@@ -638,6 +638,7 @@ _COVERED_ELSEWHERE = {
     "enchanted_only": "test_enchanted_only_rejects_a_permanent_with_no_aura",
     "attached_to_filter": "test_a_host_phrase_is_asked_of_the_host",
     "chosen_color": "test_chosen_color_is_read_off_the_ability_s_source",
+    "chosen_keyword": "test_chosen_keyword_is_read_off_the_ability_s_source",
     "chosen_creature_type":
         "test_chosen_creature_type_is_read_off_the_ability_s_source",
     "chosen_land_type":
@@ -2091,3 +2092,42 @@ def test_with_protection_from_asks_the_quality_and_not_the_keyword(pool):
     assert not subject_matches(
         game, warded, {"type_filter": "creature", "with_protection_from": "nonsense"}
     )
+
+
+
+def test_chosen_keyword_is_read_off_the_ability_s_source(pool):
+    """"target creature **with the chosen ability**" (Phyrexian Splicer).
+
+    A keyword the *activation* chose (CR 601.2b), recorded on the ability's own
+    source — so, like ``chosen_color``, it is answerable only by a reader
+    holding that permanent, and the pure matcher refuses it outright.
+
+    Resolved into ``with_keywords``, which is what makes the answer a layer-6
+    question: a creature that was **granted** flying answers a chosen-flying
+    phrase exactly as a printed flyer does, and asking the printed keyword list
+    instead would miss it.
+    """
+    from engine.keywords import grant_keyword
+    from engine.handlers._common import CHOSEN_ABILITY
+
+    splicer = Permanent(card=pool["Phyrexian Splicer"])
+    flier = Permanent(card=pool["Air Elemental"])          # printed flying
+    grounded = Permanent(card=pool["Grizzly Bears"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[splicer, flier, grounded]),
+        PlayerState(name="P2"),
+    ])
+    described = {"type_filter": "creature", "chosen_keyword": True}
+
+    # Nothing chosen: the key survives to the pure matcher, which refuses.
+    assert not subject_matches(game, flier, described, source=splicer)
+
+    splicer.metadata[CHOSEN_ABILITY] = "flying"
+    assert subject_matches(game, flier, described, source=splicer)
+    assert not subject_matches(game, grounded, described, source=splicer)
+    # …and a *granted* flier answers it, because the resolved key is asked of
+    # layer 6.
+    grant_keyword(grounded, "flying", duration="end_of_turn")
+    assert subject_matches(game, grounded, described, source=splicer)
+    # With no source there is nothing to have chosen, and the key refuses.
+    assert not subject_matches(game, flier, described)

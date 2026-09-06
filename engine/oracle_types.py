@@ -518,6 +518,19 @@ class ActivatedAbilityCost:
     #: positional arguments ``parse_activated_ability_cost`` passes are at the
     #: front, so a field inserted among them silently rebinds one of them.
     sacrifice_attached: bool = False
+    #: "{2}, {T}, **Choose flying, first strike, trample, or shadow**: …"
+    #: (Phyrexian Splicer.) A clause in the activation cost that spends nothing
+    #: and decides a word (CR 602.1a puts it in the cost, CR 601.2b announces
+    #: it). The options are the printed ones, because a choice the sentence did
+    #: not offer is not a choice.
+    #:
+    #: Empty for every other ability, so nothing that reads a cost changes: the
+    #: activation path asks for a word only when there is a list to pick from.
+    #:
+    #: Last for ``sacrifice_attached``'s stated reason — the positional
+    #: arguments ``parse_activated_ability_cost`` passes are at the front, so a
+    #: field inserted among them silently rebinds one of them.
+    chosen_keyword_options: tuple[str, ...] = ()
 
     @property
     def is_loyalty(self) -> bool:

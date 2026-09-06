@@ -247,6 +247,8 @@ class _FilterDraft:
     # "permanents **of the chosen color**" (Psychic Allergy) — see
     # ``ast.ObjectFilter.chosen_color``.
     chosen_color: bool = False
+    #: See ``ast.ObjectFilter.chosen_keyword``.
+    chosen_keyword: bool = False
     # "Creatures **of the chosen type**" (An-Zerrin Ruins) — see the field of
     # the same name on ``ast.ObjectFilter``.
     chosen_creature_type: bool = False
@@ -915,6 +917,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         nontoken=d.nontoken,
         colored=d.colored,
         chosen_color=d.chosen_color,
+        chosen_keyword=d.chosen_keyword,
         chosen_creature_type=d.chosen_creature_type,
         creature_type_of_your_choice=d.creature_type_of_your_choice,
         chosen_land_type=d.chosen_land_type,

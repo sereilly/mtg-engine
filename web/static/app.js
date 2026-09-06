@@ -5413,6 +5413,48 @@ function applyCardTypeChoicePrompt(info) {
   });
 }
 
+// Phyrexian Splicer: one of the four abilities the card printed, chosen before
+// its targets. Not a pending-choice prompt — nothing is on the stack yet — so it
+// is rendered here and the answer rides the activate action.
+function renderAbilityWordPrompt(card, options, then) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.remove("hidden");
+  cancelBtn.disabled = false;
+  customOkBtn.disabled = true;
+
+  const cardName = card?.name || "an ability";
+  title.textContent = "Choose an ability";
+  body.textContent = `${cardName}: the creature you target first must have it.`;
+  steps.innerHTML =
+    `<div class="prompt-choice-column">` +
+    options
+      .map(
+        (word) =>
+          `<button type="button" class="prompt-choice-btn" data-ability-word="${escapeHtml(word)}">` +
+          `${escapeHtml(word.charAt(0).toUpperCase() + word.slice(1))}</button>`
+      )
+      .join("") +
+    `</div>`;
+
+  steps.querySelectorAll("[data-ability-word]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      pendingChosenAbilityWord = btn.dataset.abilityWord;
+      then();
+    });
+  });
+}
+
 function applyCreatureTypeChoicePrompt(info) {
   const panel = q("activationPanel");
   const title = q("promptTitle");
@@ -10489,6 +10531,12 @@ function resolveAbilityChoice(optionIndex) {
   startActivationPrompt(singleAbilityCard, pending.targetSeat, pending.permanentIndex);
 }
 
+// Phyrexian Splicer: the ability its activation chose. Module-level for the
+// reason `pendingCastModeIndex` is — the word is announced with the activation
+// (CR 601.2b) and every activate body is built somewhere different, so it is
+// carried through the one place they all end up (`sendAction`).
+let pendingChosenAbilityWord = null;
+
 function startActivationPrompt(card, targetSeat, permanentIndex = null) {
   const cardName = normalizeCardName(card);
   if (!cardName) return;
@@ -10589,6 +10637,19 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     startCastGraveyardCreatureTargetPrompt(card, "activate", {
       sourcePermanentIndex: permanentIndex, abilityIndex,
     });
+    return;
+  }
+
+  // "Choose flying, first strike, trample, or shadow:" (Phyrexian Splicer).
+  // CR 601.2b's choice, asked **before** any target branch below, because the
+  // first target's phrase is "creature with the chosen ability" — a word picked
+  // afterwards would narrow nothing. The offered list is the card's own, off
+  // the same spec the picker is built from.
+  const abilityWords = targetSpecOf(card).keyword_options;
+  if (Array.isArray(abilityWords) && abilityWords.length && !pendingChosenAbilityWord) {
+    renderAbilityWordPrompt(card, abilityWords, () =>
+      startActivationPrompt(card, targetSeat, permanentIndex)
+    );
     return;
   }
 
@@ -17917,6 +17978,13 @@ async function sendAction(actionBody) {
   // path fires (direct, targeted, X, auto-tap retry) without threading it manually.
   if (_CAST_ACTIONS.has(body.action) && body.mode_index == null && pendingCastModeIndex != null) {
     body.mode_index = pendingCastModeIndex;
+  }
+  // Phyrexian Splicer's chosen ability, carried the same way and for the same
+  // reason: it is part of the announcement (CR 601.2b), and the activate body
+  // is built in a dozen places while this is the one they all pass through.
+  if (body.action === "activate" && body.chosen_keyword == null && pendingChosenAbilityWord) {
+    body.chosen_keyword = pendingChosenAbilityWord;
+    pendingChosenAbilityWord = null;
   }
   // "Choose one or more —": while a collection is open, a cast body is not a
   // cast — it is the target the current mode's own prompt just produced. Capture

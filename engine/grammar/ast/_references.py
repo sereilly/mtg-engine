@@ -258,6 +258,16 @@ class ObjectFilter:
     # and is stored on that permanent, so folding it in would need a sentinel
     # colour word every ``color_filter`` reader would then compare against.
     chosen_color: bool = False
+    #: "target creature **with the chosen ability**" (Phyrexian Splicer). The
+    #: keyword the ability's *activation* chose (CR 601.2b, through CR 602.2b),
+    #: recorded on the ability's own source — so it is answered the way
+    #: ``chosen_color`` is, by a reader holding that permanent, and refused by
+    #: the pure matcher which holds none.
+    #:
+    #: A separate key from ``with_keywords`` and not a value of it, because the
+    #: word is not in the sentence: a filter carrying a keyword list would have
+    #: to carry a word, and there is none until the ability is announced.
+    chosen_keyword: bool = False
     # "Creatures **of the chosen type**" (An-Zerrin Ruins). The creature type
     # its source recorded as it entered (CR 614.1c) — the sibling of
     # ``chosen_color`` above, one characteristic over, and its own field for
@@ -836,6 +846,8 @@ class ObjectFilter:
             payload["original_expansion"] = self.original_expansion
         if self.chosen_color:
             payload["chosen_color"] = True
+        if self.chosen_keyword:
+            payload["chosen_keyword"] = True
         if self.chosen_creature_type:
             payload["chosen_creature_type"] = True
         # Emitted, and deliberately outside ``TESTABLE_SUBJECT_FILTER_KEYS``:

@@ -643,3 +643,100 @@ def _fused_tap_then_bite(
             }),
         )}),
     )
+
+
+def _fused_two_target_keyword_move(
+    steps: tuple[ast.Statement, ...]
+) -> tuple[OracleInstruction, ...] | None:
+    """"Until end of turn, target creature with the chosen ability **loses it**
+    and **another target creature gains it**." (Phyrexian Splicer.)
+
+    One sentence, two chosen creatures, and one keyword that leaves the first
+    and lands on the second. A fuser for ``_fused_two_target_pump``'s reason
+    exactly — the printed "another" (CR 601.2c) means the clauses name different
+    permanents, and every one-target keyword handler resolves through
+    ``_one_choice``, which reads the first entry of the list. Lowered as two
+    ordinary steps the card would take the ability off a creature and give it
+    straight back.
+
+    **Here rather than in ``lowering/keywords``**, which is this module's own
+    rule: a fuser lives with the sequence it folds, not with the verb it folds.
+    What it reads is a shape — a removal and a grant naming the same word — and
+    the keyword inside is one leaf of that shape.
+
+    The word itself is in neither clause: both print the pronoun, and what it
+    names is the option the *activation* chose (CR 601.2b, through CR 602.2b),
+    recorded on the ability's own source. So the instruction carries no keyword
+    at all, and the handler reads one. Both halves must print the pronoun: a
+    move whose halves named different abilities would be two effects sharing a
+    sentence, and one printed word with one pronoun would be a card that takes
+    flying off one creature and gives something else to another.
+    """
+    if len(steps) != 2:
+        return None
+    first, second = steps
+    if not isinstance(first, ast.LoseKeyword) or not isinstance(second, ast.GainKeyword):
+        return None
+    if not (first.chosen_ability and second.chosen_ability):
+        return None
+    if first.keywords or second.keywords:
+        # Belt and braces: the productions that set the flag pass no keywords,
+        # and a node carrying both would be two readings of one clause.
+        return None
+    if not _is_target(first.subject) or not _is_target(second.subject):
+        return None
+    assert isinstance(first.subject, ast.TargetSpec)
+    assert isinstance(second.subject, ast.TargetSpec)
+    if first.subject.distinct_from_prior:
+        raise LoweringError(
+            'the first clause of a sentence cannot name "another" target',
+            node=first,
+        )
+    if not second.subject.distinct_from_prior:
+        # Without the printed "another", CR 601.2c lets the two instances of
+        # "target" name one permanent — a creature losing an ability and
+        # regaining it, which is not this card. Refusing without consuming
+        # leaves the sentence to `_refuse_unfused_distinctness`, whose message
+        # names the real gap.
+        return None
+    if not first.subject.filter.chosen_keyword:
+        # "**target creature with the chosen ability** loses it." The narrowing
+        # is what makes the removal legal at announcement (CR 601.2c): without
+        # it the picker would offer a creature that has nothing to lose, and
+        # the ability would resolve having moved nothing.
+        raise LoweringError(
+            "a keyword move takes it from a creature the phrase says has it",
+            node=first,
+        )
+    for clause in (first, second):
+        if clause.duration.kind not in ("until_end_of_turn", "this_turn"):
+            # A durationless half is a continuous effect and a mismatched pair
+            # is two effects sharing a sentence — `_fused_two_target_pump`'s
+            # two refusals, and for its reasons.
+            raise LoweringError(
+                "a keyword move needs an until-end-of-turn duration on both "
+                "clauses",
+                node=clause,
+            )
+    return (
+        OracleInstruction("move_chosen_keyword_between_targets", "", {
+            "duration": "end_of_turn",
+            "targets": {
+                "quantifier": "target",
+                "kind": "object",
+                # `filter` is the shape every one-slot reader expects;
+                # `filters` is what the picker and the handler read per slot.
+                # Both are emitted for `_fused_two_target_pump`'s reason.
+                "filter": _filter_payload(first.subject.filter),
+                "filters": [
+                    _filter_payload(first.subject.filter),
+                    _filter_payload(second.subject.filter),
+                ],
+                "count": 2,
+                # The printed "another" (CR 601.2c), carried rather than folded
+                # into a filter: it is a relation between two slots, not a
+                # property of one permanent.
+                "distinct": True,
+            },
+        }),
+    )

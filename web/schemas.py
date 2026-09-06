@@ -573,6 +573,14 @@ class GameActionRequest(BaseModel):
     # catalog — so the engine checks it against the list carried on the prompt,
     # which is the same list the prompt offered.
     card_type: str | None = None
+    # Phyrexian Splicer: the ability its activation chose, sent with
+    # `activate_ability`. It travels with the *action* rather than through the
+    # pending-choice queue because CR 601.2b announces it as part of activating
+    # (CR 602.2b) — before the targets, which the card narrows by it — and a
+    # queued prompt would put the ability on the stack before its announcement
+    # was finished. The engine checks the word against the options the card
+    # printed, which is the same list the client offered.
+    chosen_keyword: str | None = None
     # Counterspell / Fork: which spell on the stack to target, as a top-first index
     # into the serialized stack (0 = topmost). Converted server-side to an engine
     # stack index.

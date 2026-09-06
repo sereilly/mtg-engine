@@ -145,7 +145,8 @@ from ._counter_stores import _lower_player_gets_counters
 from .counters import _lower_put_counter
 from .sequences import (_fused_cost_repeated_destroys,
                         _fused_tap_enchanted_then_counters,
-                        _fused_tap_then_bite)
+                        _fused_tap_then_bite,
+                        _fused_two_target_keyword_move)
 from .loops import (
     _PER_DEATH_COUNTERS,
     _PER_DEATH_SUBJECT,
@@ -460,6 +461,7 @@ __all__ = [
     "_lower_redirect_damage",
     "_lower_prevent_all",
     "_fused_tap_any_number_then_pump",
+    "_fused_two_target_keyword_move",
     "_fused_two_target_pump",
     "_lower_become_creature",
     "_lower_pump",

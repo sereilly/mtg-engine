@@ -139,6 +139,14 @@ class GainKeyword:
     # than a flag, because a second card reading a different record ("of target
     # land", "of the land you control") adds a word here and no field.
     landwalk_from: str | None = None
+    # "…another target creature **gains it**" (Phyrexian Splicer). The pronoun
+    # names an *ability* rather than an object — the one the activation chose
+    # (CR 601.2b) — so, like ``landwalk_from`` above it, ``keywords`` is empty
+    # and this says where the word comes from. A boolean rather than a record
+    # name because there is one place an activation's choice is kept, on the
+    # ability's own source, and naming it here would be a second spelling of
+    # ``handlers/_common.CHOSEN_ABILITY``.
+    chosen_ability: bool = False
 
 
 @dataclass(frozen=True)
@@ -183,6 +191,10 @@ class LoseKeyword:
     subject: Recipient
     keywords: tuple[str, ...]
     duration: Duration = field(default_factory=Duration)
+    # "…target creature with the chosen ability **loses it**" (Phyrexian
+    # Splicer). See :class:`GainKeyword`'s field of the same name: the two
+    # halves of that sentence are one move, and the pronoun is the same pronoun.
+    chosen_ability: bool = False
 
 
 @dataclass(frozen=True)

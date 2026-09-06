@@ -558,6 +558,14 @@ def _parse_postmodifiers(
             # one `_protection_qualities` answers the board with — so a phrase
             # naming a quality the shield reader cannot model refuses here
             # rather than describing a set nothing is ever in.
+            # "target creature **with the chosen ability**" (Phyrexian
+            # Splicer). Read before the keyword list for the protection
+            # branch's reason: "the" is not a keyword, so the list would refuse
+            # and take the whole line with it — which is the `expected a
+            # subject` this phrase refused with for two waves.
+            if stream.accept_phrase("the", "chosen", "ability"):
+                d.chosen_keyword = True
+                continue
             protection_probe = stream.mark()
             if stream.accept_phrase("protection", "from"):
                 word = stream.peek_word()

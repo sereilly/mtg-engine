@@ -557,6 +557,45 @@ def _resolve_chosen_color(filt: dict, source) -> dict:
     return resolved
 
 
+#: Where the keyword an activation chose is recorded (Phyrexian Splicer). On
+#: the ability's own source, exactly where CR 614.1c's entry choices are kept,
+#: because that is the object every reader of the narrowing already holds — the
+#: target enumerator at announcement and the handler at resolution.
+CHOSEN_ABILITY = "chosen_ability"
+
+
+def _resolve_chosen_keyword(filt: dict, source) -> dict:
+    """*filt* with a ``chosen_keyword`` narrowing turned into a keyword list.
+
+    "target creature **with the chosen ability**" (Phyrexian Splicer). The word
+    was announced when the ability was activated (CR 601.2b through CR 602.2b),
+    which is *before* its targets were chosen — so by the time anything asks
+    this question the answer exists, and it is on the source.
+
+    ``_resolve_chosen_color``'s sibling one characteristic over, and it resolves
+    the same way: into the ordinary key every matcher already reads, which for a
+    keyword is ``with_keywords`` and so goes through CR 613 layer 6 like any
+    other keyword question — a creature *granted* flying answers a
+    chosen-flying phrase exactly as a printed flyer does.
+
+    A caller with no source, or a source with nothing recorded, leaves the key
+    in place and the pure matcher refuses every permanent. That is the safe
+    direction: a dropped narrowing here would offer every creature on the board
+    as a target for an ability that names one class of them.
+    """
+    if not filt.get("chosen_keyword"):
+        return filt
+    keyword = getattr(source, "metadata", {}).get(CHOSEN_ABILITY) if source else None
+    if not keyword:
+        return filt
+    resolved = dict(filt)
+    resolved.pop("chosen_keyword", None)
+    resolved["with_keywords"] = list(resolved.get("with_keywords") or ()) + [
+        str(keyword)
+    ]
+    return resolved
+
+
 #: The two narrowings "of the chosen type" can be, and where each one's word is
 #: recorded on the source. Both are CR 614.1c choices made as the permanent
 #: entered and both resolve to ``subtype_filter``; what separates them is the
@@ -1314,6 +1353,13 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     # into `color_filter` before asking, so the key only survives to here when
     # nobody could answer it.
     if payload.get("chosen_color"):
+        return False
+    # "…**with the chosen ability**" (Phyrexian Splicer). The same recorded
+    # choice one characteristic over — the word is on the ability's source and
+    # this function is the pure half — refused for the identical reason:
+    # ignoring the key would widen "target creature with the chosen ability" to
+    # every creature.
+    if payload.get("chosen_keyword"):
         return False
     # "…**not named this creature**" (Escaped Shapeshifter) and "…**with
     # protection from white**". Both need something this function does not

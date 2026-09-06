@@ -1707,6 +1707,92 @@ def grant_target_keyword_until_eot(game: Game, instruction: OracleInstruction, c
     return True, "resolved"
 
 
+@effect_handler("move_chosen_keyword_between_targets")
+def move_chosen_keyword_between_targets(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Until end of turn, target creature with the chosen ability loses it and
+    another target creature gains it." (Phyrexian Splicer.)
+
+    One instruction rather than a removal and a grant in a ``sequence``, for
+    ``pump_targets_until_eot``'s reason: the clauses name **different** chosen
+    creatures (the printed "another", CR 601.2c) and every one-target handler
+    resolves through ``_one_choice``, which reads the first entry of the list —
+    so lowered as two steps the ability would take the word off a creature and
+    hand it straight back.
+
+    The word is neither in the payload nor in the sentence: both clauses print
+    the pronoun, and what it names is the option the *activation* chose
+    (CR 601.2b through CR 602.2b), recorded on the ability's own source. With
+    nothing recorded there is no ability to move and the resolution does
+    nothing, which is the direction that cannot invent one.
+
+    The two slots are resolved positionally and each is re-checked against its
+    own filter, exactly as the pump above does — a slot that has become illegal
+    is dropped and the other half still happens (CR 608.2b). The removal is
+    given the same end-of-turn lifetime as the grant, so a creature that loses
+    flying this way has it again at cleanup: CR 611.2b, and the printed duration
+    governs both halves of the one sentence.
+    """
+    from ..subject_filters import subject_matches
+    from ._common import CHOSEN_ABILITY
+
+    card = context.card
+    source = context.source_permanent
+    keyword = (getattr(source, "metadata", {}) or {}).get(CHOSEN_ABILITY)
+    if not keyword:
+        game.log.append(f"{card.name}: no ability was chosen to move")
+        return True, "resolved"
+    keyword = str(keyword)
+    targets = instruction.payload.get("targets") or {}
+    slot_filters = targets.get("filters") or [targets.get("filter") or {}] * 2
+    distinct = bool(targets.get("distinct"))
+    duration = instruction.payload.get("duration")
+    chosen = resolve_target_slots(game, context, 2)
+
+    taken: list[Permanent] = []
+    for index, permanent in enumerate(chosen):
+        wanted = slot_filters[index] if index < len(slot_filters) else {}
+        if permanent is None or not game.is_on_battlefield(permanent):
+            game.log.append(f"{card.name}: nothing legal in slot {index + 1}")
+            continue
+        if not permanent.is_creature:
+            game.log.append(f"{card.name}: slot {index + 1} is no longer a creature")
+            continue
+        # The first slot's phrase is "with the chosen ability", which is a
+        # layer-6 question and so is asked of the game rather than of the pure
+        # matcher — the same reader the picker used at announcement, so what was
+        # offered and what resolves cannot disagree. Re-asked here because
+        # CR 608.2b checks legality when the ability begins resolving and the
+        # creature may have lost the word in between.
+        if not subject_matches(
+            game, permanent, wanted,
+            observer=game.players.index(context.caster)
+            if context.caster in game.players else None,
+            source=source,
+        ):
+            game.log.append(
+                f"{card.name}: slot {index + 1} is no longer a legal target"
+            )
+            continue
+        if distinct and any(permanent is seen for seen in taken):
+            game.log.append(
+                f"{card.name}: slot {index + 1} named the creature slot 1 took"
+            )
+            continue
+        taken.append(permanent)
+        if index == 0:
+            remove_keyword(permanent, keyword, duration=duration)
+            game.log.append(
+                f"{permanent.card.name} loses {keyword} until end of turn ({card.name})"
+            )
+        else:
+            grant_keyword(permanent, keyword, duration=duration)
+            game.log.append(
+                f"{permanent.card.name} gains {keyword} until end of turn ({card.name})"
+            )
+    game._refresh_dynamic_creatures()
+    return True, "resolved"
+
+
 @effect_handler("grant_self_ability_text")
 def grant_self_ability_text(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"<This permanent> gains "<ability>"." (CR 113.3.)

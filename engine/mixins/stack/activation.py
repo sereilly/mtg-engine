@@ -37,7 +37,8 @@ from ...targeting import derive_activation_spec
 from ...mana_payment import is_mana_ability, mana_cost_from_symbols
 from ...events import emit
 from ...game_types import OracleExecutionContext, OracleStateMachine, SimulationResult, StackItem
-from ...handlers._common import _card_matches_filter, attached_host
+from ...handlers._common import (CHOSEN_ABILITY, _card_matches_filter,
+                                 attached_host)
 from ...oracle import LOYALTY_ANY_TIME_STATIC, OracleInstruction, compile_card_oracle
 from ...subject_filters import card_matches_any, filter_head_noun, subject_matches
 
@@ -179,6 +180,15 @@ class AbilityActivationMixin:
         # before anything taps and a slot renumbers as soon as one does.
         cost_permanent_ids: list[int] | None = None,
         cost_hand_index: int | None = None,
+        # "**Choose flying, first strike, trample, or shadow**:" (Phyrexian
+        # Splicer). A choice printed in the *cost* clause, so CR 602.2b sends it
+        # through CR 601.2b and it is announced with the activation — before
+        # CR 601.2c chooses targets, which matters because the sentence behind
+        # it says "target creature **with the chosen ability**". It arrives with
+        # the action for the reason ``cost_permanent_index`` above does: a
+        # queued prompt would put the ability on the stack before its
+        # announcement was finished.
+        chosen_keyword: str | None = None,
         source_seat: int | None = None,
         source_permanent_index: int | None = None,
         source_stack_index: int | None = None,
@@ -199,6 +209,7 @@ class AbilityActivationMixin:
             cost_permanent_index=cost_permanent_index,
             cost_permanent_ids=cost_permanent_ids,
             cost_hand_index=cost_hand_index,
+            chosen_keyword=chosen_keyword,
             source_seat=source_seat,
             source_permanent_index=source_permanent_index,
             source_stack_index=source_stack_index,
@@ -248,6 +259,56 @@ class AbilityActivationMixin:
 
         apply_prevention_shield(self, target_player, target_perm_idx, 1)
         return SimulationResult(label, True, "activated_prevent_one", "resolved")
+    def _announce_chosen_ability(self, permanent, ability, chosen_keyword):
+        """Record the keyword a "Choose A, B, or C" cost clause names, or refuse.
+
+        Returns None when there is nothing to choose — every ability but
+        Phyrexian Splicer's — so the activation path pays no attention to a card
+        that prints no such clause.
+
+        A word outside the printed list is **refused with nothing paid**
+        (CR 602.2b): the options are the sentence's, not a catalog's, and
+        quietly substituting one would move an ability the card never offered.
+        A seat that names none takes the deterministic default below, which is
+        what keeps AI and headless play unblocked — the same arrangement
+        ``cost_permanent_index`` has for the other choice made at announcement.
+        """
+        options = tuple(getattr(ability.cost, "chosen_keyword_options", ()) or ())
+        if not options:
+            return None
+        if chosen_keyword:
+            word = str(chosen_keyword).strip().lower()
+            if word not in options:
+                return (
+                    f"{permanent.card.name} offers "
+                    + ", ".join(options)
+                    + f", not {word!r}"
+                )
+        else:
+            word = self._default_chosen_ability(permanent, options)
+        permanent.metadata[CHOSEN_ABILITY] = word
+        self.log.append(f"{permanent.card.name}: chose {word}")
+        return None
+
+    def _default_chosen_ability(self, permanent, options: tuple[str, ...]) -> str:
+        """The stated policy for a seat that names no ability: the first printed
+        option some creature on the battlefield actually has.
+
+        A real answer rather than the first word, because the first word is a
+        choice no player would make when the ability it names is on nobody's
+        board — the move would then have no legal first target at all. The
+        printed order breaks ties, which keeps it deterministic: the property
+        the AI-simulation regressions depend on.
+        """
+        for option in options:
+            if any(
+                self._has_keyword(other, option)
+                for other in self.all_permanents()
+                if other.is_creature
+            ):
+                return option
+        return options[0]
+
     def queue_permanent_ability(self, *args, **kwargs) -> SimulationResult:
         """Activate an ability — CR 602, start to finish.
 
@@ -293,6 +354,15 @@ class AbilityActivationMixin:
         cost_permanent_index: int | None = None,
         cost_permanent_ids: list[int] | None = None,
         cost_hand_index: int | None = None,
+        # "**Choose flying, first strike, trample, or shadow**:" (Phyrexian
+        # Splicer). A choice printed in the *cost* clause, so CR 602.2b sends it
+        # through CR 601.2b and it is announced with the activation — before
+        # CR 601.2c chooses targets, which matters because the sentence behind
+        # it says "target creature **with the chosen ability**". It arrives with
+        # the action for the reason ``cost_permanent_index`` above does: a
+        # queued prompt would put the ability on the stack before its
+        # announcement was finished.
+        chosen_keyword: str | None = None,
         source_seat: int | None = None,
         source_permanent_index: int | None = None,
         source_stack_index: int | None = None,
@@ -465,6 +535,26 @@ class AbilityActivationMixin:
             # `playable_card_of` above, so it is in `usable` like any other.
             self.log.append(f"No implemented activated ability for {permanent.card.name}")
             return SimulationResult(permanent.card.name, False, "unsupported", "ability not implemented")
+
+        # "**Choose flying, first strike, trample, or shadow**" (Phyrexian
+        # Splicer). CR 601.2b's choices, announced now — **before** the target
+        # gate below, because the phrase that gate enumerates is "target
+        # creature with the chosen ability" and a word chosen after it would
+        # narrow nothing.
+        #
+        # Recorded on the ability's own source, which is where CR 614.1c's entry
+        # choices live and where `_resolve_chosen_keyword` looks. The record
+        # cannot go stale on this card: the ability costs {T}, so a second
+        # announcement needs an untap step in between and the first has long
+        # since resolved.
+        keyword_refusal = self._announce_chosen_ability(
+            permanent, ability, chosen_keyword
+        )
+        if keyword_refusal is not None:
+            self.log.append(keyword_refusal)
+            return SimulationResult(
+                permanent.card.name, False, "unsupported", keyword_refusal
+            )
 
         # CR 602.2b/601.2c, once, before any cost is paid: an ability that
         # targets is unactivatable with no legal target, and a named target

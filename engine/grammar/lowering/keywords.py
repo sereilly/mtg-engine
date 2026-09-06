@@ -82,6 +82,23 @@ def _grant_duration(node, duration) -> str:
     return key
 
 
+def _refuse_bare_chosen_ability(node) -> None:
+    """A "gains it" / "loses it" that reached an ordinary lowering.
+
+    The pronoun names the keyword an activation chose, and only the two-clause
+    *move* it is printed in (``_fused_two_target_keyword_move``) knows how to
+    spend it — that fuser reads both halves before either is lowered. Anything
+    else arriving here carries an empty keyword tuple, which every branch below
+    would happily turn into a grant of nothing.
+    """
+    if getattr(node, "chosen_ability", False):
+        raise LoweringError(
+            'a "gains it" naming the chosen ability is read by the keyword '
+            "move that prints it, not on its own",
+            node=node,
+        )
+
+
 def _lower_gain_keyword(
     node: ast.GainKeyword,
     event: str | None = None,
@@ -119,6 +136,7 @@ def _lower_gain_keyword(
     # record has to be one something writes) and `landwalk.landwalk_abilities_of`
     # (every word it builds is one `landwalk_requirement` can answer, because it
     # is built from the land's own types).
+    _refuse_bare_chosen_ability(node)
     if node.landwalk_from is not None:
         if node.keywords:
             raise LoweringError(
@@ -807,6 +825,7 @@ def _lower_lose_keyword(
     fights. Gated on IMPLEMENTED_KEYWORDS exactly like the grant — removing a
     word whose behaviour is not built would report a removal of nothing.
     """
+    _refuse_bare_chosen_ability(node)
     for keyword in node.keywords:
         # Through the ability's *name*, so a keyword carrying a printed
         # argument is asked about the ability rather than about the argument:

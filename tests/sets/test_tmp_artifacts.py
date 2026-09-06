@@ -988,3 +988,144 @@ def test_a_land_with_no_land_type_grants_nothing(set_pool):
     bear = _W3G4aPermanent(card=_w3g4a_mk_card("Grizzly", "{1}{G}", "Creature - Bear", ""))
     game.players[0].battlefield.append(bear)
     assert landwalk_abilities_of(bear) == ()
+
+
+# --- W3G4: Phyrexian Splicer (an ability chosen when the ability is activated) ---
+
+
+def _w3g4b_creature(name, text):
+    from tests.helpers import _mk_card, _nosick
+    from engine.models import Permanent
+
+    return _nosick(Permanent(card=_mk_card(name, "{2}", "Creature - Human", text)))
+
+
+def _w3g4b_board(set_pool):
+    from engine import Game, PlayerState
+    from engine.models import Permanent
+    from tests.helpers import _nosick
+
+    splicer = _nosick(Permanent(card=set_pool("TMP")["Phyrexian Splicer"]))
+    flier = _w3g4b_creature("Cloud", "Flying")
+    ground = _w3g4b_creature("Grizzly", "")
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[splicer, flier, ground]),
+        PlayerState(name="P2"),
+    ])
+    game.enforce_mana_costs = False
+    return game, splicer, flier, ground
+
+
+def test_phyrexian_splicer_compiles_with_its_choice_in_the_cost(set_pool):
+    """"{2}, {T}, **Choose flying, first strike, trample, or shadow**: …"
+
+    CR 602.1a puts everything before the colon in the activation cost, and
+    CR 601.2b (through CR 602.2b) announces the choices there — *before*
+    CR 601.2c chooses targets. That ordering is the whole reason the clause is
+    read as a cost: the sentence behind it says "target creature with the
+    chosen ability", which a word picked at resolution would narrow too late.
+
+    Two readers have to agree about it — the grammar's cost parser gates whether
+    the line compiles, and `oracle.parse_activated_ability_cost` produces the
+    cost that is charged — so the options are asserted off the compiled cost.
+    """
+    from engine.oracle import compile_card_oracle
+
+    program = compile_card_oracle(set_pool("TMP")["Phyrexian Splicer"])
+    assert program.supported, program.reason
+    ability = program.activated_abilities[0]
+    assert ability.cost.chosen_keyword_options == (
+        "flying", "first strike", "trample", "shadow"
+    )
+    assert ability.instruction.kind == "move_chosen_keyword_between_targets"
+    # One instruction, not a removal and a grant in a sequence: the clauses name
+    # different creatures (the printed "another", CR 601.2c) and every
+    # one-target handler reads the first entry of the target list.
+    targets = ability.instruction.payload["targets"]
+    assert targets["count"] == 2 and targets["distinct"] is True
+    # The first slot carries the narrowing and the second does not — the card
+    # takes the ability from a creature that has it and gives it to any other.
+    assert targets["filters"][0]["chosen_keyword"] is True
+    assert "chosen_keyword" not in targets["filters"][1]
+
+
+def test_phyrexian_splicer_moves_the_chosen_ability(set_pool):
+    """The whole card, in a game: flying leaves the creature that had it and
+    lands on the one that did not."""
+    game, _splicer, flier, ground = _w3g4b_board(set_pool)
+    assert game._has_keyword(flier, "flying")
+    assert not game._has_keyword(ground, "flying")
+
+    result = game.activate_permanent_ability(
+        0, "Phyrexian Splicer", ability_index=0, chosen_keyword="flying",
+        target_permanent_ids=[flier.permanent_id, ground.permanent_id],
+    )
+    assert result.supported, result.details
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert not game._has_keyword(flier, "flying")
+    assert game._has_keyword(ground, "flying")
+
+
+def test_the_removal_and_the_grant_both_end_with_the_turn(set_pool):
+    """One printed duration governs both halves of one sentence (CR 611.2b), so
+    the creature that lost the ability has it again at cleanup — a removal given
+    no lifetime would be permanent, which the card does not say."""
+    game, _splicer, flier, ground = _w3g4b_board(set_pool)
+    game.activate_permanent_ability(
+        0, "Phyrexian Splicer", ability_index=0, chosen_keyword="flying",
+        target_permanent_ids=[flier.permanent_id, ground.permanent_id],
+    )
+    while game.stack:
+        game.resolve_top_of_stack()
+    game.resolve_cleanup_step(0)
+
+    assert game._has_keyword(flier, "flying")
+    assert not game._has_keyword(ground, "flying")
+
+
+def test_an_ability_the_card_never_offered_is_refused_with_nothing_paid(set_pool):
+    """CR 602.2b: the options are the sentence's, not a catalog's. Refused
+    rather than substituted, and refused *before* the cost — the Splicer is
+    still untapped."""
+    game, splicer, flier, ground = _w3g4b_board(set_pool)
+    result = game.activate_permanent_ability(
+        0, "Phyrexian Splicer", ability_index=0, chosen_keyword="lifelink",
+        target_permanent_ids=[flier.permanent_id, ground.permanent_id],
+    )
+    assert not result.supported
+    assert "lifelink" in result.details
+    assert not splicer.tapped
+    assert game._has_keyword(flier, "flying")
+
+
+def test_a_seat_that_names_no_ability_takes_the_stated_default(set_pool):
+    """The stated policy: the first printed option some creature on the
+    battlefield actually has. A real answer rather than the first word, which on
+    a board with no first-striker would leave the move with no legal first
+    target — and deterministic, which the AI-simulation regressions depend on.
+    """
+    from engine.handlers._common import CHOSEN_ABILITY
+
+    game, splicer, flier, ground = _w3g4b_board(set_pool)
+    result = game.activate_permanent_ability(
+        0, "Phyrexian Splicer", ability_index=0,
+        target_permanent_ids=[flier.permanent_id, ground.permanent_id],
+    )
+    assert result.supported, result.details
+    assert splicer.metadata[CHOSEN_ABILITY] == "flying"
+    while game.stack:
+        game.resolve_top_of_stack()
+    assert game._has_keyword(ground, "flying")
+
+
+def test_the_picker_offers_the_words_the_card_printed(set_pool):
+    """The client asks for the ability before it asks for a target, off the same
+    spec the target picker is built from — so the list offered and the list the
+    announcement accepts are one list (idiom 9)."""
+    game, _splicer, _flier, _ground = _w3g4b_board(set_pool)
+    spec = game.activation_target_spec(0, 0)
+    assert spec["keyword_options"] == [
+        "flying", "first strike", "trample", "shadow"
+    ]

@@ -2109,6 +2109,47 @@ def _split_mana_alternative(cost_part: str) -> tuple[str, dict[str, int] | None]
     return cost_part[: match.start(1)].rstrip()[: -len("or")].rstrip(), alternative
 
 
+#: "**Choose flying, first strike, trample, or shadow**" (Phyrexian Splicer),
+#: as the cost clause leaves it. Delimited here and read by the keyword
+#: vocabulary below, which is the split every other list in this file makes:
+#: the regex says where the words are, the registry says what they mean.
+_CHOOSE_KEYWORD_COST = re.compile(r"\bchoose ([a-z, ]+?)(?:,|$)\s*$")
+
+
+def _chosen_keyword_options(cost_lower: str) -> tuple[str, ...]:
+    """The keywords a "Choose A, B, or C" cost clause offers, or ``()``.
+
+    The second reader of a cost clause this file keeps (the grammar's is
+    ``engine/grammar/costs.py``), and it has to agree with the first or the
+    ability compiles and then charges a cost nobody announced. So the gate is
+    the same one: two or more options, every one of them a keyword the engine
+    implements. Anything else is ``()``, which the grammar has already refused
+    the line for — the pair fails closed rather than half-open.
+    """
+    match = _CHOOSE_KEYWORD_COST.search(cost_lower.strip())
+    if match is None:
+        return ()
+    from .grammar.vocabulary import IMPLEMENTED_KEYWORDS
+    from .keywords import keyword_ability_name
+
+    words = [
+        part.strip()
+        for chunk in match.group(1).split(",")
+        for part in [chunk.strip()]
+        if part
+    ]
+    options = [
+        word[len("or "):].strip() if word.startswith("or ") else word
+        for word in words
+    ]
+    if len(options) < 2 or any(
+        keyword_ability_name(option) not in IMPLEMENTED_KEYWORDS
+        for option in options
+    ):
+        return ()
+    return tuple(options)
+
+
 def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     required = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0, "generic": 0}
     requires_tap = False
@@ -2624,6 +2665,7 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         exile_top_of_library=exile_top_of_library,
         exile_graveyard_position=exile_graveyard_position,
         untap_filter=_chargeable_untap_cost(cost_lower),
+        chosen_keyword_options=_chosen_keyword_options(cost_lower),
     )
 
 

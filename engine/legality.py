@@ -1027,6 +1027,22 @@ class LegalityMixin:
             getattr(spec_ability, "instruction", None)
         )
         spec["requires_target"] = spec["kind"] != "none"
+        # "**Choose flying, first strike, trample, or shadow**:" (Phyrexian
+        # Splicer). A choice announced with the activation (CR 601.2b through
+        # CR 602.2b) and *before* the targets — so it rides the same spec the
+        # picker is built from, and the client asks for it before it asks for a
+        # target. Emitted only when there is a list, so every other ability's
+        # payload is unchanged.
+        #
+        # The list is the printed one, which is the same list
+        # ``_announce_chosen_ability`` refuses to go outside: the picker cannot
+        # offer a word the announcement would decline.
+        offered = tuple(
+            getattr(getattr(spec_ability, "cost", None), "chosen_keyword_options", ())
+            or ()
+        )
+        if offered:
+            spec["keyword_options"] = list(offered)
         if spec["kind"] == ROLES_TARGET_KIND:
             # An **ability** whose targets are of different kinds, chosen in
             # dependency order (CR 602.2b reaches CR 601.2c). The same walk the

@@ -192,6 +192,12 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "grant_target_flying_until_eot": "pump",
     "grant_self_flying_until_eot": "pump",
     "grant_target_keyword_until_eot": "pump",
+    # "…target creature with the chosen ability loses it and another target
+    # creature gains it." (Phyrexian Splicer.) One keyword leaving one creature
+    # and landing on another — the same family as the grants above it, because
+    # what the sentence is *about* is a keyword an object has. Same category, so
+    # GRAMMAR_CATEGORIES is unchanged.
+    "move_chosen_keyword_between_targets": "pump",
     # The quoted-text grants (Life Matrix): the same layer-6 family, carrying a
     # whole printed ability instead of a word.
     "grant_target_ability_text": "pump",

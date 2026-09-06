@@ -25,11 +25,14 @@ from .lexer import MANA, SELF
 from .lowering._common import (_PAYLOAD_HONOURED_FILTER_FIELDS,
                                _restrictions_beyond, chargeable_tap_filter,
                                graveyard_position_payload)
+from ..keywords import keyword_ability_name
+from .keywords import parse_keyword_list
 from .nouns import parse_object_filter
 from .readers import accept_source_reference
 from .references import parse_target_spec
 from .stream import TokenStream
-from .vocabulary import CARD_TYPES, singular as _singular
+from .vocabulary import (CARD_TYPES, IMPLEMENTED_KEYWORDS,
+                         singular as _singular)
 
 
 def _parse_cost_object(
@@ -503,6 +506,37 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
                 continue
             stream.reset(mark)
             raise stream.error("unrecognized activation cost")
+        if stream.at_word("choose"):
+            # "**Choose flying, first strike, trample, or shadow**" (Phyrexian
+            # Splicer). A cost clause that spends nothing — CR 602.1a puts
+            # everything before the colon in the activation cost, and CR 601.2b
+            # announces the choices there, which is *before* CR 601.2c chooses
+            # targets. The sentence behind it narrows its first target by the
+            # answer, so no later reading of the clause would be in time.
+            #
+            # Every option is put to the keyword registry: a word with no
+            # behaviour behind it would be an option that grants nothing, and
+            # the whole card is moving the ability between two creatures. Two
+            # options at least, because "choose" with one is not a choice and
+            # would be a keyword the sentence could simply print.
+            mark = stream.mark()
+            stream.advance()
+            try:
+                options, _disjunctive = parse_keyword_list(stream)
+            except GrammarError:
+                stream.reset(mark)
+                raise stream.error("unrecognized activation cost")
+            if len(options) < 2 or any(
+                keyword_ability_name(option) not in IMPLEMENTED_KEYWORDS
+                for option in options
+            ):
+                stream.reset(mark)
+                raise stream.error(
+                    "a choice of abilities needs two or more implemented keywords"
+                )
+            costs.append(ast.ChooseKeywordCost(tuple(options)))
+            stream.accept_punct(",")
+            continue
         if stream.accept_word("sacrifice"):
             # "Sacrifice **two** Goblins" (Goblin Warrens). The count is printed
             # in front of the phrase, which leaves the phrase itself the bare

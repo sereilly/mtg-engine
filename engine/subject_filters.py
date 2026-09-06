@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING
 
 from .handlers._common import (CHOSEN_CARD_TYPE, _comparison_holds,
                                _resolve_chosen_card_type, _resolve_chosen_color,
+                               _resolve_chosen_keyword,
                                _resolve_chosen_subtype,
                                permanent_matches_filter)
 from .search_filters import name_key
@@ -151,6 +152,12 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # source, like ``exclude_self``, and is resolved into the ordinary colour
     # key before the pure matcher is asked.
     "chosen_color",
+    # "target creature **with the chosen ability**" (Phyrexian Splicer). A
+    # keyword the *activation* chose (CR 601.2b) rather than an entry choice,
+    # recorded on the same permanent and resolved by the same kind of helper —
+    # into ``with_keywords``, so the answer goes through layer 6 like every
+    # other keyword question.
+    "chosen_keyword",
     # "Creatures **of the chosen type**" (An-Zerrin Ruins). A creature type the
     # source recorded as it entered (CR 614.1c/205.3m) — the sibling of
     # ``chosen_color`` above, needing the same thing and testable for the same
@@ -819,6 +826,7 @@ def subject_matches(
         if quality is None or quality not in game._protection_qualities(obj):
             return False
     described = _resolve_chosen_color(described, source)
+    described = _resolve_chosen_keyword(described, source)
     described = _resolve_chosen_subtype(described, source)
     described = _resolve_chosen_card_type(described, source)
     if not permanent_matches_filter(obj, described):
