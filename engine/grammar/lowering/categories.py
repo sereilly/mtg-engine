@@ -46,7 +46,7 @@ from ...land_animation import LAND_ANIMATION_KIND
 from ...land_types import STATIC_LAND_TYPE_KIND, STATIC_SUPERTYPE_REMOVAL_KIND
 from .control_changes import BID_LIFE_FOR_CONTROL_KIND
 from .ownership import OWNERSHIP_INSTRUCTION_CATEGORIES
-from .zones import ZONE_INSTRUCTION_CATEGORIES
+from ._zone_categories import ZONE_INSTRUCTION_CATEGORIES
 INSTRUCTION_CATEGORIES: dict[str, str] = {
     "deal_damage": "damage",
     # "If the creature deals damage to a creature this turn, the creature
@@ -861,8 +861,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "unless_player_pays": "optional",
 }
 
-# The zone-change half lives with the family that produces it (see
-# `zones.ZONE_INSTRUCTION_CATEGORIES` for the line). Composed rather than
-# referenced, so every reader still asks one table one question.
+# The zone-change half is its own floor beside this one (see
+# `_zone_categories.ZONE_INSTRUCTION_CATEGORIES` for the line): it lived with
+# the family that produces it until `lowering/zones.py` reached the size guard
+# at Tempest's Phase 0, and a registry with no call graph is what leaves a
+# module of dispatch. Composed rather than referenced, so every reader still
+# asks one table one question.
 INSTRUCTION_CATEGORIES.update(ZONE_INSTRUCTION_CATEGORIES)
 INSTRUCTION_CATEGORIES.update(OWNERSHIP_INSTRUCTION_CATEGORIES)

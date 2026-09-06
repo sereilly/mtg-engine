@@ -1016,7 +1016,7 @@ def test_layers_only_import_downward(layers):
     "package,shared,roof",
     [
         ("effects", (), ()),
-        ("lowering", ("_common", "_filters", "_events", "_deaths", "_delays", "_amounts", "_counted_damage", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_conjuncts", "_bound_returns", "_piles", "_counter_stores", "_blankets", "categories", "conditions"), ()),
+        ("lowering", ("_common", "_filters", "_events", "_deaths", "_delays", "_amounts", "_counted_damage", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_conjuncts", "_bound_returns", "_piles", "_counter_stores", "_blankets", "_zone_categories", "categories", "conditions"), ()),
         # `costs` is shared beside `_core` rather than a family: a cost is
         # charged on the way to the stack and never lowered, so it has no
         # `effects/` or `lowering/` twin to be a family of — and both
@@ -1459,6 +1459,24 @@ FAMILY_SHARED = {
     # back. Al-abara's Carpet's source-scoped blanket came with it because it is
     # a blanket too and is reached only from inside the one that moved.
     "_blankets",
+    # `_zone_categories` split out of `lowering/zones.py` at Tempest's Phase 0,
+    # when that module sat eleven lines from the guard with three of the wave's
+    # five groups reaching it and none of them owning it. The line is the one
+    # the table's own header already drew, read a clause further than it was
+    # written: "here rather than *there*" was an argument against `categories`
+    # rather than an argument for one file, and 121 rows with no call graph is
+    # the same seam `by_node` and `_records` each left a module through — the
+    # table is a registry either way, and `zones.py` is dispatch. It is also
+    # the half that grows, since a kind gets a row the day it is invented and a
+    # lowering only when a card prints the sentence.
+    #
+    # A floor that reads nothing at all: `categories` composes it into one
+    # `INSTRUCTION_CATEGORIES`, which is now a shared module reading a shared
+    # module where it used to be `categories` reaching up into a family for its
+    # rows. **Not one row's value changed** — a category names the migration
+    # family a kind belongs to, never the module its lowering lives in, and
+    # renaming one leaves it out of `GRAMMAR_CATEGORIES`, which has no fallback.
+    "_zone_categories",
 }
 
 
