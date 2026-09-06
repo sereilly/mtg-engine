@@ -294,14 +294,14 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 
 | Channel | Sentences claimed |
 | --- | --- |
-| parse rule | 2415 |
+| parse rule | 2416 |
 | activation cost | 1049 |
 | trigger table | 743 |
 | static-line table | 602 |
 | keyword table | 533 |
 | aura enchant noun (oracle_instructions attach) | 187 |
 | activation_restrictions.py | 99 |
-| card_hooks bespoke (name-keyed) | 91 |
+| card_hooks bespoke (name-keyed) | 90 |
 | loyalty cost | 33 |
 | cast_costs.py | 30 |
 | oracle.py (modal trigger head) | 29 |
