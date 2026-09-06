@@ -603,6 +603,15 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("creature_dealt_damage",
      r"whenever enchanted (?P<damaged_attached>[a-z]+) is dealt damage"),
     ("creature_dealt_damage",               r"whenever this creature is dealt damage"),
+    # "Whenever **a creature** is dealt damage, destroy it." (Death Pits of
+    # Rath.) The board-wide spelling of the two rows above: the observer is
+    # neither the damaged creature nor attached to it, so the noun phrase is
+    # delimited as a `damaged_subject` group and the damage fire site tests it
+    # against the permanent that took the damage. Below the two narrower rows in
+    # this table's usual order, though neither is a prefix of this one — "this"
+    # and "enchanted" are not articles.
+    ("creature_dealt_damage",
+     r"whenever (?P<damaged_subject>an? [^,]+) is dealt damage"),
     ("creature_dealt_damage_by_self_dies",  r"whenever a creature dealt damage by this creature this turn dies"),
     # "Whenever this creature becomes the target of a spell or ability an
     # opponent controls" (Warden of the Woods). Whose spell it must be is a
@@ -1091,6 +1100,25 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("cumulative_upkeep_unpaid",
      r"whenever a player doesn't pay this "
      r"(?:artifact|creature|enchantment|permanent|land)'s cumulative upkeep"),
+    # "Whenever **a creature with shadow** dies, …" (Dauthi Ghoul.) CR 700.4:
+    # "dies" *means* "is put into a graveyard from the battlefield", so this is
+    # the `permanent_dies` rows above spelled the short way — same kind, same
+    # `dying_subject` group, same board-wide fire site
+    # (`_fire_permanent_dies_triggers`), which already tests the phrase through
+    # `subject_matches`. Nothing else was missing: a *narrowed* death had no
+    # reader at all on either front end, so "a creature with flying dies" refused
+    # exactly as "a creature with shadow dies" did — the keyword was never the
+    # gap.
+    #
+    # **Last in the table**, and that is the whole of its safety. `[^,]+` reads
+    # any noun phrase, so every specific death row above — "a creature you
+    # control dies", "a creature an opponent controls dies", "a creature dealt
+    # damage by this creature this turn dies" — has to be offered its line
+    # first; and `_match_trigger_patterns` *aborts* on a phrase the noun parser
+    # refuses rather than falling through, so a row placed above them would take
+    # their cards down with it rather than merely shadowing them.
+    ("permanent_dies",
+     r"whenever (?P<dying_subject>an? [^,]+) dies"),
 )
 
 # "when" triggers (enter/leave events)

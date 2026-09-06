@@ -228,6 +228,15 @@ _EVENT_SUBJECT_OBJECTS: frozenset[str] = frozenset({
     # freezes the damager's id — the object the words name, which is the *other*
     # end of the event from the permanent it damaged.
     "damage_dealt",
+    # "Whenever a creature is dealt damage, **destroy it**." (Death Pits of
+    # Rath.) The *damaged* creature, which is what the subject of this event is
+    # — the row above is the other way round, and the two are the two ends of
+    # one damage event (`_EVENT_SUBJECT_CONTROLLERS` says the same thing about
+    # the seats). Frozen by `_fire_dealt_damage_triggers`, which stamps the id
+    # while the creature is still on a battlefield: this trigger resolves off
+    # the stack (CR 603.3) and lethal damage puts it in a graveyard before then,
+    # where CR 400.7 makes it a new object.
+    "creature_dealt_damage",
 })
 
 

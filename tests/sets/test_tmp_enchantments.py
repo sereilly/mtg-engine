@@ -189,3 +189,67 @@ def test_sadistic_glee_grows_its_host_when_a_creature_dies(set_pool):
     game._settle()
 
     assert (host.effective_power, host.effective_toughness) == (3, 3)
+
+
+# -- Death Pits of Rath -----------------------------------------------------
+
+
+def _w1g4_combat(p1_board, p2_board):
+    p1 = PlayerState(name="P1", battlefield=list(p1_board))
+    p2 = PlayerState(name="P2", battlefield=list(p2_board))
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()   # beginning of combat
+    game.advance_combat_phase()   # declare attackers
+    ok, msg = game.declare_attackers(0, [0])
+    assert ok, msg
+    game.advance_combat_phase()   # declare blockers
+    ok, msg = game.declare_blockers(1, {0: 0})
+    assert ok, msg
+    game._settle()
+    game.advance_combat_phase()   # combat damage
+    game._settle()
+    game.auto_resolve_pending_choices()
+    game._settle()
+    return game, p1, p2
+
+
+def test_death_pits_of_rath_destroys_a_damaged_creature(set_pool):
+    """"Whenever a creature is dealt damage, destroy it. It can't be
+    regenerated."
+
+    A **third dispatch scope** for one event: the damage fire site scanned the
+    damaged permanent's own abilities and its attachments, and nothing else on
+    the board — so a condition both front-end tables could read had no observer
+    that could hear it. A 4/4 that trades one point of damage for a 2/2 walks
+    away; with the Pits out it does not.
+    """
+    from engine import load_cards
+    from engine.card_loader import manifest_set_path
+
+    lea = {c.name: c for c in load_cards(manifest_set_path("LEA"))}
+    beater = _w1g4_perm(lea["Force of Nature"])
+    _, p1, p2 = _w1g4_combat(
+        [beater, _w1g4_perm(set_pool("TMP")["Death Pits of Rath"])],
+        [_w1g4_perm(lea["Granite Gargoyle"])],
+    )
+
+    assert not any(p.card.name == "Force of Nature" for p in p1.battlefield)
+    assert not p2.battlefield
+
+
+def test_a_creature_survives_the_same_combat_without_death_pits(set_pool):
+    """The control: without the enchantment the attacker lives, so the test
+    above is measuring the Pits and not the combat damage step."""
+    from engine import load_cards
+    from engine.card_loader import manifest_set_path
+
+    lea = {c.name: c for c in load_cards(manifest_set_path("LEA"))}
+    _, p1, p2 = _w1g4_combat(
+        [_w1g4_perm(lea["Force of Nature"])],
+        [_w1g4_perm(lea["Granite Gargoyle"])],
+    )
+
+    assert any(p.card.name == "Force of Nature" for p in p1.battlefield)

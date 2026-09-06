@@ -245,6 +245,19 @@ _SUBJECT_LED_EVENTS: tuple[tuple[tuple[str, ...], str], ...] = (
     (("attacks",), "matching_creature_attacks"),
     (("enters", "the", "battlefield"), "matching_permanent_enters"),
     (("enters",), "matching_permanent_enters"),
+    # "Whenever **a creature** is dealt damage, destroy it." (Death Pits of
+    # Rath.) The same event Fungusaur's "whenever **this** creature is dealt
+    # damage" names and Binding Agony's "whenever **enchanted** creature is
+    # dealt damage" names, watched by a permanent that is neither the damaged
+    # creature nor attached to it — so the subject leads and the phrase is the
+    # narrowing, which is exactly this table's shape.
+    (("is", "dealt", "damage"), "creature_dealt_damage"),
+    # "Whenever **a creature with shadow** dies" (Dauthi Ghoul). CR 700.4 makes
+    # this the long spelling read a few lines up in `_parse_matched_event`
+    # ("…is put into a graveyard from the battlefield"), so it is the same kind
+    # and reaches the same fire site. Last, because the table is tried in order
+    # and a one-word verb is the most permissive entry in it.
+    (("dies",), "permanent_dies"),
 )
 
 
