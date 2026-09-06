@@ -243,3 +243,139 @@ def test_g2_an_unpaid_or_absent_announcement_reads_back_as_declined(
         set_pool("TMP")["Reality Anchor"],
         {"additional_costs_paid": {"{3}": 1}},
     ), "a card printing no buyback is never bought back by somebody else's key"
+
+
+# --- W1G2: Whim of Volrath — a text change with a printed duration (CR 612) ---
+from engine.card_loader import load_cards as _w1g2_load
+from engine.card_loader import manifest_set_path as _w1g2_path
+from engine.text_changes import UNTIL_END_OF_TURN, text_changes
+
+_W1G2_LEA = {card.name: card for card in _w1g2_load(_w1g2_path("LEA"))}
+_W1G2_MIR = {card.name: card for card in _w1g2_load(_w1g2_path("MIR"))}
+
+
+def _g2_text_change(spell, *, old="W", new="U"):
+    """Cast *spell* at a Black Knight and answer any vocabulary prompt.
+
+    Black Knight is the subject because its "Protection from white" is a colour
+    word in its *rules text* — so the rewrite is visible through
+    ``effective_card`` (CR 613 layer 3) rather than only in a record.
+    """
+    caster = PlayerState(name="A", hand=[spell])
+    holder = PlayerState(name="B")
+    game = Game(players=[caster, holder])
+    game.enforce_mana_costs = False
+    knight = Permanent(card=_W1G2_LEA["Black Knight"])
+    holder.battlefield.append(knight)
+    game._settle()
+
+    result = game.cast_from_hand(
+        0, spell.name, target_player_index=1, target_permanent_index=0,
+        target_permanent_ids=[knight.permanent_id],
+        old_color=old, new_color=new,
+    )
+    game._settle()
+    while game.stack:
+        game.resolve_top_of_stack()
+        game._settle()
+    for choice in list(game.pending_choices):
+        game.confirm_text_change_vocabulary(choice.player_index, "color_word")
+        game._settle()
+    return game, knight, result
+
+
+def test_g2_whim_of_volrath_is_mind_bend_with_a_duration(set_pool):
+    """The union vocabulary already existed (Mind Bend, MIR). What Whim of
+    Volrath adds is the *duration*, which is why it is a field on the node and
+    a key on the payload rather than a second instruction kind."""
+    program = compile_card_oracle(set_pool("TMP")["Whim of Volrath"])
+    assert program.supported, program.reason
+    assert [i.kind for i in program.instructions] == ["mark_text_modified"]
+    assert program.instructions[0].payload == {
+        "mode": "color_word_or_land_type", "duration": "until_end_of_turn",
+    }
+    assert compile_card_oracle(_W1G2_MIR["Mind Bend"]).instructions[0].payload == {
+        "mode": "color_word_or_land_type",
+    }, "the durationless printing keeps the payload it always had"
+
+
+def test_g2_whim_of_volrath_rewrites_the_word_and_the_cleanup_puts_it_back(set_pool):
+    game, knight, result = _g2_text_change(set_pool("TMP")["Whim of Volrath"])
+
+    assert result.supported, result.details
+    assert "protection from blue" in knight.effective_card.oracle_text.lower()
+    assert [
+        (c["from"], c["to"], c.get("duration")) for c in text_changes(knight)
+    ] == [("white", "blue", UNTIL_END_OF_TURN)]
+
+    game.resolve_cleanup_step(0)
+    game._settle()
+
+    assert text_changes(knight) == ()
+    assert "protection from white" in knight.effective_card.oracle_text.lower(), (
+        "dropping the contribution is the reversion (CR 611.3b) — nothing was "
+        "stashed and nothing is restored"
+    )
+
+
+def test_g2_the_cleanup_keeps_a_text_change_printed_without_a_duration():
+    """The half a plain `_EOT_METADATA_KEYS` entry would have got wrong: the key
+    holds records of two lifetimes, and popping it whole would end Mind Bend's
+    indefinite rewrite with the turn."""
+    game, knight, result = _g2_text_change(_W1G2_MIR["Mind Bend"])
+
+    assert result.supported, result.details
+    assert [c.get("duration") for c in text_changes(knight)] == [None]
+
+    game.resolve_cleanup_step(0)
+    game._settle()
+
+    assert [c.get("duration") for c in text_changes(knight)] == [None]
+    assert "protection from blue" in knight.effective_card.oracle_text.lower()
+
+
+def test_g2_both_lifetimes_on_one_permanent_end_separately(set_pool):
+    """Mind Bend first, then Whim of Volrath: the cleanup drops one record and
+    keeps the other, and what the permanent reads afterwards is whatever
+    contributions remain.
+
+    Neither swap names blue, and that is not incidental: Whim of Volrath is a
+    **blue** spell, so rewriting Black Knight's protection to blue would make it
+    an illegal target for the second cast (CR 702.16b). The engine refuses that
+    correctly, which is how this test first failed.
+    """
+    caster = PlayerState(
+        name="A",
+        hand=[_W1G2_MIR["Mind Bend"], set_pool("TMP")["Whim of Volrath"]],
+    )
+    holder = PlayerState(name="B")
+    game = Game(players=[caster, holder])
+    game.enforce_mana_costs = False
+    knight = Permanent(card=_W1G2_LEA["Black Knight"])
+    holder.battlefield.append(knight)
+    game._settle()
+
+    for name, old, new in (("Mind Bend", "W", "G"), ("Whim of Volrath", "G", "R")):
+        cast = game.cast_from_hand(
+            0, name, target_player_index=1, target_permanent_index=0,
+            target_permanent_ids=[knight.permanent_id],
+            old_color=old, new_color=new,
+        )
+        assert cast.supported, f"{name}: {cast.details}"
+        game._settle()
+        while game.stack:
+            game.resolve_top_of_stack()
+            game._settle()
+        for choice in list(game.pending_choices):
+            game.confirm_text_change_vocabulary(choice.player_index, "color_word")
+            game._settle()
+
+    assert "protection from red" in knight.effective_card.oracle_text.lower()
+
+    game.resolve_cleanup_step(0)
+    game._settle()
+
+    assert [c.get("duration") for c in text_changes(knight)] == [None]
+    assert "protection from green" in knight.effective_card.oracle_text.lower(), (
+        "Mind Bend's white->green is still there; only Whim's green->red ended"
+    )

@@ -103,22 +103,41 @@ def _forms(kind: str, old: str, new: str) -> tuple[tuple[str, str], ...]:
     return tuple(sorted(pairs.items(), key=lambda item: (-len(item[0]), item[0])))
 
 
-def _record(perm: Permanent, kind: str, old: str, new: str, *, label: str) -> None:
+#: The one duration a text change may carry. CR 612 gives none by default —
+#: which is what Magical Hack, Sleight of Mind and Mind Bend mean by "This
+#: effect lasts indefinitely" — and Whim of Volrath is the first card in the
+#: pool to print one. Kept as a constant rather than a bare string because the
+#: lowering, the record and the sweep all have to spell it the same way, and a
+#: record stamped with a duration the sweep does not recognise is an effect
+#: printed to end that never does.
+UNTIL_END_OF_TURN = "until_end_of_turn"
+
+
+def _record(
+    perm: Permanent, kind: str, old: str, new: str, *, label: str,
+    duration: str | None = None,
+) -> None:
     effects = perm.metadata.setdefault(TEXT_CHANGE_EFFECTS, [])
-    effects.append(
-        {
-            "kind": kind,
-            "from": old,
-            "to": new,
-            # 613.7b: an effect is stamped when it is created.
-            "timestamp": next_timestamp(),
-            "label": label,
-        }
-    )
+    record = {
+        "kind": kind,
+        "from": old,
+        "to": new,
+        # 613.7b: an effect is stamped when it is created.
+        "timestamp": next_timestamp(),
+        "label": label,
+    }
+    if duration is not None:
+        # Absent for a permanent one, so every record written before Whim of
+        # Volrath existed is byte-identical to what it was — which is what keeps
+        # `changed_words`' payload and the web state stable for the three cards
+        # that print no duration.
+        record["duration"] = duration
+    effects.append(record)
 
 
 def change_color_word(
-    perm: Permanent, old_symbol: str, new_symbol: str, *, label: str = ""
+    perm: Permanent, old_symbol: str, new_symbol: str, *, label: str = "",
+    duration: str | None = None,
 ) -> bool:
     """Sleight of Mind: replace one colour word with another in *perm*'s text.
 
@@ -129,12 +148,13 @@ def change_color_word(
     new = COLOR_WORDS.get((new_symbol or "").upper())
     if not old or not new:
         return False
-    _record(perm, COLOR_WORD, old, new, label=label)
+    _record(perm, COLOR_WORD, old, new, label=label, duration=duration)
     return True
 
 
 def change_land_word(
-    perm: Permanent, old_type: str, new_type: str, *, label: str = ""
+    perm: Permanent, old_type: str, new_type: str, *, label: str = "",
+    duration: str | None = None,
 ) -> bool:
     """Magical Hack: replace one basic land type with another in *perm*'s text.
 
@@ -149,7 +169,7 @@ def change_land_word(
     basics = set(LAND_TYPE_WORDS.values())
     if old not in basics or new not in basics:
         return False
-    _record(perm, LAND_WORD, old, new, label=label)
+    _record(perm, LAND_WORD, old, new, label=label, duration=duration)
     return True
 
 
@@ -157,11 +177,43 @@ def text_changes(perm: Permanent) -> tuple[dict, ...]:
     """The recorded text changes, oldest first (CR 613.7).
 
     Recorded order is timestamp order: a text change is only ever appended, and
-    never ends — nothing in CR 612 gives one a duration, and none of the cards
-    that make them do either. :func:`apply_text_changes` sorts anyway, because
-    it is the fold and the fold is where the order has to be right.
+    ends only where the card printed a duration — which until Whim of Volrath no
+    card in the pool did. :func:`apply_text_changes` sorts anyway, because it is
+    the fold and the fold is where the order has to be right.
     """
     return tuple(perm.metadata.get(TEXT_CHANGE_EFFECTS) or ())
+
+
+def end_until_eot_text_changes(perm: Permanent) -> bool:
+    """Drop *perm*'s until-end-of-turn text changes. True if any went.
+
+    Called by the cleanup step, and shaped like the gained-type sweep beside it
+    rather than like a plain ``_EOT_METADATA_KEYS`` entry, for that sweep's
+    reason: the key holds records of **two** lifetimes, and popping it whole
+    would end Magical Hack's permanent rewrite with the turn.
+
+    Dropping the contribution *is* the reversion (CR 611.3b): nothing here
+    remembers a delta, so what the permanent reads afterwards is whatever
+    contributions remain — including a later permanent change that was stacked
+    on top of the one being dropped, which is why the fold is re-run rather than
+    anything being restored.
+    """
+    recorded = perm.metadata.get(TEXT_CHANGE_EFFECTS)
+    if not recorded:
+        return False
+    kept = [
+        change for change in recorded
+        if change.get("duration") != UNTIL_END_OF_TURN
+    ]
+    if len(kept) == len(recorded):
+        return False
+    if kept:
+        perm.metadata[TEXT_CHANGE_EFFECTS] = kept
+    else:
+        # Popped rather than left empty, so ``has_text_changes``' fast path —
+        # which nearly every rules query takes — goes back to answering False.
+        perm.metadata.pop(TEXT_CHANGE_EFFECTS, None)
+    return True
 
 
 def has_text_changes(perm: Permanent) -> bool:
