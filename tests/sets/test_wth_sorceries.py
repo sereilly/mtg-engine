@@ -456,3 +456,31 @@ def test_cone_of_flame_keeps_a_survivors_own_share_when_a_target_leaves(set_pool
 
     assert second.damage_marked == 2, "still its own share, not the first's"
     assert game.players[1].life == 17
+
+
+def test_cone_of_flame_is_proposable_by_the_ai(set_pool):
+    """A card the policy skips every turn is a card no simulation ever tests.
+
+    Cone of Flame's total is printed, so nothing asks for it — and
+    `_divided_announcement_total` read the total off a key only "as you choose"
+    set, answered 0, and `choose_divided_targets` returned "no lawful
+    announcement". The card compiled, resolved correctly when driven by hand,
+    and was never once cast.
+    """
+    from engine.ai_policy import choose_cast_action
+
+    board = [_w2g2_bear(f"Bear {i}") for i in range(3)]
+    lands = [_w2g2_permanent(card=set_pool("LEA")["Mountain"]) for _ in range(6)]
+    for land in lands:
+        land.metadata["summoning_sickness_turn"] = -99
+    game = Game(players=[
+        PlayerState(name="P1", hand=[set_pool("WTH")["Cone of Flame"]],
+                    battlefield=lands),
+        PlayerState(name="P2", battlefield=board),
+    ])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    action = choose_cast_action(game, 0)
+    assert action is not None and action.card_name == "Cone of Flame"
+    assert len(action.divided_targets) == 3, "the count the card prints"

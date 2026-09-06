@@ -44,7 +44,7 @@ from __future__ import annotations
 import re
 
 from .cast_costs import additional_costs, costs_charged_from
-from .divided_damage import CHOSEN, DIVIDED_TARGETS, divided_entry
+from .divided_damage import CARD_DIVIDED, CHOSEN, DIVIDED_TARGETS, divided_entry
 from .enter_effects import copy_on_enter_type
 from .oracle_types import _COLOR_WORD_TO_SYMBOL
 from .subject_filters import filter_head_noun, unimplemented_filter_keywords
@@ -1970,6 +1970,17 @@ def _from_instructions(instructions) -> dict | None:
     return None
 
 
+#: The divisions whose spec carries the quantity being divided.
+#:
+#: CR 601.2d's "as you choose" needs it so the picker can ask for a division
+#: that totals it. The two the *card* divides need it for a different reader and
+#: the same reason: ``ai_policy._divided_announcement_total`` asks "how much is
+#: there", and a spell whose answer is 0 has no lawful announcement at all — so
+#: Cone of Flame, whose 6 is printed and needs no asking, was skipped by the
+#: policy every turn it was in hand.
+_SIZED_DIVISIONS = frozenset({CHOSEN}) | CARD_DIVIDED
+
+
 def _from_instruction(instruction) -> dict | None:
     """The spec one instruction describes, or None when it describes none."""
     # A kind with several specs settles its own case first, because it is the
@@ -1981,7 +1992,7 @@ def _from_instruction(instruction) -> dict | None:
         return from_payload(instruction.payload)
     described = _from_targets_payload(instruction.payload.get("targets"))
     if described is not None:
-        if described.get("division") == CHOSEN:
+        if described.get("division") in _SIZED_DIVISIONS:
             # **How much there is to divide**, so the picker can ask for a
             # division that totals it (CR 601.2d). Read off the payload here
             # rather than copied into the `targets` description at lowering: the
