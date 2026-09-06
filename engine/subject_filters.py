@@ -73,6 +73,14 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # reason: the key set is what a compiler admits a narrowed line on, and
     # without the word the sweep would be refused outright.
     "mana_value_at_most_counters",
+    # "…each creature **with mana value equal to the number of age counters on
+    # this enchantment**" (Wave of Terror). The bound above read off the
+    # ability's own source rather than off the candidate, which puts it on
+    # ``created_with_source``'s footing: testable here and nowhere else,
+    # answered no by a caller with no source. That direction is the whole point
+    # on a *sweep* — with the word untestable the lowering refuses the line, and
+    # dropping it instead would destroy every creature on the table.
+    "mana_value_equals_source_counters",
     "nontoken", "named", "supertypes",
     # "…with **a name originally printed in the Homelands expansion**"
     # (Apocalypse Chime). A fact about the card, read off
@@ -634,6 +642,30 @@ def subject_matches(
             k: v for k, v in described.items() if k != "attacked_you_this_turn"
         }
         if observer is None or not attacked_seat_this_turn(obj, observer):
+            return False
+    # "…with mana value **equal to the number of age counters on this
+    # enchantment**" (Wave of Terror). Both halves are numbers, but only one of
+    # them comes off the object being tested — the other is a count on the
+    # ability's own source, which the pure matcher has no way to reach. So it is
+    # answered here, where the source is in hand, and stripped before that
+    # matcher runs. With no source it refuses, which on a board sweep is the
+    # only safe direction.
+    equals_counters = described.get("mana_value_equals_source_counters")
+    if equals_counters is not None:
+        from .named_counters import counters_on
+
+        described = {
+            k: v for k, v in described.items()
+            if k != "mana_value_equals_source_counters"
+        }
+        if source is None:
+            return False
+        # ``effective_card``, like the ``mana_value`` key beside it: CR 202.3
+        # reads the mana value off the card, and layer 1 may have made that a
+        # different card than the one printed.
+        if int(getattr(obj.effective_card, "cmc", 0) or 0) != counters_on(
+            source, str(equals_counters)
+        ):
             return False
     relative = described.get("characteristic_vs_source")
     if relative:

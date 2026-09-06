@@ -310,6 +310,31 @@ def _lower_gain_life(
                 },
             ),
         )
+    # "When this creature leaves the battlefield, you gain life equal to **the
+    # number of age counters on it**." (Revered Unicorn.) Not a count of a set
+    # in any zone — a counter is not an object — so it travels the
+    # ``source_counters`` spec ``cards._lower_draw`` and
+    # ``where_x._lower_where_x_counters`` already write for the identical
+    # phrase, resolved at the one substitution point. One evaluator, so the
+    # three printed word orders cannot count differently.
+    #
+    # Uncapped and to the ability's own controller: the pool prints no other
+    # shape, and a cap dropped on the way past is the bug this file refuses on
+    # behalf of everywhere else.
+    if isinstance(node.amount, ast.CountersOnSource):
+        if node.capped_by or node.per_each is not None:
+            raise LoweringError(
+                "a counter-counted life gain is gained uncapped", node=node
+            )
+        return (
+            OracleInstruction(
+                "target_gains_life", "",
+                {
+                    "amount": "x", "recipient": recipient,
+                    X_FROM_COUNT: {"source_counters": node.amount.kind},
+                },
+            ),
+        )
     # "You gain **X plus 1** life, where X is the number of green creatures on
     # the battlefield." (An-Havva Inn.) A printed constant on top of the
     # sentence's X, carried on the amount rather than folded into the count that

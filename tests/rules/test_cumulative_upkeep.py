@@ -40,13 +40,20 @@ def _mk(name: str, cost: str, *, extra_text: str = "", type_line: str = "Enchant
     return _card(name, type_line, text, keywords=("Cumulative upkeep",))
 
 
-def _mk_cost(name: str, cost: str, *, type_line: str = "Enchantment") -> CardDefinition:
+def _mk_cost(
+    name: str, cost: str, *, type_line: str = "Enchantment",
+    power: str = "", toughness: str = "",
+) -> CardDefinition:
     """:func:`_mk` for a cost printed after CR 702.24's em dash.
 
     A separate spelling rather than a flag on the one above, because the em
     dash is part of the printed line for a non-mana cost and part of what the
     reader has to get past — a fixture that joined the two with a space would
     test a line no card carries.
+
+    *power*/*toughness* are pass-throughs, and a creature fixture needs them:
+    a card with a blank toughness is a 0/0 and CR 704.5f puts it in the
+    graveyard before its first upkeep ever resolves.
     """
     reminder = (
         " (At the beginning of your upkeep, put an age counter on this permanent, "
@@ -57,6 +64,8 @@ def _mk_cost(name: str, cost: str, *, type_line: str = "Enchantment") -> CardDef
         type_line,
         f"Cumulative upkeep—{cost}.{reminder}",
         keywords=("Cumulative upkeep",),
+        power=power,
+        toughness=toughness,
     )
 
 
@@ -417,3 +426,114 @@ def test_702_24a_the_keyword_rides_a_line_with_other_keywords():
     assert len(program.triggered_abilities) == 1
     perm = Permanent(card=card)
     assert perm.has_keyword("flying")
+
+
+# --- W1G3: cumulative upkeep beyond a mana cost ---
+
+
+@pytest.mark.cr("702.24a")
+def test_702_24a_a_cost_whose_content_is_an_act_is_paid_once_per_age_counter():
+    """CR 702.24a's [cost] may be something the payer *does* rather than
+    something they hand over ("Put a -1/-1 counter on this creature", Aboroth).
+
+    "Pay [cost] for each age counter on it" then means the act is performed
+    again, not performed bigger — which is why the escalation multiplies a
+    repetition count and leaves the lowered instruction alone.
+    """
+    perm = Permanent(
+        card=_mk_cost(
+            "Counting Ager", "Put a -1/-1 counter on this creature",
+            type_line="Creature — Elemental", power="5", toughness="5",
+        )
+    )
+    game, p1 = _game(perm)
+
+    game.resolve_upkeep(0)
+    # The CR 122.1a record, not the P/T bonus beside it: ``named_counters``
+    # holds the counters a card invented and a -1/-1 counter is on ``pt.py``'s
+    # channel (``minus_counters``), which is what the 704.5q sweep reads.
+    assert perm.metadata.get("minus_counters") == 1
+
+    game.resolve_upkeep(0)
+    assert perm.metadata.get("minus_counters") == 3, "one, then two more"
+    assert perm in p1.battlefield
+
+
+@pytest.mark.cr("121.4")
+def test_121_4_a_draw_cost_is_payable_with_a_library_too_short_for_it():
+    """"Cumulative upkeep—Draw a card" (Psychic Vortex) with two cards left and
+    three age counters.
+
+    CR 118.3 asks whether the cost can be paid *fully*, and CR 121.4 says
+    attempting to draw from an empty library is a legal thing to do — the
+    player loses at the next state-based check instead. So the cost is paid and
+    the permanent stays; refusing it would sacrifice a permanent the rules keep
+    on the battlefield.
+    """
+    perm = Permanent(card=_mk_cost("Drawing Ager", "Draw a card"))
+    game, p1 = _game(perm)
+    p1.library = [_forest(f"Forest {i}") for i in range(3)]
+
+    game.resolve_upkeep(0)   # 1 counter -> draw 1
+    game.resolve_upkeep(0)   # 2 counters -> draw 2, library empty
+    assert len(p1.library) == 0
+    assert perm in p1.battlefield
+
+    game.resolve_upkeep(0)   # 3 counters -> draws from an empty library
+    assert perm in p1.battlefield
+    assert len(p1.hand) == 3
+
+
+@pytest.mark.cr("702.24a")
+def test_702_24a_an_act_this_engine_cannot_perform_alone_refuses_the_card():
+    """The self-action reader is a whitelist for the reason the whole phrase
+    reader is strict: what the payment *does* is execute the lowered
+    instruction, so a clause that targets, prompts or aims anywhere but the
+    payer is refused and costs its card support rather than being run against
+    a seat nobody chose.
+    """
+    assert cumulative_upkeep_cost("cumulative upkeep—destroy target creature") is None
+    assert cumulative_upkeep_cost("cumulative upkeep—each opponent draws a card") is None
+    assert cumulative_upkeep_cost("cumulative upkeep—discard a card") is None
+    assert cumulative_upkeep_cost(
+        "cumulative upkeep—put a -1/-1 counter on this creature"
+    ) == UpkeepCost(
+        self_action={"kind": "add_counter_to_self", "payload": {"counter": "-1/-1"}},
+        self_actions=1,
+        self_action_text="put a -1/-1 counter on this creature",
+    )
+
+
+@pytest.mark.cr("702.24a", "120.8")
+def test_702_24a_the_unpaid_trigger_fires_before_the_sacrifice():
+    """"When a player doesn't pay this enchantment's cumulative upkeep…"
+    (Heart of Bogardan, Thought Lash.)
+
+    CR 702.24a's "if you don't" is decided in exactly one place, and the
+    trigger has to be announced from it — a condition that is in both front-end
+    tables and fires nowhere is a card that compiles, reports supported, and
+    does nothing. Announced **before** the sacrifice, because a permanent
+    already in a graveyard is not one the trigger scan reaches.
+    """
+    perm = Permanent(
+        card=_mk(
+            "Watched Ager", "{U}",
+            extra_text=(
+                "When a player doesn't pay this enchantment's cumulative "
+                "upkeep, this enchantment deals 2 damage to target player."
+            ),
+        )
+    )
+    game, p1 = _game(perm)
+    opponent = game.players[1]
+
+    game.resolve_upkeep(0)
+    game.auto_resolve_pending_choices(kinds=("trigger_target",))
+    game._settle()
+    while game.stack:
+        game.resolve_top_of_stack()
+        game.auto_resolve_pending_choices(kinds=("trigger_target",))
+        game._settle()
+
+    assert perm not in p1.battlefield, "unpaid, so it is sacrificed"
+    assert opponent.life == 18, "and the trigger that watched it fired"

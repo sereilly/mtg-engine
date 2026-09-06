@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**358 / 612 tracked rules covered (58%)** — 2064 tests, 0 unannotated.
+**358 / 612 tracked rules covered (58%)** — 2068 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -327,7 +327,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **120.5** Damage dealt to a creature, planeswalker, or battle doesn’t destroy it. Likewise, the source of t...
 - [ ] **120.6** Damage marked on a creature remains until the cleanup step, even if that permanent stops being a ...
 - [x] **120.7** The source of damage is the object that dealt it. If an effect requires a player to choose a sour... *(1 tests)*
-- [x] **120.8** If a source would deal 0 damage, it does not deal damage at all. That means abilities that trigge... *(2 tests)*
+- [x] **120.8** If a source would deal 0 damage, it does not deal damage at all. That means abilities that trigge... *(3 tests)*
 - [ ] **120.9** If an ability triggers on damage being dealt by a specific source or sources, and the effect refe...
 - [ ] **120.10** Some triggered abilities check whether a permanent has been dealt excess damage. These abilities ...
 
@@ -336,7 +336,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **121.1** A player draws a card by putting the top card of their library into their hand. This is done as a... *(3 tests)*
 - [x] **121.2** Cards may only be drawn one at a time. If a player is instructed to draw multiple cards, that pla... *(3 tests, subrules a)*
 - [ ] **121.3** If there are no cards in a player’s library and an effect offers that player the choice to draw a...
-- [x] **121.4** A player who attempts to draw a card from a library with no cards in it loses the game the next t... *(3 tests)*
+- [x] **121.4** A player who attempts to draw a card from a library with no cards in it loses the game the next t... *(4 tests)*
 - [ ] **121.5** If an effect moves cards from a player’s library to that player’s hand without using the word “dr...
 - [x] **121.6** Some effects replace card draws. *(1 tests)*
 - [ ] **121.7** Some replacement effects and prevention effects result in one or more card draws. In such a case,...
@@ -888,7 +888,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.20** Vigilance *(2 tests, subrules b)*
 - [x] **702.22** Banding *(35 tests, subrules abcdefghjk)*
 - [x] **702.23** Rampage *(6 tests, subrules abc)*
-- [x] **702.24** Cumulative Upkeep *(25 tests, subrules ab)*
+- [x] **702.24** Cumulative Upkeep *(28 tests, subrules ab)*
 - [x] **702.25** Flanking *(6 tests, subrules ab)*
 - [x] **702.26** Phasing *(15 tests, subrules adfgim)*
 - [x] **702.36** Fear *(5 tests, subrules ab)*

@@ -143,6 +143,13 @@ class ObjectFilter:
     #: general `op` here would be a comparison the matcher has to be trusted to
     #: implement in five ways nothing exercises.
     mana_value_at_most_counters: str | None = None
+    #: "…each creature **with mana value equal to the number of age counters on
+    #: this enchantment**" (Wave of Terror). The field above read off the
+    #: ability's *source* instead of off the object being tested — a different
+    #: question, so a different key, and the operator is again in the name for
+    #: that field's reason. "On it" is refused by the parse and belongs to the
+    #: field above: the pronoun names the candidate.
+    mana_value_equals_source_counters: str | None = None
     named: str | None = None
     #: "…**with a name originally printed in the Homelands expansion**"
     #: (Apocalypse Chime, Golgothian Sylex). The set *code* the printed
@@ -792,6 +799,9 @@ class ObjectFilter:
         # with no key is exactly what `dropped_narrowings` refuses.
         if self.mana_value_at_most_counters is not None:
             payload["mana_value_at_most_counters"] = self.mana_value_at_most_counters
+        if self.mana_value_equals_source_counters is not None:
+            key = "mana_value_equals_source_counters"
+            payload[key] = self.mana_value_equals_source_counters
         # "with power 4 or greater" (Turret Ogre's intervening-if). Same rule
         # as mana_value: a literal bound rides the payload and the matcher
         # tests it against the layer-computed stat; a variable bound stays
