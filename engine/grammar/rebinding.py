@@ -9,9 +9,13 @@ is pointed at it.
 Its own module rather than more of ``triggers``: only one of the two rebinders
 is about a trigger, and the walk underneath is about the shape of the AST rather
 than about either. It sits below ``triggers`` in the layer order because it
-imports nothing but ``ast`` — a rebinder that needed a production would be
-rebinding by a list of the productions that admit a pronoun, which is the
-per-node table the walk exists to avoid.
+reaches no production — a rebinder that needed one would be rebinding by a list
+of the productions that admit a pronoun, which is the per-node table the walk
+exists to avoid. The one name it takes from further down is a **vocabulary**,
+``back_references.COMBAT_ROLES``: the words "the attacking creature" and "the
+blocking creature" are read there and resolved here, and spelling them twice is
+how the reader and the resolver would come to disagree about which phrase is a
+role at all.
 """
 
 from __future__ import annotations
@@ -20,6 +24,7 @@ import dataclasses
 from dataclasses import replace
 
 from . import ast
+from .back_references import COMBAT_ROLES
 
 
 def _walk_specs(node, rewrite, kind=ast.TargetSpec):
@@ -248,6 +253,73 @@ def rebind_pronoun_to_event_subject(
     if not isinstance(subject, ast.ObjectFilter) or subject.is_source:
         return statement
     return _rebound(statement, subject)
+
+
+#: For each printed combat role, the trigger events whose **subject** plays it.
+#:
+#: A role names one member of a combat pair, and a pair has two — so an event
+#: answers for exactly one of the words and never for both. "Whenever this
+#: creature becomes blocked" is the attacker's event: "the attacking creature"
+#: is its subject and "the blocking creature" is the *other* half, which is a
+#: different question with a different answer (``handlers/_common``'s
+#: ``block_pair_permanents``) and is deliberately not resolved here.
+#:
+#: The unions are left out on purpose. Under "whenever this creature attacks or
+#: blocks" (Imprison) and "whenever enchanted creature blocks or becomes blocked
+#: by …" (Infinite Authority) the subject is in the combat but which role it
+#: plays is not known until the trigger fires, so a role word under one of them
+#: names an object nothing can identify at compile time. Refusing is the whole
+#: point of keeping the role as a quantifier: the card is reported unsupported
+#: naming its clause instead of acting on whichever creature was at hand.
+_ROLE_EVENT_SUBJECTS: dict[str, frozenset[str]] = {
+    "attacking": frozenset({
+        "creature_attacks",
+        "attacks_unblocked",            # Farrel's Mantle
+        "matching_creature_attacks",
+        # The attacker's own event: CR 509.1a's pair is announced against the
+        # creature that *was* blocked, so its subject is the attacking half.
+        "creature_becomes_blocked",
+    }),
+    "blocking": frozenset({"creature_blocks"}),
+}
+
+
+def rebind_combat_role_to_event_subject(
+    event: ast.TriggerEvent, statement: ast.Statement
+) -> ast.Statement:
+    """"…**the attacking creature** assigns no combat damage this turn."
+    (Farrel's Mantle.) The role names the object the trigger's condition was
+    about — but only where the condition established that role.
+
+    The sibling of :func:`rebind_pronoun_to_event_subject` and the same rewrite;
+    what differs is the gate. A bare "it" is rebound under any event with a
+    subject, because the word names whatever the sentence already named. A role
+    word says *which* combatant, so it is only the event subject when the event
+    is about a creature playing that role — and under any other event it stays a
+    role, which every lowering refuses by name (CR 509.1a: a block is a pair, and
+    a phrase naming the wrong half of one does not fail loudly on its own).
+
+    Left as a role rather than raising here: this runs over every trigger in the
+    pool, and a parse-time refusal would blame the subject for a lowering that
+    may yet be written. The refusal that reaches the support report should name
+    the effect that could not use the role.
+    """
+    subject = event.subject
+    if not isinstance(subject, ast.ObjectFilter) or subject.is_source:
+        return statement
+    roles = {
+        role for role in COMBAT_ROLES
+        if event.kind in _ROLE_EVENT_SUBJECTS[role]
+    }
+    if not roles:
+        return statement
+
+    def _rewrite(spec: ast.TargetSpec) -> ast.TargetSpec | None:
+        if spec.quantifier in roles:
+            return replace(spec, quantifier="it", filter=subject)
+        return None
+
+    return _walk_specs(statement, _rewrite)
 
 
 def rebind_pronoun_to_delay_target(

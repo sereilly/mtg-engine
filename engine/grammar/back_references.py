@@ -57,6 +57,37 @@ from .vocabulary import CARD_TYPES, CREATURE_TYPES, SUBTYPE_INDEX, match_longest
 PAIR_ORDINALS = ("other", "first")
 
 
+#: The two **combat roles** a printed sentence names a member of a combat pair
+#: by: "the attacking creature", "the blocking creature" (No Quarter, Farrel's
+#: Mantle). Beside :data:`PAIR_ORDINALS` because it is the same vocabulary
+#: answering the same question — which of two bound objects does this phrase
+#: point at — with the role printed instead of the position.
+#:
+#: A role is a **quantifier**, exactly as an ordinal is, and for that constant's
+#: reason: nothing accepts one unless it says so, so a sentence naming a role no
+#: event established fails *by name* rather than resolving to whatever object
+#: happened to be at hand. That is not a hypothetical. Before Tempest's third
+#: wave "the attacking creature" was read as the bare pronoun and "the blocking
+#: creature" refused to parse at all — two halves of one vocabulary, one of them
+#: answering, and answering with the **ability's own source**. No card printed
+#: the pair, so nothing failed; No Quarter prints both, and would have destroyed
+#: itself.
+#:
+#: ``rebinding.rebind_combat_role_to_event_subject`` is the one place a role
+#: becomes an object, because the trigger event is the only thing that can say
+#: whether the role was established at all.
+COMBAT_ROLES = ("attacking", "blocking")
+
+
+def accept_combat_role(stream: TokenStream) -> str | None:
+    """``attacking`` / ``blocking`` at the cursor, consumed, or None."""
+    word = stream.peek_word()
+    if word in COMBAT_ROLES:
+        stream.advance()
+        return word
+    return None
+
+
 def _accept_pair_ordinal(stream: TokenStream) -> str | None:
     """``other`` / ``first`` at the cursor, consumed, or None."""
     word = stream.peek_word()

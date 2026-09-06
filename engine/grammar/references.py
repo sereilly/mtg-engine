@@ -33,7 +33,8 @@ from .amounts import parse_amount
 # the same effect rather than a choice a player makes. Re-exported under the
 # names this module used, so `phrases` and every effect family that reads one
 # is untouched, exactly as `phrases` re-exports them one layer up.
-from .back_references import (PAIR_ORDINALS,  # noqa: F401
+from .back_references import (COMBAT_ROLES, PAIR_ORDINALS,  # noqa: F401
+                              accept_combat_role,
                               _parse_that_object, parse_bound_subject,
                               parse_pair_ordinal_subject)
 from .errors import GrammarError
@@ -575,33 +576,39 @@ def parse_recipient(stream: TokenStream) -> ast.Recipient | None:
     mark_definite = stream.mark()
     if stream.accept_word("the"):
         # "…**the attacking creature** assigns no combat damage this turn"
-        # (Farrel's Mantle). The same back-reference with the state the trigger
-        # already established spelled out: the sentence is under "whenever
-        # enchanted creature **attacks** and isn't blocked", so "the attacking
-        # creature" and "the creature" name one object. Read as an adjective
-        # here rather than as a noun phrase for the reason the bare form is:
-        # the words point at an object the sentence already has, and the noun
-        # parser would go looking for a set to choose from.
+        # (Farrel's Mantle), "…destroy **the blocking creature**" (No Quarter).
+        # The same back-reference with the combat role the trigger established
+        # spelled out — and the role is kept as the spec's *quantifier* rather
+        # than dropped, because only a reader holding the trigger can say
+        # whether the role was established at all.
         #
-        # One word, and only the one a printed sentence pairs with this shape.
-        # A wider list would let a state the trigger did **not** establish
-        # ("the blocking creature" under an attack trigger) resolve to the
-        # attacker, which is a referent nothing checked.
-        stated = stream.accept_word("attacking")
+        # It used to be dropped, for one of the two words. "attacking" was
+        # consumed and the phrase returned the bare pronoun; "blocking" was not
+        # in the list, so the phrase did not parse. Two halves of one
+        # vocabulary, one answering and one refusing, and the half that answered
+        # named the **ability's own source** with nothing checking that the
+        # source was attacking anything. Only Farrel's Mantle printed it, where
+        # the rebinding below happens to give the right object, so nothing ever
+        # failed — until a card printed both halves on a source that is not in
+        # the combat at all.
+        role = accept_combat_role(stream)
         noun = stream.peek_word()
         if noun is not None and noun in CARD_TYPES:
             stream.advance()
-            if stream.exhausted or stream.at_punct(".", ",", ";"):
-                return ast.TargetSpec("it", ast.ObjectFilter(is_source=True))
-            # …and in the **subject** position, where a verb follows instead of
-            # the end of the phrase. Admitted only with the state word printed:
-            # bare "the creature" as a subject is read as a bound back-reference
-            # by ``phrases.parse_bound_subject``, and claiming it here would take
-            # every one of those sentences away from the lowerings written for
-            # them. A possessive is left alone for the same reason the bare form
-            # is — "the creature's controller" names a player, and the reader
-            # below this one reads it.
-            if stated and not stream.at_word("'s"):
+            if role is not None:
+                # A possessive is left alone for the reason the bare form below
+                # is — "the creature's controller" names a player, and the
+                # reader further down reads it.
+                if not stream.at_word("'s"):
+                    return ast.TargetSpec(
+                        role, ast.ObjectFilter(card_types=(noun,))
+                    )
+            # The bare definite article, admitted only where the noun **ends
+            # the phrase**: as a subject it is the bound back-reference
+            # ``back_references.parse_bound_subject`` reads, and claiming it
+            # here would take every one of those sentences away from the
+            # lowerings written for them.
+            elif stream.exhausted or stream.at_punct(".", ",", ";"):
                 return ast.TargetSpec("it", ast.ObjectFilter(is_source=True))
     stream.reset(mark_definite)
     # "**that token**" — the token an earlier sentence of this same effect
