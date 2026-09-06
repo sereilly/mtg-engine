@@ -689,6 +689,28 @@ class DeclareBlockersStepMixin:
             )
             if restriction.kind == "cant_be_blocked_by_more_than"
         ]
+        # "Each creature you control can't be blocked by more than one
+        # creature." (Familiar Ground.) The same ceiling printed on a
+        # *permanent* about a described set, so it is found by scanning the
+        # board rather than read off the attacker's own program — and it is
+        # collected into the same list, because CR 509.1b makes every
+        # restriction apply and the smallest ceiling is still the answer.
+        #
+        # "You control" inside the noun phrase is relative to the permanent
+        # printing it (CR 109.5), which is what scopes Familiar Ground to its
+        # own controller's creatures; `observer` is that seat and `source` is
+        # that permanent, exactly as the attack-side scan one file over asks.
+        for source_seat, source_perm in self.permanents_with_controller():
+            for instr in compile_card_oracle(
+                source_perm.effective_card
+            ).instructions:
+                if instr.kind != "matching_cant_be_blocked_by_more_than":
+                    continue
+                if subject_matches(
+                    self, attacker, dict(instr.payload.get("subject") or {}),
+                    observer=source_seat, source=source_perm,
+                ):
+                    caps.append(int(instr.payload.get("count", 1)))
         return min(caps) if caps else None
 
     def _can_block_attacker(self, blocker: Permanent, attacker: Permanent) -> bool:
