@@ -850,6 +850,25 @@ class SpellCastingMixin:
             self.log.append(details)
             return SimulationResult(card.name, False, classification.effect_kind, details)
 
+        # "Until end of turn, **target player** can't cast instant or sorcery
+        # spells." (Abeyance.) The same CR 601.3 prohibition with no permanent
+        # behind it: a resolved effect named the seat and the window, so there is
+        # no card text for the three board scans around this to find. Asked here
+        # beside them because it is the same question at the same moment, and
+        # through `spell_prohibitions.py` because that record's one writer and
+        # one reader are named for each other — a prohibition recorded and not
+        # asked is an effect that resolves, logs itself and changes nothing.
+        from ...spell_prohibitions import casting_forbidden_this_turn
+
+        forbidden_type = casting_forbidden_this_turn(self, caster_index, card)
+        if forbidden_type is not None:
+            details = (
+                f"can't cast {card.name}: {self.players[caster_index].name} "
+                f"can't cast {forbidden_type} spells this turn"
+            )
+            self.log.append(details)
+            return SimulationResult(card.name, False, classification.effect_kind, details)
+
         # "Creature spells can't be cast." (Aether Storm.) The same CR 601.3a
         # prohibition with no seat in the sentence, so it is asked of every
         # battlefield and binds the enchantment's own controller too. Beside the

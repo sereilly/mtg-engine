@@ -8,6 +8,7 @@ from ..delayed_triggers import matching_delayed_triggers
 from ..cast_permissions import expire_at_turn_start as expire_turn_permissions
 from ..hand_locks import expire_hand_locks
 from ..land_play_allowance import clear_turn_land_play_effects
+from ..spell_prohibitions import clear_turn_spell_prohibitions
 from ..game_types import OracleExecutionContext, SimulationResult
 from ..oracle import compile_card_oracle
 from ..replacements import apply_replacements
@@ -279,6 +280,11 @@ class TurnManagementMixin:
         # modify rather than in a sweep of their own — a prohibition that
         # outlived its turn is a seat that quietly stops playing lands.
         clear_turn_land_play_effects(self)
+        # "**Until end of turn**, target player can't cast instant or sorcery
+        # spells…" (Abeyance.) The same boundary and the same reason as the
+        # land-play records above it: a prohibition that outlived its turn is a
+        # seat that quietly stops casting.
+        clear_turn_spell_prohibitions(self)
         # "Until that player's next turn" (Firestorm Phoenix) is an ordinal
         # against the counter just incremented, so this drops what has expired
         # rather than deciding anything — engine/hand_locks.py derives the

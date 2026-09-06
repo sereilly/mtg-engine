@@ -314,3 +314,115 @@ def test_400_7_a_face_down_record_stops_speaking_once_its_card_leaves_exile():
     game.players[0].exile.remove(hidden)
     assert list(live_records(game)) == []
     assert face_down_exiled_cards(game, 0) == []
+
+
+# --- W2G5: enforcement, entry replacement and the last statics ---
+
+from engine.models import Permanent as _W2G5Permanent  # noqa: E402
+from engine.card_loader import load_cards as _w2g5_load  # noqa: E402
+from engine.card_loader import manifest_set_path as _w2g5_path  # noqa: E402
+from engine.spell_prohibitions import (  # noqa: E402
+    casting_forbidden_this_turn,
+    clear_turn_spell_prohibitions,
+    forbid_casting_this_turn,
+    forbid_nonmana_activations_this_turn,
+)
+
+
+def _w2g5_spell(name: str, type_line: str) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="{1}", cmc=1.0, type_line=type_line,
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(), raw={"name": name, "type_line": type_line},
+    )
+
+
+@pytest.mark.cr("601.3", "205.2")
+def test_601_3_a_per_seat_cast_prohibition_is_read_by_card_type():
+    """CR 601.3: "a player can begin to cast a spell only if … no rule or effect
+    prohibits that player from casting it."
+
+    The record is per **seat** and narrowed by card type, and the type test is
+    the one CR 205.2 asks: a card has *every* type its line names, so an artifact
+    creature is stopped by a ban on either word.
+    """
+    game = Game(players=[PlayerState(name="P0"), PlayerState(name="P1")])
+    forbid_casting_this_turn(game, 1, ("instant",))
+
+    assert casting_forbidden_this_turn(
+        game, 1, _w2g5_spell("Bolt", "Instant")
+    ) == "instant"
+    assert casting_forbidden_this_turn(
+        game, 1, _w2g5_spell("Bear", "Creature - Bear")
+    ) is None
+    assert casting_forbidden_this_turn(
+        game, 0, _w2g5_spell("Bolt", "Instant")
+    ) is None, "the prohibition names one seat"
+
+
+@pytest.mark.cr("601.3")
+def test_601_3_two_prohibitions_on_one_seat_accumulate():
+    """Two Abeyances are two prohibitions. A second resolution that *replaced*
+    the first would let a narrower copy of an effect undo a wider one."""
+    game = Game(players=[PlayerState(name="P0"), PlayerState(name="P1")])
+    forbid_casting_this_turn(game, 1, ("instant", "sorcery"))
+    forbid_casting_this_turn(game, 1, ("creature",))
+
+    for type_line in ("Instant", "Sorcery", "Creature - Bear"):
+        assert casting_forbidden_this_turn(
+            game, 1, _w2g5_spell("X", type_line)
+        ) is not None
+
+
+@pytest.mark.cr("602.5", "605.1a")
+def test_602_5_a_per_seat_activation_prohibition_spares_mana_abilities():
+    """CR 602.5: "a player can't begin to activate an ability that's prohibited
+    from being activated" — with CR 605.1a's mana ability as the exception.
+
+    Asked of ``mana_payment.is_mana_ability``, the reader Faith's Fetters'
+    identical exception already uses, rather than of a second opinion about
+    which abilities make mana. The two readings are not the same: the
+    same-named function in ``ai_valuation`` answers False for a mana ability
+    that lowers to a ``sequence`` (the painlands, the depletion lands), which
+    would shut off an ability the card leaves open.
+    """
+    lea = {c.name: c for c in _w2g5_load([_w2g5_path("LEA")])}
+    seat = PlayerState(
+        name="P1",
+        battlefield=[
+            _W2G5Permanent(card=lea["Birds of Paradise"]),
+            _W2G5Permanent(card=lea["Icy Manipulator"]),
+        ],
+    )
+    game = Game(players=[PlayerState(name="P0"), seat])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    for perm in seat.battlefield:
+        perm.metadata["summoning_sickness_turn"] = -1
+    forbid_nonmana_activations_this_turn(game, 1)
+
+    assert game.activate_permanent_ability(1, "Birds of Paradise").supported
+    assert not game.activate_permanent_ability(
+        1, "Icy Manipulator", permanent_index=1,
+        target_player_index=0, target_permanent_index=0,
+    ).supported
+
+
+@pytest.mark.cr("514.2")
+def test_a_per_seat_prohibition_does_not_outlive_its_turn():
+    """"Until end of turn." Both records are dropped in one turn-boundary sweep,
+    for the reason the land-play records are: a prohibition that outlived its
+    turn is a seat that quietly stops casting, and no test would say which turn
+    it came from."""
+    game = Game(players=[PlayerState(name="P0"), PlayerState(name="P1")])
+    forbid_casting_this_turn(game, 1, ("instant",))
+    forbid_nonmana_activations_this_turn(game, 1)
+
+    clear_turn_spell_prohibitions(game)
+
+    assert casting_forbidden_this_turn(
+        game, 1, _w2g5_spell("Bolt", "Instant")
+    ) is None
+    assert game.nonmana_activations_forbidden_this_turn == set()
+
+# --- end W2G5 ---

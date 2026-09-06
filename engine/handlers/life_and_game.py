@@ -866,6 +866,66 @@ def grant_extra_land_plays_this_turn(game: Game, instruction: OracleInstruction,
     return True, "resolved"
 
 
+@effect_handler("forbid_casting_types_this_turn")
+def forbid_casting_types_this_turn(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Until end of turn, target player can't cast instant or sorcery spells."
+    (Abeyance, CR 601.3.)
+
+    The land-play prohibition below with a card-type narrowing, on the same
+    per-turn seat record model — a resolved effect naming a seat and a window,
+    where ``engine/cast_restrictions.py``'s three bans are re-derived from a
+    permanent's own text at every cast.
+
+    A card type is data: a card printing "creature spells" is this sentence and
+    needs no code, which is the same promise ``_BANNABLE_SPELL_TYPES`` makes one
+    module over.
+    """
+    from ..spell_prohibitions import forbid_casting_this_turn as record
+
+    victim = context.target
+    if victim not in game.players:
+        game.log.append(f"{context.card.name}: no valid target")
+        return True, "resolved"
+    types = tuple(instruction.payload.get("card_types") or ())
+    if not types:
+        # A ban naming nothing is a ban on nothing; recording it would leave a
+        # seat marked and unstopped, which reads as an effect that worked.
+        return False, "no card type to forbid"
+    record(game, game.players.index(victim), types)
+    game.log.append(
+        f"{victim.name} can't cast {' or '.join(types)} spells this turn "
+        f"({context.card.name})"
+    )
+    return True, "resolved"
+
+
+@effect_handler("forbid_nonmana_activations_this_turn")
+def forbid_nonmana_activations_this_turn(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"…and that player can't activate abilities that aren't mana abilities."
+    (Abeyance, CR 602.5.)
+
+    "That player" is the seat the sentence in front of this one chose, so it is
+    read off ``context.target`` rather than described again — the reading
+    ``sacrifice_matching_permanent`` gives the identical pronoun on a line with
+    no firing event, and the reason this instruction carries no target
+    description of its own.
+    """
+    from ..spell_prohibitions import (
+        forbid_nonmana_activations_this_turn as record,
+    )
+
+    victim = context.target
+    if victim not in game.players:
+        game.log.append(f"{context.card.name}: no valid target")
+        return True, "resolved"
+    record(game, game.players.index(victim))
+    game.log.append(
+        f"{victim.name} can't activate non-mana abilities this turn "
+        f"({context.card.name})"
+    )
+    return True, "resolved"
+
+
 @effect_handler("forbid_land_plays_this_turn")
 def forbid_land_plays_this_turn(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Target player can't play lands this turn." (Solfatara, CR 305.1.)

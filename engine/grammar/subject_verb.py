@@ -45,6 +45,8 @@ from .phrases import (
 from .effects import (
     _parse_attacks_this_turn_if_able,
     parse_block_count_grant,
+    parse_cant_activate_nonmana_abilities,
+    parse_cant_cast_spell_types,
     parse_cant_play_lands,
     parse_choose_card_type,
     _parse_ante,
@@ -816,6 +818,22 @@ def parse_subject_verb(
             lands = parse_cant_play_lands(stream, source_spec)
             if lands is not None:
                 return lands
+            # "Until end of turn, target player **can't cast instant or sorcery
+            # spells**, and that player **can't activate abilities that aren't
+            # mana abilities**." (Abeyance.) Two more readers beside the two
+            # above and for their reason: the combat production below is the
+            # `can't` reader for attacking and blocking and refuses everything
+            # else with "expected 'be'" — a word neither of these sentences
+            # prints, and the refusal that hid Abeyance's whole first line while
+            # its second line ("Draw a card.") kept the card "supported".
+            forbidden = parse_cant_cast_spell_types(stream, source_spec)
+            if forbidden is not None:
+                return forbidden
+            activations = parse_cant_activate_nonmana_abilities(
+                stream, source_spec
+            )
+            if activations is not None:
+                return activations
             stream.reset(phase_mark)
             return _parse_cant_attack_or_block(stream, source_spec)
         # "Those creatures **don't untap** during their controller's next untap

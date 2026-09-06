@@ -10,7 +10,7 @@ is a third outcome, not a win with an asterisk.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from ._core import (
     Amount,
@@ -574,6 +574,56 @@ class CantPlayLands:
 
     player: PlayerRef
     duration: Duration
+
+
+@dataclass(frozen=True)
+class CantCastSpellTypes:
+    """``<player> can't cast <types> spells <duration>.`` (Abeyance.)
+
+    CR 601.3's prohibition on a *named seat* for a stated window, which is what
+    separates it from every "can't cast" this engine already reads: those three
+    are printed on a permanent and are re-derived from its text at each cast
+    (``cast_restrictions.py``, ``auras.py``), and this one is a resolved effect
+    with nothing left on the battlefield to read.
+
+    The types are payload for the reason every printed word in this grammar is:
+    "can't cast **creature** spells" is the same sentence, and a second node for
+    it would be a second gate free to drift from this one.
+
+    *duration* is a field rather than payload so a window printed in **front**
+    of the clause reaches it — ``sentence_clauses._distribute_duration``
+    attaches a leading prefix by ``dataclasses.replace``, and Abeyance prints
+    "Until end of turn," first. It is **required** at the lowering for
+    :class:`CantPlayLands`' reason one node over: the durationless sentence is a
+    permanent's static ability that a table already reads, and a production
+    admitting it would take that table's line and hand it to an effect that
+    expires at the turn boundary.
+    """
+
+    player: PlayerRef
+    card_types: tuple[str, ...]
+    duration: Duration = field(default_factory=lambda: Duration())
+
+
+@dataclass(frozen=True)
+class CantActivateNonManaAbilities:
+    """``<player> can't activate abilities that aren't mana abilities
+    <duration>.`` (Abeyance.)
+
+    CR 602.5's twin of the node above, and its own node rather than a field on
+    it because the two are different rules with different exceptions: a cast ban
+    is narrowed by card type and this one is narrowed by what an ability *does*
+    (CR 605.1a). Folded together, "can't cast instants" would also stop every
+    activated ability, which is a much larger card.
+
+    The exception is not carried as data. "That aren't mana abilities" is the
+    only spelling in the pool and it names a rule rather than a set the card
+    chooses, so a card printing a different exception is a different sentence
+    and must refuse here rather than be read as this one.
+    """
+
+    player: PlayerRef
+    duration: Duration = field(default_factory=lambda: Duration())
 
 
 @dataclass(frozen=True)

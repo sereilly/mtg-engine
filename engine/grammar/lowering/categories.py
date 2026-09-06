@@ -509,6 +509,12 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # same question answered twice.
     "grant_extra_land_plays_this_turn": "turns",
     "forbid_land_plays_this_turn": "turns",
+    # "Until end of turn, target player can't cast instant or sorcery
+    # spells, and that player can't activate abilities that aren't mana
+    # abilities." (Abeyance.) CR 601.3 and CR 602.5 for one seat and one
+    # turn, beside the land-play prohibition they are modelled on.
+    "forbid_casting_types_this_turn": "turns",
+    "forbid_nonmana_activations_this_turn": "turns",
     "cumulative_upkeep": "upkeep",
     # Rogue Skycaptain's decline: clear the counters and hand the permanent
     # over. Cumulative upkeep's own decline is a sacrifice and stays on the

@@ -348,6 +348,8 @@ from .game import (
     _lower_skip_turn,
     _lower_targeting_ban,
     _lower_extra_land_plays,
+    _lower_cant_activate_nonmana_abilities,
+    _lower_cant_cast_spell_types,
     _lower_cant_play_lands,
 )
 from .life import (
@@ -410,6 +412,8 @@ __all__ = [
     "_lower_skip_turn",
     "_lower_targeting_ban",
     "_lower_extra_land_plays",
+    "_lower_cant_activate_nonmana_abilities",
+    "_lower_cant_cast_spell_types",
     "_lower_cant_play_lands",
     "_lower_upkeep_counter_toll",
     "_lower_upkeep_damage_unless_cost",

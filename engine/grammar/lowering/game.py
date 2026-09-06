@@ -11,8 +11,8 @@ through when this module crossed a thousand lines, exactly as
 from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
-from ._common import (RESTRICTION_TURNS, _amount_payload, _describe_targets,
-                      _filter_payload)
+from ._common import (RESTRICTION_TURNS, _REST_OF_TURN, _amount_payload,
+                      _describe_targets, _filter_payload)
 from ._events import COUNTED_NUMBER
 from ._seats import _player_recipient
 
@@ -360,6 +360,73 @@ def _lower_cant_play_lands(node: ast.CantPlayLands) -> tuple[OracleInstruction, 
     payload: dict[str, object] = {}
     _describe_targets(payload, node.player)
     return (OracleInstruction("forbid_land_plays_this_turn", "", payload),)
+
+
+def _lower_cant_cast_spell_types(
+    node: "ast.CantCastSpellTypes",
+) -> tuple[OracleInstruction, ...]:
+    """"Until end of turn, target player can't cast instant or sorcery spells."
+    (Abeyance, CR 601.3.)
+
+    The seat is payload, exactly as ``_lower_cant_play_lands`` above makes it,
+    and for that function's stated reason: describing the chosen seat is what
+    gives the card a picker at all. Abeyance is that card's twin — it reported
+    supported on "Draw a card." alone, so ``derive_cast_spec`` had nothing to
+    read, the client sent a bare cast and the engine refused it.
+
+    The window is **required** for :class:`ast.CantPlayLands`' reason: a
+    durationless "can't cast <type> spells" is a permanent's static ability that
+    ``engine/cast_restrictions.py`` already reads as a table, and admitting it
+    here would take that table's line and hand it to an effect that expires at
+    the turn boundary.
+    """
+    if node.duration.kind not in _REST_OF_TURN:
+        raise LoweringError(
+            "a cast prohibition on a seat lasts the rest of the turn; a "
+            "durationless one is a permanent's static ability",
+            node=node,
+        )
+    if node.player.kind not in ("target_player", "target_opponent"):
+        raise LoweringError(
+            f"no handler stops {node.player.kind!r} casting spells", node=node
+        )
+    payload: dict[str, object] = {"card_types": list(node.card_types)}
+    _describe_targets(payload, node.player)
+    return (
+        OracleInstruction("forbid_casting_types_this_turn", "", payload),
+    )
+
+
+def _lower_cant_activate_nonmana_abilities(
+    node: "ast.CantActivateNonManaAbilities",
+) -> tuple[OracleInstruction, ...]:
+    """"…and that player can't activate abilities that aren't mana abilities."
+    (Abeyance, CR 602.5.)
+
+    **No target description.** The clause names "that player", a back-reference
+    to the seat the sentence in front of it already chose — CR 601.2c fixes one
+    target for the spell, and a second description here would raise a second
+    picker for a player the caster has already named. The handler reads
+    ``context.target``, which is the reading ``sacrifice_matching_permanent``
+    gives the identical pronoun on a line with no firing event.
+
+    The window is required for its sibling's reason: there is no permanent this
+    could be derived from, so a durationless sentence names a prohibition
+    nothing would ever lift.
+    """
+    if node.duration.kind not in _REST_OF_TURN:
+        raise LoweringError(
+            "an activation prohibition on a seat lasts the rest of the turn",
+            node=node,
+        )
+    if node.player.kind not in ("that_player", "target_player", "target_opponent"):
+        raise LoweringError(
+            f"no handler stops {node.player.kind!r} activating abilities",
+            node=node,
+        )
+    return (
+        OracleInstruction("forbid_nonmana_activations_this_turn", "", {}),
+    )
 
 
 def _lower_targeting_ban(node: "ast.TargetingBan") -> tuple[OracleInstruction, ...]:

@@ -719,6 +719,88 @@ def parse_cant_play_lands(
     return ast.CantPlayLands(subject, duration)
 
 
+#: The card types a printed "can't cast <types> spells" may name. The same list
+#: ``cast_restrictions._BANNABLE_SPELL_TYPES`` holds one module over, and for
+#: that list's reason: what a card may forbid is a card type, and a word outside
+#: the type line describes nothing the gate can test.
+_BANNABLE_CAST_TYPES = (
+    "artifact", "creature", "enchantment", "instant", "sorcery",
+    "planeswalker", "battle", "land",
+)
+
+
+def parse_cant_cast_spell_types(
+    stream: TokenStream, subject: "ast.Recipient"
+) -> "ast.CantCastSpellTypes | None":
+    """``… can't cast <type>[ or <type>]* spells.`` (Abeyance.) The verb only —
+    the subject has already been read by the caller.
+
+    CR 601.3's permission withdrawn from one named seat, the resolved-effect
+    twin of the three board-scanned bans in ``engine/cast_restrictions.py``.
+
+    Every type must be one the gate can test, and the list must be **exhausted
+    by the word "spells"**: a phrase this reader could only half-consume would
+    leave the rest as unconsumed text, which is the loud direction, rather than
+    a ban narrower than the card prints.
+
+    Non-consuming on refusal, because the ``can't`` dispatcher hands every other
+    sentence on to the combat production and a consumed word there would replace
+    its refusal with one naming a verb the line never printed — the arrangement
+    ``parse_cant_play_lands`` above already documents.
+
+    The **duration** is not read here. Abeyance prints it in front of the whole
+    sentence, and ``sentence_clauses._distribute_duration`` attaches a leading
+    prefix to the node afterwards; the lowering is what refuses a node that
+    still has none, for ``CantPlayLands``' reason — a durationless "can't cast"
+    is a permanent's static ability that ``cast_restrictions.py`` already reads.
+    """
+    if not isinstance(subject, ast.PlayerRef):
+        return None
+    mark = stream.mark()
+    if not stream.accept_word("cast"):
+        stream.reset(mark)
+        return None
+    types: list[str] = []
+    while True:
+        word = stream.peek_word()
+        if word not in _BANNABLE_CAST_TYPES:
+            stream.reset(mark)
+            return None
+        stream.advance()
+        types.append(word)
+        if not stream.accept_word("or"):
+            break
+    if not stream.accept_word("spells"):
+        stream.reset(mark)
+        return None
+    return ast.CantCastSpellTypes(subject, tuple(types))
+
+
+def parse_cant_activate_nonmana_abilities(
+    stream: TokenStream, subject: "ast.Recipient"
+) -> "ast.CantActivateNonManaAbilities | None":
+    """``… can't activate abilities that aren't mana abilities.`` (Abeyance.)
+    The verb only — the subject has already been read by the caller.
+
+    CR 602.5 for one named seat. Every word of the exception is required: "can't
+    activate abilities" with the rest dropped is a prohibition that also stops
+    the player tapping a Forest, which is a strictly larger card — and the
+    exception names a **rule** (CR 605.1a) rather than a set the card chooses, so
+    a different exception is a different sentence and refuses here.
+
+    Non-consuming on refusal, for the reason its sibling above gives.
+    """
+    if not isinstance(subject, ast.PlayerRef):
+        return None
+    mark = stream.mark()
+    if stream.accept_phrase(
+        "activate", "abilities", "that", "aren't", "mana", "abilities"
+    ):
+        return ast.CantActivateNonManaAbilities(subject)
+    stream.reset(mark)
+    return None
+
+
 def _parse_targeting_ban(stream: TokenStream) -> "ast.TargetingBan | None":
     """``players and permanents can't be the targets of spells or activated
     abilities [<duration>]`` (Peace Talks).
