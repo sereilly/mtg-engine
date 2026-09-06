@@ -12,9 +12,9 @@ for which sets ship): Limited Edition Alpha (290 cards), Limited Edition Beta
 Antiquities (85), Revised Edition (296), Legends (310), The Dark (119),
 Fallen Empires (102), Fourth Edition (368), Ice Age (373), Homelands (115),
 Alliances (144), Mirage (335), Visions (167), Fifth Edition (434),
-Weatherlight (167) and Core Set 2021 (285), 2,515 unique cards, all classified
-as supported.
-**Eighteen sets, and their sizes are the whole spread**: 4ED and 5ED are pure
+Weatherlight (167), Tempest (335) and Core Set 2021 (285), 2,824 unique cards,
+all classified as supported.
+**Nineteen sets, and their sizes are the whole spread**: 4ED and 5ED are pure
 reprint sets, every one of their cards already in the pool, so they are the two
 sets that ship without implementing a card; Ice Age is the largest ever ingested and brought
 **346 new cards**, more than any set since Alpha; and Fallen Empires is the
@@ -27,13 +27,21 @@ fourth — 167 of 167 new, sharing not one oracle_id with *any* set in the pool.
 sharing with the seventeen sets before it not one oracle_id **and not one card
 name**. **Mirage breaks that run** — 313 of its 335 are new and 22 were
 already here, which makes it the
-first set since 4ED whose insert position can move a card's origin. Which is why
-the per-set totals sum to far more than 2,515 — they are printings (4,252 of
+first set since 4ED whose insert position can move a card's origin. **Tempest
+sits between the two shapes and is the one to reason from**: 309 of its 335 are
+new and the 26 that were not are almost all furniture — twenty basic lands plus
+Counterspell, Dark Ritual, Pacifism and a few more — so its insert position
+moves **no card's origin at all**, and the printing-order guard is the only
+thing that can catch a wrong one. Which is why
+the per-set totals sum to far more than 2,824 — they are printings (4,587 of
 them). Alliances was the
 first set to reach 100% with **zero name-keyed hooks**, across all 144, Visions
-is the second across all 167, and **Weatherlight is the third**, across all 167
-again and over eleven parallel groups that were each told a hook was the last
-resort. Reliance is **2.3% of supported cards**, 59 of 2,515. `scripts/support_report.py` reports on the whole manifest pool, not one set. Card files hold only the fields
+is the second across all 167, **Weatherlight is the third** across all 167
+again, and **Tempest is the fourth and by far the largest** — 335 cards over
+eighteen parallel groups in four waves, every one told a hook was the last
+resort, and the set ships carrying exactly **one** hooked card, which is
+Alpha's Power Sink arriving as a reprint. Reliance is **2.1% of supported
+cards**, 60 of 2,824. `scripts/support_report.py` reports on the whole manifest pool, not one set. Card files hold only the fields
 the engine and web layer read; `scripts/ingest_set.py` produces them. The
 engine is **registry-based**: card support grows by adding small isolated
 entries, never by editing core control flow.
@@ -48,9 +56,9 @@ and no player can put one of its cards in a deck. **It is empty today** — M21
 went in under it at 58% supported, Antiquities at 56.5%, Legends at 32.9%, The
 Dark at 47.9%, Fourth Edition at 100%, Ice Age at 49.3%, Fallen Empires at
 67.6%, Homelands at 66.1%, Fifth Edition at 100%, Alliances at 43.1%, Mirage
-at 54.9%, Visions at 59.3% and Weatherlight at 59.9%, and all thirteen were
-promoted to `sets` once every card was, which is the role working as designed
-rather than a role nobody uses. 4ED is the degenerate case that shows what the role is
+at 54.9%, Visions at 59.3%, Weatherlight at 59.9% and Tempest at 67.8%, and all
+fourteen were promoted to `sets` once every card was, which is the role working
+as designed rather than a role nobody uses. 4ED is the degenerate case that shows what the role is
 *for* rather than an exception to it: it entered `measured` fully supported and
 left the same day, and the ingest still paid — a guard proved itself unable to
 tell the roles apart for an all-reprint set, which is a finding only the

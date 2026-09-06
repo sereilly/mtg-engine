@@ -1,11 +1,13 @@
 # Scaling Roadmap
 
-Target: grow the card pool from **2,515** unique cards (LEA/LEB/2ED/ARN/ATQ/
-3ED/LEG/DRK/FEM/4ED/ICE/HML/ALL/MIR/VIS/5ED/WTH/M21, all shipped and all
+Target: grow the card pool from **2,824** unique cards (LEA/LEB/2ED/ARN/ATQ/
+3ED/LEG/DRK/FEM/4ED/ICE/HML/ALL/MIR/VIS/5ED/WTH/TMP/M21, all shipped and all
 supported)
 to the full release line — **137 sets, 33,594 printings, 26,113 unique cards**
-per `set_progress.json`. Eighteen sets, and the recent arrivals span the whole
-range: 4ED and 5ED are pure reprint sets that bought printings rather than
+per `set_progress.json`. Nineteen sets, and the recent arrivals span the whole
+range: Tempest is the largest work set yet at 335 cards and 309 of them new —
+larger than Ice Age's 346-card addition only in total size, and the first set
+here to need four waves; 4ED and 5ED are pure reprint sets that bought printings rather than
 cards, Ice
 Age brought 346 new ones (the largest addition since Alpha), Fallen Empires
 brought 102 of which every single one was new — the smallest work set so far,
