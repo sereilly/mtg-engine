@@ -706,7 +706,16 @@ def parse_equal_to(stream: TokenStream) -> ast.Amount | None:
 #: both, for the reason ``references.parse_player_ref`` admits both in the same
 #: position: "that Wall" names an object exactly as "that creature" does, and
 #: which word the card prints is the card's business.
-_POSSESSIVE_NOUNS = CARD_TYPES | ALL_SUBTYPES
+#:
+#: **"card" is in the set for the same reason and is not a card type.** CR 400.1
+#: makes "card" the word for an object outside the battlefield, so a sentence
+#: whose preceding step named a *graveyard* prints it where a sentence about a
+#: permanent prints the type: "Put target creature **card** from a graveyard
+#: onto the battlefield … You lose life equal to **that card's** mana value"
+#: (Reanimate). Same referent, same record, one more word — and its absence
+#: refused the whole line rather than narrowing anything, because a card type is
+#: what the *previous* zone happened to be called.
+_POSSESSIVE_NOUNS = CARD_TYPES | ALL_SUBTYPES | {"card"}
 
 
 def parse_pt_pair(text: str) -> tuple[ast.Amount, bool, ast.Amount, bool]:

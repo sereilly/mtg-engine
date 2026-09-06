@@ -186,3 +186,86 @@ def test_w2g5_winds_of_rath_reads_the_plural_clause_as_the_singular_one(set_pool
         "not_enchanted": True,
         "bypass_regeneration": True,
     }
+
+
+# --- W2G5: a number frozen by the step that moved the card ------------------
+
+
+def test_w2g5_reanimate_costs_its_target_s_mana_value_in_life(set_pool):
+    """"Put target creature card from a graveyard onto the battlefield under
+    your control. You lose life equal to **that card's mana value**."
+
+    Three layers were missing and the inherited refusal named none of them
+    (it quoted the *second* sentence's first word, which is a probe above the
+    real production raising first):
+
+    1. ``that <noun>'s mana value`` admitted card types and subtypes and not
+       the word **card** — CR 400.1's word for an object outside the
+       battlefield, which is what a sentence following a graveyard phrase
+       prints;
+    2. ``reanimate_creature`` declared no ``its_mana_value`` producer, so the
+       back-reference gate refused the phrase by name;
+    3. and ``target_loses_life`` read the *trigger* channel only, so even with
+       both of those the card would have lost **zero** life and logged itself
+       resolved. Its twin ``target_gains_life`` has read both channels since
+       Divine Offering.
+
+    Only a game finds the third, which is why this test is a game.
+    """
+    pool = set_pool("TMP")
+    elemental = set_pool("LEA")["Air Elemental"]   # {3}{U}{U}
+    caster = PlayerState(
+        name="P1", hand=[pool["Reanimate"]], life=20, graveyard=[elemental],
+    )
+    game = Game(players=[caster, PlayerState(name="P2", life=20)])
+    game.enforce_mana_costs = False
+
+    result = game.cast_from_hand(
+        0, "Reanimate", target_player_index=0, target_permanent_index=0,
+    )
+    game.resolve_stack()
+
+    assert result.supported, result.details
+    assert [p.card.name for p in caster.battlefield] == ["Air Elemental"]
+    assert caster.life == 15, "5 life for a mana value of 5"
+
+
+def test_w2g5_reanimate_reads_a_graveyard_that_is_not_the_casters(set_pool):
+    """"…from **a** graveyard" (not "your graveyard"), so the card comes back
+    under the caster's control out of the opponent's pile — and the life paid
+    is that card's mana value, not the caster's own creature's."""
+    pool = set_pool("TMP")
+    caster = PlayerState(name="P1", hand=[pool["Reanimate"]], life=20)
+    victim = PlayerState(
+        name="P2", life=20, graveyard=[pool["Horned Turtle"]],   # {2}{U}
+    )
+    game = Game(players=[caster, victim])
+    game.enforce_mana_costs = False
+
+    game.cast_from_hand(
+        0, "Reanimate", target_player_index=1, target_permanent_index=0,
+    )
+    game.resolve_stack()
+
+    assert [p.card.name for p in caster.battlefield] == ["Horned Turtle"]
+    assert caster.life == 17
+
+
+def test_w2g5_reanimate_with_nothing_to_return_costs_nothing(set_pool):
+    """The record is written unconditionally, zero when nothing came back.
+
+    The lowering admitted the phrase on the strength of a producer, so a step
+    that sometimes writes nothing would be a reader that sometimes finds
+    nothing — and "nothing arrived" has a right answer rather than an absent
+    one: CR 608.2b affects no object, so no life is lost.
+    """
+    pool = set_pool("TMP")
+    caster = PlayerState(name="P1", hand=[pool["Reanimate"]], life=20)
+    game = Game(players=[caster, PlayerState(name="P2", life=20)])
+    game.enforce_mana_costs = False
+
+    game.cast_from_hand(0, "Reanimate", target_player_index=0)
+    game.resolve_stack()
+
+    assert caster.battlefield == []
+    assert caster.life == 20

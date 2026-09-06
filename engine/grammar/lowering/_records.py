@@ -440,7 +440,20 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # the Dead.) The permanent did not exist when the ability was activated —
     # the ability's target is a *card* in a graveyard — so the reanimation is
     # the only step that can say which permanent the sentences behind it name.
-    "reanimate_creature": _REANIMATED_PERMANENTS,
+    # …**and the mana value of the card it moved**. "Put target creature card
+    # from a graveyard onto the battlefield under your control. You lose life
+    # equal to **that card's mana value**." (Reanimate.) The same record the
+    # destroy above declares and for the same reason: the number is about an
+    # object the reader cannot go and look at — here because the sentence named
+    # a card in a *graveyard*, so there was no permanent to read when the
+    # ability was announced, and CR 400.7 makes what arrived a new object.
+    # Frozen by the step that performs the move (CR 608.2h).
+    #
+    # ``_REANIMATED_PERMANENTS`` stays first: ``primary_produced`` reads the
+    # head of this tuple as the record an "if you do" tests, and "if you do"
+    # about a reanimation asks whether a permanent arrived, never how much it
+    # cost.
+    "reanimate_creature": (_REANIMATED_PERMANENTS, "its_mana_value"),
     # "…**return it to the battlefield** under your control and put a death
     # counter on **it**." (Bogardan Phoenix.) The reanimation asked of the
     # ability's own source, and it records under the same key for the same

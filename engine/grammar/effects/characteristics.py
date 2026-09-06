@@ -189,10 +189,26 @@ def _parse_gains(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
         control_mark = stream.mark()
         if stream.accept_phrase("control", "of"):
             try:
-                what = parse_target_spec(stream)
+                # ``parse_recipient`` and not ``parse_target_spec``: this is the
+                # same "what is being handed over" phrase
+                # ``effects/control_changes._parse_gain_control`` reads, and that
+                # one has always used the wider reader. The narrow one has no
+                # SELF branch, so **"That permanent's controller gains control of
+                # Starke"** (Starke of Rath) refused on the card's own name while
+                # the identical sentence written "…of this creature" parsed —
+                # which is one printed sentence with two readers, disagreeing
+                # about the one spelling pre-Sixth-Edition templating actually
+                # uses.
+                #
+                # Narrowed back to an object: ``parse_recipient`` opens with a
+                # player reference, and a player is not something a player gains
+                # control of. Declining rather than raising keeps every other
+                # "gains …" reading below reachable, which is this branch's own
+                # rule.
+                what = parse_recipient(stream)
             except GrammarError:
                 what = None
-            if what is not None:
+            if isinstance(what, ast.TargetSpec):
                 return ast.GainControl(what, "indefinite", gained_by=subject)
         stream.reset(control_mark)
 

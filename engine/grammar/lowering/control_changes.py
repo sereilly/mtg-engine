@@ -14,7 +14,7 @@ family without the parse family having to split with it.
 """
 
 
-from ...oracle_types import OracleInstruction
+from ...oracle_types import LAST_TARGET_CONTROLLER, OracleInstruction
 from ...subject_filters import object_only_filter, untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
@@ -239,6 +239,7 @@ _CHOSEN_GAINERS = {"opponent": "Choose an opponent to gain control of this perma
 
 def _lower_another_seat_gains_control(
     node: ast.GainControl, subject: ast.TargetSpec, event: str | None = None,
+    produced: frozenset[str] = frozenset(),
 ) -> tuple[OracleInstruction, ...]:
     """"Target opponent gains control of this creature." (Chaos Lord.)
 
@@ -264,6 +265,26 @@ def _lower_another_seat_gains_control(
     assert node.gained_by is not None
     who = node.gained_by.kind
     if who in _EVENT_GAINERS:
+        # "Destroy target artifact or creature. **That permanent's controller**
+        # gains control of this creature." (Starke of Rath.) No trigger fired
+        # and no event froze anybody: the seat is the one the *preceding step
+        # of this same resolution* recorded, which the destroy has written as
+        # ``LAST_TARGET_CONTROLLER`` since Afterlife. Preferred over the trigger
+        # context for the reason ``life.py``'s "its controller loses 2 life"
+        # already prefers it: inside one resolution the pronoun names what that
+        # resolution acted on, not what fired it.
+        #
+        # The record is what makes the seat readable **after** the destroy —
+        # CR 608.2h. By the time this step runs the permanent is a card in a
+        # graveyard and CR 108.4 gives a card no controller at all, so a board
+        # read here would hand the creature to nobody.
+        if LAST_TARGET_CONTROLLER in produced:
+            return (
+                OracleInstruction(
+                    "give_control_of_source_to_player", "",
+                    {"who": LAST_TARGET_CONTROLLER},
+                ),
+            )
         # The seat the *firing event* froze, gated on the one table that says
         # which events freeze one — so this sentence under a trigger that
         # froze nobody refuses here rather than handing the permanent to
@@ -351,7 +372,7 @@ def _lower_gain_control(
     # (``node.offered``, Infernal Denizen) is a different sentence and keeps its
     # own branch further down — there the seat both picks and receives.
     if node.gained_by is not None and not node.offered:
-        return _lower_another_seat_gains_control(node, subject, event)
+        return _lower_another_seat_gains_control(node, subject, event, produced)
     # "When this Aura enters, gain control of **enchanted land** until end
     # of turn." (Wellspring.) The permanent the Aura is attached to, which
     # is neither a target (an Aura's effect on its own host chooses nothing)

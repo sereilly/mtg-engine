@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ..oracle_types import LAST_TARGET_CONTROLLER
 from ._common import (recorded_permanent_ids, one_recorded_permanent_id, attached_host, permanent_matches_filter,
                       resolve_target_permanent,
                       resolve_target_slots)
@@ -300,6 +301,23 @@ def give_control_of_source_to_player(game: Game, instruction: OracleInstruction,
         seat = context.results.get("chosen_player")
         if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
             game.log.append(f"{context.card.name}: no opponent was chosen")
+            return True, "resolved"
+        recipient = game.players[seat]
+    elif who == LAST_TARGET_CONTROLLER:
+        # "Destroy target artifact or creature. **That permanent's controller**
+        # gains control of this creature." (Starke of Rath.) The seat the
+        # destroy in front of this step froze as it removed the permanent
+        # (CR 608.2h) — a board read cannot answer it, because by now the
+        # permanent is a card in a graveyard and CR 108.4 gives a card no
+        # controller.
+        #
+        # Nobody recorded hands the creature to nobody, for the reason the two
+        # branches around this one give: the sentence has just named a seat
+        # that is not the caster, so falling back to the caster would be the
+        # ability doing the opposite of what it says.
+        seat = context.results.get(LAST_TARGET_CONTROLLER)
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            game.log.append(f"{context.card.name}: nothing was destroyed to name a seat")
             return True, "resolved"
         recipient = game.players[seat]
     elif who == "event_subject_player":

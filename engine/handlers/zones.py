@@ -1758,6 +1758,21 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
     context.results[REANIMATED_PERMANENTS] = (
         (reanimated.permanent_id,) if reanimated is not None else ()
     )
+    # "You lose life equal to **that card's mana value**." (Reanimate.) The
+    # number frozen where the object still had it (CR 608.2h): the sentence
+    # behind this one cannot go and look, because the ability's target was a
+    # card in a graveyard and CR 400.7 makes what arrived a new object.
+    #
+    # Written **unconditionally**, zero when nothing came back. The lowering
+    # admitted the phrase on the strength of this producer, so a resolution that
+    # sometimes writes nothing is a reader that sometimes finds nothing, and
+    # "nothing arrived" has a right answer: you lose no life. CR 202.3 off the
+    # effective card, exactly as the destroy that shares this record does — a
+    # permanent that entered as a copy has the copied cost.
+    context.results["its_mana_value"] = (
+        int(getattr(reanimated.effective_card, "cmc", 0) or 0)
+        if reanimated is not None else 0
+    )
     game.log.append(
         f"Reanimated {card_type} to battlefield" if reanimated is not None
         else f"No {card_type} to reanimate"

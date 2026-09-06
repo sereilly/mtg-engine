@@ -1428,3 +1428,92 @@ def test_w2g5_the_bounty_picker_offers_only_the_marked_creatures(set_pool):
 
     add_counters(turtle, "bounty", 1)
     assert offered() == ["Horned Turtle"]
+
+
+# --- W2G5: a permanent that hands itself to the seat it just robbed ---------
+
+
+def _w2g5_starke(set_pool, victim_seat):
+    """Starke of Rath in play, and a Horned Turtle on *victim_seat*'s board."""
+    pool = set_pool("TMP")
+    starke = _W2G5Permanent(card=pool["Starke of Rath"])
+    starke.summoning_sick = False
+    turtle = _W2G5Permanent(card=pool["Horned Turtle"])
+    boards = ([starke, turtle], []) if victim_seat == 0 else ([starke], [turtle])
+    game = _W2G5Game(players=[
+        _W2G5PlayerState(name="P1", life=20, battlefield=list(boards[0])),
+        _W2G5PlayerState(name="P2", life=20, battlefield=list(boards[1])),
+    ])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    return game, starke
+
+
+def test_w2g5_starke_of_rath_changes_hands_to_the_seat_it_robbed(set_pool):
+    """"{T}: Destroy target artifact or creature. That permanent's controller
+    gains control of Starke. (This effect lasts indefinitely.)"
+
+    The seat has to be read **before** the destroy is over. By the time the
+    second sentence runs the permanent is a card in a graveyard, and CR 108.4
+    gives a card no controller at all — so a board read would hand Starke to
+    nobody. The destroy has recorded ``last_target_controller`` since Afterlife
+    (CR 608.2h); the control change reads it, which is the same preference
+    "its controller loses 2 life" already takes one family over.
+
+    The control change itself is CR 611.2b's untimed one — a layer-2
+    contribution with nothing to end it — so ``controller_index_of`` answers
+    the new seat and the permanent has genuinely moved.
+    """
+    game, starke = _w2g5_starke(set_pool, victim_seat=1)
+
+    result = game.activate_permanent_ability(
+        0, "Starke of Rath", ability_index=0,
+        target_player_index=1, target_permanent_index=0,
+    )
+    game.resolve_stack()
+
+    assert result.supported, result.details
+    assert [c.name for c in game.players[1].graveyard] == ["Horned Turtle"]
+    assert game.controller_index_of(starke) == 1
+    assert [p.card.name for p in game.controlled_by(0)] == []
+    assert [p.card.name for p in game.controlled_by(1)] == ["Starke of Rath"]
+
+
+def test_w2g5_starke_of_rath_stays_home_when_it_kills_its_own_side(set_pool):
+    """The seat is the *victim's* controller, whoever that is — so aiming the
+    ability at your own creature keeps Starke where it is. A hand-over that
+    always went to an opponent would be a different card."""
+    game, starke = _w2g5_starke(set_pool, victim_seat=0)
+
+    assert game.activate_permanent_ability(
+        0, "Starke of Rath", ability_index=0,
+        target_player_index=0, target_permanent_index=1,
+    ).supported
+    game.resolve_stack()
+
+    assert game.controller_index_of(starke) == 0
+    assert [p.card.name for p in game.controlled_by(1)] == []
+
+
+def test_w2g5_a_named_self_reference_reads_as_this_creature(set_pool):
+    """The half that had nothing to do with control changes.
+
+    "…gains control of **Starke**" and "…gains control of **this creature**"
+    are one printed sentence in two templating eras, and they had two readers:
+    the seat-in-front spelling used ``parse_target_spec``, which has no SELF
+    branch, while ``_parse_gain_control`` beside it used ``parse_recipient``,
+    which does. So the modern spelling parsed and the card's own name did not.
+    """
+    from engine.grammar import parse_line
+    from engine.grammar.lower import lower_ability
+
+    named = lower_ability(parse_line(
+        "{T}: Destroy target artifact or creature. That permanent's controller "
+        "gains control of Starke of Rath.",
+        card_name="Starke of Rath",
+    ))
+    modern = lower_ability(parse_line(
+        "{T}: Destroy target artifact or creature. That permanent's controller "
+        "gains control of this creature.",
+    ))
+    assert named == modern

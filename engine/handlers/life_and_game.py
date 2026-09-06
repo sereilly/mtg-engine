@@ -164,8 +164,23 @@ def target_loses_life(game: Game, instruction: OracleInstruction, context: Oracl
     # the key the lowering named. An absent record loses nothing rather than
     # falling back to a static amount the card never printed.
     from_trigger = instruction.payload.get("amount_from_trigger")
+    # "…You lose life equal to **that card's mana value**." (Reanimate.) The
+    # *scratchpad* twin of the branch above: a number an earlier step of this
+    # same resolution recorded, where the trigger key is a number the firing
+    # event carried. ``target_gains_life`` has read both channels since Divine
+    # Offering and this handler read only one of them, so a lowering that
+    # emitted ``amount_from`` here — which the grammar has always been able to
+    # do, the two sentences being one sentence with the sign flipped — lost
+    # **zero** life and logged itself resolved. Nothing in the pool printed it
+    # until now, which is the only reason that was latent rather than live.
+    #
+    # An absent record loses nothing rather than falling back to a printed
+    # amount the card never named, exactly as its two neighbours do.
+    from_results = instruction.payload.get("amount_from")
     if from_trigger is not None:
         amount = max(0, int((context.trigger_context or {}).get(from_trigger, 0)))
+    elif from_results is not None:
+        amount = max(0, int(context.results.get(from_results, 0)))
     else:
         amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
     # The same recipient key deal_damage reads: absent means the spell's
