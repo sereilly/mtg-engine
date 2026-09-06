@@ -25,14 +25,12 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**28 unclaimed sentence(s) across 26 supported card(s).**
+**19 unclaimed sentence(s) across 18 supported card(s).**
 
 - **Anoint**
   - `buyback {3}`
 - **Capsize**
   - `buyback {3}`
-- **Cold Storage**
-  - `sacrifice this artifact: return each creature card exiled with this artifact to the battlefield under your control`
 - **Corpse Dance**
   - `buyback {2}`
 - **Disturbed Burial**
@@ -41,28 +39,17 @@ anything anyone did, and every ingest would arrive red.
   - `at the beginning of your upkeep, you may exile all cards from your hand face down. if you do, put all other cards you own exiled with this enchantment into your hand`
 - **Elvish Fury**
   - `buyback {4}`
-- **Essence Bottle**
-  - `{t}, remove all elixir counters from this artifact: you gain 2 life for each elixir counter removed this way`
 - **Evincar's Justice**
   - `buyback {3}`
-- **Ghost Town**
-  - `{0}: return this land to its owner's hand. activate only if it's not your turn`
 - **Imps' Taunt**
   - `buyback {3}`
-- **Interdict**
-  - `counter target activated ability from an artifact, creature, enchantment, or land`
-  - `that permanent's activated abilities can't be activated this turn`
 - **Invulnerability**
   - `buyback {3}`
-- **Legacy's Allure**
-  - `sacrifice this enchantment: gain control of target creature with power less than or equal to the number of treasure counters on this enchantment`
 - **Magnetic Web**
   - `if a creature with a magnet counter on it attacks, all creatures with magnet counters on them attack if able`
   - `whenever a creature with a magnet counter on it attacks, all creatures with magnet counters on them block that creature this turn if able`
 - **Reality Anchor**
   - `target creature loses shadow until end of turn`
-- **Recycle**
-  - `your maximum hand size is two`
 - **Sarcomancy**
   - `at the beginning of your upkeep, if there are no zombies on the battlefield, this enchantment deals 1 damage to you`
 - **Searing Touch**
@@ -71,10 +58,6 @@ anything anyone did, and every ingest would arrive red.
   - `target creature gains shadow until end of turn`
 - **Spirit Mirror**
   - `at the beginning of your upkeep, if there are no reflection tokens on the battlefield, create a 2/2 white reflection creature token`
-- **Stalking Stones**
-  - `{6}: this land becomes a 3/3 elemental artifact creature that's still a land`
-- **Torture Chamber**
-  - `{1}, {t}, remove all pain counters from this artifact: it deals damage to target creature equal to the number of pain counters removed this way`
 - **Volrath's Curse**
   - `that creature's controller may sacrifice a permanent of their choice for that player to ignore this effect until end of turn`
 - **Whispers of the Muse**
