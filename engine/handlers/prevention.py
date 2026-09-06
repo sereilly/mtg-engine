@@ -25,6 +25,7 @@ from ..shields import (
     make_whole_source,
 )
 from ..divided_damage import DIVIDED_TARGETS, EVENLY, divide, divided_entry
+from ..next_damage import (DAMAGE_DOUBLED_NEXT, DAMAGE_PREVENTED_NEXT, arm)
 from ._common import (divided_target_permanent, recorded_permanent_ids, attached_host, bound_permanent, resolve_amount,
                       resolve_target_permanent)
 from .registry import effect_handler
@@ -1078,3 +1079,71 @@ def prevent_damage_from_targeting_sources_until_eot(
         f"{target.card.name} is shielded from spells and abilities that target it"
     )
     return True, "resolved"
+
+
+def _arm_next_damage_rider(
+    game, instruction, context, key: str, description: str
+) -> tuple[bool, str]:
+    """Put one of Desperate Gambit's two riders on the source this spell chose.
+
+    The body both handlers below share, and the reason they are two handlers at
+    all is the only line it does not contain: *which* rider. One arms a CR 614
+    amount replacement and the other a CR 615 prevention, which are two
+    registries, two order spaces and two interceptors — so the instruction kind
+    names which, exactly as ``shields.Shield.kind`` names the interceptor that
+    consumes a shield.
+
+    The source is read out of the resolution scratchpad rather than off the
+    board: "that source" and "it" name what the sentence in front of these chose
+    (``choose_permanent``), and nothing about a battlefield records a choice. By
+    ``permanent_id``, never by slot — anything leaving between the choice and
+    this step renumbers every later index (CR 400.7).
+
+    Choosing nothing is a legal outcome, not a failure: a controller with no
+    permanents had nothing to choose, and the flip still happened. The rider is
+    simply not armed, and the log says so rather than saying nothing.
+    """
+    recorded = (context.results or {}).get(str(instruction.payload.get("source_from")))
+    card_name = getattr(context.card, "name", "an effect")
+    source = game.permanent_by_id(recorded) if isinstance(recorded, int) else None
+    if source is None or not arm(source, key):
+        game.log.append(f"{card_name}: no source was chosen")
+        return True, "resolved"
+    game.log.append(
+        f"{card_name}: the next damage {source.card.name} would deal this turn "
+        f"{description}"
+    )
+    return True, "resolved"
+
+
+@effect_handler("double_next_damage_from_chosen_source")
+def double_next_damage_from_chosen_source(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """Desperate Gambit's winning flip: "the next time that source would deal
+    damage this turn, it deals double that damage instead."
+
+    Arms the CR 614 replacement in ``engine/replacements.py``; the rider itself
+    is a count on the chosen permanent (``engine/next_damage.py``), which is
+    what gives it CR 400.7's lifetime and the turn's sweep for free.
+    """
+    return _arm_next_damage_rider(
+        game, instruction, context, DAMAGE_DOUBLED_NEXT, "is doubled"
+    )
+
+
+@effect_handler("prevent_next_damage_from_chosen_source")
+def prevent_next_damage_from_chosen_source(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """Desperate Gambit's losing flip: "the next time it would deal damage this
+    turn, prevent that damage."
+
+    Arms the CR 615 shield in ``engine/prevention.py``. It protects nobody in
+    particular — the sentence names no recipient, so the record sits on the
+    source and the prevention applies wherever that source's next damage was
+    headed.
+    """
+    return _arm_next_damage_rider(
+        game, instruction, context, DAMAGE_PREVENTED_NEXT, "is prevented"
+    )

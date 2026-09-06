@@ -67,6 +67,7 @@ from .damage_source_colors import damage_source_colors
 from .effect_ordering import Candidate
 from .models import PlayerState
 from .named_counters import add_counters, counters_on, remove_counters
+from .next_damage import DAMAGE_PREVENTED_NEXT, armed, spend as spend_next_damage
 from .pt import remove_plus1_counters
 from .shields import (END_OF_TURN as SHIELD_END_OF_TURN, PREVENT_ALL_BUT,
                       PREVENT_AND_DAMAGE_SOURCE, PREVENT_AND_GAIN_LIFE,
@@ -117,6 +118,19 @@ SPELL_CLASS_BLANKET = 29
 # applying it costs its recipient nothing and spends no shield that could have
 # covered later damage.
 MATCHING_BLANKET = 30
+# "…the next time it would deal damage this turn, prevent that damage."
+# (Desperate Gambit.) One instance from one chosen source, to **anything** — the
+# only shield in this file that names no recipient at all, which is why its
+# record lives on the source instead of on a protected object
+# (``engine/next_damage.py``).
+#
+# It is a charge rather than a blanket, and it still belongs here rather than
+# down among the consumables at 100-600. CR 616.1e gives the choice to the
+# *affected* player, and this is not their charge: somebody else armed it, so
+# applying it costs them nothing and leaves every shield of their own unspent
+# for the next source. That is the blanket band's own argument — "applying one
+# costs the recipient nothing" — read from the seat that actually chooses.
+CHOSEN_SOURCE_ONE_SHOT = 31
 # "Prevent all damage that would be dealt to you this turn by attacking
 # creatures without flying." (Al-abara's Carpet.) A blanket a *player* was
 # handed rather than one a permanent prints, but a blanket all the same — no
@@ -2001,6 +2015,39 @@ def _prevent_all_to_matching(game, event: dict) -> PreventionOutcome | None:
         f"prevented ({name})"
     )
     return PreventionOutcome(prevented=event["amount"])
+
+
+def _applies_chosen_source_one_shot(game, event: dict) -> bool:
+    """Whether the event's source is carrying Desperate Gambit's losing half.
+
+    Pure — it reads the count and never spends it, which is what CR 616.1's
+    counting round requires of every predicate in this file.
+    """
+    if event["amount"] <= 0:
+        return False
+    return armed(event.get("source"), DAMAGE_PREVENTED_NEXT) > 0
+
+
+@prevention_effect(CHOSEN_SOURCE_ONE_SHOT, applies=_applies_chosen_source_one_shot)
+def _prevent_next_damage_from_chosen_source(game, event: dict) -> PreventionOutcome | None:
+    """Desperate Gambit's losing flip: "the next time it would deal damage this
+    turn, prevent that damage."
+
+    The whole instance, whoever it was headed for — no recipient is recorded
+    anywhere, because the sentence names none. Spent by instance, so a source
+    that deals damage twice this turn has only its first event prevented; the
+    rider's other end of life is the turn, swept with every other marker a
+    damager carries (``mixins/_constants._EOT_METADATA_KEYS``).
+    """
+    source = event.get("source")
+    amount = event["amount"]
+    spend_next_damage(source, DAMAGE_PREVENTED_NEXT)
+    card = getattr(source, "card", source)
+    game.log.append(
+        f"{amount} damage from {getattr(card, 'name', 'a chosen source')} is "
+        "prevented (the next time it would deal damage this turn)"
+    )
+    return PreventionOutcome(prevented=amount)
 
 
 def prevention_claims_line(line: str) -> bool:

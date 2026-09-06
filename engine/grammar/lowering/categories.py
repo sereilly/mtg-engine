@@ -420,12 +420,23 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "lock_damage_to_target": "prevention",
     "grant_source_class_prevention_shield": "prevention",
     "prevent_damage_from_targeting_sources_until_eot": "prevention",
+    # "…the next time it would deal damage this turn, prevent that damage."
+    # (Desperate Gambit's losing flip.) A CR 615 shield like every row above it,
+    # and the only one whose record hangs off the *source* rather than off
+    # anything it protects — the sentence names no recipient at all.
+    "prevent_next_damage_from_chosen_source": "prevention",
     # A redirect is *not* a prevention (CR 614.9): the damage is still
     # dealt, by the same source, to somebody else. Categorised with the
     # damage it moves rather than with the shields it sits beside in the
     # contention set.
     "redirect_damage_from_target_until_eot": "damage",
     "redirect_damage_from_chosen_source_until_eot": "damage",
+    # "…the next time that source would deal damage this turn, it deals double
+    # that damage instead." (Desperate Gambit's winning flip.) Filed with the
+    # redirects for their reason and not with the prevention beside it: the
+    # damage is still dealt, in full and then some, so what the sentence changes
+    # is the event rather than whether there is one (CR 614, not CR 615).
+    "double_next_damage_from_chosen_source": "damage",
     "redirect_damage_from_target_spell_until_eot": "damage",
     # "…it deals **double** that damage to that creature instead" (Blind
     # Fury). The third half of a damage event a CR 614 replacement can

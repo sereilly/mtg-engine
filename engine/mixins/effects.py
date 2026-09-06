@@ -1317,20 +1317,38 @@ class EffectsMixin:
             target.mirror_damage_sources.remove(matched_mirror)
         else:
             target.mirror_damage_charges -= 1
-        mirror_index = (
-            self.controller_index_of(source)
-            if isinstance(source, Permanent)
-            else None
-        )
-        if mirror_index is None:
-            # A spell (or unknown) source: fall back to the first living
-            # opponent — its caster in every two-player game.
+        # "…deals that much damage to **that source's controller**" — CR 109.5,
+        # which is the question ``damage_source_seat`` answers for every damage
+        # event this engine runs: the control seam for a permanent, the seat it
+        # entered under for one that has left, and the resolving seat for a
+        # spell, whose source is the printed ``CardDefinition`` no player
+        # controls.
+        #
+        # This used to read the seat off a ``Permanent`` and, for a spell,
+        # **fall back to the first living opponent of the damaged player** —
+        # which is the spell's controller in a duel only when somebody else cast
+        # it. Your own burn spell aimed at yourself mirrored onto your opponent,
+        # and in a free-for-all a third seat's spell mirrored onto whichever
+        # opponent happened to sit at the lower index. The card names one seat
+        # and the engine already had it.
+        mirror_index = damage_source_seat(self, source)
+        if mirror_index is None and source is None:
+            # An event with **no source object at all** — which the mirror's own
+            # damage below is, deliberately, and which several internal damage
+            # paths are. There is no controller to name, so the old fallback is
+            # kept for exactly this case rather than switched off in a round
+            # about a different bug: the first living opponent of the damaged
+            # player. What it means is "somebody else", which is all a
+            # sourceless event can say.
             target_index = self.players.index(target)
             mirror_index = next(
-                (i for i, p in enumerate(self.players) if i != target_index and not p.lost),
+                (
+                    index for index, player in enumerate(self.players)
+                    if index != target_index and not player.lost
+                ),
                 None,
             )
-        if mirror_index is None:
+        if mirror_index is None or not (0 <= mirror_index < len(self.players)):
             return
         victim = self.players[mirror_index]
         self._deal_damage_to_player(

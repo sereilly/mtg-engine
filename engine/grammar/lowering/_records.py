@@ -41,6 +41,7 @@ from ...oracle_types import (CHOSEN_TARGET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
                              MANA_LOST_COUNT, MANA_LOST_THIS_WAY,
                              TAPPED_THIS_WAY, TAPPED_THIS_WAY_OBJECTS)
 from ._events import (ATTACHED_PERMANENT_CONTROLLER, CHOSEN_CAST_DAMAGE,
+                      CHOSEN_DAMAGE_SOURCE,
                       _BASE_PT_SET_PERMANENTS,
                       PUT_FROM_HAND_PERMANENTS,
                       LAST_TARGET_CONTROLLER,
@@ -625,6 +626,13 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
 #: already writes.
 _PRODUCES_FOR_PAYLOAD: dict[str, tuple[str, object, str]] = {
     "search_library": ("destination", "exile", "exiled_cards"),
+    # "**Choose a source you control** and flip a coin." (Desperate Gambit.) The
+    # same instruction Enchantment Alteration's host pick uses, sending its
+    # answer somewhere else — and where it sends it is exactly what the
+    # sentences behind it read. A row in ``_PRODUCES`` cannot say that: the
+    # record is not a property of the kind, it is the payload's ``result_key``,
+    # which is the one shape this table exists for.
+    "choose_permanent": ("result_key", CHOSEN_DAMAGE_SOURCE, CHOSEN_DAMAGE_SOURCE),
 }
 
 

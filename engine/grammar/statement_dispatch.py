@@ -89,6 +89,7 @@ from .lowering import (
     _lower_gain_control,
     _lower_gain_ability_text,
     _lower_prevent_damage,
+    _lower_chosen_source_next_damage,
     _lower_gain_keyword,
     _lower_lose_keyword,
     _lower_phase_out,
@@ -288,6 +289,10 @@ def lower_statement(
     # that needs nothing but its node.
     if isinstance(statement, ast.PreventDamage):
         return _lower_prevent_damage(statement, produced)
+    # Beside the shield above, and here rather than in `by_node.py` for its
+    # reason: the source it names is one a step in front of it chose (idiom 7).
+    if isinstance(statement, ast.ChosenSourceNextDamage):
+        return _lower_chosen_source_next_damage(statement, produced)
     if isinstance(statement, (ast.DoesntUntapNextStep, ast.DoesntUntapWhileCounter)):
         # The **unfiltered** event, for `_lower_destroy`'s reason one branch
         # up: whose creature "that creature" names is a fact about the trigger

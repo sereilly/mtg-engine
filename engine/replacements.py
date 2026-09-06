@@ -84,6 +84,8 @@ from .damage_redirects import (
     live_recipient,
 )
 from .hand_locks import lock_card_in_hand
+from .next_damage import (DAMAGE_DOUBLED_NEXT, armed,
+                          spend as spend_next_damage)
 from .search_filters import card_has_type
 from .models import Permanent, PlayerState
 from .replacement_choices import (
@@ -196,6 +198,19 @@ DAMAGE_MULTIPLIER = 700  # Fiery Emancipation
 #: counts effects, and sharing a number would make the two one contender and
 #: silently drop whichever was asked second.
 COMBAT_DAMAGE_DOUBLER = 710  # Blind Fury
+#: "…the next time that source would deal damage this turn, it deals **double**
+#: that damage instead." (Desperate Gambit.) The third multiplier and the only
+#: one that is *spent*: the two above are standing effects re-read off the board
+#: at every event, and this one fires once and is gone
+#: (``engine/next_damage.py``).
+#:
+#: Last of the three, and the slot is genuinely free rather than argued for:
+#: multiplication commutes, so a source carrying this and a Fiery Emancipation
+#: deals the same damage in either order, and both apply to the one event
+#: whichever runs first. What the number does have to be is *distinct* — CR
+#: 616.1 counts effects, and a shared order would make two contenders one and
+#: drop whichever was asked second.
+NEXT_DAMAGE_DOUBLED = 720  # Desperate Gambit
 
 # The results kinds (CR 120.4c) have a space of their own. No shield lives there:
 # prevention stops damage being *dealt*, and by 120.4c it already has been.
@@ -1568,6 +1583,53 @@ def _double_combat_damage_between_creatures(
         f"({game.combat_damage_doubled_between_creatures[0]})"
     )
     return ReplacementOutcome(new_amount=amount * multiplier)
+
+
+def _applies_next_damage_doubled(game, payload: dict) -> bool:
+    """Whether this event's source is carrying Desperate Gambit's winning half.
+
+    Pure — it reads the count and never spends it, which is what CR 616.1's
+    counting round requires of every predicate in this file.
+    """
+    if payload["amount"] <= 0:
+        return False
+    return armed(payload.get("source"), DAMAGE_DOUBLED_NEXT) > 0
+
+
+@replacement_effect(
+    "damage_to_creature", NEXT_DAMAGE_DOUBLED, applies=_applies_next_damage_doubled
+)
+@replacement_effect(
+    "damage_to_player", NEXT_DAMAGE_DOUBLED, applies=_applies_next_damage_doubled
+)
+def _double_next_damage_from_chosen_source(
+    game, payload: dict
+) -> ReplacementOutcome | None:
+    """Desperate Gambit's winning flip: "the next time that source would deal
+    damage this turn, it deals double that damage instead."
+
+    A CR 120.4b effect like the two multipliers above it, so the bigger number
+    is the damage *dealt*: lifelink gains it (CR 120.3f), a "deals damage"
+    trigger sees it, and deathtouch and trample read it.
+
+    One body for both recipients, because the sentence makes no distinction —
+    it names no recipient at all, which is the whole of what separates this
+    from Blind Fury. The two kinds differ only in which list the registration
+    lands in.
+
+    Spent here and not in the predicate, and by *instance* rather than by
+    points: "the next time" is one damage event however large it is, so a
+    source that deals damage twice this turn has only its first event doubled.
+    """
+    source = payload.get("source")
+    amount = int(payload["amount"])
+    spend_next_damage(source, DAMAGE_DOUBLED_NEXT)
+    card = getattr(source, "card", source)
+    game.log.append(
+        f"{amount} damage from {getattr(card, 'name', 'a chosen source')} "
+        f"becomes {amount * 2} (the next time it would deal damage this turn)"
+    )
+    return ReplacementOutcome(new_amount=amount * 2)
 
 
 def _applies_exile_instead_of_dying(game, payload: dict) -> bool:

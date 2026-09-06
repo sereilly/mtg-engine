@@ -837,3 +837,118 @@ def test_the_printed_combat_word_narrows_the_blanket_to_combat_damage():
 
     assert _w1g4_damage_dealt(game, bear, 3, combat=True) == 0
     assert _w1g4_damage_dealt(game, bear, 3, combat=False) == 3
+
+
+# --- Closer: a one-shot effect keyed on a chosen source (CR 609.7) ---
+
+from engine.damage_events import deal_damage as _closer_deal_damage
+from engine.next_damage import (DAMAGE_DOUBLED_NEXT as _CLOSER_DOUBLED,
+                                DAMAGE_PREVENTED_NEXT as _CLOSER_PREVENTED,
+                                arm as _closer_arm, armed as _closer_armed)
+
+
+def _closer_land(name: str = "Invented Waste"):
+    """A permanent that cannot deal damage on its own. CR 609.7a is explicit
+    that such an object is a legal choice, which is the half of the rule an
+    implementation is most tempted to narrow away."""
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Land", oracle_text="",
+        colors=(), color_identity=(), keywords=(), produced_mana=("C",),
+        raw={"name": name, "type_line": "Land"},
+    )
+
+
+def _closer_rider_game(rider: str):
+    """One permanent carrying *rider*, and a game with nothing else in it."""
+    source = Permanent(card=_closer_land())
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[source]),
+        PlayerState(name="P2"),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    assert _closer_arm(source, rider) is True
+    return game, source
+
+
+@pytest.mark.cr("609.7a")
+def test_a_source_chosen_for_a_one_shot_effect_need_not_be_able_to_deal_damage():
+    """CR 609.7a: "A source doesn't need to be capable of dealing damage to be a
+    legal choice… the effect will apply to the next damage dealt by that
+    permanent, regardless of whether it's combat damage or damage dealt as the
+    result of a spell or ability."
+
+    Both halves are load-bearing here and both are easy to lose. Narrowing the
+    choice to creatures would refuse a legal pick; narrowing the *rider* to
+    combat damage would be a different card, because a land that has been
+    animated, or that gains a damage ability, deals damage the sentence covers.
+    """
+    game, source = _closer_rider_game(_CLOSER_DOUBLED)
+
+    dealt = _closer_deal_damage(game, {
+        "recipient": game.players[1], "amount": 2, "source": source,
+        "combat": False,
+    }).dealt
+
+    assert dealt == 4, game.log
+
+
+@pytest.mark.cr("609.7b")
+def test_a_one_shot_source_rider_that_modifies_nothing_is_not_used_up():
+    """CR 609.7b: "If for any reason the shield prevents no damage or replaces
+    no damage, the shield isn't used up."
+
+    A blanket combat shield takes the whole event first (CR 616.1's contention
+    set is ordered so a free effect goes before a charged one), so the one-shot
+    rider never applies — and must therefore still be there for the next event.
+    A rider spent when it was merely *asked about* is the shape CR 616.1's
+    purity requirement exists to keep out: the predicate counts, the body
+    spends.
+    """
+    game, source = _closer_rider_game(_CLOSER_PREVENTED)
+    game.combat_damage_prevented_until_eot = True
+
+    first = _closer_deal_damage(game, {
+        "recipient": game.players[1], "amount": 3, "source": source,
+        "combat": True,
+    })
+
+    assert first.dealt == 0
+    assert _closer_armed(source, _CLOSER_PREVENTED) == 1, game.log
+
+    game.combat_damage_prevented_until_eot = False
+    second = _closer_deal_damage(game, {
+        "recipient": game.players[1], "amount": 3, "source": source,
+        "combat": True,
+    })
+    assert second.dealt == 0
+    assert _closer_armed(source, _CLOSER_PREVENTED) == 0
+
+
+@pytest.mark.cr("614.1a", "615.1a", "120.4b")
+def test_instead_and_prevent_send_one_printed_clause_to_two_registries():
+    """CR 614.1a ("instead" is a replacement effect) against CR 615.1a
+    ("prevent" is a prevention effect), read off one sentence whose only
+    difference is that word.
+
+    The distinction is not bookkeeping. CR 120.4b deals the *replaced* amount,
+    so a doubled event is a damage event of the larger size — lifelink gains it,
+    a "deals damage" trigger sees it, deathtouch and trample read it — where a
+    prevented event deals nothing at all. An implementation that reached for one
+    registry for both would get one of the two cards silently wrong in whichever
+    direction it chose.
+    """
+    doubling, doubled_source = _closer_rider_game(_CLOSER_DOUBLED)
+    preventing, prevented_source = _closer_rider_game(_CLOSER_PREVENTED)
+    event = {"amount": 3, "combat": False}
+
+    replaced = _closer_deal_damage(doubling, {
+        **event, "recipient": doubling.players[1], "source": doubled_source,
+    })
+    shielded = _closer_deal_damage(preventing, {
+        **event, "recipient": preventing.players[1], "source": prevented_source,
+    })
+
+    assert (replaced.dealt, replaced.result) == (6, 6)
+    assert (shielded.dealt, shielded.result) == (0, 0)
+    assert shielded.consumed is False

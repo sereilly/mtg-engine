@@ -523,6 +523,19 @@ OTHER_CHOSEN_PERMANENT = "other_chosen_permanent"
 # all write the string, and a second spelling would make one producer gate
 # vacuous while the handler read an empty record.
 CHOSEN_PERMANENT = "attach_host"
+
+#: "**Choose a source you control** and flip a coin. … the next time **that
+#: source** would deal damage this turn…" (Desperate Gambit.) The permanent an
+#: untargeted CR 609.7 source choice picked, written by the same
+#: ``choose_permanent`` step the key above is written by and read by the two
+#: damage clauses behind it.
+#:
+#: A key of its own rather than that one, and the distance between their names
+#: is the reason: ``attach_host`` is what a sentence about *attaching* reads,
+#: and one record under one name would let a card that chose a permanent for one
+#: purpose satisfy a producer gate written for the other. Two questions, two
+#: records — the same rule the pair above it keeps.
+CHOSEN_DAMAGE_SOURCE = "chosen_damage_source"
 CHOSEN_CAST_DAMAGE = "damage_dealt_by_chosen_cast"
 
 #: The number "Count the number of permanents." records and "if **the number**
