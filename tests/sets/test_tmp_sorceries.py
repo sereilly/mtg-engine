@@ -95,3 +95,46 @@ def test_mana_severance_refuses_a_pick_that_is_not_a_land(set_pool):
 
     assert not game.confirm_search_exile(0, [{"zone": "library", "index": 0}])
     assert not game.players[0].exile
+
+
+def test_mana_severance_is_not_a_search_a_headless_seat_takes_the_maximum_of(set_pool):
+    """The stated default for an "any number" exile search is *take everything*,
+    and its own reasoning is "the cards come back castable" — which is a fact
+    about the three cards it was written for (Foresight's delayed return,
+    Mangara's Tome's recorded pile, Chandra's cast permission) rather than about
+    the sentence.
+
+    Mana Severance is the card that separates them: nothing on it reads the pile
+    back, so taking the maximum exiles the seat's entire land supply for good.
+    A headless seat now fails to find (CR 701.23b), which is legal and is what a
+    player would do. Nothing but driving the card finds this — the census, the
+    hollow-line report and `parse_coverage` all read it as done.
+    """
+    from engine.ai_valuation import exiled_search_pile_comes_back
+
+    card = set_pool("TMP")["Mana Severance"]
+    assert not exiled_search_pile_comes_back(card)
+
+    forest = _w2g4_card("Forest", "Basic Land — Forest")
+    game = _w2g4_duel(libraries=([forest] * 6, ()), hands=([card], ()))
+    game.interactive_seats = set()
+    game.cast_from_hand(0, "Mana Severance")
+    game.resolve_top_of_stack()
+    game.auto_resolve_pending_choices()
+
+    assert not game.players[0].exile
+    assert len(game.players[0].library) == 6
+
+
+def test_a_search_whose_pile_comes_back_still_takes_the_maximum(catalog_by_name):
+    """The other half, so the change is a *narrowing* and not a reversal.
+
+    Foresight, Mangara's Tome and Chandra's -9 each hand the exiled cards back,
+    and the derivation says so off the compiled program — a card printing a new
+    "search and exile" with a return behind it is answered right the day it
+    lands, and one without is answered right without anybody listing it.
+    """
+    from engine.ai_valuation import exiled_search_pile_comes_back
+
+    for name in ("Foresight", "Mangara's Tome", "Chandra, Heart of Fire"):
+        assert exiled_search_pile_comes_back(catalog_by_name[name]), name

@@ -1809,14 +1809,31 @@ class PendingChoicesMixin:
         return True
 
     def _default_search_exile(self, choice: PendingChoice) -> None:
-        """A non-interactive seat takes everything that matches: "any number"
-        is a may per card, and the cards come back castable, so the maximum is
-        the only default that never leaves value on the table.
+        """A non-interactive seat takes everything that matches **when the cards
+        come back**: "any number" is a may per card, and where a later sentence
+        hands the pile over (Foresight's delayed return, Mangara's Tome's
+        recorded pile, Chandra's "you may cast them") the maximum is the only
+        default that never leaves value on the table.
+
+        Where nothing reads the pile back it takes **nothing**, and the same
+        sentence justifies both: exiling your own library for good is spending
+        the seat's own resources, and CR 701.23b's fail-to-find is always a
+        legal answer. Mana Severance is the card that separates them — it
+        exiles every land it can find and never returns one, so the old policy
+        emptied a headless seat's land supply the day the card was supported.
+        Which of the two a card is is derived from its compiled program
+        (``ai_valuation.exiled_search_pile_comes_back``) and carried on the
+        prompt, never named here: the reasoning "the cards come back castable"
+        was a fact about three cards rather than about the sentence.
 
         Where a ceiling is printed the default takes that many — the same
         "as much as the card allows" reading, bounded. Without the trim the
         picks would be refused whole and the seat would take *nothing*, which
         is the opposite default."""
+        if not choice.data.get("comes_back", True):
+            if not self._resolve_search_exile(choice, []):
+                self.discard_pending_choice(choice)
+            return
         caster = self.players[choice.player_index]
         picks = [
             {"zone": zone, "index": index}
