@@ -321,6 +321,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # (Retribution.) The sacrifice acting on a permanent a ``choose_permanent``
     # step recorded, beside the one acting on a permanent a trigger bound.
     "sacrifice_recorded_permanent": "destruction",
+    # Tariff's whole paragraph. In the destruction category because what the
+    # sentence is *about* is a sacrifice; the offer in front of it is the price
+    # of not making one, exactly as `self_damage_unless_pay` sits under the
+    # damage it is a toll against.
+    "each_player_pays_or_sacrifices_greatest": "destruction",
     "destroy_self": "destruction",
     "destroy_all_artifacts_creatures_enchantments": "destruction",
     "delayed_destroy_blocked_or_blocker": "destruction",

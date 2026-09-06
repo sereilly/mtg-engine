@@ -1727,10 +1727,15 @@ def may(game: Game, instruction: OracleInstruction, context: OracleExecutionCont
                 _run(game, on_decline, context)
             return True, "resolved"
 
+    # A named seat rebinds for the same reason every member of `_EACH_ACTORS`
+    # does: the offer is made to somebody the resolution was not already
+    # holding, so "that player" and every bare imperative inside the offer mean
+    # the seat that took it. Tariff's decline branch sacrifices out of that
+    # seat's own board.
+    rebind = isinstance(actor, int) or actor in _EACH_ACTORS
+
     def offer(player_index: int) -> None:
-        _offer_to_seat(
-            game, instruction, context, player_index, rebind=actor in _EACH_ACTORS
-        )
+        _offer_to_seat(game, instruction, context, player_index, rebind=rebind)
 
     # Through ``run_resumable`` like every other loop in this file, and for the
     # reason ``engine/resumption.py`` states: the offer suspends on an
@@ -1769,6 +1774,17 @@ def _offered_seats(
 
     A player who has already left the game is nobody (CR 800.4a).
     """
+    if isinstance(actor, int):
+        # A seat a **handler's own loop** is on rather than a word a card
+        # printed — Tariff's paragraph builds one offer per player and names
+        # the seat outright, because "each player" there is a number of *pairs*
+        # of steps that only the resolution knows. A seat that has left the
+        # game is nobody (CR 800.4a), exactly as below.
+        return (
+            [actor]
+            if 0 <= actor < len(game.players) and not game.players[actor].lost
+            else []
+        )
     if actor == "each_player":
         count = len(game.players)
         # "**Starting with you**, each player may …" (Eureka) names the first

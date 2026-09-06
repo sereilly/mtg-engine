@@ -296,6 +296,24 @@ class ExchangeControl:
 
 
 @dataclass(frozen=True)
+class PayOrSacrificeGreatestManaValue:
+    """``Each player sacrifices the <type> they control with the greatest mana
+    value unless they pay that <type>'s mana cost. If two or more <type>s a
+    player controls are tied for greatest, that player chooses one.`` (Tariff.)
+
+    A whole paragraph as one node, for :class:`ExchangeGreatestManaValue`'s
+    reason beside it: "that creature's mana cost" names a permanent no sentence
+    of its own has chosen, and the tie-break sentence is about a set the first
+    sentence describes. Read apart, the second sentence chooses among nothing.
+
+    ``card_type`` is the printed noun, so a card printing the same paragraph
+    about artifacts is this node with one word changed.
+    """
+
+    card_type: str
+
+
+@dataclass(frozen=True)
 class ExchangeGreatestManaValue:
     """``You and target player exchange control of the <type> you each control
     with the greatest mana value. Then exchange control of <type>s the same

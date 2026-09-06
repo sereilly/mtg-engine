@@ -34,6 +34,7 @@ from .paragraphs import (
     _parse_name_and_strip,
     _parse_name_then_consult,
     _parse_name_then_random_reveal,
+    _parse_pay_or_sacrifice_greatest_mana_value,
     _parse_rebalance_lands,
     _parse_transmute_by_sacrifice,
 )
@@ -193,6 +194,13 @@ def parse_imperative(
     rebalanced = _parse_rebalance_lands(stream)
     if rebalanced is not None:
         return rebalanced
+    # Tariff's two-sentence paragraph, beside Natural Balance's for its reason
+    # and one word apart from it: both open "Each player …" on a verb whose
+    # ordinary production would read the first sentence and strand the second.
+    # Refuses without consuming.
+    tariff = _parse_pay_or_sacrifice_greatest_mana_value(stream)
+    if tariff is not None:
+        return tariff
     colour_shield = _parse_source_of_choice_effect(stream)
     if colour_shield is not None:
         return colour_shield

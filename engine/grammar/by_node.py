@@ -93,7 +93,9 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_add_mana_for_tappe
                        _lower_upkeep_damage_unless_cost,
                        _lower_doesnt_untap_while_source_tapped, _lower_tap_or_untap,
                        _lower_attach, _lower_count_objects, _lower_exchange_control,
-                       _lower_exchange_greatest_mana_value, _lower_win_game)
+                       _lower_exchange_greatest_mana_value,
+                       _lower_pay_or_sacrifice_greatest_mana_value,
+                       _lower_win_game)
 
 
 #: The node types whose lowering is *only* a name — one AST class, one
@@ -161,6 +163,7 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.CountObjects: _lower_count_objects,
     ast.ExchangeControl: _lower_exchange_control,
     ast.ExchangeGreatestManaValue: _lower_exchange_greatest_mana_value,
+    ast.PayOrSacrificeGreatestManaValue: _lower_pay_or_sacrifice_greatest_mana_value,
     ast.MillUntil: _lower_mill_until,
     ast.Scry: _lower_scry,
     ast.ProducesManaInstead: _lower_produces_mana_instead,

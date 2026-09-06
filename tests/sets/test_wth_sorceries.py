@@ -158,3 +158,123 @@ def test_flux_draws_a_seat_nothing_when_it_discarded_nothing(set_pool):
 
     assert [c.name for c in game.players[0].hand] == ["Island", "Island"], game.log
     assert game.players[1].hand == [], game.log
+
+
+def _w1g5_put(game, seat, card):
+    from engine.models import Permanent
+
+    perm = Permanent(card=card)
+    game.players[seat].battlefield.append(perm)
+    game._sync_control()
+    return perm
+
+
+def test_tariff_takes_each_seat_s_own_biggest_creature(set_pool):
+    """"Each player sacrifices the creature they control with the greatest mana
+    value unless they pay that creature's mana cost."
+
+    One instruction whose handler is the loop, because "each player" is a
+    number of *pairs* of steps only the resolution knows. Every step it builds
+    is one the engine already dispatches: Juxtapose's `choose_permanent` with
+    `greatest_mana_value` and `only_on_tie`, and Flash's `may` whose cost is
+    read off what that step recorded, with Retribution's
+    `sacrifice_recorded_permanent` on the decline.
+    """
+    wth, lea = set_pool("WTH"), set_pool("LEA")
+    program = _w1g5_compile(wth["Tariff"])
+    assert program.supported, program.reason
+    (instruction,) = program.instructions
+    assert instruction.kind == "each_player_pays_or_sacrifices_greatest"
+    assert instruction.payload == {"card_type": "creature"}
+
+    game = _w1g5_game()
+    game.active_player_index = 0
+    _w1g5_put(game, 0, lea["Grizzly Bears"])
+    _w1g5_put(game, 0, lea["Shivan Dragon"])
+    _w1g5_put(game, 1, lea["Craw Wurm"])
+    _w1g5_put(game, 1, lea["Mons's Goblin Raiders"])
+    game.players[0].hand = [wth["Tariff"]]
+
+    game.cast_from_hand(0, "Tariff")
+    game.resolve_stack()
+    game.auto_resolve_pending_choices()
+
+    # Each seat lost its own greatest-mana-value creature and kept the rest.
+    assert [p.card.name for p in game.players[0].battlefield] == ["Grizzly Bears"]
+    assert [p.card.name for p in game.players[1].battlefield] == [
+        "Mons's Goblin Raiders"
+    ], game.log
+
+
+def test_tariff_offers_the_creature_s_own_mana_cost_to_its_own_controller(set_pool):
+    """The toll is "**that** creature's mana cost" — unprinted, and different
+    for every seat. Paying it keeps the creature."""
+    wth, lea = set_pool("WTH"), set_pool("LEA")
+    game = _w1g5_game(interactive={1})
+    game.active_player_index = 0
+    _w1g5_put(game, 0, lea["Shivan Dragon"])
+    _w1g5_put(game, 1, lea["Craw Wurm"])
+    game.players[1].mana_pool = {
+        "W": 0, "U": 0, "B": 0, "R": 0, "G": 2, "C": 4,
+    }
+    game.players[0].hand = [wth["Tariff"]]
+
+    game.cast_from_hand(0, "Tariff")
+    game.resolve_stack()
+
+    owed = game.pending_choice_of("optional_pay")
+    assert owed is not None and owed.player_index == 1, game.pending_choices
+    assert owed.data["prompt"] == "Pay {4}{G}{G}?", owed.data
+    assert game.confirm_optional_pay(1, accept=True), game.log
+
+    # The payer kept the Wurm and spent the mana; the seat that could not pay
+    # lost its Dragon.
+    assert [p.card.name for p in game.players[1].battlefield] == ["Craw Wurm"]
+    assert not any(v for v in game.players[1].mana_pool.values()), game.players[1].mana_pool
+    assert game.players[0].battlefield == [], game.log
+
+
+def test_tariff_asks_the_tied_seat_which_of_its_creatures(set_pool):
+    """"If two or more creatures a player controls are tied for greatest, that
+    player chooses one." The prompt is asked of the seat whose creatures they
+    are — and asked *only* on a tie, because with one candidate the card names
+    it outright.
+
+    Seat 0 is a seat: `controlled_by` used to be read for truthiness, so a loop
+    naming the active player dropped the narrowing entirely and let that seat
+    choose out of somebody else's board.
+    """
+    wth, lea = set_pool("WTH"), set_pool("LEA")
+    game = _w1g5_game(interactive={1})
+    game.active_player_index = 0
+    _w1g5_put(game, 1, lea["Craw Wurm"])
+    _w1g5_put(game, 1, lea["Force of Nature"])
+    game.players[0].hand = [wth["Tariff"]]
+
+    game.cast_from_hand(0, "Tariff")
+    game.resolve_stack()
+
+    owed = game.pending_choice_of("permanent_choice")
+    assert owed is not None and owed.player_index == 1, game.pending_choices
+    assert owed.data["result_key"] == "greatest_creature_seat_1"
+    # Both are mana value 6, and the caster controls nothing, so it is asked
+    # once and only of the seat that owns them.
+    assert len(owed.data["_candidates"]) == 2, owed.data
+
+
+def test_tariff_skips_a_seat_with_no_creature_rather_than_offering_it_nothing(set_pool):
+    """CR 608.2b: with nothing to sacrifice there is no toll. Asked anyway it
+    would be an offer to pay nothing for nothing, shown to a live player — and
+    the caster here is an interactive seat with an empty board."""
+    wth, lea = set_pool("WTH"), set_pool("LEA")
+    game = _w1g5_game(interactive={0, 1})
+    game.active_player_index = 0
+    _w1g5_put(game, 1, lea["Craw Wurm"])
+    game.players[1].mana_pool = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 2, "C": 4}
+    game.players[0].hand = [wth["Tariff"]]
+
+    game.cast_from_hand(0, "Tariff")
+    game.resolve_stack()
+
+    # Only the seat that owns a creature is asked anything at all.
+    assert [c.player_index for c in game.pending_choices] == [1], game.pending_choices

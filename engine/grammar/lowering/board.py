@@ -573,6 +573,34 @@ def _lower_delayed_self_action(
     )
 
 
+def _lower_pay_or_sacrifice_greatest_mana_value(
+    node: "ast.PayOrSacrificeGreatestManaValue",
+) -> tuple[OracleInstruction, ...]:
+    """Tariff's paragraph → one instruction, whose handler is a loop.
+
+    Juxtapose's paragraph one production down decomposes at *lowering* time,
+    because it names exactly two seats and the card says which. This one names
+    "each player", so how many pairs of steps there are is not knowable until
+    the spell resolves — which is why the loop is the handler's and the payload
+    is only the printed noun. What the loop then runs is the same machinery
+    Juxtapose and Flash already use, per seat: a ``choose_permanent`` narrowed
+    to that seat's greatest-mana-value permanents and asked ``only_on_tie``,
+    then a ``may`` whose cost is read off what that step recorded
+    (``cost_from``, Flash's key) with ``sacrifice_recorded_permanent`` on the
+    decline (Retribution's).
+
+    So there is no new mechanism here at all, and deliberately: the tie-break
+    sentence *is* the prompt, and the toll's unprinted cost is the one
+    ``_derived_cost`` already computes off a recorded permanent.
+    """
+    return (
+        OracleInstruction(
+            "each_player_pays_or_sacrifices_greatest", "",
+            {"card_type": node.card_type},
+        ),
+    )
+
+
 def _lower_exchange_greatest_mana_value(
     node: ast.ExchangeGreatestManaValue,
 ) -> tuple[OracleInstruction, ...]:

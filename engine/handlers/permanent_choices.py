@@ -139,7 +139,11 @@ def permanent_choice_candidates(game, payload: dict, context, among=None) -> lis
             # phrase names nothing rather than everything.
             if host is None or not shares_a_card_type(perm, host):
                 continue
-        if payload.get("controlled_by"):
+        if payload.get("controlled_by") is not None:
+            # ``is not None``, not truthiness: seat 0 is a seat, and a handler
+            # loop that names one (Tariff's) had its whole narrowing dropped by
+            # the falsy read — the active player then chose out of *somebody
+            # else's* board.
             # "the <type> **you each** control" (Juxtapose): whose battlefield
             # this side of the choice is drawn from. A seat question, which
             # `subject_matches` deliberately does not answer for a named
@@ -193,6 +197,15 @@ def _controlled_by_seat(game, word: str, context, payload: dict | None = None) -
     nobody rather than defaulting: a side of an exchange drawn from the wrong
     battlefield is a different card.
     """
+    if isinstance(word, int):
+        # A seat a **handler's own loop** is on, not a word any card printed.
+        # Tariff's paragraph is one instruction whose handler walks the seats
+        # (`each_player_pays_or_sacrifices_greatest`), because "each player"
+        # means a number of steps only the resolution knows; the steps it then
+        # builds are ordinary instructions, and this is how they name the seat
+        # the iteration is on. No lowering emits it — a card that could print
+        # a seat number is not a card.
+        return word if 0 <= word < len(game.players) else None
     if word == "you":
         return game.players.index(context.caster)
     if word == "target":
@@ -226,6 +239,10 @@ def _chooser_seat(game, payload: dict, context) -> int | None:
     """
     caster_seat = game.players.index(context.caster)
     chooser = payload.get("chooser")
+    if isinstance(chooser, int):
+        # A handler's loop seat — see ``_controlled_by_seat``'s branch for the
+        # same value.
+        return chooser if 0 <= chooser < len(game.players) else None
     if chooser == "event_subject_player":
         # "At the beginning of each player's upkeep, destroy target nonartifact
         # creature **that player** controls **of their choice**." (The Abyss.)
