@@ -912,6 +912,82 @@ engine charges an alternative or repeated cost correctly and the browser can
 only announce the default — recorded as a named four-part item in
 SET_PLAYBOOK.md's Known gaps.
 
+## Tempest (TMP) — measured (227/335 at ingest, manifest index 17)
+
+**Ingest census: 227/335 supported (67.8%), 309 of 335 cards new to the pool.**
+Registered under `measured` on 2026-09-05 at release date 1997-10-14, which
+places it after Weatherlight (1997-06-09) and before Core Set 2021 —
+printing-order **index 17**, the first set since Mirage to be appended at the
+end of the pre-M21 run rather than inserted into it.
+
+**It is the first set in six that is not all-new**, and the 41 shared cards are
+almost all furniture: 20 basic lands plus Counterspell, Dark Ritual, Pacifism,
+Disenchant, Power Sink, Stone Rain, the five Circles of Protection and eight
+more. None of them is TMP's own origin — every one has an earlier printing — so
+the printing-order prefix guard is blind here for the sixth consecutive set and
+`test_the_shipped_sets_are_in_printing_order` is again the assertion that can
+fire. Rehearse the wrong insert at Phase 4 regardless (MIR's Volcanic Geyser is
+why).
+
+**Phase 2's first sweep is empty and the second is not.** Every card is
+`layout: normal` and every printed type already ships, so nothing gates Phase 4
+absolutely. But **two keyword abilities are genuinely missing**, and between
+them they are the largest single bucket this set has:
+
+* **Shadow** (CR 702.28) — 17 cards refuse on the keyword *line alone*, and
+  another eight print a sentence that grants it, removes it, blocks around it
+  or prevents its damage. `oracle.UNSUPPORTED_KEYWORDS` is empty, so nothing is
+  being suppressed; the word is simply not in `vocabulary.IMPLEMENTED_KEYWORDS`
+  and the evasion behind it does not exist.
+* **Buyback** (CR 702.27) — 12 cards, and **every one of them reports
+  supported**. This is the population the card census structurally cannot see:
+  the spell's effect line compiles, the card is supported because *any* line
+  is, and the `Buyback {N}` line is claimed by nothing. Today those twelve cast
+  at their printed mana cost with no offer, pay no additional cost and never
+  return to hand — playable, silent, and wrong in the caster's favour.
+
+**The censuses, all five, read at ingest rather than at the gate:**
+
+| Instrument | Reading |
+| --- | --- |
+| `support_report --set TMP` | 108 unsupported |
+| `--refusals` | 103 refused lines over 100 distinct sentences — **1.03** |
+| `--fragments` | the Licid cycle's 22 fragments at 5 cards each, "until end of turn" 10, "at the beginning of" 7, "to target creature" 7, "creatures with shadow" 4, "all slivers have {2}" 3 |
+| `--hollow-lines` | 9 supported cards, 9 instruction-less parts |
+| `parse_coverage --set TMP` | 26 supported cards, 28 unclaimed sentences (12 of them `buyback {N}`) |
+| `picker_sweep --set TMP` | 5 findings, 3 of them the Roots class |
+
+**1.03 for the ninth consecutive set, and for the ninth consecutive set the
+rollup's largest sites name no family**: 33 lines at `expected a subject`, 15 at
+`unrecognized effect verb`, 11 at `unconsumed text`. The fragment census one
+level down finds the two cycles the sentence census scatters — the five
+**Licids**, whose one printed line is 22 of the top 40 shared fragments, and
+the five **Slivers**, whose `All Slivers have "…"` grants a quoted activated
+ability to a tribe.
+
+**So the work list is ~130 cards, not 108.** The three sentence-level
+instruments add twenty-six the card census cannot see, and twelve of those are
+one keyword.
+
+### The round plan — five parallel worktree groups, integrated serially
+
+The split is by **code family**. Phase 0 read the cap headroom first
+(`check_all.py --caps`): eight grammar modules sat within 30 lines of the
+1,000-line guard, and `statement_dispatch.py` — eight lines under, and the
+chain every new statement kind lands an arm in — is the one no single group
+could own. It was **pre-split before the fan-out** rather than at integration
+(`statement_dispatch_naming.py`, the naming-and-choice arms; 0 cards moved by
+`oracle_diff`). The other seven are assigned to exactly one group each, which
+is the half of Weatherlight's rule that held.
+
+| Group | Family | Owns (lines / headroom) | Cards |
+| --- | --- | --- | --: |
+| W1G1 | Shadow (CR 702.28): the keyword, and every sentence around it | `postmodifiers.py` (990/10), `lowering/keywords.py` | 25 |
+| W1G2 | What casting a spell costs, and what it remembers: buyback (CR 702.27) | `costs.py`, `engine/cast_costs.py` | 16 |
+| W1G3 | A granted quoted ability, and board-wide characteristic statics | `effects/characteristics.py` (985/15) | 13 |
+| W1G4 | Triggered abilities the engine has never fired | `triggers.py`, `lowering/_events.py`, `references.py` (986/14), `lowering/_amounts.py` (986/14), `lowering/damage.py` (983/17) | 19 |
+| W1G5 | Supported and inert: the hollow lines and the unclaimed sentences | `effects/library.py` (987/13), `lowering/exile.py` (971/29) | 13 |
+
 ## Weatherlight (WTH) — shipped (167/167, manifest index 16)
 
 **Ingest census: 100/167 supported (59.9%), and 167 of 167 cards new to the

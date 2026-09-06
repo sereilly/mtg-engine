@@ -27,10 +27,7 @@ unchanged — the same promise that file's docstring makes about
 from ..oracle_types import OracleInstruction
 from . import ast
 from .errors import LoweringError
-from .lowering._deaths import BOUND_CARD_EVENTS
-from .lowering._events import (CHOSEN_PLAYER,
-                               LOOP_BOUND_OBJECT, LOOP_BOUND_PLAYER,
-                               chooser_payload as _chooser_payload)
+from .lowering._events import LOOP_BOUND_OBJECT, LOOP_BOUND_PLAYER
 from .lowering.where_x import lower_where_x
 from .lowering.control_flow import (
     _lower_may, _lower_one_of, _lower_unless_player_pays,
@@ -46,15 +43,12 @@ from .lowering.loops import (
     _lower_for_each_player,
 )
 from .lowering import (
-    _targets_payload,
     INSTRUCTION_CATEGORIES,
     _refuse_unfused_distinctness,
     _fused_discard_then_draw,
     _fused_draw_then_discard,
     _fused_exile_then_controller_life,
     _lower_add_mana,
-    _lower_put_exiled_card_into_zone,
-    _amount_payload,
     _lower_become_color,
     _lower_cant_be,
     _lower_remove_from_combat,
@@ -102,7 +96,6 @@ from .lowering import (
     _lower_put_milled_card_onto_battlefield,
     _lower_put_counter,
     _lower_put_onto_battlefield,
-    _lower_reveal_until,
     _lower_remove_counter,
     _lower_return_to_zone,
     _lower_sacrifice,
@@ -133,6 +126,7 @@ from .lowering import (
 #: inspection: no class in this table appears anywhere else in the chain and
 #: none of them inherits from another, so at most one branch could ever have
 #: matched a given node.
+from .statement_dispatch_naming import lower_naming_statement
 from .by_node import (_BY_NODE_TYPE, _BY_NODE_TYPE_WITH_EVENT,
                       _BY_NODE_TYPE_WITH_PRODUCED)
 
@@ -459,237 +453,11 @@ def lower_statement(
     if isinstance(statement, ast.SearchPlayerLibrary):
         return _lower_search_player_library(statement, produced)
 
-    if isinstance(statement, ast.NameAndStrip):
-        # "Search **target opponent's** graveyard, hand, and library …"
-        # (Necromentia). The searched seat is chosen as the spell is cast
-        # (CR 601.2c) and the production spells the words out, so the
-        # description is emitted here the way its sibling below emits
-        # Nebuchadnezzar's — and for the same reason: the kind table answers a
-        # bare ``{"kind": "player"}`` for `name_and_strip`, which offered the
-        # caster their own graveyard, hand and library (CR 115.4). The picker
-        # offers exactly what this describes.
-        return (
-            OracleInstruction(
-                "name_and_strip", "",
-                {
-                    "zones": list(statement.zones),
-                    "token_zone": statement.token_zone,
-                    "token": {
-                        "power": statement.token_power,
-                        "toughness": statement.token_toughness,
-                        "colors": list(statement.token_colors),
-                        "subtypes": list(statement.token_subtypes),
-                    },
-                    "targets": {
-                        "quantifier": "target",
-                        "kind": "player",
-                        "opponents_only": True,
-                    },
-                },
-            ),
-        )
-
-    if isinstance(statement, ast.NameAndRandomReveal):
-        # "Target opponent" is the only seat this paragraph names, and every
-        # sentence after the first is about that same seat — "that player" is
-        # the revealer. A description is emitted so the picker chooses the
-        # opponent at activation (CR 601.2c), and the count rides as the
-        # announced amount rather than a number, because X is not known until
-        # the ability is activated.
-        return (
-            OracleInstruction(
-                "name_and_random_reveal", "",
-                {
-                    "count": _amount_payload(statement.count),
-                    "zone": statement.zone,
-                    "targets": {
-                        "quantifier": "target",
-                        "kind": "player",
-                        "opponents_only": True,
-                    },
-                },
-            ),
-        )
-
-    if isinstance(statement, ast.RepeatedGraveyardPick):
-        # "**Target opponent** chooses" — a chosen seat, which the picker has to
-        # offer and the handler has to read. Any other reference names a seat
-        # nothing chose.
-        if statement.chooser.kind != "target_opponent":
-            raise LoweringError(
-                "the repeated graveyard pick is made by the opponent this "
-                "spell targets",
-                node=statement,
-            )
-        payload: dict[str, object] = {
-            "cost": {symbol: count for symbol, count in statement.cost.pips},
-            "targets": _targets_payload(statement.chooser),
-        }
-        return (OracleInstruction("repeated_graveyard_pick", "", payload),)
-
-    if isinstance(statement, ast.PutExiledCardIntoZone):
-        return _lower_put_exiled_card_into_zone(statement, produced)
-
-    if isinstance(statement, ast.ExileBoundCard):
-        # "Whenever a nontoken creature is put into your graveyard from the
-        # battlefield, **exile that card**." (Purgatory.) No printed zone,
-        # because the trigger's own condition already said which one — so the
-        # card is the ``dead_card`` the death seam froze (CR 603.10) and the
-        # handler looks for it by identity wherever CR 404.1 put it.
-        #
-        # Gated on the same ``BOUND_CARD_EVENTS`` every other reading of "that
-        # card" is gated on: an event that records no card makes these two
-        # words name nothing, and the honest answer is a refusal rather than a
-        # handler that finds nothing while the card compiles supported.
-        if statement.from_zone is None:
-            if event not in BOUND_CARD_EVENTS:
-                raise LoweringError(
-                    "'that card' names the firing event's object, and this "
-                    "event records none",
-                    node=statement,
-                )
-            return (OracleInstruction("exile_bound_card", "", {}),)
-        # "Exile **that card** from your graveyard." (Necropotence.) The object
-        # the firing event named, so the event has to be one whose fire site
-        # records it — under anything else the words name a card nobody wrote
-        # down, and the handler would find nothing while the card compiled
-        # supported.
-        if event != "you_discard_card":
-            raise LoweringError(
-                "'that card' names the firing event's object, and this event "
-                "records none",
-                node=statement,
-            )
-        if statement.from_zone.name != "graveyard" or (
-            statement.from_zone.owner is None
-            or statement.from_zone.owner.kind != "you"
-        ):
-            raise LoweringError(
-                "the bound-card exile reaches the discarding player's own "
-                "graveyard",
-                node=statement,
-            )
-        return (OracleInstruction("exile_bound_card_from_graveyard", "", {}),)
-
-    if isinstance(statement, ast.NameThenConsult):
-        return (
-            OracleInstruction(
-                "name_then_consult", "",
-                {"exile_count": _amount_payload(statement.exile_count)},
-            ),
-        )
-
-    if isinstance(statement, ast.NameThenRevealTop):
-        # "Target player chooses…" is the only subject printed on this
-        # paragraph, and it is the whole shape of the effect: the chooser, the
-        # revealer and the card's destination are all the *same* seat. A
-        # sentence naming anyone else would be a different card, so it refuses
-        # rather than lowering onto a seat the handler would then have to guess
-        # between.
-        if statement.who.kind != "target_player":
-            raise LoweringError(
-                "the guess is made by the player the spell targets",
-                node=statement,
-            )
-        payload: dict[str, object] = {
-            "match_zone": statement.match_zone,
-            "miss_zone": statement.miss_zone,
-            "targets": _targets_payload(statement.who),
-        }
-        if statement.miss_damage:
-            # Emitted only when the card prints it, so Petra Sphinx's payload
-            # stays byte-identical and no behaviour signature moves.
-            payload["miss_damage"] = statement.miss_damage
-        return (OracleInstruction("name_then_reveal_top", "", payload),)
-
-    if isinstance(statement, ast.RevealUntil):
-        return _lower_reveal_until(statement, produced)
-
-    if isinstance(statement, ast.CopyThatSpell):
-        return (OracleInstruction("copy_triggering_spell", "", {}),)
-
-    if isinstance(statement, ast.CopySpell):
-        # "Copy **this** spell" — the resolving object, which this engine has
-        # already popped off the stack, so the handler reads
-        # `Game.resolving_items[-1]` rather than scanning. Who gets the copy is
-        # payload (CR 707.10a): the sentence's printed subject, which for Chain
-        # Lightning is the player who paid and not the spell's controller.
-        return (
-            OracleInstruction(
-                "copy_this_spell", "",
-                {
-                    "controller": statement.controller.kind,
-                    "may_choose_new_target": bool(statement.may_choose_new_target),
-                },
-            ),
-        )
-
-    if isinstance(statement, ast.EndTheTurn):
-        return (OracleInstruction("end_the_turn", "", {}),)
-
-    if isinstance(statement, ast.ChooseNumber):
-        # The bounds are all there is to carry: what the number is *for* is a
-        # different sentence on the card (Shapeshifter's characteristic-defining
-        # P/T), which reads it back off the permanent.
-        return (
-            OracleInstruction(
-                "choose_number", "",
-                {"minimum": statement.minimum, "maximum": statement.maximum},
-            ),
-        )
-
-    if isinstance(statement, ast.ChooseColor):
-        # The colour is not printed and the permanent it lands on is the
-        # ability's own source — see the node. What can vary is *who* names it.
-        return (
-            OracleInstruction(
-                "choose_color", "", _chooser_payload(statement, event, "colour")
-            ),
-        )
-
-    if isinstance(statement, ast.ChooseCardType):
-        # The colour choice's sibling above, with the same two readings of who
-        # names it and the same refusals — the printed option list is the only
-        # thing it carries that the colour does not, because that one has a
-        # catalog and this one has a sentence.
-        return (
-            OracleInstruction(
-                "choose_card_type", "",
-                {
-                    "options": list(statement.options),
-                    **_chooser_payload(statement, event, "type"),
-                },
-            ),
-        )
-
-    if isinstance(statement, ast.ChoosePlayerWhoCast):
-        # "Choose a player who cast one or more sorcery spells this turn."
-        # (Backdraft.) The choice and nothing else: what the chosen player is
-        # *for* is the sentence after it, which reads the seat this one records
-        # (`_PRODUCES`) — the same shape the coin flip below has, and for the
-        # same reason.
-        return (
-            OracleInstruction(
-                "choose_player_who_cast", "",
-                {
-                    "card_type": statement.card_type,
-                    "minimum": statement.minimum,
-                    "result_key": CHOSEN_PLAYER,
-                },
-            ),
-        )
-
-    if isinstance(statement, ast.FlipCoin):
-        # CR 705.1: the flip is the whole sentence, and it takes no payload. What
-        # happens next is the conditional sentences after it, which read the
-        # result this one records (`_PRODUCES`).
-        return (OracleInstruction("flip_coin", "", {}),)
-
-    if isinstance(statement, ast.DrawGame):
-        # "The game is a draw." (CR 104.4c.) `game_is_draw` takes an empty
-        # payload and the sentence carries nothing else, so there is nothing to
-        # check and nothing that could be dropped.
-        return (OracleInstruction("game_is_draw", "", {}),)
+    # The naming and choice arms live in `statement_dispatch_naming.py`;
+    # None means none of them matched and the chain continues.
+    named = lower_naming_statement(statement, produced, event)
+    if named is not None:
+        return named
 
     if isinstance(statement, ast.CombatRestriction):
         return _lower_combat_restriction(statement, dispatch_event)

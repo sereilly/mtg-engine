@@ -355,7 +355,15 @@ PARSE_LAYERS = [
 # are dispatch here, so the chain of 79 type arms goes and the line wrappers
 # around it stay. Below `lower`, which re-exports `lower_statement` so the
 # name's address is unchanged, and above `by_node`, which it reads.
-LOWER_LAYERS = ["lowering", "statics", "by_node", "statement_dispatch", "lower"]
+# `statement_dispatch_naming` is that chain's own split, taken at Tempest's
+# Phase 0 rather than at its integration: eight lines of headroom with five
+# groups about to land arms is the "shared module" case SET_PLAYBOOK.md says to
+# pre-split. Below `statement_dispatch`, which calls it and continues its chain
+# on a None — the contract `by_node` already has one layer further down.
+LOWER_LAYERS = [
+    "lowering", "statics", "by_node",
+    "statement_dispatch_naming", "statement_dispatch", "lower",
+]
 
 # `library` joined on the parse side when The Dark pushed `effects/cards.py`
 # past the size guard: search, look-at and the library's top split off, reusing
