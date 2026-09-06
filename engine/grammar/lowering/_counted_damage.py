@@ -42,7 +42,7 @@ from ...oracle_types import (
 )
 from .. import ast
 from ..errors import LoweringError
-from ._amounts import count_spec
+from ._amounts import TARGET_OPPONENT_SCOPE, count_spec
 from ._common import _describe_targets, _is_target
 from ._events import (CHOSEN_CAST_DAMAGE, CHOSEN_PLAYER,
                       EVENT_SUBJECT_PLAYER, _EVENT_SUBJECT_PLAYERS)
@@ -253,14 +253,11 @@ def _lower_cost_sacrifice_damage(
     )
 
 
-#: How the subtrahend of a printed difference is *scoped*, when the phrase
-#: narrows it to a player the spell targets. A scope rather than a filter for
-#: `count_spec`'s stated reason — nothing downstream tests a controller key, so
-#: a count narrowed by one is a count taken on the wrong battlefield — and its
-#: own value rather than the plain "target" because CR 102.3 says a player is
-#: never their own opponent: the resolution's fallback seat is not necessarily
-#: one, and this scope is what says so.
-TARGET_OPPONENT_SCOPE = "target_opponent"
+#: Re-exported from ``_amounts``, where the constant now lives. It was written
+#: here when Superior Numbers' subtrahend was the only phrase that named a
+#: targeted seat; Reap prints the same narrowing on a plain count, so
+#: ``count_spec`` lifts it now — and the floor every family reads cannot import
+#: a family. The name keeps its address for the readers below.
 
 
 def lower_difference_damage(node: ast.DealDamage) -> tuple[OracleInstruction, ...]:

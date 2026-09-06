@@ -1349,6 +1349,23 @@ class SpellCastingMixin:
                     card.name, False, classification.effect_kind, refusal,
                 )
             resolved_x_value = defined
+        # CR 601.2b's other definition, the one printed as the tail of the
+        # sentence it sizes: "…, where X is the number of black permanents
+        # target opponent controls **as you cast this spell**" (Reap). It takes
+        # the announcement away from the caster exactly as the table above does,
+        # so it overrides whatever the wire sent — and it is *stamped on the
+        # stack item*, which is the half that matters: CR 601.2c fixes the
+        # number of targets from it and says the number does not change even if
+        # the board it was counted off does. Read through the one reader the
+        # picker and the target gate already asked, so the number the caster was
+        # offered, the number the announcement was checked against and the
+        # number the resolution spends are one number.
+        announced_x = self.announced_cast_x(
+            caster_index, card,
+            target_player_index=target_player_index, mode_index=mode_index,
+        )
+        if announced_x is not None:
+            resolved_x_value = announced_x
         if resolved_x_value is None and "{X}" in card.mana_cost.upper():
             # "…with mana value X" (Spell Blast, Detonate). The target and the X
             # are announced together (CR 601.2b before 601.2c), and only one X

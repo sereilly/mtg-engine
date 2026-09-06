@@ -2683,6 +2683,58 @@ def destroy_subject_filter(payload: dict) -> dict:
     }
 
 
+#: The payload key a where-clause's count is stamped under. Spelled here rather
+#: than imported from ``oracle_types`` beside the module's other constants
+#: because this module is read by ``legality`` and the cast path and nothing
+#: else needs the name — the one reader is :func:`cast_time_count_spec` below.
+_X_FROM_COUNT = "x_from_count"
+
+
+def cast_time_count_spec(program, *, mode_index: int | None = None) -> dict | None:
+    """The count a spell's own where-clause takes **as it is cast**, or None.
+
+    CR 601.2b: "…, where X is the number of black permanents target opponent
+    controls **as you cast this spell**" (Reap). The words move the count from
+    CR 608.2's resolution to the announcement, and that is not a nicety — the
+    same X sizes the spell's target list, so CR 601.2c's "once the number of
+    targets is determined, that number doesn't change" has nothing to fix it to
+    unless the number exists before the targets are named.
+
+    Derived from the **compiled program** rather than from a second reading of
+    the card's text, which is what separates this from
+    ``cost_x_definitions``'s three regex tables one file over. Those read a
+    whole printed line and answer from the board; this clause is the tail of the
+    sentence it modifies, so the parser has already read it, and a regex here
+    would be a second reader of a sentence the grammar owns — free to disagree
+    with the lowering about which board is counted.
+
+    The top level alone is scanned: ``_stamp_x_from_count`` writes the spec onto
+    every instruction of the sentence *including* the wrappers, so a nested step
+    can never carry one its parent does not.
+    """
+    instructions = tuple(getattr(program, "instructions", ()) or ())
+    modes = tuple(getattr(program, "modes", ()) or ())
+    if modes:
+        chosen = (
+            modes[mode_index]
+            if isinstance(mode_index, int) and 0 <= mode_index < len(modes)
+            else None
+        )
+        candidates = (
+            (chosen.instruction,) if chosen is not None and chosen.instruction is not None
+            else tuple(
+                mode.instruction for mode in modes if mode.instruction is not None
+            )
+        )
+        instructions = instructions + candidates
+    for instruction in instructions:
+        spec = getattr(instruction, "payload", None)
+        spec = spec.get(_X_FROM_COUNT) if isinstance(spec, dict) else None
+        if isinstance(spec, dict) and spec.get("as_cast"):
+            return spec
+    return None
+
+
 # The one spec kind whose chosen index is *not* a battlefield slot. Named
 # rather than spelled out at each reader, because "is this index a graveyard
 # index?" is asked in five places and a sixth that forgets is a spell reading a

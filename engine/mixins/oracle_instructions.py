@@ -50,7 +50,21 @@ class OracleInstructionsMixin:
         # gives the clause to every effect family at once. Doing it per handler
         # is how the pump ended up the only sentence that could carry one.
         count_spec = instruction.payload.get(X_FROM_COUNT)
-        if count_spec:
+        # …unless the clause said **when**. "…, where X is the number of black
+        # permanents target opponent controls **as you cast this spell**" (Reap)
+        # is CR 601.2b: the number was fixed at the announcement and stamped on
+        # the stack item, and CR 601.2c then says it does not change even if the
+        # board it was counted off does. Counting again here would undo exactly
+        # that — an opponent who sacrifices a Swamp in response would shrink a
+        # spell whose targets are already locked, and the caster's announcement
+        # would resolve for fewer cards than the rules gave them.
+        #
+        # Asked of the *spec* rather than of the card, because that is where the
+        # grammar wrote the answer; and only where the announcement actually
+        # left a number, so a clause carrying the words on an ability with no
+        # cast at all (which no card prints) falls back to counting rather than
+        # to nothing.
+        if count_spec and not (count_spec.get("as_cast") and context.x_value is not None):
             context = dataclasses.replace(
                 context, x_value=count_from_payload(self, context, count_spec, instruction)
             )

@@ -22,7 +22,7 @@ from .delayed import (_parse_create_delayed_trigger, delay_binds_an_object,
 from .references import parse_player_ref
 from .stream import TokenStream
 from .conditions import _parse_condition
-from .where_x import parse_where_x_definition
+from .where_x import accept_cast_time_marker, parse_where_x_definition
 from .subject_verb import parse_subject_verb
 from .leading_iteration import parse_leading_iteration
 from .rebinding import (rebind_alternative_pronoun_to_choice_target,
@@ -123,7 +123,15 @@ def parse_statement(stream: TokenStream, *, top_level: bool = True) -> ast.State
     delay = parse_trailing_delay(stream)
     definition = _parse_where_x(stream)
     if definition is not None:
-        statement = ast.WhereX(statement, definition)
+        # "…, where X is the number of black permanents target opponent
+        # controls **as you cast this spell**." (Reap.) CR 601.2b fixes the
+        # quantity at the announcement, which is a different card from the
+        # same sentence without the words — so the phrase is read here,
+        # where the clause has just been consumed, and carried on the node
+        # rather than left as unconsumed text that refuses the line.
+        statement = ast.WhereX(
+            statement, definition, as_cast=accept_cast_time_marker(stream)
+        )
         # "…, where X is the total power of the creatures sacrificed this way,
         # **then exile this artifact and those creature cards**." (Sword of the
         # Ages.) The comma list inside the body stops at "where" — correctly,

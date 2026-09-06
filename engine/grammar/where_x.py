@@ -470,6 +470,26 @@ def accept_this_way_count(stream: TokenStream, filt) -> "ast.Amount | None":
     return None
 
 
+
+def accept_cast_time_marker(stream: TokenStream) -> bool:
+    """"…as you cast this spell" — CR 601.2b, the trailing words that say a
+    where-clause's X is fixed at the **announcement** and not counted when the
+    spell resolves. (Reap.)
+
+    Here rather than in ``statements`` because the words belong to the clause:
+    they say nothing about the sentence in front of them, only about *when* the
+    definition behind them is asked. The caller stamps the answer on
+    ``ast.WhereX``.
+
+    Consumes nothing and answers False when the words are absent, so the
+    CR 608.2 reading every other where-clause has stays exactly what it was.
+    A card printing the words on a clause the lowering cannot freeze refuses
+    there rather than here — parsing a phrase is not implementing it, and
+    ``lowering/where_x.py`` is where the two are told apart.
+    """
+    return stream.accept_phrase("as", "you", "cast", "this", "spell")
+
+
 def _names_only_cards(filt) -> bool:
     """Whether *filt* is the bare noun "cards" with nothing narrowing it.
 

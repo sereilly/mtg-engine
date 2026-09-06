@@ -89,6 +89,19 @@ def lower_where_x(
     # gets it without knowing it can, exactly as the multiplier and the offset
     # already do. Unwrapped here rather than dispatched on, because it is not a
     # definition at all: it is an arithmetic over whichever one follows.
+    # CR 601.2b: "…**as you cast this spell**" (Reap). The definition is the
+    # same one every branch below reads; what the words change is *when* it is
+    # asked, and only a count of a zone can be asked early. Every other channel
+    # here answers out of the resolution's own scratchpad or off what a cost
+    # ate — a back-reference, a death record, a payment characteristic — and
+    # none of those exists while the spell is being announced, so freezing one
+    # at the announcement would freeze a zero. Refused rather than approximated,
+    # because a card whose X is announced and whose X is counted are different
+    # cards.
+    if node.as_cast and not _is_cast_time_countable(node.definition):
+        raise LoweringError(
+            "only a count of a zone can be taken as a spell is cast", node=node
+        )
     if isinstance(node.definition, ast.Half):
         halved = lower_where_x(
             dataclasses.replace(node, definition=node.definition.of),
@@ -159,8 +172,41 @@ def lower_where_x(
                       multiplier=factor)
     if plus:
         spec["plus"] = plus
+    if node.as_cast:
+        # CR 601.2b. The key the cast path reads to take this count at the
+        # announcement and the resolution reads to know it must **not** take it
+        # again — one flag for both halves, so "when is this counted?" has one
+        # answer rather than a cast-time table and a resolution-time table free
+        # to disagree. Written last so every spec on a clause without the words
+        # stays byte-identical.
+        spec["as_cast"] = True
     return _stamp_x_from_count(inner, spec)
 
+
+
+def _is_cast_time_countable(definition: "ast.Amount") -> bool:
+    """Whether *definition* is the plain board count CR 601.2b can freeze.
+
+    The arithmetic wrappers are transparent: "twice the number of …" and
+    "2 plus the number of …" are the same count with a factor and a constant
+    over it, and both are computable from a board alone. Anything else is a
+    record only a resolution holds.
+    """
+    while True:
+        if isinstance(definition, ast.Half):
+            definition = definition.of
+        elif isinstance(definition, ast.Times):
+            definition = definition.of
+        elif isinstance(definition, (ast.Plus, ast.Minus)):
+            left, right = definition.left, definition.right
+            if isinstance(right, ast.Fixed) and not isinstance(left, ast.Fixed):
+                definition = left
+            elif isinstance(left, ast.Fixed) and not isinstance(right, ast.Fixed):
+                definition = right
+            else:
+                return False
+        else:
+            return isinstance(definition, ast.CountOf)
 
 def _lower_where_x_exiled_for_cost(
     node: ast.WhereX, inner: tuple[OracleInstruction, ...]

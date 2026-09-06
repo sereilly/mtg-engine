@@ -502,6 +502,56 @@ class LegalityMixin:
         return pairs
 
     # -- Targeting ---------------------------------------------------------
+
+    def announced_cast_x(
+        self, caster_index: int, card: CardDefinition, *,
+        target_player_index: int | None = None,
+        mode_index: int | None = None,
+    ) -> int | None:
+        """CR 601.2b: the X this spell's own where-clause fixes **at the
+        announcement**, or None when it defines none.
+
+        "Return up to X target cards from your graveyard to your hand, where X
+        is the number of black permanents target opponent controls **as you cast
+        this spell**." (Reap.) Three callers ask, all of them before any cost is
+        paid and all of them about the same board: the picker (so the browser
+        offers at most X cards), :meth:`cast_target_refusal` (so an announcement
+        naming more than X is refused, CR 601.2c), and the cast path (so the
+        number is stamped on the stack item and the resolution reads it rather
+        than counting again). One function, because three readings of one count
+        are three chances for the picker to offer what the gate refuses.
+
+        Evaluated through ``count_from_payload`` — the *same* evaluator the
+        resolution uses — rather than through a cast-time arithmetic of its own.
+        That is the whole point: CR 601.2c says the number does not change once
+        determined, and the only way to be sure the frozen number is the one the
+        clause means is for both moments to ask one function. What differs is
+        the moment, which is what the caller supplies.
+
+        The seat a ``target_opponent``-scoped count reads is resolved by that
+        evaluator too (CR 102.3: a player is never their own opponent), so an
+        unnamed seat lands on the first living opponent — which in a two-player
+        game is the only announcement CR 601.2c permits.
+        """
+        from .game_types import OracleExecutionContext
+        from .handlers._common import count_from_payload
+        from .targeting import cast_time_count_spec
+
+        spec = cast_time_count_spec(
+            compile_card_oracle(card), mode_index=mode_index
+        )
+        if spec is None:
+            return None
+        caster = self.players[caster_index]
+        named = (
+            self.players[target_player_index]
+            if isinstance(target_player_index, int)
+            and 0 <= target_player_index < len(self.players)
+            else caster
+        )
+        context = OracleExecutionContext(caster=caster, target=named, card=card)
+        return max(0, int(count_from_payload(self, context, spec)))
+
     def cast_target_spec(
         self,
         caster_index: int,
@@ -559,6 +609,19 @@ class LegalityMixin:
         if caps_cast_x(card.oracle_text):
             bound = cast_x_ceiling(self, caster_index, card.oracle_text)
             spec["max_x"] = 0 if bound is None else bound[0]
+        # CR 601.2b's *third* answer, and the one that also sizes the target
+        # list: a where-clause counted "as you cast this spell" (Reap). Like
+        # ``defined_x`` above it takes the announcement away from the caster, so
+        # it is reported the same way and the browser asks for no X — and
+        # because CR 601.2c fixes the number of targets from it, the count
+        # becomes an ordinary ``max_targets`` here. ``x_targets`` is dropped in
+        # the same breath: that flag means "however many the announced X pays
+        # for", which is a question with an answer now.
+        announced = self.announced_cast_x(caster_index, card)
+        if announced is not None:
+            spec["defined_x"] = announced
+            spec.pop("x_targets", None)
+            spec["max_targets"] = announced
         # CR 107.3a's *other three* places an X can live. The browser asked only
         # the mana-cost string, so Fire Covenant ({1}{B}{R}, "pay X life") and
         # Infernal Harvest ({1}{B}, "return X Swamps") were offered no X box at
@@ -1419,6 +1482,26 @@ class LegalityMixin:
                 # than deduplicated at resolution, which would quietly destroy
                 # fewer permanents than the caster paid for.
                 return f"{card.name} needs {required} different targets"
+        # CR 601.2c's count for the *other* shape that has one: a spell whose
+        # X is fixed at the announcement (Reap). Above the graveyard branch
+        # rather than inside it, because what bounds the announcement is the
+        # clause and not the zone the targets sit in — a card printing the same
+        # tail over battlefield targets is gated here for free. Without this the
+        # spell compiles, reports supported, and lets the caster name as many
+        # cards as they like: the resolution clamps the list it *acts* on to X
+        # and nothing ever says the announcement was illegal, which is an
+        # ability that works more often than the card allows.
+        announced = self.announced_cast_x(
+            caster_index, card, target_player_index=target_player_index
+        )
+        if announced is not None:
+            named_count = len(named_ids) if named_ids else len(indices)
+            if named_count > announced:
+                return (
+                    f"{card.name} has {announced} target"
+                    + ("s" if announced != 1 else "")
+                    + f", not {named_count}"
+                )
         if spec.get("kind") == GRAVEYARD_TARGET_KIND:
             # A named graveyard slot, checked against the ``graveyard``-kind
             # entries the same enumeration offers the picker — the one zone

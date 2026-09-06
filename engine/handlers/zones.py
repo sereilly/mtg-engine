@@ -1580,6 +1580,12 @@ def return_creature_from_graveyard_to_hand(game: Game, instruction: OracleInstru
     # collected, so every chosen slot is honoured rather than only the first.
     targets_desc = instruction.payload.get("targets") or {}
     printed_count = targets_desc.get("count") if isinstance(targets_desc, dict) else None
+    # Whether the sentence's target *count* is the announced X, remembered
+    # before the letter is turned into a number. Everything below the
+    # conversion sees an ordinary integer, and "is this a targeted list?" is a
+    # different question from "how long is it?" — conflating the two is what
+    # made the ``> 1`` gate wrong (see there).
+    counted_x = printed_count == "x"
     if printed_count == "x":
         # "Return **X** target creature cards from your graveyard to your hand."
         # (Shattered Crypt.) The announced X (CR 601.2b), which is not a number
@@ -1592,7 +1598,24 @@ def return_creature_from_graveyard_to_hand(game: Game, instruction: OracleInstru
         # **one** card of however many X paid for — while the card lost X life
         # and reported itself supported.
         printed_count = int(context.x_value or 0)
-    if isinstance(printed_count, int) and printed_count > 1:
+    # An X-counted list goes through the slot resolver **whatever X is**, and
+    # the ``> 1`` beside it is a printed number's threshold rather than this
+    # one's. Two cards were mis-resolved by sharing it:
+    #
+    # * Shattered Crypt cast for X=1 with a list-shaped announcement fell past
+    #   the ``isinstance(idx, int)`` branch below (a one-element list is not an
+    #   int) and out into the "return whatever creature is nearest" fallback —
+    #   so the browser, which sends a list for every several-target picker,
+    #   returned the first creature card in the pile instead of the one the
+    #   caster targeted.
+    # * "Return **up to X** target cards…" (Reap) counted at 0 reached the same
+    #   fallback and returned a card for a spell that names none — an effect
+    #   happening more often than the card allows, which is the direction that
+    #   never announces itself.
+    #
+    # Zero picks is a legal outcome here, not a reason to guess: the sentence
+    # targets (CR 601.2c), so an announcement naming nothing returns nothing.
+    if counted_x or (isinstance(printed_count, int) and printed_count > 1):
         picked = _resolve_graveyard_slots(
             caster, context, printed_count, _eligible
         )

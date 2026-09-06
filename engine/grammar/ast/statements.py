@@ -609,6 +609,21 @@ class WhereX:
     """
     statement: "Statement"
     definition: Amount
+    #: "…, where X is the number of black permanents target opponent
+    #: controls **as you cast this spell**." (Reap.) CR 601.2b: the
+    #: quantity is fixed as the spell is announced rather than counted when
+    #: it resolves, which is what CR 601.2c then means by "once the number
+    #: of targets is determined, that number doesn't change, even if the
+    #: information used to determine it does".
+    #:
+    #: A flag on the clause rather than a different node, because it is the
+    #: same definition read at a different moment — every alternative above
+    #: means what it means either way, and only *when* it is asked moves.
+    #: Defaulted False so every WhereX written before the words existed is
+    #: untouched, and so the two other construction sites
+    #: (``control_flow``'s folded sequences) keep the resolution-time
+    #: reading the CR 608.2 default is.
+    as_cast: bool = False
 
 
 @dataclass(frozen=True)

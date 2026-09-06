@@ -864,10 +864,18 @@ class StackResolutionMixin:
             # every reader defaults it differently (`1 - caster` here, the
             # caster there), so a spell was validated against one graveyard and
             # resolved against another.
+            # ``[]`` is a real announcement, not a missing one: "Return **up
+            # to X** target cards…" with X counted at 0 (Reap against an
+            # opponent with no black permanents) names no target and is a legal
+            # cast, and so is any "up to" spell announced empty. Indexing a
+            # stamp list without asking whether it has one raised IndexError
+            # from inside the resolution, which is a crash where CR 601.2c has
+            # an answer.
+            stamps = item.target_graveyard_card
             first = (
-                item.target_graveyard_card[0]
-                if isinstance(item.target_graveyard_card, list)
-                else item.target_graveyard_card
+                (stamps[0] if stamps else None)
+                if isinstance(stamps, list)
+                else stamps
             )
             if first is not None:
                 item.target_player_index = first.seat

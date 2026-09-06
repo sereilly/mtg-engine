@@ -71,6 +71,24 @@ _CARD_ZONE_KEYS = frozenset({"type_filter", "named", "color_filter"})
 #: characteristics at all.
 _UNCOUNTABLE_FILTER_KEYS: frozenset[str] = frozenset()
 
+#: How a count is *scoped* when the printed noun phrase narrows it to a player
+#: the spell targets — "the number of black permanents **target opponent**
+#: controls" (Reap, Superior Numbers' subtrahend).
+#:
+#: A **scope** rather than a filter key, for this function's own stated reason
+#: one comment down: nothing downstream tests a ``controller`` key on a count,
+#: so a count narrowed by one is a count taken on the wrong battlefield. And its
+#: own value rather than the plain ``"target"`` beside it because CR 102.3 says
+#: a player is never their own opponent: the resolution's fallback seat is not
+#: necessarily one, and this scope is what tells ``count_from_payload`` to skip
+#: past the caster when the announcement did not name a seat.
+#:
+#: Defined **here**, in the floor, and imported by ``_counted_damage`` — it was
+#: written there when Superior Numbers was the only card that needed it, and a
+#: family cannot be imported by the floor every family reads. Two spellings of
+#: one scope would be two answers to "whose board is this?".
+TARGET_OPPONENT_SCOPE = "target_opponent"
+
 
 def count_spec(
     filt: "ast.ObjectFilter", node, *, aggregate: str = "count", multiplier: int = 1,
@@ -122,9 +140,26 @@ def count_spec(
     # be handed over and silently ignored, and the count taken on the wrong
     # player's battlefield. Refused rather than dropped.
     controller = payload.pop("controller", None)
-    if controller not in (None, "you"):
+    # "…the number of black permanents **target opponent** controls" (Reap).
+    # The one narrowing that is not dropped but *lifted*: it names a seat rather
+    # than a property of each object, and `count_from_payload` has resolved that
+    # seat since Superior Numbers — so it becomes the spec's ``owner`` below,
+    # where the evaluator reads it, instead of a filter key nothing tests.
+    #
+    # Reachable on the battlefield alone, and by construction rather than by a
+    # second condition: a count in any other zone refuses a ``controller`` key
+    # outright at the `_CARD_ZONE_KEYS` gate above, before this line runs.
+    if controller not in (None, "you", TARGET_OPPONENT_SCOPE):
         raise LoweringError(
             f"a count cannot be narrowed to the {controller}'s permanents", node=node
+        )
+    if controller == TARGET_OPPONENT_SCOPE and filt.zone_owner is not None:
+        # Two seats in one phrase name two different sets, exactly as the
+        # battlefield-scope branch below says of its pair. Refused rather than
+        # resolved to either half.
+        raise LoweringError(
+            "a count cannot be scoped to a target opponent and to a zone's owner",
+            node=node,
         )
     # "the number of green creatures **on the battlefield**" (An-Havva
     # Constable, An-Havva Inn). CR 403.1's one shared zone, which is the *whole*
@@ -178,6 +213,11 @@ def count_spec(
     if owner == "you" and not filt.zone_owner and controller is None:
         if payload.get("blocking_only") or payload.get("attacking_only"):
             owner = "all"
+    # The lift the controller gate above admitted. Written after the zone-owner
+    # reading rather than in place of it so the refusal beside it stays the only
+    # way two seats can be named at once.
+    if controller == TARGET_OPPONENT_SCOPE:
+        owner = TARGET_OPPONENT_SCOPE
     spec: dict = {
         "zone": filt.zone,
         "owner": owner,
