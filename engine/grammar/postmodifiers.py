@@ -34,7 +34,9 @@ COST_TAPPED_REFERENT = "the creature tapped this way"
 from typing import Callable
 
 from . import ast
-from .amounts import accept_source_relative_comparison, parse_comparison
+from .amounts import (accept_counters_on_it_bound,
+                      accept_source_counter_bound,
+                      accept_source_relative_comparison, parse_comparison)
 from .errors import GrammarError
 from .lexer import PT, SELF
 from .names import accept_name_comparison, accept_original_expansion, parse_card_name
@@ -456,6 +458,21 @@ def _parse_postmodifiers(
                 if relative is not None:
                     d.characteristic_vs_source = relative
                     continue
+                # "…**less than or equal to the number of treasure counters on
+                # this enchantment**" (Legacy's Allure). A count on the
+                # ability's own source rather than a printed number, so it is
+                # its own field for the reason the mana-value pair below are
+                # two: `parse_comparison` reads an `Amount`, and an amount is
+                # answered from the effect's context rather than from whichever
+                # permanent the matcher is looking at. Read before that parser,
+                # whose "less than" branch would consume the words and then
+                # fail on "the".
+                source_counters = accept_source_counter_bound(
+                    stream, comparison=("less", "than", "or", "equal", "to"),
+                )
+                if source_counters is not None:
+                    d.power_at_most_source_counters = source_counters
+                    continue
                 d.power = parse_comparison(stream)
                 continue
             if stream.accept_word("toughness"):
@@ -517,7 +534,7 @@ def _parse_postmodifiers(
                 # whichever permanent the matcher happens to be looking at.
                 # Read before the ordinary comparison, whose "less than" branch
                 # would otherwise consume the words and then fail on "the".
-                counters = _accept_counters_on_it_bound(stream)
+                counters = accept_counters_on_it_bound(stream)
                 if counters is not None:
                     d.mana_value_at_most_counters = counters
                     continue
@@ -526,7 +543,7 @@ def _parse_postmodifiers(
                 # ability's own source instead, and read here for the reason
                 # the one above is: `parse_comparison` opens with an amount and
                 # would fail on "equal".
-                source_counters = _accept_source_counter_bound(stream)
+                source_counters = accept_source_counter_bound(stream)
                 if source_counters is not None:
                     d.mana_value_equals_source_counters = source_counters
                     continue
@@ -928,63 +945,3 @@ def _parse_postmodifiers(
             stream.reset(probe)
             break
         break
-
-
-def _accept_source_counter_bound(stream: TokenStream) -> str | None:
-    """``equal to the number of <kind> counters on <this permanent>``
-    (Wave of Terror).
-
-    The counter's name is what comes back. The referent is the ability's own
-    **source**, and a bare "it" is refused here on purpose: that pronoun names
-    the object being tested, which is the sibling bound below and a different
-    pile entirely. Everything the source can be printed as — "this enchantment",
-    the card's own name — goes through ``accept_source_reference``, so a card
-    calling itself something else needs no code.
-
-    Refuses without consuming, so "with mana value 3 or less" keeps its own
-    reading.
-    """
-    mark = stream.mark()
-    if not stream.accept_phrase("equal", "to", "the", "number", "of"):
-        stream.reset(mark)
-        return None
-    kind = stream.peek_word()
-    if kind is None:
-        stream.reset(mark)
-        return None
-    stream.advance()
-    if not stream.accept_phrase("counters", "on"):
-        stream.reset(mark)
-        return None
-    if stream.at_word("it") or not accept_source_reference(stream):
-        stream.reset(mark)
-        return None
-    return kind
-
-
-def _accept_counters_on_it_bound(stream: TokenStream) -> str | None:
-    """``less than or equal to the number of <kind> counters on it`` (Corrosion).
-
-    The counter's name is what comes back; "on **it**" is required, because that
-    word is the whole difference between this bound and a count of counters on
-    the ability's *source* — a phrase the amount parser already reads and which
-    would name a different pile entirely.
-
-    Refuses without consuming, so "with mana value 3 or less" keeps its own
-    reading.
-    """
-    mark = stream.mark()
-    if not stream.accept_phrase(
-        "less", "than", "or", "equal", "to", "the", "number", "of"
-    ):
-        stream.reset(mark)
-        return None
-    kind = stream.peek_word()
-    if kind is None:
-        stream.reset(mark)
-        return None
-    stream.advance()
-    if not stream.accept_phrase("counters", "on", "it"):
-        stream.reset(mark)
-        return None
-    return kind

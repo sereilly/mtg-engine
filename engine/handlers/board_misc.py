@@ -849,20 +849,64 @@ def animate_self_until_eot(game: Game, instruction: OracleInstruction, context: 
     "In addition to its other types" is why the record adds rather than
     replaces: the enchantment is still an enchantment while it is a creature.
     """
+    return _animate_self(
+        game, instruction, context,
+        record_key=ANIMATE_UNTIL_EOT, until_eot=True, duration="until end of turn",
+    )
+
+
+@effect_handler("animate_self_indefinitely")
+def animate_self_indefinitely(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"{6}: This land becomes a 3/3 Elemental artifact creature that's still a
+    land. (This effect lasts indefinitely.)" (Stalking Stones, CR 611.2a.)
+
+    ``animate_target_indefinitely``'s self twin, and the two differences from
+    the sibling above are both the duration, exactly as they are on the targeted
+    pair: the record goes on the key the cleanup sweep does **not** clear, and
+    the P/T on the persistent channel rather than the ``_until_eot`` one. A
+    record on the swept key would end the effect the turn it started; a P/T on
+    the swept channel would leave a land that is a creature with no size, which
+    is a 0/0 the next state-based check bins under CR 704.5f.
+
+    "That's still a land" needs no code for the targeted twin's reason: the
+    record *adds* types (CR 613 layer 4 addition, not CR 305.7's replacement).
+    """
+    return _animate_self(
+        game, instruction, context,
+        record_key=ANIMATE_INDEFINITELY, until_eot=False, duration="indefinitely",
+    )
+
+
+def _animate_self(
+    game: Game,
+    instruction: OracleInstruction,
+    context: OracleExecutionContext,
+    *,
+    record_key: str,
+    until_eot: bool,
+    duration: str,
+) -> tuple[bool, str]:
+    """Both self-animations: write the record on the source and log it.
+
+    One body for ``_animate_target``'s reason one screen down — which record is
+    written is the only thing the two kinds disagree about, and a second copy of
+    the write is a second chance for the colour channel or the P/T channel to be
+    given the wrong duration.
+    """
     source = context.source_permanent
     if source is None:
         return False, "ability not implemented"
     payload = instruction.payload
-    set_base_pt(source, int(payload.get("power", 0)), int(payload.get("toughness", 0)))
-    source.metadata[ANIMATE_UNTIL_EOT] = {
+    power, toughness = int(payload.get("power", 0)), int(payload.get("toughness", 0))
+    set_base_pt(source, power, toughness, until_eot=until_eot)
+    source.metadata[record_key] = {
         "subtypes": list(payload.get("subtypes") or ()),
         "keywords": list(payload.get("keywords") or ()),
         "card_types": list(payload.get("card_types") or ()),
     }
-    _record_animation_colors(source, payload, until_eot=True)
+    _record_animation_colors(source, payload, until_eot=until_eot)
     game.log.append(
-        f"{context.card.name} becomes a "
-        f"{payload.get('power', 0)}/{payload.get('toughness', 0)} creature until end of turn"
+        f"{context.card.name} becomes a {power}/{toughness} creature {duration}"
     )
     return True, "resolved"
 

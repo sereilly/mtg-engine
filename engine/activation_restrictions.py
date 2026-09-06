@@ -433,6 +433,16 @@ def _during_your_turn(game: "Game", controller_index: int, source) -> bool:
     return game.active_player_index == controller_index
 
 
+def _not_your_turn(game: "Game", controller_index: int, source) -> bool:
+    """Ghost Town. The complement of :func:`_during_your_turn`, and printed as a
+    negation rather than as "during an opponent's turn" — which is the same set
+    of turns in a duel and **not** in a multiplayer game only if a turn could
+    belong to nobody, which CR 500.1 does not allow. So one predicate answers
+    both spellings, and it is written as the negation the card prints.
+    """
+    return game.active_player_index != controller_index
+
+
 def _during_combat(game: "Game", controller_index: int, source) -> bool:
     """Jade Statue."""
     return game.current_turn_phase == "combat"
@@ -1417,6 +1427,19 @@ ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
         re.compile(r"^activate only during your turn$"),
         _during_your_turn,
         "only during your turn",
+    ),
+    ActivationRestriction(
+        # "Activate only if it's not your turn." (Ghost Town.) The row above
+        # negated, and it is a row rather than a comment because the clause was
+        # **unenforced**: the grammar admits an "Activate only …" sentence only
+        # when this table can read it, so a wording with no row here left the
+        # whole line refused — which is the loud half. The quiet half is what
+        # a row written without a predicate would have been: a land that
+        # bounces itself at any time, including in response to its own
+        # controller's sorcery, which is exactly what the clause forbids.
+        re.compile(r"^activate only if it's not your turn$"),
+        _not_your_turn,
+        "only if it's not your turn",
     ),
     ActivationRestriction(
         re.compile(r"^activate only during the end of combat step$"),

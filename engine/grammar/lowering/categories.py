@@ -156,6 +156,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # The "pump" family, because what the sentence does is set a P/T — the
     # type change beside it is the layer bridge reading the same record.
     "animate_self_until_eot": "pump",
+    # "{6}: This land becomes a 3/3 Elemental artifact creature that's still a
+    # land." (Stalking Stones.) The row above with no end to it (CR 611.2a), so
+    # the same category for `animate_target_indefinitely`'s reason: what differs
+    # is the duration, not what the sentence does.
+    "animate_self_indefinitely": "pump",
     # "Target snow land becomes a 2/2 creature until end of turn." (Balduvian
     # Conjurer.) The same record on a permanent the sentence names rather than
     # on the source, so the same category: what differs is which permanent

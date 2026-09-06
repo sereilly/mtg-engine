@@ -154,6 +154,16 @@ class ObjectFilter:
     #: that field's reason. "On it" is refused by the parse and belongs to the
     #: field above: the pronoun names the candidate.
     mana_value_equals_source_counters: str | None = None
+    #: "…target creature **with power less than or equal to the number of
+    #: treasure counters on this enchantment**" (Legacy's Allure). The bound
+    #: above one characteristic over: a count on the ability's *source*
+    #: compared against the candidate's power. Its own key rather than a
+    #: characteristic on the mana-value one, because which stat is compared is
+    #: what the matcher has to read and CR 613 computes power through the
+    #: layers where CR 202.3 reads mana value off the card. The operator is in
+    #: the name for the two fields above's reason: this is the only direction
+    #: printed, and a general `op` would be five comparisons nothing exercises.
+    power_at_most_source_counters: str | None = None
     named: str | None = None
     #: "…**with a name originally printed in the Homelands expansion**"
     #: (Apocalypse Chime, Golgothian Sylex). The set *code* the printed
@@ -830,6 +840,9 @@ class ObjectFilter:
         if self.mana_value_equals_source_counters is not None:
             key = "mana_value_equals_source_counters"
             payload[key] = self.mana_value_equals_source_counters
+        if self.power_at_most_source_counters is not None:
+            key = "power_at_most_source_counters"
+            payload[key] = self.power_at_most_source_counters
         # "with power 4 or greater" (Turret Ogre's intervening-if). Same rule
         # as mana_value: a literal bound rides the payload and the matcher
         # tests it against the layer-computed stat; a variable bound stays

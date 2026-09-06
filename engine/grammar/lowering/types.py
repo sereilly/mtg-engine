@@ -58,12 +58,18 @@ def _lower_become_creature(
     (`engine/land_animation.py`), not a record stamped once.
     """
     if _is_source(node.subject):
-        _refuse_indefinite(node, "a permanent animating itself")
-        return (
-            OracleInstruction(
-                "animate_self_until_eot", "", _animation_payload(node)
-            ),
+        # "{6}: This land becomes a 3/3 Elemental artifact creature that's
+        # still a land. (This effect lasts indefinitely.)" (Stalking Stones.)
+        # CR 611.2a: a continuous effect from a resolving ability with no
+        # stated duration lasts as long as the game does, so the record has to
+        # outlive the cleanup sweep — its own kind for the reason the targeted
+        # pair are two kinds, that a kind whose name says "until_eot" writing a
+        # record nothing sweeps is a lie a reader has no way to see.
+        kind = (
+            "animate_self_until_eot" if node.until_end_of_turn
+            else "animate_self_indefinitely"
         )
+        return (OracleInstruction(kind, "", _animation_payload(node)),)
     # "**Forests you control** become 2/3 creatures until end of turn. They're
     # still lands." (Thelonite Druid.) A quantified subject, and a *third*
     # instruction kind rather than a flag on the two above, because what

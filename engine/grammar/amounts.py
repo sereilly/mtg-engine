@@ -220,6 +220,87 @@ def _accept_rounding(stream: TokenStream) -> str:
     return "down"
 
 
+#: The three readers below all delimit one printed phrase — "the number of
+#: <kind> counters on <somewhere>" — and differ only in the operator in front of
+#: it and in whose pile it names. They sit together for that reason: the fork
+#: they were is what a fragment fork always is, three readers of one sentence in
+#: three modules, and the second one to be extended is the moment it shows.
+def _accept_counter_count(
+    stream: TokenStream, *, comparison: tuple[str, ...], on_source: bool,
+) -> str | None:
+    """``<comparison> the number of <kind> counters on <referent>``, as the
+    counter's printed name — or None with the cursor exactly where it was.
+
+    *on_source* picks the referent, and it is the whole difference between the
+    two bounds this serves: the ability's own **source** (Wave of Terror,
+    Legacy's Allure), read through ``accept_source_reference`` so a card naming
+    itself needs no code, against a bare "it" (Corrosion), which names the
+    object being tested. They are different piles, so a reader that admitted
+    either would answer one card's phrase with the other card's count — which
+    is why "it" is refused outright by the source form rather than falling
+    through to it.
+
+    Refuses without consuming, so "with mana value 3 or less" keeps its own
+    reading.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase(*comparison, "the", "number", "of"):
+        stream.reset(mark)
+        return None
+    kind = stream.peek_word()
+    if kind is None:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    if not stream.accept_phrase("counters", "on"):
+        stream.reset(mark)
+        return None
+    if on_source:
+        # Late import for `accept_counters_on_source`'s reason below: `nouns`
+        # reads this module for its comparisons, so the cycle is broken at call
+        # time rather than at import time.
+        from .nouns import accept_source_reference
+
+        if stream.at_word("it") or not accept_source_reference(stream):
+            stream.reset(mark)
+            return None
+    elif not stream.accept_word("it"):
+        stream.reset(mark)
+        return None
+    return kind
+
+
+def accept_source_counter_bound(
+    stream: TokenStream, *, comparison: tuple[str, ...] = ("equal", "to"),
+) -> str | None:
+    """``<comparison> the number of <kind> counters on <this permanent>``
+    — "with mana value **equal to** …" (Wave of Terror), "with power **less
+    than or equal to** …" (Legacy's Allure).
+
+    *comparison* is the caller's, because the caller is what knows which field
+    the answer lands in: the two operators bound different characteristics and
+    reach different matchers. Reading either here and returning only the kind
+    would let one card's operator be tested as the other's — a narrowing
+    silently widened, on a phrase whose whole job is to narrow.
+    """
+    return _accept_counter_count(stream, comparison=comparison, on_source=True)
+
+
+def accept_counters_on_it_bound(stream: TokenStream) -> str | None:
+    """``less than or equal to the number of <kind> counters on it``
+    (Corrosion).
+
+    The bound above with the pronoun in place of the source. "On **it**" is
+    required: that word is the whole difference between a count on the object
+    being tested and a count on the ability's own permanent.
+    """
+    return _accept_counter_count(
+        stream,
+        comparison=("less", "than", "or", "equal", "to"),
+        on_source=False,
+    )
+
+
 def accept_counters_on_source(stream: TokenStream) -> "ast.CountersOnSource | None":
     """``<word> counters on <the source>`` — the count of a named counter the
     ability's own source is carrying, or None when the words are something else.

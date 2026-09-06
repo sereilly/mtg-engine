@@ -264,6 +264,9 @@ ACTIVATED_LABELS: dict[str, str] = {
     # in both cases.
     "gain_type": "activated_pump",
     "animate_self_until_eot": "activated_pump",
+    # Stalking Stones, the same sentence with no end to it. Same bucket — the
+    # report has no word for a duration.
+    "animate_self_indefinitely": "activated_pump",
     # Golgothian Sylex sweeps a whole expansion off the board.
     "sacrifice_expansion_permanents": "activated_destruction",
     # Priest of Yawgmoth eats a permanent and pays out mana; the mana is the
