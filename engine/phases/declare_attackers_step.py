@@ -1124,6 +1124,42 @@ class DeclareAttackersStepMixin:
                 for other in declared
             ):
                 return True
+        # "**If a creature with a magnet counter on it attacks**, all creatures
+        # with magnet counters on them attack if able." (Magnetic Web.) The
+        # same conditional requirement printed on one permanent about a *set*
+        # of others, so it is found by a board scan rather than on the attacker
+        # itself — the arrangement `_must_attack_if_able` above already has for
+        # the unconditional form and `can_attack` has for the restriction.
+        #
+        # Both noun phrases go through `subject_matches` with the **carrier's**
+        # seat as CR 109.5's "you", so a card printing "creatures you control"
+        # in either half would mean the seat whose permanent this is.
+        # `other is not attacker` is what keeps the requirement from being
+        # self-satisfying: a lone magnetized attacker is the creature its own
+        # condition names, and without the identity check it would be compelled
+        # to attack because it is attacking (idiom #11 — two magnetized
+        # creatures are two permanents and each answers for the other).
+        for source_seat, source_perm in self.permanents_with_controller():
+            for instr in compile_card_oracle(
+                source_perm.effective_card
+            ).instructions:
+                if instr.kind != "creatures_must_attack_if_partner_attacks":
+                    continue
+                if not subject_matches(
+                    self, attacker, dict(instr.payload.get("subject") or {}),
+                    observer=source_seat, source=source_perm,
+                ):
+                    continue
+                condition = dict(instr.payload.get("condition_subject") or {})
+                if any(
+                    other is not attacker
+                    and subject_matches(
+                        self, other, condition,
+                        observer=source_seat, source=source_perm,
+                    )
+                    for other in declared
+                ):
+                    return True
         return False
 
     def attack_declaration_refusal(
