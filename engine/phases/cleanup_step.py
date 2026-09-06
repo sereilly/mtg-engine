@@ -26,6 +26,7 @@ from ..mixins._constants import _EOT_METADATA_KEYS
 from ..damage_redirects import clear_redirects
 from ..land_mana_swaps import clear_swaps as clear_land_mana_swaps
 from ..shields import clear_shields
+from ..text_changes import end_until_eot_text_changes
 from ..pt import remove_temporary_pt
 
 
@@ -231,6 +232,17 @@ class CleanupStepMixin:
                 # Beside its two siblings, because a grant and a removal that
                 # share a printed duration have to end at one moment.
                 clear_removed_ability_keywords(permanent, "end_of_turn")
+                # "Change the text of target permanent … **until end of turn**."
+                # (Whim of Volrath.) CR 612's rewrite with a printed duration —
+                # the first in the pool — and it is filtered rather than popped
+                # for the gained-type sweep's reason a few lines up: the key
+                # holds records of two lifetimes, and popping it whole would end
+                # Magical Hack's permanent rewrite with the turn. A land word
+                # inside a lord's grant line is part of a cached buff, so
+                # dropping the record has to re-derive it, exactly as making one
+                # does.
+                if end_until_eot_text_changes(permanent):
+                    self._recalculate_lord_buffs()
                 # CR 611.2c: an until-end-of-turn control change ends here too.
                 # Dropping the contribution *is* the reversion — the permanent
                 # never moved, so whatever contributions remain simply decide

@@ -114,6 +114,7 @@ SCOPE: dict[str, str | tuple[str, ...]] = {
         "702.20",  # Vigilance
         "702.22",  # Banding
         "702.26",  # Phasing (M21: Teferi, Master of Time)
+        "702.27",  # Buyback (TMP: Capsize, Whispers of the Muse, +10)
         "702.23",  # Rampage
         "702.24",  # Cumulative upkeep (ICE: 24 cards)
         "702.25",  # Flanking

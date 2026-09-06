@@ -760,6 +760,30 @@ class DeclareAttackersStepMixin:
             if held < wanted:
                 return False
 
+        # "…unless you've cast a creature spell this turn." (Mogg Conscripts.)
+        # CR 506.1 asked of a *window* rather than of a board, so it reads the
+        # per-turn cast record instead of scanning permanents — and it reads the
+        # **attacker's controller's** record, which is what "you" means on a
+        # creature's own text (CR 109.5). A creature stolen this turn is held to
+        # its new controller's casts, not to the caster's.
+        #
+        # CR 508.1c keeps it cumulative for the reason the two clauses above
+        # are: satisfying this restriction answers only this one.
+        after_cast = next(
+            (
+                i for i in program.instructions
+                if i.kind == "cant_attack_unless_you_cast"
+            ),
+            None,
+        )
+        if after_cast is not None:
+            from ..cast_restrictions import spells_cast_matching
+
+            seat = self.controller_index_of(attacker)
+            described = dict(after_cast.payload.get("spell_filter") or {})
+            if seat is None or not spells_cast_matching(self, seat, described):
+                return False
+
         # The creature's own printed clause, and the one an Aura imposes
         # (Faith's Fetters). Asked of the Auras attached right now, so the
         # restriction ends when the Aura does without anything clearing a flag —

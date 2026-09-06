@@ -18,6 +18,7 @@ rather than through any accessor this family owns.
 """
 
 from .. import ast
+from ..phrases import _parse_duration
 from ..references import parse_recipient
 from ..stream import TokenStream
 
@@ -51,6 +52,11 @@ def _parse_change_text(stream: TokenStream) -> ast.ChangeText:
     required — "all instances of **one**" is what says a single word is
     replaced everywhere, and a card replacing something else, or only the first
     instance, would be a different effect wearing this one's sentence.
+
+    The **trailing duration** is read last and defaults to permanent, which is
+    what the three cards printed before Tempest mean by "This effect lasts
+    indefinitely": Whim of Volrath's "…until end of turn" is the first printed
+    one, and its lowering is what refuses a duration the cleanup cannot end.
     """
     stream.expect_word("change")
     stream.expect_word("the")
@@ -74,9 +80,10 @@ def _parse_change_text(stream: TokenStream) -> ast.ChangeText:
             # a sentence offering something this cannot substitute refuses here
             # rather than reaching the handler as a mode it will ignore.
             alternative = _accept_text_change_alternative(stream, mode)
-            if alternative is not None:
-                return ast.ChangeText(subject, alternative)
-            return ast.ChangeText(subject, mode)
+            return ast.ChangeText(
+                subject, alternative if alternative is not None else mode,
+                _parse_duration(stream),
+            )
     raise stream.error("no text substitution replaces this")
 
 

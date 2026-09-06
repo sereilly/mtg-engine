@@ -12,6 +12,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 
 from ...auras import aura_enchant_clause
+from ...cast_costs import buyback_paid
 from ...cast_timing import CAST_AT_INSTANT_SPEED
 from ...classifier import CardClassification, classify_card
 from ...events import emit
@@ -173,13 +174,48 @@ def _controller_narrowing_is_in(spec: dict, instruction) -> bool:
 
 class StackResolutionMixin:
     def _bin_spell_card(
-        self, owner, card: CardDefinition, *, exile_instead: bool, verb: str
+        self, owner, card: CardDefinition, *, exile_instead: bool, verb: str,
+        hand_instead: bool = False,
     ) -> None:
         """Where a spell's card goes as it leaves the stack (CR 608.2n): the
         owner's graveyard, unless the cast carried the "if that spell would be
         put into your graveyard, exile it instead" rider — which covers
         resolving and being countered alike, so every leave-the-stack site
-        routes through here rather than deciding for itself."""
+        routes through here rather than deciding for itself.
+
+        *hand_instead* is CR 702.27a's second static ability: "If the buyback
+        cost was paid, put this spell into its owner's hand instead of into that
+        player's graveyard **as it resolves**." A parameter rather than a
+        question this function asks, because the seam is shared with the
+        countering path and that rule's "as it resolves" excludes it — a bought
+        back spell that is countered goes to the graveyard like any other. Only
+        the resolution site passes it, off ``cast_costs.buyback_paid``.
+
+        Through ``put_card_into_hand``, so CR 903.9b is asked at the one place
+        it has to be asked (CLAUDE.md's "every put this card into a hand goes
+        through" seam) — a commander bought back returns to the command zone if
+        its owner says so.
+
+        **Order when two of these apply.** ``exile_instead`` covers two things:
+        an opponent's "exile it instead of putting it into its owner's
+        graveyard" rider, and CR 724.1b's end-the-turn exile, which is not a
+        replacement at all — it removes the object from the stack, so the
+        resolution buyback's clause is about never finishes and the exile has to
+        win. Between buyback and the *rider*, CR 616.1 makes it the affected
+        object's controller's choice, and the buyback payer is that controller
+        and has just paid for the return; taking it for them is the only reading
+        that does not make the payment pointless. The end-the-turn half reaches
+        here with ``hand_instead`` False, because the resolution never got as
+        far as asking.
+        """
+        if hand_instead and not exile_instead:
+            arrived = self.put_card_into_hand(owner, card)
+            if arrived:
+                self.log.append(
+                    f"{card.name} {verb} and returned to its owner's hand "
+                    "(buyback) instead of going to the graveyard"
+                )
+            return
         if exile_instead:
             owner.exile.append(card)
             self.log.append(f"{card.name} {verb} and was exiled instead of going to the graveyard")
@@ -1238,6 +1274,11 @@ class StackResolutionMixin:
                 caster, card,
                 exile_instead=exile_instead_of_graveyard or first_pass["ends_turn"],
                 verb="resolved",
+                # CR 702.27a's second static ability, asked here because "as it
+                # resolves" is exactly this step and nowhere else. The answer is
+                # the announcement this cast made, which by now survives only on
+                # the stack item's own record (CR 500.4 emptied the pool).
+                hand_instead=buyback_paid(card, choices),
             )
 
         # CR 608.2n puts the card into the graveyard as the *last* part of

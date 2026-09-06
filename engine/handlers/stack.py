@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..card_hooks import ON_SPELL_COUNTERED
+from ..counter_conditions import spell_cant_be_countered
 from ..divided_damage import DIVIDED_TARGETS, divided_entry
 from ..game_types import StackItem
 from ..mana_payment import mana_cost_label, total_pips
@@ -336,6 +337,25 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
                 )
                 return True, "resolved"
         target = chosen if (chosen is not None and chosen in game.stack) else game.stack[-1]
+        # "This spell can't be countered." (Scragnoth.) CR 113.6g: the ability
+        # functions while the object is on the stack, so it is asked here — at
+        # CR 608.2, the one moment the spell exists to be asked — and **before**
+        # every narrowing below, including the "unless its controller pays"
+        # prompt. Arming that prompt for a spell nothing can counter would ask a
+        # player to pay to prevent something that was never going to happen.
+        #
+        # Not a targeting restriction: Counterspell prints "target spell", not
+        # "target spell that can be countered", so the uncounterable spell is a
+        # legal choice (CR 115.1) and the counter simply does nothing.
+        # `effective_card` is the wrong reader here and deliberately unused —
+        # that is a `Permanent`'s accessor for what a permanent says, and this
+        # object is a card on the stack (CR 613.1: its printed face is all there
+        # is).
+        if spell_cant_be_countered(target.card):
+            game.log.append(
+                f"{card.name}: {target.card.name} can't be countered"
+            )
+            return True, "resolved"
         if color_filter and color_filter not in game._stack_item_colors(target):
             game.log.append(f"{card.name}: {target.card.name} is not color {color_filter}, cannot counter")
             return True, "resolved"

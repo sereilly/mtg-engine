@@ -4188,6 +4188,29 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
     # (loud) instead.
     if combat_restriction_for(_restriction_line(line, card_name), card_name) is not None:
         return True
+    # "Cast this spell only if you've cast another spell this turn."
+    # (Skyshroud Condor.) CR 601.3, gated by `check_cast_timing` from the cast
+    # path — so, like every table above, it needs no instruction to work. What
+    # it needed was this line: Skyshroud Condor is the first *creature* in the
+    # pool to print one of these clauses, and a creature is refused for any
+    # line nothing reads, so a card the table gates perfectly reported "text
+    # too complex". Asked of the table's own reader, so a clause it cannot read
+    # still refuses the card rather than admitting it with the restriction
+    # unenforced.
+    from .cast_restrictions import cast_timing_claims_line
+
+    if cast_timing_claims_line(normalized):
+        return True
+    # "This spell can't be countered." (Scragnoth.) CR 113.6g: a static ability
+    # of the object *on the stack*, so it produces no instruction for a
+    # permanent — the counter path reads it off the card at CR 608.2. Asked of
+    # that reader, so a card admitted here is one the counter path really
+    # honours; a parsed-and-dropped "can't be countered" is worse than none,
+    # because it looks like protection nobody has.
+    from .counter_conditions import uncounterable_line
+
+    if uncounterable_line(normalized):
+        return True
     # "<this creature> can't be the target of Aura spells" (Bartel Runeaxe,
     # Tetsuo Umezawa). Asked of the same reader `_can_be_targeted` consults, so
     # a wording the table cannot read is reported unsupported rather than
@@ -5092,7 +5115,7 @@ def expand_ability_lines(
     lines must start from (``engine/legality.py``, ``scripts/parse_coverage.py``,
     ``scripts/hook_reliance.py``), or it is reading a different card.
 
-    Two rewrites today, both of them the rules' own:
+    Three rewrites today, all of them the rules' own:
 
     * a modal activated head and its bullets become one ability line per
       bullet (:func:`expand_modal_activated_lines`);
@@ -5101,22 +5124,36 @@ def expand_ability_lines(
       Activate only as a sorcery." (``engine/equipment.py``). From there it is
       an ordinary activated ability to the grammar, the cost parser, the timing
       table and the target picker, none of which know the word.
+    * a **buyback** keyword line becomes the additional cost CR 702.27a says it
+      means — "As an additional cost to cast this spell, you may pay [cost]."
+      (``engine/cast_costs.py``). From there it is an ordinary CR 601.2b
+      optional additional cost to the cost table, the cast path, the payability
+      ceiling and the browser's cast-offer prompt, none of which know the word.
+      The rule's *second* static ability — the spell goes to its owner's hand
+      instead of the graveyard as it resolves — has no sentence to rewrite into
+      and is implemented at the one seam a resolving spell leaves the stack
+      through (``mixins/stack/resolution._bin_spell_card``), off the same
+      reader that produced this line.
 
     And one rewrite that is the *card's* rather than the rules': a legendary
     card's shortened self-reference written out in full
     (``engine/self_reference.py``). It belongs in this pass for exactly the
-    reason the other two do — every reader of a card's lines has to see the same
-    sentence, and the readers that see only the compiler's stored text have no
-    name to shorten *with*. A caller that names no card gets the text unchanged,
-    which is what every reader asking about a line rather than a card wants.
+    reason the other three do — every reader of a card's lines has to see the
+    same sentence, and the readers that see only the compiler's stored text have
+    no name to shorten *with*. A caller that names no card gets the text
+    unchanged, which is what every reader asking about a line rather than a card
+    wants.
     """
+    from .cast_costs import expand_buyback_lines
     from .self_reference import expand_short_self_references
 
     oracle_text = expand_short_self_references(
         oracle_text, card_name, legendary=legendary
     )
     return expand_static_then_trigger_lines(expand_conjoined_trigger_lines(
-        expand_equip_lines(expand_modal_activated_lines(oracle_text))
+        expand_buyback_lines(
+            expand_equip_lines(expand_modal_activated_lines(oracle_text))
+        )
     ))
 
 
@@ -5272,6 +5309,18 @@ def _derived_static_claims(
         for line in (oracle_text or "").splitlines()
     ):
         claims.append(LETHAL_DAMAGE_CLAIM)
+    # "This spell can't be countered." (Scragnoth prints it on a creature; an
+    # instant or sorcery printing the same sentence reads identically.)
+    # CR 113.6g: a static ability that functions on the stack, read off the card
+    # by the counter handler at CR 608.2 — so there is no instruction, and its
+    # own claim name for the reason the bans above have one: it is what the
+    # *spell* says about itself, not a condition some counter carries.
+    from .counter_conditions import UNCOUNTERABLE_CLAIM, uncounterable_line
+
+    if any(
+        uncounterable_line(line) for line in (oracle_text or "").splitlines()
+    ):
+        claims.append(UNCOUNTERABLE_CLAIM)
     # "Reveal the first card you draw each turn." (Rowen.) The draw seam reads
     # the permanent's own text on every draw, so there is no instruction to
     # point at — and on a card whose static half is only this sentence, no

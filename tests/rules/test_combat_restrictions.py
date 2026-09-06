@@ -1128,3 +1128,92 @@ def test_a_board_wide_blocker_ceiling_takes_the_smallest_of_several():
     # 509.1b makes both apply.
     assert not game.declare_blockers(1, {0: 1, 1: 1})[0]
     assert game.declare_blockers(1, {0: 1})[0]
+
+
+# --- W1G2: a restriction whose condition is a *window* (CR 508.1c) ---
+#
+# Every other row in engine/combat_restrictions.py asks about a **board**: what
+# the defending player controls, how many artifacts you control, whether a
+# creature you control is attacking. "This creature can't attack unless you've
+# cast a creature spell this turn" (Mogg Conscripts) asks about something that
+# is *gone* — the spell has resolved, been countered, or is still on the stack,
+# and none of those states is on any battlefield. So it reads the turn's cast
+# record instead, through the same reader the casting gate uses.
+
+from engine.cast_restrictions import cast_spell_filter as _w1g2_spell_filter
+from engine.card_loader import load_catalog as _w1g2_catalog
+
+_W1G2_CARDS = {card.name: card for card in _w1g2_catalog()}
+
+
+def _w1g2_conscript(noun: str) -> CardDefinition:
+    """An invented creature restricted on a printed *spell* noun phrase.
+
+    Invented rather than Mogg Conscripts, and with the noun varied, because the
+    claim the row makes is that the phrase is payload — a card printed about an
+    artifact spell is this restriction with one word changed.
+    """
+    text = f"This creature can't attack unless you've cast {noun} this turn."
+    return CardDefinition(
+        name=f"Probe {noun.title()} Zealot", mana_cost="{R}", cmc=1.0,
+        type_line="Creature — Goblin", oracle_text=text,
+        colors=("R",), color_identity=("R",), keywords=(), produced_mana=(),
+        raw={"name": f"Probe {noun.title()} Zealot",
+             "type_line": "Creature — Goblin", "power": "1", "toughness": "1"},
+        power="1", toughness="1",
+    )
+
+
+@pytest.mark.cr("508.1c")
+def test_508_1c_a_cast_window_restriction_is_checked_against_the_turns_record():
+    zealot = _w1g2_conscript("a creature spell")
+    p1 = PlayerState(name="P1")
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    perm = _nosick(Permanent(card=zealot))
+    p1.battlefield.append(perm)
+    game._settle()
+
+    assert not game.can_attack(perm, 1)
+    p1.spells_cast_this_turn.append(_W1G2_CARDS["Lightning Bolt"])
+    assert not game.can_attack(perm, 1), "an instant is not a creature spell"
+    p1.spells_cast_this_turn.append(_W1G2_CARDS["Grizzly Bears"])
+    assert game.can_attack(perm, 1)
+
+
+@pytest.mark.cr("508.1c")
+def test_508_1c_the_printed_noun_is_payload_and_is_really_applied():
+    """A different noun is a different restriction with no second row — and the
+    narrowing reaches the enforcement, which is what separates this from a
+    clause parsed and dropped."""
+    artifacts = _w1g2_conscript("an artifact spell")
+    read = combat_restriction_for(normalize_creature_line(artifacts.oracle_text))
+    assert read is not None
+    assert read.kind == "cant_attack_unless_you_cast"
+    assert read.payload == {"spell_filter": {"type_filter": "artifact"}}
+
+    p1 = PlayerState(name="P1")
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    perm = _nosick(Permanent(card=artifacts))
+    p1.battlefield.append(perm)
+    game._settle()
+
+    p1.spells_cast_this_turn.append(_W1G2_CARDS["Grizzly Bears"])
+    assert not game.can_attack(perm, 1)
+    p1.spells_cast_this_turn.append(_W1G2_CARDS["Black Lotus"])
+    assert game.can_attack(perm, 1)
+
+
+@pytest.mark.cr("508.1c")
+def test_508_1c_a_noun_the_reader_refuses_leaves_the_card_unsupported():
+    """The direction a restriction must never drift in. A phrase admitted
+    unread would be an *unless* clause conditional on nothing — a creature that
+    can never attack, or one that always can, depending on how the empty filter
+    were read."""
+    assert _w1g2_spell_filter("two or more creature spells") is None
+    unreadable = _w1g2_conscript("two or more creature spells")
+    assert combat_restriction_for(
+        normalize_creature_line(unreadable.oracle_text)
+    ) is None
+    assert not compile_card_oracle(unreadable).supported

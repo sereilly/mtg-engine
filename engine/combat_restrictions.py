@@ -74,6 +74,7 @@ class CombatRestriction:
 #   creatures_cant_attack           phases/declare_attackers_step.can_attack
 #   cant_attack_if_attacked_last_turn  phases/declare_attackers_step.can_attack
 #   cant_attack_unless_defender_acted  phases/declare_attackers_step.can_attack
+#   cant_attack_unless_you_cast     phases/declare_attackers_step.can_attack
 #   cant_attack_unless_pay          phases/declare_attackers_step.can_attack
 #                                   + declare_attackers (the charge)
 #   creatures_cant_attack_you_unless_pay
@@ -422,6 +423,34 @@ _PATTERNS: tuple[tuple[re.Pattern[str], "str | tuple[str, ...]"], ...] = (
             r"last turn$"
         ),
         "cant_attack_unless_defender_acted",
+    ),
+    (
+        # "This creature can't attack unless you've cast a creature spell this
+        # turn." (Mogg Conscripts.) CR 506.1's restriction asked of a *window*
+        # rather than of a board — which is what makes it different from the
+        # defending-player row above and from the controlled-count one: what it
+        # asks about is gone by the time it is asked, since the spell it names
+        # has resolved, been countered or is still on the stack, and none of
+        # those states is on any battlefield.
+        #
+        # It needs no record of its own. `PlayerState.spells_cast_this_turn` has
+        # held every cast of the turn beside the seat that made it since
+        # Stormwing Entity's ordinal, and `turn_management` empties it at the
+        # turn boundary — which is the half that matters, because a record that
+        # outlived its turn would be a restriction that stopped applying.
+        #
+        # The noun phrase is payload, like every other noun in this file, and it
+        # is read by **`cast_restrictions.cast_spell_filter`** rather than by
+        # `_printed_noun` one screen down: what this names is a *spell*, not a
+        # permanent (CR 613.1 gives it no computed characteristics), and it is
+        # the same phrase Skyshroud Condor's casting gate reads. One reader, so
+        # the two tables cannot come to disagree about what "a creature spell"
+        # is.
+        re.compile(
+            r"^this creature can't attack unless you(?:'ve|’ve| have) cast "
+            r"(?P<attack_after_cast>.+) this turn$"
+        ),
+        "cant_attack_unless_you_cast",
     ),
     # "This **token** can't block" (the Pirate Pursued Whale makes). A token is
     # a creature and "this token" is the same self-reference "this creature" is
@@ -1153,6 +1182,21 @@ def combat_restriction_for(
             if described is None:
                 return None
             payload["subject"] = described
+        # "…unless you've cast **a creature spell** this turn." (Mogg
+        # Conscripts.) Read here for the reason every other noun on this page is
+        # read here — the regex ends in `.+`, and a phrase admitted unread would
+        # be a restriction conditional on nothing, which for an *unless* clause
+        # means a creature that can never attack. Through the casting gate's own
+        # reader, because a spell is not a permanent and because Skyshroud
+        # Condor reads the identical phrase.
+        after_cast = payload.pop("attack_after_cast", None)
+        if after_cast is not None:
+            from .cast_restrictions import cast_spell_filter
+
+            described = cast_spell_filter(after_cast)
+            if described is None:
+                return None
+            payload["spell_filter"] = described
         # "**Creatures with flying** can block only **creatures with
         # flying**." Both halves read here for the reason every other noun on
         # this page is read here: the regex ends in `.+`, and a phrase admitted

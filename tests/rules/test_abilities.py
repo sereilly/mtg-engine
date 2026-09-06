@@ -1552,3 +1552,81 @@ def test_603_1b_one_ability_with_two_trigger_conditions_answers_to_each_once():
     game._settle()
 
     assert p1.life == 26
+
+
+# --- W1G2: CR 113.6g — an ability that functions on the stack ---
+#
+# The third exception to CR 113.6's battlefield default, and the one whose
+# subject is a *spell* rather than a permanent: "An object's ability that states
+# it can't be countered or can't be copied functions on the stack." Declared by
+# the sentence, like the two above, so an invented card printing it is answered
+# the same way as Scragnoth.
+
+from engine.card_loader import load_catalog as _w1g2_load_catalog
+from engine.counter_conditions import spell_cant_be_countered, uncounterable_line
+
+_W1G2_CATALOG = {card.name: card for card in _w1g2_load_catalog()}
+
+
+def _w1g2_uncounterable_creature() -> CardDefinition:
+    return CardDefinition(
+        name="Probe Bulwark", mana_cost="{4}{G}", cmc=5.0,
+        type_line="Creature — Test",
+        oracle_text="This spell can't be countered.",
+        colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": "Probe Bulwark", "type_line": "Creature — Test",
+             "power": "3", "toughness": "3"},
+        power="3", toughness="3",
+    )
+
+
+@pytest.mark.cr("113.6g", "701.6a")
+def test_113_6g_an_uncounterable_spell_survives_a_counter():
+    """CR 113.6g puts the ability on the stack, so the counter resolves and
+    CR 701.6a's removal simply does not happen. An invented card, because what
+    is being checked is that the *sentence* does this — not that one named card
+    does."""
+    bulwark = _w1g2_uncounterable_creature()
+    p1 = PlayerState(name="P1", hand=[bulwark])
+    p2 = PlayerState(name="P2", hand=[_W1G2_CATALOG["Counterspell"]])
+    game = Game(players=[p1, p2])
+
+    game.queue_from_hand(0, "Probe Bulwark")
+    game.queue_from_hand(1, "Counterspell", target_player_index=0)
+    game.resolve_stack()
+
+    assert [p.card.name for p in p1.battlefield] == ["Probe Bulwark"]
+    assert p1.graveyard == []
+
+
+@pytest.mark.cr("113.6g")
+def test_113_6g_the_immunity_is_read_off_the_printed_sentence():
+    """The whole line, anchored: a sentence that merely contains the words is
+    not this ability, and a substring reading is how a whitelist comes to claim
+    what it does not implement."""
+    assert uncounterable_line("This spell can't be countered.")
+    assert not uncounterable_line("Counter target spell that can't be countered")
+    assert not uncounterable_line("This creature can't be blocked.")
+    assert spell_cant_be_countered(_w1g2_uncounterable_creature())
+    assert not spell_cant_be_countered(_W1G2_CATALOG["Grizzly Bears"])
+
+
+@pytest.mark.cr("113.6g", "115.1")
+def test_113_6g_the_uncounterable_spell_is_still_a_legal_target():
+    """Counterspell prints "target spell", not "target spell that can be
+    countered", so the announcement is legal (CR 115.1) and the counter is spent
+    doing nothing. Enforcing the immunity at the picker would refuse a cast the
+    rules allow — and would make the counter's controller keep their card."""
+    bulwark = _w1g2_uncounterable_creature()
+    p1 = PlayerState(name="P1", hand=[bulwark])
+    p2 = PlayerState(name="P2", hand=[_W1G2_CATALOG["Counterspell"]])
+    game = Game(players=[p1, p2])
+
+    game.queue_from_hand(0, "Probe Bulwark")
+    result = game.queue_from_hand(1, "Counterspell", target_player_index=0)
+    assert result is None or getattr(result, "supported", True)
+    game.resolve_stack()
+
+    assert [c.name for c in p2.graveyard] == ["Counterspell"], (
+        "the counter resolved and was spent"
+    )

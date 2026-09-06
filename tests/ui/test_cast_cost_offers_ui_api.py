@@ -318,3 +318,81 @@ def test_the_offer_prompt_is_rendered_before_the_priority_prompt_takes_the_panel
         "  if (!pendingActivation && !pendingCastTarget && !pendingCastX"
     )
     assert offers_at < priority_at
+
+
+# --- W1G2: buyback is an ordinary offer, and the prompt still names it ---
+#
+# CR 702.27a is a rewrite (`cast_costs.expand_buyback_lines`), which is what
+# makes the whole of this file's machinery apply to it without a line of new
+# wire: the offer is described, priced against the pool and the board, and
+# announced on the same `optional_cost_payments` key. The one thing a rewrite
+# loses is the *word*, and the word is what a player deciding whether to pay
+# needs — so the offer's `label` carries it, and the client renders it.
+#
+# The **engine** half is asked directly for the Tempest cards. `CARD_BY_NAME` is
+# shipped-only by design, so the route this file otherwise drives answers 404
+# for a measured card — the same seam that keeps a measured set out of every
+# deck. Primitive Justice is shipped and carries the route half.
+
+
+def _w1g2_offers(game, card, seat: int = 0) -> list[dict]:
+    return [
+        offer for offer in game.cast_cost_offers(seat, card)
+        if offer.get("kind") == "optional_mana"
+    ]
+
+
+def test_w1g2_buyback_is_described_as_an_optional_mana_offer():
+    _sid, _held, game = _session()
+    game.players[0].battlefield = [Permanent(card=_LEA["Island"]) for _ in range(6)]
+
+    offers = _w1g2_offers(game, _POOL["Capsize"])
+
+    assert [(o["symbols"], o["repeatable"], o["max_times"]) for o in offers] == [
+        ("{3}", False, 1)
+    ], "buyback is paid once, and six Islands cover {1}{U}{U} plus {3}"
+
+
+def test_w1g2_the_offer_is_labelled_with_the_keyword():
+    """"Pay {3}" is not "buyback {3}". Worthy Cause is the card that makes the
+    difference matter: it prints a buyback *and* a mandatory sacrifice, so an
+    unnamed price says nothing about which one buys the card back."""
+    _sid, _held, game = _session()
+    game.players[0].battlefield = [Permanent(card=_LEA["Plains"]) for _ in range(3)]
+
+    assert [o["label"] for o in _w1g2_offers(game, _POOL["Worthy Cause"])] == ["buyback"]
+    assert "offer.label" in APP_JS, (
+        "the client has to render the name, or the payload is decoration"
+    )
+
+
+def test_w1g2_an_ordinary_optional_cost_keeps_its_symbols_as_its_label():
+    """The three cards that print CR 601.2b's own wording send a byte-identical
+    payload — the label falls back to the symbols, which is what it was. Through
+    the route, because Primitive Justice ships."""
+    sid = _primitive_justice_session()
+
+    offers = [
+        o for o in _spec(sid, "Primitive Justice", hand_index=0)["cost_offers"]
+        if o.get("kind") == "optional_mana"
+    ]
+
+    assert offers, "Primitive Justice prints two offers"
+    assert all(o["label"] == o["symbols"] for o in offers)
+
+
+def test_w1g2_the_buyback_ceiling_falls_with_the_board():
+    """The ceiling is `plan_payment` over the pool *and* the untapped lands, so
+    a board that cannot cover the printed cost plus the offer says so — which is
+    what stops the client announcing a cast CR 601.2h would refuse."""
+    _sid, _held, game = _session()
+
+    game.players[0].battlefield = [Permanent(card=_LEA["Island"]) for _ in range(3)]
+    assert [
+        o["max_times"] for o in _w1g2_offers(game, _POOL["Whispers of the Muse"])
+    ] == [0]
+
+    game.players[0].battlefield = [Permanent(card=_LEA["Island"]) for _ in range(6)]
+    assert [
+        o["max_times"] for o in _w1g2_offers(game, _POOL["Whispers of the Muse"])
+    ] == [1]

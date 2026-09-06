@@ -1,5 +1,11 @@
-"""When a conditional counter actually counters — "Counter target spell **if it
-would destroy a land you control**." (Equinox.)
+"""When a counter actually counters — both ends of the question.
+
+The **counter's** end is a printed condition: "Counter target spell **if it
+would destroy a land you control**." (Equinox.) The **victim's** end is a static
+ability of the object on the stack: "This spell can't be countered."
+(Scragnoth, CR 113.6g.) One module, because the counter path has to ask both and
+a path that asked one of them would be a restriction parsed and dropped — the
+last section of this file is the second half.
 
 CR 608.2: a spell's effect is worked out as it resolves, so a counter that
 carries a condition asks it *then*, of the spell still sitting on the stack.
@@ -21,6 +27,7 @@ outside them leaves its card unsupported, loudly.
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
@@ -156,9 +163,67 @@ def _key(sentence: str) -> str:
     return " ".join((sentence or "").lower().split()).strip(" .")
 
 
+# ---------------------------------------------------------------------------
+# The other half of "does this counter counter": what the *victim* says
+# ---------------------------------------------------------------------------
+#
+# Everything above is a condition the **counter** prints about the spell it
+# chose. "This spell can't be countered." (Scragnoth) is the same question asked
+# from the other end — a static ability of the object on the stack, CR 113.6g:
+# "An object's ability that states it can't be countered or can't be copied
+# functions on the stack." So it lives beside them rather than in a file of its
+# own: one module answers "is this spell countered", and a counter path that
+# asked only half of it would be the parsed-and-dropped restriction this repo
+# refuses.
+#
+# It is **not** a targeting restriction. Counterspell says "target spell", not
+# "target spell that can be countered", so Scragnoth is a legal target
+# (CR 115.1) and the counter simply does nothing when it resolves. Enforcing it
+# at the picker would refuse a cast the rules allow.
+
+#: The whole line, anchored, so a sentence that *contains* these words without
+#: being them cannot claim the immunity — the substring reading is how a
+#: whitelist comes to claim what it does not implement.
+_UNCOUNTERABLE = re.compile(r"^this spell can't be countered$")
+
+#: The claim name ``oracle._derived_static_claims`` reports for it. Its own name
+#: rather than "counter_conditions", because that one says what a *counter*
+#: may ask and this says what a spell answers.
+UNCOUNTERABLE_CLAIM = "uncounterable"
+
+
+def uncounterable_line(line: str) -> bool:
+    """Whether *line* is the printed "This spell can't be countered."
+
+    The **table's own** answer to "is this my sentence?", read by the support
+    gate (``oracle._is_supported_static_creature_line`` and
+    ``_derived_static_claims``), by the grammar's parse claim and by
+    ``scripts/parse_coverage.py`` — so what is claimed and what is enforced are
+    one function rather than three copies of a phrase.
+    """
+    return _UNCOUNTERABLE.match(_key(line)) is not None
+
+
+def spell_cant_be_countered(card) -> bool:
+    """Whether *card*'s own text makes it uncounterable (CR 113.6g).
+
+    Asked of the card on the stack at the moment a counter resolves (CR 608.2),
+    which is the only moment it can be asked: a spell has no permanent to read a
+    layer off, so the printed face is the whole of what there is — and reading
+    it any earlier would be reading it before the spell existed.
+    """
+    return any(
+        uncounterable_line(line)
+        for line in (getattr(card, "oracle_text", "") or "").split("\n")
+    )
+
+
 __all__ = [
     "COUNTER_CONDITIONS",
+    "UNCOUNTERABLE_CLAIM",
     "counter_condition_holds",
     "counter_condition_key",
     "counter_condition_readable",
+    "spell_cant_be_countered",
+    "uncounterable_line",
 ]

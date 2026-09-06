@@ -5080,7 +5080,7 @@ class PendingChoicesMixin:
 
     def arm_text_change_vocabulary(
         self, player_index: int, permanent, old_symbol: str, new_symbol: str,
-        card_name: str,
+        card_name: str, duration: str | None = None,
     ) -> None:
         """Queue "a colour word, or a basic land type?" for Mind Bend.
 
@@ -5098,7 +5098,8 @@ class PendingChoicesMixin:
             return
         if len(live) == 1:
             self._apply_text_change_vocabulary(
-                permanent, live[0], old_symbol, new_symbol, card_name
+                permanent, live[0], old_symbol, new_symbol, card_name,
+                duration=duration,
             )
             return
         self.arm_pending_choice(
@@ -5108,12 +5109,19 @@ class PendingChoicesMixin:
             options=list(live),
             old_symbol=(old_symbol or "").upper(),
             new_symbol=(new_symbol or "").upper(),
+            # Absent for the three cards that print no duration, so their
+            # prompt data is byte-identical to what it was. "Until end of turn"
+            # is a property of the *effect being created*, so it has to survive
+            # the decision the seat still owes -- a duration read at the
+            # resolution and dropped at the prompt would be a Whim of Volrath
+            # that lasts forever whenever its target had both words.
+            **({"duration": duration} if duration else {}),
             _permanent=permanent,
         )
 
     def _apply_text_change_vocabulary(
         self, permanent, mode: str, old_symbol: str, new_symbol: str,
-        card_name: str,
+        card_name: str, duration: str | None = None,
     ) -> None:
         """Perform the swap the seat named, through the same two writers the
         single-vocabulary cards use — a third copy here would be a third answer
@@ -5123,7 +5131,8 @@ class PendingChoicesMixin:
 
         if mode == "color_word":
             if change_color_word(
-                permanent, old_symbol, new_symbol, label=card_name
+                permanent, old_symbol, new_symbol, label=card_name,
+                duration=duration,
             ):
                 self.log.append(
                     f"{card_name} changed {old_symbol} text to {new_symbol} on "
@@ -5133,7 +5142,7 @@ class PendingChoicesMixin:
         old_type = LAND_TYPE_WORDS.get((old_symbol or "").upper())
         new_type = LAND_TYPE_WORDS.get((new_symbol or "").upper())
         if old_type and new_type and change_land_word(
-            permanent, old_type, new_type, label=card_name
+            permanent, old_type, new_type, label=card_name, duration=duration,
         ):
             self.log.append(
                 f"{card_name} changed {old_type} to {new_type} in "
@@ -5164,6 +5173,7 @@ class PendingChoicesMixin:
             permanent, str(mode), str(choice.data.get("old_symbol") or ""),
             str(choice.data.get("new_symbol") or ""),
             str(choice.data.get("card_name") or ""),
+            duration=choice.data.get("duration"),
         )
         return True
 

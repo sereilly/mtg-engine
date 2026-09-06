@@ -34,6 +34,7 @@ someone checked.
 import pytest
 
 from engine.card_loader import load_catalog
+from engine.cast_restrictions import cast_timing_claims_line
 from engine.characteristic_defining import dynamic_pt_for
 from engine.combat_restrictions import combat_restriction_for
 from engine.land_play_allowance import land_play_line
@@ -141,6 +142,20 @@ def _derived(normalized: str) -> bool:
         # is outside the game: CR 113.6a's deck-construction instruction, read
         # by `web/deck_legality.py` off the same constant the gate asks.
         or is_ante_deck_line(normalized)
+        # "Cast this spell only during an opponent's turn" and its four
+        # condition siblings -- the fourteenth derivation table, enforced by
+        # `cast_restrictions.check_cast_timing` from the cast path. Asked
+        # directly rather than through `_derived_static_claims`, which does not
+        # name it: emitting a `derived_static_rule` for a timing clause would
+        # move the compiled program of every card in the pool that prints one,
+        # for a support question their effect lines already answer.
+        #
+        # The gate began admitting these when Skyshroud Condor arrived -- the
+        # first *creature* in the pool to print one, and a creature is refused
+        # for any line nothing reads. Twenty-four shipped instants print the
+        # same clause and were never asked here before, which is why widening a
+        # gate is the moment to re-read the guards keyed on the old answer.
+        or cast_timing_claims_line(normalized)
         # The strongest claim of all, and the last asked: **the grammar lowered
         # this line to an instruction**. "This creature gets +X/+0, where X is
         # the greatest power among creature cards in your graveyard" (Carrion

@@ -340,10 +340,21 @@ def alternative_costs(card: CardDefinition) -> tuple[AlternativeCost, ...]:
     *applied*: what the rule limits is the choice, not the printing, and the
     cast path is where the limit belongs — it is the only place that knows which
     one was chosen.
+
+    Read off ``expand_ability_lines``'s text rather than off ``oracle_text``,
+    which is CLAUDE.md's rule that every reader of a card's lines starts from
+    that function — and the twin ``cast_costs.additional_costs`` obeys for a
+    live reason (CR 702.27a's buyback *is* one of its costs and reaches it only
+    as the rewrite's sentence). No rewrite produces an **alternative**-cost
+    sentence today, so this moves no card in either manifest role; it is here so
+    the two halves of one question are not read two ways, which is how the
+    sibling would have been the one place short.
     """
+    from .oracle import expand_card_lines
+
     found = [
         cost
-        for line in (card.oracle_text or "").split("\n")
+        for line in expand_card_lines(card)
         if (cost := alternative_cost_for_line(line)) is not None
     ]
     return tuple(found)

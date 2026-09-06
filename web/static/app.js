@@ -9367,8 +9367,17 @@ function renderActivationPrompt() {
           + ` data-offer-symbols="${escapeHtml(offer.symbols)}" data-offer-times="${times}">${times}</button>`,
         );
       }
+      // The offer's `label` names the *price* when the card prints a keyword
+      // for it — "buyback" (CR 702.27a) — and repeats the symbols when it does
+      // not. The word has to survive to here and nowhere else: the keyword is a
+      // rewrite everywhere in the engine, which is what makes it an ordinary
+      // offer, but a player deciding whether to pay {2} on Worthy Cause (which
+      // also prints a mandatory sacrifice) needs to know which price buys the
+      // card back.
+      const named = offer.label && offer.label !== offer.symbols
+        ? ` (${escapeHtml(offer.label)})` : "";
       rows.push(
-        `<div>Pay ${renderSymbolsInline(offer.symbols)}`
+        `<div>Pay ${renderSymbolsInline(offer.symbols)}${named}`
         + (offer.repeatable ? " any number of times" : "")
         + ` — chosen ${chosen}${max ? ` of up to ${max}` : " (none payable)"}.</div>`,
       );

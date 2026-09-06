@@ -276,10 +276,19 @@ class ChangeText:
     It is a closed set: a wording naming some other vocabulary is a text change
     the engine's substitution does not implement, and must fail to parse rather
     than arrive here as a mode nothing knows.
+
+    *duration* is CR 612's other axis, and it defaults to the permanent one
+    every card printed before Tempest has: Magical Hack, Sleight of Mind and
+    Mind Bend all say "This effect lasts indefinitely" in their reminder text.
+    **Whim of Volrath** is the first card in the pool to print a duration on
+    one ("…until end of turn"), and it needs the field rather than a separate
+    node because what differs is when the record is dropped, not what the
+    record says.
     """
 
     subject: Recipient
     mode: str
+    duration: Duration = field(default_factory=Duration)
 
 
 @dataclass(frozen=True)

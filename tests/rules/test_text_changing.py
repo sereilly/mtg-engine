@@ -236,3 +236,85 @@ def test_613_1c_no_remap_returns_the_card_unchanged(catalog):
     reads effective_card."""
     game, (knight,) = _board(catalog, "Black Knight")
     assert knight.effective_card is knight.card
+
+
+# --- W1G2: a text change with a printed duration (CR 612.1 / CR 613.7) ---
+#
+# Every card in the pool before Tempest says "This effect lasts indefinitely" in
+# its reminder text, and this module's docstring above was written against that:
+# a record was only ever appended and never ended. Whim of Volrath prints
+# "…until end of turn", so the record now carries a lifetime and the cleanup
+# step drops the ones that have it.
+#
+# The two lifetimes share one metadata key, which is why the sweep filters
+# rather than popping: a plain `_EOT_METADATA_KEYS` entry would have ended
+# Magical Hack's permanent rewrite with the turn.
+
+from engine.text_changes import UNTIL_END_OF_TURN, end_until_eot_text_changes
+
+
+@pytest.mark.cr("612.1")
+def test_612_1_a_text_change_with_a_printed_duration_ends_at_cleanup(catalog):
+    game, (knight,) = _board(catalog, "Black Knight")
+    assert change_color_word(
+        knight, "W", "U", label="Probe Whim", duration=UNTIL_END_OF_TURN
+    )
+    assert "protection from blue" in knight.effective_card.oracle_text.lower()
+
+    game.resolve_cleanup_step(0)
+    game._settle()
+
+    assert text_changes(knight) == ()
+    assert "protection from white" in knight.effective_card.oracle_text.lower(), (
+        "dropping the contribution is the reversion (CR 611.3b) — nothing was "
+        "stashed and nothing is restored"
+    )
+
+
+@pytest.mark.cr("612.1")
+def test_612_1_a_text_change_without_one_outlives_the_turn(catalog):
+    """The default CR 612 gives, and the half a whole-key sweep would break."""
+    game, (knight,) = _board(catalog, "Black Knight")
+    assert change_color_word(knight, "W", "U", label="Probe Hack")
+
+    game.resolve_cleanup_step(0)
+    game._settle()
+
+    assert [c.get("duration") for c in text_changes(knight)] == [None]
+    assert "protection from blue" in knight.effective_card.oracle_text.lower()
+
+
+@pytest.mark.cr("612.1", "613.7")
+def test_612_1_the_two_lifetimes_share_one_record_and_end_separately(catalog):
+    """Timestamp order still decides what the permanent reads, and the sweep
+    removes one contribution out of the middle of that order rather than
+    rewriting anything."""
+    game, (knight,) = _board(catalog, "Black Knight")
+    assert change_color_word(knight, "W", "G", label="Probe Hack")
+    assert change_color_word(
+        knight, "G", "R", label="Probe Whim", duration=UNTIL_END_OF_TURN
+    )
+    assert "protection from red" in knight.effective_card.oracle_text.lower()
+
+    assert end_until_eot_text_changes(knight)
+
+    assert [c.get("duration") for c in text_changes(knight)] == [None]
+    assert "protection from green" in knight.effective_card.oracle_text.lower()
+
+
+@pytest.mark.cr("612.1")
+def test_612_1_the_sweep_reports_whether_it_removed_anything(catalog):
+    """The cleanup step re-derives the cached lord buffs off this answer — a
+    swapped land word can live inside a grant line — so a sweep that always
+    said True would re-derive the whole board every turn, and one that always
+    said False would leave a stale buff behind."""
+    game, (knight,) = _board(catalog, "Black Knight")
+    assert not end_until_eot_text_changes(knight), "nothing recorded"
+
+    change_color_word(knight, "W", "U", label="Probe Hack")
+    assert not end_until_eot_text_changes(knight), "nothing with a duration"
+
+    change_color_word(
+        knight, "U", "R", label="Probe Whim", duration=UNTIL_END_OF_TURN
+    )
+    assert end_until_eot_text_changes(knight)

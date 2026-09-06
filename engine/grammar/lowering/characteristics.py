@@ -967,10 +967,24 @@ def _lower_change_text(node: ast.ChangeText) -> tuple[OracleInstruction, ...]:
     to the resolution check. Left off, the ability would have read as the Lace
     cycle's and been aimable at any permanent on the board — a restriction the
     card prints and nothing enforces.
+
+    The **duration** is on the payload only when the card prints one. Every
+    reader before Whim of Volrath treats a recorded text change as permanent,
+    so an absent key is the reading those three cards already have, byte for
+    byte. Any duration but "until end of turn" refuses: the cleanup step is what
+    ends one (``end_until_eot_text_changes``), so a record stamped with a
+    duration nothing sweeps would be an effect printed to end and lasting the
+    rest of the game — the widening direction.
     """
     if not _is_target(node.subject):
         raise LoweringError("a text change has to name what it changes", node=node)
     payload: dict[str, object] = {"mode": node.mode}
+    if node.duration.kind is not None:
+        if node.duration.kind not in ("until_end_of_turn", "this_turn"):
+            raise LoweringError(
+                "no sweep ends a text change with this duration", node=node
+            )
+        payload["duration"] = "until_end_of_turn"
     assert isinstance(node.subject, ast.TargetSpec)
     if _filter_payload(node.subject.filter):
         _describe_targets(payload, node.subject)

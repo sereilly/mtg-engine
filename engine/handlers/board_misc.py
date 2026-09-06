@@ -423,6 +423,13 @@ def mark_text_modified(game: Game, instruction: OracleInstruction, context: Orac
     mode = instruction.payload.get("mode")
     new_symbol = (context.choices.get("new_color") or "").upper()
     old_symbol = (context.choices.get("old_color") or "").upper()
+    # "…**until end of turn**." (Whim of Volrath.) Absent for every card printed
+    # before it, which is what "This effect lasts indefinitely" means on the
+    # other three -- so the record they write is byte-identical to what it was.
+    # It travels with every branch below, the vocabulary prompt included: a
+    # duration dropped on the way to the record is an effect printed to end and
+    # lasting the rest of the game.
+    duration = instruction.payload.get("duration")
 
     # Magical Hack: "replacing all instances of one basic land type with
     # another". One text change (CR 612.1 / 613 layer 3), whatever the permanent
@@ -442,7 +449,7 @@ def mark_text_modified(game: Game, instruction: OracleInstruction, context: Orac
             return True, "resolved"
         game.arm_text_change_vocabulary(
             game.seat_index(context.caster), target_perm,
-            old_symbol, new_symbol, card.name,
+            old_symbol, new_symbol, card.name, duration=duration,
         )
         return True, "resolved"
 
@@ -468,7 +475,10 @@ def mark_text_modified(game: Game, instruction: OracleInstruction, context: Orac
                 (effective.type_line, effective.oracle_text, *effective.keywords)
             ).lower()
             if old_type in written:
-                change_land_word(target_perm, old_type, new_type, label=card.name)
+                change_land_word(
+                    target_perm, old_type, new_type, label=card.name,
+                    duration=duration,
+                )
                 game.log.append(
                     f"{card.name} changed {old_type} to {new_type} in {target_perm.card.name}'s text"
                 )
@@ -485,7 +495,8 @@ def mark_text_modified(game: Game, instruction: OracleInstruction, context: Orac
     # Permanent.effective_card. It does NOT recolor the permanent.
     if mode == "color_word":
         if target_perm is not None and change_color_word(
-            target_perm, old_symbol, new_symbol, label=card.name
+            target_perm, old_symbol, new_symbol, label=card.name,
+            duration=duration,
         ):
             game.log.append(f"{card.name} changed {old_symbol} text to {new_symbol} on {target_perm.card.name}")
         return True, "resolved"

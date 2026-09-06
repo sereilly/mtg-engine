@@ -216,3 +216,92 @@ def test_601_3a_the_opponents_turn_window_is_not_narrowed_to_a_step():
     for phase in ("beginning", "precombat_main", "combat", "postcombat_main", "ending"):
         game.current_turn_phase = phase
         assert check_cast_timing(game, 0, text) is None, phase
+
+
+# --- W1G2: the own-cast window, and the table's completeness (CR 601.3) ---
+from engine.card_loader import manifest_set_paths
+from engine.card_loader import load_cards as _w1g2_load_cards
+from engine.cast_restrictions import (cast_own_cast_line, cast_spell_filter,
+                                      cast_timing_claims_line)
+
+
+@pytest.mark.cr("601.3")
+def test_601_3_the_own_cast_window_reads_the_turns_cast_record():
+    """"Cast this spell only if you've cast another spell this turn."
+    (Skyshroud Condor.) The window is a *record*, not a moment: what it asks
+    about has resolved, been countered or is still on the stack, and none of
+    those is on any battlefield."""
+    game, p1, _p2 = _duel()
+    text = "cast this spell only if you've cast another spell this turn."
+
+    assert check_cast_timing(game, 0, text) == (
+        "can only be cast if you've cast another spell this turn"
+    )
+    p1.spells_cast_this_turn.append(_CATALOG["Lightning Bolt"])
+    assert check_cast_timing(game, 0, text) is None
+
+
+@pytest.mark.cr("601.3")
+def test_601_3_the_own_cast_window_narrows_by_the_printed_noun():
+    """The noun is payload, so a card printed about a *creature* spell needs no
+    second row — and the narrowing is really applied, which is what separates
+    this from a clause parsed and dropped."""
+    game, p1, _p2 = _duel()
+    text = "cast this spell only if you've cast a creature spell this turn."
+
+    p1.spells_cast_this_turn.append(_CATALOG["Lightning Bolt"])
+    assert check_cast_timing(game, 0, text) is not None
+    p1.spells_cast_this_turn.append(_CATALOG["Grizzly Bears"])
+    assert check_cast_timing(game, 0, text) is None
+
+
+@pytest.mark.cr("601.3")
+def test_601_3_the_own_cast_window_is_the_casters_own_record():
+    """"You" is the seat announcing the spell (CR 109.5's observer), so an
+    opponent's casts do not open the window."""
+    game, _p1, p2 = _duel()
+    text = "cast this spell only if you've cast another spell this turn."
+
+    p2.spells_cast_this_turn.append(_CATALOG["Lightning Bolt"])
+    assert check_cast_timing(game, 0, text) is not None
+    assert check_cast_timing(game, 1, text) is None
+
+
+@pytest.mark.cr("601.3")
+def test_601_3_an_unreadable_window_is_refused_rather_than_lifted():
+    """A phrase the reader cannot answer leaves the line unclaimed, which makes
+    its card unsupported. The direction matters: a restriction quietly widened
+    is a spell castable when the card forbids it."""
+    assert cast_own_cast_line(
+        "cast this spell only if you've cast two or more spells this turn"
+    ) is None
+    assert cast_spell_filter("two or more spells") is None
+    assert cast_own_cast_line("cast this spell only during your upkeep") is None
+
+
+@pytest.mark.cr("601.3")
+def test_601_3_every_printed_cast_window_in_the_pool_is_claimed_by_the_table():
+    """The completeness half, which `cast_timing_claims_line`'s docstring
+    promises: the support gate reads that function, so a printed clause it does
+    not claim is a card refused for a line the engine really does enforce — or,
+    worse, one admitted by some other line with this one silently unenforced.
+
+    Over **both** manifest roles, because a measured set is where the next such
+    clause arrives.
+    """
+    seen: dict[str, object] = {}
+    for path in manifest_set_paths(include_measured=True):
+        for card in _w1g2_load_cards(path):
+            seen.setdefault(card.name, card)
+
+    unclaimed = [
+        (card.name, line.strip())
+        for card in seen.values()
+        for line in (card.oracle_text or "").splitlines()
+        if line.strip().lower().startswith("cast this spell only")
+        and not cast_timing_claims_line(line)
+    ]
+    assert not unclaimed, (
+        "printed casting windows no row in engine/cast_restrictions.py reads: "
+        f"{unclaimed}"
+    )
