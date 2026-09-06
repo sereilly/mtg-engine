@@ -684,6 +684,27 @@ LOWERING_FAMILIES = [
      # `redirection`, `delayed` and `prohibitions`: the parse half stays in
      # `effects/board.py` and the guard fired on the lowerings.
      "phasing",
+     # `linked_exile` split off `lowering/exile.py` at Tempest's Phase 0, when
+     # that module reached the guard a second time with three of the wave's
+     # five groups reaching it and none of them owning it. The cut is not a new
+     # line: it is the section divider `exile` had carried whole since the
+     # block arrived out of `library` — "Cards exiled *with* a source, and the
+     # permission to cast them", with the paragraph under it saying the block
+     # was a lodger and that the call graph fell apart cleanly around it.
+     # It was a lodger in `exile` for the same reason and the graph fell apart
+     # in the same place: `exile` moves an object **into** the zone (CR 406)
+     # and refuses the shapes no handler implements, where everything here
+     # starts from a pile that is already there and asks whose it is, where it
+     # goes and what may be done with it. Neither module calls the other.
+     # The divider's second clause had already gone — `_lower_cast_permission`
+     # left for `permissions` at Alliances — so this is the first clause of it.
+     # The name is `engine/linked_exile.py`'s, the record every shape here
+     # pivots on, so the mirror re-forms rather than forking a third word for
+     # one subject, the reuse `untap_restrictions` and `base_pt` make of their
+     # engine modules. `effects/` and `ast/` have no `linked_exile`, for
+     # `permissions`' reason: the guard fired on the lowerings, and the nodes
+     # are cards in a zone that sit beside the other card ones.
+     "linked_exile",
      # The mirror of `grammar/repeats.py`, and it left `lowering/game.py` the
      # moment the family had a second member: `_lower_repeat_process` had been
      # a section of one there, with its parse half in `parser.py` and no mirror
