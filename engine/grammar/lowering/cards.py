@@ -6,7 +6,8 @@ families of their own: mana production in `mana.py`, the hidden-zone
 search/reveal/exile-linkage flows in `library.py`.
 """
 
-from ...oracle_types import (MILLED_THIS_WAY, PER_OBJECT_SEAT_RECORDS,
+from ...oracle_types import (DISCARDED_BY_SEAT, MILLED_THIS_WAY,
+                             PER_OBJECT_SEAT_RECORDS,
                              X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT,
                              OracleInstruction)
 from .. import ast
@@ -141,6 +142,20 @@ def _lower_discard(node: ast.Discard, event: str | None = None) -> tuple[OracleI
                 OracleInstruction(
                     "each_player_discards_a_card", "",
                     {X_FROM_COUNT_PER_RECIPIENT: per_seat},
+                ),
+            )
+        if isinstance(node.count, ast.AnyNumber):
+            # "**Each player discards any number of cards**, then draws that
+            # many cards." (Flux.) A ceiling with no printed number: the bound
+            # is the seat's own hand, which only the resolution knows, so it
+            # travels as a flag and the handler sizes each prompt. The same
+            # prompt Mind Bomb's "up to three" arms — "any number" and "up to
+            # N" are one decision with two ceilings, and the "may" is already
+            # inside both (a player may answer with none).
+            return (
+                OracleInstruction(
+                    "each_player_discards_up_to_cards", "",
+                    {"actor": node.player.kind, "any_number": True},
                 ),
             )
         if not isinstance(node.count, ast.Fixed):
@@ -430,6 +445,17 @@ def _lower_next_draw_replacement(
     )
 
 
+#: The single-number scratchpad key a step writes, and the per-seat map it
+#: writes *beside* it. A looped drawer's "that many" has one answer per player,
+#: so it reads the map; the flat key is the same event asked by one seat about
+#: its own answer, and reading it here would give every player the last
+#: answer's number. Two keys because one cannot be both — the same reason
+#: ``DISCARDED_BY_SEAT`` exists at all.
+_LOOPED_SEAT_RECORDS: dict[str, str] = {
+    "discarded_count": DISCARDED_BY_SEAT,
+}
+
+
 def _lower_draw(
     node: ast.Draw,
     produced: frozenset[str] = frozenset(),
@@ -594,6 +620,23 @@ def _lower_draw(
         # *else* ("…for each card in **your** hand") is one shared number and
         # belongs on the ordinary channel — but the looping handler has no
         # reader for that at all, so it refuses rather than drawing zero.
+        # "…**then draws that many cards**." (Flux.) The number the *same seat*
+        # just gave, which the each-player discard writes per seat as each
+        # prompt is answered. The bare back-reference above resolved it to
+        # ``discarded_count`` — one number, the last seat to answer — so every
+        # player would have drawn whatever the final answer happened to be.
+        recorded = payload.pop("amount_from", None)
+        if recorded is not None:
+            per_seat = _LOOPED_SEAT_RECORDS.get(recorded)
+            if per_seat is None:
+                raise LoweringError(
+                    f"no per-seat record behind a looped draw of {recorded!r}",
+                    node=node,
+                )
+            payload.pop("amount", None)
+            payload[X_FROM_COUNT_PER_RECIPIENT] = {"seat_record": per_seat}
+            _describe_targets(payload, node.player)
+            return (OracleInstruction(kind, "", payload),)
         shared = payload.pop(X_FROM_COUNT, None)
         if shared is not None:
             if shared.get("owner") not in ("owner", "target"):

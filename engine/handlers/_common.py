@@ -334,6 +334,49 @@ def count_from_payload(
     return counted
 
 
+def per_recipient_amount(game, context, spec: dict, face, *, source=None) -> int:
+    """One seat's share of an ``x_from_count_per_recipient`` spec.
+
+    The channel that carries "one number per player" — "the number of Islands
+    **that player** controls" (Typhoon), "3 minus the number of cards **they**
+    discarded this way" (Mind Bomb), "**that many** cards" after an each-player
+    discard (Flux). Four shapes and one reader, because the channel already
+    carries four value shapes and this repo has been burned by a channel whose
+    producers disagreed about arity (SET_PLAYBOOK's ``permanents_from`` entry).
+    ``deal_damage`` spelled three of them inline; a second inline copy in the
+    draw handler is how the fourth would have come to mean something else.
+
+    * ``seat_tally_of`` — a ``{permanent_id: seat}`` map an earlier step froze,
+      counted for this seat (Builder's Bane).
+    * ``resolution_record`` with ``base`` — a printed constant *minus* what
+      this seat's answer recorded (Mind Bomb's shortfall).
+    * ``seat_record`` — what this seat's answer recorded, plainly (Flux). Its
+      own key rather than a ``resolution_record`` with the base left out,
+      because that spelling reads ``0 - recorded`` and clamps to zero: a
+      shortfall and a tally are opposite arithmetic and one key cannot be both.
+    * anything else — an ordinary count spec, evaluated against this seat.
+
+    A seat the record never mentions did nothing, which every one of the four
+    reads as zero.
+    """
+    seat = game.players.index(face)
+    tally = spec.get("seat_tally_of")
+    if tally is not None:
+        recorded = context.results.get(tally) or {}
+        return sum(1 for owner in recorded.values() if owner == seat)
+    plain = spec.get("seat_record")
+    if plain is not None:
+        recorded = context.results.get(plain) or {}
+        return max(0, int(recorded.get(seat, 0) or 0))
+    record = spec.get("resolution_record")
+    if record is not None:
+        recorded = context.results.get(record) or {}
+        return max(0, int(spec.get("base", 0)) - int(recorded.get(seat, 0) or 0))
+    return max(0, evaluate_count(
+        game, face, spec, exclude=source, source=source,
+    ))
+
+
 def _damage_dealt_this_turn(game, context, query: dict) -> int:
     """How much damage the turn's ledger recorded, as one clause narrowed it.
 

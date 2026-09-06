@@ -30,7 +30,8 @@ from ...oracle_types import (CHOSEN_TARGET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
                              MILLED_THIS_WAY,
                              REVEALED_HAND_CARDS,
                              SEARCHED_PERMANENTS,
-                             COUNTERED_SPELL_CONTROLLER, DREW_BY_SEAT,
+                             COUNTERED_SPELL_CONTROLLER, DISCARDED_BY_SEAT,
+                             DREW_BY_SEAT,
                              DREW_COUNT,
                              COUNTERS_REMOVED, HAND_CARDS_TO_LIBRARY,
                              MILLED_THIS_WAY,
@@ -202,8 +203,12 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # player chose from.
     "discard_controller_cards": "discarded_count",
     # The per-seat form records the same thing, so a sentence reading "the
-    # number of cards they discarded this way" has a producer to name.
-    "each_player_discards_up_to_cards": "discarded_count",
+    # number of cards they discarded this way" has a producer to name — and
+    # records it **twice**, flat and keyed by seat, which is what the prompt
+    # has always written. Only the flat key was declared, so "then draws that
+    # many cards" (Flux) had no per-seat producer to demand and the looped
+    # draw would have read one seat's answer for everybody.
+    "each_player_discards_up_to_cards": ("discarded_count", DISCARDED_BY_SEAT),
     # "Each player may draw up to two cards. **For each card less than two a
     # player draws this way**, that player gains 2 life." (Truce.) The draw's
     # per-seat tally, written as each prompt is answered — the only place it

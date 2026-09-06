@@ -15,7 +15,8 @@ from ..resumption import run_resumable
 from ._common import (recorded_permanent_ids, 
     apply_damage_to_creature, apply_temp_pt_boost, attached_host, evaluate_count,
     flip_coin,
-    frozen_that_player_seat, permanent_matches_filter, resolve_amount,
+    frozen_that_player_seat, per_recipient_amount, permanent_matches_filter,
+    resolve_amount,
     resolve_target_permanent, resolve_target_permanents, seats_matching_deed,
 )
 from ..oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
@@ -197,24 +198,9 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         #
         # A seat the map never mentions lost nothing and takes nothing, which
         # is also what the words say.
-        tally = per_recipient_spec.get("seat_tally_of")
-        if tally is not None:
-            recorded = context.results.get(tally) or {}
-            seat = game.players.index(face)
-            return sum(1 for owner in recorded.values() if owner == seat)
-        record = per_recipient_spec.get("resolution_record")
-        if record is not None:
-            recorded = context.results.get(record) or {}
-            seat = game.players.index(face)
-            return max(
-                0,
-                int(per_recipient_spec.get("base", 0))
-                - int(recorded.get(seat, 0)),
-            )
-        return max(0, evaluate_count(
-            game, face, per_recipient_spec,
-            exclude=source_permanent, source=source_permanent,
-        ))
+        return per_recipient_amount(
+            game, context, per_recipient_spec, face, source=source_permanent,
+        )
 
     def _record_and_log(dealt: int, face) -> None:
         """What a multi-seat damage loop does with each seat's result.
