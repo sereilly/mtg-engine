@@ -27,7 +27,8 @@ from .errors import GrammarError
 from .lexer import SELF, WORD
 from .paragraphs import _parse_name_then_reveal_top
 from .conjuncts import (_with_attack_conjunct, _with_damage_conjunct,
-                        _with_untap_conjunct)
+                        _with_gained_type_conjunct,
+                        _with_keyword_loss_conjunct, _with_untap_conjunct)
 from .imperatives import parse_imperative
 from .nouns import parse_object_filter
 from .records import accept_player_deed
@@ -246,9 +247,19 @@ def parse_subject_verb(
         if token.text in ("fights", "fight"):
             return _parse_fight(stream, source_spec)
         if token.text in ("gets", "get"):
-            return _with_untap_conjunct(stream, _with_damage_conjunct(
-                stream, _parse_gets(stream, source_spec), source_target
-            ), source_target)
+            # "…gets +1/+0 **and becomes an artifact in addition to its other
+            # types**." (Thran Forge.) The fourth tail this verb carries, read
+            # outside the other two rather than nested inside them for the
+            # reason the "deals" branch above gives: a sentence prints one of
+            # them, and nesting would make the order they are tried a fact
+            # about which card was written first.
+            return _with_gained_type_conjunct(
+                stream,
+                _with_untap_conjunct(stream, _with_damage_conjunct(
+                    stream, _parse_gets(stream, source_spec), source_target
+                ), source_target),
+                source_target,
+            )
         if token.text in ("gains", "gain"):
             # "**You** gain control of that land until end of turn."
             # (Wellspring.) CR 608.2c gives an effect with no printed subject
@@ -684,7 +695,16 @@ def parse_subject_verb(
             blocked = _parse_becomes_blocked(stream, source_spec)
             if blocked is not None:
                 return blocked
-            return _parse_becomes(stream, source_spec)
+            # "…becomes a 3/2 Construct artifact creature **and loses
+            # flying**." (Chimeric Sphere.) The tail the two pump verbs already
+            # carry, on the verb that prints it here — one noun phrase, two
+            # things said about it, and left unread it is unconsumed text that
+            # refuses the whole line.
+            return _with_keyword_loss_conjunct(
+                stream,
+                _parse_becomes(stream, source_spec),
+                source_spec if isinstance(source_spec, ast.TargetSpec) else None,
+            )
         # "This creature**'s power becomes** the toughness of target creature
         # …" (Sworn Defender). CR 613.4b's rewrite in the possessive voice,
         # where the verb belongs to a *characteristic* of the subject rather

@@ -763,3 +763,77 @@ def test_615_3_a_directional_shield_lasts_the_window_its_card_printed():
         "a turn-long shield is not swept by the combat that happens to contain it"
     )
 # --- end W4G4 ---
+
+
+# --- W1G4: a static blanket over a described set ---
+from engine import Game as _W1G4_Game
+from engine import PlayerState as _W1G4_PlayerState
+from engine.models import CardDefinition as _W1G4_CardDefinition
+from engine.models import Permanent as _W1G4_Permanent
+from tests.helpers import _damage_dealt as _w1g4_damage_dealt
+
+
+def _w1g4p_creature(name, subtype="Test"):
+    return _W1G4_CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line=f"Creature - {subtype}",
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": f"Creature - {subtype}",
+             "power": "2", "toughness": "2"},
+    )
+
+
+def _w1g4p_artifact(name, text):
+    return _W1G4_CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Artifact",
+        oracle_text=text, colors=(), color_identity=(), keywords=(),
+        produced_mana=(), raw={"name": name, "type_line": "Artifact"},
+    )
+
+
+@pytest.mark.cr("615.1", "109.5")
+def test_a_static_blanket_over_a_described_set_reads_the_printed_noun():
+    """CR 615.1's shield with a *set of permanents* in the recipient slot, on
+    invented cards.
+
+    Bubble Matrix and Inner Sanctum are one row whose only difference is the
+    noun phrase, so the phrase has to be honoured rather than carried: the
+    Zombies are shielded and the Bears beside them are not. A test naming only
+    the two real cards would pass against a table with either card's phrase
+    baked in.
+    """
+    matrix = _W1G4_Permanent(card=_w1g4p_artifact(
+        "Invented Matrix",
+        "Prevent all damage that would be dealt to Zombies.",
+    ))
+    zombie = _W1G4_Permanent(card=_w1g4p_creature("Invented Zombie", "Zombie"))
+    bear = _W1G4_Permanent(card=_w1g4p_creature("Invented Bear"))
+    game = _W1G4_Game(players=[
+        _W1G4_PlayerState(name="P1", battlefield=[matrix, zombie, bear]),
+        _W1G4_PlayerState(name="P2"),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+
+    assert _w1g4_damage_dealt(game, zombie, 3) == 0
+    assert _w1g4_damage_dealt(game, bear, 3) == 3
+
+
+@pytest.mark.cr("615.1")
+def test_the_printed_combat_word_narrows_the_blanket_to_combat_damage():
+    """The word is read, not skipped: without it the shield would also stop a
+    burn spell, which is a strictly larger effect than such a card prints."""
+    matrix = _W1G4_Permanent(card=_w1g4p_artifact(
+        "Invented Combat Matrix",
+        "Prevent all combat damage that would be dealt to creatures.",
+    ))
+    bear = _W1G4_Permanent(card=_w1g4p_creature("Invented Bear"))
+    game = _W1G4_Game(players=[
+        _W1G4_PlayerState(name="P1", battlefield=[matrix, bear]),
+        _W1G4_PlayerState(name="P2"),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+
+    assert _w1g4_damage_dealt(game, bear, 3, combat=True) == 0
+    assert _w1g4_damage_dealt(game, bear, 3, combat=False) == 3

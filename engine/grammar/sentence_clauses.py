@@ -423,6 +423,23 @@ def _distribute_duration(
             raise stream.error("this sentence prints two different durations")
         payload["duration"] = duration.kind
         return dataclasses.replace(statement, payload=tuple(payload.items()))
+    # An animation keeps its window as a **bool** rather than a `Duration` —
+    # ``until_end_of_turn`` is the only one the handlers hold, and False is
+    # CR 611.2a's indefinite default (Mishra's Groundbreaker) rather than a
+    # missing field. So it takes the prefix by translation, exactly as the two
+    # nodes above do and for their reason: the ``replace`` below would find no
+    # ``duration`` field and refuse a sentence the grammar can read.
+    #
+    # "**Until end of turn,** this artifact becomes a 2/1 Construct artifact
+    # creature with flying." (Chimeric Sphere.) Any other prefix refuses: an
+    # animation that ended at end of combat would need the record the cleanup
+    # sweep does not clear, which is a different handler.
+    if isinstance(statement, ast.BecomeCreature):
+        if duration.kind != "until_end_of_turn":
+            raise stream.error(
+                "an animation's leading duration is until end of turn"
+            )
+        return dataclasses.replace(statement, until_end_of_turn=True)
     fields = {field.name for field in dataclasses.fields(statement)}
     if "duration" not in fields:
         raise stream.error(

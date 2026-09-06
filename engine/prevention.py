@@ -110,6 +110,13 @@ CONTROLLER_BLANKET = 28
 # are here: it has no charges, so applying it costs nobody anything and spends
 # no shield that could cover later damage.
 SPELL_CLASS_BLANKET = 29
+# "Prevent all damage that would be dealt to creatures." (Bubble Matrix) /
+# "…to creatures you control." (Inner Sanctum.) The same static blanket as
+# Glacial Chasm's above with a *described set of permanents* in the recipient
+# slot instead of a player. Beside the others for their reason: no charges, so
+# applying it costs its recipient nothing and spends no shield that could have
+# covered later damage.
+MATCHING_BLANKET = 30
 # "Prevent all damage that would be dealt to you this turn by attacking
 # creatures without flying." (Al-abara's Carpet.) A blanket a *player* was
 # handed rather than one a permanent prints, but a blanket all the same — no
@@ -1875,6 +1882,127 @@ def _prevent_all_from_spell_class(game, event: dict) -> PreventionOutcome | None
     return PreventionOutcome(prevented=event["amount"])
 
 
+#: "Prevent all damage that would be dealt to **creatures**." (Bubble Matrix) /
+#: "…to **creatures you control**." (Inner Sanctum.) The recipient is a printed
+#: noun phrase describing permanents, which is what makes this a different
+#: reader from :func:`prevent_all_to_controller` above — that one's recipient is
+#: a *player*, and a player has no characteristics to match.
+#:
+#: One row for both cards, because the only difference between them is the noun
+#: phrase: "you control" narrows the set relative to the permanent printing the
+#: line (CR 109.5), and it rides the payload as an ordinary filter the one
+#: matcher already tests. Spelling either card's phrase into a kind would make
+#: every printed narrowing a new kind and a new interceptor.
+#:
+#: Anchored at both ends and **without** a duration, exactly as the controller
+#: blanket above is and for its reason: "…this turn" is a one-shot effect the
+#: grammar's ``PreventDamage`` production reads, and claiming the line here
+#: takes it away from that production entirely
+#: (``engine/grammar/registries.py``).
+#:
+#: The phrase is read by the **grammar's** noun parser
+#: (``grammar.subject_filter_payload``) rather than by a regex here, for
+#: ``combat_restrictions._printed_noun``'s reason one file over:
+#: ``subject_matches`` is what will answer this at every damage event, and a
+#: second reader of "creatures you control" would be free to disagree with it.
+#: A phrase it cannot read *in full* refuses the whole line — which is also what
+#: keeps this pattern's ``.+`` off the source-narrowed sentences above it
+#: ("…dealt to this creature **by artifact sources**"): that tail is not a noun
+#: phrase, so the parser leaves it unconsumed and the line falls through to the
+#: reader that owns it.
+#:
+#: ``plural=True`` is the other half of that gate and it is load-bearing: the
+#: parser refuses a *singular* self-reference under it, so "…dealt to **this
+#: creature**" and "…dealt to **enchanted creature**" — the two subjects the
+#: source-narrowed readers above own — cannot reach this shield. Without it
+#: both would reduce to a bare ``{"type_filter": "creature"}`` and one Aura
+#: would make every creature in the game unkillable.
+_PREVENT_ALL_TO_MATCHING_RE = re.compile(
+    r"^prevent all (?P<combat>combat )?damage that would be dealt to "
+    r"(?P<subject>.+)$"
+)
+
+
+def prevent_all_to_matching(line: str) -> dict | None:
+    """The set of permanents *line* shields, or None.
+
+    One matcher, asked by the interceptor below and by the claim reader, so what
+    is prevented and what is claimed cannot drift.
+    """
+    from .grammar import subject_filter_payload
+
+    match = _PREVENT_ALL_TO_MATCHING_RE.match(
+        " ".join((line or "").strip().lower().rstrip(".").split())
+    )
+    if match is None:
+        return None
+    described = subject_filter_payload(match.group("subject"), plural=True)
+    # None covers both refusals that matter here: a phrase the noun parser
+    # cannot read end to end, and one carrying a narrowing `subject_matches`
+    # cannot test. Either admitted, the shield would cover a strictly larger set
+    # than the card prints — which for a prevention is a permanent nothing can
+    # ever kill.
+    if not described:
+        return None
+    return {"filter": described, "combat_only": bool(match.group("combat"))}
+
+
+def _matching_blanket_for(game, event: dict) -> str | None:
+    """The name of a permanent whose blanket covers this event, or None. Pure.
+
+    Every battlefield, because the sentence names no controller of its own:
+    Bubble Matrix shields both seats' creatures and Inner Sanctum shields its
+    own controller's, and which of the two a card is depends on the noun phrase
+    rather than on who owns the enchantment. ``observer`` is therefore the seat
+    controlling the *printing* permanent (CR 109.5) and ``source`` is that
+    permanent, which is what makes "you control" mean the Sanctum's controller.
+    """
+    recipient = event["recipient"]
+    if isinstance(recipient, PlayerState) or event["amount"] <= 0:
+        # A player is the controller blanket's business, one reader up: the
+        # noun phrase here describes permanents, and asking `subject_matches`
+        # about a `PlayerState` is a question it has no answer for.
+        return None
+    from .subject_filters import subject_matches
+
+    for seat, permanent in game.permanents_with_controller():
+        for line in permanent.effective_card.oracle_text.splitlines():
+            described = prevent_all_to_matching(line)
+            if described is None:
+                continue
+            if described["combat_only"] and not event.get("combat"):
+                continue
+            if subject_matches(
+                game, recipient, dict(described["filter"]),
+                observer=seat, source=permanent,
+            ):
+                return permanent.card.name
+    return None
+
+
+def _applies_matching_blanket(game, event: dict) -> bool:
+    return _matching_blanket_for(game, event) is not None
+
+
+@prevention_effect(MATCHING_BLANKET, applies=_applies_matching_blanket)
+def _prevent_all_to_matching(game, event: dict) -> PreventionOutcome | None:
+    """Bubble Matrix: "Prevent all damage that would be dealt to creatures."
+
+    Every point, from every source, for as long as the permanent printing it is
+    on the battlefield. Nothing is spent and nothing recorded — the next event
+    asks the board again, which is what ends the shield with the permanent
+    (CR 611.2) rather than with a sweep.
+    """
+    name = _matching_blanket_for(game, event)
+    if name is None:  # pragma: no cover - the predicate just said otherwise
+        return None
+    game.log.append(
+        f"{event['amount']} damage to {event['recipient'].card.name} is "
+        f"prevented ({name})"
+    )
+    return PreventionOutcome(prevented=event["amount"])
+
+
 def prevention_claims_line(line: str) -> bool:
     """Whether one printed line is, in full, a static prevention effect
     implemented above.
@@ -1894,5 +2022,6 @@ def prevention_claims_line(line: str) -> bool:
         or attached_prevent_all_from_source_type(line) is not None
         or attached_combat_shield_direction(line) is not None
         or prevent_all_to_controller(line) is not None
+        or prevent_all_to_matching(line) is not None
         or prevent_all_from_spell_class(line) is not None
     )

@@ -74,6 +74,27 @@ def _lower_cant_be(
     back-reference means the creature *that* trigger bound, and under any other
     trigger it means nothing at all.
     """
+    if node.duration.kind is None and _is_source(node.subject) and node.action == "blocked":
+        # "This creature can't be blocked." (Phantom Warrior.) A **static**
+        # ability rather than a one-shot grant, and it is lowered here rather
+        # than left to `engine/combat_restrictions.py` alone because the line
+        # parses: `test_grammar_derived_lines` holds a line both readers claim
+        # to producing the *same* instruction, and parsed-but-unlowered would
+        # take the sentence away from the table without giving it to anybody.
+        #
+        # Which is what it did. The kind has had two enforcement sites all
+        # along — `declare_blockers_step._can_block_attacker` refuses every
+        # blocker on it and `legality.is_unblockable` reads it for the UI's fade
+        # — and no producer at all, so the one card printing the sentence was
+        # reported unsupported over behaviour that was already complete.
+        #
+        # The empty payload is the table's byte for byte: nothing may block it,
+        # so there is no blocker class to describe, and both enforcement sites
+        # read the kind off the attacker's own program. A subject that is not
+        # the source keeps the refusal below — `cant_be_blocked` says nothing
+        # about *whose* creature it is, so a narrowed printing would be a
+        # restriction the sites cannot test.
+        return (OracleInstruction("cant_be_blocked", "", {}),)
     if node.duration.kind not in _REST_OF_TURN:
         raise LoweringError(
             "a restriction with no end-of-turn duration is a static ability, "

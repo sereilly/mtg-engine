@@ -327,6 +327,32 @@ _PATTERNS: tuple[tuple[re.Pattern[str], "str | tuple[str, ...]"], ...] = (
         "creatures_cant_attack",
     ),
     (
+        # "Creatures can't attack." (Peacekeeper.) The unnarrowed member of the
+        # family — Moat's sentence with the exclusion deleted — and the one
+        # printing that a bare `creatures_cant_attack` row could not previously
+        # produce, so the card reported "text too complex" for a kind the
+        # declaration step has enforced since Moat landed.
+        #
+        # **The subject must end in the plural head noun, and that is the
+        # gate rather than a style choice.** `_printed_noun` answers
+        # ``{"type_filter": "creature"}`` for "this creature" *and* for
+        # "enchanted creature" — the two self-references — so a row capturing
+        # any `.+` before "can't attack" would read a restriction printed about
+        # one creature as a ban on every creature on the board. Requiring the
+        # plural is what tells a board-wide prohibition from a self-reference in
+        # the printed words, and it still buys "Red creatures can't attack" and
+        # "Nonartifact creatures can't attack" for nothing. A narrowing printed
+        # *after* the head noun ("creatures with flying can't attack") ends the
+        # phrase somewhere else and keeps refusing — the three rows above are
+        # where each such tail has earned its own anchor, and widening this one
+        # to reach them is exactly what would re-admit the two self-references.
+        #
+        # Below the three narrowed rows above, whose subjects end in "control",
+        # a keyword or a subtype and so cannot reach this pattern.
+        re.compile(r"^(?P<board_attack_subject>(?:[a-z'-]+ )*creatures) can't attack$"),
+        "creatures_cant_attack",
+    ),
+    (
         # "Creatures you control can't attack." (Glacial Chasm.) The
         # unnarrowed member of the family below — no keyword, no negated
         # subtype, nothing but the seat — and the same `subject` payload one
@@ -426,6 +452,26 @@ _PATTERNS: tuple[tuple[re.Pattern[str], "str | tuple[str, ...]"], ...] = (
         ),
         "attacks_as_though_hasty_unless_it_entered",
     ),
+    (
+        # "This creature can't be blocked." (Phantom Warrior.) The unnarrowed
+        # member of the "can't be blocked" family below: no blocker class, no
+        # count and no price, so nothing may block it at all (CR 509.1b).
+        #
+        # **The kind already had two enforcement sites and no producer.**
+        # `phases/declare_blockers_step._can_block_attacker` refuses every
+        # blocker on it and `legality.is_unblockable` reads it for the UI's
+        # fade, both keyed on ``cant_be_blocked``, and nothing in the engine
+        # ever emitted one — the grammar's `_lower_cant_be` refuses a
+        # restriction with no duration and there was no static table row. So the
+        # card that prints the sentence was reported unsupported while the
+        # behaviour behind it was complete.
+        #
+        # Anchored at both ends and **above** the general "can't be blocked by
+        # <noun>" row, which the sentence does not reach — it requires " by " —
+        # but which is where a widened pattern here would collide.
+        re.compile(r"^this creature can't be blocked$"),
+        "cant_be_blocked",
+    ),
     # "…can't be blocked by **Walls**" (Invisibility's mirror, Ali Baba's
     # targets) and "…can't be blocked by **artifact creatures**" (Argothian
     # Pixies, Artifact Ward). One restriction: what differs is the noun phrase,
@@ -457,6 +503,29 @@ _PATTERNS: tuple[tuple[re.Pattern[str], "str | tuple[str, ...]"], ...] = (
             r"(?P<count>\w+) creatures?$"
         ),
         "cant_be_blocked_by_more_than",
+    ),
+    (
+        # "Each creature you control can't be blocked by more than one
+        # creature." (Familiar Ground.) The row above printed on a *permanent*
+        # about somebody else's creatures rather than on the attacker itself, so
+        # it is its own kind: that one is read off the attacker's own program
+        # and this one has to be found by scanning the board, and a payload flag
+        # on one kind would leave whichever enforcement site did not read it
+        # applying the ceiling to the wrong creatures.
+        #
+        # The subject is a printed noun phrase (`_printed_noun`) and the number
+        # is payload, for the reasons every other noun and number on this page
+        # is: a card printing "Each Wall you control…" or "…more than two
+        # creatures" is this restriction and needs nothing here.
+        #
+        # "Each" is stripped by the pattern rather than read by the noun parser,
+        # which refuses the quantified phrase in full — and the singular head
+        # noun that follows it is what the parser wants anyway.
+        re.compile(
+            r"^each (?P<blocked_more_subject>.+) can't be blocked by more than "
+            r"(?P<count>\w+) creatures?$"
+        ),
+        "matching_cant_be_blocked_by_more_than",
     ),
     (
         # "…can't be blocked by **Walls**" (Invisibility's mirror), "…by
@@ -1049,6 +1118,28 @@ def combat_restriction_for(
         cant_act_subject = payload.pop("cant_act_subject", None)
         if cant_act_subject is not None:
             described = _printed_noun(cant_act_subject)
+            if described is None:
+                return None
+            payload["subject"] = described
+        # "**Creatures** can't attack." / "**Red creatures** can't attack." The
+        # whole printed subject, read by the one noun reader on this page. A
+        # phrase it cannot read refuses the line: the enforcement site hands an
+        # empty filter to `subject_matches`, which answers True for every
+        # creature — so an unread narrowing here does not do less, it grounds
+        # the whole board.
+        board_attack_subject = payload.pop("board_attack_subject", None)
+        if board_attack_subject is not None:
+            described = _printed_noun(board_attack_subject)
+            if described is None:
+                return None
+            payload["subject"] = described
+        # "Each **creature you control** can't be blocked by more than one
+        # creature." Same reader and same refusal, and the direction of a
+        # dropped narrowing is the same: a ceiling over an empty filter caps
+        # every creature on the board rather than the ones the card names.
+        blocked_more_subject = payload.pop("blocked_more_subject", None)
+        if blocked_more_subject is not None:
+            described = _printed_noun(blocked_more_subject)
             if described is None:
                 return None
             payload["subject"] = described

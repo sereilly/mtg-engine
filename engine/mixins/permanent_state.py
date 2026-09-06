@@ -2648,13 +2648,24 @@ class PermanentStateMixin:
         # either without the other, so neither may answer for both.
         if ability_source is None and source_card is not None:
             from ..target_immunity import (
+                board_target_immunity_classes,
                 spell_is_in_class,
                 spell_target_immunity_classes,
             )
 
+            # The board-wide subject beside the two relational ones, and asked
+            # of the same `spell_is_in_class` reader so a class string means one
+            # thing here however the clause reached this permanent. "Creatures
+            # can't be the targets of spells." (Dense Foliage) is printed on
+            # some other permanent entirely — there is no relation from this
+            # creature back to the line — so it takes the game and scans, which
+            # `printed_about` structurally cannot do.
             if any(
                 spell_is_in_class(source_card, spell_class)
-                for spell_class in spell_target_immunity_classes(target)
+                for spell_class in (
+                    spell_target_immunity_classes(target)
+                    | board_target_immunity_classes(self, target)
+                )
             ):
                 return False
         if ability_source is not None:

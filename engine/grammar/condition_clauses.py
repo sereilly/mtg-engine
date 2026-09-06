@@ -653,6 +653,29 @@ def _accept_counter_condition(stream: TokenStream) -> "ast.Condition | None":
                         counter_word, 1, comparison="at_least"
                     )
             stream.reset(article)
+        # "as long as this creature has **no** shell counters on it" (Roc
+        # Hatchling). The zero of the same possessive spelling, and the
+        # "there are no …" branch above already reads the zero of the
+        # existential one — so the sentence had two halves implemented and
+        # neither of them was this card's, which is the shape the production
+        # above calls out about its own axes: the spelling nobody listed reads
+        # as a parser gap rather than as the same question.
+        #
+        # "no more" is the same optional word it is up there, and for the same
+        # reason: the difference is English, not a different question.
+        # `comparison` is left at its default equality — a count of zero read
+        # as "at least zero" is a static that always holds, which for a Roc
+        # Hatchling is a 4/4 flier on turn one.
+        empty = stream.mark()
+        if stream.accept_word("no"):
+            stream.accept_word("more")
+            counter_word = _accept_counter_kind(stream)
+            if counter_word is not None and (
+                stream.accept_word("counters", "counter")
+                and stream.accept_phrase("on", "it")
+            ):
+                return ast.SourceCounterCount(counter_word, 0)
+            stream.reset(empty)
         word = stream.peek_word()
         if word is not None and word in NUMBER_WORDS:
             stream.advance()

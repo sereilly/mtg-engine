@@ -1285,3 +1285,70 @@ def test_101_2_a_cant_gain_control_effect_beats_an_exchange():
     game._sync_control()
     assert game.controller_index_of(protected) == 1
 # --- end W1G5 ---
+
+
+# --- W1G4: CR 205.1b's "becomes an artifact creature" exception ---
+@pytest.mark.cr("205.1b")
+def test_a_clause_less_artifact_animation_keeps_the_permanents_own_types():
+    """CR 205.1b, second-to-last sentence: "Some effects state that an object
+    becomes an 'artifact creature'; these effects also allow the object to
+    retain all of its prior card types and subtypes."
+
+    That is why Chimeric Sphere prints no "in addition to its other types" and
+    Mishra's Factory prints "It's still a land": the rule supplies the clause
+    for the first shape and not for the second. Asserted on an invented card, so
+    a production that had the three real names in it would fail here.
+    """
+    from engine import Game, PlayerState
+    from engine.models import CardDefinition, Permanent
+
+    card = CardDefinition(
+        name="Invented Sphere", mana_cost="{3}", cmc=3.0, type_line="Artifact",
+        oracle_text=(
+            "{2}: Until end of turn, this artifact becomes a 2/1 Construct "
+            "artifact creature with flying."
+        ),
+        colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": "Invented Sphere", "type_line": "Artifact"},
+    )
+    sphere = Permanent(card=card)
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[sphere]), PlayerState(name="P2"),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+
+    assert game.activate_permanent_ability(
+        0, "Invented Sphere", ability_index=0
+    ).supported
+    game._recompute_continuous_effects()
+    assert sphere.is_creature
+    assert sphere.has_type("construct")
+    # The retained type — the whole of what CR 205.1b's exception says.
+    assert sphere.has_type("artifact")
+
+
+@pytest.mark.cr("205.1b")
+def test_an_animation_that_would_replace_a_type_is_refused_rather_than_added():
+    """The other half of CR 205.1b, and the reason the gate is narrow.
+
+    A land that "becomes a 4/4 creature" with no retention clause is the rule's
+    *first* sentence — the new type replaces the old — and this engine's
+    animation record only ever adds. Admitting the line would leave a permanent
+    that is still a land when the card says it is not, silently; refusing leaves
+    the card unsupported and named.
+
+    Its sibling is the narrower case one sentence later: "…becomes a '[creature
+    type] artifact creature'… replace any existing creature types". A creature
+    animated into a Construct would keep the subtypes the rule replaces, so that
+    subject is refused too.
+    """
+    from engine.grammar import compile_line
+
+    assert not compile_line(
+        "Target land becomes a 4/4 creature until end of turn."
+    ).instructions
+    assert not compile_line(
+        "Until end of turn, this creature becomes a 2/1 Construct artifact creature."
+    ).instructions

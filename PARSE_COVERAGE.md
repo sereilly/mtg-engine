@@ -25,7 +25,7 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**10 unclaimed sentence(s) across 9 supported card(s).**
+**9 unclaimed sentence(s) across 8 supported card(s).**
 
 - **Abeyance**
   - `until end of turn, target player can't cast instant or sorcery spells, and that player can't activate abilities that aren't mana abilities`
@@ -42,8 +42,6 @@ anything anyone did, and every ingest would arrive red.
   - `when this card is put into your graveyard from your library, shuffle your graveyard into your library`
 - **Goblin Bomb**
   - `remove five fuse counters from this enchantment and sacrifice it: it deals 20 damage to target player or planeswalker`
-- **Inner Sanctum**
-  - `prevent all damage that would be dealt to creatures you control`
 - **Winding Canyons**
   - `{2}, {t}: you may cast creature spells this turn as though they had flash`
 
