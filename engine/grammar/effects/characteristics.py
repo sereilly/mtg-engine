@@ -316,6 +316,25 @@ def _parse_gains(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
             subject, abilities, _parse_duration(stream), self_name=self_name
         )
 
+    # "…gains **landwalk of each of the land types of the sacrificed land**"
+    # (Excavator). Read before the keyword list, which matches "landwalk" on its
+    # own and then strands "of each of…" — the whole line failing on a phrase
+    # whose first word it had already taken, the same probe-order trap the
+    # "with protection from" branch avoids one package over.
+    #
+    # No keyword travels: CR 702.14a builds the ability's *name* out of a land
+    # type, and which land type is a fact about the cost that was paid rather
+    # than about the sentence. The node carries the record instead.
+    landwalk_mark = stream.mark()
+    if stream.accept_word("landwalk") and stream.accept_phrase(
+        "of", "each", "of", "the", "land", "types", "of", "the", "sacrificed",
+        "land",
+    ):
+        return ast.GainKeyword(
+            subject, (), _parse_duration(stream), landwalk_from="sacrificed",
+        )
+    stream.reset(landwalk_mark)
+
     # "gains **your choice of** deathtouch or lifelink" (Alchemist's Gift), and
     # "gains banding, first strike, **or** trample" (Nature's Blessing) — the
     # same card with the four words the older printing does not spell out.

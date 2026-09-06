@@ -34,7 +34,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 5ED | 434 | 631 | 93.7% | 93.3% | 60.7% | 318 |
 | WTH | 167 | 249 | 88.0% | 88.0% | 64.7% | 140 |
 | M21 | 285 | 503 | 87.3% | 87.1% | 61.0% | 237 |
-| TMP *(measured)* | 335 | 478 | 87.9% | 87.7% | 61.7% | 255 |
+| TMP *(measured)* | 335 | 478 | 88.1% | 87.9% | 61.9% | 256 |
 | **All (shipped)** | **4252** | **6339** | **89.9%** | **89.2%** | **59.1%** | **3105** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -49,7 +49,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ---: | ---: | --- | --- |
 | 359 | 158 | expected a subject |  |
 | 111 | 53 | unrecognized effect verb |  |
-| 92 | 44 | unconsumed text |  |
+| 91 | 43 | unconsumed text |  |
 | 36 | 21 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 34 | unrecognized activation cost |  |
 | 13 | 8 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
@@ -1789,6 +1789,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {C}{B}.`
 - **Evincar's Justice**
   - `Evincar's Justice deals 2 damage to each creature and each player.`
+- **Excavator**
+  - `{T}, Sacrifice a basic land: Target creature gains landwalk of each of the land types of the sacrificed land until end of turn. (It can't be blocked as long as defending player controls a land of any of those types.)`
 - **Exile**
   - `Exile target nonwhite attacking creature. You gain life equal to its toughness.`
 - **Exorcist**

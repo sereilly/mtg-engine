@@ -108,6 +108,40 @@ def landwalk_requirement(ability: str) -> LandwalkRequirement | None:
     return LandwalkRequirement(tuple(qualities))
 
 
+def landwalk_abilities_of(permanent: "Permanent") -> tuple[str, ...]:
+    """The landwalk abilities *permanent*'s own land types name (CR 702.14a).
+
+    "Target creature gains landwalk of each of the land types of the sacrificed
+    land until end of turn." (Excavator.) A land's types are read here rather
+    than by the handler, so the word a grant builds and the word a block check
+    reads are built by one module: every name this returns is one
+    :func:`landwalk_requirement` answers, because it is built out of the land's
+    own subtype.
+
+    Through the computed accessor, so a Dwarven Hold that Blood Moon has made a
+    Mountain grants mountainwalk and a basic Forest that Conversion has turned
+    into Plains grants plainswalk. Ordered by the type line rather than sorted,
+    because a dual land grants two and the printed order is the only order there
+    is. Anything that is not a land — and any land with no subtype — grants
+    nothing, which is the direction that cannot invent an evasion.
+    """
+    from .layer_bridge import computed_types
+    from .grammar.vocabulary import LAND_TYPES
+
+    card_types, subtypes = computed_types(permanent)
+    if "land" not in card_types:
+        return ()
+    seen: list[str] = []
+    for subtype in subtypes:
+        word = str(subtype).lower()
+        if word not in LAND_TYPES:
+            continue
+        ability = f"{word}walk"
+        if ability not in seen:
+            seen.append(ability)
+    return tuple(seen)
+
+
 def is_landwalk(ability: str) -> bool:
     """Whether *ability* is a landwalk the engine can enforce."""
     return landwalk_requirement(ability) is not None
@@ -143,6 +177,7 @@ __all__ = [
     "LandQuality",
     "LandwalkRequirement",
     "is_landwalk",
+    "landwalk_abilities_of",
     "land_satisfies",
     "landwalk_requirement",
 ]

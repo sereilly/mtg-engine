@@ -28,6 +28,14 @@ from ._common import (_describe_several_targets, _describe_targets, _filter_payl
                       _durationless_reason, _restrictions_beyond, _is_enchanted,
                       _is_source, _is_target, _names_several_targets)
 
+#: Where a landwalk whose land type is not printed reads that type from
+#: (Excavator: "landwalk of each of the land types of **the sacrificed land**").
+#: The parse side names the record in its own words and this is the only place
+#: those words become a scratchpad key — an unlisted word refuses the line
+#: rather than lowering onto a record nothing writes, which is the difference
+#: between an unsupported card and one that grants no keyword at all.
+_LANDWALK_SOURCES: dict[str, str] = {"sacrificed": "sacrificed_for_cost"}
+
 _KEYWORD_GRANTS: dict[tuple[str, str], str] = {
     ("flying", "target"): "grant_target_flying_until_eot",
     ("flying", "self"): "grant_self_flying_until_eot",
@@ -100,6 +108,40 @@ def _lower_gain_keyword(
                 raise LoweringError("a keyword choice needs one instruction per option", node=node)
             modes.append({"label": alternative.keywords[0], "instruction": lowered[0]})
         return (OracleInstruction("choose_one", "", {"modes": tuple(modes)}),)
+    # "Target creature gains **landwalk of each of the land types of the
+    # sacrificed land** until end of turn." (Excavator.) CR 702.14a builds a
+    # landwalk's *name* out of a land type, and which land type is a fact about
+    # the cost that was paid — so no keyword can be in the payload and the
+    # handler builds the words at resolution off the record the cost wrote.
+    #
+    # `_check_grantable` is deliberately not asked: it validates printed words,
+    # and there is none here. What stands in its place is the table above (the
+    # record has to be one something writes) and `landwalk.landwalk_abilities_of`
+    # (every word it builds is one `landwalk_requirement` can answer, because it
+    # is built from the land's own types).
+    if node.landwalk_from is not None:
+        if node.keywords:
+            raise LoweringError(
+                "a computed landwalk grant carries no printed keyword", node=node
+            )
+        record = _LANDWALK_SOURCES.get(node.landwalk_from)
+        if record is None:
+            raise LoweringError(
+                f"nothing records the land {node.landwalk_from!r} names", node=node
+            )
+        if not _is_target(node.subject):
+            raise LoweringError(
+                "a computed landwalk grant reads a chosen target", node=node
+            )
+        computed: dict[str, object] = {
+            "keywords": (),
+            "duration": _grant_duration(node, node.duration),
+            "landwalk_from": record,
+        }
+        _describe_targets(computed, node.subject)
+        return (
+            OracleInstruction("grant_target_keyword_until_eot", "", computed),
+        )
     if node.duration.kind is None:
         # "…and that creature gains flying." (Cocoon's hatch, bound to the
         # enchanted creature by the rider that read it.) A one-shot grant with

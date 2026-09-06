@@ -842,3 +842,149 @@ def test_w2g2_the_ai_declares_a_legal_magnet_attack(set_pool):
     game, p0, p1 = _w2g2_magnet_attack_board(set_pool("TMP")["Magnetic Web"])
     chosen = sorted(ai_policy.choose_attackers(game, 0))
     assert game.declare_attackers(0, chosen, 1)[0], (chosen, game.log)
+
+
+# --- W3G4: Excavator (a keyword whose word the cost decides) ---
+
+import pytest as _w3g4a_pytest
+
+from engine import Game as _W3G4aGame
+from engine import PlayerState as _W3G4aPlayerState
+from engine.card_loader import load_cards as _w3g4a_load_cards
+from engine.card_loader import manifest_set_paths as _w3g4a_manifest_set_paths
+from engine.models import Permanent as _W3G4aPermanent
+from engine.oracle import compile_card_oracle as _w3g4a_compile
+from tests.helpers import _mk_card as _w3g4a_mk_card
+from tests.helpers import _nosick as _w3g4a_nosick
+
+
+@_w3g4a_pytest.fixture(scope="module")
+def _w3g4a_basics():
+    """The basic lands, which Tempest does not print — from the shipped pool the
+    manifest already resolves, never a spelled-out card file."""
+    return {
+        card.name: card
+        for card in _w3g4a_load_cards(_w3g4a_manifest_set_paths())
+        if card.name in ("Island", "Forest", "Plains")
+    }
+
+
+def _w3g4a_dig(set_pool, land_card):
+    """Excavator, one land to eat, and a Bear to give the walk to."""
+    digger = _w3g4a_nosick(_W3G4aPermanent(card=set_pool("TMP")["Excavator"]))
+    land = _W3G4aPermanent(card=land_card)
+    bear = _w3g4a_nosick(
+        _W3G4aPermanent(card=_w3g4a_mk_card("Grizzly", "{1}{G}", "Creature - Bear", ""))
+    )
+    game = _W3G4aGame(players=[
+        _W3G4aPlayerState(name="P1", battlefield=[digger, land, bear]),
+        _W3G4aPlayerState(name="P2"),
+    ])
+    game.enforce_mana_costs = False
+    return game, bear, land
+
+
+def _w3g4a_activate(game, bear):
+    result = game.activate_permanent_ability(
+        game_seat := 0, "Excavator", ability_index=0,
+        target_player_index=game_seat,
+        target_permanent_index=game.battlefield_index_of(bear),
+    )
+    assert result.supported, result.details
+    while game.stack:
+        game.resolve_top_of_stack()
+    return result
+
+
+def test_excavator_compiles_with_no_printed_keyword(set_pool):
+    """"Target creature gains landwalk of each of the land types of the
+    sacrificed land until end of turn."
+
+    The payload carries **no** keyword, and must not: CR 702.14a builds a
+    landwalk's name out of a land type, and which land type is a fact about the
+    cost that was paid rather than about the sentence. What travels is the name
+    of the record the words are built from.
+    """
+    program = _w3g4a_compile(set_pool("TMP")["Excavator"])
+    assert program.supported, program.reason
+    ability = program.activated_abilities[0]
+    assert ability.instruction.kind == "grant_target_keyword_until_eot"
+    assert ability.instruction.payload["keywords"] == ()
+    assert ability.instruction.payload["landwalk_from"] == "sacrificed_for_cost"
+    # The cost is the other half: a *basic* land, and the tap.
+    assert ability.cost.requires_tap is True
+    assert ability.cost.sacrifice_filter == {
+        "type_filter": "land", "supertypes": ["basic"]
+    }
+
+
+@_w3g4a_pytest.mark.parametrize(
+    "land,walk", [("Island", "islandwalk"), ("Forest", "forestwalk")]
+)
+def test_excavator_grants_the_walk_the_sacrificed_land_names(
+    set_pool, _w3g4a_basics, land, walk
+):
+    """The word follows the land the cost ate, which is the whole card.
+
+    The record is the *cost's* — `sacrificed_for_cost`, written by
+    `mixins/stack/activation.py` when the cost is paid. It is last-known
+    information (CR 608.2h): by the time this resolves the land is in a
+    graveyard, and nothing on the battlefield can say what it was.
+    """
+    game, bear, sacrificed = _w3g4a_dig(set_pool, _w3g4a_basics[land])
+    assert not game._has_keyword(bear, walk)
+
+    _w3g4a_activate(game, bear)
+
+    assert not game.is_on_battlefield(sacrificed)
+    assert game._has_keyword(bear, walk)
+    # And only that walk: a land names the types it has and no others.
+    other = "forestwalk" if walk == "islandwalk" else "islandwalk"
+    assert not game._has_keyword(bear, other)
+
+
+def test_the_granted_walk_actually_restricts_a_block(set_pool, _w3g4a_basics):
+    """The Rock Hydra question, asked of the grant: a keyword in layer 6 that
+    nothing reads is a card that reports supported and does nothing.
+
+    CR 702.14b/c: the creature can't be blocked as long as the defending player
+    controls a land of the named type — so the same blocker answers differently
+    on either side of one Island.
+    """
+    game, bear, _sacrificed = _w3g4a_dig(set_pool, _w3g4a_basics["Island"])
+    _w3g4a_activate(game, bear)
+
+    wall = _w3g4a_nosick(
+        _W3G4aPermanent(card=_w3g4a_mk_card("Wall", "{1}", "Creature - Wall", ""))
+    )
+    game.players[1].battlefield = [wall, _W3G4aPermanent(card=_w3g4a_basics["Island"])]
+    assert not game._can_block_attacker(wall, bear)
+
+    game.players[1].battlefield = [wall]
+    assert game._can_block_attacker(wall, bear)
+
+
+def test_a_land_with_no_land_type_grants_nothing(set_pool):
+    """The direction a missing word must fail in. A land with no subtype names
+    no landwalk, so nothing is granted — where a fallback word would be an
+    evasion the card never named.
+
+    It cannot be paid for with one (the cost says "a basic land"), so the case
+    is reached by handing the handler the record directly, which is exactly
+    what a future card printing "the sacrificed land" over a wider cost would
+    do.
+    """
+    from engine.landwalk import landwalk_abilities_of
+
+    colorless = _W3G4aPermanent(
+        card=_w3g4a_mk_card("Wastes", "", "Land", "")
+    )
+    game = _W3G4aGame(players=[
+        _W3G4aPlayerState(name="P1", battlefield=[colorless]),
+        _W3G4aPlayerState(name="P2"),
+    ])
+    assert landwalk_abilities_of(colorless) == ()
+    # …and a creature is not a land at all.
+    bear = _W3G4aPermanent(card=_w3g4a_mk_card("Grizzly", "{1}{G}", "Creature - Bear", ""))
+    game.players[0].battlefield.append(bear)
+    assert landwalk_abilities_of(bear) == ()

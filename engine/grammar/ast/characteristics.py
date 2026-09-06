@@ -131,6 +131,14 @@ class GainKeyword:
     # and lifelink" once the conjunction is read, so the difference has to be
     # recorded here or the card grants both.
     choose_one: bool = False
+    # "gains **landwalk of each of the land types of the sacrificed land**"
+    # (Excavator). The granted word is not printed anywhere on the card: CR
+    # 702.14a builds a landwalk's name out of a land type, and *which* land
+    # type is only known once the cost has been paid. So ``keywords`` is empty
+    # and this names the **record** the words are built from — a value rather
+    # than a flag, because a second card reading a different record ("of target
+    # land", "of the land you control") adds a word here and no field.
+    landwalk_from: str | None = None
 
 
 @dataclass(frozen=True)

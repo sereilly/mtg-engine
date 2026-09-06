@@ -1643,6 +1643,30 @@ def grant_target_keyword_until_eot(game: Game, instruction: OracleInstruction, c
 
     keywords = tuple(instruction.payload.get("keywords") or ())
 
+    # "…gains **landwalk of each of the land types of the sacrificed land**"
+    # (Excavator). The granted words are not printed: CR 702.14a builds the
+    # ability's name out of a land type, and which land type is known only once
+    # the cost has been paid. The record is the cost's own
+    # (``sacrificed_for_cost``), which is last-known information — the land is
+    # in a graveyard by now (CR 608.2h) — and the words are built by
+    # ``engine/landwalk.py``, the module the block check reads, so a grant and
+    # a block cannot disagree about what "islandwalk" means.
+    #
+    # Nothing recorded, or a record with no land type, grants **nothing**: an
+    # empty tuple here is a creature that gained no evasion, where a fallback
+    # word would be an evasion the card never named.
+    landwalk_record = instruction.payload.get("landwalk_from")
+    if landwalk_record is not None:
+        from ..landwalk import landwalk_abilities_of
+
+        paid_with = (context.choices or {}).get(str(landwalk_record))
+        keywords = landwalk_abilities_of(paid_with) if paid_with is not None else ()
+        if not keywords:
+            game.log.append(
+                f"{card.name}: the land it was paid with names no landwalk"
+            )
+            return True, "resolved"
+
     # "**X** target creatures gain islandwalk until end of turn." (Part Water.)
     # The printed count is a *string* until the spell is cast — X is announced,
     # not printed — so it is resolved against the context's X rather than tested
