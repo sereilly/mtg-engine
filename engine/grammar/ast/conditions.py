@@ -27,6 +27,8 @@ from .costs import Cost
 # one of them is the drift the union's own note is about.
 from .records import (AdditionalCostWasPaid, AttackedOrBlockedThisCombat,
                       ChosenNameMilledThisWay,
+    SharedColorMilledThisWay,
+                      SharedColorMilledThisWay,
     RevealedCardHasChosenName,
                       RevealedCardHasChosenName,
                       ChosenThisWay, CoinFlipResult, CostObjectWas,
@@ -540,6 +542,7 @@ Condition = Union[
     ItWas,
     LifeGainedThisTurn,
     ChosenNameMilledThisWay,
+    SharedColorMilledThisWay,
     RevealedCardHasChosenName,
     MilledThisWay,
     PaidCost,

@@ -235,6 +235,18 @@ def _parse_mill(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
     with every number there is.
     """
     stream.expect_word("mills", "mill")
+    # "mills **cards equal to** the sacrificed creature's power" (Altar of
+    # Dementia) puts the noun in front of the count, where every other mill
+    # puts it behind — the same two spellings ``_parse_draw`` above reads, and
+    # read the same way: first, and reset if the words turn out to be an
+    # ordinary "mills two cards", because "cards" cannot start a number so
+    # nothing has been skipped.
+    equal_mark = stream.mark()
+    if stream.accept_word("cards"):
+        counted = parse_equal_to(stream)
+        if counted is not None:
+            return ast.Mill(player, counted)
+        stream.reset(equal_mark)
     count = parse_amount(stream)
     stream.expect_word("card", "cards")
     repeated = _parse_mill_repeat_tail(stream, player, count)

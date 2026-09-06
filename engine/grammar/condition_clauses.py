@@ -391,6 +391,22 @@ def _accept_record_condition(stream: TokenStream) -> "ast.Condition | None":
     # beside its sibling. "That card" is the reveal's, which is the referent
     # every "if it's a …" above already uses — the lowering demands the reveal
     # and the naming both, so the words cannot name a record nothing wrote.
+    # "if **two cards that share a color were milled this way**" (Grindstone).
+    # Read here beside its two siblings and before the counted "one or more"
+    # spelling below, whose noun-phrase opening it does not share: the relation
+    # ("that share a color") is not a narrowing on a card, so the noun parser
+    # would refuse it.
+    shared_mark = stream.mark()
+    shared_count = NUMBER_WORDS.get(stream.peek_word() or "")
+    if shared_count is not None:
+        stream.advance()
+        if stream.accept_phrase(
+            "cards", "that", "share", "a", "color", "were", "milled", "this",
+            "way",
+        ):
+            return ast.SharedColorMilledThisWay(count=int(shared_count))
+    stream.reset(shared_mark)
+
     named_mark = stream.mark()
     if stream.accept_phrase(
         "that", "card", "has", "the", "chosen", "name",

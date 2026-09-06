@@ -657,6 +657,30 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             payload.get("value"),
         )
 
+    if kind == "shared_color_milled_this_way":
+        # "**If two cards that share a color were milled this way**, repeat
+        # this process." (Grindstone.) The record the mill in front of this
+        # wrote, never the graveyard: a graveyard holds whatever else has gone
+        # there, and the words say "this way".
+        #
+        # A *shared* colour, so a colourless card can never satisfy it however
+        # many are milled — Grindstone's famous stop. The test is over every
+        # subset of the printed size, which for two is "some colour appears in
+        # at least two of them"; written as a count per colour rather than as
+        # pairs, because the printed number is a field and pairs would only
+        # answer for two.
+        from collections import Counter
+
+        wanted = max(2, int(payload.get("count", 2) or 2))
+        milled = tuple(context.results.get(MILLED_THIS_WAY) or ())
+        if len(milled) < wanted:
+            return False
+        counts: Counter = Counter()
+        for card in milled:
+            for color in getattr(card, "colors", ()) or ():
+                counts[color] += 1
+        return any(seen >= wanted for seen in counts.values())
+
     if kind == "revealed_card_has_chosen_name":
         # "**If that card has the chosen name**, this artifact deals 2 damage
         # to any target." (Cursed Scroll.) The two records an earlier step of
@@ -2353,6 +2377,51 @@ def repeat_optional_process(game: Game, instruction: OracleInstruction, context:
 
     run_resumable(game, [*steps, _ASK_TO_REPEAT], step)
     return True, "resolved"
+
+
+@effect_handler("repeat_process_while")
+def repeat_process_while(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Target player mills two cards. **If two cards that share a color were
+    milled this way, repeat this process.**" (Grindstone.)
+
+    The third repeat in this file and the third mechanism: ``repeat_offer_round``
+    ends on a round nobody took, ``repeat_optional_process`` on a seat's
+    answer, and this one on a **condition asked of what the round just did**.
+
+    ``resets`` is the whole reason the loop terminates on a real board. The
+    condition reads records the round writes, and those records accumulate
+    across an effect by design ("what did this whole resolution mill?") — so
+    each round clears exactly the keys its own steps write, which is what makes
+    "milled **this way**" mean this round's cards. Without it Grindstone would
+    be asked about every card it had milled so far, find a shared colour among
+    them for ever, and mill until the library was empty on any two coloured
+    cards at all.
+
+    **No ``run_resumable``**, unlike the two loops above, and that is a
+    property of this shape rather than an omission: the condition is asked
+    *between* rounds, so a round that suspended part-way would leave the
+    question about a round that had not happened. The lowering keeps that
+    honest by refusing a condition whose records the round does not write —
+    a round with nothing to ask about cannot be a round this repeats.
+
+    Termination is the card's, not a cap here: the round has to write the
+    record the condition reads, and a round that writes an empty one answers
+    False. Grindstone's mill shrinks a finite library every time round, and an
+    empty library mills nothing, which is exactly that.
+    """
+    steps = _steps(instruction, "steps")
+    condition = dict(instruction.payload.get("condition") or {})
+    resets = tuple(instruction.payload.get("resets") or ())
+    if not steps or not condition:
+        return True, "resolved"
+    while True:
+        for key in resets:
+            context.results.pop(key, None)
+        for item in steps:
+            game._execute_oracle_instruction(item, context)
+        if not evaluate_condition(game, context, condition):
+            return True, "resolved"
+        game.log.append(f"{getattr(context.card, 'name', 'Effect')}: repeating")
 
 
 @effect_handler("choose_one")

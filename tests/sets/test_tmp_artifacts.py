@@ -268,3 +268,129 @@ def test_cursed_scroll_offers_any_target_at_activation(set_pool):
     spec = derive_activation_spec(program.activated_abilities[0])
     assert spec is not None, "the picker has no idea what this ability targets"
     assert spec.get("kind") == "any"
+
+
+def test_altar_of_dementia_mills_the_power_of_the_creature_the_cost_ate(set_pool):
+    """`Sacrifice a creature: Target player mills cards equal to the sacrificed
+    creature's power.`
+
+    The number is the *cost's*, and by resolution the creature is in a
+    graveyard with no characteristics at all (CR 613.1) — so it is read off the
+    record the activation kept (CR 601.2h, CR 608.2h). Two creatures of
+    different sizes are on the board, so a handler reading "a creature" rather
+    than "the one the cost ate" would mill the wrong number.
+    """
+    altar = Permanent(card=set_pool("TMP")["Altar of Dementia"])
+    big = Permanent(card=_w2g4_card("Ogre", "Creature — Ogre", power=4, toughness=4))
+    small = Permanent(card=_w2g4_card("Rat", "Creature — Rat", power=1, toughness=1))
+    game = _w2g4_game([altar, big, small])
+    game.players[1].library = [_w2g4_card("Mountain", "Basic Land — Mountain")] * 10
+
+    result = game.activate_permanent_ability(
+        0, "Altar of Dementia", ability_index=0,
+        target_player_index=1,
+        # A battlefield *slot*, which is what this parameter is: the Ogre is
+        # the second permanent P0 controls.
+        cost_permanent_index=1,
+    )
+    assert result.supported, result.details
+    game.resolve_top_of_stack()
+
+    assert len(game.players[1].graveyard) == 4, "four, the Ogre's power"
+    # And the cost was actually charged: wave 1 found two artifacts whose
+    # non-mana activation cost was parsed and collected by nobody.
+    assert [p.card.name for p in game.controlled_by(0)] == [
+        "Altar of Dementia", "Rat",
+    ]
+    assert [c.name for c in game.players[0].graveyard] == ["Ogre"]
+
+
+def test_altar_of_dementia_mills_nothing_for_a_zero_power_sacrifice(set_pool):
+    """A 0-power creature mills nothing rather than falling back to a printed
+    number — there is no printed number, and a handler that read one would have
+    had to invent it."""
+    altar = Permanent(card=set_pool("TMP")["Altar of Dementia"])
+    wall = Permanent(card=_w2g4_card("Wall", "Creature — Wall", power=0, toughness=4))
+    game = _w2g4_game([altar, wall])
+    game.players[1].library = [_w2g4_card("Mountain", "Basic Land — Mountain")] * 5
+
+    game.activate_permanent_ability(
+        0, "Altar of Dementia", ability_index=0, target_player_index=1,
+        cost_permanent_index=1,
+    )
+    game.resolve_top_of_stack()
+
+    assert not game.players[1].graveyard
+
+
+def _w2g4_coloured(name, color):
+    return CardDefinition(
+        name=name, mana_cost="", type_line="Creature — Bear", oracle_text="",
+        cmc=0.0, colors=(color,), color_identity=(color,), keywords=(),
+        produced_mana=(), power="2", toughness="2",
+        raw={"name": name, "type_line": "Creature — Bear"},
+    )
+
+
+def test_grindstone_repeats_while_the_two_milled_cards_share_a_colour(set_pool):
+    """`{3}, {T}: Target player mills two cards. If two cards that share a
+    color were milled this way, repeat this process.`
+
+    The loop is the card. Four black cards on top of six colourless ones: two
+    rounds of two black cards, then a round of two colourless ones that stops
+    it. Six cards milled, four left.
+    """
+    grindstone = Permanent(card=set_pool("TMP")["Grindstone"])
+    game = _w2g4_game([grindstone])
+    black = _w2g4_coloured("Bog Imp", "B")
+    plain = _w2g4_card("Ornithopter", "Artifact Creature — Thopter",
+                       power=0, toughness=2)
+    game.players[1].library = [black] * 4 + [plain] * 6
+
+    result = game.activate_permanent_ability(
+        0, "Grindstone", ability_index=0, target_player_index=1,
+    )
+    assert result.supported, result.details
+    game.resolve_top_of_stack()
+
+    assert len(game.players[1].graveyard) == 6
+    assert len(game.players[1].library) == 4
+
+
+def test_grindstone_stops_on_two_colourless_cards(set_pool):
+    """Colourless cards share no colour with anything, which is the card's
+    famous stop — and the reason the test is over `colors`, not over sameness:
+    two Ornithopters are the same card and still do not share a colour."""
+    grindstone = Permanent(card=set_pool("TMP")["Grindstone"])
+    game = _w2g4_game([grindstone])
+    plain = _w2g4_card("Ornithopter", "Artifact Creature — Thopter",
+                       power=0, toughness=2)
+    game.players[1].library = [plain] * 10
+
+    game.activate_permanent_ability(
+        0, "Grindstone", ability_index=0, target_player_index=1,
+    )
+    game.resolve_top_of_stack()
+
+    assert len(game.players[1].graveyard) == 2, "one round and no more"
+
+
+def test_grindstone_empties_a_library_of_one_colour_and_terminates(set_pool):
+    """An all-black library is the loop's worst case, and it terminates because
+    an empty library mills nothing — the round writes an empty record and the
+    condition reads it as False.
+
+    This is the test that would hang if `resets` were dropped or if the
+    stopping condition read the graveyard rather than the round's own record.
+    """
+    grindstone = Permanent(card=set_pool("TMP")["Grindstone"])
+    game = _w2g4_game([grindstone])
+    game.players[1].library = [_w2g4_coloured("Bog Imp", "B")] * 9
+
+    game.activate_permanent_ability(
+        0, "Grindstone", ability_index=0, target_player_index=1,
+    )
+    game.resolve_top_of_stack()
+
+    assert not game.players[1].library
+    assert len(game.players[1].graveyard) == 9

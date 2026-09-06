@@ -73,6 +73,7 @@ from .lowering import (
     _lower_repeat_for_types,
     _lower_repeat_optional_process,
     _lower_repeat_process,
+    _lower_repeat_process_while,
     _lower_for_each_destroyed,
     _lower_for_each_exiled,
     _lower_for_each_tapped,
@@ -639,6 +640,13 @@ def lower_statement(
         return _lower_repeat_optional_process(statement, lower_statement)
     if isinstance(statement, ast.RepeatForEachType):
         return _lower_repeat_for_types(statement, lower_statement)
+    # The fourth, and the only one whose clause is a *condition* — so it takes
+    # the condition lowering back as an argument too, for the same reason it
+    # takes the statement one: both live below this dispatcher.
+    if isinstance(statement, ast.RepeatProcessWhile):
+        return _lower_repeat_process_while(
+            statement, lower_statement, _lower_condition, produced, event,
+        )
 
     if isinstance(statement, ast.ChoosePermanent):
         # Two lowerings, told apart by the printed quantifier. The plural needs

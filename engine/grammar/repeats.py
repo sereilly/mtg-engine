@@ -39,6 +39,7 @@ from . import ast
 from .errors import GrammarError
 from .lexer import PUNCT, tokenize
 from .vocabulary import CARD_TYPES, singular
+from .conditions import _parse_condition
 from .statements import parse_statement
 from .stream import TokenStream
 
@@ -205,4 +206,53 @@ def _attach_repeat_optional_process(stream: TokenStream, steps: list) -> bool:
     stream.accept_punct(".")
     round_ = steps[0] if len(steps) == 1 else ast.Sequence(tuple(steps))
     steps[:] = [ast.RepeatOptionalProcess(round=round_)]
+    return True
+
+
+def _attach_repeat_while_condition(stream: TokenStream, steps: list) -> bool:
+    """Fold "If two cards that share a color were milled this way, repeat this
+    process." into the sentence before it (Grindstone).
+
+    The **fourth** printed "repeat this process" and the fourth mechanism: this
+    one ends on a condition asked of what the round just did. It wraps the last
+    step rather than every step read so far — the process is one printed
+    sentence, exactly as Eureka's and Equipoise's are, and Forbidden Ritual's
+    two are that card's shape rather than the clause's.
+
+    Read as *this* clause rather than as an ordinary conditional sentence
+    whose branch happens to be a repeat: "repeat this process" is not a
+    statement any production reads, and there is nothing for a `Conditional` to
+    hold. Non-consuming on refusal, so an "If …" sentence with any other branch
+    keeps its own reading and its own refusal site.
+
+    Refuses with nothing in front of it, for :func:`_attach_repeat_optional_process`'s
+    reason: a process with no sentence before it names nothing, and wrapping an
+    empty list would compile a loop that repeats silence.
+    """
+    if not steps:
+        return False
+    mark = stream.mark()
+    if not stream.accept_word("if"):
+        stream.reset(mark)
+        return False
+    try:
+        condition = _parse_condition(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return False
+    if not stream.accept_punct(","):
+        stream.reset(mark)
+        return False
+    if not stream.accept_phrase("repeat", "this", "process"):
+        stream.reset(mark)
+        return False
+    # The clause must **end** its sentence, for the reason
+    # `_attach_repeat_for_types` gives about its own list: a word behind it is a
+    # card this reading has not read. An exhausted stream ends it as surely as a
+    # full stop, because `parse_coverage` asks the clause with its trailing
+    # period already stripped.
+    if not (stream.accept_punct(".") or stream.exhausted):
+        stream.reset(mark)
+        return False
+    steps[-1] = ast.RepeatProcessWhile(round=steps[-1], condition=condition)
     return True

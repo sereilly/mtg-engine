@@ -146,6 +146,26 @@ class ChosenNameMilledThisWay:
 
 
 @dataclass(frozen=True)
+class SharedColorMilledThisWay:
+    """``if two cards that share a color were milled this way`` (Grindstone).
+
+    :class:`MilledThisWay`'s third sibling, asking of the same record a
+    question neither of the others can: not what *kind* of card was milled and
+    not whether a named one was, but whether the milled cards have a colour in
+    common. A colour shared between two cards is a relation, and an
+    ``ObjectFilter`` describes one card at a time — so it cannot be a filter on
+    that node any more than "the chosen name" could.
+
+    ``count`` is the printed size of the comparison. Two is the only printing,
+    and it is a field rather than a constant because the question the handler
+    asks is "do *count* of them share a colour" and a card printing three would
+    be the same question.
+    """
+
+    count: int = 2
+
+
+@dataclass(frozen=True)
 class MilledThisWay:
     """"If one or more creature cards **were put into that graveyard this
     way**" (Helm of Obedience).

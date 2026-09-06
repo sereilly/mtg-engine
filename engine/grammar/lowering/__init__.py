@@ -346,7 +346,8 @@ from .combat import (
 from .tokens import (_lower_create_copy_token, _lower_create_emblem, _title,
                      _lower_create_token)
 from .repeats import (_lower_repeat_for_types,
-                      _lower_repeat_optional_process, _lower_repeat_process)
+                      _lower_repeat_optional_process, _lower_repeat_process,
+                      _lower_repeat_process_while)
 from .game import (
     _lower_count_objects,
     _lower_ante,
@@ -625,6 +626,7 @@ __all__ = [
     "_lower_repeat_for_types",
     "_lower_repeat_optional_process",
     "_lower_repeat_process",
+    "_lower_repeat_process_while",
     "_lower_exchange_life_totals",
     "_lower_set_life_total",
     "_lower_gain_life",

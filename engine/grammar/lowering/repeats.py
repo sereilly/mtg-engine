@@ -28,6 +28,7 @@ import dataclasses
 from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
+from ._records import produced_keys
 
 
 def _lower_repeat_process(node: ast.RepeatProcess, lower) -> tuple[OracleInstruction, ...]:
@@ -222,4 +223,48 @@ def _lower_repeat_optional_process(
         )
     return (
         OracleInstruction("repeat_optional_process", "", {"steps": steps}),
+    )
+
+
+def _lower_repeat_process_while(
+    node: ast.RepeatProcessWhile, lower, lower_condition, produced, event,
+) -> tuple[OracleInstruction, ...]:
+    """"Target player mills two cards. **If two cards that share a color were
+    milled this way, repeat this process.**" (Grindstone.)
+
+    The round and its stopping question are one instruction, for
+    :func:`_lower_repeat_process`'s reason: the question is about what the
+    round just did, so whatever asks it has to be holding the round it would
+    run again.
+
+    Two things are checked and both are the difference between a loop and a
+    hang. The round must **produce** every record the condition reads — a
+    condition asked of a record nothing writes answers the same way for ever,
+    which is either one round or none of them ending. And the records the round
+    writes are named in the payload as ``resets``, because "milled **this
+    way**" means *this round's* cards: without the clearing, round two would be
+    asked about round one's mill as well and Grindstone would never stop on a
+    library it had already emptied of shared colours.
+
+    ``produced`` is the effect's own set *plus* what the round writes, because
+    the condition is printed after the round and reads it.
+    """
+    steps = lower(node.round, produced, event=event, whole_effect=False)
+    if not steps:
+        raise LoweringError(
+            "a repeated process with no effect in it", node=node
+        )
+    written = frozenset(
+        key for step in steps for key in produced_keys(step)
+    )
+    condition = lower_condition(node.condition, produced | written, event)
+    return (
+        OracleInstruction(
+            "repeat_process_while", "",
+            {
+                "steps": steps,
+                "condition": condition,
+                "resets": tuple(sorted(written)),
+            },
+        ),
     )
