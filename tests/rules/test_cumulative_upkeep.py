@@ -502,3 +502,38 @@ def test_702_24a_an_act_this_engine_cannot_perform_alone_refuses_the_card():
         self_actions=1,
         self_action_text="put a -1/-1 counter on this creature",
     )
+
+
+@pytest.mark.cr("702.24a", "120.8")
+def test_702_24a_the_unpaid_trigger_fires_before_the_sacrifice():
+    """"When a player doesn't pay this enchantment's cumulative upkeep…"
+    (Heart of Bogardan, Thought Lash.)
+
+    CR 702.24a's "if you don't" is decided in exactly one place, and the
+    trigger has to be announced from it — a condition that is in both front-end
+    tables and fires nowhere is a card that compiles, reports supported, and
+    does nothing. Announced **before** the sacrifice, because a permanent
+    already in a graveyard is not one the trigger scan reaches.
+    """
+    perm = Permanent(
+        card=_mk(
+            "Watched Ager", "{U}",
+            extra_text=(
+                "When a player doesn't pay this enchantment's cumulative "
+                "upkeep, this enchantment deals 2 damage to target player."
+            ),
+        )
+    )
+    game, p1 = _game(perm)
+    opponent = game.players[1]
+
+    game.resolve_upkeep(0)
+    game.auto_resolve_pending_choices(kinds=("trigger_target",))
+    game._settle()
+    while game.stack:
+        game.resolve_top_of_stack()
+        game.auto_resolve_pending_choices(kinds=("trigger_target",))
+        game._settle()
+
+    assert perm not in p1.battlefield, "unpaid, so it is sacrificed"
+    assert opponent.life == 18, "and the trigger that watched it fired"

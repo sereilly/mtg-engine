@@ -819,7 +819,15 @@ def _lower_split_recipients(
         raise LoweringError(
             "a multi-recipient damage clause carries no riders", node=node
         )
-    if any(_targets_payload(recipient) is not None for recipient in node.recipients):
+    named = [r for r in node.recipients if _targets_payload(r) is not None]
+    if len(named) == 1:
+        # "…deals X damage to **target player or planeswalker** and **each
+        # creature that player or that planeswalker's controller controls**."
+        # (Heart of Bogardan.) One printed choice, not two: the second half is
+        # a *description* keyed to the object the first half named, so the
+        # split raises one picker and the sweep reads the seat it announced.
+        return _lower_target_and_its_board(node, named[0], event, produced)
+    if named:
         raise LoweringError(
             "multi-recipient damage without a sweep shape cannot name a target",
             node=node,
@@ -829,6 +837,85 @@ def _lower_split_recipients(
         lowered += _lower_damage(
             dataclasses.replace(node, recipients=(recipient,)), event, produced
         )
+    return lowered
+
+
+#: The pronoun a described set uses for the recipient its own sentence targeted,
+#: and the seat key the matcher answers it with. Rewritten rather than passed
+#: through, because ``that_player`` is what a *trigger's frozen event* means
+#: everywhere else in this file — and on Heart of Bogardan that seat is the
+#: player who failed to pay, which is a different player from the one the
+#: ability targets whenever the card is played the way it is meant to be.
+_ANTECEDENT_SEAT_KEY = "target_player"
+
+
+def _lower_target_and_its_board(
+    node: ast.DealDamage,
+    named: ast.Recipient,
+    event: str | None,
+    produced: frozenset[str],
+) -> tuple[OracleInstruction, ...]:
+    """"…to target player or planeswalker **and each creature that player …
+    controls**." (Heart of Bogardan.)
+
+    The shape :func:`_lower_split_recipients` refuses one recipient short of:
+    there *is* a chosen recipient, but only one, and every other recipient is a
+    set described relative to it. So the split raises exactly one picker — the
+    thing CR 601.2c/603.3d allow only once — and the sweep asks the matcher for
+    the seat that picker announced.
+
+    Every refusal below is a way the sentence could otherwise reach further
+    than it names:
+
+    * a described half that narrows by anything but the pronoun is a phrase
+      whose antecedent this cannot prove is the target, and reading it as one
+      would burn a board the card never pointed at;
+    * a half that is not a sweep at all ("target player and target creature")
+      is two printed choices and belongs to the refusal above;
+    * the printed riders are already refused for the whole shape by
+      :func:`_lower_split_recipients`'s first check.
+    """
+    rewritten: list[ast.Recipient] = []
+    for recipient in node.recipients:
+        if recipient is named:
+            rewritten.append(recipient)
+            continue
+        if not (
+            isinstance(recipient, ast.TargetSpec)
+            and recipient.quantifier == "each"
+            and not recipient.targeted
+            and recipient.filter.controller == "that_player"
+        ):
+            raise LoweringError(
+                "a described half of a targeted damage clause must be the set "
+                "the target controls",
+                node=node,
+            )
+        rewritten.append(
+            dataclasses.replace(
+                recipient,
+                filter=dataclasses.replace(
+                    recipient.filter, controller=_ANTECEDENT_SEAT_KEY
+                ),
+            )
+        )
+    # "…or that **planeswalker's controller**" — the one printed clause whose
+    # target may be an object rather than a seat, and it says which seat that
+    # then means. Carried as payload so the sweep resolves it only where the
+    # card printed the word: a sweep that inferred a controller from any
+    # permanent target would answer a seat for sentences that never named one.
+    walks = isinstance(named, ast.PlayerRef) and named.or_planeswalker
+    lowered: tuple[OracleInstruction, ...] = ()
+    for recipient in rewritten:
+        for instruction in _lower_damage(
+            dataclasses.replace(node, recipients=(recipient,)), event, produced
+        ):
+            if walks and instruction.kind == "deal_damage_each_matching":
+                instruction = OracleInstruction(
+                    instruction.kind, instruction.value,
+                    instruction.payload | {"target_controller_if_permanent": True},
+                )
+            lowered += (instruction,)
     return lowered
 
 

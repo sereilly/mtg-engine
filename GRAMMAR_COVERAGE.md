@@ -33,7 +33,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | VIS | 167 | 278 | 89.6% | 89.6% | 61.5% | 138 |
 | 5ED | 434 | 631 | 93.7% | 93.3% | 60.7% | 318 |
 | M21 | 285 | 503 | 87.3% | 87.1% | 61.0% | 237 |
-| WTH *(measured)* | 167 | 249 | 65.9% | 57.8% | 37.8% | 86 |
+| WTH *(measured)* | 167 | 249 | 66.7% | 59.0% | 39.0% | 89 |
 | **All (shipped)** | **4085** | **6090** | **90.0%** | **89.2%** | **58.8%** | **2962** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -48,7 +48,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ---: | ---: | --- | --- |
 | 346 | 154 | expected a subject |  |
 | 107 | 51 | unrecognized effect verb |  |
-| 99 | 53 | unconsumed text |  |
+| 98 | 52 | unconsumed text |  |
 | 36 | 21 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 34 | unrecognized activation cost |  |
 | 12 | 7 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
@@ -70,7 +70,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 3 | 1 | expected a colour or a creature body after 'becomes' |  |
 | 3 | 1 | expected 'of' |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
-| 2 | 2 | expected something to destroy |  |
+| 2 | 1 | expected 'the number of' in a where-clause |  |
 
 ## Cards executing through the grammar
 
@@ -2246,6 +2246,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `• Prevent the next 3 damage that would be dealt to any target this turn.`
 - **Heart Wolf**
   - `{T}: Target Dwarf creature gets +2/+0 and gains first strike until end of turn. When that creature leaves the battlefield this turn, sacrifice this creature. Activate only during combat.`
+- **Heart of Bogardan**
+  - `When a player doesn't pay this enchantment's cumulative upkeep, this enchantment deals X damage to target player or planeswalker and each creature that player or that planeswalker's controller controls, where X is twice the number of age counters on this enchantment minus 2.`
 - **Heart of Yavimaya**
   - `{T}: Add {G}.`
   - `{T}: Target creature gets +1/+1 until end of turn.`
@@ -4030,6 +4032,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Reveka deals 2 damage to any target and doesn't untap during your next untap step.`
 - **Reverberation**
   - `All damage that would be dealt this turn by target sorcery spell is dealt to that spell's controller instead.`
+- **Revered Unicorn**
+  - `When this creature leaves the battlefield, you gain life equal to the number of age counters on it.`
 - **Reverse Damage**
   - `The next time a source of your choice would deal damage to you this turn, prevent that damage. You gain life equal to the damage prevented this way.`
   - `The next time a source of your choice would deal damage to you this turn, prevent that damage. You gain life equal to the damage prevented this way.`
@@ -5513,6 +5517,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, sacrifice this creature unless you return an untapped Island you control to its owner's hand.`
 - **Wave Elemental**
   - `{U}, {T}, Sacrifice this creature: Tap up to three target creatures without flying.`
+- **Wave of Terror**
+  - `At the beginning of your draw step, destroy each creature with mana value equal to the number of age counters on this enchantment. They can't be regenerated.`
 - **Weakstone**
   - `Attacking creatures get -1/-0.`
 - **Wellspring**

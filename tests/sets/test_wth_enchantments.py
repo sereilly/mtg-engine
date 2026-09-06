@@ -147,3 +147,81 @@ def test_wave_of_terrors_sweep_carries_both_of_its_riders(set_pool):
         "mana_value_equals_source_counters": "age",
         "bypass_regeneration": True,
     }
+
+
+def test_heart_of_bogardan_burns_the_target_and_that_players_board(set_pool, cards):
+    """"When a player doesn't pay this enchantment's cumulative upkeep, this
+    enchantment deals X damage to target player or planeswalker and each
+    creature that player or that planeswalker's controller controls, where X is
+    twice the number of age counters on this enchantment minus 2."
+
+    The card was **supported before this round** on its keyword line, with the
+    whole of this ability compiling to no instruction — a hollow line. Three
+    separate things had to be true for it to work, and the assertions below
+    check each: the unpaid-upkeep trigger has to fire at all, X has to be
+    2N-2 rather than 2N or 2(N-1), and the swept half has to land on the
+    **target's** board rather than on the board of the player who declined —
+    who is the enchantment's own controller, and so the opposite seat.
+    """
+    pool = set_pool("WTH")
+    heart = Permanent(card=pool["Heart of Bogardan"])
+    lands = [Permanent(card=cards["Mountain"]) for _ in range(14)]
+    mine = Permanent(card=cards["Hill Giant"])
+    theirs = [
+        Permanent(card=cards[name])
+        for name in ("Gray Ogre", "Hurloon Minotaur", "Hill Giant")
+    ]
+    p1 = PlayerState(name="P1", battlefield=[heart] + lands + [mine], life=20)
+    p2 = PlayerState(name="P2", battlefield=list(theirs), life=20)
+    game = Game(players=[p1, p2])
+    game.interactive_seats = {0}
+
+    for _ in range(4):
+        game.resolve_upkeep(0, human_choices={"Heart of Bogardan": True})
+        _w1g3_settle(game)
+        for land in lands:
+            land.tapped = False
+    assert counters_on(heart, "age") == 4 and p2.life == 20
+
+    game.resolve_upkeep(0, human_choices={"Heart of Bogardan": False})
+    _w1g3_settle(game)
+
+    # The fifth counter goes down before the payment is offered, so X is
+    # 2 * 5 - 2 = 8.
+    assert p2.life == 12
+    assert [perm.card.name for perm in p2.battlefield] == []
+    assert mine in p1.battlefield, (
+        "the sweep is the target's board, not the declining player's"
+    )
+    assert p1.life == 20
+
+
+def test_heart_of_bogardan_raises_one_picker_for_one_printed_target(set_pool):
+    """"target player or planeswalker **and** each creature that player …
+    controls" is one printed choice, not two: the second half is a description
+    keyed to the object the first half named.
+
+    So the sweep carries the seat key the matcher answers from the announced
+    target — never ``that_player``, which for this trigger is the seat that
+    failed to pay and is the enchantment's own controller.
+    """
+    program = compile_card_oracle(set_pool("WTH")["Heart of Bogardan"])
+    unpaid = next(
+        trig for trig in program.triggered_abilities
+        if trig.condition.kind == "cumulative_upkeep_unpaid"
+    )
+    steps = unpaid.instruction.payload["steps"]
+
+    assert [step.kind for step in steps] == ["deal_damage", "deal_damage_each_matching"]
+    assert steps[0].payload["targets"] == {
+        "quantifier": "target", "kind": "player_or_planeswalker",
+    }
+    assert steps[1].payload["filter"] == {
+        "type_filter": "creature", "controller": "target_player",
+    }
+    assert steps[1].payload["target_controller_if_permanent"] is True
+    # Both halves read one X, taken off the counters as the ability resolves.
+    for step in steps:
+        assert step.payload["x_from_count"] == {
+            "source_counters": "age", "multiplier": 2, "plus": -2,
+        }

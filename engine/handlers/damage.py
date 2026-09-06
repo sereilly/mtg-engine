@@ -2171,6 +2171,17 @@ def deal_damage_each_matching(
         if context.target is not None and context.target in game.players
         else None
     )
+    # "…and each creature that player **or that planeswalker's controller**
+    # controls" (Heart of Bogardan). The one printed clause whose target may be
+    # an object rather than a seat, and it names the seat that then means. Read
+    # only when the payload says the card printed the word: a sweep that
+    # inferred a controller from any permanent target would answer a seat for
+    # sentences that never named one, and a seat answered where none was named
+    # is a board burned that the card never pointed at.
+    if targeted is None and instruction.payload.get("target_controller_if_permanent"):
+        chosen = game.permanent_by_id(context.target_permanent_id)
+        if chosen is not None:
+            targeted = game.controller_index_of(chosen)
     struck = []
     for perm in list(game.all_permanents()):
         if not subject_matches(

@@ -281,6 +281,18 @@ def _parse_where_x_alternatives(stream: TokenStream) -> "ast.Amount":
     factor = _accept_multiplier(stream)
     if factor is not None:
         scaled = parse_where_x_definition_body(stream)
+        # "…where X is twice the number of age counters on this enchantment
+        # **minus 2**." (Heart of Bogardan.) A constant on the far side of the
+        # multiplier, and read here rather than inside the definition for the
+        # multiplier's own reason: what it applies to is the *product*, so a
+        # definition that carried it would be reading a different number.
+        # ``Minus`` is what "minus" means everywhere else in this grammar,
+        # clamp included (CR 107.1b: no card prints a negative quantity).
+        trailing = _accept_offset(stream)
+        if trailing < 0:
+            return ast.Minus(ast.Times(factor, scaled), ast.Fixed(-trailing))
+        if trailing > 0:
+            return ast.Plus(ast.Times(factor, scaled), ast.Fixed(trailing))
         return ast.Times(factor, scaled)
     # "…where X is **3 plus** the amount of damage dealt …" (Blazing Effigy).
     # A constant added to whatever definition follows, read here beside the

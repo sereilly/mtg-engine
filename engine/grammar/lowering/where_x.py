@@ -112,8 +112,9 @@ def lower_where_x(
         return _lower_where_x_exiled_for_cost(node, inner)
     if isinstance(node.definition, ast.SacrificedForCost):
         return _lower_where_x_sacrificed_for_cost(node, inner)
-    if isinstance(node.definition, ast.CountersOnSource):
-        return _lower_where_x_counters(node, inner)
+    counter_spec = _source_counter_spec(node.definition)
+    if counter_spec is not None:
+        return _lower_where_x_counters(node, inner, counter_spec)
     if isinstance(node.definition, ast.TotalPowerSacrificedThisWay):
         return _lower_where_x_sacrificed_power(node, inner)
     # "…where X is **twice** the number of …" (Jovial Evil). The factor is
@@ -202,8 +203,45 @@ def _lower_where_x_sacrificed_for_cost(
     )
 
 
+def _source_counter_spec(definition: "ast.Amount") -> dict[str, object] | None:
+    """The count spec "<n> plus/minus twice the number of <kind> counters on
+    <the source>" names, or None when *definition* is something else.
+
+    One reader for the four shapes the arithmetic wrappers make of one printed
+    count, because they are one count: the kind is what is being counted and
+    the factor and the constant are printed numbers on top of it. Written as an
+    unwrapping rather than as four ``isinstance`` arms in the dispatcher above
+    so that a shape it cannot take — a multiplier over something else, a
+    subtrahend that is itself a count — falls through to the refusal there
+    instead of being read as a plain count with its rider dropped.
+
+    The constant is ``plus`` and never ``offset``: ``_scaled`` applies
+    ``offset`` *before* the multiplier, so "twice the number … minus 2" written
+    that way would be 2N-4.
+    """
+    factor = 1
+    plus = 0
+    if isinstance(definition, (ast.Minus, ast.Plus)):
+        sign = -1 if isinstance(definition, ast.Minus) else 1
+        if not isinstance(definition.right, ast.Fixed):
+            return None
+        plus = sign * definition.right.value
+        definition = definition.left
+    if isinstance(definition, ast.Times):
+        factor = definition.factor
+        definition = definition.of
+    if not isinstance(definition, ast.CountersOnSource):
+        return None
+    spec: dict[str, object] = {"source_counters": definition.kind}
+    if factor != 1:
+        spec["multiplier"] = factor
+    if plus:
+        spec["plus"] = plus
+    return spec
+
+
 def _lower_where_x_counters(
-    node: ast.WhereX, inner: tuple[OracleInstruction, ...]
+    node: ast.WhereX, inner: tuple[OracleInstruction, ...], spec: dict[str, object]
 ) -> tuple[OracleInstruction, ...]:
     """"…, where X is the number of +1/+1 counters on it." (Primordial Ooze.)
 
@@ -219,7 +257,7 @@ def _lower_where_x_counters(
     """
     if not _mentions_x(inner):
         raise LoweringError("a where-clause defined an X nothing reads", node=node)
-    return _stamp_x_from_count(inner, {"source_counters": node.definition.kind})
+    return _stamp_x_from_count(inner, spec)
 
 
 def _lower_where_x_sacrificed_power(
