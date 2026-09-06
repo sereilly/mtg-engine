@@ -96,6 +96,36 @@ def lower_bite(
                 },
             ),
         )
+    # "Target creature deals damage **to itself** equal to its power."
+    # (Repentance.) The biter and the bitten are one creature, which is why it
+    # is a kind of its own rather than ``target_bites_target`` with the same
+    # permanent in both slots: that kind builds a *two*-slot cast-time picker
+    # and refuses a second target equal to the first (the printed "another"),
+    # so a single-target card routed through it would ask for a pick it never
+    # announces and then decline it.
+    #
+    # "Itself" is the sentence's own subject, not the ability's source: a
+    # sorcery has no permanent, and the reflexive can only mean the creature
+    # the sentence just named. Read here rather than by rewriting the pronoun,
+    # because the branch is gated on the subject being a **target** — a card
+    # whose subject really is the ability's source ("this creature deals damage
+    # to itself…") is a different sentence and keeps its own refusal.
+    if (
+        isinstance(node.amount, ast.ThatMuch)
+        and node.amount.source == "its_power"
+        and not node.amount.bonus
+        and node.source is not None
+        and isinstance(node.source, ast.TargetSpec)
+        and node.source.quantifier == "target"
+        and node.source.targeted
+        and len(node.recipients) == 1
+        and _is_source(node.recipients[0])
+        and node.riders == ast.DamageRiders()
+    ):
+        payload: dict[str, object] = {}
+        _describe_targets(payload, node.source)
+        payload["filter"] = _filter_payload(node.source.filter)
+        return (OracleInstruction("target_bites_itself", "", payload),)
     # "This creature deals damage equal to its power to target **player** or
     # planeswalker." (Leafkin Avenger.) The recipient is not an object, so the
     # bites handler below — which resolves a permanent — cannot carry it. The

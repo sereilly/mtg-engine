@@ -62,6 +62,7 @@ from .lowering import (
     _lower_damage_unless_pay,
     _fused_conditional_counter,
     _fused_tap_enchanted_then_counters,
+    _fused_tap_then_bite,
     _fused_prepare_then_interact,
     _fused_tap_any_number_then_pump,
     _fused_two_target_pump,
@@ -677,6 +678,12 @@ def lower_statement(
             _fused_conditional_counter,
             _fused_tap_any_number_then_pump,
             _fused_tap_enchanted_then_counters,
+            # "Tap target creature. It deals damage equal to its power to
+            # another target creature." (Deadshot.) Last of the loop's rows
+            # because it is the narrowest: it opens on a Tap, which three of
+            # the rows above also read, and every one of them refuses without
+            # consuming.
+            _fused_tap_then_bite,
         ):
             fused = fuse(statement.steps)
             if fused is not None:

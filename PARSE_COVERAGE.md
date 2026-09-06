@@ -10,7 +10,7 @@ unclaimed text. Do not edit by hand.
 - Fully claimed: **2513**
 - With acknowledged simplifications: **2**
 - With UNCLAIMED text (must fix or acknowledge): **0**
-- With deletion-probe findings (ignored words): **249**
+- With deletion-probe findings (ignored words): **252**
 
 ## Measured sets — reported, not gated
 
@@ -140,6 +140,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Gauntlets of Chaos | `exchange control of target artifact, creature, or land you control and` | or |
 | Gemstone Mine | `add one mana of any color. if there are no mining counters on this lan` | land, |
 | Giant Albatross | `you may pay {1}{u}. if you do, for each creature that dealt damage to ` | creature |
+| Giant Trap Door Spider | `exile this creature and target creature without flying that's attackin` | that's |
 | Glyph of Doom | `choose target wall creature. at this turn's next end of combat, destro` | all |
 | Glyph of Reincarnation | `destroy all creatures that were blocked by target wall this turn. they` | all |
 | Goblin Arsonist | `you may have it deal 1 damage to any target` | have |
@@ -164,6 +165,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Icatian Moneychanger | `you gain 1 life for each credit counter on this creature` | creature |
 | Icatian Skirmishers | `all creatures banded with it gain first strike until end of turn` | all |
 | Icatian Store | `if this land is tapped, put a storage counter on it` | land |
+| Ice Floe | `tap target creature without flying that's attacking you. it doesn't un` | that's |
 | Icequake | `destroy target land. if that land was a snow land, icequake deals 1 da` | land, |
 | Icy Manipulator | `tap target artifact, creature, or land` | or |
 | Infernal Harvest | `infernal harvest deals x damage divided as you choose among any number` | target |
@@ -239,6 +241,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Shipwreck Dowser | `return target instant or sorcery card from your graveyard to your hand` | or |
 | Shyft | `you may have this creature become the color or colors of your choice` | have |
 | Simoon | `simoon deals 1 damage to each creature target opponent controls` | each |
+| Snow Fortress | `this creature deals 1 damage to target creature without flying that's ` | that's |
 | Snow Hound | `return this creature and target green or blue creature you control to ` | or |
 | Songs of the Damned | `add {b} for each creature card in your graveyard` | card |
 | Soraya the Falconer | `target bird creature gains banding until end of turn` | creature |

@@ -626,6 +626,13 @@
   ]
  },
  {
+  "card": "Giant Trap Door Spider",
+  "clause": "exile this creature and target creature without flying that's attacking you",
+  "ignored": [
+   "that's"
+  ]
+ },
+ {
   "card": "Glyph of Doom",
   "clause": "choose target wall creature. at this turn's next end of combat, destroy all creatures that were blocked by that creature this turn",
   "ignored": [
@@ -793,6 +800,13 @@
   "clause": "if this land is tapped, put a storage counter on it",
   "ignored": [
    "land"
+  ]
+ },
+ {
+  "card": "Ice Floe",
+  "clause": "tap target creature without flying that's attacking you. it doesn't untap during its controller's untap step for as long as this land remains tapped",
+  "ignored": [
+   "that's"
   ]
  },
  {
@@ -1323,6 +1337,13 @@
   "clause": "simoon deals 1 damage to each creature target opponent controls",
   "ignored": [
    "each"
+  ]
+ },
+ {
+  "card": "Snow Fortress",
+  "clause": "this creature deals 1 damage to target creature without flying that's attacking you",
+  "ignored": [
+   "that's"
   ]
  },
  {

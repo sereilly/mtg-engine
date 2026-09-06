@@ -331,3 +331,25 @@ class AttacksThisTurnIfAble:
     """
 
     subject: Recipient
+
+
+@dataclass(frozen=True)
+class BlocksThisTurnIfAble:
+    """``<subject> blocks <attacker> this turn if able.`` (Trumpeting Armodon.)
+
+    CR 509.1c's requirement for one turn — the blocking twin of
+    :class:`AttacksThisTurnIfAble` and its own node for that one's reason: the
+    printed static ("this creature blocks each combat if able", Watchdog) is a
+    continuous ability ``engine/combat_restrictions.py`` reads and this is a
+    one-shot effect a spell or an ability creates, ending with the turn
+    (CR 611.2a).
+
+    It carries **two** creatures where the attack requirement carries one,
+    because a block is a pair: the printed sentence names who must block *and
+    which attacker they must block*. "Blocks **each attacking creature**"
+    (Blaze of Glory) is the same sentence with the second half unnarrowed, and
+    is read by its own whole-card production today.
+    """
+
+    subject: Recipient
+    attacker: Recipient

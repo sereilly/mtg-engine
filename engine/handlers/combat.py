@@ -20,6 +20,7 @@ from ..combat_assignment import (ASSIGNS_NO_COMBAT_DAMAGE,
 from ..combat_permissions import (ADDITIONAL_BLOCKS_UNTIL_EOT,
                                   CAN_BLOCK_ANY_NUMBER_UNTIL_EOT,
                                   MUST_BLOCK_ALL_UNTIL_EOT,
+                                  MUST_BLOCK_ATTACKERS_UNTIL_EOT,
                                   ATTACK_AS_THOUGH_NO_DEFENDER,
                                   CANT_BLOCK_UNTIL_EOT)
 from ..pt import add_pt_modifier
@@ -756,6 +757,63 @@ def force_target_to_attack_until_eot(game: Game, instruction: OracleInstruction,
         return True, "resolved"
     chosen.metadata["must_attack_until_eot"] = True
     game.log.append(f"{chosen.card.name} must attack this turn if able")
+    return True, "resolved"
+
+
+@effect_handler("force_target_to_block_until_eot")
+def force_target_to_block_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Target creature blocks this creature this turn if able." (Trumpeting
+    Armodon.)
+
+    CR 509.1c's requirement for one turn on the creature the caster chose
+    (CR 601.2c), aimed at **one named attacker** — the ability's own source.
+    Recorded on the compelled creature as that attacker's ``permanent_id``,
+    which the declare-blockers step reads and the cleanup sweep clears.
+
+    By id, and appended rather than assigned: two activations name two
+    attackers and the creature owes both blocks as far as the rules allow, and
+    an attacker that leaves and returns is a new object (CR 400.7) whose new id
+    the old requirement no longer names.
+
+    The printed noun phrase is re-asked here, not only at announcement, for the
+    reason the attack twin gives: a target that stopped being a creature
+    between the two is no longer the thing the card names (CR 608.2b).
+
+    With no source on the battlefield there is no attacker for the requirement
+    to be about, so nothing is recorded — a mark with no id in it would be a
+    "block anything" requirement the card never prints.
+    """
+    from ..subject_filters import subject_matches
+
+    attacker = context.source_permanent
+    if attacker is None or not game.is_on_battlefield(attacker):
+        game.log.append(
+            f"{context.card.name}: its own attacker has left, so nothing is "
+            "compelled to block"
+        )
+        return True, "resolved"
+    described = (instruction.payload.get("targets") or {}).get("filter") or {}
+    observer = (
+        game.players.index(context.caster) if context.caster in game.players
+        else None
+    )
+    chosen = resolve_target_permanent(
+        game, context,
+        predicate=lambda perm: subject_matches(
+            game, perm, described, observer=observer, source=attacker,
+        ),
+        fallback_on_invalid_choice=False,
+    )
+    if chosen is None:
+        game.log.append(f"{context.card.name}: its target is gone (608.2b)")
+        return True, "resolved"
+    owed = list(chosen.metadata.get(MUST_BLOCK_ATTACKERS_UNTIL_EOT) or ())
+    if attacker.permanent_id not in owed:
+        owed.append(attacker.permanent_id)
+    chosen.metadata[MUST_BLOCK_ATTACKERS_UNTIL_EOT] = owed
+    game.log.append(
+        f"{chosen.card.name} blocks {attacker.card.name} this turn if able"
+    )
     return True, "resolved"
 
 

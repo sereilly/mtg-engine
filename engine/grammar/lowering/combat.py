@@ -890,3 +890,59 @@ def _lower_attacks_this_turn_if_able(
     raise LoweringError(
         "no handler makes that subject attack this turn", node=node
     )
+
+
+def _lower_blocks_this_turn_if_able(
+    node: ast.BlocksThisTurnIfAble,
+) -> tuple[OracleInstruction, ...]:
+    """CR 509.1c's requirement for one turn, on a chosen creature and aimed at
+    one named attacker (Trumpeting Armodon).
+
+    Two halves, and both are checked here rather than trusted. The **subject**
+    is who must block: a target, so the picker falls out of the ``targets``
+    description exactly as it does for the attack twin. The **attacker** is
+    what they must block, and only the ability's own source resolves today —
+    a block is a pair (CR 509.1a) and a requirement whose second half was
+    dropped would compel the creature to block anything at all, which is a
+    strictly larger effect than the card prints.
+    """
+    if not (
+        isinstance(node.attacker, ast.TargetSpec) and _is_source(node.attacker)
+    ):
+        raise LoweringError(
+            "the block requirement names one attacker, and only the ability's "
+            "own source resolves here",
+            node=node,
+        )
+    if not (
+        isinstance(node.subject, ast.TargetSpec) and node.subject.targeted
+    ):
+        raise LoweringError(
+            "no handler makes that subject block this turn", node=node
+        )
+    if _names_several_targets(node.subject):
+        raise LoweringError(
+            "the block requirement marks one creature; nothing here collects "
+            "several",
+            node=node,
+        )
+    described = testable_filter_payload(
+        node.subject.filter,
+        refusal=(
+            "the block requirement is enforced against the chosen creature, so "
+            "a narrowing the matcher cannot test would be dropped and the "
+            "picker would offer creatures the card never names"
+        ),
+        node=node,
+        require_narrowing=False,
+    )
+    if described.get("type_filter") != "creature":
+        # CR 509.1a is about creatures; a noun phrase this lowering cannot
+        # confirm names one would put the mark on a permanent that can never
+        # meet the requirement.
+        raise LoweringError("a block requirement names a creature", node=node)
+    payload: dict[str, object] = {"attacker": "source"}
+    _describe_targets(payload, node.subject)
+    return (
+        OracleInstruction("force_target_to_block_until_eot", "", payload),
+    )

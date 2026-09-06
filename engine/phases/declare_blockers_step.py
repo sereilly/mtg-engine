@@ -16,6 +16,7 @@ from ..auras import attached_combat_restrictions, aura_restriction_active
 from ..combat_permissions import (ADDITIONAL_BLOCKS_UNTIL_EOT,
                                   CAN_BLOCK_ANY_NUMBER_UNTIL_EOT,
                                   MUST_BLOCK_ALL_UNTIL_EOT,
+                                  MUST_BLOCK_ATTACKERS_UNTIL_EOT,
                                   CANT_BLOCK_UNTIL_EOT)
 from ..combat_restrictions import declaration_company_required, participation_cap
 from ..evasion_negation import negated_evasion_abilities
@@ -408,6 +409,53 @@ class DeclareBlockersStepMixin:
                         f"{blocker.card.name} must block {attacker.card.name} "
                         "(Blaze of Glory)"
                     )
+
+        # "Target creature blocks **this creature** this turn if able."
+        # (Trumpeting Armodon.) CR 509.1c's requirement narrowed to one named
+        # attacker, and the narrowest of the four in this step: Lure names the
+        # attacker and compels everybody, Blaze of Glory names the blocker and
+        # compels every attacker, Watchdog names the blocker and compels
+        # anything at all, and this names both halves of the pair.
+        #
+        # The attackers are held by ``permanent_id`` and resolved here, so a
+        # marked attacker that left combat, left the battlefield, or is aimed at
+        # somebody else compels nothing.
+        for blocker_idx, blocker in enumerate(
+            self.controlled_by(controller_index) if not _camouflage_resolution else ()
+        ):
+            owed = blocker.metadata.get(MUST_BLOCK_ATTACKERS_UNTIL_EOT) or ()
+            if not owed:
+                continue
+            if not blocker.is_creature or blocker.tapped:
+                continue
+            assigned = set(assignments.get(blocker_idx, []))
+            for attacker_idx in own_attackers:
+                attacker = self.permanent_at(attacker_controller, attacker_idx)
+                if attacker is None or attacker.permanent_id not in owed:
+                    continue
+                if attacker_idx in assigned:
+                    continue
+                if not self._can_block_attacker(blocker, attacker):
+                    continue
+                # CR 509.1c, last clause: a cost to block lifts every
+                # requirement, this one included.
+                if self._block_mana_costs_of(blocker, attacker):
+                    continue
+                if self._left_right_block_illegal(
+                    attacker_idx, blocker_idx, blocker
+                ):
+                    continue
+                joined = sum(
+                    1
+                    for other in assignments.values()
+                    if attacker_idx in other
+                )
+                if joined + 1 < self._minimum_blockers(attacker):
+                    continue
+                return False, (
+                    f"{blocker.card.name} must block {attacker.card.name} "
+                    "this turn if able"
+                )
 
         # "This creature blocks each combat if able." (Watchdog.) CR 509.1c's
         # requirement aimed at the *blocker* rather than at an attacker, and the
