@@ -34,7 +34,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 5ED | 434 | 631 | 93.7% | 93.3% | 60.7% | 318 |
 | WTH | 167 | 249 | 88.0% | 88.0% | 64.7% | 140 |
 | M21 | 285 | 503 | 87.3% | 87.1% | 61.0% | 237 |
-| TMP *(measured)* | 335 | 478 | 87.7% | 87.4% | 61.5% | 254 |
+| TMP *(measured)* | 335 | 478 | 88.3% | 88.1% | 62.1% | 257 |
 | **All (shipped)** | **4252** | **6339** | **89.9%** | **89.2%** | **59.1%** | **3105** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -47,8 +47,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 359 | 158 | expected a subject |  |
-| 111 | 53 | unrecognized effect verb |  |
+| 357 | 156 | expected a subject |  |
+| 110 | 52 | unrecognized effect verb |  |
 | 93 | 45 | unconsumed text |  |
 | 36 | 21 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 34 | unrecognized activation cost |  |
@@ -814,6 +814,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Carrion Grub**
   - `This creature gets +X/+0, where X is the greatest power among creature cards in your graveyard.`
   - `When this creature enters, mill four cards. (Put the top four cards of your library into your graveyard.)`
+- **Carrionette**
+  - `{2}{B}{B}: Exile this card and target creature unless that creature's controller pays {2}. Activate only if this card is in your graveyard.`
 - **Casting of Bones**
   - `When enchanted creature dies, draw three cards, then discard one of them.`
 - **Castle**
@@ -1050,6 +1052,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Coercion**
   - `Target opponent reveals their hand. You choose a card from it. That player discards that card.`
   - `Target opponent reveals their hand. You choose a card from it. That player discards that card.`
+- **Coffin Queen**
+  - `{2}{B}, {T}: Put target creature card from a graveyard onto the battlefield under your control. When this creature becomes untapped or you lose control of this creature, exile that creature.`
 - **Coils of the Medusa**
   - `Sacrifice this Aura: Destroy all non-Wall creatures blocking enchanted creature.`
 - **Cold Snap**
@@ -3287,6 +3291,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, you may remove a vitality counter from this Aura. If you do, you gain 1 life.`
   - `At the beginning of your upkeep, you may remove a vitality counter from this Aura. If you do, you gain 1 life.`
   - `At the beginning of your upkeep, you may remove a vitality counter from this Aura. If you do, you gain 1 life.`
+- **Living Death**
+  - `Each player exiles all creature cards from their graveyard, then sacrifices all creatures they control, then puts all cards they exiled this way onto the battlefield.`
 - **Living Lands**
   - `All Forests are 1/1 creatures that are still lands.`
   - `All Forests are 1/1 creatures that are still lands.`
