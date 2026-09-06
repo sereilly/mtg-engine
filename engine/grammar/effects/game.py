@@ -351,8 +351,11 @@ def _parse_enchant(stream: TokenStream) -> ast.Statement:
     return ast.RawEffect(f"enchant:{filt}")
 
 
-def _parse_extra_turn(stream: TokenStream) -> ast.Statement:
+def _parse_extra_turn(
+    stream: TokenStream, player: "ast.PlayerRef | None" = None
+) -> ast.Statement:
     """``Take an extra turn after this one.`` (Time Walk, Time Vault.)
+    ``Target player takes an extra turn after this one.`` (Time Warp.)
 
     The count is the article or a written-out number ("Take two extra turns
     after this one.", Teferi, Master of Time) — never defaulted, so a quantity
@@ -360,8 +363,15 @@ def _parse_extra_turn(stream: TokenStream) -> ast.Statement:
     one turn. "after this one" is required for the same reason — it is what
     says the turns are taken immediately, and a card that placed it elsewhere
     would be a different effect.
+
+    *player* is the printed subject when the sentence has one, handed in by
+    ``subject_verb`` with the cursor on the verb. Absent, the subject is the
+    effect's controller (CR 109.5) — the bare imperative every other card in
+    this family prints. One production either way: who takes the turn is the
+    node's own field, and a second production would be the same sentence read
+    twice.
     """
-    stream.expect_word("take")
+    stream.expect_word("take", "takes")
     if stream.accept_word("an"):
         count = 1
     else:
@@ -373,7 +383,7 @@ def _parse_extra_turn(stream: TokenStream) -> ast.Statement:
     stream.expect_word("turn", "turns")
     if not stream.accept_phrase("after", "this", "one"):
         raise stream.error("expected 'after this one'")
-    return ast.ExtraTurn(ast.PlayerRef("you"), count)
+    return ast.ExtraTurn(player or ast.PlayerRef("you"), count)
 
 
 #: The phases a printed "additional <x> phase" can name, and the engine phase

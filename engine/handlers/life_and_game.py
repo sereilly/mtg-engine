@@ -687,16 +687,28 @@ EXTRA_TURN_GRANTED = "extra_turn_granted"
 
 @effect_handler("grant_extra_turn")
 def grant_extra_turn(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    caster = context.caster
-    caster_index = game.players.index(caster)
+    # Who takes the turn. "Target player takes an extra turn after this one."
+    # (Time Warp) names a seat; every other printing in this pool names none
+    # and means the effect's controller (CR 109.5). The payload key is the
+    # same ``recipient`` every other seat-affecting kind carries, so
+    # ``targeting.py`` derives the picker from it rather than from the kind —
+    # a flat "this kind targets a player" row would have put a prompt in front
+    # of Time Walk.
+    taker = (
+        context.target
+        if instruction.payload.get("recipient") == "target"
+        and context.target is not None
+        else context.caster
+    )
+    taker_index = game.players.index(taker)
     # "Take two extra turns after this one." (Teferi, Master of Time) — each
     # queued turn is its own CR 500.7 insertion.
     count = int(instruction.payload.get("count", 1))
     for _ in range(count):
-        game.add_extra_turn(caster_index)
+        game.add_extra_turn(taker_index)
     game.log.append(
-        f"{caster.name} gained an extra turn" if count == 1
-        else f"{caster.name} gained {count} extra turns"
+        f"{taker.name} gained an extra turn" if count == 1
+        else f"{taker.name} gained {count} extra turns"
     )
     # "…At the beginning of **that turn's** end step, you lose the game."
     # (Final Fortune.) The sentence behind this one refers back to the turn

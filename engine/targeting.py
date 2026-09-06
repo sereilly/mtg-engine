@@ -1030,6 +1030,21 @@ def _player_recipient_spec(payload: dict) -> dict | None:
     return _from_targets_payload(payload.get("targets")) or {"kind": "player"}
 
 
+def _extra_turn_spec(payload: dict) -> dict | None:
+    """Who takes the extra turn, or None when the sentence chooses nobody.
+
+    :func:`_life_gain_spec`'s reading one kind over, and here for its reason
+    exactly: "**Target player** takes an extra turn after this one" (Time Warp)
+    picks a seat and "Take an extra turn after this one" (Time Walk, Time
+    Vault) picks none, and the kind alone cannot tell them apart. A flat
+    ``{"kind": "player"}`` row would have raised a player picker in front of
+    Time Walk, whose handler then ignores whatever was clicked.
+    """
+    if payload.get("recipient") != "target":
+        return None
+    return _from_targets_payload(payload.get("targets")) or {"kind": "player"}
+
+
 def _look_top_pick_spec(payload: dict) -> dict | None:
     """The seat this look-top pick chooses, or None for the cards choosing none.
 
@@ -1611,6 +1626,7 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     "target_gains_life": _life_gain_spec,
     "target_loses_life": _player_recipient_spec,
     "mill_target_player": _player_recipient_spec,
+    "grant_extra_turn": _extra_turn_spec,
     "counter_top_stack_spell": _counter_spec,
     "counter_stack_ability": _counter_ability_spec,
     "choose_permanent": _chosen_permanent_spec,

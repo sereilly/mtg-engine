@@ -27,21 +27,29 @@ from ._seats import _player_recipient
 
 
 def _lower_extra_turn(node: ast.ExtraTurn) -> tuple[OracleInstruction, ...]:
-    """"Take an extra turn after this one." (Time Walk) / "Take two extra
-    turns after this one." (Teferi, Master of Time.)
+    """"Take an extra turn after this one." (Time Walk) / "**Target player** takes
+    an extra turn after this one." (Time Warp.)
 
-    ``grant_extra_turn`` queues the turns for the effect's *controller*; it
-    takes no player argument. A card handing the extra turn to someone else is
-    a different effect, so it is refused rather than lowered onto a handler
-    that would give the turn to the wrong player. The count rides in the
-    payload only when it is not 1, keeping the single-turn payload byte-equal
-    with what the pool has always compiled to.
+    ``grant_extra_turn`` queues the turns for a seat, and which seat is the
+    payload's ``recipient`` — absent for the effect's own controller, which is
+    what every card but Time Warp prints, and ``"target"`` for the one that
+    names somebody. Absent rather than ``"you"`` so the single-turn payload
+    stays byte-equal with what the pool has always compiled to, and so
+    ``targeting.py`` can tell a spell that picks a seat from one that picks
+    nothing — the twelve-card mistake ``_player_recipient_spec`` records.
+
+    Every other subject is refused rather than lowered onto a handler that
+    would give the turn to the wrong player: "each player takes an extra turn"
+    is several insertions in APNAP order (CR 500.7) and no card in this pool
+    prints it.
     """
-    if node.player.kind != "you":
+    payload: dict[str, object] = {}
+    if node.player.kind in ("target_player", "target_opponent"):
+        payload["recipient"] = "target"
+    elif node.player.kind != "you":
         raise LoweringError(
             f"no handler for {node.player.kind!r} taking an extra turn", node=node
         )
-    payload: dict[str, object] = {}
     if node.count != 1:
         payload["count"] = node.count
     return (OracleInstruction("grant_extra_turn", "", payload),)

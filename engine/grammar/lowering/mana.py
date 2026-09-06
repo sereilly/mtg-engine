@@ -354,6 +354,14 @@ def _lower_add_mana(
         # of the ability are in hand.
         payload["any_type_from"] = node.any_type_from
         return (OracleInstruction("add_mana_from_text", "", payload),)
+    if node.any_type_from_lands is not None:
+        # "…of any type **that a land you control** could produce" (Reflecting
+        # Pool). A board rather than a cost payment, so there is nothing to gate
+        # on — an ability naming a board is answerable on any board, including
+        # an empty one, where CR 106.7 says it produces no mana at all. Which
+        # board is payload for the reason every printed word in this family is.
+        payload["any_type_from_lands"] = node.any_type_from_lands
+        return (OracleInstruction("add_mana_from_text", "", payload),)
     if node.any_color_from is not None:
         # "…that a land an opponent controls could produce" (Fellwar Stone).
         # Which board narrows the choice, carried so the handler and the colour

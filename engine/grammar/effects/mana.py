@@ -424,6 +424,20 @@ def _parse_add_mana(stream: TokenStream) -> ast.Statement:
             reference = "cost_untapped_land"
         elif stream.accept_phrase("the", "sacrificed", "land", "could", "produce"):
             reference = "cost_sacrificed_land"
+        elif stream.accept_phrase(
+            "that", "a", "land", "you", "control", "could", "produce"
+        ):
+            # "…of any type **that a land you control** could produce."
+            # (Reflecting Pool.) A described *board* rather than a
+            # back-reference to what this ability's cost paid, which is why it
+            # rides its own node field: the two back-references above are
+            # refused on an ability whose cost makes no such payment, and this
+            # sentence makes none to refuse. The mirror of Fellwar Stone's
+            # colour phrase one branch below, one CR 106.1b type wider.
+            return ast.AddMana(
+                (), any_color=count, source_text=_clause(),
+                any_type_from_lands="controlled_lands",
+            )
         else:
             raise stream.error(
                 "the only mana type this reads is one a named land could produce"

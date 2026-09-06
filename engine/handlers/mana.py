@@ -706,6 +706,30 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
                 f"({land.card.name} could make it)"
             )
             return True, "resolved"
+        # "…of any type **that a land you control** could produce" (Reflecting
+        # Pool). CR 106.7's fixpoint over this seat's own board, which is what
+        # keeps the Pool from reading *itself*: Scryfall records its
+        # ``produced_mana`` as all five colours, so a plain union would let a
+        # lone Reflecting Pool tap for anything.
+        from_own_lands = instruction.payload.get("any_type_from_lands")
+        if from_own_lands is not None:
+            from ..mana_could_produce import types_a_land_you_control_could_produce
+
+            seat = game.players.index(caster)
+            available = types_a_land_you_control_could_produce(game, seat)
+            if not available:
+                game.log.append(
+                    f"{card.name}: no land you control could produce any mana"
+                )
+                return True, "resolved"
+            if symbol not in available:
+                # CR 608.2d again: the choice is among the types the board
+                # offers, re-checked here rather than trusted from the picker.
+                symbol = sorted(available)[0]
+            if amount > 0:
+                caster.mana_pool[symbol] += amount
+            game.log.append(f"{card.name} produced {amount} {symbol} mana")
+            return True, "resolved"
         narrowed_to = instruction.payload.get("any_color_from")
         if narrowed_to is not None:
             available = _colors_opponents_lands_produce(game, caster)
@@ -878,25 +902,20 @@ def _colors_opponents_lands_produce(game, caster) -> frozenset[str]:
     """The colours "a land an opponent controls could produce" names (Fellwar
     Stone).
 
-    Through the control seam, because "controls" is a seat question (CR 109.5)
-    and ``player.battlefield`` is only a projection of it - and through
-    ``has_type`` for the land test, so an animated land still counts and a
-    permanent that stopped being one does not (CR 613 layer 4).
-
-    The per-card answer is ``commander.produced_mana_colors``, which was already
-    the engine's one reader of "what colours could this land make". A second
-    copy here would be a second answer to one question, and the direction it
-    would drift is a Stone that taps for a colour no opponent can make.
+    Asked of ``engine/mana_could_produce.py``, which is CR 106.7's own reading
+    and the reader Reflecting Pool's phrase uses. This was a scan of
+    ``commander.produced_mana_colors`` over the opponents' lands, which is the
+    right answer for every land that says what it makes and the wrong one for a
+    land that derives it: Scryfall records Reflecting Pool's ``produced_mana``
+    as all five colours, so an opponent's lone Pool made this Stone tap for
+    anything. CR 106.7 answers "no type of mana can be defined this way", and
+    its own example is a board of nothing but these cards.
     """
-    from ..commander import produced_mana_colors
+    from ..mana_could_produce import colors_a_land_an_opponent_controls_could_produce
 
-    seat = game.players.index(caster)
-    colors: set[str] = set()
-    for opponent in game.opponents_of(seat):
-        for perm in game.controlled_by(opponent):
-            if perm.has_type("land"):
-                colors |= produced_mana_colors(perm.effective_card)
-    return frozenset(colors)
+    return colors_a_land_an_opponent_controls_could_produce(
+        game, game.players.index(caster)
+    )
 
 
 @effect_handler("note_mana_spent")
