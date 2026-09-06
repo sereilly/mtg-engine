@@ -703,3 +703,155 @@ def test_w1g5_recycle_sets_its_controllers_maximum_hand_size(set_pool):
 
     game.remove_from_battlefield(recycle)
     assert maximum_hand_size(game, 0) == 7, "CR 611.3a: the static ends with it"
+
+
+# --- W2G3: board-wide statics, replacements and prohibitions ---
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+from engine.replacements import damage_multiplier_line
+
+
+def _w2g3e_game(*battlefields):
+    seats = [
+        PlayerState(name=f"P{index + 1}", battlefield=list(permanents))
+        for index, permanents in enumerate(battlefields)
+    ]
+    game = Game(players=seats)
+    game.enforce_mana_costs = False
+    return game
+
+
+def test_root_maze_taps_artifacts_and_lands_on_every_battlefield(set_pool, catalog_by_name):
+    """"Artifacts and lands enter tapped." (CR 614.1d.)
+
+    ``engine/enter_tapped_statics.py`` named Root Maze in its own docstring and
+    then refused it: a phrase naming no controller was declined on the stated
+    ground that nobody had printed one. Tempest is the set that had. Nothing
+    about the reading needed inventing — ``subject_matches`` with no
+    ``controller`` key asks about the type alone, which is what the sentence
+    says.
+    """
+    maze = Permanent(card=set_pool("TMP")["Root Maze"])
+    game = _w2g3e_game([maze], [])
+    game.players[0].hand = [catalog_by_name["Mox Pearl"], catalog_by_name["Forest"]]
+    game.players[1].hand = [catalog_by_name["Black Lotus"], catalog_by_name["Island"]]
+    game.start_turn(0)
+
+    game.cast_from_hand(0, "Mox Pearl")
+    game._settle()
+    game.cast_from_hand(0, "Forest")
+
+    tapped = {p.card.name: p.tapped for p in game.players[0].battlefield}
+    assert tapped["Mox Pearl"] is True
+    assert tapped["Forest"] is True
+    assert tapped["Root Maze"] is False, "the Maze is neither an artifact nor a land"
+
+    game.start_turn(1)
+    game.cast_from_hand(1, "Black Lotus")
+    game._settle()
+    game.cast_from_hand(1, "Island")
+
+    theirs = {p.card.name: p.tapped for p in game.players[1].battlefield}
+    assert theirs == {"Black Lotus": True, "Island": True}, (
+        "the sentence names no controller, so it is everyone's"
+    )
+
+
+def test_root_maze_leaves_a_creature_alone(set_pool, catalog_by_name):
+    """The narrowing that *is* printed. A filter admitted with its type list
+    dropped would tap everything, which is the direction an entry static must
+    never take."""
+    maze = Permanent(card=set_pool("TMP")["Root Maze"])
+    game = _w2g3e_game([maze], [])
+    game.players[0].hand = [catalog_by_name["Grizzly Bears"]]
+    game.start_turn(0)
+
+    game.cast_from_hand(0, "Grizzly Bears")
+    game._settle()
+
+    bear = next(p for p in game.players[0].battlefield if p.card.name == "Grizzly Bears")
+    assert not bear.tapped
+
+
+def test_furnace_of_rath_doubles_an_opponents_spell(set_pool, catalog_by_name):
+    """"If **a source** would deal damage to a permanent or player, it deals
+    **double** that damage to that permanent or player instead."
+
+    The whole difference from Fiery Emancipation is the narrowing Furnace does
+    not have: the Emancipation says "a source **you control**" and this says
+    nothing, so it doubles the damage its own controller is dealt. A reading
+    that carried the seat over from the card already implemented would have got
+    every board with one player on it right and this one wrong.
+    """
+    furnace = Permanent(card=set_pool("TMP")["Furnace of Rath"])
+    game = _w2g3e_game([furnace], [])
+    game.players[1].hand = [catalog_by_name["Lightning Bolt"]]
+    game.active_player_index = 1
+
+    game.cast_from_hand(1, "Lightning Bolt", target_player_index=0)
+    game._settle()
+
+    assert game.players[0].life == 14, game.log
+
+
+def test_furnace_of_rath_doubles_its_controllers_own_spell(set_pool, catalog_by_name):
+    """And the other half of "a source": the symmetry is the card."""
+    furnace = Permanent(card=set_pool("TMP")["Furnace of Rath"])
+    game = _w2g3e_game([furnace], [])
+    game.players[0].hand = [catalog_by_name["Lightning Bolt"]]
+    game.active_player_index = 0
+
+    game.cast_from_hand(0, "Lightning Bolt", target_player_index=1)
+    game._settle()
+
+    assert game.players[1].life == 14, game.log
+
+
+def test_two_multipliers_compose(set_pool, catalog_by_name):
+    """A Furnace beside a Fiery Emancipation is ×6. CR 616.1 applies them one
+    at a time and lets the affected player choose the order; multiplication
+    does not care, so one interceptor taking the product is the same game —
+    and one that returned a single card's factor would drop the other, because
+    an effect applies once per event."""
+    furnace = Permanent(card=set_pool("TMP")["Furnace of Rath"])
+    emancipation = Permanent(card=set_pool("M21")["Fiery Emancipation"])
+    game = _w2g3e_game([furnace, emancipation], [])
+    game.players[0].hand = [catalog_by_name["Lightning Bolt"]]
+    game.active_player_index = 0
+
+    game.cast_from_hand(0, "Lightning Bolt", target_player_index=1)
+    game._settle()
+
+    assert game.players[1].life == 2, game.log
+
+
+def test_the_emancipations_narrowing_survives_the_generalisation(set_pool, catalog_by_name):
+    """The regression the shape reader could have caused: read as one sentence
+    with two payload words, "a source you control" must still mean one seat.
+    P2 casts; P1 holds the Emancipation and nothing else."""
+    emancipation = Permanent(card=set_pool("M21")["Fiery Emancipation"])
+    game = _w2g3e_game([emancipation], [])
+    game.players[1].hand = [catalog_by_name["Lightning Bolt"]]
+    game.active_player_index = 1
+
+    game.cast_from_hand(1, "Lightning Bolt", target_player_index=0)
+    game._settle()
+
+    assert game.players[0].life == 17, "untouched: the source is not P1's"
+
+
+def test_the_multiplier_line_is_read_as_a_shape(set_pool):
+    """Both printings through the one reader the interceptor and the support
+    gate ask, so what is claimed and what fires cannot drift."""
+    assert damage_multiplier_line(
+        "If a source would deal damage to a permanent or player, it deals "
+        "double that damage to that permanent or player instead."
+    ) == (2, False)
+    assert damage_multiplier_line(
+        "If a source you control would deal damage to a permanent or player, "
+        "it deals triple that damage to that permanent or player instead."
+    ) == (3, True)
+    assert damage_multiplier_line("If a source would deal damage, prevent it.") is None
+    assert compile_card_oracle(set_pool("TMP")["Furnace of Rath"]).supported

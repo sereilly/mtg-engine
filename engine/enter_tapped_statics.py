@@ -62,12 +62,18 @@ def enter_tapped_static_for(normalized_line: str) -> dict | None:
         return None
     if untestable_filter_keys(payload):
         return None
-    # A phrase naming no controller ("Creatures enter tapped") would be every
-    # creature including the source's own, which is a card nobody has printed;
-    # refusing keeps the reading the printed cards actually have rather than
-    # guessing at one.
-    if payload.get("controller") is None:
-        return None
+    # A phrase naming **no** controller is every such permanent on every
+    # battlefield, the source's controller's included: "Artifacts and lands
+    # enter tapped" (Root Maze). This used to refuse, on the stated ground that
+    # nobody had printed one — a refusal whose reason expired the moment a set
+    # arrived that had. It costs nothing to admit: ``subject_matches`` with no
+    # ``controller`` key asks about the type alone, which is what the sentence
+    # says, and the observer the caller passes is then read by nothing.
+    #
+    # Including, per CR 614.12, the source itself where the phrase names its own
+    # type — a replacement modifying how a permanent enters may come from the
+    # object that is entering. No printed card does both today; the reading is
+    # stated rather than guarded so a card that does gets the rule's answer.
     return payload
 
 

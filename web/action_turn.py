@@ -7,6 +7,7 @@ an AI turn forward.
 
 from __future__ import annotations
 
+from engine.untap_restrictions import permanent_in_limited_scope
 from engine.upkeep_costs import cost_from_payload
 from fastapi import HTTPException
 
@@ -142,7 +143,10 @@ def _action_untap_select(session, req, seat_type):
             permanent = battlefield[idx]
             limits = options.get("limits") or {}
             return next(
-                (t for t in sorted(limits) if permanent.has_type(t)),
+                (
+                    t for t in sorted(limits)
+                    if permanent_in_limited_scope(permanent, t)
+                ),
                 permanent.card.primary_type,
             )
 
@@ -193,11 +197,11 @@ def _action_untap_confirm(session, req, seat_type):
         card_type: [
             i for i in selected
             if 0 <= i < len(battlefield)
-            # `has_type`, matching the engine's own check — an artifact
-            # creature answers to both Damping Field's limit and Smoke's, and a
-            # split that disagreed would hand the resolver a selection it then
-            # rejected.
-            and battlefield[i].has_type(card_type)
+            # The engine's own scope predicate, not a second spelling of it —
+            # an artifact creature answers to both Damping Field's limit and
+            # Smoke's, every permanent answers to Static Orb's, and a split that
+            # disagreed would hand the resolver a selection it then rejected.
+            and permanent_in_limited_scope(battlefield[i], card_type)
         ]
         for card_type in (options.get("limits") or {})
     }

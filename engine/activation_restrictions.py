@@ -619,9 +619,43 @@ def _opponents_turn_before_attackers(game: "Game", controller_index: int, source
     return _before_attackers_are_declared(game, controller_index, source)
 
 
-def _exactly_seven_cards_in_hand(game: "Game", controller_index: int, source) -> bool:
-    """Library of Alexandria's draw ability."""
-    return len(game.players[controller_index].hand) == 7
+def _printed_hand_count(match: "re.Match[str]") -> int | None:
+    """The hand size the clause names, or None when the word is not a number.
+
+    "**no** cards in hand" (Fool's Tome) and "exactly **seven** cards in hand"
+    (Library of Alexandria) are one sentence with the number changed, so they
+    are one row and the number is payload — the shape every other parameterised
+    row in this table has. Written as its own reader because both the predicate
+    and :attr:`ActivationRestriction.payload_readable` ask it, and a row that
+    admitted a count word it could not turn into a number would refuse every
+    activation, silently.
+    """
+    from .oracle_types import _NUMBER_WORDS
+
+    word = match.group("count")
+    if word == "no":
+        return 0
+    word = word.split(" ", 1)[1] if " " in word else word
+    return int(word) if word.isdigit() else _NUMBER_WORDS.get(word)
+
+
+def _readable_hand_count(match: "re.Match[str]") -> bool:
+    return _printed_hand_count(match) is not None
+
+
+def _exact_cards_in_hand(
+    game: "Game", controller_index: int, source, match: "re.Match[str]"
+) -> bool:
+    """"Activate only if you have <N> cards in hand." (Fool's Tome, Library of
+    Alexandria.)
+
+    Both printed spellings state an **exact** size rather than a bound, so one
+    comparison answers both. A card printing "or more" / "or fewer" would be a
+    different sentence and would want its own row; this pattern does not admit
+    one, which is what keeps that from being read as this.
+    """
+    wanted = _printed_hand_count(match)
+    return wanted is not None and len(game.players[controller_index].hand) == wanted
 
 
 def _controlled_since_your_last_turn(game: "Game", controller_index: int, source) -> bool:
@@ -1498,10 +1532,20 @@ ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
         _before_blockers_are_declared,
         "only before blockers are declared",
     ),
+    # "Activate only if you have **no** cards in hand" (Fool's Tome) and
+    # "…**exactly seven** cards in hand" (Library of Alexandria). One row: the
+    # sentence is the same rule with the number changed, and the number is
+    # payload for the reason every parameterised row here gives — the next card
+    # to print it about another count costs nothing.
     ActivationRestriction(
-        re.compile(r"^activate only if you have exactly seven cards in hand$"),
-        _exactly_seven_cards_in_hand,
-        "only with exactly seven cards in hand",
+        re.compile(
+            r"^activate only if you have (?P<count>no|exactly \w+) "
+            r"cards? in hand$"
+        ),
+        _exact_cards_in_hand,
+        "you don't have that many cards in hand",
+        reads_payload=True,
+        payload_readable=_readable_hand_count,
     ),
     ActivationRestriction(
         re.compile(

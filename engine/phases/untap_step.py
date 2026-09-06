@@ -22,8 +22,10 @@ from ..named_counters import counters_on
 from ..turn_state import record_turn_start_states
 from ..turn_state import attacked_during_seats_last_turn
 from ..untap_restrictions import (
+    LIMITED_SCOPES,
     SELF_DOESNT_UNTAP_PHRASE,
     SELF_MAY_KEEP_TAPPED_PHRASE,
+    permanent_in_limited_scope,
     self_untap_attacked_last_turn,
     self_untap_counter_condition,
     self_untap_line,
@@ -31,10 +33,12 @@ from ..untap_restrictions import (
 )
 
 
-#: The card types a "can't untap more than N" restriction may name. The untap
-#: step asks each one separately, so a card printed with any of them needs no
-#: code here — only a row in engine/untap_restrictions.py.
-_LIMITED_TYPES = ("land", "creature", "artifact")
+#: The scopes a "can't untap more than N" restriction may name. The untap step
+#: asks each one separately, so a card printed with any of them needs no code
+#: here — only a row in engine/untap_restrictions.py. Imported from that module
+#: rather than spelled again: the row that produces the scope and the step that
+#: enforces it disagreeing is a cap read off a card and then applied to nothing.
+_LIMITED_TYPES = LIMITED_SCOPES
 
 
 def _holds_a_live_untap_lock(game, permanent) -> bool:
@@ -224,7 +228,7 @@ class UntapStepMixin:
         """
         return [
             idx for idx, perm in enumerate(player.battlefield)
-            if perm.tapped and perm.has_type(card_type)
+            if perm.tapped and permanent_in_limited_scope(perm, card_type)
         ]
 
     def get_optional_untap_permanents(self, player_index: int) -> list[dict]:
@@ -325,7 +329,12 @@ class UntapStepMixin:
                 if idx < 0 or idx >= len(player.battlefield):
                     raise ValueError(f"selected {card_type} index out of range")
                 permanent = player.battlefield[idx]
-                if permanent.card.primary_type != card_type:
+                # Through the scope predicate, which is also what
+                # `_tapped_indices_of_type` offered the caller — and which
+                # answers CR 110.1's "permanent" (Static Orb), a word no type
+                # line carries. `primary_type` was the third reader of this
+                # question and the narrowest of the three.
+                if not permanent_in_limited_scope(permanent, card_type):
                     raise ValueError(f"selected permanent is not a {card_type}")
                 if not permanent.tapped:
                     continue
@@ -449,7 +458,9 @@ class UntapStepMixin:
             # the layers for the reason `_tapped_indices_of_type` gives — an
             # artifact creature is under both Damping Field's limit and
             # Smoke's, and each has to see it.
-            applicable = [t for t in limits if permanent.has_type(t)]
+            applicable = [
+                t for t in limits if permanent_in_limited_scope(permanent, t)
+            ]
             if any(
                 (selected.get(t) is not None and idx not in selected[t])
                 or untapped_by_type.get(t, 0) >= limits[t]

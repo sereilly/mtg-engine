@@ -169,3 +169,173 @@ def test_w1g5_cold_storage_returns_only_the_creature_cards_it_exiled(set_pool):
     assert [entry["card"].name for entry in linked_entries(storage)] == ["Relic"], (
         "the artifact the sentence does not name stays exiled with the pile"
     )
+
+
+# --- W2G3: the untap cap and the empty-hand gate ---
+
+from engine import Game, PlayerState
+from engine.activation_restrictions import activation_denial
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+from engine.untap_restrictions import untap_restriction_for
+
+
+def _w2g3a_game(*battlefields, catalog=None):
+    """A two-seat game with each seat's permanents already down.
+
+    Mana costs off: every test in this block is about a restriction rather
+    than about paying for one.
+    """
+    seats = [
+        PlayerState(name=f"P{index + 1}", battlefield=list(permanents))
+        for index, permanents in enumerate(battlefields)
+    ]
+    game = Game(players=seats)
+    game.enforce_mana_costs = False
+    return game
+
+
+def test_static_orb_caps_the_untap_step_at_two_permanents(set_pool, catalog_by_name):
+    """"Players can't untap more than two **permanents** during their untap
+    steps."
+
+    CR 110.1 makes every battlefield object a permanent, so this is not a card
+    type and ``Permanent.has_type`` has nothing to answer with — which is why
+    the row went unread for the whole of wave 1 and the card reported
+    unsupported. The cap is one scope word beside land / creature / artifact,
+    and the untap step's per-type machinery does the rest.
+    """
+    orb = Permanent(card=set_pool("TMP")["Static Orb"])
+    lands = [Permanent(card=catalog_by_name["Forest"]) for _ in range(3)]
+    bears = [Permanent(card=catalog_by_name["Grizzly Bears"]) for _ in range(2)]
+    game = _w2g3a_game([orb] + lands + bears, [])
+
+    for permanent in game.players[0].battlefield:
+        permanent.tapped = True
+    orb.tapped = False
+
+    assert game.resolve_untap_step(0) == 2, game.log
+    # Across *types*, not two of each: the cap names permanents.
+    assert sum(1 for p in game.players[0].battlefield if not p.tapped) == 3
+
+
+def test_static_orb_offers_every_tapped_permanent_as_the_choice(set_pool, catalog_by_name):
+    """The cap is a choice the untapping player makes (CR 502.3), so the
+    candidate list the browser is offered has to be every tapped permanent —
+    not the tapped *lands*, which is what a scope read as a card type would
+    have produced.
+    """
+    orb = Permanent(card=set_pool("TMP")["Static Orb"])
+    land = Permanent(card=catalog_by_name["Forest"])
+    bear = Permanent(card=catalog_by_name["Grizzly Bears"])
+    mox = Permanent(card=catalog_by_name["Mox Jet"])
+    game = _w2g3a_game([orb, land, bear, mox], [])
+    for permanent in (land, bear, mox):
+        permanent.tapped = True
+
+    options = game.get_untap_land_selection_options(0)
+
+    assert options["limits"] == {"permanent": 2}
+    assert options["max_count"] == 2
+    assert options["candidate_indices"] == [1, 2, 3]
+
+
+def test_static_orb_stops_restricting_while_it_is_tapped(set_pool, catalog_by_name):
+    """"**As long as this artifact is untapped**" — the qualifier the table
+    already stripped, kept honest for the new scope."""
+    orb = Permanent(card=set_pool("TMP")["Static Orb"])
+    lands = [Permanent(card=catalog_by_name["Forest"]) for _ in range(4)]
+    game = _w2g3a_game([orb] + lands, [])
+    for permanent in game.players[0].battlefield:
+        permanent.tapped = True
+
+    assert game.resolve_untap_step(0) == 5, "the Orb was tapped, so nothing capped"
+
+
+def test_static_orb_and_winter_orb_are_both_read(set_pool, catalog_by_name):
+    """Two caps in force at once, one over lands and one over everything. The
+    step asks each scope separately, so a land is under both and the tighter
+    one is what it obeys."""
+    orb = Permanent(card=set_pool("TMP")["Static Orb"])
+    winter = Permanent(card=catalog_by_name["Winter Orb"])
+    lands = [Permanent(card=catalog_by_name["Forest"]) for _ in range(3)]
+    bears = [Permanent(card=catalog_by_name["Grizzly Bears"]) for _ in range(2)]
+    game = _w2g3a_game([orb, winter] + lands + bears, [])
+    for permanent in game.players[0].battlefield:
+        permanent.tapped = True
+    orb.tapped = False
+    winter.tapped = False
+
+    assert game.resolve_untap_step(0) == 2, "Static Orb's cap over everything"
+
+    untapped = [p.card.name for p in game.players[0].battlefield if not p.tapped]
+    assert untapped.count("Forest") == 1, "Winter Orb allows one land"
+    assert untapped.count("Grizzly Bears") == 1, "and the second slot went elsewhere"
+
+
+def test_static_orbs_restriction_is_the_one_the_table_reads(set_pool):
+    """The scope word and the number, off the printed line — so a card printed
+    "more than three permanents" needs no code."""
+    orb = set_pool("TMP")["Static Orb"]
+    restriction = untap_restriction_for(orb.oracle_text)
+
+    assert restriction.scope == "permanent"
+    assert restriction.limit == 2
+    assert restriction.only_while_source_untapped is True
+    assert compile_card_oracle(orb).supported
+
+
+def test_fools_tome_refuses_to_draw_while_you_hold_a_card(set_pool, catalog_by_name):
+    """"Activate only if you have no cards in hand."
+
+    The failure this file's own module docstring names: an unenforced
+    restriction is not a dead ability, it is one that works more often than the
+    card allows. The clause is a row in ``engine/activation_restrictions.py``
+    and the support gate reads the same row, so a Tome that could be tapped
+    with a hand full of cards would be unsupported rather than silently
+    generous.
+    """
+    tome = Permanent(card=set_pool("TMP")["Fool's Tome"])
+    game = _w2g3a_game([tome], [])
+    game.players[0].hand = [catalog_by_name["Forest"]]
+    game.players[0].library = [catalog_by_name["Island"], catalog_by_name["Plains"]]
+    game.start_turn(0)
+
+    result = game.activate_permanent_ability(0, "Fool's Tome", permanent_index=0)
+
+    assert not result.supported
+    assert "cards in hand" in result.details
+    assert len(game.players[0].hand) == 1, "nothing was drawn"
+    assert not tome.tapped, "and nothing was paid"
+
+
+def test_fools_tome_draws_with_an_empty_hand(set_pool, catalog_by_name):
+    """The other half. A restriction row that answered "no" for every board
+    would be this file's failure mode pointed the other way."""
+    tome = Permanent(card=set_pool("TMP")["Fool's Tome"])
+    game = _w2g3a_game([tome], [])
+    game.players[0].library = [catalog_by_name["Island"], catalog_by_name["Plains"]]
+    game.start_turn(0)
+
+    result = game.activate_permanent_ability(0, "Fool's Tome", permanent_index=0)
+    game._settle()
+
+    assert result.supported, result.details
+    assert len(game.players[0].hand) == 1
+    assert tome.tapped
+
+
+def test_the_hand_count_clause_is_one_row_for_both_printings(set_pool, catalog_by_name):
+    """Library of Alexandria's "exactly seven" and the Tome's "no" are one
+    sentence with the number changed, so they are one row and the number is
+    payload — the shape every parameterised row in that table has."""
+    tome = Permanent(card=set_pool("TMP")["Fool's Tome"])
+    game = _w2g3a_game([tome], [])
+    game.players[0].hand = [catalog_by_name["Forest"]] * 7
+
+    assert activation_denial(
+        game, 0, tome, "Activate only if you have exactly seven cards in hand."
+    ) is None
+    assert activation_denial(
+        game, 0, tome, "Activate only if you have no cards in hand."
+    ) is not None
