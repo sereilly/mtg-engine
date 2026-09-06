@@ -776,6 +776,21 @@ _KIND_TO_SPEC: dict[str, dict] = {
     # Shyft: the same positive "nothing to point at" — the sentence names
     # the source itself, so no picker is offered and none is missing.
     "recolor_self_chosen_color": {"kind": "none"},
+    # "This creature gains protection from **the color of your choice** until
+    # end of turn." (Knight of Dawn.) The third of the same positive answer,
+    # and the one that shows what the row is actually *for*: "of your choice"
+    # is the phrase a target probe watches for, and here it names a
+    # **characteristic** rather than an object. CR 608.2d makes a colour part
+    # of the resolution and the word rides `mana_color` like every other one;
+    # the permanent it applies to is the ability's own source, which nobody
+    # chooses. So there is nothing to point at, and saying so positively is
+    # what lets a guard tell "this ability targets nothing" from "the
+    # derivation lost its evidence".
+    #
+    # The row is the *kind's*, not the card's — every "this creature gains
+    # <keyword> until end of turn" in the pool names its own source, whether
+    # the keyword is printed (Fetid Imp's deathtouch) or chosen.
+    "grant_self_keyword_until_eot": {"kind": "none"},
     "tap_or_untap_target": {"kind": "permanent"},
     "tap_target_player_lands_and_drain_mana": {"kind": "player"},
     # Phyrexian Furnace: "{T}: Exile the bottom card of **target player's**
@@ -2840,7 +2855,15 @@ def derive_activation_spec(ability) -> dict | None:
         target_spec.get("sacrifice_cost") or target_spec.get("discard_cost")
     ):
         return target_spec
-    if target_spec is None:
+    # …and an ability that points at **nothing** is the same case: the cost
+    # picker is the whole prompt. Two spellings reach here — ``None`` (the
+    # program carries no evidence) and ``{"kind": "none"}`` (the derivation
+    # saying positively that the sentence chooses nothing, which
+    # ``grant_self_keyword_until_eot`` now does) — and they are one answer to
+    # this question. Seasoned Hallowblade is the card that says so: "{1},
+    # Discard a card: This creature gains indestructible until end of turn."
+    # names no target at all, and its prompt is the discard.
+    if target_spec is None or target_spec.get("kind") == "none":
         return cost_spec
     # Dwarven Weaponsmith: a real target *and* a cost, which CR 601.2c and
     # CR 601.2b make two separate announcements carrying two separate fields.
@@ -3219,6 +3242,25 @@ _OTHERS_TARGETING = re.compile(r"(?:spells|abilities)[^.]*? that (?:can )?target
 # end of the clause, which every printing in the pool ends at the sentence.
 _CANT_BE_TARGETED = re.compile(r"can't be the targets? of[^.;]*")
 
+# A **granted quoted ability** — All Slivers have "{2}, Sacrifice this
+# permanent: Target player discards a card at random." (Mindwhip Sliver). The
+# quotation marks are the card handing an ability to somebody else, and the
+# target inside them is chosen when *that* ability is activated (CR 602.2b),
+# never as this creature is cast. `legality._cast_lines` cannot drop the line:
+# it splits on the activated-ability cost syntax, and this line opens with
+# "All Slivers have", so the whole grant reads as a cast effect.
+#
+# Erased rather than vetoed, for `_CANT_BE_TARGETED`'s reason exactly: a
+# printed sentence may grant a quoted ability *and* target something itself
+# ("Target creature gains “{T}: ...” until end of turn"), and a veto
+# would read such a line as naming nothing at all. The activation-side probe in
+# ``tests/engine/test_activation_targeting.py`` has stripped quoted text since
+# Liliana's emblem for the same reason, one level down; this is the half that
+# was missing on the cast side.
+#: Both the straight and the curly pair, because the ingested oracle text
+#: prints the curly ones and a hand-written test fixture prints the straight.
+_QUOTED_ABILITY = re.compile("[\"“][^\"”]*[\"”]")
+
 
 def line_names_a_cast_target(line: str) -> bool:
     """Whether *line* names a target the caster chooses as the spell is cast.
@@ -3240,9 +3282,11 @@ def line_names_a_cast_target(line: str) -> bool:
         or _OTHERS_TARGETING.search(line)
     ):
         return False
-    # Last, because it subtracts rather than vetoes: whatever the prohibition
-    # does not cover still has to name a target for this to be one.
-    return bool(_TARGET_WORD.search(_CANT_BE_TARGETED.sub("", line)))
+    # Last, because these subtract rather than veto: whatever the prohibition
+    # and the quoted grant do not cover still has to name a target for this to
+    # be one.
+    remaining = _QUOTED_ABILITY.sub("", _CANT_BE_TARGETED.sub("", line))
+    return bool(_TARGET_WORD.search(remaining))
 
 
 def cast_picker_expected(card, program) -> bool:

@@ -267,13 +267,32 @@ def _activation_spec(abilities) -> tuple[dict, object | None]:
     single-ability permanent shows. Scanning in order is what makes the two
     agree: a mana ability chooses nothing, so Desert's default prompt is its
     damage ability's, exactly as it was when a per-card cascade produced it.
+
+    **"Chooses nothing" has two spellings and the scan must treat them alike.**
+    ``None`` is "no evidence in the program"; ``{"kind": "none"}`` is the
+    derivation saying *positively* that the ability points at nothing (Dream
+    Coat's colour, Knight of Dawn's). Returning the second one the moment it is
+    seen would end the scan on an ability that chooses nothing — which is the
+    thing this loop exists to skip past — so a permanent whose first ability
+    recolours itself and whose second destroys a creature would show the
+    first's empty prompt. The positive answer is kept and returned only when no
+    later ability chooses anything, so it still reaches a caller that asked
+    about that one ability alone.
     """
+    nothing_to_point_at = None
     for ability in abilities:
         spec = derive_activation_spec(ability)
         if spec is None:
             spec = _fallback_activation_spec(getattr(ability, "source_line", ""))
-        if spec is not None:
-            return spec, ability
+        if spec is None:
+            continue
+        if spec.get("kind") == "none":
+            if nothing_to_point_at is None:
+                nothing_to_point_at = (spec, ability)
+            continue
+        return spec, ability
+    if nothing_to_point_at is not None:
+        return nothing_to_point_at
     return {"kind": "none"}, None
 
 

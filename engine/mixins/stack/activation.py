@@ -259,7 +259,9 @@ class AbilityActivationMixin:
 
         apply_prevention_shield(self, target_player, target_perm_idx, 1)
         return SimulationResult(label, True, "activated_prevent_one", "resolved")
-    def _announce_chosen_ability(self, permanent, ability, chosen_keyword):
+    def _announce_chosen_ability(
+        self, permanent, ability, chosen_keyword, reversal_ledger=None
+    ):
         """Record the keyword a "Choose A, B, or C" cost clause names, or refuse.
 
         Returns None when there is nothing to choose — every ability but
@@ -272,6 +274,28 @@ class AbilityActivationMixin:
         A seat that names none takes the deterministic default below, which is
         what keeps AI and headless play unblocked — the same arrangement
         ``cost_permanent_index`` has for the other choice made at announcement.
+
+        **And the record itself is registered for reversal**, because it is the
+        one thing an activation writes before the activation is known to be
+        legal. Every cost below checks its payability where it is announced and
+        pays further down, so a refused activation has nothing to give back —
+        except this, which has to be written *first*: the target gate
+        enumerates "target creature with the chosen ability", and a word chosen
+        after it would narrow nothing. CR 733.1, reached through CR 601.2 and
+        CR 602.2b, reverses the entire action ("any payments already made are
+        canceled"), so ``queue_permanent_ability`` takes the record back when
+        the activation is refused.
+
+        The reader that would see a leftover is
+        ``handlers/_common._resolve_chosen_keyword``, which turns "with the
+        chosen ability" into a keyword filter off exactly this key. That it is
+        reached today only from a resolution — which always follows a fresh
+        announcement — is a fact about which cards the pool prints, not a
+        guarantee; a word nobody chose is state a reversed action left behind
+        either way. The note that used to sit at the call site argued the record
+        could not go stale because the ability costs {T}, so a second
+        announcement needs an untap step in between. That is true of an
+        activation that happened. A refusal pays no {T}.
         """
         options = tuple(getattr(ability.cost, "chosen_keyword_options", ()) or ())
         if not options:
@@ -286,6 +310,12 @@ class AbilityActivationMixin:
                 )
         else:
             word = self._default_chosen_ability(permanent, options)
+        if reversal_ledger is not None:
+            reversal_ledger.append((
+                permanent,
+                CHOSEN_ABILITY in permanent.metadata,
+                permanent.metadata.get(CHOSEN_ABILITY),
+            ))
         permanent.metadata[CHOSEN_ABILITY] = word
         self.log.append(f"{permanent.card.name}: chose {word}")
         return None
@@ -319,8 +349,28 @@ class AbilityActivationMixin:
         ping belongs above the Cauldron's ability rather than under it. See
         ``deferring_triggers``.
         """
+        # CR 733.1, reached through CR 601.2 and CR 602.2b: an activation that
+        # turns out to be illegal is *reversed* — "the entire action is
+        # reversed and any payments already made are canceled". The rest of
+        # ``_activate_onto_stack`` obeys that by construction, checking every
+        # cost where it is announced and paying it further down, so a refusal
+        # has nothing to give back. CR 601.2b's announced choice is the one
+        # exception, because the target gate has to read it; this ledger is how
+        # it is taken back. Undone here and in no other place: a refusal can
+        # come from forty returns inside that function, and thirty-nine of them
+        # would be a place to forget.
+        ledger: list = []
         with self.deferring_triggers():
-            return self._activate_onto_stack(*args, **kwargs)
+            result = self._activate_onto_stack(
+                *args, reversal_ledger=ledger, **kwargs
+            )
+        if not result.supported:
+            for permanent, had_record, prior in reversed(ledger):
+                if had_record:
+                    permanent.metadata[CHOSEN_ABILITY] = prior
+                else:
+                    permanent.metadata.pop(CHOSEN_ABILITY, None)
+        return result
 
     def _activate_onto_stack(
         self,
@@ -367,6 +417,10 @@ class AbilityActivationMixin:
         source_permanent_index: int | None = None,
         source_stack_index: int | None = None,
         source_controller_index: int | None = None,
+        # Where CR 601.2b's announced choice records how to take itself back.
+        # Supplied by ``queue_permanent_ability``, this function's only caller
+        # and the one place a refused activation is reversed (CR 733.1).
+        reversal_ledger: list | None = None,
     ) -> SimulationResult:
         controller = self.players[controller_index]
         # Ifh-Bíff Efreet: "Any player may activate this ability." The activator
@@ -543,12 +597,15 @@ class AbilityActivationMixin:
         # narrow nothing.
         #
         # Recorded on the ability's own source, which is where CR 614.1c's entry
-        # choices live and where `_resolve_chosen_keyword` looks. The record
-        # cannot go stale on this card: the ability costs {T}, so a second
-        # announcement needs an untap step in between and the first has long
-        # since resolved.
+        # choices live and where `_resolve_chosen_keyword` looks. A note here
+        # used to argue the record could not go stale, because the ability costs
+        # {T} and a second announcement therefore needs an untap step in between
+        # — true of an activation that *happened*, and the whole point is the
+        # one that did not. A refusal below pays no {T}, so the permanent stayed
+        # untapped and kept a word nobody ended up choosing. It is taken back on
+        # the ledger threaded through `queue_permanent_ability` (CR 733.1).
         keyword_refusal = self._announce_chosen_ability(
-            permanent, ability, chosen_keyword
+            permanent, ability, chosen_keyword, reversal_ledger
         )
         if keyword_refusal is not None:
             self.log.append(keyword_refusal)

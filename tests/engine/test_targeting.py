@@ -448,13 +448,26 @@ def test_the_agreement_ratchet_still_examines_the_card_that_broke_it(supported_c
     under your control and attach this enchantment to it." Reviewed as an
     inventory rather than loosened to a non-emptiness check: a third member
     should be looked at by somebody, and equality is what makes that happen.
+
+    Tempest brought the third and the fourth, and the review is why the equality
+    is worth its maintenance. **Reanimate** is another spell, and it says the
+    same thing the other three do. **Coffin Queen is a new shape**: the first
+    card in the pool to print the phrase on an *activated* ability rather than
+    on a spell, so its cast spec is None and the agreement ratchet above skips
+    it entirely — what answers for it is ``derive_activation_spec``, which
+    reaches the very same reanimation payload through the same shared table.
+    It is examined here because the walk runs over ``program.instructions``,
+    which carries a permanent's ability instructions too. Both offer either
+    graveyard, which is what their payloads say.
     """
     widened = {
         card.name for card in supported_cards
         if any(_graveyard_reads(compile_card_oracle(card)))
     }
 
-    assert widened == {"Hymn of Rebirth", "Necromancy"}
+    assert widened == {
+        "Hymn of Rebirth", "Necromancy", "Reanimate", "Coffin Queen",
+    }
 
 
 def test_a_reanimation_printed_your_graveyard_still_offers_only_yours(supported_cards):
