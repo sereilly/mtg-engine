@@ -333,26 +333,41 @@ def _parse_become_creature(
                 stream.reset(relative)
     # …and the fourth spelling, which is **no clause at all**: "Until end of
     # turn, this artifact becomes a 2/1 Construct **artifact** creature with
-    # flying." (Chimeric Sphere, Xanthic Statue, Jade Statue.) CR 205.1b's
-    # *replacement* — the listed types are what the permanent is, and nothing
-    # says the old ones survive.
+    # flying." (Chimeric Sphere, Xanthic Statue, Jade Statue.)
     #
-    # Admitted only where the body names every card type the printed subject
-    # does, which is CR 205.1b's own arithmetic done on the words: if the
-    # animation lists "artifact" and the subject is "this **artifact**", the
-    # replacement and the addition produce the same type line, so the record the
-    # lowering writes is right either way and no layer-4 removal is needed.
+    # CR 205.1b names this case out loud, which is why it is an *addition* here
+    # rather than the replacement the rule's first sentence describes: "Some
+    # effects state that an object becomes an 'artifact creature'; these effects
+    # also allow the object to retain all of its prior card types and subtypes."
+    # So the missing clause is not an omission the card gets away with — the
+    # rule supplies it.
     #
-    # Every card in the pool that prints the clause-less form prints it this way
-    # — and that is *why* Mishra's Factory prints "It's still a land" and these
-    # do not: a land becoming an artifact creature loses the word the card needs
-    # back. So the gate is not a convenience. "Target land becomes a 4/4
-    # creature until end of turn" names no land in its body and keeps refusing,
-    # because admitting it under an *adding* record is the silent half of the
-    # replacement this engine has not built (see the node).
+    # Two conditions, and both are that sentence rather than convenience:
+    #
+    # * the body must name every card type the printed subject names, which is
+    #   what makes it the "becomes an artifact creature" case rather than the
+    #   general type change above it. That is also why Mishra's Factory prints
+    #   "It's still a land" and these three do not — a land becoming an artifact
+    #   creature is outside the rule's exception and loses the word;
+    # * the subject must not already be a creature, because the rule's next
+    #   sentence is narrower: "…becomes a '[creature type] artifact creature';
+    #   these effects also allow the object to retain all of its prior card
+    #   types and subtypes **other than creature types**, but replace any
+    #   existing creature types." The record this lowers to *adds* subtypes, so
+    #   a creature animated into a Construct would keep the types the rule
+    #   replaces. Nothing in the pool prints it; refusing keeps it that way
+    #   rather than admitting it silently.
+    #
+    # "Target land becomes a 4/4 creature until end of turn" fails the first and
+    # keeps refusing, which is the point: admitting it under an adding record is
+    # the silent half of a type replacement this engine has not built.
     if not in_addition and isinstance(subject, ast.TargetSpec):
         printed = set(subject.filter.card_types)
-        if printed and printed <= set(card_types) | {"creature"}:
+        if (
+            printed
+            and "creature" not in printed
+            and printed <= set(card_types) | {"creature"}
+        ):
             in_addition = True
     # **Read, not required.** A sentence printing no duration is CR 611.2b's
     # default — the animation lasts indefinitely (Mishra's Groundbreaker) — and

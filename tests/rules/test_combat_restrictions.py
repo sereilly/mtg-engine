@@ -1011,3 +1011,113 @@ def test_declining_to_block_never_owes_the_cost():
     assert game.declare_blockers(1, {})[0]
     assert not any(land.tapped for land in lands)
 # --- end W2G1 ---
+
+
+# --- W1G4: board-wide prohibitions are templates, not card entries ---
+from engine import Game, PlayerState
+from engine.models import CardDefinition, Permanent
+
+
+def _w1g4r_creature(name, power, toughness, keywords=(), text=""):
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature - Test",
+        oracle_text=text, colors=(), color_identity=(),
+        keywords=tuple(word.capitalize() for word in keywords), produced_mana=(),
+        raw={"name": name, "type_line": "Creature - Test",
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def _w1g4r_enchantment(name, text):
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Enchantment",
+        oracle_text=text, colors=(), color_identity=(), keywords=(),
+        produced_mana=(), raw={"name": name, "type_line": "Enchantment"},
+    )
+
+
+def _w1g4r_nosick(perm):
+    perm.metadata["summoning_sickness_turn"] = -99
+    return perm
+
+
+def _w1g4r_combat(mine, theirs):
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=list(mine)),
+        PlayerState(name="P2", battlefield=list(theirs)),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    return game
+
+
+@pytest.mark.cr("508.1c", "109.5")
+def test_a_board_wide_attack_ban_reads_the_printed_noun_and_not_a_card_name():
+    """CR 508.1c's restriction over a *described set*, on an invented card.
+
+    Peacekeeper's "Creatures can't attack." is the unnarrowed member of a family
+    whose narrowed members already worked (Moat, Glacial Chasm, Evil Eye of
+    Orms-by-Gore). The point of the row is that the subject is a printed noun
+    phrase, so a card nobody has printed obeys it too — a test naming only the
+    real card would pass against a table with the name baked in, which is how
+    the sibling land-animation bug survived.
+
+    CR 109.5 for the colour narrowing: the sentence names no controller, so the
+    ban reaches every seat, and the *red* creature is stopped where the white
+    one is not.
+    """
+    ban = Permanent(card=_w1g4r_enchantment(
+        "Invented Ban", "Red creatures can't attack."
+    ))
+    red = _w1g4r_nosick(Permanent(card=CardDefinition(
+        name="Invented Red", mana_cost="{R}", cmc=1.0, type_line="Creature - Test",
+        oracle_text="", colors=("R",), color_identity=("R",), keywords=(),
+        produced_mana=(), raw={"name": "Invented Red", "type_line": "Creature - Test",
+                               "power": "2", "toughness": "2"},
+    )))
+    white = _w1g4r_nosick(Permanent(card=CardDefinition(
+        name="Invented White", mana_cost="{W}", cmc=1.0, type_line="Creature - Test",
+        oracle_text="", colors=("W",), color_identity=("W",), keywords=(),
+        produced_mana=(), raw={"name": "Invented White", "type_line": "Creature - Test",
+                               "power": "2", "toughness": "2"},
+    )))
+    game = _w1g4r_combat([ban, red, white], [])
+
+    assert not game.can_attack(red, 1)
+    assert game.can_attack(white, 1)
+
+
+@pytest.mark.cr("509.1b")
+def test_a_board_wide_blocker_ceiling_takes_the_smallest_of_several():
+    """CR 509.1b: every restriction applies, so two ceilings over one attacker
+    leave the tighter one standing.
+
+    Familiar Ground's ceiling is found by a board scan and Stalking Tiger's is
+    read off the attacker's own program; they land in one list for exactly this
+    reason, and a scan that replaced the list rather than adding to it would
+    pass every single-source test.
+    """
+    ground = Permanent(card=_w1g4r_enchantment(
+        "Invented Ground",
+        "Each creature you control can't be blocked by more than two creatures.",
+    ))
+    attacker = _w1g4r_nosick(Permanent(card=_w1g4r_creature(
+        "Invented Tiger", 4, 4,
+        text="This creature can't be blocked by more than one creature.",
+    )))
+    blockers = [
+        _w1g4r_nosick(Permanent(card=_w1g4r_creature(f"Guard {i}", 1, 1)))
+        for i in range(2)
+    ]
+    game = _w1g4r_combat([ground, attacker], blockers)
+    assert game.declare_attackers(0, [1])[0]
+    game.advance_combat_phase()
+
+    # The enchantment allows two; the creature's own line allows one, and CR
+    # 509.1b makes both apply.
+    assert not game.declare_blockers(1, {0: 1, 1: 1})[0]
+    assert game.declare_blockers(1, {0: 1})[0]
