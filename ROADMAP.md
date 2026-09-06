@@ -1106,6 +1106,88 @@ one. No card in the pool prints either shape, which is why nothing is red;
 `printed_shape` instead, which is CR 205.2a's answer — so two readers of "is this
 a creature card in a graveyard" now disagree in principle.
 
+### Wave 1 closed: 100 → 137 of 167, zero hooks added, zero caps crossed at integration
+
+Five worktree groups, five reports, **45 cards claimed and 45 landed** — no
+group declined a card it was given, which has not happened in a wave before.
+(37 of them moved the supported count; the rest were cards already counted
+supported off another line, which is the census's structural blind spot doing
+what it does.)
+
+**The cap experiment worked, and its result is the wave's process finding.**
+Visions crossed five caps, three at integration where neither branch was at
+fault. Weatherlight assigned each of the seven tight modules a single owning
+group and briefed that group to expect its own split. **Integration crossed
+none.** Two groups did cross a cap *in round*, which is the design working:
+W1G2 took `triggers.py` from 974 past 1,000 and split `trigger_casts.py` out of
+it (974 → 791), and W1G1 hit exactly 1,000 in `lowering/exile.py` and moved the
+new lowering to `lowering/zones.py`, where its category row already lived and
+its parse half already mirrored. Both cut along a line the module's own
+docstring had already drawn. `ast/_references.py`, deliberately left unowned as
+the control, was the one module that drifted — 986 → 996 — with W1G3 reporting
+it as the integration hazard it would have become.
+
+**Nine already-supported cards were mis-playing, and all nine are shipped.**
+None was visible to the census, to `--hollow-lines` or to `parse_coverage.py`,
+because each produced *something*:
+
+- **Lich** (LEA) — "When this enchantment is put into a graveyard from the
+  battlefield, you lose the game." Neither trigger front end read CR 700.4's
+  long wording for a non-creature noun or the article "a", so the card's entire
+  downside compiled to nothing. Cyclopean Tomb (ATQ) gains the condition from
+  the same fix and stays honestly unsupported on its effect.
+- **Merfolk Assassin** (DRK/4ED/5ED) — "{T}: Destroy target creature with
+  islandwalk" **destroys a plain Bear**, driven in a game.
+  `_destroy_target_legal` calls `permanent_matches_filter`, the *pure* half of
+  the matcher, so every keyword or controller narrowing on a destroy is
+  unenforced. Pit Trap (ICE), Feline Sovereign and Rambunctious Mutt (M21) read
+  the same way. **Found, not fixed — it is wave 2's first item.**
+- **Five cards offered the caster their own face** for a printed "target
+  opponent" — Ebony Charm, Forbidden Ritual, Necromentia on the cast path,
+  Liliana Death Mage and Mirror Universe on the activation path, which is where
+  nobody had looked. Fixed at the source, in the three lowerings that record
+  what the phrase states, rather than by a printed-line gate.
+- **Vito, Thorn of the Dusk Rose** never asked *which* opponent (CR 603.3d) and
+  defaulted to the first living one. Kaervek's Spite and Peer into the Abyss
+  carried no target description at all.
+- **Brand of Ill Omen** stopped enforcing anything for the length of one W1G4
+  commit, because a new `controller_cast_ban` reader shadowed the identically
+  named import from `engine/auras.py`. One ICE test caught it. This is the
+  "two names for one thing" merge hazard with the polarity reversed — **one
+  name for two things** — and a duplicate-*definition* grep cannot see it.
+
+**Three CR citation blocks were wrong by subject, in the way VIS wave 4
+predicted the next wave would find.** `CR 404.3` is the simultaneous-arrival
+tie-break, not the graveyard's order — the ordering rules are CR 404.1 and
+404.2, and `engine/graveyard_order.py`'s own definition-site docstring had it
+wrong with twelve sites copying it. `CR 602.5c` was cited eight times in
+`mixins/stack/activation.py` for "an unpayable cost can't be paid", which is
+CR 601.2h reached through CR 602.2b. And `CR 115.4` ("any target") is cited in
+at least four sites for "target opponent can't be you", which is CR 102.2/102.3
+through CR 115.1. None is inside the 701 block, so
+`test_cr_citation_subjects.py` cannot see any of them.
+
+**The ingest's own yield was three red guards, and it was nearly missed.** Phase
+1's suite run was invoked as `pytest … | tail`, so the exit code reported was
+`tail`'s: the run read green with three tests failing. A gate piped into
+anything is not a gate. The three: the self-reference ratchet (Maraxus of Keld,
+read and accepted), `test_every_admitted_cost_clause_is_charged` (Betrothed of
+Fire's "Sacrifice enchanted creature:" is neither the source nor a chosen
+permanent, and is charged by nobody), and CR 601.2b's no-unread-cost gate,
+which W1G1 took from four cards to two.
+
+**The merge convention's documented failure mode fired for real**, in
+`test_wth_creatures.py`: two branches' blocks ended with the same lines, git
+took them as common context, and the conflict came back as **two regions**. The
+reconstruction from the merge base is what is safe there, and the sweep
+afterwards — every non-blank line of every branch's block present in the merged
+file, over all four merged branches and all six per-set files — found nothing,
+which is the result you want and cannot assume.
+
+Duplicate-definition sweep against the wave base: **31 duplicated top-level
+names before, 31 after, none new**. Missing-name scan: five findings, all five
+the documented `from __future__ import annotations` false positive.
+
 ## Visions (VIS) — shipped (167/167, manifest index 14)
 
 **Ingest census: 99/167 supported (59.3%), and 167 of 167 cards new to the
