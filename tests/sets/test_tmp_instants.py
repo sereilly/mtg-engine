@@ -802,3 +802,81 @@ def test_w2g2_aven_gagglemaster_still_counts_its_fliers(catalog_by_name):
 
 def test_w2g2_respite_is_supported(set_pool):
     assert compile_card_oracle(set_pool("TMP")["Respite"]).supported
+
+
+# --- W3G5: Kindle — a constant plus a count across every graveyard ---
+
+from engine import Game, PlayerState  # noqa: F811  (block-local, see module docstring)
+from engine.oracle import compile_card_oracle  # noqa: F811
+
+
+def _w3g5_kindle_game(set_pool, *, mine, theirs):
+    """A two-seat game with *mine*/*theirs* copies of Kindle already in each
+    graveyard and one more in hand."""
+    pool = set_pool("TMP")
+    kindle = pool["Kindle"]
+    p0 = PlayerState(name="P0", hand=[kindle], graveyard=[kindle] * mine)
+    p1 = PlayerState(name="P1", graveyard=[kindle] * theirs)
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    game.start_turn(0)
+    game._close_current_priority_step()
+    return game, p0, p1
+
+
+def test_w3g5_kindle_counts_every_graveyard_not_just_yours(set_pool):
+    """"Kindle deals X damage to any target, where X is 2 plus the number of
+    cards named Kindle in all graveyards."
+
+    Three pieces were named in the decline and only two were real. The count
+    of ``cards named <name>`` already parsed *and* lowered — the brief said the
+    filter key merely "exists" — so what was missing was the constant in front
+    of the count (a lowering) and the printed words "all graveyards" (a parse).
+    ``evaluate_count`` has answered ``owner: "all"`` since Lhurgoyf, so the
+    scope needed no evaluator at all.
+
+    Driven through a game rather than asserted off the program because the
+    seat-scope is exactly the thing a compiled payload cannot show is wrong:
+    ``owner: "you"`` and ``owner: "all"`` are the same shape and different
+    cards. One Kindle in each graveyard is 2 + 2 = 4.
+    """
+    game, p0, p1 = _w3g5_kindle_game(set_pool, mine=1, theirs=1)
+    before = p1.life
+    assert game.cast_from_hand(0, "Kindle", target_player_index=1).supported
+    while game.stack:
+        game.resolve_top_of_stack()
+    assert p1.life == before - 4, game.log
+
+
+def test_w3g5_kindle_with_empty_graveyards_deals_its_printed_base(set_pool):
+    """The constant alone. A ``plus`` dropped on the floor would be 0 damage
+    here and 2 too few in the test above, and only the pair pins both halves."""
+    game, p0, p1 = _w3g5_kindle_game(set_pool, mine=0, theirs=0)
+    before = p1.life
+    assert game.cast_from_hand(0, "Kindle", target_player_index=1).supported
+    while game.stack:
+        game.resolve_top_of_stack()
+    assert p1.life == before - 2, game.log
+
+
+def test_w3g5_kindle_ignores_a_graveyard_card_with_another_name(set_pool):
+    """The ``named`` narrowing, in the direction that fails silently: a filter
+    dropped from an all-graveyards count reads every card in every pile."""
+    pool = set_pool("TMP")
+    p0 = PlayerState(name="P0", hand=[pool["Kindle"]], graveyard=[pool["Shadow Rift"]])
+    p1 = PlayerState(name="P1", graveyard=[pool["Kindle"], pool["Shadow Rift"]])
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    game.start_turn(0)
+    game._close_current_priority_step()
+    before = p1.life
+    assert game.cast_from_hand(0, "Kindle", target_player_index=1).supported
+    while game.stack:
+        game.resolve_top_of_stack()
+    assert p1.life == before - 3, game.log
+
+
+def test_w3g5_kindle_is_supported(set_pool):
+    assert compile_card_oracle(set_pool("TMP")["Kindle"]).supported

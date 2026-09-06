@@ -181,9 +181,28 @@ def accept_zone_scope(stream: TokenStream, d) -> bool | None:
     probe = stream.mark()
     stream.advance()
     owner = accept_zone_possessive(stream)
+    every = False
     if owner is None:
-        stream.accept_word("a", "an", "the")
+        # "in **all graveyards**" (Kindle, Lhurgoyf). CR 400.1 gives every
+        # player their own copy of the graveyard, hand and library, so the
+        # printed plural names one pile per seat rather than one shared zone —
+        # which is a fact about *whose* zone and so belongs in the possessive
+        # slot beside "your" and "an opponent's", not in a second key. The
+        # article branch below is the alternative rather than a fallthrough: a
+        # phrase saying both ("in all a player's graveyards") is not English and
+        # would name two scopes.
+        if stream.accept_word("all"):
+            every = True
+        else:
+            stream.accept_word("a", "an", "the")
     noun = stream.peek_word()
+    if every:
+        # The plural is **required**, and it is the whole gate: no card prints
+        # "in all graveyard", and accepting the singular would let "all" be read
+        # off a phrase that never scoped anything. Trimmed here rather than
+        # through `vocabulary.singular`, which only trims words its type
+        # catalogs know and leaves a zone noun alone.
+        noun = noun[:-1] if noun and noun.endswith("s") else None
     if noun in _ZONE_NOUNS:
         stream.advance()
         # "from **the graveyard of** <player>" (Glyph of
@@ -193,13 +212,22 @@ def accept_zone_scope(stream: TokenStream, d) -> bool | None:
         # second answer; and the referent has to be one this file
         # reads, because "the graveyard of" followed by words nothing
         # claims names a graveyard that cannot be found.
-        if owner is None and stream.accept_word("of"):
+        # Never after "all": that scope has already named every seat, so a
+        # possessive behind it would be a second answer to the same question
+        # and this branch would quietly keep it.
+        if owner is None and not every and stream.accept_word("of"):
             owner = _parse_zone_owner_of(stream)
             if owner is None:
                 stream.reset(probe)
                 return False
         d.zone = noun
-        d.zone_owner = owner
+        # `each_player` is the seat-set kind this grammar already carries for
+        # "each player"; `count_spec` is what turns it into the ``owner: "all"``
+        # spelling `evaluate_count` answers with. Every other reader of
+        # `zone_owner` refuses any kind but "you", so a production that has not
+        # been taught the scope declines the sentence rather than quietly
+        # reading one pile.
+        d.zone_owner = ast.PlayerRef("each_player") if every else owner
         return True
     stream.reset(probe)
     return False

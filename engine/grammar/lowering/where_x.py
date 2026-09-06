@@ -124,6 +124,27 @@ def lower_where_x(
     # which would be half the damage the card prints.
     factor = 1
     definition = node.definition
+    # "…where X is **2 plus** the number of cards named ~ in all graveyards"
+    # (Kindle); "…twice the number of … **minus 2**" said of a counted set
+    # rather than of the source's counters. The constant is unwrapped *before*
+    # the multiplier so the two compose in the order the sentence prints them,
+    # and it becomes ``plus`` rather than ``offset`` for
+    # ``_source_counter_spec``'s reason exactly: ``_scaled`` applies ``offset``
+    # ahead of the multiplier, which for "twice the number … minus 2" would be
+    # 2N-4.
+    #
+    # A subtrahend on the **left** ("2 minus the number of …") is deliberately
+    # not taken: that is a constant minus a count, which no key on this spec
+    # expresses, so it falls to the refusal below rather than being read as its
+    # own negation.
+    plus = 0
+    if isinstance(definition, (ast.Plus, ast.Minus)):
+        sign = -1 if isinstance(definition, ast.Minus) else 1
+        left, right = definition.left, definition.right
+        if isinstance(right, ast.Fixed) and not isinstance(left, ast.Fixed):
+            plus, definition = sign * right.value, left
+        elif sign > 0 and isinstance(left, ast.Fixed) and not isinstance(right, ast.Fixed):
+            plus, definition = left.value, right
     if isinstance(definition, ast.Times):
         factor = definition.factor
         definition = definition.of
@@ -136,6 +157,8 @@ def lower_where_x(
         raise LoweringError("a where-clause defined an X nothing reads", node=node)
     spec = count_spec(_count_filter_for(definition.filter, inner, node, event), node,
                       multiplier=factor)
+    if plus:
+        spec["plus"] = plus
     return _stamp_x_from_count(inner, spec)
 
 

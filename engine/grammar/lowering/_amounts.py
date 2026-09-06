@@ -147,6 +147,17 @@ def count_spec(
         owner = "all"
     else:
         owner = filt.zone_owner.kind if filt.zone_owner else "you"
+        # "the number of cards named ~ in **all graveyards**" (Kindle). The
+        # seat-set kind the noun phrase carries, translated once here into the
+        # ``owner: "all"`` spelling `evaluate_count` has answered since Lhurgoyf
+        # — the same key the branch above writes for "on the battlefield", so
+        # one scope has one word in the spec however the card printed it.
+        # Translated rather than passed through: every other value of this key
+        # is a seat the resolution resolves, and `each_player` reaching
+        # `count_from_payload` unrecognised falls to `context.target or
+        # context.caster`, which is one player's graveyard read as everyone's.
+        if owner == "each_player":
+            owner = "all"
     # "…for each **blocking** creature other than Márton Stromgald." A combat
     # role is a property of the *battlefield*, not of a controller, and the seat
     # that asks is not necessarily the seat the objects are on — so a phrase
