@@ -1460,6 +1460,30 @@ def _action_is_takeable(game: Game, player, instruction: OracleInstruction, sour
             _card_matches_filter(card, described, game=game, owner=player)
             for card in player.hand
         )
+    # "Sacrifice it **unless you return a basic land card from your graveyard to
+    # your hand**." (Harvest Wurm.) The graveyard twin of the hand question
+    # above, and it fails the same way: the handler returns as many as it can
+    # (CR 608.2), so a graveyard with no card the phrase names returned
+    # **nothing**, the price counted as paid and the sacrifice the card prints
+    # for not paying it never happened — the Wurm stayed on the battlefield for
+    # free. The narrowing is the whole of it here: a graveyard full of creatures
+    # and no basic land is not "nothing to give" by size, only by description,
+    # which is why the offered seat's pile is asked through
+    # ``graveyard_card_matches`` — the one predicate the picker and the handler
+    # already share, so all three agree about which cards count.
+    #
+    # Only the several-targets spelling is skipped: with a chosen list the
+    # picker collects the slots and its own floor decides, exactly as the
+    # permanent-set price one screen up leaves the count to the prompt.
+    if instruction.kind == "return_creature_from_graveyard_to_hand":
+        from ._common import graveyard_card_matches
+
+        if instruction.payload.get("targets"):
+            return True
+        return any(
+            graveyard_card_matches(instruction.payload, card)
+            for card in player.graveyard
+        )
     # "Target player discards a card unless they **put a card from their hand on
     # top of their library**." (Tainted Specter.) An empty hand is a real and
     # checkable "nothing to give": the handler underneath moves as many cards as

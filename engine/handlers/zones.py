@@ -5604,10 +5604,11 @@ def shuffle_source_card_into_library(game: Game, instruction: OracleInstruction,
     the command zone instead, and thirty fire sites is twenty-nine places to
     forget it.
 
-    The shuffle happens even when the card has already left (exiled in response,
-    CR 608.2's "as much as possible"), because CR 701.24a's randomisation is
-    what this sentence is mostly for: it is the reason a player cannot count
-    the Dragon's return.
+    The shuffle happens even when the card has already left — exiled in
+    response from the graveyard — because CR 701.24c says so outright, with
+    Guile (the same printed sentence) as its example: "that library is
+    shuffled even if none of those objects are in the zone they're expected to
+    be in". It is the reason a player cannot read the deck for the answer.
     """
     card = context.card
     source = context.source_permanent
