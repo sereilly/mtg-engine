@@ -653,23 +653,46 @@ ATTACHED_SUBJECT_EVENTS: frozenset[str] = frozenset({
 })
 
 
-def names_attached_permanent(subject, event: str | None) -> bool:
+def names_attached_permanent(
+    subject, event: str | None, event_subject=None
+) -> bool:
     """Whether *subject* names the permanent the ability's source is attached to.
 
     One reader for both spellings — "it"/"enchanted <noun>", which the noun
     parser already marks, and the repeated "that <noun>" above — so a lowering
     that learns one gets the other and the two cannot come to disagree about
     which permanent an Aura's sentence is talking about.
+
+    *event_subject* is the firing trigger's own printed subject, and it answers
+    the case the event set above cannot. :data:`ATTACHED_SUBJECT_EVENTS` holds
+    the conditions that are *only ever* printed about an attached permanent, so
+    the kind alone settles them; "becomes the target of a spell or ability" is
+    not one — the same kind is printed about "this creature" (Warden of the
+    Woods) and about "enchanted creature" (Spinal Graft), and adding it to that
+    set would make the Warden's "that creature" name a permanent it is not
+    attached to. The condition's own subject is what tells the two apart, and
+    it is already threaded through every lowering that could need it.
+
+    The noun must be the one the condition named, for the reason the "that"
+    test above is bare: "that creature" is a back-reference and "that creature
+    you control" is a phrase that chose for itself.
     """
     from ._common import _is_enchanted
 
     if _is_enchanted(subject):
         return True
-    return (
+    if not (
         isinstance(subject, ast.TargetSpec)
         and subject.quantifier == "that"
         and not subject.targeted
-        and event in ATTACHED_SUBJECT_EVENTS
+    ):
+        return False
+    if event in ATTACHED_SUBJECT_EVENTS:
+        return True
+    return (
+        getattr(event_subject, "is_enchanted", False)
+        and tuple(getattr(event_subject, "card_types", ())) == subject.filter.card_types
+        and not set(subject.filter.to_payload()) - {"type_filter"}
     )
 
 

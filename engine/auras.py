@@ -720,6 +720,21 @@ def aura_compiled_trigger_claim(normalized_line: str, card_name: str = "") -> st
             "the attack-declaration trigger (CR 508.1) — "
             "phases/declare_attackers_step.py"
         )
+    if cond == "self_becomes_target" and kind in EFFECT_HANDLERS:
+        # "When enchanted creature becomes the target of a spell or ability,
+        # destroy that creature." (Spinal Graft.) CR 603.2's announcement, made
+        # from `mixins/helpers._announce_targeting` — the boundary where an
+        # object is put on the stack with its targets settled (CR 601.2c /
+        # 602.2b), which is one site for a spell and an ability alike.
+        #
+        # Reached only when `attached_trigger_claim` above did not already
+        # claim the line, which for an Aura it does; the row is here so the
+        # dispatcher is *named* for the shape rather than left to that
+        # broader claim, which asks only whether an instruction came out.
+        return (
+            "the targeting trigger (CR 603.2) — "
+            "mixins/helpers._announce_targeting"
+        )
     if cond == "creature_dies" and kind in EFFECT_HANDLERS:
         # "Whenever a creature dies, put a +1/+1 counter on enchanted creature."
         # (Sadistic Glee.) CR 603.2's announcement of a death, made from the one

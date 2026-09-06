@@ -569,6 +569,21 @@ def _lower_gain_control(
         described = _linked_steal_filter(node, subject)
         described["link_conditions"] = ["source_on_battlefield"]
         return (OracleInstruction("steal_target_linked_to_source", "", described),)
+    if node.duration == "while_target_enchanted":
+        # "{T}: Gain control of target creature **for as long as that creature
+        # is enchanted**." (Rootwater Matriarch.) The same monitored
+        # contribution every branch here records, with a condition the sweep
+        # asks of the **stolen** permanent instead of the source — which is the
+        # whole of what is new, and is why it is `link_conditions` data rather
+        # than a kind of its own. CR 611.2b: the duration ends the moment the
+        # last Aura leaves the creature, whatever the Matriarch is doing.
+        if subject.quantifier != "target":
+            raise LoweringError(
+                "the linked-control handler needs a named target", node=node
+            )
+        described = _linked_steal_filter(node, subject)
+        described["link_conditions"] = ["target_remains_enchanted"]
+        return (OracleInstruction("steal_target_linked_to_source", "", described),)
     if node.duration == "while_you_control_source_tapped":
         # Willow Satyr / Rubinia Soulsinger. The filter must be one the
         # resolution can test (Willow's "legendary" is the supertypes key),

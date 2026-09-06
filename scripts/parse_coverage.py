@@ -74,7 +74,8 @@ from engine.cast_restrictions import (CAST_RESTRICTIONS,  # noqa: E402
 from engine.counter_conditions import uncounterable_line  # noqa: E402
 from engine.special_actions import special_action_line  # noqa: E402
 from engine.cast_timing import (grants_flash,  # noqa: E402
-                                sacrifices_at_cleanup_if_cast_at_instant_speed)
+                                sacrifices_at_cleanup_if_cast_at_instant_speed,
+                                static_flash_permission)
 from engine.replacements import replacement_claims_line  # noqa: E402
 from engine.life_prohibitions import life_gain_ban_line  # noqa: E402
 from engine.cost_modifiers import cost_modifier_claims_line, cost_modifiers_for  # noqa: E402
@@ -267,6 +268,12 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     ("cast_timing.py (granted flash)", grants_flash),
     ("cast_timing.py (cleanup sacrifice rider)",
      sacrifices_at_cleanup_if_cast_at_instant_speed),
+    # And the *static* half of the same file — "You may cast Aura spells with
+    # enchant creature as though they had flash" (Rootwater Shaman), a
+    # permission a permanent grants its controller's other spells rather than
+    # one a card grants itself. Its own channel because it is its own reader.
+    ("cast_timing.py (static flash permission)",
+     lambda s: static_flash_permission(s) is not None),
     # CR 116's special actions — "You may discard this card any time you could
     # cast an instant" (Circling Vultures, the one card CR 116.2e names). No
     # stack and so no instruction, which is exactly the population this census

@@ -35,7 +35,9 @@ def _parse_gain_control(
     Only the shapes a handler implements are admitted: "until end of turn",
     "for as long as you control this <noun>" (Aladdin, The Wretched), that
     clause with "…and this <noun> remains tapped" behind it (Willow Satyr,
-    Rubinia Soulsinger), and — since Ritual of the Machine — **no clause at
+    Rubinia Soulsinger), "for as long as that <noun> is enchanted" (Rootwater
+    Matriarch — the one whose condition is about the *stolen* permanent), and
+    — since Ritual of the Machine — **no clause at
     all**, which CR 611.2a makes an indefinite change rather than a missing one.
     A differently-conditioned one (Old Man of the Sea's power comparison)
     reverts on things nothing here watches, and is this production's sentence
@@ -94,6 +96,26 @@ def _parse_gain_control(
         "remains", "on", "the", "battlefield"
     ):
         return ast.GainControl(subject, "while_source_on_battlefield")
+    stream.reset(mark)
+    # "…for as long as **that creature is enchanted**" (Rootwater Matriarch).
+    # The one linked duration whose condition is about the permanent the steal
+    # *took* rather than about the source, which is why it is read here rather
+    # than folded into the two clauses below: the sweep asks it of the stolen
+    # side, and a card whose Aura falls off gets its creature back even while
+    # the Matriarch stands untapped under its controller.
+    #
+    # The noun is consumed and required to be the one the sentence already
+    # named — "that **creature**" — so a clause about some other object stays
+    # unconsumed and the line fails loudly rather than borrowing this reading.
+    mark = stream.mark()
+    if stream.accept_word("that"):
+        noun = stream.peek_word()
+        subject_nouns = getattr(subject, "filter", None)
+        wanted = getattr(subject_nouns, "card_types", ()) if subject_nouns else ()
+        if noun is not None and (noun,) == tuple(wanted):
+            stream.advance()
+            if stream.accept_phrase("is", "enchanted"):
+                return ast.GainControl(subject, "while_target_enchanted")
     stream.reset(mark)
     if not stream.accept_phrase("you", "control"):
         raise stream.error(

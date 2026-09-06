@@ -142,6 +142,114 @@ def granted_flash_timing(game: "Game", seat: int, card) -> bool:
     )
 
 
+# ---------------------------------------------------------------------------
+# The *static* half: a permanent that widens the timing of other players' spells
+# ---------------------------------------------------------------------------
+
+#: "You may cast Aura spells with enchant creature as though they had flash."
+#: (Rootwater Shaman.) A static ability of a permanent on the battlefield, which
+#: is the third source of flash timing and the one neither half above could
+#: hold: :class:`FlashGrant` is a record an effect *resolved* and left behind,
+#: and :func:`grants_flash` reads a card's permission about **itself**. This one
+#: is neither — it is derived from a permanent's own text on every question, the
+#: same model ``engine/cost_modifiers.py`` and ``engine/cast_restrictions.py``
+#: use, so a permanent leaving the battlefield takes the permission with it and
+#: there is nothing to undo.
+#:
+#: The spell class is payload rather than part of the pattern: "creature spells"
+#: is the same sentence with a different word, so a card printing it needs no
+#: code. The Aura's enchant clause is the one *quality* read, because it is the
+#: one this engine can test — ``auras.aura_enchants`` is the reader the cast
+#: gate and the picker already share. A sentence naming any other quality
+#: refuses here rather than being admitted with the narrowing dropped, which
+#: would let a Shaman flash in an Aura that enchants a land.
+_STATIC_FLASH_PERMISSION = re.compile(
+    r"^you may cast (?P<article>an? )?(?P<klass>[a-z]+) spells?"
+    r"(?: with enchant (?P<enchant>[a-z]+))?"
+    r" as though (?:it|they) had flash$"
+)
+
+#: The spell classes the matcher below can test. A card type is asked of
+#: ``search_filters.card_has_type`` (CR 205.2b) and "aura" of the same printed
+#: line, which is where a card outside the battlefield keeps its subtypes
+#: (CR 613.1 does not reach it). A word outside this set leaves the sentence
+#: unclaimed, so the card is reported unsupported rather than granting flash to
+#: a class nothing narrows.
+_FLASHABLE_CLASSES: frozenset[str] = frozenset(
+    {"artifact", "aura", "creature", "enchantment", "instant", "sorcery"}
+)
+
+
+@dataclass(frozen=True)
+class StaticFlashPermission:
+    """What one printed static timing permission covers.
+
+    ``card_class`` is the printed word before "spells"; ``enchant_noun`` is the
+    Aura clause it may narrow to, or None where the sentence named none.
+    """
+
+    card_class: str
+    enchant_noun: str | None = None
+
+    def covers(self, card) -> bool:
+        """Whether *card* is one of the spells this permission names."""
+        from .search_filters import card_has_type
+
+        if not card_has_type(card, self.card_class):
+            return False
+        if self.enchant_noun is None:
+            return True
+        from .auras import aura_enchants
+
+        return aura_enchants(getattr(card, "oracle_text", "") or "", self.enchant_noun)
+
+
+def static_flash_permission(line: str) -> StaticFlashPermission | None:
+    """The timing permission one printed *line* grants, or None.
+
+    Read by the support gate **and** by :func:`board_flash_timing`, so what the
+    engine claims and what it carries out are one table — the arrangement
+    ``engine/activation_restrictions.py`` is the model for.
+    """
+    match = _STATIC_FLASH_PERMISSION.match(_normalize(line).rstrip("."))
+    if match is None:
+        return None
+    klass = match.group("klass")
+    if klass not in _FLASHABLE_CLASSES:
+        return None
+    return StaticFlashPermission(card_class=klass, enchant_noun=match.group("enchant"))
+
+
+def static_flash_permissions_on(permanent) -> list[StaticFlashPermission]:
+    """Every timing permission *permanent* currently grants.
+
+    Off ``effective_card``, never the printed card: a text change (CR 612.1) or
+    a copy (CR 707.2) rewrites what the permanent says before anything reads it.
+    """
+    card = getattr(permanent, "effective_card", None) or getattr(permanent, "card", None)
+    text = getattr(card, "oracle_text", "") or ""
+    return [
+        found
+        for line in text.splitlines()
+        if (found := static_flash_permission(line)) is not None
+    ]
+
+
+def board_flash_timing(game: "Game", seat: int, card) -> bool:
+    """Whether a permanent *seat* controls lets them cast *card* at instant
+    speed.
+
+    "**You** may cast …" is the permission's own controller (CR 109.5), so the
+    scan is over that seat's permanents rather than over the whole board — a
+    Shaman does not flash an opponent's Auras in.
+    """
+    for permanent in game.controlled_by(seat):
+        for permission in static_flash_permissions_on(permanent):
+            if permission.covers(card):
+                return True
+    return False
+
+
 def a_sorcery_could_be_cast(game: "Game", seat: int) -> bool:
     """CR 601.3d's timing: *seat*'s own main phase, with an empty stack.
 
@@ -201,7 +309,14 @@ def casts_at_instant_speed(card, game: "Game | None" = None, seat: int | None = 
         return True
     if game is None or seat is None:
         return False
-    return granted_flash_timing(game, seat, card)
+    # Three sources with a board, not two: a resolved grant (Winding Canyons)
+    # and a **static** one derived from a permanent's own text (Rootwater
+    # Shaman). Asked here rather than at each gate, because this function is
+    # the one question both timing gates ask and a fifth source added at one
+    # of them would be invisible to the other.
+    return granted_flash_timing(game, seat, card) or board_flash_timing(
+        game, seat, card
+    )
 
 
 def cast_permission_line(line: str) -> bool:
@@ -229,6 +344,10 @@ __all__ = [
     "granted_flash_timing",
     "cast_permission_line",
     "casts_at_instant_speed",
+    "board_flash_timing",
     "grants_flash",
+    "StaticFlashPermission",
+    "static_flash_permission",
+    "static_flash_permissions_on",
     "sacrifices_at_cleanup_if_cast_at_instant_speed",
 ]
