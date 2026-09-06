@@ -943,7 +943,7 @@ def test_creature_bond_deals_damage_when_enchanted_creature_dies(all_cards):
     assert result.supported
 
     # Destroy the enchanted creature; P2 (controller) should take damage equal to toughness (2)
-    game._destroy_target_permanent(p2, type_filter="creature")
+    game._destroy_target_permanent(p2, described={"type_filter": "creature"})
     # The Aura's death trigger goes on the stack and resolves off it (CR 603.3).
     game.resolve_stack()
 

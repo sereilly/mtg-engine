@@ -1846,7 +1846,20 @@ class LegalityMixin:
         """
         instruction = _targeting_step(instruction) or instruction
         if instruction.kind == "destroy_target_permanent":
-            return self._destroy_target_legal(instruction.payload, perm)
+            # Every seat this gate can be given, because ``subject_matches``
+            # refuses a seat-relative narrowing it cannot answer and a refusal
+            # here is an empty picker: "you own" (Despotic Scepter) wants the
+            # observer, "defending player controls" (Necrite, Goblin Vandal)
+            # wants CR 506.2's seat, "that player controls" (Feline Sovereign)
+            # wants the one the trigger froze, and "blocking this creature"
+            # (Urborg Panther) wants the ability's own source.
+            return self._destroy_target_legal(
+                instruction.payload, perm,
+                observer=controller_index,
+                source=source_permanent,
+                defending=defending,
+                that_player=that_player,
+            )
         if instruction.kind == "mark_non_wall_target_to_attack":
             # The whole noun phrase, not its first two words: "the active
             # player has controlled continuously since the beginning of the

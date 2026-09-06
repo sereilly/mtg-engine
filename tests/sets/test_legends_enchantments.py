@@ -1961,7 +1961,7 @@ def test_puppet_master_returns_the_dead_creatures_card_to_its_owners_hand(set_po
     game, host = _r32_puppet_master(set_pool)
     card = host.card
 
-    game._destroy_target_permanent(game.players[1], type_filter="creature")
+    game._destroy_target_permanent(game.players[1], described={"type_filter": "creature"})
     game.check_state_based_actions()
     game.resolve_stack()
 
@@ -1979,7 +1979,7 @@ def test_puppet_master_does_not_deal_creature_bonds_damage(set_pool):
     """
     game, host = _r32_puppet_master(set_pool)
 
-    game._destroy_target_permanent(game.players[1], type_filter="creature")
+    game._destroy_target_permanent(game.players[1], described={"type_filter": "creature"})
     game.check_state_based_actions()
     game.resolve_stack()
 
@@ -1998,7 +1998,7 @@ def test_puppet_master_buys_itself_back_for_three_blue(set_pool):
         aura_card = game.players[0].battlefield[0].card
         game.players[0].mana_pool["U"] = 3
 
-        game._destroy_target_permanent(game.players[1], type_filter="creature")
+        game._destroy_target_permanent(game.players[1], described={"type_filter": "creature"})
         game.check_state_based_actions()
         game.resolve_stack()
         assert aura_card in game.players[0].graveyard, "CR 704.5m put the Aura here"

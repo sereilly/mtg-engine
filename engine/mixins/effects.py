@@ -5,7 +5,6 @@ import re
 
 from ..ante import is_ante_card
 from ..card_hooks import UNTAPPED_ARTIFACT_PROTECTORS
-from ..handlers._common import permanent_matches_filter
 from ..auras import aura_restriction_active
 from ..auras import attached_subject_triggers
 from ..damage_events import EVENT_LOCK, damage_source_seat, deal_damage, lifelink_life_gained
@@ -248,16 +247,32 @@ class EffectsMixin:
     def _destroy_target_permanent(
         self,
         target: PlayerState,
-        type_filter: str | None = None,
-        color_filter: str | None = None,
+        described: dict | None = None,
         target_permanent_index: int | None = None,
-        exclude_colors: list[str] | None = None,
-        exclude_types: list[str] | None = None,
         bypass_regeneration: bool = False,
-        subtype_filter: str | None = None,
-        tapped_only: bool = False,
-        attached_to_filter: dict | None = None,
+        *,
+        observer: int | None = None,
+        source: "Permanent | None" = None,
+        defending: int | None = None,
+        that_player: int | None = None,
     ) -> "Permanent | None":
+        """Destroy the permanent *described* names on *target*'s battlefield.
+
+        **The whole noun phrase, as one payload.** This used to take seven named
+        filter keys, which made the printed narrowing a hand-maintained
+        inclusion list: a key the lowering emitted and this signature had never
+        heard of was dropped on the floor. ``with_keywords`` was one, so Merfolk
+        Assassin's "target creature with islandwalk" scanned the battlefield for
+        any creature at all and destroyed the first one.
+
+        The four seats are what ``subject_matches`` refuses a relative narrowing
+        without — "you own" (Despotic Scepter), "defending player controls"
+        (Necrite), "that player controls" (Feline Sovereign) — and *source* is
+        what a combat relation needs ("blocking this creature", Urborg Panther).
+        A caller that cannot supply one hands over a narrowing that then refuses
+        every candidate, which is the direction that destroys nothing rather
+        than the wrong thing.
+        """
         # The destroyed **Permanent**, not its card: the caller may owe a
         # record of what died ("the number of Mountains put into a graveyard
         # this way" is the same question whichever branch destroyed them), and
@@ -269,21 +284,20 @@ class EffectsMixin:
             (i for i, p in enumerate(self.players) if p is target), None
         )
 
-        # Shared filter evaluation (handlers/_common.py) so resolution can
-        # never disagree with cast validation / legality enumeration about
-        # what a target filter means.
-        filter_payload = {
-            "type_filter": type_filter,
-            "subtype_filter": subtype_filter,
-            "tapped_only": tapped_only,
-            "color_filter": color_filter,
-            "exclude_colors": exclude_colors,
-            "exclude_types": exclude_types,
-            "attached_to_filter": attached_to_filter,
-        }
+        # Shared filter evaluation (engine/subject_filters.py) so resolution can
+        # never disagree with cast validation / legality enumeration about what
+        # a target filter means — the *whole* matcher, not the pure half, which
+        # is the difference between the two readings this method used to hold.
+        from ..subject_filters import subject_matches
+
+        filter_payload = described or {}
 
         def _is_legal_target(perm) -> bool:
-            return permanent_matches_filter(perm, filter_payload)
+            return subject_matches(
+                self, perm, filter_payload,
+                observer=observer, source=source,
+                defending=defending, that_player=that_player,
+            )
 
         def _do_destroy(perm: "Permanent", idx: int) -> "Permanent":
             # Pyramids: a shielded land's destruction is replaced — remove all

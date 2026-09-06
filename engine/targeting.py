@@ -2471,6 +2471,46 @@ def bounce_subject_filter(payload: dict) -> dict:
     return {"type_filter": "creature"}
 
 
+#: Keys a ``destroy_target_permanent`` payload carries that are **not** part of
+#: the printed noun phrase. Everything else is, which is the direction that
+#: matters: a key left off a hand-written *inclusion* list is a narrowing
+#: silently dropped, and a dropped narrowing is an ability destroying more than
+#: the card allows. Naming the exclusions instead means a new filter key is
+#: enforced the day the lowering starts emitting it.
+_DESTROY_NON_SUBJECT_KEYS = frozenset({
+    # How the announcement was shaped, not what it may name.
+    "targets",
+    # CR 701.19c's rider, applied by the destruction itself.
+    "bypass_regeneration",
+    # The scratchpad channel another seat's choice was recorded on (The Abyss);
+    # the handler reads it as *the* victim rather than as a description.
+    "permanents_from",
+    # "…with mana value X" (Detonate, Kaervek's Purge). The one restriction with
+    # no literal to test at picker time: the caster announces the target and the
+    # X together (CR 601.2b then 601.2c), so narrowing here would offer nothing
+    # at all. `_validate_cast_targets` checks the pair where both halves exist.
+    "mv_equals_x",
+})
+
+
+def destroy_subject_filter(payload: dict) -> dict:
+    """What "Destroy target <noun phrase>" named, as a filter payload.
+
+    One reading shared by the picker, the cast gate and the resolution, so the
+    three cannot disagree about which permanents a destroy may name. It used to
+    be three: the picker and the cast gate handed the *whole* payload to
+    ``permanent_matches_filter`` — the pure half of the matcher, which has no
+    game and therefore silently ignores every seat-, keyword- and
+    source-relative key — and the resolution forwarded eight keys by hand.
+    Merfolk Assassin's "target creature with islandwalk" destroyed a vanilla
+    Bear through all three.
+    """
+    return {
+        key: value for key, value in payload.items()
+        if key not in _DESTROY_NON_SUBJECT_KEYS
+    }
+
+
 # The one spec kind whose chosen index is *not* a battlefield slot. Named
 # rather than spelled out at each reader, because "is this index a graveyard
 # index?" is asked in five places and a sixth that forgets is a spell reading a

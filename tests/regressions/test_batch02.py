@@ -307,7 +307,7 @@ class TestSedgeTroll:
         p2 = PlayerState(name="P2")
         game = _game(p1, p2)
 
-        destroyed = game._destroy_target_permanent(p1, type_filter="creature")
+        destroyed = game._destroy_target_permanent(p1, described={"type_filter": "creature"})
 
         assert destroyed is None
         assert troll in p1.battlefield

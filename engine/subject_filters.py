@@ -528,6 +528,37 @@ def _source_relative_bound_holds(
     )
 
 
+def _blocked_while_it_lasted(
+    game: "Game", blocker: "Permanent", attacker: "Permanent"
+) -> bool:
+    """Whether *blocker* blocked *attacker* this turn, read off the record
+    rather than off the live combat maps (CR 608.2h).
+
+    The maps are indexed on the battlefield and are dropped when a creature
+    leaves it, which is right for "is blocking" as a *state* and wrong for the
+    two cards that ask the question after paying themselves as the cost. Both
+    Wall of Corpses and Urborg Panther are sacrificed to activate an ability
+    whose target is "the creature this creature is blocking" / "blocking this
+    creature" — so at CR 608.2b's re-check the relation exists only as last
+    known information, and reading the maps alone makes both abilities resolve
+    for nothing.
+
+    One record, ``blocked_attacker_ids_this_turn``, written by
+    ``declare_blockers_step`` on the *blocker*, which is the same field
+    ``blocked_source_this_turn`` reads — so the live relation and its history
+    cannot disagree about who blocked whom.
+    """
+    if blocker is None or attacker is None:
+        return False
+    if game.is_on_battlefield(blocker) and game.is_on_battlefield(attacker):
+        # Both still here, so the live maps are the whole truth and a creature
+        # that has left the combat is no longer blocking anything.
+        return False
+    return attacker.permanent_id in set(
+        blocker.metadata.get("blocked_attacker_ids_this_turn") or ()
+    )
+
+
 def subject_matches(
     game: "Game",
     obj: "Permanent | None",
@@ -810,7 +841,15 @@ def subject_matches(
         if source is None:
             return False
         if not any(attacker is obj for attacker in game.creatures_blocked_by(source)):
-            return False
+            # **Unless the source has left** (CR 608.2h). Wall of Corpses is
+            # sacrificed to pay for its own ability, so by the time CR 608.2b
+            # re-reads "target creature this creature is blocking" the combat
+            # maps have already let the block go — the relation is last known
+            # information, and reading the live maps alone makes every card of
+            # this shape resolve for nothing. The record is on the blocker and
+            # the two directions below share it.
+            if not _blocked_while_it_lasted(game, source, obj):
+                return False
     # "target creature **blocking this creature**" — the same combat record read
     # from the other end, through the reader the damage step and the count
     # evaluator already share (``creatures_blocking``), so a band-propagated
@@ -820,7 +859,11 @@ def subject_matches(
         if source is None:
             return False
         if not any(blocker is obj for blocker in game.creatures_blocking(source)):
-            return False
+            # The same last-known-information reading one relation over: Urborg
+            # Panther is sacrificed for its own ability too, and its blocker is
+            # what the sentence names.
+            if not _blocked_while_it_lasted(game, obj, source):
+                return False
     # "…all creatures **that blocked this creature this turn**" (Joven's
     # Ferrets). The same relation as a *history* rather than as a live combat
     # fact, and that is why it reads a record rather than the combat maps: the

@@ -377,7 +377,7 @@ def test_false_demise_returns_the_dead_creature_under_the_auras_controller(set_p
     attach_aura(aura, host)
     card = host.card
 
-    game._destroy_target_permanent(game.players[1], type_filter="creature")
+    game._destroy_target_permanent(game.players[1], described={"type_filter": "creature"})
     game.check_state_based_actions()
     game.resolve_stack(pause_for_choices=True)
 
@@ -400,7 +400,7 @@ def test_false_demise_deals_no_damage_of_creature_bonds(set_pool):
     ])
     attach_aura(aura, host)
 
-    game._destroy_target_permanent(game.players[1], type_filter="creature")
+    game._destroy_target_permanent(game.players[1], described={"type_filter": "creature"})
     game.check_state_based_actions()
     game.resolve_stack(pause_for_choices=True)
 
