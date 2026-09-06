@@ -15610,6 +15610,7 @@ function renderBoard(state) {
     : (isSelfTurn ? (!canEndTurn || hasBlockingPrompt) : (seat === null || hasBlockingPrompt));
   q("nextPhaseBtn").disabled = !hasPriority || hasBlockingPrompt || hasCombatDeclarationPrompt;
   q("undoBtn").disabled = sessionId === null;
+  renderSpecialActions(state, hasPriority);
   selfHeader?.classList.toggle("turn-zone-self", isSelfTurn);
   // Per-seat, not just "not my turn": in FFA the active player might be one
   // of the corner seats instead of the classic header's seat.
@@ -17603,6 +17604,43 @@ async function rejoinSession(seatIndex) {
 }
 
 const _CAST_ACTIONS = new Set(["cast", "debug_cast_free", "debug_cast_free_opponent"]);
+
+// CR 116 special actions — what the viewer may do with a card in hand right
+// now without using the stack. The server has already asked
+// `engine/special_actions.special_action_refusal` of every entry, so this
+// renders what it is given rather than re-deciding: a client that made its own
+// judgement would be the second copy that disagrees with the action.
+//
+// One button per entry, and none at all when the list is empty, which is every
+// game that does not contain one of these cards.
+const SPECIAL_ACTION_LABELS = {
+  discard_from_hand: (name) => `Discard ${name}`,
+};
+
+function renderSpecialActions(state, hasPriority) {
+  const host = q("specialActions");
+  if (!host) return;
+  const entries = hasPriority ? (state?.special_actions || []) : [];
+  host.innerHTML = "";
+  host.classList.toggle("hidden", entries.length === 0);
+  for (const entry of entries) {
+    const label = SPECIAL_ACTION_LABELS[entry.kind];
+    if (!label) continue;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "secondary-btn";
+    button.textContent = label(entry.name);
+    button.title = "A special action (CR 116): it does not use the stack.";
+    button.addEventListener("click", () => {
+      sendAction({
+        action: "special_action",
+        hand_index: entry.hand_index,
+        special_action_kind: entry.kind,
+      });
+    });
+    host.appendChild(button);
+  }
+}
 
 async function sendAction(actionBody) {
   if (!sessionId) return;

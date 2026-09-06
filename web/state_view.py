@@ -43,6 +43,7 @@ from dataclasses import dataclass
 from engine import Game
 from engine.hand_locks import locked_hand_indices
 from engine.cast_permissions import playable_from_zones
+from engine.special_actions import available_special_actions
 from engine.cast_timing import casts_at_instant_speed
 from engine.classifier import classify_card
 from engine.models import PlayerState
@@ -685,6 +686,17 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         # spectator — a permission belongs to a seat.
         "castable_from_zones": (
             playable_from_zones(session.game, viewer_seat)
+            if viewer_seat is not None
+            else []
+        ),
+        # CR 116 special actions: what the viewer may do with a card in hand
+        # right now without using the stack (engine/special_actions.py). One
+        # entry per (hand card, kind), through the same refusal the action
+        # asks — a card offered here and refused by the action would be a
+        # button that does nothing. Empty for a spectator, for the reason the
+        # permissions above are: an action belongs to a seat.
+        "special_actions": (
+            available_special_actions(session.game, viewer_seat)
             if viewer_seat is not None
             else []
         ),

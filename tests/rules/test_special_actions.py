@@ -1,214 +1,138 @@
-"""Comprehensive Rules Section 116 — Special Actions.
+"""CR 116 — special actions: what a player may do with priority, off the stack.
 
-A special action is something a player *does* with priority that never uses the
-stack, so nothing can respond to it and no ability sees a spell being cast. Of
-the twelve CR 116.2 lists, this engine implements exactly one: 116.2a, playing
-a land. The others (turning a face-down creature face up, suspend, foretell,
-companion, …) belong to mechanics outside the Alpha-through-M21 pool.
+CR 116.1 defines them as "actions a player may take when they have priority
+that don't use the stack", and CR 116.2 lists twelve. This engine implements
+two: the land drop (CR 116.2a), which predates the seam and still lives on the
+play path, and CR 116.2e, the only rule in the whole CR that names a card.
 
-The interesting assertions are all *negative* — no stack item, no cast record —
-because that is the entire difference between playing a land and casting a
-spell, and the two go through the same engine entry point. CR 305.2's
-once-per-turn count is covered from the land side in
-``test_land_play_allowance.py``; here it is cited as what makes the action a
-special action rather than a spell.
-
-CR 116.3 ("that player receives priority afterward") is at the end. Playing a
-land opens no priority window of its own, so the grant is an explicit call —
-``Game.note_priority_action_taken``, which every action site makes once its
-action has succeeded.
+The reason the second one needed a seam at all is the first clause of CR 116.1.
+No stack means no instruction to compile and no handler to dispatch, so a card
+whose remaining text is a keyword line and an upkeep trigger reported
+*unsupported* however well the action worked — the compiler had nowhere to put
+it. `engine/special_actions.py` is the table, and the support gate reads that
+same table, which is what closes the gap.
 """
 
 import pytest
 
 from engine import Game, PlayerState
-from engine.models import CardDefinition, Permanent
+from engine.card_loader import load_catalog, load_cards, manifest_set_path
+from engine.oracle import compile_card_oracle
+from engine.special_actions import (available_special_actions,
+                                    special_action_line,
+                                    special_action_refusal,
+                                    special_actions_for, take_special_action)
+
+_WTH = {
+    c.name: c
+    for c in load_cards(manifest_set_path("WTH", include_measured=True))
+}
+_CATALOG = {c.name: c for c in load_catalog()}
 
 
-def _card(name: str, type_line: str, oracle_text: str = "") -> CardDefinition:
-    raw: dict = {"name": name, "type_line": type_line}
-    if "Creature" in type_line:
-        raw["power"], raw["toughness"] = "2", "2"
-    return CardDefinition(
-        name=name, mana_cost="", cmc=0.0, type_line=type_line,
-        oracle_text=oracle_text, colors=(), color_identity=(), keywords=(),
-        produced_mana=("G",) if "Land" in type_line else (),
-        raw=raw,
-    )
-
-
-def _forest(name: str = "Forest") -> CardDefinition:
-    return _card(name, "Basic Land — Forest", "({T}: Add {G}.)")
-
-
-def _game_with_hand(*cards: CardDefinition) -> tuple[Game, PlayerState]:
-    p1 = PlayerState(name="P1", hand=list(cards))
-    game = Game(players=[p1, PlayerState(name="P2")])
+def _duel(hand=()):
+    p1, p2 = PlayerState(name="A", hand=list(hand)), PlayerState(name="B")
+    game = Game(players=[p1, p2])
     game.enforce_mana_costs = False
-    game.start_turn(0)
-    return game, p1
+    game.active_player_index = 0
+    return game, p1, p2
 
 
-# ---------------------------------------------------------------------------
-# 116.1 — special actions don't use the stack
-# ---------------------------------------------------------------------------
+@pytest.mark.cr("116.1", "116.2e", "116.3")
+def test_116_2e_discarding_circling_vultures_is_a_special_action():
+    """"One card (Circling Vultures) has the ability 'You may discard Circling
+    Vultures any time you could cast an instant.' Doing so is a special action.
+    A player can take such an action any time they have priority."
 
-@pytest.mark.cr("116.1", "116.2a")
-def test_116_1_playing_a_land_never_touches_the_stack():
-    """Playing a land is a special action, so it uses no stack.
+    Three properties, one per clause, and each is a way this could be built
+    wrong:
 
-    ``queue_from_hand`` is the "leave it on the stack" API and still reports
-    the land *resolved*: the land branch puts the permanent onto the
-    battlefield directly and never reaches ``_stack_push``.
+    * it does not use the stack (CR 116.1), so nothing is put on it and nothing
+      resolves;
+    * it needs priority and nothing else (CR 116.2e) — *not* CR 601.3d's
+      sorcery window, and not `cast_timing.casts_at_instant_speed`, which
+      answers about a card being **cast** and nothing here is cast;
+    * the player has priority again afterwards (CR 116.3), so the action must
+      not pass or advance a step.
     """
-    game, p1 = _game_with_hand(_forest())
+    assert special_action_line(
+        "You may discard this card any time you could cast an instant."
+    ) == "discard_from_hand"
+    assert special_actions_for(_WTH["Circling Vultures"]) == ("discard_from_hand",)
 
-    result = game.queue_from_hand(0, "Forest")
+    game, p1, _p2 = _duel([_WTH["Circling Vultures"], _CATALOG["Grizzly Bears"]])
+    game.priority_player_index = 0
+    assert available_special_actions(game, 0) == [
+        {"hand_index": 0, "name": "Circling Vultures", "kind": "discard_from_hand"}
+    ]
 
-    assert result.details == "resolved"
-    assert game.stack == []
-    assert [perm.card.name for perm in p1.battlefield] == ["Forest"]
+    assert take_special_action(
+        game, 0, _WTH["Circling Vultures"], "discard_from_hand"
+    ) is None
+
+    assert [c.name for c in p1.hand] == ["Grizzly Bears"]
+    assert [c.name for c in p1.graveyard] == ["Circling Vultures"]
+    assert game.stack == [], "CR 116.1: a special action does not use the stack"
+    assert game.has_priority(0), "CR 116.3: and the player keeps priority"
+
+
+@pytest.mark.cr("116.1", "116.2e")
+def test_116_1_a_special_action_needs_priority_and_the_card_in_hand():
+    """The two halves of "when they have priority", asked of the one gate the
+    engine and the web layer both read — an action the client offers and the
+    engine refuses is a button that does nothing.
+
+    The opponent's answer is the one that matters: the card is in somebody's
+    hand and the ability is real, and the seat that may take it is the seat
+    holding it.
+    """
+    game, _p1, _p2 = _duel([_WTH["Circling Vultures"]])
+    vultures = _WTH["Circling Vultures"]
+
+    game.priority_player_index = 1
+    assert special_action_refusal(game, 0, vultures, "discard_from_hand") == (
+        "A does not have priority"
+    )
+    assert available_special_actions(game, 0) == []
+
+    game.priority_player_index = 0
+    assert special_action_refusal(game, 0, vultures, "discard_from_hand") is None
+    assert special_action_refusal(game, 1, vultures, "discard_from_hand") == (
+        "Circling Vultures is not in B's hand"
+    )
+    assert available_special_actions(game, 1) == []
+
+
+@pytest.mark.cr("116.2e", "400.3")
+def test_116_2e_a_discard_takes_exactly_one_copy_of_a_shared_definition():
+    """A deck repeats one immutable ``CardDefinition`` per copy, so an identity
+    *filter* over the hand removes every copy where the caller then files one.
+    That class has deleted cards from this game before
+    (`tests/engine/test_hand_removal_seam.py`), and the graveyard side is
+    CR 614's event rather than a list append — a bare append skips every
+    replacement over "if a card would be put into your graveyard".
+    """
+    vultures = _WTH["Circling Vultures"]
+    game, p1, _p2 = _duel([vultures, vultures])
+    game.priority_player_index = 0
+
+    take_special_action(game, 0, vultures, "discard_from_hand")
+
+    assert [c.name for c in p1.hand] == ["Circling Vultures"]
+    assert [c.name for c in p1.graveyard] == ["Circling Vultures"]
 
 
 @pytest.mark.cr("116.1")
-def test_116_1_a_spell_by_contrast_does_use_the_stack():
-    """The same entry point, the other answer — this is what pins the previous
-    test to CR 116.1 rather than to an implementation detail of land handling."""
-    game, p1 = _game_with_hand(_card("Grizzly Bears", "Creature — Bear"))
+def test_116_1_a_special_action_makes_its_card_supported():
+    """The gap the seam closes, asserted rather than described.
 
-    result = game.queue_from_hand(0, "Grizzly Bears")
-
-    assert result.details == "queued"
-    assert len(game.stack) == 1
-    assert p1.battlefield == []
-
-
-@pytest.mark.cr("116.1", "116.2a")
-def test_116_1_playing_a_land_is_not_casting_a_spell():
-    """Nothing that watches for a spell being cast sees a land played.
-
-    CR 116.1 keeps the special action off the stack; the consequence tested
-    here is that the land is never recorded as a spell cast, which is what
-    "whenever you cast" abilities and prowess read.
+    Circling Vultures' other two lines both worked — flying, and an upkeep
+    trigger that compiles to a real ``may``/``otherwise`` pair — and the card
+    reported unsupported for the one sentence that produces no instruction
+    *by rule*. A support gate that only counts instructions cannot admit a
+    CR 116 action at all, which is why it reads this table.
     """
-    game, p1 = _game_with_hand(_forest(), _card("Grizzly Bears", "Creature — Bear"))
+    program = compile_card_oracle(_WTH["Circling Vultures"])
 
-    game.queue_from_hand(0, "Forest")
-    assert p1.spells_cast_this_turn == []
-
-    game.queue_from_hand(0, "Grizzly Bears")
-    assert [card.name for card in p1.spells_cast_this_turn] == ["Grizzly Bears"]
-
-
-@pytest.mark.cr("116.1")
-def test_116_1_a_land_play_cannot_be_responded_to():
-    """Nothing can be put on the stack in response, because there is no window:
-    the land is already on the battlefield when the action finishes, so an
-    opponent never sees an object to respond to."""
-    game, p1 = _game_with_hand(_forest())
-
-    game.queue_from_hand(0, "Forest")
-
-    assert game.stack == []
-    assert game.is_on_battlefield(p1.battlefield[0])
-
-
-# ---------------------------------------------------------------------------
-# 116.2a — playing a land, and its once-per-turn default
-# ---------------------------------------------------------------------------
-
-@pytest.mark.cr("116.2a", "305.1")
-def test_116_2a_the_land_goes_to_the_battlefield_from_the_zone_it_was_in():
-    """To play a land is to put it onto the battlefield from the zone it was in
-    — it leaves the hand and arrives in play in one action, with no
-    intermediate zone."""
-    game, p1 = _game_with_hand(_forest())
-
-    game.queue_from_hand(0, "Forest")
-
-    assert p1.hand == []
-    assert p1.graveyard == []
-    assert len(p1.battlefield) == 1
-    assert p1.battlefield[0].card.name == "Forest"
-
-
-@pytest.mark.cr("116.2a", "305.2")
-def test_116_2a_only_once_during_each_of_their_turns_by_default():
-    """"By default, a player can take this action only once during each of
-    their turns." The count is the engine's, so it only binds when cost
-    enforcement is on."""
-    game, p1 = _game_with_hand(_forest("Forest 1"), _forest("Forest 2"))
-    game.enforce_mana_costs = True
-
-    assert game.cast_from_hand(0, "Forest 1").supported is True
-    second = game.cast_from_hand(0, "Forest 2")
-
-    assert second.supported is False
-    assert second.details == "already played a land this turn"
-    assert len(p1.battlefield) == 1
-
-
-@pytest.mark.cr("116.2a", "305.2")
-def test_116_2a_the_allowance_resets_on_the_players_next_turn():
-    """The default is once per *their* turn, so the count is per-turn state and
-    a new turn restores the action."""
-    game, p1 = _game_with_hand(_forest("Forest 1"), _forest("Forest 2"))
-    game.enforce_mana_costs = True
-    game.cast_from_hand(0, "Forest 1")
-    assert game.cast_from_hand(0, "Forest 2").supported is False
-
-    game.start_turn(1)
-    game.start_turn(0)
-
-    assert game.cast_from_hand(0, "Forest 2").supported is True
-    assert len(p1.battlefield) == 2
-
-
-# ---------------------------------------------------------------------------
-# 116.3 — the player who took the special action gets priority back
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.cr("116.3", "116.2a")
-def test_116_3_playing_a_land_grants_priority_even_with_no_window_open():
-    """"If a player takes a special action, that player receives priority
-    afterward."
-
-    The land play itself opens no priority window — it is not a spell and puts
-    nothing on the stack — so the grant has to come from somewhere, and it is
-    ``note_priority_action_taken``, the call every action site makes once its
-    action succeeded. Its "no window open" branch is the whole of CR 116.3:
-    without it a seat that took a special action outside a window would hold
-    nothing afterward and could not act again."""
-    game, p1 = _game_with_hand(_forest())
-    game.clear_priority_window()
-    assert game.priority_player_index is None
-
-    game.queue_from_hand(0, "Forest")
-    game.note_priority_action_taken(0)
-
-    assert game.has_priority(0)
-    assert not game.has_priority(1)
-    assert game.priority_pass_count == 0
-    assert len(p1.battlefield) == 1
-
-
-@pytest.mark.cr("116.3", "116.2a")
-def test_116_3_a_special_action_is_not_a_pass():
-    """The player who took it receives priority — the opponent does not. That
-    is the difference between taking a special action and passing, and the
-    second half of this test is what makes the first half mean something: the
-    same window *does* hand priority over when it is actually passed."""
-    game, p1 = _game_with_hand(_forest("Forest 1"), _forest("Forest 2"))
-    assert game.has_priority(0)
-
-    game.queue_from_hand(0, "Forest 1")
-    game.note_priority_action_taken(0)
-
-    assert game.has_priority(0)
-    assert not game.has_priority(1)
-
-    game.pass_priority(0)
-
-    assert game.has_priority(1)
-    assert not game.has_priority(0)
+    assert program.supported, program.reason
+    assert [t.supported for t in program.triggered_abilities] == [True]

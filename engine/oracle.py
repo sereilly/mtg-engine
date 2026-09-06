@@ -55,6 +55,7 @@ from .alternative_costs import (
     unread_alternative_cost_sentence,
 )
 from .cast_costs import cast_cost_claims_line, unread_cost_sentence
+from .special_actions import special_action_line
 from .combat_restrictions import combat_restriction_for
 from .enter_effects import enter_effect_line
 from .target_immunity import immunity_claims_line
@@ -4326,6 +4327,19 @@ def _parse_creature_program(
         if alternative_cost_claims_line(line):
             continue
 
+        # 1d. A CR 116 **special action** — "You may discard this card any time
+        # you could cast an instant" (Circling Vultures, the one card CR 116.2e
+        # names). Not an effect and so not an instruction, for the reason the
+        # two costs above are not: CR 116.1 says a special action does not use
+        # the stack, so there is nothing to put on it and nothing to dispatch.
+        # `engine/special_actions.py` performs it and this asks that table, so
+        # what is claimed and what acts cannot drift.
+        #
+        # A creature is where the pool prints it, and the noncreature path
+        # reaches the same table through `_derived_static_claims`.
+        if special_action_line(line) is not None:
+            continue
+
         # 2. Triggered ability
         trig = _parse_triggered_ability(line, card_name)
         if trig is not None:
@@ -5038,6 +5052,7 @@ def _derived_static_claims(
     from .regeneration import denies_regeneration_line, self_regeneration_line
     from .replacements import replacement_claims_line
     from .revealed_hands import revealed_hands_line
+    from .special_actions import special_action_line
     from .target_immunity import CLAIM as TARGET_IMMUNITY_CLAIM
     from .target_immunity import immunity_claims_line
     from .lethal_damage import CLAIM as LETHAL_DAMAGE_CLAIM
@@ -5213,6 +5228,20 @@ def _derived_static_claims(
         cast_permission_line(line) for line in (oracle_text or "").splitlines()
     ):
         claims.append("cast_timing")
+    # "You may discard this card any time you could cast an instant."
+    # (Circling Vultures.) CR 116.2e's special action, which by CR 116.1 does
+    # not use the stack — so there is nothing to compile, and on a creature
+    # whose other text is a keyword and an upkeep trigger, "nothing to compile"
+    # meant the card reported unsupported however well the action works.
+    #
+    # Claimed line by line and through the table's own reader, for the reason
+    # every row above is asked that way: a literal here would be a second copy
+    # of the sentence, free to drift from the one that acts.
+    if any(
+        special_action_line(line) is not None
+        for line in (oracle_text or "").splitlines()
+    ):
+        claims.append("special_actions")
     # "Creatures with mountainwalk can be blocked as though they didn't have
     # mountainwalk." (Crevasse and its four siblings.) The blockers step reads
     # the permanent's own text, so there is no instruction — and on an

@@ -1070,3 +1070,69 @@ def test_fungus_elemental_refuses_on_a_later_turn(set_pool, catalog_by_name):
     assert [p.card.name for p in p1.battlefield] == [
         "Fungus Elemental", "Forest",
     ], "nothing was spent"
+
+
+def test_circling_vultures_may_be_discarded_as_a_special_action(
+    set_pool, catalog_by_name
+):
+    """"You may discard this card any time you could cast an instant."
+
+    CR 116.2e names this card, and CR 116.1 is why it needed a seam rather than
+    a production: a special action does not use the stack, so there is no
+    instruction to compile — and the card reported *unsupported* for the one
+    sentence that produces none by rule, while its flying and its upkeep
+    trigger both worked.
+    """
+    from engine.special_actions import (available_special_actions,
+                                        take_special_action)
+
+    pool = set_pool("WTH")
+    vultures = pool["Circling Vultures"]
+    game, p1, _p2 = _w2g1_turn_one_board()
+    p1.hand = [vultures, catalog_by_name["Grizzly Bears"]]
+    game.priority_player_index = 0
+
+    assert [entry["kind"] for entry in available_special_actions(game, 0)] == [
+        "discard_from_hand"
+    ]
+    assert take_special_action(game, 0, vultures, "discard_from_hand") is None
+
+    assert [c.name for c in p1.hand] == ["Grizzly Bears"]
+    assert [c.name for c in p1.graveyard] == ["Circling Vultures"]
+    assert game.stack == [], "CR 116.1: it never touches the stack"
+
+
+def test_circling_vultures_upkeep_still_costs_a_creature_card(
+    set_pool, catalog_by_name
+):
+    """"At the beginning of your upkeep, sacrifice this creature unless you
+    exile the top creature card of your graveyard."
+
+    The other half of the card, and the reason the special action had to make
+    the *card* supported rather than merely be implemented: this trigger
+    already compiled and already worked, and the card was refused anyway.
+    """
+    pool = set_pool("WTH")
+    game, p1, _p2 = _w2g1_turn_one_board()
+    game.interactive_seats = {0}
+    vultures = _W2G1Permanent(card=pool["Circling Vultures"])
+    p1.battlefield.append(vultures)
+    p1.graveyard = [catalog_by_name["Grizzly Bears"]]
+
+    game.resolve_upkeep(0)
+    # The trigger is a "may … unless", so an interactive seat is *asked*
+    # (CR 608.2, CR 117.3b: the game waits while a prompt is owed). A test
+    # written without the prompt proves only that the default runs.
+    assert [choice.kind for choice in game.pending_choices] == ["optional_pay"]
+    game.confirm_optional_pay(0, accept=True)
+
+    assert [c.name for c in p1.exile] == ["Grizzly Bears"], "the price was paid"
+    assert [p.card.name for p in p1.battlefield] == ["Circling Vultures"]
+
+    game.resolve_upkeep(0)
+    game.confirm_optional_pay(0, accept=True)
+
+    assert [p.card.name for p in p1.battlefield] == [], (
+        "and with no creature card left, it is sacrificed"
+    )
+    assert [c.name for c in p1.graveyard] == ["Circling Vultures"]

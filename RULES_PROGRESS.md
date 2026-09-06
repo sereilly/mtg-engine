@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**359 / 612 tracked rules covered (58%)** — 2083 tests, 0 unannotated.
+**359 / 612 tracked rules covered (58%)** — 2078 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -275,9 +275,9 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 116. Special Actions
 
-- [x] **116.1** Special actions are actions a player may take when they have priority that don’t use the stack. T... *(4 tests)*
-- [x] **116.2** There are twelve special actions: *(7 tests, subrules a)*
-- [x] **116.3** If a player takes a special action, that player receives priority afterward. *(2 tests)*
+- [x] **116.1** Special actions are actions a player may take when they have priority that don’t use the stack. T... *(3 tests)*
+- [x] **116.2** There are twelve special actions: *(3 tests, subrules e)*
+- [x] **116.3** If a player takes a special action, that player receives priority afterward. *(1 tests)*
 
 ### 117. Timing and Priority
 
@@ -445,8 +445,8 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 305. Lands
 
-- [x] **305.1** A player who has priority may play a land card from their hand during a main phase of their turn ... *(4 tests)*
-- [x] **305.2** A player can normally play one land during their turn; however, continuous effects may increase t... *(25 tests, subrules ab)*
+- [x] **305.1** A player who has priority may play a land card from their hand during a main phase of their turn ... *(3 tests)*
+- [x] **305.2** A player can normally play one land during their turn; however, continuous effects may increase t... *(23 tests, subrules ab)*
 - [ ] **305.3** A player can’t play a land, for any reason, if it isn’t their turn. Ignore any part of an effect ...
 - [ ] **305.4** Effects may also allow players to “put” lands onto the battlefield. This isn’t the same as “playi...
 - [ ] **305.5** Land subtypes are always a single word and are listed after a long dash. Land subtypes are also c...
@@ -479,7 +479,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **400.1** A zone is a place where objects can be during a game. There are normally seven zones: library, ha... *(4 tests)*
 - [x] **400.2** Public zones are zones in which all players can see the cards’ faces, except for those cards that... *(4 tests)*
-- [x] **400.3** If an object would go to any library, graveyard, or hand other than its owner’s, it goes to its o... *(7 tests)*
+- [x] **400.3** If an object would go to any library, graveyard, or hand other than its owner’s, it goes to its o... *(8 tests)*
 - [x] **400.4** Cards with certain card types can’t enter certain zones. *(1 tests)*
 - [x] **400.5** The order of objects in a library, in a graveyard, or on the stack can’t be changed except when e... *(2 tests)*
 - [ ] **400.6** If an object would move from one zone to another, determine what event is moving the object. If t...
