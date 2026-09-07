@@ -889,6 +889,61 @@ answer. `tests/ui/test_layer_reads_on_the_wire.py` now pins both known sites
 from the wire side. Two promotion smoke tests in a row have found one of these,
 which is the argument for the widened scan rather than a third.
 
+**Added at EXO's wave 2: a *cast* cannot announce CR 615.8's chosen source.**
+"A source of your choice" is not a target (CR 615.8), so it travels on its own
+announcement field — `choices["chosen_source"]`, filled from
+`source_seat`/`source_permanent_index`/`source_stack_index`. Only
+`mixins/stack/activation.py` writes it. Every **spell** in the pool that prints
+the phrase gets away with that because it names nothing else, so the source
+rides the spell's own target slot instead (`targeting` gives them
+`source_of_choice` + `also_stack`, and `handlers/prevention.chosen_shield_source`
+reads it there): Reverse Damage, Reflect Damage, Invulnerability, Shadowbane and
+Eye for an Eye are all cast correctly that way.
+
+**The gap is a spell that names a target *as well*, and it already has a shipped
+victim.** Honorable Passage ("The next time a source of your choice would deal
+damage to **any target** this turn, prevent that damage") derives
+`{"kind": "any", "requires_source": True}` — but `web/static/app.js` runs the
+`requires_source` stage only inside `if (pending.castAction === "activate")`, so
+a human casting it is never offered the second prompt and the shield arms
+sourceless. It is *bounded* rather than wrong: `uses=1` means the effect is
+spent on one instance either way, which is the documented AI/headless fallback.
+That is exactly why it went unnoticed.
+
+**EXO's Kor Chant is the same gap where the fallback is no longer bounded**, and
+that is what makes this worth draining. "All damage that would be dealt this
+turn to target creature you control by a source of your choice is dealt to
+another target creature instead" announces *three* things — two targets and the
+source — and it is **blanket for the turn**, not one instance. Armed against any
+source it would move every point of damage dealt all turn onto the second
+creature. So the lowering refuses by name
+(`lowering/redirection.py`: "a cast cannot announce CR 615.8's chosen source
+beside its own targets") rather than taking a fallback that is wider than the
+card in the silent direction. Everything else for the card is built: the
+production reads the phrase in its printed position and the node is complete.
+
+**Phase 3 of the next set printing either shape clears it**, as four parts:
+1. `casting.cast_from_hand` / `_cast_onto_stack` take
+   `source_seat`/`source_permanent_index`/`source_stack_index` and stash the
+   resolved object under `choices["chosen_source"]`, exactly as
+   `activation.py` already does around its own stack push;
+2. `web/actions.py`'s cast branch forwards those three fields, with the same
+   top-first-to-bottom-first stack-index conversion the activate branch does;
+3. `web/static/app.js` lifts the `requires_source` stage out of the activate
+   branch so it runs after a cast's target walk — including after a **roles**
+   walk, which is the shape Kor Chant needs and no existing card exercises;
+4. the redirect kind itself
+   (`redirect_chosen_source_damage_between_targets_until_eot`: two per-slot
+   `filters`, no `uses`, the taker resolved from slot 1), its
+   `INSTRUCTION_CATEGORIES`/`GRAMMAR_CATEGORIES` rows, and a
+   `_KIND_TO_SPEC_FROM_PAYLOAD` row — `_off_target_chosen_source_redirect_spec`
+   already serves it unchanged, because it reads the payload and
+   `_slot_roles_spec` turns two differing slots into ordered roles.
+
+Parts 1–3 are what makes part 4 safe; landing 4 alone is the wide-fallback
+mis-play this entry exists to refuse. Verify with **Honorable Passage**, which
+is shipped and so can be driven in the running app.
+
 ## Phase 0 — Pre-flight
 
 **Entry:** a set has been chosen. **Exit:** clean tree, every gate green,

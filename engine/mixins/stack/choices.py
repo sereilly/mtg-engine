@@ -2613,9 +2613,18 @@ class PendingChoicesMixin:
                 break
             discarded += 1
         self.discard_pending_choice(choice)
-        # The stated policy for "up to" is to take the whole offer: this pairing
+        # The stated policy for "up to" is to take the whole offer, and the
+        # reason has widened rather than changed. It used to be "this pairing
         # only ever prints with a draw behind it, so discarding fewer is
-        # strictly less card selection for the same cards.
+        # strictly less card selection for the same cards" — a fact about which
+        # cards existed, which stopped being true when "discard **any number of**
+        # creature cards. For each card discarded this way, put two +1/+1
+        # counters on this creature" (Mind Maggots) arrived with counters behind
+        # it instead of a draw. The policy still holds on both, because on both
+        # the offer buys something per card; it is a policy for a seat that does
+        # not evaluate, not a claim about the pool, and the next card to print a
+        # ceiling whose payoff is *not* worth the cards is what would need a
+        # real valuation here rather than a default.
         self._after_discard_answered(choice, discarded)
 
     def auto_resolve_pending_discard(self) -> None:

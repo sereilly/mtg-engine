@@ -6515,8 +6515,18 @@ def discard_controller_cards(game: Game, instruction: OracleInstruction, context
     described = dict(instruction.payload.get("filter") or {})
     eligible = [card for card in caster.hand
                 if _card_matches_filter(card, described, game=game, owner=caster)]
-    amount = min(
-        resolve_amount(instruction.payload.get("amount", 0), context.x_value), len(eligible)
+    # "Discard **any number of** creature cards" (Mind Maggots): a ceiling with
+    # no printed number, so the bound is however many cards the phrase names in
+    # this hand — a number only the resolution knows, which is why the lowering
+    # sends a flag rather than an amount. `up_to` then makes it a ceiling: "any
+    # number" includes none, and a required count would force the whole hand out.
+    any_number = bool(instruction.payload.get("any_number"))
+    amount = (
+        len(eligible) if any_number else
+        min(
+            resolve_amount(instruction.payload.get("amount", 0), context.x_value),
+            len(eligible),
+        )
     )
     # Recorded before the prompt, and again with the real number when it is
     # answered: "…for each card discarded this way" has to read a zero when
@@ -6536,6 +6546,9 @@ def discard_controller_cards(game: Game, instruction: OracleInstruction, context
     game.arm_pending_choice(
         "discard", player_seat,
         count=amount,
+        # Only when the phrase printed a ceiling, so every discard written
+        # before "any number of" existed arms a byte-identical choice.
+        **({"up_to": True} if any_number else {}),
         filter=described,
         allow_top_of_library=game._controls_top_of_library_discard(caster),
         # The live scratchpad, so the answer can record how many were actually
@@ -6544,7 +6557,10 @@ def discard_controller_cards(game: Game, instruction: OracleInstruction, context
         # none of a client's business.
         _results=context.results,
     )
-    game.log.append(f"{caster.name} must choose {amount} card(s) to discard")
+    game.log.append(
+        f"{caster.name} may discard up to {amount} card(s)" if any_number
+        else f"{caster.name} must choose {amount} card(s) to discard"
+    )
     return True, "pending_discard"
 
 

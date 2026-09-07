@@ -229,6 +229,30 @@ def _parse_damage_redirect(stream: TokenStream) -> "ast.RedirectDamage | None":
         if to is None:
             stream.reset(mark)
             return None
+    # "…dealt this turn to target creature you control **by a source of your
+    # choice**" (Kor Chant). CR 615.8's way of naming the source, printed here
+    # on the *blanket* redirect this production reads rather than on the "the
+    # next time" one that ``effects/damage_instances.py`` reads — so the phrase
+    # is the same and only the quantity in front of it differs.
+    #
+    # Read here rather than in the ``by`` branch above, and the position is the
+    # printed one: Kor Chant puts the recipient between the duration and the
+    # source, so by the time these words are reached that branch has already
+    # declined on "to". A second reading rather than a widening of the first,
+    # for the reason the recipient itself gets one — the card prints its clauses
+    # in an order the earlier pass cannot rewind to.
+    #
+    # ``from_chosen_source`` and ``dealt_by`` are the two ways one node names a
+    # source, so a sentence reaching here having already read a targeted "by"
+    # would be naming it twice; the lowering refuses that pair by name, which
+    # keeps the refusal beside every other thing it says about the shape.
+    from_chosen_source = False
+    if dealt_by is None:
+        chosen_mark = stream.mark()
+        if stream.accept_phrase("by", "a", "source", "of", "your", "choice"):
+            from_chosen_source = True
+        else:
+            stream.reset(chosen_mark)
     if not stream.accept_phrase("is", "dealt", "to"):
         stream.reset(mark)
         return None
@@ -242,6 +266,7 @@ def _parse_damage_redirect(stream: TokenStream) -> "ast.RedirectDamage | None":
         to=to,
         new_recipient=new_recipient,
         dealt_by=dealt_by,
+        from_chosen_source=from_chosen_source,
         duration=duration,
         chooser=chooser,
         combat_only=combat_only,

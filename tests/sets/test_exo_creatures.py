@@ -950,3 +950,224 @@ def test_w1g4_a_control_aura_that_changes_hands_takes_the_creature_with_it(set_p
     game.check_state_based_actions()
 
     assert game.controller_index_of(bear) == 1
+
+
+# --- W2G3: what a step records, and the rate the sentence behind it spends ---
+from engine import Game, PlayerState
+from engine.grammar import compile_line
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+
+
+def _g3w2_seats():
+    """Two seats with costs off, seat 0 active.
+
+    Its own ending — three names in the returned tuple — so a mechanical union
+    cannot splice this body onto another group's helper signature.
+    """
+    game = Game(players=[PlayerState(name="Kaya"), PlayerState(name="Oleg")])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    return game, game.players[0], game.players[1]
+
+
+def _g3w2_enter(game, seat, card, hand=()):
+    """Put *card* onto *seat*'s battlefield and fire its enters trigger."""
+    game.players[seat].hand = list(hand)
+    perm = Permanent(card=card)
+    perm.metadata["summoning_sickness_turn"] = -99
+    game.players[seat].battlefield.append(perm)
+    game._sync_control()
+    game._apply_self_enters_battlefield_triggers(seat, perm, None, None)
+    game._settle()
+    return perm
+
+
+def _g3w2_owed_discard(game):
+    """The discard prompt this resolution armed, or None if it armed none."""
+    owed = [choice for choice in game.pending_choices if choice.kind == "discard"]
+    return owed[0] if owed else None
+
+
+def test_mind_maggots_pays_two_counters_for_every_card_discarded(set_pool):
+    """"Discard any number of creature cards. For each card discarded this way,
+    put two +1/+1 counters on this creature."
+
+    The rate is the point: one discard buys two counters, so a lowering that
+    dropped the printed "two" would place half what the card says, and one that
+    dropped the *record* would place none at all. Two discards, four counters,
+    a 2/2 becoming a 6/6.
+    """
+    pool = set_pool("EXO")
+    game, kaya, _oleg = _g3w2_seats()
+    game.interactive_seats = {0}
+    hand = [pool["Standing Troops"], pool["Rabid Wolverines"], pool["City of Traitors"]]
+    maggots = _g3w2_enter(game, 0, pool["Mind Maggots"], hand)
+
+    assert game.confirm_discard(0, [0, 1])
+    game._settle()
+
+    assert len(kaya.graveyard) == 2
+    assert maggots.effective_power == 6
+    assert maggots.effective_toughness == 6
+
+
+def test_mind_maggots_offers_a_ceiling_rather_than_demanding_a_count(set_pool):
+    """"**Any number**" includes none, so the prompt is a ceiling and answering
+    it with nothing is a legal answer.
+
+    Read as an amount instead, the trigger would force the whole hand out — a
+    cost strictly larger than the card asks for, in the silent direction.
+    """
+    pool = set_pool("EXO")
+    game, kaya, _oleg = _g3w2_seats()
+    game.interactive_seats = {0}
+    hand = [pool["Standing Troops"], pool["Rabid Wolverines"]]
+    maggots = _g3w2_enter(game, 0, pool["Mind Maggots"], hand)
+
+    owed = _g3w2_owed_discard(game)
+    assert owed is not None and owed.data.get("up_to") is True
+    assert owed.data["count"] == 2, "the ceiling is what the phrase names"
+
+    assert game.confirm_discard(0, [])
+    game._settle()
+
+    assert len(kaya.hand) == 2
+    assert maggots.effective_power == 2, "declining places no counters"
+
+
+def test_mind_maggots_only_offers_the_creature_cards_the_phrase_names(set_pool):
+    """"Any number of **creature** cards": the ceiling is bounded by what the
+    printed noun phrase admits, not by the size of the hand. A dropped narrowing
+    would let the trigger pitch a land for counters.
+    """
+    pool = set_pool("EXO")
+    game, _kaya, _oleg = _g3w2_seats()
+    game.interactive_seats = {0}
+    hand = [pool["Standing Troops"], pool["Rabid Wolverines"], pool["City of Traitors"]]
+    _g3w2_enter(game, 0, pool["Mind Maggots"], hand)
+
+    owed = _g3w2_owed_discard(game)
+    assert owed is not None and owed.data["count"] == 2, "the land is no candidate"
+    assert owed.data["filter"] == {"type_filter": "creature"}
+
+
+def test_mind_maggots_with_no_creature_card_arms_no_prompt(set_pool):
+    """An empty candidate list is answered by not asking. A prompt armed over
+    nothing would hold the trigger on the stack with no legal answer to it."""
+    pool = set_pool("EXO")
+    game, _kaya, _oleg = _g3w2_seats()
+    game.interactive_seats = {0}
+    maggots = _g3w2_enter(
+        game, 0, pool["Mind Maggots"], [pool["City of Traitors"]]
+    )
+
+    assert _g3w2_owed_discard(game) is None
+    assert maggots.effective_power == 2
+
+
+def test_a_recorded_count_names_the_record_it_reads():
+    """The latent defect this round found in shipped code, as a probe.
+
+    Every ``ThatMuch`` reaching the counter placement left as ``trigger_count``
+    whatever record the words named — a key no discard writes — so the trailing
+    spelling would have placed **zero** counters while compiling clean. Only
+    Tetravus reached the branch and its record really is that key, which is what
+    kept it latent rather than live. The named record now travels.
+    """
+    trailing = compile_line(
+        "discard a creature card. Put a +1/+1 counter on this creature "
+        "for each card discarded this way"
+    )
+    assert trailing.lowering_error is None
+    placed = trailing.instructions[-1]
+    assert placed.payload["x_from_count"] == {"back_reference": "discarded_count"}
+
+
+def test_a_bare_that_many_keeps_the_key_its_own_producer_writes():
+    """Tetravus' "put **that many** +1/+1 counters on this creature" names no
+    record at all, so it keeps ``trigger_count`` — the key its exile step really
+    writes. Routing it through the named channel would have refused a shipped
+    card for want of a producer nothing declares."""
+    tetravus = compile_line(
+        "you may exile any number of tokens created with this creature. "
+        "If you do, put that many +1/+1 counters on this creature"
+    )
+    assert tetravus.lowering_error is None
+    assert "trigger_count" in repr(tetravus.instructions)
+
+
+def test_a_rate_with_no_earlier_step_refuses_by_name():
+    """"For each card discarded this way" with nothing in front of it names no
+    record. ``count_from_payload`` would answer 0, which is a card that reports
+    supported and places no counters — so it refuses instead, naming the key it
+    could not find."""
+    orphan = compile_line(
+        "For each card discarded this way, put two +1/+1 counters on this creature"
+    )
+    assert orphan.parse_error is None, "the clause parses; the record is what is missing"
+    assert "no producer in this effect" in (orphan.lowering_error or "")
+
+
+def test_the_two_printed_word_orders_of_a_rate_agree():
+    """Mind Maggots prints the clause in front and Sacred Boon behind it. One
+    reader mints the arithmetic for both, so the two spellings cannot come to
+    mean two numbers — which is why the fronted form is a production rather than
+    a second table."""
+    fronted = compile_line(
+        "discard a creature card. For each card discarded this way, "
+        "put two +1/+1 counters on this creature"
+    )
+    trailing = compile_line(
+        "discard a creature card. Put two +1/+1 counters on this creature "
+        "for each card discarded this way"
+    )
+    assert fronted.lowering_error is None and trailing.lowering_error is None
+    assert fronted.instructions[-1].payload == trailing.instructions[-1].payload
+    assert fronted.instructions[-1].payload["x_from_count"]["multiplier"] == 2
+
+
+def test_a_leading_rate_over_an_effect_that_cannot_carry_one_refuses():
+    """The refusal that makes the distribution safe. A rate silently dropped is
+    a card that does its effect once where it should do it per recorded unit, so
+    a statement with nowhere to carry the number raises rather than losing it."""
+    nowhere = compile_line(
+        "discard a creature card. For each card discarded this way, "
+        "destroy target creature"
+    )
+    assert nowhere.parse_error is not None
+    assert "leading rate" in nowhere.parse_error
+
+
+def test_mind_maggots_reports_supported_with_both_sentences_behind_it(set_pool):
+    """A card is supported when *any* of its lines is, so the step list is what
+    says the second sentence landed rather than being read and dropped."""
+    program = compile_card_oracle(set_pool("EXO")["Mind Maggots"])
+    assert program.supported
+    steps = program.triggered_abilities[0].instruction.payload["steps"]
+    assert [step.kind for step in steps] == [
+        "discard_controller_cards", "add_counter_to_self",
+    ]
+
+
+def test_kor_chant_refuses_on_the_announcement_rather_than_the_effect(set_pool):
+    """W2G3's decline, pinned so the next wave inherits the real gap.
+
+    The sentence now **parses** — the blanket redirect reads "by a source of
+    your choice" in its printed position — and what refuses is the
+    announcement: CR 615.8's chosen source reaches a resolution on
+    ``choices["chosen_source"]``, which only the activation path writes, and
+    this card's two target slots are already spoken for. Lowering it onto the
+    any-source fallback would move every point of damage dealt all turn, which
+    is why it refuses instead.
+    """
+    program = compile_card_oracle(set_pool("EXO")["Kor Chant"])
+    assert not program.supported
+
+    line = compile_line(
+        "All damage that would be dealt this turn to target creature you "
+        "control by a source of your choice is dealt to another target "
+        "creature instead"
+    )
+    assert line.parse_error is None
+    assert "chosen source" in (line.lowering_error or "")

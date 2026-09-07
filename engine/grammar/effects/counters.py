@@ -16,7 +16,8 @@ import dataclasses
 
 from .. import ast
 from ..amounts import parse_amount
-from ..records import _parse_for_each_history, _parse_for_each_this_way
+from ..records import (_parse_for_each_history, _parse_for_each_this_way,
+                       scaled_by_recorded_count)
 from ..errors import GrammarError
 from ..lexer import PT
 from ..references import parse_recipient
@@ -352,11 +353,16 @@ def _parse_put_counter(stream: TokenStream) -> ast.Statement:
         if second is not None:
             return ast.Conjunction((placement, second))
         return placement
-    if up_to or not isinstance(count, ast.Fixed) or count.value != 1:
+    if up_to:
+        # "**Up to** two counters … for each card discarded this way" is a
+        # ceiling on a number the resolution computes, which is two questions
+        # about one quantity and no card prints.
         raise stream.error(
-            "a counter placed per recorded unit is placed one at a time"
+            "a counter placed per recorded unit has no printed ceiling"
         )
-    return dataclasses.replace(placement, count=counted)
+    return dataclasses.replace(
+        placement, count=scaled_by_recorded_count(count, counted, stream)
+    )
 
 
 def _parse_second_counter_placement(

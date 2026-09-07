@@ -175,6 +175,38 @@ def _lower_discard(node: ast.Discard, event: str | None = None) -> tuple[OracleI
     # pending choice the targeted form uses. Fixed counts only: the variable
     # form stays with the random handler below, whose contract it is.
     if node.player.kind == "you":
+        if isinstance(node.count, ast.AnyNumber) and not node.at_random:
+            # "…**discard any number of creature cards**." (Mind Maggots.) A
+            # ceiling with no printed number, which is the same sentence the
+            # each-player branch above already reads (Flux) pointed at one seat:
+            # the bound is what the printed phrase names in the caster's own
+            # hand, and only the resolution knows it. So it travels as a flag
+            # and ``discard_controller_cards`` sizes the prompt, exactly as that
+            # branch leaves the sizing to its handler.
+            #
+            # "Any number" carries its own "may" — a player may answer with
+            # none — so the prompt is armed as a ceiling (``up_to``) rather than
+            # as an amount. Read as an amount it would force the whole hand out,
+            # which is a strictly larger cost than the card asks for.
+            #
+            # ``at_random`` is excluded rather than folded in: who picks is what
+            # separates this handler from ``discard_x_target_cards``, and
+            # nobody chooses a random discard's size either.
+            payload: dict[str, object] = {"amount": 0, "any_number": True}
+            if node.filter is not None:
+                # The same reader the counted branch below uses, and for its
+                # reason: a phrase ``_card_matches_filter`` cannot test would be
+                # dropped where the prompt applies it, and a dropped narrowing
+                # here offers the whole hand to a sentence naming one card type.
+                described = chargeable_card_filter(node.filter)
+                if not described:
+                    raise LoweringError(
+                        "no discard prompt can test this narrowing", node=node
+                    )
+                payload["filter"] = described
+            return (
+                OracleInstruction("discard_controller_cards", "", payload),
+            )
         amount = _amount_payload(node.count)
         # "Discard **X** cards, then …" (Recall). The count may be the cast's X:
         # `discard_controller_cards` sizes its prompt through `resolve_amount`,

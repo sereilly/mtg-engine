@@ -276,6 +276,59 @@ def count_spec(
     return spec
 
 
+def recorded_count_spec(
+    amount: "ast.Amount", produced: frozenset[str], node
+) -> dict | None:
+    """The ``x_from_count`` spec for a quantity an earlier step of this same
+    effect **recorded**, or None when *amount* is not one.
+
+    "For each card discarded this way, put **two** +1/+1 counters on this
+    creature." (Mind Maggots.) The third of this module's three readings of a
+    printed quantity: :func:`count_spec` counts a board, ``_counted_damage``
+    reads a cast, and this reads the resolution's own scratchpad — which is the
+    sentence the module docstring has named since the first cut and the only one
+    that had no reader.
+
+    :class:`ast.Times` is unwrapped here rather than by each caller, for the
+    reason ``lower_where_x`` unwraps it: "two counters **for each** card" is one
+    number, and a factor honoured by one spender and dropped by the next is the
+    dropped-rider bug with an arithmetic face. It lands on ``multiplier``, which
+    ``handlers/_common._scaled`` already applies to every aggregate — so the
+    arithmetic is the same one place that halves a count and offsets it.
+
+    **The words must name their producer, and a step of this effect must be it.**
+    A bare "that many" names nothing the parser can see (``ast.ThatMuch``'s own
+    docstring), so it is left to the caller's own reading; a named one with no
+    producer would be answered 0 by ``count_from_payload`` — a card that reports
+    supported and places no counters at all, which is precisely the shape this
+    gate exists to refuse.
+    """
+    multiplier = 1
+    if isinstance(amount, ast.Times):
+        multiplier = amount.factor
+        amount = amount.of
+    if not isinstance(amount, ast.ThatMuch) or amount.source is None:
+        return None
+    if amount.bonus:
+        # "…equal to its power **plus 2**" over a recorded count. The channel
+        # carries a `plus`, but no card prints one here and admitting it
+        # untested would be a number nothing has ever checked.
+        raise LoweringError(
+            "a recorded count carries no printed bonus", node=node
+        )
+    if amount.source not in produced:
+        raise LoweringError(
+            f"back-reference to {amount.source!r} with no producer in this "
+            "effect", node=node,
+        )
+    spec: dict[str, object] = {"back_reference": amount.source}
+    if multiplier != 1:
+        # Omitted at 1, for the reason `count_spec` omits its own: a spec
+        # written before the factor existed stays byte-identical.
+        spec["multiplier"] = multiplier
+    return spec
+
+
 def halved_count_spec(amount: "ast.Amount", node) -> dict | None:
     """The spec for a computed amount that may be halved, or None if it is not one.
 

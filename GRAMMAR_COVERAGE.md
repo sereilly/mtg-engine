@@ -36,7 +36,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | TMP | 335 | 478 | 92.5% | 92.3% | 65.7% | 271 |
 | STH | 143 | 215 | 88.4% | 88.4% | 62.8% | 124 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| EXO *(measured)* | 143 | 207 | 87.0% | 87.0% | 63.3% | 121 |
+| EXO *(measured)* | 143 | 207 | 87.9% | 87.4% | 63.8% | 122 |
 | **All (shipped)** | **4730** | **7032** | **90.5%** | **89.8%** | **59.8%** | **3510** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -49,7 +49,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 364 | 162 | expected a subject |  |
+| 362 | 160 | expected a subject |  |
 | 111 | 56 | unrecognized effect verb |  |
 | 85 | 41 | unconsumed text |  |
 | 37 | 22 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -3806,6 +3806,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Each player may discard up to three cards. Mind Bomb deals damage to each player equal to 3 minus the number of cards they discarded this way.`
 - **Mind Games**
   - `Tap target artifact, creature, or land.`
+- **Mind Maggots**
+  - `When this creature enters, discard any number of creature cards. For each card discarded this way, put two +1/+1 counters on this creature.`
 - **Mind Over Matter**
   - `Discard a card: You may tap or untap target artifact, creature, or land.`
 - **Mind Peel**
