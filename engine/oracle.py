@@ -235,6 +235,24 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("permanent_dies",
      r"whenever (?P<dying_subject>an? [^,]+) is put into a graveyard from the battlefield"
      r", if it (?P<dying_not_sacrificed>wasn't sacrificed)"),
+    # "Whenever **a spell or ability an opponent controls causes** a land to be
+    # put into your graveyard from the battlefield" (Sacred Ground). The same
+    # event with a narrowing about **what caused it** — a permanent that died
+    # to a state-based action, to its own upkeep, or to a spell its owner cast
+    # is not what this card watches, and the graveyard looks identical in every
+    # one of those cases.
+    #
+    # The cause is a payload key like every other narrowing on this row, and it
+    # is answered where the discard seam answers the identical question for
+    # Psychic Purge: `Game.resolving_seats` is CR 109.5's controller of whatever
+    # is resolving, and an empty stack means nothing caused the death at all.
+    # Before the three rows below because "to be put into" is not "is put into"
+    # and neither could match this sentence — the position is documentation.
+    ("permanent_dies",
+     r"whenever a spell or ability (?P<dying_cause>an opponent) controls causes "
+     r"(?P<dying_subject>an? [^,]+?) to be put into "
+     r"(?P<dying_graveyard_owner>your|an opponent's) "
+     r"graveyard from the battlefield"),
     # "…is put into **your** graveyard from the battlefield" (Enduring Renewal)
     # and its mirror, "…into **an opponent's** graveyard…" (Grim Feast).
     # Whose graveyard is a narrowing the *subject* cannot carry: CR 404.1 sends

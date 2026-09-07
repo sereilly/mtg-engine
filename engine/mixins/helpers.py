@@ -2721,6 +2721,21 @@ class GameHelpersMixin:
                     mine = owner_index == controller_index
                     if mine is not (grave_owner == "your"):
                         continue
+                # "…**a spell or ability an opponent controls causes** a land
+                # to be put into your graveyard" (Sacred Ground). Who caused
+                # the death, which nothing on a board records once it has
+                # happened: `resolving_seats` is CR 109.5's controller of
+                # whatever is resolving, the same answer the discard seam gives
+                # Psychic Purge's identical question one action over. An empty
+                # stack means no spell or ability caused it — a state-based
+                # action, a cost, a turn-based effect — which is exactly when
+                # this trigger must not fire.
+                if trig.condition.payload.get("dying_cause") == "an opponent":
+                    causer = (
+                        self.resolving_seats[-1] if self.resolving_seats else None
+                    )
+                    if not isinstance(causer, int) or causer == controller_index:
+                        continue
                 # "…if it wasn't sacrificed" (Urza's Miter). CR 603.4's
                 # intervening-if, checked when the trigger would fire — and the
                 # only thing that can answer it is the record the sacrifice
