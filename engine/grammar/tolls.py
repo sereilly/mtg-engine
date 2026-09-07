@@ -32,7 +32,8 @@ from . import ast
 from .errors import GrammarError
 from .references import parse_player_ref
 from .stream import TokenStream
-from .phrases import _accept_life_alternative, _parse_mana_payment
+from .phrases import (_accept_life_alternative, _parse_mana_payment,
+                      _parse_pay_life)
 from .sacrifices import _parse_counted_sacrifice
 from .effects import (_parse_discard, _parse_mill, _parse_put_counter,
                       _parse_put_hand_cards_on_library)
@@ -233,6 +234,27 @@ def _accept_price_action(
     the card without its clause.
     """
     mark = stream.mark()
+    # "…unless you **pay 1 life**" (Carnophage). CR 119.4's currency, read
+    # here rather than left to the mana branch in :func:`_accept_trailing_toll`
+    # for two reasons this file already gives about every other price: it is a
+    # cost mana cannot express, and it is the *same* three words the two other
+    # readers of the phrase read — ``prices._parse_pay_life``, asked rather
+    # than described, so the offer, the takeability gate
+    # (``control_flow._action_is_takeable`` asks ``can_pay_life``) and the
+    # charge cannot come to disagree about what the card asks for.
+    #
+    # Read **before** the mana spelling, exactly as the sacrifice family's own
+    # tail reads it: both open "unless <player> pay(s)", and
+    # ``_parse_mana_payment`` raises rather than refusing quietly, so a life
+    # amount reaching it fails the whole line naming a missing mana cost.
+    # Season of the Witch and Essence Vortex each had their own copy of this
+    # branch inside one production, so "sacrifice this unless you pay 1 life"
+    # parsed and "tap this unless you pay 1 life" did not; here it is one
+    # currency the toll charges for whatever consequence the sentence printed.
+    if stream.at_word("pays", "pay"):
+        life = _parse_pay_life(stream, payer)
+        if life is not None:
+            return life
     # "…unless you **discard a card**" (Oath of Lim-Dul). A cost mana cannot
     # express, and the same decomposition the board family's "unless you
     # sacrifice" tails take: the discard is the offer's *action*, so the

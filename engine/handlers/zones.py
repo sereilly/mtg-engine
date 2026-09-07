@@ -3338,7 +3338,16 @@ def reveal_hand(game: Game, instruction: OracleInstruction, context: OracleExecu
     is a reveal the player has to take on trust, and Rag Man's at-random discard
     is exactly the effect where seeing the hand is the point.
     """
-    victim = context.target if context.target is not None else context.caster
+    # "**You** may reveal your hand …" (Manabond.) The printed word, read off
+    # the payload rather than inferred from an empty ``context.target``: a
+    # sentence is a sequence and by its second step the resolution may be
+    # carrying a target an earlier step chose, so the inference would reveal
+    # whichever hand that step happened to name. The same distinction
+    # ``deal_damage`` records about its own recipient.
+    if instruction.payload.get("who") == "you":
+        victim = context.caster
+    else:
+        victim = context.target if context.target is not None else context.caster
     seat = next(
         (i for i, seated in enumerate(game.players) if seated is victim), None
     )
@@ -4934,7 +4943,15 @@ def put_cards_from_hand_onto_battlefield(game: Game, instruction: OracleInstruct
     """"Put up to seven permanent cards from your hand onto the battlefield."
     (Ugin, the Spirit Dragon's −10.) Non-interactive seats take every eligible
     card up to the cap, in hand order — "up to" makes any subset legal, and
-    more battlefield is the default the AI already plays toward."""
+    more battlefield is the default the AI already plays toward.
+
+    "…put **all** land cards from it onto the battlefield." (Manabond.) The
+    sweep spelling, and nothing is chosen at all: every card the phrase names
+    goes. ``all`` rather than a very large count, because a count is a number
+    the lowering would have to know before the hand is in view — and a ceiling
+    read as a sweep, or a sweep read as a ceiling, is the same card playing two
+    different ways.
+    """
     caster = context.caster
     count = int(instruction.payload.get("count", 0))
     wanted_types = tuple(instruction.payload.get("card_types") or ())
@@ -4947,7 +4964,11 @@ def put_cards_from_hand_onto_battlefield(game: Game, instruction: OracleInstruct
             return card.primary_type in _PERMANENT_TYPES
         return True
 
-    chosen = [card for card in caster.hand if eligible(card)][:count]
+    eligible_cards = [card for card in caster.hand if eligible(card)]
+    chosen = (
+        eligible_cards if instruction.payload.get("all")
+        else eligible_cards[:count]
+    )
     caster_index = game.players.index(caster)
     for card in chosen:
         game.take_card_from_hand(caster, card)

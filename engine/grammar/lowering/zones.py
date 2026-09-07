@@ -411,8 +411,26 @@ def _lower_put_onto_battlefield(
             )
         if filt.zone_owner.kind != "you":
             raise LoweringError("only your own hand has a handler here", node=node)
-        if target.quantifier != "up_to" or not filt.is_card:
-            raise LoweringError("the from-hand handler reads 'up to N … cards'", node=node)
+        # "…put **all** land cards from it onto the battlefield." (Manabond.)
+        # The sweep spelling of the same move, and the count is the whole
+        # difference: "up to N" is a ceiling the seat may answer under, and
+        # "all" is every card the phrase names with nothing to decide. Carried
+        # as its own key rather than as a very large count, so the handler
+        # cannot be asked how many "all" is on a hand it has not seen yet.
+        if target.quantifier not in ("up_to", "all") or not filt.is_card:
+            raise LoweringError(
+                "the from-hand handler reads 'up to N … cards' or 'all … cards'",
+                node=node,
+            )
+        # Anything the phrase printed beyond its card type has to survive into
+        # the payload — the handler tests only the type, so an adjective
+        # dropped here is a hand emptied wider than the sentence says.
+        if _restrictions_beyond(
+            filt, frozenset({"is_card", "zone", "zone_owner", "card_types"})
+        ):
+            raise LoweringError(
+                "the from-hand sweep cannot test that card phrase", node=node
+            )
         return (
             OracleInstruction(
                 "put_cards_from_hand_onto_battlefield",
@@ -423,6 +441,7 @@ def _lower_put_onto_battlefield(
                     # An empty type list with is_card means "permanent cards" —
                     # the handler holds the CR 110.4 list of permanent types.
                     "permanents_only": not filt.card_types,
+                    **({"all": True} if target.quantifier == "all" else {}),
                 },
             ),
         )

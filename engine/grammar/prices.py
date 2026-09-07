@@ -186,20 +186,31 @@ def _accept_per_counter_multiplier(stream: TokenStream) -> str | None:
         stream.reset(mark)
         return None
     return str(word)
-def _parse_pay_life(stream: TokenStream) -> "ast.PayLife | None":
+def _parse_pay_life(
+    stream: TokenStream, player: "ast.PlayerRef | None" = None,
+) -> "ast.PayLife | None":
     """``pay 4 life`` (Sylvan Library) — CR 119.4.
 
     A bare imperative whose subject is the effect's controller, like the bare
     draw and discard beside it. Refuses without consuming, so "pay {R}{R}" and
     every other payment sentence keeps the reading it had.
 
-    Here rather than with the life effects because two families read it: the
-    `game` family's whole sentence, and the `board` family's "sacrifice this
+    Here rather than with the life effects because *three* families read it: the
+    `game` family's whole sentence, the `board` family's "sacrifice this
     enchantment **unless you pay 2 life**" (Season of the Witch), where the
-    payment is the alternative to the destruction. A fragment two families need
+    payment is the alternative to the destruction, and the toll's own price list
+    (``tolls._accept_price_action``), where the same three words are one printed
+    currency beside a discard and a sacrifice. A fragment several families need
     is not an effect — the same rule `_parse_zone` and `_parse_mana_payment`
     above are here for — and a second reading of the phrase is how the offer
     and the payment come to disagree about what was paid.
+
+    *player* is the payer the caller has already read off the sentence. It
+    defaults to "you" because that is the seat every bare imperative spelling
+    means and the one every existing caller passes nothing for; a toll names its
+    payer out loud ("…unless **that player** pays 1 life") and hands it in, so
+    the offer is made to the seat the card named rather than to the ability's
+    controller.
     """
     mark = stream.mark()
     if not stream.accept_word("pay", "pays"):
@@ -212,7 +223,7 @@ def _parse_pay_life(stream: TokenStream) -> "ast.PayLife | None":
     if not stream.accept_word("life"):
         stream.reset(mark)
         return None
-    return ast.PayLife(player=ast.PlayerRef("you"), amount=amount)
+    return ast.PayLife(player=player or ast.PlayerRef("you"), amount=amount)
 
 
 def _accept_life_only_offer(stream: TokenStream) -> "ast.May | None":

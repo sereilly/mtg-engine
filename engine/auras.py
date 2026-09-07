@@ -766,6 +766,26 @@ def aura_compiled_trigger_claim(normalized_line: str, card_name: str = "") -> st
             "the creature-death trigger (CR 603.2) — "
             "mixins/helpers._fire_creature_dies_triggers"
         )
+    if cond in ("spell_cast", "opponent_casts_spell") and kind in EFFECT_HANDLERS:
+        # "Whenever an opponent casts a creature spell, put a +1/+1 counter on
+        # enchanted creature." (Predatory Hunger.) CR 601.2i's announcement,
+        # made from the one site every cast passes through
+        # (``mixins/oracle_instructions._apply_spell_cast_any_triggers``, called
+        # as the object goes on the stack) — and that site emits through the
+        # event bus, which scans every permanent whose compiled trigger matches
+        # rather than only the caster's, so an Aura watching the table is
+        # enqueued exactly like the Rod/Cup/Sphere cycle's artifacts are.
+        #
+        # Both spellings of the announcement in one row, because one fire site
+        # makes both and the printed word is the trigger's own narrowing
+        # (``engine/events._opponent_casts_spell_filter``) rather than a second
+        # dispatcher. Its own row rather than a widening of the ones above, for
+        # their stated reason: each names one condition and the site that fires
+        # it.
+        return (
+            "the spell-cast trigger (CR 601.2i) — "
+            "mixins/oracle_instructions._apply_spell_cast_any_triggers"
+        )
     from .phases.upkeep_effects import UPKEEP_EFFECTS
 
     if (cond, kind) in UPKEEP_EFFECTS:

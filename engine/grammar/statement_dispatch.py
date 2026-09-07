@@ -639,7 +639,18 @@ def lower_statement(
         # *other* thing an untyped iterator can be: that one's iterator is a
         # ``DiedThisTurn`` window, so neither can claim the other's node.
         if isinstance(statement.iterator, ast.ObjectFilter):
-            return _lower_for_each_matching(statement, repeated())
+            # With `LOOP_BOUND_OBJECT` in hand, exactly as the four "this way"
+            # loops above are lowered. The marker was missing here and the
+            # omission had no reason behind it: ``handlers/control_flow.for_each``
+            # binds ``iteration_target`` per object on *this* branch too — it is
+            # the same ``run_one`` — so "its controller" and "its mana value"
+            # inside a board loop name the object the iteration is on, and
+            # without the marker they refused for want of a producer that
+            # cannot exist in a loop. "For each creature, **its controller**
+            # sacrifices a permanent of their choice unless **they** pay {1}"
+            # (Fade Away) is the sentence that needs it, and the seat it names
+            # is one ``_offered_seats`` and ``bound_permanent`` already resolve.
+            return _lower_for_each_matching(statement, repeated(object_loop))
         return _lower_for_each(statement)
 
     # Both repeat clauses take the recursion back as an argument: their

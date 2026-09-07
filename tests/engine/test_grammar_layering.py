@@ -631,7 +631,19 @@ LOWER_LAYERS = [
 # in `lowering/prevention.py` and `lowering/redirection.py`, because a Circle of
 # Protection lowers to one shield instruction however many ways its sentence
 # spells the source. The words are where the work is.
-EFFECT_FAMILIES = ["damage", "characteristics", "base_pt", "types", "board", "cards", "exile", "stack", "combat", "game", "mana", "library", "search", "reveal", "control_changes", "prevention", "damage_instances", "redirection", "damage_locks", "counters", "tapping", "attachments", "tokens", "returns", "text_changes", "destruction", "zones", "hand"]
+# `permissions` arrived on the parse side at Exodus' first wave, a set-and-a-half
+# after the lowering side split it off `lowering/exile.py` — the mirror
+# re-forming under a name that already existed, which is what a split owes
+# before it invents one. `effects/cards.py` reached the guard on Manabond's
+# reveal-and-empty template, and the line inside it is the CR's own: every other
+# production there is a card **moving** (drawn, discarded, milled, searched out,
+# revealed), and CR 601.3's permission moves nothing — it grants leave to cast
+# or play an object that stays where it is. The call graph had already fallen
+# apart along it: `_parse_cast_permission` is reached from the statement
+# dispatcher alone and `_accept_spell_type_union` from `_parse_cast_permission`
+# alone, and neither calls anything left behind. Both moved byte-identically,
+# so no compiled program moves.
+EFFECT_FAMILIES = ["damage", "characteristics", "base_pt", "types", "board", "cards", "exile", "stack", "combat", "game", "mana", "library", "search", "reveal", "control_changes", "prevention", "damage_instances", "redirection", "damage_locks", "counters", "tapping", "attachments", "tokens", "returns", "text_changes", "destruction", "zones", "hand", "permissions"]
 # `redirection` arrived on the parse side at Visions' first wave, a set after
 # the lowering side split it off `lowering/damage.py` — the mirror re-forming
 # rather than a new vocabulary, which is what this file asks a split to do.
@@ -835,7 +847,12 @@ LOWERING_FAMILIES = [
 # guard a second time and split along the same CR 613.4b line — so it now
 # arrives from `EFFECT_FAMILIES` above and naming it twice would be a list
 # disagreeing with itself.
-] + ["returns", "exile", "permissions", "keywords",
+# `permissions` was appended here for `base_pt`'s reason and left the list the
+# same way: Exodus' first wave gave it a parse twin (`effects/permissions.py`,
+# split off `effects/cards.py` at the guard on the CR 601.3 line), so it now
+# arrives from `EFFECT_FAMILIES` above and naming it twice would be a list
+# disagreeing with itself.
+] + ["returns", "exile", "keywords",
     # `keyword_removal` is `keywords`' other half, split at Tempest's wave-3
     # integration when two groups' additions summed past the cap with neither
     # at fault. The seam is that module's own first line — "granting one, and
@@ -1064,6 +1081,13 @@ AST_FAMILIES = [
     if family not in (
         "search", "control_changes", "prevention", "counters",
         "attachments", "returns",
+        # `permissions` is `reveal`'s reason one family over: `CastPermission`
+        # is a *card* node and sits in `ast/cards.py` with every other one, so
+        # splitting it out to match the parse side would put a node in one
+        # family with its lowering's reader in another. The guard that made
+        # this a parse family fired on the productions; the node inventory
+        # never crossed anything.
+        "permissions",
         # `damage_instances` is `prevention`'s own reason, which is why it sits
         # beside it: `PreventDamage`, `RedirectDamage`, `ChooseDamageSource` and
         # `ChosenSourceNextDamage` are facts about a **damage event** and live

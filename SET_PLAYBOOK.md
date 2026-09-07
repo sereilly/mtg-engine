@@ -661,6 +661,48 @@ registry question rather than a branch. **Phase 3 of the next set that prints an
 "if you do" rider clears it**, and it owes a behavioural differential over every
 card in the pool that composes the two, not a compiled one.
 
+**Drained 2026-09-07, at EXO wave 1 (W1G2) — and the registry it asked for
+already existed.** The entry wanted "a decision about what 'did anything' means
+per instruction kind, which is a registry question rather than a branch".
+`handlers/control_flow._action_is_takeable` **is** that registry, and it had
+fifteen rows and its own written rule for adding one ("a kind added here has to
+be one whose 'nothing to give' case is real and checkable"). It also asks the
+question one step earlier and better: CR 601.2 offers a choice, an action nobody
+could take is not among the things offered, so the offer is never made, the
+rider never runs, and any "if you don't" penalty still applies. What was missing
+was rows, not a design.
+
+**How many rows was measured rather than guessed, and the answer is two.** Every
+instruction kind that appears as a `may`'s action with a `then` behind it, over
+both manifest roles, was enumerated: 26 of them across 82 cards. Twenty either
+always do something (a coin flip, a life gain, a reveal, a mana ability),
+legally do nothing (Tetravus' "any number of", Scroll Rack's), or are *targeted*
+and so already refused at CR 601.2c / 608.2b. Two more are empty in a way whose
+rider is itself a no-op — Ice Cauldron grants cast permission over an empty
+pile, Flash offers a cost computed from a permanent nothing recorded — and are
+listed as reviewed rather than fixed. **Two are real, silent and in the player's
+favour**: `reanimate_graveyard_position` (Bone Dancer, the card this entry
+named) and `exile_hand_pile` (Duplicity, where an empty hand paid nothing and
+took the whole exiled pile back — the trade *is* the card).
+
+**The part worth keeping is where the false claim was written down.**
+`handlers/zones.reanimate_graveyard_position`'s docstring said an empty pile
+"returns False from the `may` it sits inside, which is what keeps 'If you do,
+this creature assigns no combat damage this turn' from firing on a turn where
+nothing came back". `_run` folds a handler's first return value into
+`resolved`/`no effect` and `on_accept` never branches on it, so the sentence was
+never true — and a docstring asserting the very guarantee a Known-gaps entry
+says is missing is the most expensive kind of comment there is. Reproduced
+before the fix, in `tests/engine/test_optional_offer_defaults.py`, which also
+holds the 26 kinds as a reviewed list so a twenty-seventh fails there and is
+read before it is added rather than after.
+
+The behavioural differential the entry asked for is that list plus the two
+cards' tests: no compiled program moves (`oracle_diff` confirms), and the only
+runtime behaviour that changes is an offer withdrawn from a seat that could not
+have taken it.
+
+
 **Added at WTH's Phase 6: two readers of "is this a ⟨type⟩ card" disagreed, and
 only one of the two questions got settled.** W2G4 measured it over the whole
 pool: `CardDefinition.primary_type` returns the *first* of `land, creature,

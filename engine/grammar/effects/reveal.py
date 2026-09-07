@@ -305,7 +305,6 @@ _REVEAL_UNTIL_REST: dict[str, str] = {
     "graveyard": "graveyard",
 }
 
-
 def _accept_reveal_until_from_top(
     stream: TokenStream,
 ) -> "ast.RevealUntil | None":

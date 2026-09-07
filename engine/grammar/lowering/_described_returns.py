@@ -41,7 +41,8 @@ from ...oracle_types import CHOSEN_THIS_WAY_OBJECTS, OracleInstruction
 from ...subject_filters import untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
-from ._events import EVENT_SUBJECT_OWNER, _EVENT_SUBJECT_OWNERS
+from ._events import (EVENT_SUBJECT_OWNER, EVENT_SUBJECT_PLAYER,
+                      _EVENT_SUBJECT_OWNERS, _EVENT_SUBJECT_PLAYERS)
 from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS,
     chargeable_card_filter,
@@ -443,13 +444,26 @@ def lower_described_return(
     # * every remaining key must be one `subject_matches` answers, or the
     #   prompt would offer permanents the printed phrase excludes — "an
     #   **untapped** Island" being exactly that.
+    # "…**that player** returns a land **they control** to its owner's hand."
+    # (Mana Breach.) The same sentence with the seat named by the firing event
+    # rather than by the word "you": one seat says who is asked and which
+    # battlefield is drawn from, exactly as `controller == "you"` does below,
+    # and the only difference is where the seat comes from. Admitted only under
+    # an event that actually froze one (`_EVENT_SUBJECT_PLAYERS`) — under any
+    # other trigger the words name a player nobody recorded, and the prompt
+    # would go to whichever seat the resolution happened to be carrying.
+    #
+    # The actor and the possessive are checked **against each other** for the
+    # sweep reanimation's reason two branches up: "that player returns … they
+    # control" is one claim said twice, and a pairing this cannot resolve
+    # refuses rather than picking a half.
     if (
         isinstance(subject, ast.TargetSpec)
         and subject.quantifier in ("a", "an")
         and not subject.targeted
         and not subject.filter.is_card
         and subject.filter.zone == "battlefield"
-        and subject.filter.controller == "you"
+        and subject.filter.controller in ("you", "that_player")
         and node.from_zone is None
         and node.to.name == "hand"
         and node.to.owner is not None
@@ -463,6 +477,31 @@ def lower_described_return(
             or node.attached_to is not None
         ):
             raise LoweringError("the chosen bounce reads no rider", node=node)
+        chooser = "you"
+        if subject.filter.controller == "that_player":
+            actor = node.actor.kind if node.actor is not None else None
+            if actor != "that_player":
+                raise LoweringError(
+                    "\"a land they control\" names the seat this sentence "
+                    "already named, and no subject here names one",
+                    node=node,
+                )
+            if event not in _EVENT_SUBJECT_PLAYERS:
+                raise LoweringError(
+                    f"no event named {event!r} freezes the seat 'that player' "
+                    "names",
+                    node=node,
+                )
+            chooser = EVENT_SUBJECT_PLAYER
+        elif node.actor is not None and node.actor.kind != "you":
+            # The "you control" reading is the controller's own price, so a
+            # sentence naming somebody *else* as the one who returns it is a
+            # different card. Refused rather than dropped: the prompt would go
+            # to the ability's controller and the printed subject would mean
+            # nothing.
+            raise LoweringError(
+                f"the chosen bounce is not made by {node.actor.kind!r}", node=node
+            )
         # The seat clause is read *here* — it becomes the prompt's
         # ``controlled_by`` — so it is taken off the filter rather than left on
         # it, exactly as the tap price one family over does. Leaving it would
@@ -483,7 +522,7 @@ def lower_described_return(
                 "choose_permanents", "",
                 {
                     "result_key": CHOSEN_THIS_WAY_OBJECTS,
-                    "chooser": "you",
+                    "chooser": chooser,
                     # Off the *chooser's* own battlefield, which is what "you
                     # control" says — named once as the seat asked and once as
                     # the board drawn from.
