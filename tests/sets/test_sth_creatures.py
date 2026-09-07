@@ -276,3 +276,30 @@ def test_wall_of_souls_reflects_its_combat_damage_at_an_opponent(set_pool):
 
     assert p2.life == their_life - 3
     assert wall.damage_marked == 3
+
+
+def test_an_en_kor_aimed_at_itself_still_takes_the_whole_event(set_pool):
+    """"target creature **you control**" includes the en-Kor, so aiming the
+    ability at itself is a legal announcement (CR 601.2c) and a no-op — the
+    damage is moved from the creature to the creature.
+
+    Written because the AI does exactly this: every seeded simulation over this
+    set has an en-Kor activating onto itself on turn 2. The record then points
+    at the permanent it hangs off, which is the one shape that could recurse —
+    a redirect deals its moved points as a fresh event, and that event asks the
+    whole contention set again. ``DamageRedirect.applying`` is what stops it,
+    and this is the test that says so.
+    """
+    game = _w1g1_duel()
+    p1, _ = game.players
+    kor = _nosick(Permanent(card=set_pool("STH")["Spirit en-Kor"]))
+    p1.battlefield.append(kor)
+
+    assert game.activate_permanent_ability(
+        0, "Spirit en-Kor", permanent_index=0,
+        target_player_index=0, target_permanent_index=0,
+    ).supported
+
+    game._mark_damage_on_permanent(kor, 3)
+
+    assert kor.damage_marked == 3
