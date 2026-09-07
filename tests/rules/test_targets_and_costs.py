@@ -1807,3 +1807,57 @@ def test_115_7a_an_ability_with_nowhere_else_to_go_keeps_its_target(set_pool):
 
     assert wyvern.damage_marked == 1, game.log
     assert any("no other legal target" in line for line in game.log), game.log
+
+# --- Integrator: an id alone is an address (CR 115.1, CR 400.7) -------------
+
+from engine.oracle_types import single_chosen_id as _int_single_chosen_id
+
+
+def test_single_chosen_id_reads_one_address_and_refuses_several():
+    """The channel's arity, as a rule rather than as twelve assumptions.
+
+    ``StackItem.target_permanent_id`` carries a *list* when ``activation`` or
+    ``casting`` stamped it and a bare id when a prompt's answer did. One
+    element is one address. Several is not, and a single-target read that
+    picked slot zero would be the multi-target list read as a single target \u2014
+    wrong in the direction that looks right \u2014 so it gets None and the caller
+    falls back to whatever it did before.
+    """
+    assert _int_single_chosen_id(7) == 7
+    assert _int_single_chosen_id([7]) == 7
+    assert _int_single_chosen_id((7,)) == 7
+    assert _int_single_chosen_id([7, 9]) is None
+    assert _int_single_chosen_id([]) is None
+    assert _int_single_chosen_id(None) is None
+    assert _int_single_chosen_id([None]) is None
+    # ``True`` is an ``int`` and is not a permanent id.
+    assert _int_single_chosen_id(True) is None
+
+
+@pytest.mark.cr("115.1", "400.7")
+def test_115_1_an_any_target_ability_named_by_id_alone_hits_the_creature(set_pool):
+    """"any target" addressed the only stable way there is.
+
+    ``_stack_push`` stamps both an index and an id, and the ``deal_damage``
+    permanent branch used to be gated on the **index** \u2014 so a caller that sent
+    only the id fell past it to the face and burned the *player*, having named
+    a creature. ``web/actions.py`` fills an index in and masked it; the AI, a
+    headless driver and a test do not. Written from the far side of the fix:
+    the assertion that fails without it is the player's life total, not the
+    creature's damage.
+    """
+    lea = set_pool("LEA")
+    rod = _nosick(Permanent(card=lea["Rod of Ruin"]))
+    victim = Permanent(card=lea["Gray Ogre"])
+    p1 = PlayerState(name="P1", battlefield=[rod])
+    p2 = PlayerState(name="P2", battlefield=[victim], life=20)
+    game = _two_player_game(p1, p2)
+
+    assert game.queue_permanent_ability(
+        0, "Rod of Ruin", ability_index=0,
+        target_permanent_ids=[victim.permanent_id],
+    ).supported
+    game.resolve_stack()
+
+    assert victim.metadata.get("was_dealt_damage_this_turn"), game.log
+    assert p2.life == 20, game.log

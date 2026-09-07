@@ -30,6 +30,7 @@ from ..targeting import graveyard_target_spec
 from ..tokens import CREATED_WITH_PERMANENT_ID, is_token_card
 from ..trigger_utils import make_trigger_event, matching_triggers
 from ._constants import _MANA_SYMBOLS, _NO_PRIORITY_STEPS
+from ..oracle_types import single_chosen_id
 
 # The dies-triggers ``_permanent_to_graveyard`` carries out **inline** rather
 # than putting on the stack, each for the reason its own block there gives: the
@@ -1553,9 +1554,36 @@ class GameHelpersMixin:
 
         Scoped to *seat* like the index it replaces, so a permanent that changed
         controller is not silently still targeted from its old side.
+
+        **And it reads the channel's two arities**, which is why the id was
+        being ignored on the path that needs it most. ``StackItem`` carries one
+        field, and its producers disagree: ``activation`` and ``casting`` stamp
+        the whole ``target_permanent_ids`` *list*, a prompt's answer stamps a
+        bare id. Asking ``isinstance(permanent_id, int)`` alone meant a caller
+        that named its target the only stable way there is — CR 400.7's id, the
+        address CLAUDE.md says to prefer — had the name silently dropped and got
+        the index it did not send. ``deal_damage`` is where that showed: an
+        ``any_target`` activation addressed by id alone fell past the permanent
+        branch entirely and burned the *player*. The web layer fills an index in
+        ``web/actions.py`` and masked it; the AI, a headless driver and a test
+        do not.
+
+        A **one**-element sequence is one address and resolves. A longer one is
+        several, and a single-target read has no business picking from it — that
+        falls through to the index exactly as before, rather than guessing slot
+        zero, which is the multi-target list read as a single target and wrong
+        in the direction that looks right. Still additive on purpose: this can
+        only turn a dropped id into a used one.
+
+        The wider question — one field carrying two arities across 119 reader
+        sites — is `SET_PLAYBOOK.md`'s Known gaps, and settling it is a
+        pool-wide refactor rather than a fix. This is the seam every caller
+        already goes through, so it is the one place the disagreement can be
+        absorbed without becoming a twelfth local normalisation.
         """
-        if isinstance(permanent_id, int):
-            found = self.permanent_by_id(permanent_id)
+        named = single_chosen_id(permanent_id)
+        if named is not None:
+            found = self.permanent_by_id(named)
             if found is not None and self.controls(seat, found):
                 return found
         return self.permanent_at(seat, index)

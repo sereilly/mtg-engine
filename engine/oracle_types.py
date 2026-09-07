@@ -1123,3 +1123,35 @@ def clear_compilation_caches() -> None:
     """
     for cached in _COMPILATION_CACHES:
         cached.cache_clear()
+
+
+def single_chosen_id(permanent_id) -> "int | None":
+    """The one permanent id a cast-time choice named, or None.
+
+    ``StackItem.target_permanent_id`` carries **two arities** and its producers
+    disagree: ``stack/activation`` and ``stack/casting`` stamp the whole
+    ``target_permanent_ids`` *list*, while a prompt's answer
+    (``stack/choices``) stamps a bare id. Every reader that wants one object has
+    to answer the same question, so it is answered once here rather than twelve
+    times at the call sites — the shape ``recorded_permanent_ids`` already
+    settled for the ``permanents_from`` channel one level down.
+
+    A **one**-element sequence is one address and resolves. A longer one is
+    several, and a single-target read has no business picking from it: guessing
+    slot zero is the multi-target list read as a single target, wrong in the
+    direction that looks right. Those get None, and the caller falls back to
+    whatever it did before.
+
+    The wider question — one field, two arities, 119 reader sites — is recorded
+    in ``SET_PLAYBOOK.md``'s Known gaps. Settling it is a pool-wide refactor
+    rather than a fix, and this is the reader that makes the disagreement
+    harmless in the meantime.
+    """
+    if isinstance(permanent_id, bool):
+        return None
+    if isinstance(permanent_id, int):
+        return permanent_id
+    if isinstance(permanent_id, (list, tuple)) and len(permanent_id) == 1:
+        only = permanent_id[0]
+        return only if isinstance(only, int) and not isinstance(only, bool) else None
+    return None

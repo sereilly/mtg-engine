@@ -19,6 +19,7 @@ from ._common import (divided_target_permanent, recorded_permanent_ids,
     resolve_amount,
     resolve_target_permanent, resolve_target_permanents, seats_matching_deed,
 )
+from ..oracle_types import single_chosen_id
 from ..oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
                            LAST_DAMAGER_CONTROLLER,
                            X_FROM_COUNT_PER_RECIPIENT)
@@ -710,8 +711,20 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
                 then=_damage_reporter(game, card, target_perm),
             )
         return True, "resolved"
-    if isinstance(target_perm_idx, int):
+    if isinstance(target_perm_idx, int) or single_chosen_id(
+        context.target_permanent_id
+    ) is not None:
         # Damage targets a creature permanent, not the player.
+        #
+        # **Either address gets in.** The gate asked for the index alone, and
+        # ``_stack_push`` is what stamps both — so a caller that named its
+        # target the only stable way there is (CR 400.7's id, the address
+        # CLAUDE.md says to prefer) fell straight past this branch to the face
+        # and burned the *player*. ``web/actions.py`` fills an index in and
+        # masked it; the AI, a headless driver and a test do not. The sibling
+        # ``object``-quantified branch below never had the hole, because it
+        # scans for a legal target rather than reading a slot — this is the
+        # ``any_target`` half catching up.
         #
         # The id is asked *first*, and the CR 608.2b refusal below is what the
         # bounds check became. Order matters here and it is easy to get wrong:
