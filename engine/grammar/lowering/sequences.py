@@ -33,6 +33,7 @@ from .. import ast
 from ..errors import LoweringError
 from ..phrases import is_pt_counter
 from ._common import (
+    _optional_slot_key,
     _describe_several_targets, _filter_payload, _is_enchanted, _is_target,
     _names_several_targets, _restrictions_beyond, SEVERAL_DESTROY_NARROWINGS,
     testable_filter_payload
@@ -639,6 +640,7 @@ def _fused_tap_then_bite(
                         _filter_payload(bitten.filter),
                     ],
                     "count": 2,
+                    **_optional_slot_key((first.subject, bitten)),
                 },
             }),
         )}),
@@ -733,6 +735,7 @@ def _fused_two_target_keyword_move(
                     _filter_payload(second.subject.filter),
                 ],
                 "count": 2,
+                **_optional_slot_key((first.subject, second.subject)),
                 # The printed "another" (CR 601.2c), carried rather than folded
                 # into a filter: it is a relation between two slots, not a
                 # property of one permanent.

@@ -19,6 +19,16 @@ Scope (the playbook's own disclaimer): this answers for the *cast* and
 inside a triggered ability, is out of scope and reads as a false positive —
 and the chooser census is deliberately loose (any choosing word hands the card
 to the sweep), so read a finding as a work-list entry, not a diagnosis.
+
+**And the question stops one level above "is the picker right".** It asks
+whether a picker was *derived at all* — a spec of None against a line that names
+a target. A spec that exists and offers the **wrong list** is silence here, and
+that is not hypothetical: eight cards announced two targets through one
+undifferentiated list while their printed slots were differently restricted
+("target land you control and target land an opponent controls"), so a caster
+could name two of their own. Every one of them had a derived spec and passed
+this sweep. Nothing in the repo sees that class; the guards in
+``tests/engine/test_activation_targeting.py`` check particular shapes by hand.
 """
 
 from __future__ import annotations

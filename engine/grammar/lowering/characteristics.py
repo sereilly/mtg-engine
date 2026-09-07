@@ -28,6 +28,7 @@ from ._amounts import (
 from ...oracle_types import MILLED_THIS_WAY
 from ._events import binds_block_pair
 from ._common import (
+    _optional_slot_key,
     chargeable_card_filter,
     _describe_targets,
     _durationless_reason,
@@ -884,6 +885,7 @@ def _fused_two_target_pump(
                     _filter_payload(second.subject.filter),
                 ],
                 "count": 2,
+                **_optional_slot_key((first.subject, second.subject)),
                 # The printed "another" (CR 601.2c), carried rather than folded
                 # into a filter: it is a relation between two slots, not a
                 # property of one permanent, so `permanent_matches_filter` could

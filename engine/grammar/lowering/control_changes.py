@@ -18,7 +18,7 @@ from ...oracle_types import LAST_TARGET_CONTROLLER, OracleInstruction
 from ...subject_filters import object_only_filter, untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
-from ._common import (_describe_targets, _filter_payload, _is_enchanted,
+from ._common import (_optional_slot_key, _describe_targets, _filter_payload, _is_enchanted,
                       _is_source, _is_target,
                       _restrictions_beyond)
 from ._events import (CHOSEN_PERMANENT, CHOSEN_PLAYER, EVENT_SUBJECT_PLAYER, _EVENT_SUBJECT_PLAYERS, _UNTAPPED_PERMANENTS)
@@ -55,6 +55,7 @@ def _lower_exchange_control(node: ast.ExchangeControl) -> tuple[OracleInstructio
             "filter": first,
             "filters": [first, second],
             "count": 2,
+            **_optional_slot_key((node.first, node.second)),
             # Two permanents on two battlefields are distinct by construction,
             # but saying so is what stops one player's own permanent filling
             # both slots if a later card drops the controller words.

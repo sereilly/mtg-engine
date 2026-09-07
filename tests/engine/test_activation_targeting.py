@@ -368,17 +368,22 @@ def test_the_fallback_still_reaches_the_prompt_it_exists_for(by_name):
     assert [t["name"] for t in spec["valid_targets"]] == ["Grizzly Bears"]
 
 
-def test_a_narrowing_only_one_slot_names_does_not_narrow_the_picker():
-    """Two targets, differently restricted: the spec must narrow by what
-    **every** slot admits, never by what one does.
+def test_slots_that_differ_become_roles_and_keep_both_narrowings():
+    """Two targets, differently restricted, are ordered **roles** — one legal
+    set per slot rather than one shared set for all of them.
 
-    The picker enumerates one legal set for all the slots of a description, so
-    a flag read off a single filter is applied to every slot — and "target
-    creature you control deals damage … to **another target creature**" names
-    the caster's creature and then anyone's. Read that way the ability could
-    bite nothing but its own board, while its own handler was written to allow
-    either. Per-slot legality stays the handler's; this is only about what the
-    prompt is allowed to hide.
+    This is the fix for a bug the previous version of this guard recorded as
+    deliberate. A shared list can only carry a narrowing **every** slot has:
+    apply one slot's flag to the whole list and it hides a target another slot
+    legitimately admits. So "target creature you control fights target creature
+    **an opponent controls**" intersected to *nothing*, the picker offered every
+    creature for both slots, and the announcement gate read that same over-wide
+    list and admitted two of the activator's own creatures — which CR 601.2c
+    does not allow.
+
+    Roles keep both restrictions because each slot is enumerated with its own
+    filter, and CR 601.2c's distinctness comes free: a permanent taken by an
+    earlier role is not offered to a later one.
     """
     from engine.targeting import _from_targets_payload
 
@@ -396,8 +401,10 @@ def test_a_narrowing_only_one_slot_names_does_not_narrow_the_picker():
             {"type_filter": "creature"},
         ],
     })
-    assert per_slot["max_targets"] == 2
-    assert "own_only" not in per_slot
+    assert per_slot["kind"] == "roles"
+    first, second = per_slot["roles"]
+    assert first["own_only"] is True, "the narrowing the shared list had to drop"
+    assert "own_only" not in second, "the second slot still admits any creature"
 
     both_slots = _from_targets_payload({
         "quantifier": "target", "kind": "object", "count": 2,
@@ -407,7 +414,34 @@ def test_a_narrowing_only_one_slot_names_does_not_narrow_the_picker():
             {"type_filter": "creature", "controller": "you"},
         ],
     })
-    assert both_slots["own_only"] is True, "a narrowing every slot names still applies"
+    assert both_slots["own_only"] is True, "slots that agree stay one list"
+    assert both_slots["max_targets"] == 2
+
+
+def test_an_optional_slot_keeps_the_shared_list_it_can_still_be_cast_with():
+    """The shape roles cannot express, and why it is left alone.
+
+    "…it fights **up to one** target creature an opponent controls" (Primal
+    Might). CR 601.2c lets that slot name nothing, and a roles walk has no way
+    to say so — every role is answered or the announcement is refused. Turning
+    an optional target into a required one is a *different* wrongness, not a
+    smaller one, so these keep the shared list and the narrowing loss that comes
+    with it. ``optional_slots`` is what the description records to say so.
+    """
+    from engine.targeting import _from_targets_payload
+
+    spec = _from_targets_payload({
+        "quantifier": "target", "kind": "object", "count": 2,
+        "filter": {"type_filter": "creature", "controller": "you"},
+        "filters": [
+            {"type_filter": "creature", "controller": "you"},
+            {"type_filter": "creature", "controller": "not_you"},
+        ],
+        "optional_slots": [1],
+    })
+    assert spec["kind"] == "creature"
+    assert spec["max_targets"] == 2
+    assert "own_only" not in spec, "the intersection still governs a shared list"
 
 
 # ---------------------------------------------------------------------------
@@ -674,14 +708,17 @@ def test_r31_the_picker_applies_the_abilitys_own_printed_narrowing(
     assert _r31_offer(game, source, _r31_targeting_index(source.card)) == sorted(expected)
 
 
-def test_r31_a_multi_slot_description_offers_what_any_slot_admits(catalog_by_name):
-    """One legal set for several differently-restricted slots (CR 115.3).
+def test_r31_a_multi_slot_description_asks_slot_by_slot(catalog_by_name):
+    """Differently-restricted slots are asked in order, each with its own set.
 
-    The narrowing above must not be intersected across slots: Garruk, Savage
-    Herald's "target creature you control fights target creature you don't
-    control" restricts slot one to the activator's creatures and slot two to
-    anything, and a picker answering "every slot admits it" would hide every
-    opponent's creature from a bite allowed to name one.
+    This guard used to assert the union — one legal set for every slot — which
+    was the best a shared list could do and was wrong in both directions at
+    once: Garruk, Savage Herald's "target creature you control fights target
+    creature you don't control" had its *first* slot widened to the opponent's
+    board as the price of keeping the second one open.
+
+    Role 0 is the activator's own creature and nothing else; the opponent's
+    appears under that entry's ``next``, which is where role 1's options live.
     """
     walker = Permanent(
         card=catalog_by_name["Garruk, Savage Herald"],
@@ -693,9 +730,16 @@ def test_r31_a_multi_slot_description_offers_what_any_slot_admits(catalog_by_nam
     p2 = PlayerState(name="P2", battlefield=[theirs])
     game = _game(p1, p2)
 
-    assert _r31_offer(
-        game, walker, _r31_targeting_index(walker.card)
-    ) == ["Air Elemental", "Grizzly Bears"]
+    index = _r31_targeting_index(walker.card)
+    ability = _abilities(walker.card)[index]
+    spec = derive_activation_spec(ability)
+    walk = game._role_target_walk(
+        0, walker.card, spec, (), for_cast=False,
+        source_permanent=walker, ability_instruction=ability.instruction,
+        ability_source=walker,
+    )
+    assert sorted(t["name"] for t in walk) == ["Grizzly Bears"]
+    assert sorted(t["name"] for t in walk[0]["next"]) == ["Air Elemental"]
 
 
 # --- FixC: a sweep names a class, not a target ---

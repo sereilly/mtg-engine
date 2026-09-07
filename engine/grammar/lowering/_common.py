@@ -50,7 +50,7 @@ from ._targets import (PRIMARY_TARGET_ROLE, SEVERAL_DESTROY_NARROWINGS,
                        card_divided_each_description,
                        card_divided_shares_payload, describe_target_roles,
                        describe_independent_target_roles,
-                       divided_target_description)
+                       divided_target_description, _optional_slot_key)
 
 
 def split_creature_type_choice(described: dict) -> tuple[tuple, dict, dict]:

@@ -334,8 +334,15 @@ def test_garruk_savage_herald_can_bite_an_opponents_creature(set_pool):
     bite = program.activated_abilities[1]
 
     spec = derive_activation_spec(bite)
-    assert spec["max_targets"] == 2
-    assert "own_only" not in spec, "the second slot admits any creature"
+    # Ordered **roles**, one per slot. The shared-list spec this replaced could
+    # only ever apply a narrowing that *every* slot had, so it dropped
+    # "you control" to keep the second slot open — right, given one list, and
+    # the reason it read `max_targets: 2` with no `own_only`. Per-slot
+    # enumeration keeps both restrictions instead of trading one for the other.
+    assert spec["kind"] == "roles"
+    biter, bitten = spec["roles"]
+    assert biter["own_only"] is True, "the biter is the activator's own"
+    assert "own_only" not in bitten, "the second slot admits any creature"
 
     walker = Permanent(card=walker_card, metadata={"loyalty_counters": 5})
     mine = Permanent(card=pool["Elder Gargaroth"])       # 6/6, the biter
@@ -345,11 +352,17 @@ def test_garruk_savage_herald_can_bite_an_opponents_creature(set_pool):
     game = Game(players=[p1, p2])
     game.enforce_mana_costs = False
 
-    offered = game._enumerate_targets(
-        0, walker_card, spec, for_cast=False,
-        ability_instruction=bite.instruction, source_permanent=walker,
+    # The roles walk, which is what the picker and the activation gate both
+    # read. Role 0 offers only the activator's creature — the narrowing the
+    # shared list had to drop — and each entry carries under `next` what role 1
+    # would then allow, which is where the opponent's creature appears.
+    walk = game._role_target_walk(
+        0, walker_card, spec, (), for_cast=False,
+        source_permanent=walker, ability_instruction=bite.instruction,
+        ability_source=walker,
     )
-    assert {t.get("name") for t in offered} == {"Elder Gargaroth", "Concordia Pegasus"}
+    assert {t.get("name") for t in walk} == {"Elder Gargaroth"}
+    assert {t.get("name") for t in walk[0]["next"]} == {"Concordia Pegasus"}
 
     result = game.activate_permanent_ability(
         0, "Garruk, Savage Herald", ability_index=1,

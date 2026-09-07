@@ -680,23 +680,55 @@ whose keyword moved. The rest of the corrections — 609.3 for 608.2d, 706.2 for
 707.2, the 121/122 and 118/119/120 confusions — are prose headings that no
 guard can match. **A CR edition bump owes a re-read, not just a green suite.**
 
-**Added at TMP's Phase 4: a multi-slot target's picker offers one list for
-every slot.** Phyrexian Splicer prints "target creature **with the chosen
-ability** … and another target creature", and the derived spec is one
-`{"kind": "creature", "max_targets": 2}` over two slots whose payload filters
-differ — `filters[0]` carries the chosen keyword and `filters[1]` does not. So
-`_enumerate_targets` offers every creature for slot 1, the gate reads the same
-list and admits it, the cost is paid, and the handler drops slot 1 at resolution
-while slot 2 still gains the ability. CR 601.2c makes that an illegal
+**Added at TMP's Phase 4, mostly drained 2026-09-07: a multi-slot target's
+picker offers one list for every slot.** Phyrexian Splicer prints "target
+creature **with the chosen ability** … and another target creature", and the
+derived spec was one `{"kind": "creature", "max_targets": 2}` over two slots
+whose payload filters differ. So `_enumerate_targets` offered every creature for
+both, the gate read the same list and admitted it, the cost was paid, and the
+handler dropped a slot at resolution. CR 601.2c makes that an illegal
 announcement. **No instrument here can see it**: the card compiles, has no
 hollow line, claims every sentence, and `picker_sweep` asks whether a picker is
-*derived*, not whether its list is right per slot. Narrowing the single shared
-list breaks the card the other way — you could no longer give the ability to a
-creature that lacks it, which is the whole card. **The fix is per-slot
-enumeration through the `ROLES_TARGET_KIND` machinery**, and it is one round
-whose blast radius is every multi-target spell in the pool, so it does not
-travel with a card wave. The picker sweep's own question stops one level above
-this and should say so.
+*derived*, not whether its list is right per slot.
+
+**The blast radius was measured rather than guessed, and the entry's guess was
+wrong.** "Every multi-target spell in the pool" is **fourteen descriptions, of
+which twelve differ, across eight cards** — small enough to take in one round.
+And six of the eight were worse than the card that named the gap: Triangle of
+War, Political Trickery, Gauntlets of Chaos, Hunter's Edge, Primal Might and
+Garruk, Savage Herald all print a **controller** restriction on one slot
+("target land you control and target land **an opponent controls**"), and
+intersecting "you control" with "an opponent controls" leaves *nothing*, so the
+printed restriction was enforced by nothing at all and the caster could name two
+of their own.
+
+`_from_targets_payload` now derives ordered **roles** when the slots differ, so
+each slot is enumerated with its own filter, CR 601.2c's distinctness comes free,
+and the picker and the gate stay one call. The description is untouched, so no
+compiled program moves for it and every handler goes on reading `filters`
+positionally — the answers arrive in role order.
+
+**Two things are left, and both are named because the shape of each is now
+known.**
+
+*An optional slot cannot be a role.* "…it fights **up to one** target creature an
+opponent controls" (Primal Might) may name nothing, and a roles walk answers
+every role or refuses the announcement — so converting it would turn an optional
+target into a required one, which is a different wrongness rather than a smaller
+one. Those keep the shared list and its narrowing loss. The description now
+records `optional_slots` so the case is *visible* instead of being invisible in
+a flattened `count`; closing it means an optional role in the walk and in the
+client.
+
+*A runtime narrowing is not a picker flag.* Phyrexian Splicer's own slot 0 is
+"with the chosen ability", and which keyword that is depends on the activation's
+cost choice. `_narrowing_flags` has no key for it and the enumerator has no
+answer at picker time, so the card has per-slot enumeration and still no
+narrowing on the slot that needed one. It wants the keyword choice to reach the
+enumerator, which is its own piece.
+
+**The picker sweep's question stops one level above all of this**, and its
+docstring now says so.
 
 **Added at TMP's Phase 4: `unless_player_pays` is labelled with an effect family
 rather than a shape.** It is a **wrapper** carrying `activated_control`, which is

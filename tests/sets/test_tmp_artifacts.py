@@ -1450,3 +1450,38 @@ def test_an_ability_whose_word_is_not_offered_leaves_nothing_behind_either(set_p
 
     assert not result.supported
     assert _PROMO_CHOSEN_ABILITY not in splicer.metadata
+
+
+def test_phyrexian_splicer_asks_for_its_two_slots_separately(set_pool):
+    """"Until end of turn, target creature **with the chosen ability** loses it
+    and **another target creature** gains it."
+
+    Two slots of one announcement (CR 601.2c) whose filters differ, and the
+    shared-list spec could not say so: a narrowing may only be applied to one
+    list when every slot has it, so slot 0's ``chosen_keyword`` was intersected
+    away and the picker offered every creature for both. The gate then read that
+    same over-wide list and admitted the announcement, the cost was paid, and
+    the handler dropped slot 0 at resolution while slot 1 still gained the
+    ability.
+
+    The spec is now ordered roles, one enumeration per slot. **The narrowing on
+    slot 0 is still not carried** — "with the chosen ability" is a runtime fact
+    (which keyword the activation chose) and ``_narrowing_flags`` has no key for
+    it — so this asserts the shape that makes the remaining fix possible rather
+    than claiming the card is finished. SET_PLAYBOOK's Known gaps carries the
+    rest.
+    """
+    from engine.oracle import compile_card_oracle
+    from engine.targeting import derive_activation_spec
+
+    program = compile_card_oracle(set_pool("TMP")["Phyrexian Splicer"])
+    move = next(
+        ability for ability in program.activated_abilities
+        if ability.instruction is not None
+        and ability.instruction.kind == "move_chosen_keyword_between_targets"
+    )
+    spec = derive_activation_spec(move)
+
+    assert spec["kind"] == "roles", spec
+    assert len(spec["roles"]) == 2, "one enumeration per printed slot"
+    assert [role["kind"] for role in spec["roles"]] == ["creature", "creature"]

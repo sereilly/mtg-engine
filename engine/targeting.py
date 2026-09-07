@@ -2415,6 +2415,70 @@ def role_slot(spec: dict | None, role: str | None) -> int | None:
     return None
 
 
+def _slot_roles_spec(targets: dict, slot_filters: list) -> dict | None:
+    """A roles spec for a multi-slot description whose slots differ, or None.
+
+    "Target creature you control fights target creature **an opponent
+    controls**" (Triangle of War); "target creature **with the chosen ability**
+    … and another target creature" (Phyrexian Splicer). Two slots, two different
+    printed restrictions, and one announcement (CR 601.2c).
+
+    **A shared list cannot say it.** This used to intersect the per-slot
+    narrowing flags — right, given a single list, because a flag only one slot
+    has would hide a target the other slot legitimately admits — but the
+    intersection of "you control" and "an opponent controls" is *nothing*, so
+    the picker offered every creature for both slots, the announcement gate read
+    that same over-wide list and admitted it, and the cost was paid. Eight cards
+    were in that state, six of them with a controller restriction enforced by
+    nothing at all.
+
+    Roles are the shape already built for it: ``legality._role_target_walk``
+    enumerates slot *n* with slots 0…n-1 settled, which gets each slot its own
+    filter, gets CR 601.2c's distinctness for free (a permanent taken by an
+    earlier role is not offered to a later one), and makes the picker and the
+    gate one call. The description is left untouched, so no compiled program
+    moves and every handler goes on reading ``filters`` positionally — the
+    answers arrive in role order, which is slot order.
+
+    None when the slots do **not** differ, which is the ordinary several-target
+    spell ("Destroy two target creatures") and is honestly one list.
+
+    The role *name* is positional. Nothing renders it — the browser labels a
+    role by its ``kind`` and its step ("Choose the creature for Triangle of War
+    (2 of 2)") — and these slots often share a printed noun, which is exactly
+    what ``describe_independent_target_roles`` refuses to name.
+    """
+    if all(slot == slot_filters[0] for slot in slot_filters[1:]):
+        return None
+    if targets.get("optional_slots"):
+        # "…it fights **up to one** target creature an opponent controls"
+        # (Primal Might). CR 601.2c lets that slot be left empty, and a roles
+        # walk has no way to say so — every role is answered or the announcement
+        # is refused. Converting it would turn an optional target into a
+        # required one, which is a *different* wrongness rather than a smaller
+        # one: the shared list at least lets the card be cast the way it prints.
+        #
+        # So the shared-list reading stays for these, with its own narrowing
+        # loss intact, and the remainder is recorded in SET_PLAYBOOK's Known
+        # gaps rather than papered over. An optional role is the piece that
+        # closes it.
+        return None
+    roles: list[dict] = []
+    for position, slot in enumerate(slot_filters):
+        described = _from_targets_payload({
+            "quantifier": "target", "kind": "object", "filter": slot or {},
+        })
+        if described is None:
+            # A slot this reader cannot describe would be enumerated as
+            # "anything", which is the widening this function exists to remove.
+            # Refuse the whole conversion rather than build a spec that is right
+            # about one slot and silent about the other.
+            return None
+        described["role"] = f"slot_{position}"
+        roles.append(described)
+    return {"kind": ROLES_TARGET_KIND, "roles": roles}
+
+
 def _from_targets_payload(targets) -> dict | None:
     """The spec from a grammar-lowered ``targets`` description.
 
@@ -2537,13 +2601,23 @@ def _from_targets_payload(targets) -> dict | None:
         return None
     filt = targets.get("filter") or {}
     # A description whose slots are *differently* restricted carries one filter
-    # per slot. The picker enumerates one legal set for all of them, so a
-    # narrowing may only be applied to that set when **every** slot has it —
-    # otherwise the flag hides a target one slot legitimately admits, which is
-    # what kept Garruk, Savage Herald's -2 from ever biting an opponent's
-    # creature. Per-slot legality is the handler's, and it already enforced it.
+    # per slot, and a single shared list cannot express it: a narrowing may only
+    # be applied to that list when **every** slot has it, so a slot's own
+    # restriction is simply dropped. The spec becomes ordered **roles** instead,
+    # one per slot, which is the shape built for exactly this question.
     slot_filters = targets.get("filters")
     if isinstance(slot_filters, list) and len(slot_filters) > 1:
+        roles = _slot_roles_spec(targets, slot_filters)
+        if roles is not None:
+            return roles
+        # Still one shared list: either the slots agree, or one of them is
+        # optional and roles cannot say so. A narrowing may then only be applied
+        # when **every** slot has it — a flag only one slot carries would hide a
+        # target another slot legitimately admits, which is what kept Garruk,
+        # Savage Herald's -2 from ever biting an opponent's creature. That loses
+        # a slot's own restriction, which is the whole reason the roles
+        # conversion above exists; it survives here only for the shapes that
+        # cannot take it.
         per_slot = [_narrowing_flags(slot or {}) for slot in slot_filters]
         flags = {
             key: value

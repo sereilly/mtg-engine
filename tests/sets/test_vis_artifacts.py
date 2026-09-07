@@ -551,16 +551,29 @@ def test_w2g4_triangle_of_war_deals_nothing_when_one_fighter_has_gone(set_pool):
     )
     assert game.is_on_battlefield(mine), game.log
 def test_w2g4_triangle_of_war_asks_for_two_targets(set_pool):
-    """The picker's side of CR 601.2c. A spec of ``max_targets`` 2 is what the
-    client tests to decide how many prompts to run -- the Roots class is a
-    supported card whose spec is None and which therefore cannot be played at
-    all, and a two-slot ability that reported one is the same failure halved.
+    """The picker's side of CR 601.2c, and both printed restrictions with it.
+
+    A spec that asks for two targets is what the client tests to decide how many
+    prompts to run -- the Roots class is a supported card whose spec is None and
+    which therefore cannot be played at all, and a two-slot ability that
+    reported one is the same failure halved.
+
+    It asks as ordered **roles** rather than as one list of two, because the two
+    slots are differently restricted: "target creature you control fights target
+    creature **an opponent controls**". A shared list can only carry a narrowing
+    every slot has, so both controller words were dropped and the artifact could
+    be aimed at two of its own controller's creatures -- an announcement CR
+    601.2c does not allow, admitted by a gate reading the same over-wide list
+    the picker offered.
     """
     program = _w2g4a_compile(set_pool("VIS")["Triangle of War"])
     ability = program.activated_abilities[0]
     assert ability.instruction.kind == "target_fights_target"
     spec = _w2g4a_spec(ability)
-    assert spec is not None and spec.get("max_targets") == 2, spec
+    assert spec is not None and spec["kind"] == "roles", spec
+    fighter, opponent = spec["roles"]
+    assert fighter["own_only"] is True and "opponent_only" not in fighter
+    assert opponent["opponent_only"] is True and "own_only" not in opponent
 def test_w2g4_a_two_target_fight_needs_both_slots_announced():
     """"Target creature you control fights **another creature**" is a different
     card: CR 601.2c announces nothing for the second phrase, so the choice

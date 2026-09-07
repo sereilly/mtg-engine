@@ -30,6 +30,7 @@ from ...oracle_types import ATTACHED_PERMANENT_CONTROLLER, OracleInstruction
 from .. import ast
 from ..errors import LoweringError
 from ._common import (
+    _optional_slot_key,
     _describe_targets,
     _filter_payload,
     _is_enchanted,
@@ -92,6 +93,9 @@ def lower_bite(
                             _filter_payload(node.recipients[0].filter),
                         ],
                         "count": 2,
+                        **_optional_slot_key(
+                            (node.source, node.recipients[0])
+                        ),
                     },
                 },
             ),

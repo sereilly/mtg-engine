@@ -22,6 +22,7 @@ from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
 from ._common import (
+    _optional_slot_key,
     _REST_OF_TURN,
     _amount_payload,
     _describe_targets,
@@ -120,6 +121,12 @@ def _fused_prepare_then_interact(
                         _filter_payload(second.filter),
                     ],
                     "count": 2,
+                    # Which slots CR 601.2c lets the announcement leave empty
+                    # ("…fights **up to one** target creature an opponent
+                    # controls", Primal Might). Absent unless a slot really is
+                    # optional, so the ordinary two-target description is
+                    # byte-identical to what it was.
+                    **_optional_slot_key((first, second)),
                 },
             },
         ),
@@ -191,6 +198,7 @@ def _two_target_fight(node: ast.Fight) -> tuple[OracleInstruction, ...] | None:
                     "filter": described[0],
                     "filters": described,
                     "count": 2,
+                    **_optional_slot_key((first, second)),
                 },
             },
         ),

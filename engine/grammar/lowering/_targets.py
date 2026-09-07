@@ -716,3 +716,38 @@ def _refuse_unfused_distinctness(steps: tuple[ast.Statement, ...]) -> None:
                 "a lowering with a slot per clause",
                 node=spec,
             )
+
+
+def optional_slot_positions(specs) -> tuple[int, ...]:
+    """Which of *specs* CR 601.2c lets the announcement leave empty.
+
+    "…it fights **up to one** target creature an opponent controls" (Primal
+    Might) against "…deals damage … to target creature an opponent controls"
+    (Hunter's Edge). One word apart, and the multi-slot description could not
+    tell them apart: every slot was flattened into one ``count``, so a reader
+    deriving per-slot behaviour from it turned an optional slot into a required
+    one. ``up_to`` is the quantifier the parser already records for the printed
+    "up to", so this reads the fact rather than re-deriving it.
+
+    Returned as positions rather than as a per-slot list of quantifiers, because
+    what every reader wants to know is "may this slot be skipped?" — and a list
+    that repeats "target" for the ordinary card is a key on every description
+    instead of on the few that mean something by it.
+    """
+    return tuple(
+        position
+        for position, spec in enumerate(specs)
+        if getattr(spec, "quantifier", None) == "up_to"
+    )
+
+
+def _optional_slot_key(specs) -> dict:
+    """``{"optional_slots": [...]}`` for *specs*, or ``{}`` when none is.
+
+    A key rather than a value so a producer can splat it into the description
+    and the ordinary two-target card stays byte-identical to what it was — an
+    ``optional_slots: []`` on every multi-slot description would move every one
+    of their compiled programs to say nothing.
+    """
+    positions = optional_slot_positions(specs)
+    return {"optional_slots": list(positions)} if positions else {}
