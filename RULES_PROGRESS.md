@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**364 / 614 tracked rules covered (59%)** — 2171 tests, 0 unannotated.
+**364 / 614 tracked rules covered (59%)** — 2174 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -204,7 +204,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **109.2** If a spell or ability uses a description of an object that includes a card type or subtype, but d...
 - [ ] **109.3** An object’s characteristics are name, mana cost, color, color indicator, card type, subtype, supe...
 - [ ] **109.4** Only objects on the stack or on the battlefield have a controller. Objects that are neither on th...
-- [x] **109.5** The words “you” and “your” on an object refer to the object’s controller, its would-be controller... *(17 tests)*
+- [x] **109.5** The words “you” and “your” on an object refer to the object’s controller, its would-be controller... *(18 tests)*
 
 ### 110. Permanents
 
@@ -334,7 +334,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 121. Drawing a Card
 
 - [x] **121.1** A player draws a card by putting the top card of their library into their hand. This is done as a... *(3 tests)*
-- [x] **121.2** Cards may only be drawn one at a time. If a player is instructed to draw multiple cards, that pla... *(3 tests, subrules a)*
+- [x] **121.2** Cards may only be drawn one at a time. If a player is instructed to draw multiple cards, that pla... *(4 tests, subrules a)*
 - [ ] **121.3** If there are no cards in a player’s library and an effect offers that player the choice to draw a...
 - [x] **121.4** A player who attempts to draw a card from a library with no cards in it loses the game the next t... *(4 tests)*
 - [ ] **121.5** If an effect moves cards from a player’s library to that player’s hand without using the word “dr...
@@ -445,7 +445,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 305. Lands
 
-- [x] **305.1** A player who has priority may play a land card from their hand during a main phase of their turn ... *(3 tests)*
+- [x] **305.1** A player who has priority may play a land card from their hand during a main phase of their turn ... *(4 tests)*
 - [x] **305.2** A player can normally play one land during their turn; however, continuous effects may increase t... *(23 tests, subrules ab)*
 - [ ] **305.3** A player can’t play a land, for any reason, if it isn’t their turn. Ignore any part of an effect ...
 - [ ] **305.4** Effects may also allow players to “put” lands onto the battlefield. This isn’t the same as “playi...
@@ -790,7 +790,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **614.2** Some replacement effects apply to damage from a source. See rule 609.7.
 - [ ] **614.3** There are no special restrictions on casting a spell or activating an ability that generates a re...
 - [x] **614.4** Replacement effects must exist before the appropriate event occurs—they can’t “go back in time” a... *(2 tests)*
-- [x] **614.5** A replacement effect doesn’t invoke itself repeatedly; it gets only one opportunity to affect an ... *(6 tests)*
+- [x] **614.5** A replacement effect doesn’t invoke itself repeatedly; it gets only one opportunity to affect an ... *(7 tests)*
 - [x] **614.6** If an event is replaced, it never happens. A modified event occurs instead, which may in turn tri... *(10 tests)*
 - [x] **614.7** If a replacement effect would replace an event, but that event never happens, the replacement eff... *(5 tests, subrules a)*
 - [x] **614.8** Regeneration is a destruction-replacement effect. The word “instead” doesn’t appear on the card b... *(9 tests)*
@@ -851,7 +851,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **701.6** Counter *(6 tests, subrules ab)*
 - [x] **701.7** Create *(3 tests, subrules a)*
 - [x] **701.8** Destroy *(7 tests, subrules abc)*
-- [x] **701.9** Discard *(4 tests, subrules ac)*
+- [x] **701.9** Discard *(5 tests, subrules ac)*
 - [x] **701.12** Exchange *(7 tests, subrules ab)*
 - [x] **701.13** Exile *(7 tests, subrules a)*
 - [x] **701.14** Fight *(7 tests, subrules abd)*

@@ -12,32 +12,6 @@ unclaimed text. Do not edit by hand.
 - With UNCLAIMED text (must fix or acknowledge): **0**
 - With deletion-probe findings (ignored words): **272**
 
-## Measured sets — reported, not gated
-
-Cards in a `measured` set (see `cards/manifest.json`) that the
-compiler calls **supported** while carrying a printed line nothing
-implements. They are the debt behind that set's progress number, and
-`--hollow-lines` sees only the ones that produced an *ability part* —
-a line yielding nothing at all leaves that probe nothing to find.
-
-Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
-`HOOK_RELIANCE.md`'s ceilings exclude the same sets: a ratchet over a
-set nobody has implemented fires on its composition rather than on
-anything anyone did, and every ingest would arrive red.
-
-**6 unclaimed sentence(s) across 4 supported card(s).**
-
-- **Mox Diamond**
-  - `if this artifact would enter, you may discard a land card instead`
-  - `if you do, put this artifact onto the battlefield`
-  - `if you don't, put it into its owner's graveyard`
-- **Provoke**
-  - `that creature blocks this turn if able`
-- **Pursuit of Knowledge**
-  - `if you would draw a card, you may put a study counter on this enchantment instead`
-- **Volrath's Stronghold**
-  - `{1}{b}, {t}: put target creature card from your graveyard on top of your library`
-
 ## Acknowledged simplifications
 
 | Card | Sentence | Why it is acceptable |
@@ -343,7 +317,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | parse rule | 2696 |
 | activation cost | 1196 |
 | trigger table | 807 |
-| static-line table | 676 |
+| static-line table | 692 |
 | keyword table | 596 |
 | aura enchant noun (oracle_instructions attach) | 198 |
 | activation_restrictions.py | 109 |
@@ -351,10 +325,10 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | cast_costs.py | 47 |
 | loyalty cost | 33 |
 | oracle.py (modal trigger head) | 29 |
-| auras.py (attached effect) | 28 |
-| aura static (oracle_instructions/permanent_state) | 23 |
 | cost_modifiers.py | 23 |
+| auras.py (attached effect) | 20 |
 | mixin text scan | 16 |
+| aura static (oracle_instructions/permanent_state) | 15 |
 | activation_permissions.py | 11 |
 | cast_timing.py (granted flash) | 10 |
 | cast_timing.py (cleanup sacrifice rider) | 10 |
