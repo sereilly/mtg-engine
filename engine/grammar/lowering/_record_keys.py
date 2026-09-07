@@ -51,6 +51,9 @@ from ...oracle_types import (BASE_PT_SET_PERMANENTS,
                              COUNTERS_PLACED_THIS_WAY,
                              COUNTERS_REMOVED, HAND_CARDS_TO_LIBRARY,
                              PER_OBJECT_SEAT_RECORDS, SEARCHED_PERMANENTS)
+from ...oracle_types import (
+    REMOVED_FROM_COMBAT_PERMANENTS as _REMOVED_FROM_COMBAT_PERMANENTS,
+)
 from ...tokens import CREATED_TOKEN_RESULT_KEY
 # The two records a *death* freezes that are also produced quantities. `_deaths`
 # is the floor beside this one that owns what a death leaves behind, and it
@@ -329,8 +332,27 @@ PUT_FROM_HAND_PERMANENTS = "put_from_hand_permanents"
 #: ``_records`` imports it from here either way.
 
 
+#: "Remove target attacking creature you control from combat **and untap it**."
+#: (Reconnaissance.) The permanent the removal chose, recorded because the step
+#: behind it names it with a bare pronoun and there is nothing else to read: the
+#: removal is not a tap or an untap, so none of the records above it holds the
+#: object, and reading the *board* at that point cannot tell the creature the
+#: ability targeted from any other creature that is no longer attacking.
+#:
+#: The other printing of this sentence (Disharmony, Imprison) has the pronoun in
+#: front rather than behind and reads one of those records instead — which is
+#: why this is a record the removal *writes* rather than a second reading of one
+#: it takes.
+#: Imported from ``oracle_types`` rather than defined here, exactly as
+#: ``COUNTERS_PLACED_THIS_WAY`` above is and for the same reason: the handler
+#: that writes it and the lowering that gates on it are at opposite ends of the
+#: pipeline, so the string lives in the module neither imports from.
+REMOVED_FROM_COMBAT_PERMANENTS = _REMOVED_FROM_COMBAT_PERMANENTS
+
+
 _RECORDED_PERMANENTS: frozenset[str] = frozenset({
     _TAPPED_PERMANENTS, _UNTAPPED_PERMANENTS, _UNBLOCKABLE_PERMANENTS,
+    REMOVED_FROM_COMBAT_PERMANENTS,
     _BLOCKED_PERMANENTS,
     _PERMANENTS_GIVEN_COUNTERS, _REANIMATED_PERMANENTS,
     _BASE_PT_SET_PERMANENTS,

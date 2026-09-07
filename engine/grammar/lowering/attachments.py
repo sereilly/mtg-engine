@@ -372,27 +372,33 @@ def _lower_choose_permanent(node: ast.ChoosePermanent) -> tuple[OracleInstructio
         )
     described = node.spec.filter
     scoped: dict[str, object] = {}
-    if node.spec.targeted:
-        # "An opponent chooses **target creature they control**." (Echo
-        # Chamber.) "They" is the seat this sentence has already named — the
-        # chooser — so the picked-from battlefield and the picking seat are one
-        # answer, exactly as Preacher's "of an opponent's choice **they**
-        # control" resolves them in ``lowering/control_changes.py``.
-        #
-        # Lifted out of the filter into the ``controlled_by`` key the candidate
-        # rule answers, for that lowering's reason: ``subject_matches`` has
-        # nobody to compare a bare "that_player" controller against, so left
-        # inside it the phrase refuses the line and dropped it would offer every
-        # creature on the table. Any other possessive names a third seat this
-        # has no word for and refuses.
-        if described.controller is not None:
-            if described.controller != "that_player":
-                raise LoweringError(
-                    "the choice cannot be scoped to this player's battlefield",
-                    node=node,
-                )
-            scoped["controlled_by"] = "chooser"
-            described = dataclasses.replace(described, controller=None)
+    # "An opponent chooses **target creature they control**." (Echo Chamber.)
+    # "Defending player chooses **an untapped creature they control**."
+    # (Crashing Boars.) "They" is the seat this sentence has already named — the
+    # chooser — so the picked-from battlefield and the picking seat are one
+    # answer, exactly as Preacher's "of an opponent's choice **they** control"
+    # resolves them in ``lowering/control_changes.py``.
+    #
+    # Lifted out of the filter into the ``controlled_by`` key the candidate rule
+    # answers, for that lowering's reason: ``subject_matches`` has nobody to
+    # compare a bare "that_player" controller against, so left inside it the
+    # phrase refuses the line and dropped it would offer every creature on the
+    # table. Any other possessive names a third seat this has no word for and
+    # refuses.
+    #
+    # Asked of **every** spelling rather than only the targeted one. Which
+    # battlefield "they control" names does not depend on whether the word
+    # "target" was printed in front of the noun, and the untargeted branch is
+    # the one where dropping it costs most: nothing announced the choice, so
+    # there is no announcement-time check to catch the widened set either.
+    if described.controller is not None:
+        if described.controller != "that_player":
+            raise LoweringError(
+                "the choice cannot be scoped to this player's battlefield",
+                node=node,
+            )
+        scoped["controlled_by"] = "chooser"
+        described = dataclasses.replace(described, controller=None)
     announced = _ANNOUNCED_CHOOSERS.get(node.chooser.kind)
     if announced is not None:
         # The singular's half of the plural's announcement above, and the same
@@ -457,6 +463,14 @@ _CHOOSER_SEATS = {
     # is the Roots class. Nothing in the pool printed the phrase until now,
     # which is why the collapse survived.
     "target_opponent": "target",
+    # "**Defending player** chooses an untapped creature they control."
+    # (Crashing Boars.) CR 506.2's seat, which only a trigger that froze one can
+    # answer: the ability resolves after the declare-attackers step, and a
+    # combat with several defenders (CR 802) has a defending player *per
+    # attacking creature* — so the seat is read out of the trigger's own
+    # context, under the key every combat fire site already stamps, rather than
+    # re-derived from a board the resolution has already changed.
+    "defending_player": "trigger_defending_player",
     # "**An opponent** chooses target creature they control." (Echo Chamber.)
     # The *untargeted* spelling, and the one row that really does mean
     # "whichever opponent there is": nothing is announced, so ``_chooser_seat``

@@ -22,6 +22,7 @@ from ...subject_filters import OBJECT_ONLY_FILTER_KEYS, card_only_filter
 from .. import ast
 from ..errors import LoweringError
 from ._events import (_RECORDED_PERMANENTS, CREATED_TOKEN, EXILED_THIS_WAY,
+                      damage_trigger_names_damaged_end,
                       EXILED_THIS_WAY_OBJECTS)
 from ._delays import _BOUND_OBJECT_DELAYED_EVENTS
 from ._common import (
@@ -236,6 +237,7 @@ def _lower_exile(
     node: ast.Exile,
     produced: frozenset[str] = frozenset(),
     event: str | None = None,
+    event_subject: object | None = None,
 ) -> tuple[OracleInstruction, ...]:
     """"Exile target creature until end of turn." — and nothing else.
 
@@ -384,6 +386,29 @@ def _lower_exile(
             raise LoweringError(
                 "the bound-object exile carries no rider", node=node
             )
+        if damage_trigger_names_damaged_end(event, event_subject):
+            # "Whenever this creature deals damage to a creature, **exile that
+            # creature**." (Pit Spawn.) The immediate twin of Lowland
+            # Basilisk's delayed destroy, one keyword action over.
+            # `damage_events._announce` stamps the damaged permanent as the
+            # trigger's **target** (`target_permanent_id`), which is what lets
+            # this ride the ordinary targeted exile with no `targets`
+            # description — nothing is chosen, exactly as
+            # `destroy_target_permanent` reads the same stamp for the same
+            # sentence in the destruction family. Gated on
+            # :func:`damage_trigger_names_damaged_end` rather than on the kind,
+            # which is that helper's whole point: under Mangara's Equity's
+            # spelling the same two words name the *damager*.
+            if _restrictions_beyond(subject.filter, frozenset({"card_types"})):
+                raise LoweringError(
+                    "a creature named by a damage trigger carries no narrowing "
+                    "the exile could honour", node=node,
+                )
+            return (
+                OracleInstruction(
+                    "exile_target_permanent", "", _filter_payload(subject.filter)
+                ),
+            )
         if event not in _BOUND_OBJECT_DELAYED_EVENTS:
             raise LoweringError(
                 "\"that\" names the firing event's object, and this event "
@@ -500,8 +525,21 @@ def _lower_exile(
         # to and would be dropped where they are tested.
         narrowings = _filter_payload(rest)
         unusable = sorted(set(narrowings) - OBJECT_ONLY_FILTER_KEYS)
+        # ``blocked_by_source`` is named here rather than in
+        # ``_PAYLOAD_HONOURED_FILTER_FIELDS``, which is the idiom
+        # ``lowering/_filters.py`` states for a relation only some lowerings can
+        # carry: ``to_payload`` emits the key and ``subject_matches`` answers
+        # it, but only with the ability's **source** in hand — so the lowering
+        # that admits it is the one whose handler has one. "Exile all creatures
+        # blocked by this creature" (Wall of Nets) is that sentence, and the
+        # sweep handler reads its narrowings through ``subject_matches`` with
+        # ``context.source_permanent`` for exactly this key's sake. Admitted
+        # into the general set instead, every lowering in the package would
+        # carry a relation most of their handlers test with the pure matcher,
+        # which drops it — and a dropped ``blocked_by_source`` on a sweep is
+        # every creature on the table.
         leftovers = _restrictions_beyond(
-            rest, _PAYLOAD_HONOURED_FILTER_FIELDS | {"zone"}
+            rest, _PAYLOAD_HONOURED_FILTER_FIELDS | {"zone", "blocked_by_source"}
         ) + dropped_narrowings(rest, narrowings) + tuple(unusable)
         if leftovers:
             raise LoweringError(

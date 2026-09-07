@@ -117,6 +117,14 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # "attacks and isn't blocked" (Merchant Ship) — before the bare "attacks"
     # it is a prefix of, so the longer condition matches first.
     ("attacks_unblocked", ("this", "creature", "attacks", "and", "isn't", "blocked")),
+    # "attacks **alone**" (Reckless Ogre; CR 506.5) — before the bare "attacks"
+    # it is a prefix of, for this table's standing reason. One kind with the
+    # bare row, because it is one event: which declarations announce it is a
+    # narrowing `engine/oracle.py`'s condition table carries as payload and the
+    # declare-attackers step reads, and this side has no dispatcher to tell.
+    # Listed all the same, because a word left unclaimed here refuses the whole
+    # line and the effect behind it goes with it.
+    ("creature_attacks", ("this", "creature", "attacks", "alone")),
     ("creature_attacks", ("this", "creature", "attacks")),
     # The bare joined sentence (Spitting Slug), above both halves it is a
     # strict prefix of: matching "this creature blocks" first would leave

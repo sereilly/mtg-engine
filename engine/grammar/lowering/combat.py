@@ -692,6 +692,38 @@ def _lower_remove_from_combat(
       compiled clean.
     """
     subject = node.subject
+    # "**Remove target attacking creature you control from combat** and untap
+    # it." (Reconnaissance.) The other half of the sentence above: here the
+    # removal is the step that *chooses*, and the pronoun behind it is the one
+    # that reads. So a targeted subject is admitted — the picker falls out of
+    # the ``targets`` description, exactly as it does for every other targeted
+    # instruction — and the removal records what it took out of combat under
+    # ``REMOVED_FROM_COMBAT_PERMANENTS`` for the untap behind it.
+    #
+    # One target only. Nothing in the pool prints a removal of several, and
+    # ``_names_several_targets`` is the opt-in a handler that resolves a list
+    # would need: routed here without one, every choice after the first would
+    # be collected and dropped.
+    if isinstance(subject, ast.TargetSpec) and subject.targeted:
+        if _names_several_targets(subject):
+            raise LoweringError(
+                "the combat removal takes one creature; nothing here collects "
+                "several",
+                node=node,
+            )
+        described = refuse_untestable(
+            _filter_payload(subject.filter),
+            refusal=(
+                "the combat removal is enforced against the chosen permanent, "
+                "so a narrowing the matcher cannot test would be dropped and "
+                "the picker would offer permanents the card never names"
+            ),
+            node=node,
+        )
+        payload: dict[str, object] = dict(described)
+        payload["frees_blocked_attackers"] = node.frees_blocked_attackers
+        _describe_targets(payload, subject)
+        return (OracleInstruction("remove_from_combat", "", payload),)
     if not isinstance(subject, ast.TargetSpec) or subject.quantifier != "it":
         raise LoweringError(
             "remove-from-combat acts on the object the sentence already chose",

@@ -27,6 +27,7 @@ from ..combat_permissions import (ADDITIONAL_BLOCKS_UNTIL_EOT,
                                   CANT_BLOCK_ATTACKERS_UNTIL_EOT,
                                   MUST_BLOCK_UNTIL_EOT,
                                   CANT_BLOCK_UNTIL_EOT)
+from ..oracle_types import REMOVED_FROM_COMBAT_PERMANENTS
 from ..pt import add_pt_modifier
 from ..rampage import rampage_bonus
 from ..turn_state import (CANT_ATTACK_ON_SEAT_TURN_KEY,
@@ -509,11 +510,46 @@ def remove_from_combat(game: Game, instruction: OracleInstruction, context: Orac
     # become unblocked" (Imprison) is what overrides it, so the card decides
     # rather than the removal.
     frees = bool(instruction.payload.get("frees_blocked_attackers"))
-    for permanent_id in recorded_permanent_ids(context, key):
+    if key:
+        removed_ids = list(recorded_permanent_ids(context, key))
+    else:
+        # "Remove **target attacking creature you control** from combat and
+        # untap it." (Reconnaissance.) The other printing, where the removal is
+        # the step that chooses — the ``targets`` description on the payload is
+        # what says so, and the picker is derived from it. The printed noun
+        # phrase is re-checked here as well as at announcement (idiom 9: the
+        # picker's enumeration is a hint), through ``subject_matches`` because
+        # "you control" and "attacking" are what the phrase is made of.
+        from ..subject_filters import subject_matches
+
+        described = {
+            name: value for name, value in instruction.payload.items()
+            if name not in ("targets", "frees_blocked_attackers")
+        }
+        observer = (
+            game.players.index(context.caster)
+            if context.caster in game.players else None
+        )
+        chosen = resolve_target_permanent(
+            game, context,
+            predicate=lambda p: subject_matches(
+                game, p, described, observer=observer,
+                source=context.source_permanent,
+            ),
+        )
+        removed_ids = [chosen.permanent_id] if chosen is not None else []
+    removed: list[int] = []
+    for permanent_id in removed_ids:
         perm = game.permanent_by_id(permanent_id)
         if perm is None:
             continue
         _take_permanent_out_of_combat(game, perm, frees_blocked_attackers=frees)
+        removed.append(permanent_id)
+    # What a sentence behind this one means by "it" (Reconnaissance's untap).
+    # By id, never by object or slot (CR 400.7), and written whichever branch
+    # above ran: which printing chose the permanent is not something the step
+    # behind it can see, so it must not be something it has to know.
+    context.results[REMOVED_FROM_COMBAT_PERMANENTS] = tuple(removed)
     return True, "resolved"
 
 
@@ -858,6 +894,21 @@ def force_target_to_block_until_eot(game: Game, instruction: OracleInstruction, 
             "compelled to block"
         )
         return True, "resolved"
+    # "Defending player chooses an untapped creature they control. **That
+    # creature** blocks this creature this turn if able." (Crashing Boars.) The
+    # creature an earlier step of this same resolution chose, read out of the
+    # scratchpad by id — nothing was targeted, so there is no announcement to
+    # resolve and nothing to re-check: the prompt's own candidate rule already
+    # enforced the printed noun phrase, and re-asking it here would be a second
+    # reading of a set the card only ever describes once.
+    recorded_key = instruction.payload.get("permanents_from")
+    if recorded_key:
+        for permanent_id in recorded_permanent_ids(context, recorded_key):
+            perm = game.permanent_by_id(permanent_id)
+            if perm is None:
+                continue
+            _owe_block(game, perm, attacker, context)
+        return True, "resolved"
     described = (instruction.payload.get("targets") or {}).get("filter") or {}
     observer = (
         game.players.index(context.caster) if context.caster in game.players
@@ -873,14 +924,28 @@ def force_target_to_block_until_eot(game: Game, instruction: OracleInstruction, 
     if chosen is None:
         game.log.append(f"{context.card.name}: its target is gone (608.2b)")
         return True, "resolved"
-    owed = list(chosen.metadata.get(MUST_BLOCK_ATTACKERS_UNTIL_EOT) or ())
+    _owe_block(game, chosen, attacker, context)
+    return True, "resolved"
+
+
+def _owe_block(game: Game, blocker, attacker, context) -> None:
+    """Record that *blocker* owes *attacker* a block this turn (CR 509.1c).
+
+    One body for both ways the creature is named — a target the caster chose
+    (Trumpeting Armodon) and one an earlier step of the resolution recorded
+    (Crashing Boars) — because what is recorded does not depend on which. By
+    id, and appended rather than assigned: two activations name two attackers
+    and the creature owes both blocks as far as the rules allow, and an
+    attacker that leaves and returns is a new object (CR 400.7) whose new id
+    the old requirement no longer names.
+    """
+    owed = list(blocker.metadata.get(MUST_BLOCK_ATTACKERS_UNTIL_EOT) or ())
     if attacker.permanent_id not in owed:
         owed.append(attacker.permanent_id)
-    chosen.metadata[MUST_BLOCK_ATTACKERS_UNTIL_EOT] = owed
+    blocker.metadata[MUST_BLOCK_ATTACKERS_UNTIL_EOT] = owed
     game.log.append(
-        f"{chosen.card.name} blocks {attacker.card.name} this turn if able"
+        f"{blocker.card.name} blocks {attacker.card.name} this turn if able"
     )
-    return True, "resolved"
 
 
 @effect_handler("force_subject_to_block_until_eot")

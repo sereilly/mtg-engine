@@ -36,7 +36,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | TMP | 335 | 478 | 92.1% | 91.8% | 65.5% | 271 |
 | STH | 143 | 215 | 88.4% | 88.4% | 62.8% | 124 |
 | M21 | 285 | 503 | 87.3% | 87.1% | 61.0% | 237 |
-| EXO *(measured)* | 143 | 207 | 72.5% | 67.6% | 45.9% | 90 |
+| EXO *(measured)* | 143 | 207 | 74.9% | 71.5% | 49.3% | 95 |
 | **All (shipped)** | **4730** | **7032** | **90.2%** | **89.5%** | **59.8%** | **3510** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -49,30 +49,30 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 393 | 175 | expected a subject |  |
-| 115 | 60 | unrecognized effect verb |  |
-| 89 | 45 | unconsumed text |  |
+| 391 | 173 | expected a subject |  |
+| 114 | 59 | unrecognized effect verb |  |
+| 88 | 44 | unconsumed text |  |
 | 37 | 22 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
-| 14 | 14 | expected 'a' |  |
+| 14 | 13 | expected 'unless defending player controls' |  |
 | 13 | 8 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
-| 13 | 12 | expected 'unless defending player controls' |  |
+| 13 | 13 | expected 'a' |  |
 | 7 | 1 | no lowering for RawEffect |  |
 | 7 | 2 | expected who takes the redirected damage |  |
 | 7 | 2 | expected what this creature can't block, or a duration |  |
 | 6 | 1 | no handler for this battlefield entry |  |
 | 6 | 3 | expected a keyword ability |  |
 | 5 | 1 | expected 'card' |  |
-| 5 | 2 | expected a destination zone after 'return' |  |
 | 5 | 5 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
 | 4 | 1 | the sacrifice prompt cannot test this restriction |  |
 | 4 | 1 | expected 'that' |  |
 | 4 | 1 | attach needs one chosen permanent to attach to |  |
 | 4 | 1 | no whole-hand discard handler for 'each_player' |  |
-| 3 | 2 | remove-from-combat acts on the object the sentence already chose |  |
+| 4 | 1 | expected a destination zone after 'return' |  |
 | 3 | 1 | expected 'of' |  |
 | 3 | 3 | unrecognized "can't be" restriction |  |
 | 3 | 3 | a counter-removal cost only reads the ability's own source |  |
+| 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 1 | expected 'the number of' in a where-clause |  |
 
 ## Cards executing through the grammar
@@ -958,6 +958,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature blocks or becomes blocked, it gets +2/+2 until end of turn.`
 - **Cinder Cloud**
   - `Destroy target creature. If a white creature dies this way, Cinder Cloud deals damage to that creature's controller equal to the creature's power.`
+- **Cinder Crawler**
+  - `{R}: This creature gets +1/+0 until end of turn. Activate only if this creature is blocked.`
 - **Cinder Giant**
   - `At the beginning of your upkeep, this creature deals 2 damage to each other creature you control.`
 - **Cinder Marsh**
@@ -1200,6 +1202,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Crash Through**
   - `Creatures you control gain trample until end of turn. (Each of those creatures can deal excess combat damage to the player or planeswalker it's attacking.)`
   - `Draw a card.`
+- **Crashing Boars**
+  - `Whenever this creature attacks, defending player chooses an untapped creature they control. That creature blocks this creature this turn if able.`
 - **Crazed Armodon**
   - `{G}: This creature gets +3/+0 and gains trample until end of turn. Destroy this creature at the beginning of the next end step. Activate only once each turn.`
 - **Creature Bond**
@@ -4367,6 +4371,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature deals damage to a player, that player gets a poison counter. (A player with ten or more poison counters loses the game.)`
 - **Pit Spawn**
   - `At the beginning of your upkeep, sacrifice this creature unless you pay {B}{B}.`
+  - `Whenever this creature deals damage to a creature, exile that creature.`
 - **Pit Trap**
   - `{2}, {T}, Sacrifice this artifact: Destroy target attacking creature without flying. It can't be regenerated.`
 - **Pitchburn Devils**
@@ -4661,12 +4666,16 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Discard X cards, then return a card from your graveyard to your hand for each card discarded this way. Exile Recall.`
 - **Reckless Embermage**
   - `{1}{R}: This creature deals 1 damage to any target and 1 damage to itself.`
+- **Reckless Ogre**
+  - `Whenever this creature attacks alone, it gets +3/+0 until end of turn.`
 - **Reckless Spite**
   - `Destroy two target nonblack creatures. You lose 5 life.`
 - **Reclaim**
   - `Put target card from your graveyard on top of your library.`
 - **Reclamation**
   - `Black creatures can't attack unless their controller sacrifices a land of their choice for each black creature they control that's attacking. (This cost is paid as attackers are declared.)`
+- **Reconnaissance**
+  - `{0}: Remove target attacking creature you control from combat and untap it. (If you activate during end of combat, the creature will untap after it deals combat damage.)`
 - **Reconstruction**
   - `Return target artifact card from your graveyard to your hand.`
   - `Return target artifact card from your graveyard to your hand.`
@@ -6546,6 +6555,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{U}{U}, {T}: Create a 0/1 blue Plant Wall creature token with defender named Kelp.`
 - **Wall of Lava**
   - `{R}: This creature gets +1/+1 until end of turn.`
+- **Wall of Nets**
+  - `At end of combat, exile all creatures blocked by this creature.`
+  - `When this creature leaves the battlefield, return all cards exiled with it to the battlefield under their owners' control.`
 - **Wall of Opposition**
   - `{1}: This creature gets +1/+0 until end of turn.`
 - **Wall of Pine Needles**

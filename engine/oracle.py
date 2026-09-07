@@ -603,6 +603,24 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # fires on an unblocked one.
     ("creature_attacks",
      r"whenever enchanted (?P<combatant_attached>[a-z]+) attacks"),
+    # "Whenever this creature **attacks alone**, …" (Reckless Ogre; CR 506.5,
+    # and the same words CR 702.83a defines exalted with). The same event as
+    # the bare row below — one declaration, one announcement, the attacker's
+    # own ability — narrowed by a fact about the *declaration* rather than
+    # about the attacker: was it the only creature declared. So it is payload
+    # on `creature_attacks` rather than a kind of its own, and
+    # `_fire_creature_attacks_triggers` reads the marker against the size of
+    # the declaration it was handed.
+    #
+    # **Above** the bare row, whose printed words this one is a strict suffix
+    # of: matched first, that row consumes "whenever this creature attacks" and
+    # leaves "alone" at the head of the effect clause — a trigger firing on
+    # every attack where the card fires on a solo one, with the narrowing word
+    # then refusing the effect. The empty named group is this table's marker
+    # idiom: present in the groupdict exactly when this row matched, carrying
+    # no text of its own to re-read.
+    ("creature_attacks",
+     r"whenever this creature attacks (?P<attacks_alone>)alone"),
     ("creature_attacks",            r"whenever this creature attacks"),
     # "…blocks **a creature with flying**" (Snarespinner) narrows the source's
     # own block trigger by what it blocked. Before the bare form, which is its

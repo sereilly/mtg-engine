@@ -3797,31 +3797,39 @@ def test_remove_does_not_claim_the_other_sentences_that_start_with_it():
     failing on their own missing production, not on a counter kind they never
     mentioned.
 
-    The two refuse at different *stages* now, and the stage is not what this
-    guards. Once "defending player controls" became a noun-phrase narrowing the
-    parser reads (Floral Spuzzem, LEG round 32), the first line parses whole
-    and refuses in lowering, by the name of its own production — which is the
-    same claim, made one layer later. The second still has no production at all.
-    What must stay true of both is that neither is *lowered*, and that neither
-    blames the counter-removal reading they merely share an opening word with.
-    """
-    unlowerable = (
-        "Remove target creature defending player controls from combat.",
-        "The next time target land would be destroyed this turn, "
-        "remove all damage marked on it instead.",
-    )
-    for line in unlowerable:
-        result = compile_line(line, card_name="Test")
-        assert not result.lowered, line
-        assert "counter" not in (result.failure_reason or ""), line
+    The two have drifted apart twice, and neither drift is what this guards.
+    Once "defending player controls" became a noun-phrase narrowing the parser
+    reads (Floral Spuzzem, LEG round 32), the first line parsed whole and
+    refused in lowering rather than in the parse. And once Reconnaissance
+    printed "Remove target attacking creature you control from combat and untap
+    it" (EXO wave 1), the *targeted* removal became a production this engine
+    implements, so the first line lowers — to its own kind, with the picker
+    falling out of its own ``targets`` description.
 
-    combat = compile_line(unlowerable[0], card_name="Test")
-    assert combat.parsed
-    assert combat.failure_reason == (
-        "remove-from-combat acts on the object the sentence already chose"
+    What must stay true is the claim the name makes: neither sentence is read as
+    a **counter removal**, the reading they merely share an opening word with.
+    For the combat line that is now an assertion about what it *did* lower to;
+    for the damage line, which still has no production at all, it is an
+    assertion about the refusal it names.
+    """
+    combat_line = "Remove target creature defending player controls from combat."
+    damage_line = (
+        "The next time target land would be destroyed this turn, "
+        "remove all damage marked on it instead."
     )
-    damage = compile_line(unlowerable[1], card_name="Test")
+
+    combat = compile_line(combat_line, card_name="Test")
+    assert combat.parsed
+    assert combat.lowered
+    assert [i.kind for i in combat.instructions] == ["remove_from_combat"], (
+        "the shared opening word must not route it to a counter removal"
+    )
+    assert combat.instructions[0].payload["targets"]["quantifier"] == "target"
+
+    damage = compile_line(damage_line, card_name="Test")
     assert not damage.parsed
+    assert not damage.lowered
+    assert "counter" not in (damage.failure_reason or "")
     assert damage.failure_reason == "expected a subject"
 
 

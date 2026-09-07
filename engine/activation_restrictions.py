@@ -495,6 +495,15 @@ def _source_in_combat(game: "Game", controller_index: int, source, match) -> boo
     source there is no permanent to be in a role, and the answer is no — the
     direction that refuses an activation rather than allowing one the card
     forbids.
+
+    **"blocked" is a third word in the same payload** (Cinder Crawler:
+    "Activate only if this creature is blocked"), not a row of its own. CR
+    509.1h makes it the same kind of fact as the other two — a state stamped on
+    the permanent by the declaration step and cleared when it leaves combat —
+    and ``state_holds`` already answers it off ``Permanent.blocked``, which is
+    the same accessor the printed adjective "target **blocked** creature" is
+    matched through. A row of its own would be a second reading of one
+    question, free to disagree with this one about what the word means.
     """
     if source is None:
         return False
@@ -514,7 +523,7 @@ def _readable_source_roles(match: "re.Match[str]") -> bool:
     the card is reported unsupported naming it.
     """
     return all(
-        word in ("attacking", "blocking")
+        word in ("attacking", "blocking", "blocked")
         for word in match.group("roles").split(" or ")
     )
 
@@ -1573,11 +1582,20 @@ ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
         # spelling every set prints is this row rather than a second one.
         re.compile(
             r"^activate only if this creature is "
-            r"(?P<roles>attacking(?: or blocking)?|blocking(?: or attacking)?)$"
+            r"(?P<roles>attacking(?: or blocking)?|blocking(?: or attacking)?"
+            r"|blocked)$"
         ),
         _source_in_combat,
         "this creature is not attacking or blocking",
         reads_payload=True,
+        # The denial names the roles the *clause* printed rather than the
+        # union this row now reads: a Cinder Crawler told "this creature is not
+        # attacking or blocking" is told about a sentence its card does not
+        # print. That is exactly what ``denial_from_payload`` is for, and the
+        # constant beside it is what a caller with no match still sees.
+        denial_from_payload=lambda match: (
+            f"this creature is not {match.group('roles')}"
+        ),
         payload_readable=_readable_source_roles,
     ),
     ActivationRestriction(

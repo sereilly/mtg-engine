@@ -270,10 +270,35 @@ def parse_player_chooses_permanent(
     elif stream.accept_phrase("that", "this", "aura", "could", "enchant"):
         host_for_source = True
     if not host_for_source:
-        # Every other narrowing a "chooses" sentence could print is one this
-        # production has no answer for, and a choice made from a wider set than
-        # the card names is not the card. Refused rather than admitted with the
-        # clause dropped.
+        # "Defending player **chooses an untapped creature they control**."
+        # (Crashing Boars.) The bare sentence: the whole narrowing is the noun
+        # phrase, which ``parse_target_spec`` has already read into the filter,
+        # so there is nothing printed for this production to drop.
+        #
+        # Admitted only where the phrase **ends the sentence**, exactly as the
+        # targeted branch above requires — that gate is what keeps every other
+        # "chooses a …" wording out. "Chooses a card name, then reveals the top
+        # card of their library" (Petra Sphinx) runs on into a comma and is
+        # refused here, which is what leaves it to the production written for
+        # it; and it is the whole reason this branch cannot simply accept
+        # whatever the noun parser consumed.
+        if (
+            (stream.exhausted or stream.at_punct(".", ";"))
+            # A **permanent**, which is what this node names and what the
+            # handler picks from. "Target opponent chooses **a card in your
+            # graveyard**" (Forgotten Lore) ends its sentence exactly the same
+            # way and is not this: it opens a paragraph the repeated-pick
+            # production reads whole, and claiming its first sentence here cost
+            # that card its whole program. The zone gate is what separates them,
+            # and it is the noun phrase's own answer rather than a second
+            # reading of the words.
+            and spec.filter.zone == "battlefield"
+            and not spec.filter.is_card
+        ):
+            return ast.ChoosePermanent(chooser, spec)
+        # Anything else this production has no answer for, and a choice made
+        # from a wider set than the card names is not the card. Refused rather
+        # than admitted with the clause dropped.
         stream.reset(mark)
         return None
     # The choice is optional exactly when the sentences behind it print both

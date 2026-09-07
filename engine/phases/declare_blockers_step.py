@@ -947,6 +947,42 @@ class DeclareBlockersStepMixin:
                 ):
                     return False
 
+        # "This creature can't block unless you control **more lands than
+        # attacking player**." (Monstrous Hound.) The blocker's own comparison
+        # between two boards, read off its program beside the three blanket
+        # denials above rather than beside the attacker questions below —
+        # nothing about the attacker enters it except which seat declared it.
+        #
+        # The seat compared against is the attacker's controller rather than the
+        # active player: CR 508.1a makes them the same in every combat this
+        # engine can build, and reading it off the attacker is the answer that
+        # stays right if a creature changes hands mid-combat. Counted through
+        # `subject_matches` with the blocker's controller as observer, for the
+        # attack twin's reason — the phrase is the blocker's card's, so "you" is
+        # its controller (CR 109.5).
+        outnumber = next(
+            (
+                i for i in blocker_program.instructions
+                if i.kind == "cant_block_unless_you_control_more"
+            ),
+            None,
+        )
+        if outnumber is not None:
+            described = dict(outnumber.payload.get("subject") or {})
+            mine_seat = self.controller_index_of(blocker)
+            theirs_seat = self.controller_index_of(attacker)
+
+            def _counted(seat: int | None) -> int:
+                return sum(
+                    1 for perm in self.controlled_by(seat)
+                    if subject_matches(
+                        self, perm, described, observer=mine_seat, source=blocker
+                    )
+                )
+
+            if theirs_seat is None or _counted(mine_seat) <= _counted(theirs_seat):
+                return False
+
         attacker_program = compile_card_oracle(attacker.effective_card)
         attacker_kinds = {i.kind for i in attacker_program.instructions}
 
