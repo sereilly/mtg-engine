@@ -17,7 +17,8 @@ from ..exiled_records import source_object
 from ..named_counters import counters_on, remove_counters
 from ..pt import pt_counter_key, set_base_pt
 from ..text_changes import LAND_TYPE_WORDS, change_color_word, change_land_word
-from ..tokens import (CREATED_TOKEN_RESULT_KEY, CREATED_WITH_PERMANENT_ID,
+from ..tokens import (CHOSEN_TOKEN_RECORDS, CREATED_TOKEN_RESULT_KEY,
+                     CREATED_WITH_PERMANENT_ID, default_token_name,
                      make_token_card, tokens_created_with)
 from ._common import (BLOCK_PAIR_SUBJECT, SUBJECT_FROM_TRIGGER,
                       block_pair_permanents, bound_permanent, evaluate_count,
@@ -1441,12 +1442,43 @@ def create_token(game: Game, instruction: OracleInstruction, context: OracleExec
             printed_power = value
         else:
             printed_toughness = value
+    token_name = str(payload.get("name", "Token"))
+    type_line = str(payload.get("type_line", "Creature — Token"))
+    colors = tuple(payload.get("colors") or ())
+    # "Create a 2/2 creature token **of the chosen color and type**."
+    # (Volrath's Laboratory.) CR 614.1c's choice, made as *this* permanent
+    # entered and recorded on it — so the characteristics come off the source,
+    # under the same metadata keys `engine/enter_effects.py` writes and
+    # `subject_filters` reads. The token's CR 111.4 name follows the subtype,
+    # which is why the lowering leaves the name empty rather than rendering one.
+    #
+    # A record that is not there is not a token to build: the colour would come
+    # out colourless and the subtype missing, which is a strictly different
+    # token arriving silently. The instruction fails instead — the honest
+    # direction, and reachable only from an ability whose source is no longer
+    # the permanent that made the choice.
+    from_chosen = payload.get("from_chosen") or ()
+    if from_chosen:
+        source = context.source_permanent
+        if source is None:
+            return False, "no permanent made the choice this token is built from"
+        for characteristic in from_chosen:
+            key = CHOSEN_TOKEN_RECORDS.get(str(characteristic))
+            recorded = None if key is None else source.metadata.get(key)
+            if not recorded:
+                return False, f"nothing was chosen for the token's {characteristic}"
+            if characteristic == "color":
+                colors = (str(recorded).upper()[:1],)
+            else:
+                subtype = str(recorded).strip().title()
+                type_line = f"Creature — {subtype}"
+                token_name = default_token_name((subtype.lower(),))
     token_card = make_token_card(
-        str(payload.get("name", "Token")),
+        token_name,
         None if printed_power is None else int(printed_power),
         None if printed_toughness is None else int(printed_toughness),
-        str(payload.get("type_line", "Creature — Token")),
-        colors=tuple(payload.get("colors") or ()),
+        type_line,
+        colors=colors,
         keywords=tuple(payload.get("keywords") or ()),
         oracle_text=payload.get("oracle_text"),
         image_source=card,

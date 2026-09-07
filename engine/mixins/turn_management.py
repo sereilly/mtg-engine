@@ -605,8 +605,13 @@ class TurnManagementMixin:
             # and claimed every attached trigger with a wildcard instead — which
             # is how an Aura whose trigger nothing reads reported supported. One
             # pattern, two readers: this dispatcher and `attached_trigger_claim`.
-            extra = aura_additional_mana_on_tap(attached_aura.effective_card.oracle_text)
-            if extra:
+            #
+            # A *run* of symbols, because Overgrowth prints "{G}{G}" where Wild
+            # Growth prints "{G}" — the count is data, and adding one symbol for
+            # a card that says two is the quiet direction of wrong.
+            for extra in aura_additional_mana_on_tap(
+                attached_aura.effective_card.oracle_text
+            ):
                 player.mana_pool[extra] = player.mana_pool.get(extra, 0) + 1
                 self.log.append(f"{attached_aura.card.name}: {player.name} added an additional {{{extra}}}")
 

@@ -244,6 +244,17 @@ class CreateToken:
     #: nothing here is built positionally today, and a field inserted in the
     #: middle is how that stops being true silently.
     per_each: "ObjectFilter | None" = None
+    #: "Create a 2/2 creature token **of the chosen color and type**."
+    #: (Volrath's Laboratory.) Which characteristics the token takes from the
+    #: CR 614.1c choice its source made as it entered, in printed order — a
+    #: tuple of ``"color"`` / ``"creature_type"`` rather than two booleans,
+    #: because "of the chosen color" and "of the chosen type" are each printable
+    #: alone and the sentence states which it names.
+    #:
+    #: Not ``colors``/``subtypes``: those hold what the *card* printed, and a
+    #: chosen characteristic is not known until a permanent has entered. Folding
+    #: the two would make the payload say a colour the card never states.
+    from_chosen: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

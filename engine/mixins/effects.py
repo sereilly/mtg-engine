@@ -1111,19 +1111,32 @@ class EffectsMixin:
         """CR 701.9a: a discard happened, for the permanents that watch one.
 
         "Whenever **you** discard a card, exile that card from your graveyard."
-        (Necropotence.) Separate from ``_announce_discard_triggers`` beside it,
-        which is CR 113.6's ability *of the discarded card* and asks a
-        different question of a different object — this one walks the board.
+        (Necropotence.) "Whenever **an opponent** discards a card, this
+        enchantment deals 2 damage to that player." (Megrim.) Separate from
+        ``_announce_discard_triggers`` beside it, which is CR 113.6's ability
+        *of the discarded card* and asks a different question of a different
+        object — this one walks the board.
 
         Both discard seams call it, and that is the whole point: a discard is
         either taken from the player (``_discard_card``) or chosen by them
         (``_resolve_one_discard``), and a watcher announced on one path only
         fires for half the cards that discard.
 
+        **Which seat the card printed is a narrowing, not a second event**, the
+        same reading ``land_played`` and ``draws_card`` record: "you" is the
+        ability's controller (CR 109.5) and "an opponent" is any *other* seat,
+        which is what makes the unnarrowed reading wrong in a three-player game
+        rather than merely inverted. So the board is walked in full and each
+        watcher's own payload decides, instead of the loop skipping every
+        permanent whose controller did not discard.
+
         The card itself rides the context, because "**that** card" is the one
         just discarded and a graveyard is a list of ``CardDefinition`` where two
         copies of a card are the same object — a name match would find whichever
-        entry came first.
+        entry came first. The discarding **seat** rides it too, under the one
+        ``event_subject_player`` key every "that player" reader asks for
+        (CR 603.10): the seat varies per firing and by resolution nothing on a
+        board says who discarded.
         """
         seat = next(
             (i for i, seated in enumerate(self.players) if seated is player), None
@@ -1132,20 +1145,22 @@ class EffectsMixin:
             return
         events: list[dict] = []
         for controller_index, observer in self.permanents_with_controller():
-            if controller_index != seat:
-                # "…**you** discard a card" is the ability's controller
-                # (CR 109.5), so an opponent's copy watches their own discards.
-                continue
             for trig in matching_triggers(
-                observer.effective_card, condition_kinds={"you_discard_card"},
+                observer.effective_card, condition_kinds={"discards_card"},
             ):
                 if trig.instruction is None:
+                    continue
+                if trig.condition.payload.get("discarder") == "an opponent":
+                    if controller_index == seat:
+                        continue
+                elif controller_index != seat:
                     continue
                 events.append(make_trigger_event(
                     controller_index, observer, trig,
                     trigger_context={
                         "discarded_card": card,
                         "discarded_name": card.name,
+                        "event_subject_player": seat,
                     },
                 ))
         self._enqueue_triggered_batch(events)

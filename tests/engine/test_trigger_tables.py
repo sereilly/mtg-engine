@@ -52,10 +52,16 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
         "creature's toughness to the creature's controller.",
     ),
     "creature_dies": "whenever a creature dies",
-    # Necropotence. CR 701.9a's discard, watched from the battlefield —
-    # a different question from the discarded card's own ability
-    # (`discarded_by_opponent_effect`), which watches from the hand.
-    "you_discard_card": "whenever you discard a card",
+    # Necropotence and Megrim. CR 701.9a's discard, watched from the
+    # battlefield — a different question from the discarded card's own ability
+    # (`discarded_by_opponent_effect`), which watches from the hand. Both
+    # printed seats, for the reason `land_played` and `draws_card` list theirs:
+    # one pattern names them and the narrowing is payload, so each spelling
+    # needs its own example to be checked against every earlier pattern.
+    "discards_card": (
+        "whenever you discard a card",
+        "whenever an opponent discards a card",
+    ),
     # CR 120.4b's event, once. Every printed narrowing of it is a named group
     # on one pattern, so each spelling is checked against every earlier pattern
     # of every other kind — which is the whole reason a kind may hold several
@@ -222,6 +228,7 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     # every earlier pattern.
     "land_played": (
         "whenever an opponent plays a land",
+        "whenever a player plays a land",
         "whenever you play a land",
     ),
     "you_activate_loyalty_ability": (

@@ -83,8 +83,12 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("creature_dealt_damage_by_self_dies",
      ("a", "creature", "dealt", "damage", "by", "this", "creature", "this", "turn", "dies")),
     ("creature_dies", ("a", "creature", "dies")),
-    # "Whenever you discard a card" (Necropotence).
-    ("you_discard_card", ("you", "discard", "a", "card")),
+    # "Whenever you discard a card" (Necropotence) and "whenever an opponent
+    # discards a card" (Megrim). One event, two printed seats — the narrowing
+    # is payload on ``engine/oracle.py``'s row and is dispatched from the
+    # discard seam, exactly as ``land_played``'s and ``draws_card``'s are.
+    ("discards_card", ("you", "discard", "a", "card")),
+    ("discards_card", ("an", "opponent", "discards", "a", "card")),
     # "Whenever **equipped** creature dies" (Malefic Scythe) / "When
     # **enchanted** creature dies" (Creature Bond). One condition for both
     # words: an Equipment and an Aura attach the same way here, and the trigger
@@ -182,6 +186,10 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # the event's, the printed word is the condition's narrowing, and a line
     # only one front end reads is a card the other refuses.
     ("land_played", ("an", "opponent", "plays", "a", "land")),
+    # "Whenever **a player** plays a land" (Horn of Greed) — the unnarrowed
+    # spelling of the same event. The seat is payload on ``engine/oracle.py``'s
+    # row; here it is one more phrase for one kind.
+    ("land_played", ("a", "player", "plays", "a", "land")),
     ("land_played", ("you", "play", "a", "land")),
     # "…your second card each turn" (Mystic Skyfish, Jolrael) — a different
     # article, so no prefix collision with the bare draw event above.

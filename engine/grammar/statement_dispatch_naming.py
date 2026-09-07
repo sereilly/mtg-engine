@@ -150,7 +150,7 @@ def lower_naming_statement(
         # records it — under anything else the words name a card nobody wrote
         # down, and the handler would find nothing while the card compiled
         # supported.
-        if event != "you_discard_card":
+        if event != "discards_card":
             raise LoweringError(
                 "'that card' names the firing event's object, and this event "
                 "records none",

@@ -1199,6 +1199,23 @@ def discard_x_target_cards(game: Game, instruction: OracleInstruction, context: 
             # nobody recorded is not a seat to empty a hand at random from.
             return True, "resolved"
         target = game.players[seat]
+    if instruction.payload.get("who") == "event_subject_player":
+        # "At the beginning of each player's upkeep, **that player** discards a
+        # card at random." (Bottomless Pit.) The seat the firing event froze —
+        # a different player on every upkeep, and never the source's controller
+        # except on one turn in four. Read through the one reader of the printed
+        # phrase, so this and any sentence beside it name the same player.
+        seat = frozen_that_player_seat(game, context)
+        if seat is None:
+            # A seat nobody froze is not a hand to empty at random. Ending the
+            # effect is the honest direction: dropping the narrowing here would
+            # discard from whichever player a targetless resolution defaults to.
+            game.log.append(
+                f"{context.card.name if context.card else 'the ability'}: "
+                "no player was named to discard"
+            )
+            return True, "resolved"
+        target = game.players[seat]
     amount = instruction.payload.get("amount")
     if not isinstance(amount, int):
         amount = context.x_value

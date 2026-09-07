@@ -11,6 +11,7 @@ from ..enter_effects import (
     sacrifice_any_number_on_enter,
     CHOOSE_COLOR_AND_OPPONENT_ON_ENTER,
     chooses_color_on_enter,
+    chooses_color_and_creature_type_on_enter,
     chooses_two_land_types_on_enter,
     chooses_creature_type_on_enter,
     chooses_land_type_on_enter,
@@ -473,18 +474,7 @@ class PermanentStateMixin:
             chooses_color_on_enter(text)
             and CHOOSE_COLOR_AND_OPPONENT_ON_ENTER not in text
         ):
-            opponents = [
-                i for i, p in enumerate(self.players)
-                if i != caster_index and not p.lost
-            ]
-            counts: dict[str, int] = {}
-            for seat in opponents:
-                for perm in self.controlled_by(seat):
-                    if perm.metadata.get("is_token"):
-                        continue
-                    for color in self._effective_colors(perm):
-                        counts[color] = counts.get(color, 0) + 1
-            default_color = max(sorted(counts), key=lambda c: counts[c]) if counts else "W"
+            default_color = self._default_chosen_color(caster_index)
             permanent.metadata["chosen_color"] = default_color
             self.arm_pending_choice(
                 "enter_choice", caster_index,
@@ -531,7 +521,36 @@ class PermanentStateMixin:
         # colour one above: a type nobody controls makes the enchantment inert,
         # which is a legal choice no player would make and an AI seat would be
         # stuck with.
-        if chooses_creature_type_on_enter(text):
+        # "As this artifact enters, choose **a color and a creature type**."
+        # (Volrath's Laboratory.) Both halves of one CR 614.1c choice, so one
+        # prompt with two answers — the shape Jihad's colour-and-opponent pair
+        # already has, with a second catalog where that one has a seat.
+        #
+        # Its own branch and not the two singular ones firing together, because
+        # ``chooses_color_on_enter`` declines "choose a color and …" by design:
+        # the lookahead that keeps Jihad's opponent from being dropped would
+        # drop this card's creature type the same way. Two prompts would also be
+        # two decisions where the card prints one.
+        #
+        # Both defaults are the opponents'-board reading the singular branches
+        # take (idiom 8): a colour and a type nobody controls make the token
+        # this artifact prints inert, which is legal and is not a choice any
+        # player would make.
+        chooses_pair = chooses_color_and_creature_type_on_enter(text)
+        if chooses_pair:
+            default_color = self._default_chosen_color(caster_index)
+            permanent.metadata["chosen_color"] = default_color
+            permanent.metadata["chosen_creature_type"] = (
+                self._default_chosen_creature_type(caster_index)
+            )
+            self.arm_pending_choice(
+                "enter_choice", caster_index,
+                card_name=permanent.card.name, permanent=permanent,
+                needs_color=True, opponents=[], default_seat=None,
+                default_color=default_color, needs_creature_type=True,
+                default_creature_type=permanent.metadata["chosen_creature_type"],
+            )
+        if chooses_creature_type_on_enter(text) and not chooses_pair:
             permanent.metadata["chosen_creature_type"] = (
                 self._default_chosen_creature_type(caster_index)
             )
@@ -2104,6 +2123,39 @@ class PermanentStateMixin:
                 continue
             for color in self._effective_colors(perm):
                 counts[color] = counts.get(color, 0) + 1
+        if not counts:
+            return "W"
+        return max(sorted(counts), key=lambda c: counts[c])
+
+    def _default_chosen_color(self, caster_index: int) -> str:
+        """The colour a "choose a color" entry effect takes when nobody chooses.
+
+        The colour *caster_index*'s **opponents** hold most of among nontoken
+        permanents — the stated policy for a choice nothing else constrains
+        (idiom 8), and the same reasoning `_default_chosen_creature_type` below
+        gives: a colour nobody controls makes every "choose a color" effect
+        inert, which is a legal choice no player would make and an AI seat would
+        be stuck with.
+
+        A method rather than the inline count it used to be, because two entry
+        shapes need the same answer now — the colour alone (Psychic Allergy) and
+        the colour beside a creature type (Volrath's Laboratory) — and two
+        spellings of one default is how a card comes to be armed with one value
+        and resolved against another.
+
+        ``_dominant_nontoken_color`` above is the *per-seat* question Jihad asks
+        of the opponent it names; this is the same count over every opponent at
+        once, which is a different question and not a wording of it.
+        """
+        counts: dict[str, int] = {}
+        for seat, player in enumerate(self.players):
+            if seat == caster_index or player.lost:
+                continue
+            for perm in self.controlled_by(seat):
+                if perm.metadata.get("is_token"):
+                    continue
+                for color in self._effective_colors(perm):
+                    counts[color] = counts.get(color, 0) + 1
         if not counts:
             return "W"
         return max(sorted(counts), key=lambda c: counts[c])

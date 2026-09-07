@@ -311,6 +311,38 @@ def _lower_discard(node: ast.Discard, event: str | None = None) -> tuple[OracleI
         # handler's ``context.target`` is a seat nobody chose, so the discard
         # would empty the wrong hand while the card reported supported — which
         # is why that shape is matched in full rather than folded in below.
+        if node.player.kind == "that_player":
+            # "At the beginning of each player's upkeep, **that player discards
+            # a card at random**." (Bottomless Pit.) The seat the firing event
+            # froze (CR 603.10), under the one ``who``/``EVENT_SUBJECT_PLAYER``
+            # convention `_lower_exile_random_from_hand` uses one family over —
+            # and gated on the same table, because an event that froze nobody
+            # leaves this handler emptying whichever hand the resolution happens
+            # to be carrying. On this card that is its own controller's, on
+            # three upkeeps in four, silently.
+            if event not in _EVENT_SUBJECT_PLAYERS:
+                raise LoweringError(
+                    "no event named {!r} freezes the seat 'that player' names"
+                    .format(event),
+                    node=node,
+                )
+            random_payload: dict[str, object] = {
+                "amount": amount, "who": EVENT_SUBJECT_PLAYER,
+            }
+            if node.filter is not None:
+                described = chargeable_card_filter(node.filter)
+                if not described:
+                    raise LoweringError(
+                        "no random discard can test this narrowing", node=node
+                    )
+                random_payload["filter"] = described
+            if not isinstance(amount, int):
+                raise LoweringError(
+                    "the frozen-seat random discard is counted", node=node
+                )
+            return (
+                OracleInstruction("discard_x_target_cards", "", random_payload),
+            )
         if node.player.kind not in ("target_player", "target_opponent"):
             raise LoweringError(
                 "no handler discards at random from a seat nobody targeted",

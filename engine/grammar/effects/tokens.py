@@ -440,6 +440,37 @@ def _finish_create_token(
             stated_colour = True
         else:
             stream.reset(mark_trailing_colour)
+    # "…creature token **of the chosen color and type**." (Volrath's
+    # Laboratory.) The colour and the subtype named by the CR 614.1c choice the
+    # source made as it entered, rather than by this sentence — so the words
+    # state a colour in the sense the refusal below means, and the token has a
+    # subtype without one being printed.
+    #
+    # Read as a list of named characteristics rather than as one phrase: "of
+    # the chosen color" and "of the chosen type" are each printable alone, and a
+    # single literal would refuse the halves while claiming the pair.
+    from_chosen: list[str] = []
+    mark_chosen = stream.mark()
+    if stream.accept_phrase("of", "the", "chosen"):
+        while True:
+            if stream.accept_word("color"):
+                from_chosen.append("color")
+            elif stream.accept_word("type"):
+                from_chosen.append("creature_type")
+            else:
+                break
+            if not stream.accept_word("and"):
+                break
+        if from_chosen:
+            stated_colour = stated_colour or "color" in from_chosen
+        else:
+            # "of the chosen …" naming something this does not read is a
+            # narrowing that would be dropped, so the words go back and the
+            # line refuses below rather than being claimed with the phrase
+            # ignored.
+            stream.reset(mark_chosen)
+    else:
+        stream.reset(mark_chosen)
     if not stated_colour:
         # Every token spec the pool prints states a colour, "colorless"
         # included, and the word has to stay load-bearing: an empty ``colors``
@@ -583,6 +614,7 @@ def _finish_create_token(
         attacking=attacking,
         per_source_regeneration=per_source_regeneration,
         per_each=per_each,
+        from_chosen=tuple(from_chosen),
     )
 
 

@@ -162,6 +162,14 @@ def _lower_create_token(
         name = _title(node.name)
     elif node.subtypes:
         name = default_token_name(node.subtypes)
+    elif "creature_type" in node.from_chosen:
+        # "Create a 2/2 creature token **of the chosen color and type**."
+        # (Volrath's Laboratory.) CR 111.4's name is the token's subtypes, and
+        # the subtype is the word the source's controller chose as it entered —
+        # so there is no name to render here and the handler builds both from
+        # the one record. Refusing instead would refuse a card whose name *is*
+        # determined, merely not until resolution.
+        name = ""
     else:
         raise LoweringError(
             "a token with neither a printed name nor a subtype has no CR 111.4 "
@@ -219,6 +227,18 @@ def _lower_create_token(
             payload[key] = recorded
     if node.colors:
         payload["colors"] = node.colors
+    if node.from_chosen:
+        # The characteristics the CR 614.1c entry choice named, as the metadata
+        # keys the choice is recorded under — the same keys
+        # `engine/enter_effects.py` writes and `subject_filters` reads, so what
+        # was chosen and what the token is built from cannot be two records.
+        #
+        # Refused unless the ability's own source is what made the choice: a
+        # "chosen" characteristic with nothing chosen is a colourless, subtypeless
+        # token arriving with no CR 111.4 name at all, and it would arrive
+        # silently. The gate is the *card*'s entry line, which is checked in
+        # ``oracle.py`` — here the payload only says which records to read.
+        payload["from_chosen"] = node.from_chosen
     if node.keywords:
         payload["keywords"] = tuple(_title(word) for word in node.keywords)
     # Printed abilities in quotes. Gated on the compiler being able to read

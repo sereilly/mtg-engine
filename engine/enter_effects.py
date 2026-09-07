@@ -164,6 +164,34 @@ def chooses_color_on_enter(text: str) -> bool:
     """
     return bool(_CHOOSE_COLOR_ON_ENTER_RE.search(text or ""))
 
+#: "As this artifact enters, choose **a color and a creature type**."
+#: (Volrath's Laboratory.) Two of the qualities this one sentence can name, on
+#: one line — the pair shape ``CHOOSE_COLOR_AND_OPPONENT_ON_ENTER`` and Booby
+#: Trap's opponent-and-card-name already have, with both halves being *catalog*
+#: choices rather than one of them being a seat.
+#:
+#: Its own reader rather than letting the two singular probes both match,
+#: because ``_CHOOSE_COLOR_ON_ENTER_RE`` declines "choose a color and …" by
+#: design: that lookahead is what keeps Jihad's opponent from being dropped,
+#: and widening it would drop this card's creature type the same way. So the
+#: pair is read once, here, and armed as one prompt with two answers.
+_CHOOSE_COLOR_AND_CREATURE_TYPE_ON_ENTER_RE = re.compile(
+    r"as this [a-z]+ enters, choose a color and a creature type"
+)
+
+
+def chooses_color_and_creature_type_on_enter(text: str) -> bool:
+    """Whether *text* asks its controller for a colour **and** a creature type
+    as the permanent enters.
+
+    A substring probe like its two singular siblings above, because the mixin
+    asks it of the card's whole normalized text; :func:`enter_effect_line` asks
+    the whole-line question through this same matcher, so what is performed and
+    what is claimed cannot drift.
+    """
+    return bool(_CHOOSE_COLOR_AND_CREATURE_TYPE_ON_ENTER_RE.search(text or ""))
+
+
 #: "As this enchantment enters, choose **black or red**." (Mangara's Equity) /
 #: "As this enchantment enters, choose **Island or Swamp**." (Roots of Life.)
 #: The same CR 614.1c choice as the colour and land-type readers around it, with
@@ -1251,6 +1279,12 @@ def enter_effect_line(line: str, card_name: str | None = None) -> str | None:
     # documentation rather than precedence.
     if chooses_opponent_and_card_name_on_enter(normalized):
         return "chooses an opponent and a card name as it enters"
+    # …and the catalog pair (Volrath's Laboratory). Claimed beside the
+    # colour-only reading rather than under it: that one's negative lookahead
+    # already declines "choose a color and …", so neither can take the other's
+    # line and the position here is documentation rather than precedence.
+    if chooses_color_and_creature_type_on_enter(normalized):
+        return "chooses a color and a creature type as it enters"
     if chooses_color_on_enter(normalized):
         return "chooses a color as it enters"
     # "…choose **black or red**" / "…choose **Island or Swamp**". The same
@@ -1302,6 +1336,7 @@ __all__ = [
     "chooses_opponent_on_enter",
     "chooses_opponent_and_card_name_on_enter",
     "chooses_color_on_enter",
+    "chooses_color_and_creature_type_on_enter",
     "choose_one_of_two_on_enter",
     "chooses_two_land_types_on_enter",
     "chooses_creature_type_on_enter",

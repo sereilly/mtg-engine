@@ -3702,15 +3702,40 @@ class PendingChoicesMixin:
             from ...grammar.vocabulary import CREATURE_TYPES
 
             permanent = choice.data["permanent"]
+            # "…choose **a color and a creature type**." (Volrath's Laboratory.)
+            # One prompt with two answers, the shape the opponent-and-colour
+            # branch at the bottom already has — so the colour is validated
+            # *before* anything is written, and a bad word refuses the whole
+            # answer rather than leaving the permanent holding one new choice
+            # and one default.
+            wants_color = bool(choice.data.get("needs_color"))
+            color = None
+            if wants_color:
+                try:
+                    color = self._normalize_mana_color(mana_color)
+                except ValueError:
+                    return False
+            word = None
             if creature_type:
                 word = str(creature_type).strip().lower()
                 if word not in CREATURE_TYPES:
                     return False
-                if self.is_on_battlefield(permanent):
+            if self.is_on_battlefield(permanent):
+                chose: list[str] = []
+                if word is not None:
                     permanent.metadata["chosen_creature_type"] = word
+                    chose.append(word)
+                if color is not None:
+                    permanent.metadata["chosen_color"] = color
+                    chose.append(color)
+                if chose:
                     self.log.append(
-                        f"{choice.data['card_name']}: chose {word}"
+                        f"{choice.data['card_name']}: chose {' and '.join(chose)}"
                     )
+                if color is not None:
+                    # A chosen colour can condition a static (Jihad's anthem),
+                    # and the board was last computed against the default.
+                    self._recalculate_lord_buffs()
             self.discard_pending_choice(choice)
             return True
         # "…choose **two basic land types**." (Illusionary Terrain.) A fourth
