@@ -1510,14 +1510,31 @@ def if_then(game: Game, instruction: OracleInstruction, context: OracleExecution
     return _run(game, _steps(instruction, "else"), context)
 
 
-def _action_is_takeable(game: Game, player, instruction: OracleInstruction, source) -> bool:
+def _action_is_takeable(
+    game: Game, player, instruction: OracleInstruction, source, context=None,
+) -> bool:
     """Whether *player* could actually perform this instruction right now.
 
-    Two kinds are asked, because two kinds are the ones an optional action gives
-    something up for; everything else answers True, which is what the engine did
-    for all of them before this existed. A kind added here has to be one whose
-    "nothing to give" case is real and checkable — not a guess, because a
-    wrongly-False answer withdraws an offer the card makes.
+    A kind is asked here because its "nothing to give" case is real and
+    checkable; everything else answers True, which is what the engine did for
+    all of them before this existed. A kind added here has to be one whose
+    emptiness is a fact rather than a guess, because a wrongly-False answer
+    withdraws an offer the card makes.
+
+    **This is also the answer to "you may X. If you do, Y" on an empty X**, and
+    it is the better half of that question rather than a second one. CR 601.2
+    offers a choice; an action nobody could take is not one of the things being
+    offered, so the offer is not made, the rider does not fire, and the decline
+    branch (a "…unless you pay" penalty) still applies. Asking *before* the
+    prompt rather than measuring the action afterwards is what lets one rule
+    serve both — and it is why this table is a registry of kinds and not a
+    branch in :func:`may`.
+
+    *context* is the resolution the offer sits inside, for the two kinds whose
+    emptiness is about a zone the *event* named rather than the offered seat's
+    own board. It is optional so no existing caller changes; a kind that needs
+    it and does not get it answers True, which is the direction that keeps an
+    offer the card makes.
     """
     from ._common import _card_matches_filter
 
@@ -1748,6 +1765,52 @@ def _action_is_takeable(game: Game, player, instruction: OracleInstruction, sour
         from .life_and_game import can_pay_life
 
         return can_pay_life(player, int(instruction.payload.get("amount", 0)))
+    # "You may put **the top creature card of defending player's graveyard**
+    # onto the battlefield under your control. **If you do**, this creature
+    # assigns no combat damage this turn." (Bone Dancer.) A pile with no
+    # creature card in it is a real and checkable "nothing to give", and this
+    # is the card SET_PLAYBOOK.md's Known gaps names: accepting over an empty
+    # graveyard reanimated nothing and still marked the attacker as assigning
+    # no combat damage, which is the rider firing on an action that did not
+    # happen. Reproduced before it was fixed.
+    #
+    # The pile is the one the *combat* froze (CR 506.2), read through the same
+    # key and the same scan the handler uses (``graveyard_order.positions_named``)
+    # — so the offer and the action cannot disagree about which card is on top.
+    # Any other spelling, and a trigger that recorded no defender, answers True:
+    # a wrongly-False answer withdraws an offer the card makes.
+    if instruction.kind == "reanimate_graveyard_position":
+        from ..graveyard_order import positions_named
+
+        if instruction.payload.get("graveyard_owner") != "defending_player":
+            return True
+        seat = (getattr(context, "trigger_context", None) or {}).get(
+            "trigger_defending_player_index"
+        )
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            return True
+        return bool(
+            positions_named(
+                game.players[seat].graveyard, dict(instruction.payload)
+            )
+        )
+    # "You may **exile all cards from your hand** face down. **If you do**, put
+    # all other cards you own exiled with this enchantment into your hand."
+    # (Duplicity.) An empty hand exiles nothing and the rider then hands the
+    # whole exiled pile back for free — the card's entire price is the trade,
+    # so this is the same failure as Bone Dancer's with the reward on the other
+    # side of it.
+    #
+    # Only the "all" quantifier. "Exile **any number of** cards from your hand"
+    # (Scroll Rack) legally answers zero, so an empty hand is a real answer
+    # there rather than an offer nobody could take.
+    if instruction.kind == "exile_hand_pile":
+        if instruction.payload.get("quantifier") != "all":
+            return True
+        described = dict(instruction.payload.get("card_filter") or {})
+        return any(
+            _card_matches_filter(card, described) for card in player.hand
+        )
     return True
 
 
@@ -1769,7 +1832,9 @@ def _narrow_to_takeable_actions(
         if step.kind == "choose_one":
             modes = tuple(
                 mode for mode in (step.payload.get("modes") or ())
-                if _action_is_takeable(game, player, mode["instruction"], source)
+                if _action_is_takeable(
+                    game, player, mode["instruction"], source, context
+                )
             )
             if not modes:
                 return (), False
@@ -1777,7 +1842,7 @@ def _narrow_to_takeable_actions(
                 OracleInstruction(step.kind, step.value, {**step.payload, "modes": modes})
             )
             continue
-        if not _action_is_takeable(game, player, step, source):
+        if not _action_is_takeable(game, player, step, source, context):
             return (), False
         narrowed.append(step)
     return tuple(narrowed), True

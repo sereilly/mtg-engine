@@ -357,3 +357,180 @@ def test_the_pool_still_contains_a_modal_choice_that_is_not_uniform(catalog):
         }) > 1
     ]
     assert mixed, "no modal choice mixes a price with a free alternative"
+
+
+# --- EXO W1G2: an offer nobody could take is not made, and its rider does not
+# fire ---
+#
+# SET_PLAYBOOK.md's Known gaps carried this for two sets as "``control_flow.may``
+# runs its ``then`` branch whenever the offer is accepted, whether or not the
+# action did anything", wanting "a decision about what 'did anything' means per
+# instruction kind, which is a registry question rather than a branch".
+#
+# **The registry already existed.** ``_action_is_takeable`` is exactly that
+# table, and it asks the question one step *earlier* and better: CR 601.2 offers
+# a choice, an action nobody could take is not among the things offered, so the
+# offer is never made and the rider never runs. What was missing was rows.
+#
+# Measured rather than guessed: of the instruction kinds that appear as a
+# ``may``'s action with a ``then`` behind it across both manifest roles, all but
+# two either always do something (a coin flip, a life gain, a reveal), legally
+# do nothing (Tetravus' "any number of", Scroll Rack's), or are *targeted* and
+# so already refused at CR 601.2c / 608.2b. Those two are the ones whose
+# emptiness is real, silent, and in the player's favour.
+
+from engine.game_types import OracleExecutionContext as _G2Ctx
+from engine.models import Permanent
+
+
+def _g2_offer_duel():
+    """Two seats with costs off. Its own name and its own last line."""
+    game = Game(players=[PlayerState(name="Alice"), PlayerState(name="Bob")])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    return game, game.players[0], game.players[1]
+
+
+def _g2_bone_dancer_turn(catalog_by_name, victim_graveyard):
+    """Bone Dancer's trigger resolved against a defending graveyard holding
+    *victim_graveyard*, and the permanent it acted on."""
+    from engine.handlers.control_flow import may
+
+    game, _alice, bob = _g2_offer_duel()
+    card = catalog_by_name["Bone Dancer"]
+    dancer = Permanent(card=card)
+    dancer.metadata["summoning_sickness_turn"] = -99
+    game.players[0].battlefield.append(dancer)
+    game._sync_control()
+    bob.graveyard.extend(victim_graveyard)
+
+    program = compile_card_oracle(card)
+    context = _G2Ctx(
+        card=card, caster=game.players[0], target=bob, source_permanent=dancer,
+    )
+    context.trigger_context = {"trigger_defending_player_index": 1}
+    may(game, program.triggered_abilities[0].instruction, context)
+    game.auto_resolve_pending_choices()
+    return game, dancer
+
+
+def test_bone_dancer_assigns_damage_when_the_graveyard_had_nothing(catalog_by_name):
+    """The Known-gaps entry's own card, reproduced and closed.
+
+    "You may put the top creature card of defending player's graveyard onto the
+    battlefield under your control. **If you do**, this creature assigns no
+    combat damage this turn." Over a graveyard with no creature card in it,
+    accepting reanimated nothing and the attacker still gave up its damage —
+    and ``reanimate_graveyard_position``'s own docstring claimed the opposite,
+    which is how the defect survived: the assertion was written down and never
+    held.
+    """
+    game, dancer = _g2_bone_dancer_turn(
+        catalog_by_name, [catalog_by_name["Giant Growth"]]
+    )
+    assert "assigns_no_combat_damage_until_eot" not in dancer.metadata
+    # And the offer was never *made*, which is the shape of the fix: the
+    # withdrawal happens ahead of the prompt, so the handler that would have
+    # logged "nothing Bone Dancer can return" is never reached either.
+    assert not game.pending_choices
+    assert [p.card.name for p in game.controlled_by(game.players[0])] == [
+        "Bone Dancer",
+    ]
+
+
+def test_bone_dancer_still_gives_up_its_damage_for_a_real_creature(catalog_by_name):
+    """The other direction, which is the one a wrongly-False answer would
+    break: the offer is still made when the pile has a creature card, and
+    taking it still costs the attacker its combat damage."""
+    game, dancer = _g2_bone_dancer_turn(
+        catalog_by_name, [catalog_by_name["Grizzly Bears"]]
+    )
+    assert dancer.metadata.get("assigns_no_combat_damage_until_eot")
+    assert sorted(
+        p.card.name for p in game.controlled_by(game.players[0])
+    ) == ["Bone Dancer", "Grizzly Bears"]
+
+
+def test_duplicity_does_not_refill_from_an_empty_hand(catalog_by_name):
+    """"You may exile all cards from your hand face down. **If you do**, put
+    all other cards you own exiled with this enchantment into your hand."
+    (Duplicity.) The trade *is* the card, so an empty hand paying nothing and
+    taking the whole pile back is Bone Dancer's failure with the reward on the
+    other side of it."""
+    from engine.handlers.control_flow import may
+
+    game, alice, _bob = _g2_offer_duel()
+    card = catalog_by_name["Duplicity"]
+    enchantment = Permanent(card=card)
+    game.players[0].battlefield.append(enchantment)
+    game._sync_control()
+    program = compile_card_oracle(card)
+    entry = next(
+        t for t in program.triggered_abilities
+        if t.condition is not None and t.condition.kind == "enters_battlefield"
+    )
+    upkeep = next(
+        t for t in program.triggered_abilities
+        if t.condition is not None and t.condition.kind == "upkeep_self"
+    )
+    context = _G2Ctx(
+        card=card, caster=alice, target=alice, source_permanent=enchantment,
+    )
+    alice.library.extend([catalog_by_name["Grizzly Bears"]] * 5)
+    game._execute_oracle_instruction(entry.instruction, context)
+    assert alice.hand == []
+    assert alice.library == []
+
+    may(game, upkeep.instruction, context)
+    game.auto_resolve_pending_choices()
+
+    assert alice.hand == []
+
+
+def test_every_offer_with_a_rider_names_a_reviewed_action_kind(catalog):
+    """The property, over the whole pool rather than over two cards: no
+    ``may`` carrying a ``then`` may name an action kind nobody has read. Most
+    new ones will be fine — they always do something — but the list is what
+    makes "we decided about each one" a fact rather than a memory, so a new
+    kind fails here and is read before it is added.
+    """
+    reviewed = {
+        # Always does something, or legally does nothing and the rider is right
+        # to fire: a flip, a life gain, a reveal, a mana ability, an "any number
+        # of" pick whose zero is an answer.
+        "activate_each_lands_mana_ability", "assign_no_combat_damage_until_eot",
+        "choose_one", "draw_controller_cards", "exile_any_number_of_own_tokens",
+        "flip_coin", "grant_self_ability_text", "lose_all_unspent_mana",
+        "put_cards_from_hand_onto_battlefield",
+        "remove_any_number_of_counters_from_self", "reveal_hand",
+        "reveal_hand_while_source_present", "target_gains_life",
+        # Targeted, so an empty case is already refused at announcement
+        # (CR 601.2c) or at resolution (CR 608.2b).
+        "bounce_target_creature", "deal_damage", "destroy_target_permanent",
+        "exile_cards_from_graveyard", "gain_control_of_target",
+        "source_bites_target", "steal_target_linked_to_source",
+        "untap_target_permanent",
+        # Empty, and the rider behind it is itself a no-op — the same shape as
+        # the two rows this round added, with nothing at stake. Ice Cauldron
+        # grants permission over an empty pile; Flash offers a cost computed
+        # from a permanent nothing recorded and then sacrifices nothing.
+        "exile_chosen_card_from_hand",
+        "put_chosen_card_from_hand_onto_battlefield",
+        # Answered by `_action_is_takeable`, so the offer is withdrawn.
+        "ante_top_card", "choose_permanent", "choose_permanents",
+        "discard_controller_cards", "discard_target_cards",
+        "discard_x_target_cards", "exile_graveyard_position",
+        "exile_hand_pile", "pay_life", "put_hand_cards_on_library",
+        "reanimate_graveyard_position", "remove_counter_from_self",
+        "return_creature_from_graveyard_to_hand", "sacrifice_attached_permanent",
+        "sacrifice_matching_permanent", "sacrifice_permanents_totalling",
+        "sacrifice_self",
+    }
+    found: set[str] = set()
+    for card in catalog:
+        for instruction in _program_instructions(compile_card_oracle(card)):
+            payload = instruction.payload or {}
+            if instruction.kind != "may" or not payload.get("then"):
+                continue
+            found.update(step.kind for step in (payload.get("action") or ()))
+    assert not found - reviewed, sorted(found - reviewed)

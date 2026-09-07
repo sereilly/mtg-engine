@@ -1540,15 +1540,28 @@ def test_bone_dancer_that_declines_deals_its_damage(set_pool):
 
 def test_bone_dancer_finds_nothing_in_a_graveyard_with_no_creature_card(set_pool):
     """The printed noun narrows the pile, and a dropped narrowing is a card
-    reanimating a land."""
+    reanimating a land.
+
+    **The offer is not made at all**, which is what changed at EXO wave 1 and
+    is why this test now asserts a refusal where it used to accept. When this
+    was written, taking the offer over a pile with nothing in it reanimated
+    nothing *and* still set ``assigns_no_combat_damage_until_eot`` — the
+    "if you do" rider firing on an action that did not happen, which the round
+    recorded in SET_PLAYBOOK.md's Known gaps rather than fixing.
+    ``control_flow._action_is_takeable`` now answers for this kind, so CR 601.2
+    never offers a choice nobody could take and ``confirm_optional_pay`` finds
+    no prompt to answer. The subject of the test is unchanged: the narrowing is
+    read, and the land stays where it is.
+    """
     land = CardDefinition(
         name="Dead Land", mana_cost="", cmc=0.0, type_line="Land",
         oracle_text="", colors=(), color_identity=(), keywords=(),
         produced_mana=(), raw={"name": "Dead Land", "type_line": "Land"},
     )
-    game, _dancer, defender = _w2g3c_bone_dancer(set_pool, [land, land])
-    assert game.confirm_optional_pay(0, "Bone Dancer", accept=True), game.log
+    game, dancer, defender = _w2g3c_bone_dancer(set_pool, [land, land])
+    assert not game.confirm_optional_pay(0, "Bone Dancer", accept=True)
     _w2g3c_settle(game)
 
     assert [p.card.name for p in game.players[0].battlefield] == ["Bone Dancer"]
     assert len(defender.graveyard) == 2
+    assert not dancer.metadata.get("assigns_no_combat_damage_until_eot")

@@ -1166,6 +1166,27 @@ the split reuses a name the *lowering* side has carried since Alliances:
 permission moves nothing — and the call graph had already fallen apart along it.
 986 → 737 and 282, both definitions byte-identical, 0 cards moved by the split.
 
+**And the "if you do" Known-gaps entry is drained, because the registry it asked
+for already existed.** `handlers/control_flow._action_is_takeable` is the
+per-instruction-kind table the entry wanted, with fifteen rows and its own
+written rule for adding one — and it asks the question a step *earlier*: an
+action nobody could take is not among the things CR 601.2 offers, so the offer
+is not made and the rider does not run. Enumerating every kind that appears as a
+`may`'s action with a `then` behind it — 26 across both manifest roles — leaves
+**two** whose emptiness is real, silent and in the player's favour: Bone Dancer's
+`reanimate_graveyard_position` (the entry's own card) and Duplicity's
+`exile_hand_pile`, where an empty hand paid nothing and took the whole exiled
+pile back. Both are one row.
+
+The finding underneath is where the false claim was written down:
+`handlers/zones.reanimate_graveyard_position`'s docstring asserted that an empty
+pile "returns False from the `may` it sits inside, which is what keeps 'If you
+do …' from firing". `_run` folds a handler's first return into
+`resolved`/`no effect` and `on_accept` never branches on it, so the sentence was
+never true. Reproduced before the fix.
+`tests/engine/test_optional_offer_defaults.py` holds the 26 kinds as a reviewed
+list, so a twenty-seventh fails there and is read before it is added.
+
 **Pandemonium, declined as five parts** (in
 `tests/sets/test_exo_enchantments.py`, asserted still-unsupported so the day
 they land it fails loudly): a parse for "any target **of their choice**"; a
