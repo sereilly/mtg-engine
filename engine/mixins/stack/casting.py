@@ -81,6 +81,50 @@ def _optional_cost_offers(
     }
 
 
+def _optional_cost_keys(
+    costs: "tuple[AdditionalCost, ...]",
+) -> dict[str, bool]:
+    """Every CR 601.2b optional price announceable for this cast, mapped to
+    whether it is repeatable.
+
+    Two kinds, one namespace, because the announcement carries one map: a run of
+    mana symbols the cast folds into its payment ("you may pay {1}{R}") and a
+    non-mana price ``_pay_additional_costs`` collects ("Buyback—Sacrifice a
+    land"). A caster names either by the same key, so the check that a named
+    offer exists has to see both — a check that saw only the mana ones would
+    refuse Constant Mists' buyback as a cost the card does not print.
+    """
+    keys = {
+        offer.symbols: offer.repeatable
+        for cost in costs
+        for offer in cost.optional_mana
+    }
+    for cost in costs:
+        if cost.optional_key is not None:
+            # A printed non-mana price is taken once or declined; there is no
+            # "any number of times" spelling of one in the pool, and admitting a
+            # count would charge a sacrifice the payment collects once.
+            keys.setdefault(cost.optional_key, False)
+    return keys
+
+
+def optional_cost_taken(cost: "AdditionalCost", taken: dict | None) -> bool:
+    """Whether *cost* is charged on this cast (CR 601.2b).
+
+    True for every mandatory cost, which is all but one card in the pool, and
+    for an optional one exactly when the announcement took it. The one reader
+    the gate, the payment and the picker share — an offer the gate refused for
+    and the payment then declined to collect would be a spell uncastable for a
+    price it never charges.
+    """
+    if cost.optional_key is None:
+        return True
+    try:
+        return int((taken or {}).get(cost.optional_key, 0) or 0) > 0
+    except (TypeError, ValueError):
+        return False
+
+
 def _optional_cost_announcement(
     card: CardDefinition,
     costs: "tuple[AdditionalCost, ...]",
@@ -99,25 +143,25 @@ def _optional_cost_announcement(
     *optional* means and the only default that cannot charge a player for a
     price they did not accept.
     """
-    offers = _optional_cost_offers(costs)
+    offers = _optional_cost_keys(costs)
     taken: dict[str, int] = {}
     for symbols, times in (announced or {}).items():
         count = int(times or 0)
         if count <= 0:
             continue
-        offer = offers.get(str(symbols))
-        if offer is None:
+        key = str(symbols)
+        if key not in offers:
             printed = ", ".join(sorted(offers)) or "none"
             return {}, (
                 f"{card.name} prints no additional cost of {symbols} "
                 f"(it offers: {printed}) (CR 601.2b)"
             )
-        if count > 1 and not offer.repeatable:
+        if count > 1 and not offers[key]:
             return {}, (
-                f"{card.name}'s additional cost of {offer.symbols} may be paid "
+                f"{card.name}'s additional cost of {key} may be paid "
                 f"once, not {count} times (CR 601.2b)"
             )
-        taken[offer.symbols] = count
+        taken[key] = count
     return taken, None
 
 
@@ -1496,6 +1540,9 @@ class SpellCastingMixin:
             # together, and the gate that could not see the other one would
             # admit a cast that then took the caster below 0 (CR 119.4).
             life_already_owed=life_owed,
+            # CR 601.2b's announcement, made above: an optional price is a
+            # price only for the caster who took it.
+            taken=optional_paid,
         )
         if unpayable is not None:
             self.log.append(unpayable)
@@ -1637,6 +1684,7 @@ class SpellCastingMixin:
             cost_permanent_ids=cost_permanent_ids,
             cost_hand_card=cost_hand_card,
             x_value=resolved_x_value,
+            taken=optional_paid,
         )
         sacrificed_for_cost = cost_spoils["sacrificed_for_cost"]
         exiled_for_cost = cost_spoils["exiled_for_cost"]
@@ -1886,6 +1934,7 @@ class SpellCastingMixin:
         from_zone: str,
         x_value: int | None = None,
         life_already_owed: int = 0,
+        taken: dict[str, int] | None = None,
     ) -> str | None:
         """Why *card*'s printed additional costs can't be paid, or None.
 
@@ -1901,6 +1950,13 @@ class SpellCastingMixin:
         """
         caster = self.players[caster_index]
         for cost in costs:
+            # CR 601.2b's *optional* price (Constant Mists' buyback). An offer
+            # nobody took costs nothing, so it cannot make the spell
+            # uncastable -- and one that *was* taken is a price like any other
+            # from here down, gated on the same board this reads for the
+            # mandatory ones.
+            if not optional_cost_taken(cost, taken):
+                continue
             if cost.sacrifice_filter is not None:
                 # "…, sacrifice **two** creatures." (Phyrexian Tribute.) The
                 # *count* is what makes such a cost unpayable: one creature is
@@ -2418,6 +2474,7 @@ class SpellCastingMixin:
         cost_hand_card: "CardDefinition | None",
         x_value: int | None = None,
         cost_permanent_ids: list[int] | None = None,
+        taken: dict[str, int] | None = None,
     ) -> dict:
         """Perform *card*'s printed additional costs, returning what they ate.
 
@@ -2439,6 +2496,12 @@ class SpellCastingMixin:
         sacrificed: Permanent | None = None
         exiled: Permanent | None = None
         for cost in costs:
+            # CR 601.2b's *optional* price, collected only when the
+            # announcement took it -- the same reader ``_unpayable_additional_cost``
+            # skips it by, so a cost the gate priced and one the payment
+            # collects cannot come apart.
+            if not optional_cost_taken(cost, taken):
+                continue
             # "…, **exile X creature cards from your graveyard**." (Haunting
             # Misery.) A *card* payment, so nothing leaves the battlefield and
             # `exiled` above — which carries the Permanent a battlefield exile

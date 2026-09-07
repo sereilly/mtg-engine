@@ -164,10 +164,15 @@ def test_a_buyback_cost_this_engine_cannot_read_makes_the_card_unsupported():
     reported rather than falling through to a gate that never heard of the
     keyword — which would cast the spell at its printed mana cost with the
     price nobody was offered and no return.
+
+    The invented cost is a coin flip rather than a sacrifice: CR 702.27's cost
+    is *any* cost, and since Constant Mists the rewrite writes a non-mana one
+    the cost table can charge into CR 601.2b's optional sentence. What must
+    still refuse is a clause nothing charges, which is what this names.
     """
     card = CardDefinition(
-        name="Probe Sacrifice", mana_cost="{B}", cmc=1.0, type_line="Instant",
-        oracle_text="Buyback-Sacrifice a creature.\nDraw a card.",
+        name="Probe Coin", mana_cost="{B}", cmc=1.0, type_line="Instant",
+        oracle_text="Buyback-Flip a coin.\nDraw a card.",
         colors=(), color_identity=(), keywords=("Buyback",), produced_mana=(),
         raw={},
     )
