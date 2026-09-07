@@ -1171,9 +1171,18 @@ class StackResolutionMixin:
                 # draws a card" is a different seat on every land drop, and
                 # nothing on a board records who played one — so the freeze has
                 # to happen here, where it is known.
+                # ``played_permanent_id`` is what "**another** land" (City of
+                # Traitors) is compared against. The entry above has already
+                # happened, so a land whose own trigger watches land drops is
+                # on the battlefield and observing by the time this is
+                # announced — and the exclusion cannot be answered from
+                # ``card``, because a deck repeats one immutable
+                # ``CardDefinition`` per copy and a second printing of the same
+                # land would read as the first. CR 400.7's id is the identity.
                 emit(
                     self, "land_played", subject=card, seat=caster_index,
                     event_subject_player=caster_index,
+                    played_permanent_id=permanent.permanent_id,
                 )
                 # "When **you play a card**" (Juju Bubble). CR 701.18b's other
                 # half: a land is played rather than cast, so the cast

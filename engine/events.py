@@ -1165,6 +1165,22 @@ def _land_played_filter(
     observer = game.controller_index_of(permanent)
     if observer is None:
         return False
+    if trig.condition.payload.get("other_land"):
+        # "When you play **another** land" (City of Traitors) — CR 109.2's
+        # "another" is "not this object", and a land watching land drops is on
+        # the battlefield by the time its own play is announced
+        # (``_process_land_enters`` runs first), so without this the card would
+        # sacrifice itself the moment it arrived.
+        #
+        # Compared by ``permanent_id`` rather than by the played card: a deck
+        # repeats one immutable ``CardDefinition`` per copy, so a second City of
+        # Traitors would be the *same* object as the first and the exclusion
+        # would suppress a trigger the card makes. An announcement carrying no
+        # id fires nothing, which is this filter's own safe direction one
+        # narrowing up.
+        played = event.payload.get("played_permanent_id")
+        if played is None or played == permanent.permanent_id:
+            return False
     land_player = trig.condition.payload.get("land_player")
     if land_player == "an opponent":
         return seat != observer

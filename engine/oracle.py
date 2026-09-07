@@ -1148,8 +1148,18 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # a missing ``drawer`` — an absent optional group is not in the groupdict,
     # so "a player" and "you" would be one payload. They are not one condition,
     # so the word is captured and the filter compares it.
+    # "When you play **another** land, sacrifice this land." (City of
+    # Traitors.) A second narrowing on the same announcement rather than a
+    # second kind, exactly as the seat above is: an *optional* group, so a card
+    # printing the bare phrase carries the payload it always carried and only
+    # the printing that says the word gets the key. What the word excludes is
+    # the source itself, which the filter answers by comparing the played
+    # permanent's id against the observer's — a `CardDefinition` identity
+    # cannot, because a deck repeats one immutable definition per copy and a
+    # second City of Traitors would be read as the first.
     ("land_played",
-     r"whenever (?:you play|(?P<land_player>an opponent|a player) plays) a land"),
+     r"whenever (?:you play|(?P<land_player>an opponent|a player) plays) "
+     r"(?:a|(?P<other_land>another)) land"),
     # "**When the chosen player** draws a card **with the chosen name**, …"
     # (Booby Trap.) Two narrowings on the same announcement rather than a second
     # kind, which is the same reading `land_played` above records: one event,

@@ -64,15 +64,26 @@ def _lower_reveal_hand(node: ast.RevealHand) -> tuple[OracleInstruction, ...]:
 
     The first half of Amnesia and Rag Man, lowered as its own step so the
     discard behind it is the ordinary discard instruction rather than a second
-    fused kind. Only a *chosen* player has a handler: "each player reveals their
-    hand" would be a loop nothing here performs, and "you reveal your hand"
-    reveals a zone the revealer already sees.
+    fused kind. "Each player reveals their hand" is still refused: it would be a
+    loop nothing here performs.
 
-    The whole payload is who reveals, because a reveal narrows nothing and
+    **"You reveal your hand" is not a no-op**, and refusing it was this
+    function's one wrong reading — the reason given was that the revealer
+    "already sees" the zone, which is true of the revealer and of nobody else at
+    the table. CR 701.20a shows the cards to *every* player, and on Manabond
+    that is the whole price of the offer: the hand becomes public and is then
+    discarded. It carries no ``targets`` key, so the handler reads the seat off
+    ``who`` rather than off whatever the resolution context happened to be
+    holding — the distinction Detonate's sequence made necessary one family
+    over.
+
+    The rest of the payload is who reveals, because a reveal narrows nothing and
     chooses nothing — what the sentence after it does with the revealed hand is
     that sentence's business, and on Inquisition that is an ordinary counted
     damage.
     """
+    if node.player.kind == "you":
+        return (OracleInstruction("reveal_hand", "", {"who": "you"}),)
     if node.player.kind not in ("target_player", "target_opponent"):
         raise LoweringError(
             f"no handler reveals {node.player.kind!r}'s hand", node=node

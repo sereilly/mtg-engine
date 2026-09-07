@@ -2385,6 +2385,27 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
         if chosen not in game.players:
             return False, "no player was chosen for 'that player'"
         payers = [game.players.index(chosen)]
+    elif who == "controller":
+        # "For each creature, **its controller** sacrifices a permanent of
+        # their choice unless they pay {1}." (Fade Away.) The seat that
+        # controls the object the sentence is about, read through the seam
+        # whose whole contract is "the innermost binding wins" — inside a loop
+        # that is the iteration's own object, and outside one it is the
+        # permanent this resolution targeted. The same reader
+        # ``control_flow._offered_seats`` uses for the identical printed word,
+        # so the seat offered the payment and the seat charged for declining
+        # are one answer rather than two that can disagree.
+        #
+        # Nobody to ask is nobody charged, which is the honest outcome the
+        # frozen-seat branches below already give: a permanent that has left
+        # by the time this runs has no controller to name.
+        from ._common import bound_permanent
+
+        perm = bound_permanent(game, context, predicate=lambda _p: True)
+        seat = game.controller_index_of(perm) if perm is not None else None
+        if seat is None:
+            return False, "no permanent was bound for 'its controller'"
+        payers = [seat]
     elif who == "event_subject_player":
         # "At the beginning of each player's upkeep, **that player** sacrifices
         # a land of their choice." (Mana Vortex.) The seat the trigger's own

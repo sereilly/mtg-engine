@@ -13,6 +13,8 @@ re-forms instead of forking.
 """
 
 
+import dataclasses
+
 from .. import ast
 from ..amounts import accept_fraction_head, accept_rounding, parse_amount, parse_equal_to
 from ..records import accept_as_many_as
@@ -20,12 +22,12 @@ from ..records import accept_as_many_as
 from ..amounts import accept_counters_on_source
 from ..errors import GrammarError
 from ..nouns import parse_object_filter
-from ..references import parse_player_ref, parse_target_spec
+from ..references import parse_player_ref, parse_recipient, parse_target_spec
 from ..stream import TokenStream
 from ..phrases import (accept_a_card_at_random_from_hand, _parse_duration,
                        _parse_mana_payment)
 from ..readers import accept_source_reference
-from ..vocabulary import CARD_TYPES, singular as _singular
+
 
 
 def _parse_draw(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
@@ -374,8 +376,72 @@ def _parse_reveal_hand(
         # so handing the discard production anyone else would aim it at a seat
         # the sentence never named.
         return ast.Sequence((ast.RevealHand(player), _parse_discard(stream, player)))
+    # "…reveal your hand **and put all land cards from it onto the
+    # battlefield**." (Manabond.) The second act this production's own
+    # docstring promised: a card printing something other than a discard after
+    # the reveal reuses this reader rather than adding a second one, and the
+    # subject is carried the way the discard's is.
+    emptied = _accept_put_revealed_hand_cards(stream, player)
+    if emptied is not None:
+        return ast.Sequence((ast.RevealHand(player), emptied))
     stream.reset(mark)
     return None
+
+
+def _accept_put_revealed_hand_cards(
+    stream: TokenStream, player: ast.PlayerRef
+) -> "ast.PutOntoBattlefield | None":
+    """``put all <card phrase> from it onto the battlefield`` at the cursor —
+    or None with the cursor where it was. (Manabond.)
+
+    **"It" is the hand this same sentence has just revealed**, which is why the
+    phrase is read here and not by the shared noun parser: that parser reads a
+    zone from a zone *noun* ("from your hand"), and teaching it the pronoun
+    would hand the word to every line in the game that prints it. Duress'
+    three-sentence template makes the same binding for the same reason ("you
+    choose a … card **from it**"), and the two are the only readings of the
+    word this package has.
+
+    The noun phrase is data, so a card printing "all creature cards from it" is
+    the same production; the count is not, because "all" is the whole
+    difference between emptying a hand and picking out of it. Anything else
+    rewinds whole — a tail half-read here would leave the reveal claiming a
+    sentence it does not carry out.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("put", "puts"):
+        return None
+    try:
+        moved = parse_recipient(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if (
+        not isinstance(moved, ast.TargetSpec)
+        or moved.quantifier != "all"
+        or not moved.filter.is_card
+        # A phrase that named its own zone is not this sentence: "from it" is
+        # the binding, and a spec arriving with a zone already on it would be
+        # two answers to one question. The *owner* is what says so — the noun
+        # parser leaves ``zone`` at its "battlefield" default for a phrase that
+        # printed none, and only a printed "from <somebody>'s <pile>" fills the
+        # possessive in.
+        or moved.filter.zone_owner is not None
+        or moved.filter.zone not in (None, "battlefield")
+    ):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("from", "it", "onto", "the", "battlefield"):
+        stream.reset(mark)
+        return None
+    return ast.PutOntoBattlefield(
+        dataclasses.replace(
+            moved,
+            filter=dataclasses.replace(
+                moved.filter, zone="hand", zone_owner=player,
+            ),
+        ),
+    )
 
 
 def _parse_play_with_hand_revealed(
@@ -513,255 +579,6 @@ def parse_put_milled_card_onto_battlefield(
         stream.reset(mark)
         return None
     return ast.PutMilledCardOntoBattlefield()
-
-
-def _accept_spell_type_union(stream: TokenStream) -> "tuple[str, ...] | None":
-    """``instant and sorcery`` / ``creature`` in front of the word "spells",
-    consumed — or None with the cursor where it was.
-
-    A **cross-type union**, which is why it is read here rather than by the
-    noun parser: that reader answers "instant and sorcery **cards**" already,
-    and the word a permission sentence prints is "spells". CR 112.1 makes a
-    spell a card on the stack, so the two nouns name the same characteristics
-    and only the zone differs — but a permission's zone is stated separately
-    ("from the top of your graveyard"), so folding the two would give the
-    sentence two answers about where the card is.
-
-    Both joining words are read. "Instant **and** sorcery spells" is a union
-    despite the conjunction (no spell is both), exactly as "instant **or**
-    sorcery card" is, and refusing one spelling would refuse the card that
-    prints it for a grammatical accident.
-    """
-    mark = stream.mark()
-    found: list[str] = []
-    while True:
-        word = stream.peek_word()
-        if word is None or _singular(word) not in CARD_TYPES:
-            break
-        found.append(_singular(word))
-        stream.advance()
-        if stream.accept_word("and", "or"):
-            continue
-        break
-    if not found or not stream.accept_word("spells"):
-        stream.reset(mark)
-        return None
-    return tuple(found)
-
-
-def _parse_cast_permission(stream: TokenStream) -> ast.Statement | None:
-    """A sentence granting permission to cast or play from a zone the rules
-    alone would not allow (CR 601.3) — see :class:`ast.CastPermission` for the
-    printed forms. Returns None quietly on anything else, so "you may pay …"
-    and the causative "you may have …" keep their own readings.
-
-    The duration is read in both printed positions — a leading "Until end of
-    turn," and a trailing "this turn" — because the two spellings scope the
-    permission identically (CR 514.2 ends both at cleanup).
-
-    The **subject** is read too. Almost every printing says "you may", which
-    CR 601.3 gives to the ability's controller; Elkin Lair says "**The player**
-    may play that card this turn", where the player is whoever the trigger in
-    front of it was about. Dropping the printed subject would hand the
-    permission to the wrong seat on three upkeeps in four, silently — the grant
-    would exist and the card would be playable, just not by the player who
-    exiled it.
-    """
-    mark = stream.mark()
-    until_eot = False
-    next_upkeep = False
-    next_turn = False
-    if stream.at_word("until"):
-        # Through the shared duration table, so the phrase this sentence may
-        # open with is the same set of phrases every other effect reads — a
-        # second literal here is how one family comes to accept a wording
-        # another refuses. A kind the permission cannot *end* refuses the line
-        # rather than being read as the nearest one it can.
-        leading = _parse_duration(stream)
-        if leading.kind == "until_end_of_turn":
-            until_eot = True
-        elif leading.kind == "until_your_next_upkeep":
-            next_upkeep = True
-        elif leading.kind == "until_your_next_turn":
-            # "**Until your next turn**, you may play those cards." (Three
-            # Wishes.) One step earlier than the upkeep spelling above, and
-            # kept apart from it for that reason — see
-            # :attr:`ast.CastPermission.until_your_next_turn`.
-            next_turn = True
-        else:
-            stream.reset(mark)
-            return None
-        stream.accept_punct(",")
-    grantee: "ast.PlayerRef | None" = None
-    if not stream.accept_phrase("you", "may"):
-        # "**The player** may play that card this turn." (Elkin Lair.) Through
-        # the shared player-reference parser, which declines without consuming,
-        # so a sentence that is not a permission at all still reaches its own
-        # refusal site. Only a seat the *firing event* can name is read here:
-        # "you" is the branch above, and any other reference would be a
-        # permission granted to somebody the resolution cannot identify.
-        named = parse_player_ref(stream)
-        if named is None or named.kind != "that_player" or not stream.accept_word("may"):
-            stream.reset(mark)
-            return None
-        grantee = named
-    if stream.accept_word("play"):
-        mode = "play"
-    elif stream.accept_word("cast"):
-        mode = "cast"
-    elif stream.accept_phrase("look", "at"):
-        # "You may **look at** it for as long as it remains exiled." (Gustha's
-        # Scepter.) The same CR 611.2a permission sentence about a different
-        # verb: a card in exile face down is hidden from every player (CR
-        # 406.3), so the permission to read one is an effect rather than a
-        # courtesy. "at" is consumed here because the verb is two words; the
-        # referent and the duration below are shared with the cast readings.
-        mode = "look"
-    else:
-        stream.reset(mark)
-        return None
-
-    regrant = False
-    while_exiled = False
-
-    def _trailing_duration() -> bool:
-        nonlocal until_eot, regrant, while_exiled
-        # "…**for as long as it remains exiled**." (Ice Cauldron.) A duration
-        # stated as a zone rather than as a moment in the turn, which is why it
-        # is not in the shared duration table: that table is read by every
-        # effect family and none of the others can end on where a card is.
-        # "…**for as long as they remain exiled**" (Three Wishes) is the same
-        # duration over a pile rather than over a card. Read here beside the
-        # singular rather than as a second production: the plural is the
-        # referent's number, and the permission ends on the same event either
-        # way.
-        if stream.accept_phrase(
-            "for", "as", "long", "as", "it", "remains", "exiled"
-        ) or stream.accept_phrase(
-            "for", "as", "long", "as", "they", "remain", "exiled"
-        ):
-            while_exiled = True
-            return True
-        if stream.accept_phrase("this", "turn"):
-            until_eot = True
-        # "until you exile another card with this <permanent type>" (Furious
-        # Rise). The noun is whatever the card is printed as, so it is consumed
-        # as a word rather than matched against one spelling — an Artifact
-        # printing the same sentence needs no second branch. Every token is
-        # consumed or the phrase is not this one, because a half-read duration
-        # would leave "with this enchantment" as unaccounted text and fail the
-        # whole line.
-        elif stream.accept_phrase("until", "you", "exile", "another", "card"):
-            if not stream.accept_phrase("with", "this"):
-                raise stream.error("expected 'with this <permanent>'")
-            if stream.exhausted or stream.at_punct(".", ";"):
-                raise stream.error("expected the permanent this sentence is on")
-            stream.advance()
-            regrant = True
-        return True
-
-    # "cards exiled this way" / "them" — both name the cards a step of this
-    # same resolution exiled; lowering demands the producer.
-    # "cards exiled this way" / "them" / "that card" — all name the cards a step
-    # of this same resolution exiled; lowering demands the producer. The
-    # singular is the same set with one member in it (Furious Rise exiles the
-    # top card, so "that card" is the whole of what was exiled), which is why it
-    # is a spelling here rather than a second ``what``.
-    if (
-        stream.accept_phrase("cards", "exiled", "this", "way")
-        or stream.accept_word("them")
-        or stream.accept_phrase("that", "card")
-        # "**those cards**" (Three Wishes) — the plural of "that card", and the
-        # same set: what an earlier step of this resolution exiled. A spelling
-        # here rather than a second ``what``, for the singular's stated reason
-        # one number over.
-        or stream.accept_phrase("those", "cards")
-        # The bare pronoun, and only under "look at": a *cast* permission
-        # naming "it" would claim any "you may cast it …" sentence in the pool,
-        # where this verb has exactly one referent — the card the sentence
-        # before it exiled.
-        or (mode == "look" and stream.accept_word("it"))
-    ):
-        _trailing_duration()
-        return ast.CastPermission(
-            mode=mode, what="exiled_this_way", grantee=grantee,
-            until_end_of_turn=until_eot,
-            until_source_grants_again=regrant,
-            until_your_next_upkeep=next_upkeep,
-            until_your_next_turn=next_turn,
-            while_exiled=while_exiled,
-        )
-    # "spells from your hand without paying their mana costs" — a cost waiver.
-    # The waiver clause is required: a bare "you may cast spells from your
-    # hand" states the rules default and no card prints it.
-    if stream.accept_phrase("spells", "from", "your", "hand"):
-        if not stream.accept_phrase("without", "paying", "their", "mana", "costs"):
-            stream.reset(mark)
-            return None
-        _trailing_duration()
-        return ast.CastPermission(
-            mode=mode, what="spells_from_hand", grantee=grantee,
-            until_end_of_turn=until_eot, free=True,
-            until_your_next_upkeep=next_upkeep,
-            until_your_next_turn=next_turn,
-        )
-    # A **blanket** grant over a class of spells rather than over named cards:
-    # "instant and sorcery spells from the top of your graveyard" (Bosium
-    # Strip) and "creature spells this turn as though they had flash" (Winding
-    # Canyons). One reader for the noun phrase, because the two sentences print
-    # the same union and differ only in what follows it — a zone in one and a
-    # timing permission in the other.
-    named_types = _accept_spell_type_union(stream)
-    if named_types is not None:
-        # "…from **the top of** your graveyard." One card, not the pile: read
-        # here rather than left to the noun parser because the phrase is a
-        # *position* in an ordered zone (CR 400.5) rather than a
-        # characteristic, and a permission that dropped it would open the whole
-        # graveyard.
-        if stream.accept_phrase(
-            "from", "the", "top", "of", "your", "graveyard"
-        ):
-            _trailing_duration()
-            return ast.CastPermission(
-                mode=mode, what="spells_from_zone", grantee=grantee,
-                card_types=named_types, zone="graveyard", position="top",
-                until_end_of_turn=until_eot,
-                until_your_next_upkeep=next_upkeep,
-                until_your_next_turn=next_turn,
-            )
-        # "…**this turn** as though they had flash." CR 702.8a timing rather
-        # than a zone: the duration is printed in front of the permission, so
-        # the shared trailing reader runs first and the words after it decide
-        # which sentence this is.
-        _trailing_duration()
-        if stream.accept_phrase("as", "though", "they", "had", "flash"):
-            return ast.CastPermission(
-                mode=mode, what="spells_at_instant_speed", grantee=grantee,
-                card_types=named_types,
-                until_end_of_turn=until_eot,
-                until_your_next_upkeep=next_upkeep,
-                until_your_next_turn=next_turn,
-            )
-        # A union nothing followed is not this sentence. Reset rather than
-        # raise: "you may cast creature spells" alone is not a permission any
-        # card prints, and consuming the words would take the line away from
-        # whatever production really reads it.
-        stream.reset(mark)
-        return None
-    # "target red instant or sorcery card from your graveyard" — the noun
-    # parser reads the zone and its owner onto the filter, and lowering
-    # refuses any zone the cast path cannot open.
-    spec = parse_target_spec(stream)
-    if spec is not None and spec.quantifier == "target":
-        _trailing_duration()
-        return ast.CastPermission(
-            mode=mode, what="target_card", target=spec, grantee=grantee,
-            until_end_of_turn=until_eot,
-            until_your_next_upkeep=next_upkeep,
-            until_your_next_turn=next_turn,
-        )
-    stream.reset(mark)
-    return None
 
 
 def _parse_choose_cards_in_hand(stream: TokenStream) -> "ast.ChooseCardsInHand | None":

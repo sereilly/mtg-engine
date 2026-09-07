@@ -35,7 +35,7 @@ from ._sacrifices import _forced_sacrifice_filter
 from ._common import (_describe_targets, _filter_payload, _full_mana_payload,
                       _is_enchanted, _is_source, _is_target,
                       player_deed_payload)
-from ._events import (CHOSEN_PLAYER, OTHER_CHOSEN_PERMANENT, PUT_FROM_HAND_PERMANENTS, _EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER, names_attached_permanent, CHOSEN_PERMANENT, _RECORDED_PERMANENTS)
+from ._events import (CHOSEN_PLAYER, LOOP_BOUND_OBJECT, OTHER_CHOSEN_PERMANENT, PUT_FROM_HAND_PERMANENTS, _EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER, names_attached_permanent, CHOSEN_PERMANENT, _RECORDED_PERMANENTS)
 from ._delays import (_BOUND_OBJECT_DELAYED_EVENTS)
 
 
@@ -531,6 +531,20 @@ def _lower_sacrifice(
                     f"no event named {event!r} freezes the seat 'that player' names",
                     node=node,
                 )
+        elif node.player.kind == "controller" and LOOP_BOUND_OBJECT in produced:
+            # "For each creature, **its controller** sacrifices a permanent of
+            # their choice unless they pay {1}." (Fade Away.) Inside a loop
+            # over objects the possessive names the iteration's own object,
+            # which is the innermost binding — the handler resolves it through
+            # ``bound_permanent``, whose contract is exactly that, so the seat
+            # asked and the seat charged are one answer.
+            #
+            # Read before the frozen-seat branch below, because a loop binds
+            # the pronoun more tightly than the firing event does: under
+            # Earthlink's trigger there is no loop and the event's seat is the
+            # only one there is, and here the event is not what the sentence is
+            # about.
+            payload["who"] = "controller"
         elif node.player.kind == "controller":
             # "When enchanted creature leaves the battlefield, **its
             # controller** sacrifices a creature of their choice." (Funeral

@@ -156,7 +156,6 @@ from .cards import (
     _parse_for_each_revealed_discard,
     _parse_mill,
     _parse_scry,
-    _parse_cast_permission,
     _parse_play_with_hand_revealed,
     parse_exile_random_card_from_hand,
     _parse_reveal_hand,
@@ -164,6 +163,11 @@ from .cards import (
     parse_put_milled_card_onto_battlefield,
     _parse_repeated_graveyard_pick,
 )
+# CR 601.3's permission sentences, split off `cards` at the size guard under
+# the name `lowering/permissions.py` has carried since Alliances. The two names
+# it took keep their addresses: this package re-exports flat, so no caller
+# learns where the split fell.
+from .permissions import _parse_cast_permission
 # A hand emptying onto a library, split off `cards` at the size guard. The three
 # names it took keep their addresses: this package re-exports flat, so no caller
 # learns where the split fell.

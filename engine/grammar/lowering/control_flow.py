@@ -23,7 +23,8 @@ from ..errors import LoweringError
 from ._common import _amount_payload, _filter_payload, _restrictions_beyond
 from ._events import (EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER,
                       _DEFENDING_PLAYER_EVENTS, _EVENT_SUBJECT_CONTROLLERS,
-                      _EVENT_SUBJECT_PLAYERS, frozen_seat_record)
+                      _EVENT_SUBJECT_PLAYERS, LOOP_BOUND_OBJECT,
+                      frozen_seat_record)
 from ._records import produced_keys
 
 
@@ -399,7 +400,21 @@ def _lower_may(
             f"no offer names {node.actor.kind!r} as its payer", node=node
         )
     actor = node.actor.kind
-    if actor == "that_player" and event in _EVENT_SUBJECT_PLAYERS:
+    if actor == "that_player" and LOOP_BOUND_OBJECT in produced:
+        # "For each creature, its controller sacrifices a permanent of their
+        # choice unless **they** pay {1}." (Fade Away.) Inside a loop over
+        # objects the pronoun names the seat the *sentence* already named —
+        # the iteration's own object's controller — and not a seat the firing
+        # event froze. Read before the event tables below because the loop is
+        # the pronoun's **innermost** binder, which is the same order the
+        # damage recipient one module over takes for the seat loop's marker.
+        #
+        # It becomes the ``controller`` actor rather than a new one:
+        # ``_offered_seats`` resolves that through ``bound_permanent``, whose
+        # whole contract is "the innermost binding wins", so the offer goes to
+        # a seat this engine already knows how to find.
+        actor = "controller"
+    elif actor == "that_player" and event in _EVENT_SUBJECT_PLAYERS:
         # "…**you may draw a card unless that player pays {4}**" (Mystic
         # Remora). Under an event whose subject *is* a player, "that player" is
         # the seat the fire site froze — the opponent who cast the spell — and

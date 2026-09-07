@@ -36,7 +36,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | TMP | 335 | 478 | 92.1% | 91.8% | 65.5% | 271 |
 | STH | 143 | 215 | 88.4% | 88.4% | 62.8% | 124 |
 | M21 | 285 | 503 | 87.3% | 87.1% | 61.0% | 237 |
-| EXO *(measured)* | 143 | 207 | 72.5% | 67.6% | 45.9% | 90 |
+| EXO *(measured)* | 143 | 207 | 74.9% | 71.5% | 49.8% | 97 |
 | **All (shipped)** | **4730** | **7032** | **90.2%** | **89.5%** | **59.8%** | **3510** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -49,9 +49,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 393 | 175 | expected a subject |  |
+| 389 | 171 | expected a subject |  |
 | 115 | 60 | unrecognized effect verb |  |
-| 89 | 45 | unconsumed text |  |
+| 88 | 44 | unconsumed text |  |
 | 37 | 22 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 14 | 14 | expected 'a' |  |
@@ -407,6 +407,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this creature enters, you gain 2 life for each creature you control with flying.`
 - **Avenging Angel**
   - `When this creature dies, you may put it on top of its owner's library.`
+- **Avenging Druid**
+  - `Whenever this creature deals damage to an opponent, you may reveal cards from the top of your library until you reveal a land card. If you do, put that card onto the battlefield and put all other cards revealed this way into your graveyard.`
 - **Avizoa**
   - `{0}: This creature gets +2/+2 until end of turn. You skip your next untap step. Activate only once each turn.`
 - **Avoid Fate**
@@ -840,6 +842,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Sacrifice a Caribou token: You gain 1 life.`
 - **Carnassid**
   - `{1}{G}: Regenerate this creature.`
+- **Carnophage**
+  - `At the beginning of your upkeep, tap this creature unless you pay 1 life.`
 - **Carrier Pigeons**
   - `When this creature enters, draw a card at the beginning of the next turn's upkeep.`
 - **Carrion**
@@ -1030,6 +1034,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Exile a creature you control: Put a storage counter on this land.`
   - `{T}: Add {C} for each storage counter on this land.`
 - **City of Traitors**
+  - `When you play another land, sacrifice this land.`
   - `{T}: Add {C}{C}.`
 - **Civic Guildmage**
   - `{G}, {T}: Target creature gets +0/+1 until end of turn.`
@@ -1924,6 +1929,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever a permanent other than a basic land enters, destroy all other permanents with that name. They can't be regenerated.`
 - **Fabled Passage**
   - `{T}, Sacrifice this land: Search your library for a basic land card, put it onto the battlefield tapped, then shuffle. Then if you control four or more lands, untap that land.`
+- **Fade Away**
+  - `For each creature, its controller sacrifices a permanent of their choice unless they pay {1}.`
 - **Faerie Noble**
   - `Other Faerie creatures you control get +0/+1.`
   - `{T}: Other Faerie creatures you control get +1/+0 until end of turn.`
@@ -3592,6 +3599,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever enchanted creature blocks or becomes blocked by a creature, the other creature gains first strike until end of turn.`
 - **Man-o'-War**
   - `When this creature enters, return target creature to its owner's hand.`
+- **Mana Breach**
+  - `Whenever a player casts a spell, that player returns a land they control to its owner's hand.`
 - **Mana Clash**
   - `You and target opponent each flip a coin. Mana Clash deals 1 damage to each player whose coin comes up tails. Repeat this process until both players' coins come up heads on the same flip.`
   - `You and target opponent each flip a coin. Mana Clash deals 1 damage to each player whose coin comes up tails. Repeat this process until both players' coins come up heads on the same flip.`
@@ -3650,6 +3659,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever a player taps a land for mana, this enchantment deals 1 damage to that player.`
   - `Whenever a player taps a land for mana, this enchantment deals 1 damage to that player.`
   - `Whenever a player taps a land for mana, this enchantment deals 1 damage to that player.`
+- **Manabond**
+  - `At the beginning of your end step, you may reveal your hand and put all land cards from it onto the battlefield. If you do, discard your hand.`
 - **Manakin**
   - `{T}: Add {C}.`
 - **Mangara's Blessing**
@@ -5536,6 +5547,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Counter target spell with mana value X. (For example, if that spell's mana cost is {3}{U}{U}, X is 5.)`
 - **Spellgorger Weird**
   - `Whenever you cast a noncreature spell, put a +1/+1 counter on this creature.`
+- **Spellshock**
+  - `Whenever a player casts a spell, this enchantment deals 2 damage to that player.`
 - **Spike Breeder**
   - `{2}, Remove a +1/+1 counter from this creature: Put a +1/+1 counter on target creature.`
   - `{2}, Remove a +1/+1 counter from this creature: Create a 1/1 green Spike creature token.`
@@ -6794,6 +6807,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{G}: Regenerate this creature.`
 - **Yawgmoth Demon**
   - `At the beginning of your upkeep, you may sacrifice an artifact. If you don't, tap this creature and it deals 2 damage to you.`
+- **Zealots en-Dal**
+  - `At the beginning of your upkeep, if all nonland permanents you control are white, you gain 1 life.`
 - **Zebra Unicorn**
   - `Whenever this creature deals damage, you gain that much life.`
 - **Zelyon Sword**

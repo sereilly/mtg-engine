@@ -197,6 +197,15 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # spelling of the same event. The seat is payload on ``engine/oracle.py``'s
     # row; here it is one more phrase for one kind.
     ("land_played", ("a", "player", "plays", "a", "land")),
+    # "When you play **another** land, sacrifice this land." (City of
+    # Traitors.) The same event with the printed exclusion as the trigger's own
+    # narrowing, which the *other* front end carries as payload
+    # (``engine/oracle.py``'s ``other_land`` group, compared against the played
+    # permanent's id by ``engine/events._land_played_filter``) — this table has
+    # only to agree about which event the words name, the arrangement the seat
+    # rows above already use. Above the bare phrase it is not a prefix of, so
+    # the order is documentation here rather than precedence.
+    ("land_played", ("you", "play", "another", "land")),
     ("land_played", ("you", "play", "a", "land")),
     # "…your second card each turn" (Mystic Skyfish, Jolrael) — a different
     # article, so no prefix collision with the bare draw event above.

@@ -31,7 +31,7 @@ from .condition_clauses import (_accept_counter_condition,
                                 _parse_blockers_of_bound_creature,
                                 _parse_self_in_graveyard_above)
 from .stream import TokenStream
-from .vocabulary import NUMBER_WORDS
+from .vocabulary import COLOR_WORDS, NUMBER_WORDS
 
 
 #: What every state condition below is asked *about*: the ability's own source.
@@ -471,6 +471,59 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
     if blocking is not None:
         return blocking
     stream.reset(blockers_mark)
+
+    # "if **all nonland permanents you control are white**" (Zealots en-Dal).
+    # A universal quantification over a board, and it is read as the count it
+    # already is: "all A are white" holds exactly when the seat controls no A
+    # that is not white, which is the :class:`ast.Controls` clause every
+    # reading below already produces — vacuous truth included, since a seat
+    # controlling no A controls no non-white A either.
+    #
+    # The rewrite is in the **parse** rather than in a node of its own, for the
+    # reason the toll one family over gives about "unless": an offer with a
+    # penalty is what ``ast.May`` already says, and a board this seat has none
+    # of is what ``Controls`` already says. A separate node would be a second
+    # evaluator for one question, free to disagree about the empty board — and
+    # the printed colour is a filter key ``subject_matches`` tests
+    # (``exclude_colors``, which a colourless permanent also answers, so a Mox
+    # falsifies the sentence exactly as the card intends).
+    #
+    # Read before the existential "there are …" below and before the "you
+    # control …" clause above, because "all" opens neither of them; and refused
+    # in full rather than narrowed, so a phrase already carrying a colour, a
+    # seat this reference parser cannot name, or a trailing word is a line that
+    # fails loudly instead of a condition asking something else.
+    all_mark = stream.mark()
+    if stream.accept_word("all"):
+        try:
+            described = parse_object_filter(stream)
+        except GrammarError:
+            described = None
+        if (
+            described is not None
+            and described.controller is not None
+            and not described.colors
+            and not described.excluded_colors
+            and stream.accept_word("are")
+        ):
+            colour_word = stream.peek_word()
+            if colour_word in COLOR_WORDS:
+                stream.advance()
+                # The seat word travels as it was parsed and the *lowering*
+                # decides whether it names one (``_condition_seat``). Deciding
+                # here would be a second reading of the same question, and the
+                # one that refuses is the one every other clause in this file
+                # already relies on.
+                return ast.Controls(
+                    who=ast.PlayerRef(described.controller),
+                    filter=dataclasses.replace(
+                        described,
+                        controller=None,
+                        excluded_colors=(COLOR_WORDS[colour_word],),
+                    ),
+                    comparison=ast.Comparison("eq", ast.Fixed(0)),
+                )
+    stream.reset(all_mark)
 
     # "if **there are no Zombies on the battlefield**" (Sarcomancy) / "if
     # **there are no Reflection tokens on the battlefield**" (Spirit Mirror).

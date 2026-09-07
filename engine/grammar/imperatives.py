@@ -118,6 +118,7 @@ from .effects import (
     _parse_remove_counter,
     _parse_remove_from_combat,
     _parse_return,
+    _parse_reveal_hand,
     _parse_reveal_top,
     _parse_sacrifice,
     _parse_scry,
@@ -657,6 +658,22 @@ def parse_imperative(
     if stream.at_word("scry"):
         return _parse_scry(stream)
     if stream.at_word("reveal"):
+        # "**Reveal your hand** and put all land cards from it onto the
+        # battlefield." (Manabond.) The bare imperative spelling of a sentence
+        # that already had a reader: `_parse_reveal_hand` has read
+        # "<player> reveals their hand" since Amnesia, and with no printed
+        # subject the line reached `_parse_reveal_top` and failed on the
+        # literal "the" — four words short of a production that exists, which
+        # is the same one-line gap that function's own comments record twice.
+        #
+        # The subject is "you", which is what a bare imperative means
+        # (CR 608.2's effect is performed by the ability's controller), and the
+        # reveal production declines *without consuming* when the reveal names
+        # something other than a hand — so "reveal the top card of your
+        # library" keeps its own reading and its own error.
+        hand = _parse_reveal_hand(stream, ast.PlayerRef("you"))
+        if hand is not None:
+            return hand
         return _parse_reveal_top(stream)
     if stream.at_word("take"):
         return _parse_extra_turn(stream)

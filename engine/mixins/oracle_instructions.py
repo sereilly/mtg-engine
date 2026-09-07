@@ -266,9 +266,18 @@ class OracleInstructionsMixin:
         # ("counter it", "where X is its mana value") needs the object, not
         # just the fact of the cast, and by the time the trigger resolves the
         # stack top is something else.
+        # ``event_subject_player`` rides beside ``caster_index`` for the reason
+        # the opponent-scoped emit below already carries it: the two names are
+        # one seat read at two moments. The filter asks ``caster_index`` while
+        # deciding whether the trigger fires; a printed "**that player**"
+        # (Spellshock, Mana Breach) asks the *frozen* context while resolving,
+        # and the second is the one a per-seat key has to survive into.
+        # Without it the two spellings of one announcement disagreed — an
+        # opponent-scoped cast trigger could say "that player" and an
+        # unnarrowed one could not.
         emit(
             self, "spell_cast", subject=card, caster_index=caster_index,
-            cast_card=card,
+            cast_card=card, event_subject_player=caster_index,
         )
         # The zone rides along so "…from anywhere other than their hand"
         # (Ghostly Pilferer) has something to test. Every cast announces it;

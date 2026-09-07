@@ -366,6 +366,18 @@ _EVENT_SUBJECT_PLAYERS: frozenset[str] = frozenset({
     # the cast froze rather than a target. Read as `target_player` instead, the
     # ability would ask for a choice the card never offers.
     "opponent_casts_spell",
+    # "Whenever a player casts a spell, this enchantment deals 2 damage to
+    # **that player**" (Spellshock). The unnarrowed spelling of the row above:
+    # the same announcement, made for every seat's cast rather than an
+    # opponent's, and the same seat frozen by the same fire site
+    # (`_apply_spell_cast_any_triggers`, which now stamps
+    # ``event_subject_player`` on both of its emits rather than only the
+    # opponent-scoped one). Which seat cast varies per firing and nothing on a
+    # board records it once the spell has resolved, so it cannot be re-derived
+    # — and read as `target_player` instead the ability would ask for a choice
+    # neither card offers, which under a duel is the caster's opponent whether
+    # they cast the spell or not.
+    "spell_cast",
     # "Whenever a player attacks with one or more creatures, destroy all …
     # creatures **that player** controls" (Total War). The declaration names
     # the attacking seat and the declare-attackers step freezes it; under the

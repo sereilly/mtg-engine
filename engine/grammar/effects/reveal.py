@@ -305,6 +305,18 @@ _REVEAL_UNTIL_REST: dict[str, str] = {
     "graveyard": "graveyard",
 }
 
+#: Where the card the run **stopped on** may be printed to go, for the same
+#: reason the rest's fates are a closed list one entry up: each of these is a
+#: branch ``handlers/zones.reveal_until_match`` actually performs, and a
+#: destination outside it refuses the line rather than lowering onto a fate
+#: nobody carries out. Sacred Guide and Hermit Druid print the first; Avenging
+#: Druid prints the second, which is the whole difference between a card that
+#: fills a hand and one that ramps.
+_REVEAL_UNTIL_DESTINATIONS: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("into", "your", "hand"), "hand"),
+    (("onto", "the", "battlefield"), "battlefield"),
+)
+
 
 def _accept_reveal_until_from_top(
     stream: TokenStream,
@@ -348,15 +360,56 @@ def _accept_reveal_until_from_top(
     if not stream.accept_punct("."):
         stream.reset(mark)
         return None
+    # "You may reveal cards from the top of your library until you reveal a
+    # land card. **If you do**, put that card onto the battlefield …"
+    # (Avenging Druid.) The bridge an *optional* printing of this run puts
+    # between its two sentences, consumed here rather than folded by the
+    # "if you do" rider so the run keeps the fusion :class:`ast.RevealUntil`
+    # exists for: "that card" is what the run stopped on and "all other cards
+    # revealed this way" is what it turned over first, and split across a
+    # ``May``'s ``action`` and ``then`` they would be two instructions with two
+    # back-references into a list nothing recorded.
+    #
+    # Reading it here is also what makes the rider *true* rather than
+    # approximated. CR 601.2's offer is the whole procedure, so the branch runs
+    # exactly when the reveal was taken — where a ``then`` would run whenever
+    # the offer was accepted, which is this engine's standing "if you do" gap
+    # (SET_PLAYBOOK.md's Known gaps) and would be indistinguishable here only
+    # by luck.
+    #
+    # Optional, so Sacred Guide's and Hermit Druid's mandatory printings are
+    # untouched; the enclosing "you may" is what supplies the offer, and a
+    # sentence printing the bridge with no offer in front of it is not a
+    # sentence any card prints.
+    if stream.accept_phrase("if", "you", "do"):
+        stream.accept_punct(",")
     # Every word of the destination, for the reason the rider one module over
     # gives about its own: a printing that put the found card somewhere else is
     # a different card and nothing before this sentence shows the difference.
-    if not stream.accept_phrase("put", "that", "card", "into", "your", "hand"):
+    # Which of the two the card printed is read rather than assumed, through
+    # the closed table above — the handler branches on it, and taking the hand
+    # for the battlefield would be a cantrip where the card ramps.
+    if not stream.accept_phrase("put", "that", "card"):
+        stream.reset(mark)
+        return None
+    destination = None
+    for words, zone in _REVEAL_UNTIL_DESTINATIONS:
+        if stream.accept_phrase(*words):
+            destination = zone
+            break
+    if destination is None:
         stream.reset(mark)
         return None
     if not stream.accept_word("and"):
         stream.reset(mark)
         return None
+    # "…and **put** all other cards revealed this way into your graveyard."
+    # (Avenging Druid.) A third printed word order beside the two below: the
+    # verb is repeated rather than elided (Hermit Druid) or replaced by a
+    # different one (Sacred Guide's "exile"). Accepted here, ahead of both, so
+    # neither of them has to know about it — and non-consuming for every other
+    # printing, since "exile" and "all" are not the word.
+    stream.accept_word("put")
     # **Two printed word orders for one sentence.** Sacred Guide puts a verb in
     # front of the rest ("and *exile* all other cards revealed this way");
     # Hermit Druid elides it and names a destination instead ("and all other
@@ -379,7 +432,7 @@ def _accept_reveal_until_from_top(
             return None
         stream.advance()
         return ast.RevealUntil(
-            "you", filt, destination="hand",
+            "you", filt, destination=destination,
             rest=_REVEAL_UNTIL_REST[rest_zone],
         )
     rest = stream.peek_word()
@@ -393,7 +446,7 @@ def _accept_reveal_until_from_top(
         stream.reset(mark)
         return None
     return ast.RevealUntil(
-        "you", filt, destination="hand", rest=_REVEAL_UNTIL_REST[rest],
+        "you", filt, destination=destination, rest=_REVEAL_UNTIL_REST[rest],
     )
 
 

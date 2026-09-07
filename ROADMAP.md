@@ -1094,6 +1094,89 @@ brief with the instruction to expect its own split — `effects/stack.py` and
 to W1G2. `effects/mana.py` at 12 under has no owner and is this wave's control,
 the way Weatherlight's wave 1 kept one.
 
+### Wave 1, W1G2 — triggers on what a player does (9 of 10)
+
+**91 → 100 supported.** Landed: Spellshock, Mana Breach, Predatory Hunger,
+Carnophage, Zealots en-Dal, City of Traitors, Avenging Druid, Manabond, Fade
+Away. Declined: Pandemonium, as five named parts. `oracle_diff` moved **9 of
+3,109** — exactly the nine — and no dataclass gained a field, so the raw number
+is the filtered one. Hollow lines 0, `parse_coverage --set EXO` 0 unclaimed,
+`picker_sweep --set EXO` unchanged at one finding (Theft of Dreams, not this
+group's). **No hook added, and none removed.**
+
+What the round actually bought, card by card, is smaller than the census made it
+look — six of the nine were one row or one word:
+
+* **`spell_cast` froze no seat.** Its sibling `opponent_casts_spell` did, from
+  the same fire site and two lines apart, so "whenever **a player** casts a
+  spell … **that player**" refused where "whenever an opponent casts" worked.
+  One `emit` keyword and one row in `_EVENT_SUBJECT_PLAYERS` — Spellshock, and
+  the seat Mana Breach then chooses from.
+* **The chosen bounce already existed** (Shrieking Drake, Bull Elephant, the
+  Karoo lands): "return a <noun> you control to its owner's hand" lowers to a
+  `choose_permanents` + `return_recorded_permanents_to_hand` pair. Mana Breach
+  is that branch with the seat named by the event instead of by the word "you",
+  and `chooser: "event_subject_player"` was already a value the handler read.
+* **`engine/auras.py` names its dispatchers by hand**, and the cast trigger had
+  no row. Predatory Hunger parsed and lowered cleanly to
+  `add_pt_counters_to_attached` before this round; the whole card was one entry
+  in `aura_compiled_trigger_claim`.
+* **The trailing toll could not read a life price.** `_accept_price_action`
+  charges a discard, a mill, a sacrifice, a counter and a card put back, and
+  `_accept_trailing_toll` charges mana — so "sacrifice this unless you pay 1
+  life" parsed (the board family has its own copy of the branch) and "**tap**
+  this unless you pay 1 life" did not. One branch in the price list, through
+  `prices._parse_pay_life` so all three readers of the phrase stay one.
+* **"All X you control are white" is a count.** Zealots en-Dal's
+  intervening-if is `Controls(you, <X with exclude_colors=(W,)>, == 0)` — the
+  clause the engine has evaluated since Alpha, vacuous truth included. The
+  rewrite is in the parse, for the reason "unless" is read as a `May`.
+* **City of Traitors was one word.** "When you play a land, sacrifice this
+  land" already compiled and fired; "another" needed an optional group on the
+  regex, a phrase in `trigger_tables`, `played_permanent_id` on the emit and
+  four lines in `_land_played_filter`. The id rather than the card, because a
+  deck repeats one `CardDefinition` per copy — a second City would otherwise
+  read as the first and be spared.
+
+Three were real machinery:
+
+* **Avenging Druid** reuses Sacred Guide's reveal-until whole. What it needed
+  was the *destination* read off the card rather than fixed at "your hand", and
+  the "**If you do**," bridge consumed **inside** the run production — which
+  keeps `ast.RevealUntil`'s fusion and makes the rider exactly true, rather than
+  approximately true through `may`'s `then`.
+* **Manabond** took four pieces: the bare imperative "reveal your hand" (the
+  line failed on the literal "the" four words short of `_parse_reveal_hand`),
+  the conjunction that production's docstring already promised, `reveal_hand`
+  admitting "you" (its refusal read "the revealer already sees it", which is
+  true of the revealer and of nobody else at the table), and an "all" sweep
+  beside the from-hand "up to N".
+* **Fade Away** was one missing marker. `statement_dispatch` lowers the four
+  "this way" loops with `LOOP_BOUND_OBJECT` and the **board-scan** loop without
+  it, though `handlers/control_flow.for_each` binds `iteration_target` on the
+  same `run_one` for both — so "its controller" inside "for each creature"
+  refused for want of a producer that cannot exist in a loop.
+  `_offered_seats("controller")` and `bound_permanent` already resolved the
+  seat; the sacrifice handler needed the same row.
+
+**Cap crossed: `effects/cards.py`.** Manabond's template took it past 1,000, and
+the split reuses a name the *lowering* side has carried since Alliances:
+`effects/permissions.py` (CR 601.3, "you may cast/play from …"). The line inside
+`cards` is the CR's own — every other production there moves a card, and a
+permission moves nothing — and the call graph had already fallen apart along it.
+986 → 737 and 282, both definitions byte-identical, 0 cards moved by the split.
+
+**Pandemonium, declined as five parts** (in
+`tests/sets/test_exo_enchantments.py`, asserted still-unsupported so the day
+they land it fails loudly): a parse for "any target **of their choice**"; a
+**chooser** on a target, which nothing models (CR 603.3d gives the choice to the
+ability's controller and the card gives it to somebody else); a bite whose
+**biter** is the entering permanent, where `lowering/_bites.py` has four dealers
+and none of them is the object an event froze; `handlers/damage` reading that
+biter, where `payload["biter"]` has exactly one value today; and that handler
+biting a **player**, which it cannot — it resolves its victim through
+`resolve_target_permanent` and "any target" (CR 115.4) includes players.
+
 ## Stronghold (STH) — shipped (143/143, manifest index 18)
 
 **Ingest census: 97/143 supported (67.8%), 142 of 143 cards new to the pool.**
