@@ -1,8 +1,10 @@
-"""The battlefield: destruction, bouncing, control, sacrifice.
+"""The battlefield: destruction, bouncing, sacrifice.
 
 Destroy, sacrifice (both the plain effect and the fused pay-or-sacrifice),
-exile, control changes, regeneration and return-to-zone. Tapping and the
-untap restrictions are `tapping`, since Weatherlight's Phase 0.
+exile, regeneration and return-to-zone. Tapping and the untap restrictions are
+`tapping`, since Weatherlight's Phase 0; **who controls a permanent** is
+`control_changes`, since Exodus's second wave — this module answers what
+happens *to* a permanent, that one answers whose it is.
 
 Two of these keep a rider that looks droppable and is not: `Destroy.delay` (a
 delayed triggered ability, CR 603.7 — not this effect with a flag) and
@@ -130,8 +132,6 @@ class Exile:
     actor: PlayerRef | None = None
 
 
-
-
 @dataclass(frozen=True)
 class PutSourceIntoZone:
     """``Put it into your graveyard.`` (All Hallow's Eve, from exile.)
@@ -177,97 +177,6 @@ class ExileUntilLeavesOrUntaps:
 
 
 @dataclass(frozen=True)
-class GainControl:
-    """``Gain control of <subject> for as long as <duration>.`` (CR 613 layer 2.)
-
-    *duration* is what ends the control change, and it is required rather than
-    defaulting to "permanently": an untimed steal (Control Magic) and a linked
-    one (Aladdin) revert under completely different circumstances, and a
-    production that let the clause be absent would also let it be *deleted*
-    with no change to what was lowered.
-
-    The untimed steal now has a *name* — ``"indefinite"`` (CR 611.2a: an effect
-    with no stated duration lasts until the game ends) — rather than a missing
-    value, and that is the whole of why the field stayed required. ``None``
-    would have been the deleted-clause value the paragraph above warns about;
-    a word the production has to write cannot be produced by dropping a clause.
-
-    *tap_when_lost* is the trailing sentence "When you lose control of the
-    creature, tap it." (Ray of Command, Magus of the Unseen) — CR 603.7's
-    delayed trigger, folded onto the change it watches rather than parsed as a
-    step of its own, because on its own the sentence names no object at all.
-
-    *gained_by* is who ends up controlling it, when that is **not** the effect's
-    own controller: "an opponent may gain control of a creature you control of
-    their choice" (Infernal Denizen). The field is what gives "their choice" an
-    antecedent — "their" is the sentence's printed subject, and a node that did
-    not carry the subject would have to guess which seat picks. Absent means the
-    ordinary reading, the resolving object's controller (CR 109.5).
-
-    *offered* is the "may" in front of that verb, folded onto this node rather
-    than left as an enclosing :class:`May`. The offer and the pick are one
-    decision made by one seat — the seat named by *gained_by*, which is also the
-    seat *their_choice* names — so they are one prompt, declinable. Wrapped in a
-    ``May`` instead they would be two prompts to the same player whose two
-    answers could disagree, and whose two non-interactive defaults would have to
-    be kept in step.
-    """
-
-    subject: Recipient
-    duration: str
-    tap_when_lost: bool = False
-    #: Who gains control, when the sentence names them ("**target opponent**
-    #: gains control of this creature", Chaos Lord; "**an opponent** may gain
-    #: control of a creature you control of their choice", Infernal Denizen).
-    #: ``None`` is the ability's own controller, which is what every other
-    #: "gain control of …" spelling means and what every reader written before
-    #: this field assumed — so the default keeps them exactly as they were.
-    #:
-    #: A field rather than a second node because the two sentences differ in one
-    #: word: everything else about a control change — the timestamp, the
-    #: contribution, what ends it — is the same rule whoever the seat is.
-    #:
-    #: Two parallel branches added this field in the same wave under two names
-    #: (``gained_by`` and ``gainer``) for two cards. One fact, one field.
-    gained_by: "PlayerRef | None" = None
-    #: Whether the seat above may decline it ("**may** gain control").
-    offered: bool = False
-
-
-@dataclass(frozen=True)
-class BidLifeForControl:
-    """``Each player may bid life for control of <subject>.`` (CR 613 layer 2.)
-
-    Illicit Auction's whole printed paragraph, read as one node because the four
-    sentences after the first are the *procedure* rather than four effects: they
-    say who bids first, in what order the offer goes round, when it stops and
-    what the winner pays. Split into a :class:`Sequence` they would each have to
-    be an effect nothing can perform alone — "the bidding ends if the high bid
-    stands" describes no board change at all.
-
-    ``starting_bid`` is the number the printed second sentence names ("You start
-    the bidding with a bid of 0"), carried as data for the reason every other
-    printed number in this AST is: a card opening the bidding at 3 is this
-    sentence with one word changed.
-
-    The auction's *winner* takes the permanent indefinitely (CR 611.2a — the
-    printed "(This effect lasts indefinitely.)" is that default said out loud),
-    so there is no duration field to get wrong: unlike :class:`GainControl`,
-    this sentence has exactly one ending and it is "never".
-    """
-
-    #: Who may bid — the offer's own printed subject ("**Each player** may
-    #: bid…"). Carried rather than assumed, because the sentence prints it and
-    #: a card offering the auction to a narrower set of seats ("each opponent")
-    #: would be a different auction with the same procedure. The lowering
-    #: refuses the sets no round-robin here can walk, so the word cannot be
-    #: read and then dropped.
-    bidders: Recipient
-    subject: Recipient
-    starting_bid: int = 0
-
-
-@dataclass(frozen=True)
 class Attach:
     """``Attach <subject> to <host>`` — the keyword action of CR 701.3.
 
@@ -281,36 +190,6 @@ class Attach:
 
     subject: Recipient
     host: Recipient
-
-
-@dataclass(frozen=True)
-class ExchangeControl:
-    """``Exchange control of <first> and <second>.`` (CR 701.12b — Gauntlets of
-    Chaos.)
-
-    One node for both halves rather than two control changes in a
-    :class:`Sequence`, for the reason CR 701.12a states: an exchange is atomic,
-    so if either half cannot be completed *no part of it happens*. Written as
-    two steps the first would apply and the second would not, which hands one
-    player a permanent for nothing.
-
-    ``shares_a_type`` is the printed "…that shares one of those types with it".
-    It is a relation *between the two slots*, not a property of either
-    permanent, so it rides here beside them exactly as the two-target pump's
-    ``distinct`` does — an :class:`ObjectFilter` has nothing to compare against
-    and would have to drop it.
-
-    ``destroy_attached_auras`` is the trailing "If those permanents are
-    exchanged this way, destroy all Auras attached to them." A rider on this
-    node rather than a following statement, because "exchanged **this way**" is
-    a question only the exchange can answer: on its own the sentence names no
-    permanents at all.
-    """
-
-    first: Recipient
-    second: Recipient
-    shares_a_type: bool = False
-    destroy_attached_auras: bool = False
 
 
 @dataclass(frozen=True)
@@ -329,62 +208,6 @@ class PayOrSacrificeGreatestManaValue:
     """
 
     card_type: str
-
-
-@dataclass(frozen=True)
-class ExchangeGreatestManaValue:
-    """``You and target player exchange control of the <type> you each control
-    with the greatest mana value. Then exchange control of <type>s the same
-    way. If two or more permanents a player controls are tied for greatest,
-    their controller chooses one of them.`` (Juxtapose.)
-
-    A whole paragraph as one node, for the reason `paragraphs.py` states: "the
-    same way" names an exchange the sentence before it described, and the
-    tie-break sentence names permanents no sentence of its own has chosen. Read
-    apart, the second sentence exchanges nothing and the third is about nobody.
-
-    ``card_types`` is the printed list in printed order, so a card exchanging
-    lands or enchantments the same way is this node with different words. Each
-    exchange is separate and atomic (CR 701.12a): a player controlling no
-    permanent of one type simply exchanges nothing *of that type*, and the
-    other types still happen.
-    """
-
-    card_types: tuple[str, ...]
-
-
-@dataclass(frozen=True)
-class MutualControlOfSets:
-    """``You and <player> each gain control of all <noun> the other controls
-    <duration>.`` (Reins of Power.)
-
-    Two seats, one printed noun phrase, and a **reciprocal** reference: "the
-    other" names whichever member of the pair this half is not. That
-    reciprocity is what the node *is*, which is why there is no
-    :class:`PlayerRef` kind for the words — a seat reference answers "which
-    seat", and "the other" has no answer until you say which half is asking.
-    One node rather than two :class:`GainControl` steps under a
-    :class:`Conjunction` for the reason :class:`SimultaneousUntapAndTap` is
-    one: CR 611.2c fixes both sets when the effect begins, where in sequence
-    the second step would read a board the first had already changed and hand
-    straight back what it had just taken.
-
-    **Not** CR 701.12's exchange (:class:`ExchangeControl`) despite swapping two
-    sets: the printed verb is "each gain control of", so these are two ordinary
-    control-changing effects at once rather than one atomic exchange. A
-    permanent that can't change controllers (CR 614.17) stays where it is while
-    the rest move, where half an exchange would have to be no exchange at all.
-
-    ``filter`` is the printed noun both halves share, so a card printed about
-    artifacts is this node with one word changed. ``duration`` is the printed
-    ending, spelled as :class:`GainControl` spells its own and required for that
-    field's reason — a word the production has to write cannot be produced by
-    dropping a clause.
-    """
-
-    other: PlayerRef
-    filter: ObjectFilter
-    duration: str
 
 
 @dataclass(frozen=True)
@@ -925,10 +748,6 @@ class ShuffleLibrary:
     whose: PlayerRef
 
 
-
-
-
-
 @dataclass(frozen=True)
 class DelayedSelfAction:
     """``Destroy this artifact at the beginning of the next end step.`` (Rocket
@@ -975,3 +794,49 @@ class RebalanceLands:
     them were the answer, and it would be a coin-toss which.
     """
     keep: int
+
+
+@dataclass(frozen=True)
+class KeepSlot:
+    """One of the keeps a :class:`KeepChosenSacrificeRest` offers: how many
+    permanents may fill it and what they must be.
+
+    A count and a filter rather than *n* copies of the filter, because the count
+    is what the card prints — "chooses **five** lands" is one slot with a number
+    on it, and five identical slots would be five sentences the card does not
+    have. The lowering expands it; the parse keeps the printed shape.
+    """
+    count: int
+    filter: ObjectFilter
+
+
+@dataclass(frozen=True)
+class KeepChosenSacrificeRest:
+    """``<player> chooses <slots> from among <pool>, then sacrifices the rest.``
+    (Cataclysm; Limited Resources' entry trigger.)
+
+    One node for the whole sentence, for :class:`RebalanceLands`' reason one
+    class up: **"the rest" names a complement only the first half describes.**
+    Read as two statements the sacrifice would have no set to take a complement
+    of, and the choice would have nobody reading it — which is also why the
+    choosing is not a :class:`ChoosePermanent` here. That node records a pick
+    for a *later* step to name; this sentence has no later step, so the record
+    would be a channel with one writer and no reader.
+
+    ``pool`` is what the sacrifice ranges over, and it is the same set the
+    choice is made from: Cataclysm prints it outright ("from among the
+    permanents they control"), Limited Resources leaves it as the slot's own
+    noun ("five **lands** they control"), and the production fills it in either
+    way so the lowering has one shape to read.
+
+    ``slots`` is the printed list of keeps in printed order. Cataclysm's four
+    one-each slots and Limited Resources' single five-slot are the same node
+    with different payload — the difference between the two cards is data, not
+    a second kind — and one permanent can fill at most one slot, which is what
+    makes an artifact creature a choice rather than two free keeps (CR 608.2d:
+    a player can't choose an option that's illegal, and a permanent already
+    chosen is not available again).
+    """
+    chooser: PlayerRef
+    pool: ObjectFilter
+    slots: tuple[KeepSlot, ...]

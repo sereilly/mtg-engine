@@ -907,3 +907,148 @@ def test_w1g4_paroxysm_reads_the_enchanted_players_library(set_pool, top_card, s
     assert game.is_on_battlefield(bear) is survives
     if survives:
         assert (bear.effective_power, bear.effective_toughness) == (5, 5)
+
+
+# --- W2G1: Limited Resources — a keep on entry, and a ban with a board count ---
+
+import pytest as _w2g1e_pytest  # noqa: E402
+from engine import Game as _W2G1E_Game, PlayerState as _W2G1E_PlayerState  # noqa: E402
+from engine.models import Permanent as _W2G1E_Permanent  # noqa: E402
+from tests.helpers import resolve_stack as _w2g1e_drain  # noqa: E402
+
+
+def _w2g1e_game(set_pool, mine, theirs, hand=(), interactive=()):
+    """Both seats' boards spelled out by name, with the named EXO cards in seat
+    0's hand. Names resolve out of EXO first and LEA second, so a test can put
+    Limited Resources and a pile of Forests on the same board."""
+    pool = set_pool("EXO")
+    lea = set_pool("LEA")
+
+    def _perms(names):
+        return [_W2G1E_Permanent(card=(pool.get(n) or lea[n])) for n in names]
+
+    game = _W2G1E_Game(players=[
+        _W2G1E_PlayerState(
+            name="P1", hand=[pool[n] for n in hand], battlefield=_perms(mine),
+        ),
+        _W2G1E_PlayerState(name="P2", battlefield=_perms(theirs)),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    return game
+
+
+def _w2g1e_lands(game, seat):
+    return sum(1 for perm in game.controlled_by(seat) if perm.has_type("land"))
+
+
+def test_limited_resources_entry_trigger_cuts_every_seat_to_five_lands(set_pool):
+    """"When this enchantment enters, each player chooses five lands they
+    control and sacrifices the rest."
+
+    Every seat, and only down: a player already on three keeps all three, which
+    is the half a difference-taking implementation gets wrong in the direction
+    of doing something to a player the sentence leaves alone.
+    """
+    game = _w2g1e_game(
+        set_pool, mine=["Forest"] * 8, theirs=["Island"] * 3,
+        hand=["Limited Resources"],
+    )
+
+    assert game.cast_from_hand(0, "Limited Resources").supported
+    _w2g1e_drain(game)
+    game.auto_resolve_pending_choices()
+    game._settle()
+
+    assert (_w2g1e_lands(game, 0), _w2g1e_lands(game, 1)) == (5, 3), game.log
+
+
+def test_limited_resources_takes_only_lands(set_pool):
+    """The pool is the printed noun phrase: "five **lands** they control".
+
+    The complement is the rest of that pool and not the rest of the board, so a
+    seat's Moxen and bears are untouched however many lands it loses — which is
+    the difference between this card and Cataclysm and is payload rather than a
+    second kind.
+    """
+    game = _w2g1e_game(
+        set_pool,
+        mine=["Forest"] * 7 + ["Black Lotus", "Grizzly Bears"],
+        theirs=[], hand=["Limited Resources"],
+    )
+
+    assert game.cast_from_hand(0, "Limited Resources").supported
+    _w2g1e_drain(game)
+    game.auto_resolve_pending_choices()
+    game._settle()
+
+    survivors = sorted(perm.card.name for perm in game.controlled_by(0))
+    assert survivors == [
+        "Black Lotus", "Forest", "Forest", "Forest", "Forest", "Forest",
+        "Grizzly Bears", "Limited Resources",
+    ], game.log
+
+
+@_w2g1e_pytest.mark.parametrize("islands, banned", [(4, False), (5, True), (6, True)])
+def test_limited_resources_bans_land_plays_only_at_ten_lands(set_pool, islands, banned):
+    """"Players can't play lands as long as ten or more lands are on the
+    battlefield."
+
+    The count is over **every** battlefield, because the sentence says "on the
+    battlefield" and names no seat — so the five lands seat 0 controls and the
+    Islands seat 1 controls are one number. Nine is under the line and the game
+    carries on; ten is the line and the word is "or more".
+    """
+    game = _w2g1e_game(
+        set_pool, mine=["Forest"] * 5 + ["Limited Resources"],
+        theirs=["Island"] * islands,
+    )
+
+    assert (game._land_play_refusal(0) is not None) is banned, game.log
+    # And it reaches every seat, not just the enchantment's controller.
+    assert (game._land_play_refusal(1) is not None) is banned
+
+
+def test_limited_resources_ban_lifts_when_the_board_falls_back_under(set_pool):
+    """The condition is read off the board at each ask rather than latched.
+
+    A ban that stayed on once it had been on would be a strictly different card:
+    "as long as" is a continuous condition (CR 613), so a land leaving the
+    battlefield gives the permission back.
+    """
+    game = _w2g1e_game(
+        set_pool, mine=["Forest"] * 5 + ["Limited Resources"],
+        theirs=["Island"] * 5,
+    )
+    assert game._land_play_refusal(0) is not None
+
+    doomed = next(iter(game.controlled_by(1)))
+    game.remove_from_battlefield(doomed)
+
+    assert game._land_play_refusal(0) is None
+
+
+def test_a_land_ban_whose_condition_counts_a_noun_the_engine_cannot_test_is_refused():
+    """A restriction is only done when something enforces it.
+
+    "As long as three or more Zombies are on the battlefield" matches the same
+    printed shape and names a *subtype*, which this table counts nothing by — so
+    the claim and the enforcement both decline. Admitting it would ban land
+    plays a card never banned: silent, and against the player.
+    """
+    from engine.land_play_allowance import land_play_line, land_play_prohibition
+
+    unconditional = "Players can't play lands"
+    conditional = (
+        "Players can't play lands as long as ten or more lands are on the battlefield"
+    )
+    uncountable = (
+        "Players can't play lands as long as three or more Zombies are on the battlefield"
+    )
+
+    assert land_play_line(unconditional) == "prohibition"
+    assert land_play_line(conditional) == "prohibition"
+    assert land_play_line(uncountable) is None
+    assert land_play_prohibition(uncountable) is None
+    assert land_play_prohibition(conditional).at_least == 10
+    assert land_play_prohibition(conditional).card_type == "land"

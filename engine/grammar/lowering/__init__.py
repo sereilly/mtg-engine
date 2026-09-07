@@ -223,10 +223,10 @@ from .board import (
     _lower_put_on_library_bottom,
     _lower_put_graveyard_top_on_library_bottom,
     _lower_delayed_self_action,
-    _lower_exchange_greatest_mana_value,
     _lower_pay_or_sacrifice_greatest_mana_value,
     _lower_regenerate,
     _lower_rebalance_lands,
+    _lower_keep_chosen_sacrifice_rest,
     _lower_sacrifice_unless_pay,
     _lower_destroy_unless_pay,
     _lower_destroy_each_unless_paid,
@@ -242,6 +242,7 @@ from .destruction import (
 from .control_changes import (
     _lower_bid_life_for_control,
     _lower_exchange_control,
+    _lower_exchange_greatest_mana_value,
     _lower_gain_control,
     _lower_mutual_control_of_sets,
 )
@@ -538,6 +539,7 @@ __all__ = [
     "_lower_regenerate",
     "_lower_destroy_unless_pay",
     "_lower_rebalance_lands",
+    "_lower_keep_chosen_sacrifice_rest",
     "_lower_sacrifice_unless_pay",
     "_lower_bid_life_for_control",
     "_lower_gain_control",

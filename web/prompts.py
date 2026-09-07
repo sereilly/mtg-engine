@@ -1976,6 +1976,52 @@ def _permanent_set_choice(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("keep_permanents")
+def _keep_permanents(ctx: PromptContext, choices: list) -> dict:
+    """Cataclysm and Limited Resources: which of this seat's own permanents
+    survive, chosen as the effect resolves.
+
+    The candidate list is re-derived through the engine's own pool rule rather
+    than frozen when the prompt was armed, which is what the two permanent
+    pickers beside it do and for their reason: the answer is checked against
+    that same rule, so the list offered and the list accepted cannot disagree.
+
+    ``keep_count`` is sent because the client cannot derive it. How many a seat
+    may keep is the size of a maximum matching between their permanents and the
+    printed slots (CR 609.3), which is a number only the engine can compute -
+    two artifact creatures fill an artifact slot and a creature slot at once,
+    where two plain artifacts fill one. ``slots`` rides along so the modal can
+    say what the keeps *are*; it is a label, and nothing is decided from it.
+    """
+    choice = choices[0]
+    live = ctx.game.keep_choice_candidates(
+        choice.player_index, choice.data.get("pool") or {}
+    )
+    slot_filters = ctx.game._keep_slot_filters(choice.data.get("slots"))
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("reason", ""),
+        "keep_count": len(ctx.game._match_keeps(live, slot_filters)),
+        "slots": [
+            {
+                "count": int(slot.get("count", 0)),
+                "type": str((slot.get("filter") or {}).get("type_filter", "permanent")),
+            }
+            for slot in (choice.data.get("slots") or ())
+        ],
+        "candidates": [
+            {
+                "seat": choice.player_index,
+                "index": index,
+                "id": ctx.game.permanent_id_of(perm),
+                "name": perm.card.name,
+            }
+            for index, perm in enumerate(ctx.game.players[choice.player_index].battlefield)
+            if any(perm is candidate for candidate in live)
+        ],
+    }
+
+
 @prompt_renderer("least_power_choice")
 def _least_power_choice(ctx: PromptContext, choices: list) -> dict:
     data = choices[0].data

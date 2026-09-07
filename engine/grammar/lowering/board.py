@@ -1,11 +1,13 @@
-"""Lowering board changes: bouncing, regeneration, sacrifice, phasing, control.
+"""Lowering board changes: bouncing, regeneration, sacrifice, phasing.
 
-Regeneration, sacrifice (as an effect and as a toll), phasing out, exchanging
-control, and putting a permanent back on the bottom of a library.
+Regeneration, sacrifice (as an effect, as a toll, and as the complement of a
+keep), phasing out, and putting a permanent back on the bottom of a library.
 
 Destruction left for ``destruction`` at the thousand-line guard; tapping left
-for ``tapping`` one round earlier. What stays is what the CR calls something
-else.
+for ``tapping`` one round earlier; Juxtapose's exchange left for
+``control_changes`` at Exodus's second wave, the round its AST node moved to
+``ast/control_changes.py`` — so the mirror re-formed on all three sides rather
+than forking. What stays is what the CR calls something else.
 
 **The "… unless <someone> pays" productions are all here**, which is the one
 place that split cut a production family in half rather than along it. All
@@ -641,55 +643,6 @@ def _lower_pay_or_sacrifice_greatest_mana_value(
     )
 
 
-def _lower_exchange_greatest_mana_value(
-    node: ast.ExchangeGreatestManaValue,
-) -> tuple[OracleInstruction, ...]:
-    """Juxtapose's paragraph → a ``sequence`` of ordinary instructions.
-
-    Three steps per printed type, and none of them is new machinery: each side
-    of the exchange is a ``choose_permanent`` narrowed to "the <type> that seat
-    controls with the greatest mana value", and the exchange itself reads the
-    two ids those steps recorded. Writing it as one fused kind would have hidden
-    the tie-break sentence inside a handler; written this way the sentence *is*
-    the prompt, and ``only_on_tie`` is the printed condition under which it is
-    asked — with one candidate there is nothing to choose and no prompt is made.
-
-    The two seats are the spell's controller and its chosen player, which is why
-    the second choice's ``chooser`` is ``target``: CR 701.12 leaves the pick to
-    each permanent's own controller, and the card says so.
-    """
-    steps: list[OracleInstruction] = []
-    for card_type in node.card_types:
-        keys = []
-        for side, chooser in (("you", "you"), ("target", "target")):
-            key = f"exchanged_{card_type}_{side}"
-            keys.append(key)
-            steps.append(
-                OracleInstruction(
-                    "choose_permanent", "",
-                    {
-                        "result_key": key,
-                        "filter": {"type_filter": card_type},
-                        "controlled_by": chooser,
-                        "greatest_mana_value": True,
-                        "only_on_tie": True,
-                        "chooser": chooser,
-                        "prompt": (
-                            f"Choose which {card_type} with the greatest mana "
-                            "value to exchange."
-                        ),
-                    },
-                )
-            )
-        steps.append(
-            OracleInstruction(
-                "exchange_control_of_bound", "",
-                {"first_from": keys[0], "second_from": keys[1]},
-            )
-        )
-    return (OracleInstruction("sequence", "", {"steps": tuple(steps)}),)
-
-
 def _lower_exile_one_of_chosen(
     node: "ast.Exile", subject, produced: frozenset[str]
 ) -> tuple[OracleInstruction, ...] | None:
@@ -932,3 +885,98 @@ def _lower_rebalance_lands(node: "ast.RebalanceLands") -> tuple[OracleInstructio
         # the loud failure rather than a handler improvising.
         raise LoweringError("a land rebalancing keeps at least one land", node=node)
     return (OracleInstruction("rebalance_lands", "", {"keep": node.keep}),)
+
+
+#: Which seat the keep-and-sacrifice prompt is armed for, spelled as the
+#: handler's ``who`` vocabulary. Absent means the effect's own controller,
+#: which is what a bare imperative means (CR 109.5), and every other seat
+#: refuses: a sacrifice armed for the wrong player is a card that takes
+#: somebody else's board apart, which is the direction this repo does not guess
+#: in. Deliberately shorter than ``sacrifice_matching_permanent``'s list — the
+#: seats left out (``that_player``, the two targeted ones, the frozen-event
+#: ones) are all *one* seat, and a sentence that keeps a set and sacrifices its
+#: complement for one seat is a card nobody has printed.
+_KEEP_SACRIFICE_SEATS = {
+    "you": None,
+    "each_player": "each_player",
+    "each_opponent": "each_opponent",
+}
+
+
+def _keep_pool_filter(
+    described: "ast.ObjectFilter", node: "ast.KeepChosenSacrificeRest"
+) -> dict:
+    """One printed noun phrase — the pool or a keep slot — as a filter payload.
+
+    The possessive comes off **here** rather than inside
+    ``_forced_sacrifice_filter``, and that is a real ordering rather than a
+    preference. That helper asks "does this phrase name a set?" *before* it
+    strips the controller, so a bare "the permanents they control" — which
+    names no card type, no subtype and no colour — is refused for carrying a
+    ``controller`` key it would have dropped one line later. Moving the strip
+    inside it would admit every other card printing that shape and move their
+    compiled programs, so the phrase is reduced on the way in instead.
+
+    CR 701.21a is why dropping it is reading the phrase rather than losing part
+    of it: a player can only sacrifice a permanent they control, and this
+    prompt offers exactly the choosing seat's own board. Any *other* possessive
+    names a third seat, which is a narrowing nothing here can honour.
+    """
+    if described.controller is not None:
+        if described.controller not in ("you", "that_player"):
+            raise LoweringError(
+                f"a keep-and-sacrifice cannot be scoped to {described.controller!r}",
+                node=node,
+            )
+        described = dataclasses.replace(described, controller=None)
+    payload = _forced_sacrifice_filter(described)
+    if payload is None:
+        raise LoweringError(
+            "the keeps cannot test what this noun phrase says", node=node
+        )
+    return payload
+
+
+def _lower_keep_chosen_sacrifice_rest(
+    node: "ast.KeepChosenSacrificeRest",
+) -> tuple[OracleInstruction, ...]:
+    """Cataclysm's whole sentence, and Limited Resources' entry trigger, as one
+    instruction.
+
+    One instruction rather than a choice followed by a sacrifice, because the
+    two halves are one decision: what "the rest" means is fixed by the answer,
+    so a sacrifice written as a separate step would have to read the choice back
+    out of a scratchpad channel that has exactly one writer and one reader. The
+    handler arms one prompt per seat and the prompt's *resolver* performs the
+    complement, which is also what keeps CR 608.2's "nothing runs past an
+    unanswered prompt" true for every seat at once.
+
+    The pool and the slots are separate payload keys and both are required. A
+    slot list alone cannot say what the complement is — Cataclysm's four keeps
+    describe artifacts, creatures, enchantments and lands and its complement is
+    *every* permanent — and a pool alone cannot say what may be kept.
+    """
+    if node.chooser.kind not in _KEEP_SACRIFICE_SEATS:
+        raise LoweringError(
+            f"no prompt asks {node.chooser.kind!r} to keep and sacrifice", node=node
+        )
+    if not node.slots:
+        raise LoweringError("a keep-and-sacrifice keeps something", node=node)
+    slots: list[dict[str, object]] = []
+    for slot in node.slots:
+        if slot.count < 1:
+            # A slot that keeps nothing is not a keep; it would make the
+            # sentence "sacrifice everything" with four nouns printed in front
+            # of it. No card prints it and the refusal is the loud failure.
+            raise LoweringError("a keep slot keeps at least one", node=node)
+        slots.append(
+            {"count": int(slot.count), "filter": _keep_pool_filter(slot.filter, node)}
+        )
+    payload: dict[str, object] = {
+        "pool": _keep_pool_filter(node.pool, node),
+        "slots": slots,
+    }
+    seat = _KEEP_SACRIFICE_SEATS[node.chooser.kind]
+    if seat is not None:
+        payload["who"] = seat
+    return (OracleInstruction("keep_chosen_sacrifice_rest", "", payload),)

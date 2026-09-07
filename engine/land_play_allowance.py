@@ -33,6 +33,7 @@ import re
 from dataclasses import dataclass
 from functools import lru_cache
 
+from .grammar.vocabulary import CARD_TYPES
 from .oracle_types import _NUMBER_WORDS
 
 _COUNT_WORD = "|".join(sorted(_NUMBER_WORDS, key=len, reverse=True))
@@ -83,7 +84,31 @@ _ANY_NUMBER = re.compile(r"^you may play any number of lands on each of your tur
 # because it is about a land arriving from anywhere rather than about the action
 # of playing one. A card printing only this line still lets a reanimated land
 # through, which is what it says.
-_NO_LAND_PLAYS = re.compile(r"^players can't play lands$")
+_NO_LAND_PLAYS = re.compile(
+    rf"^players can't play lands"
+    rf"(?: as long as (?P<count>\d+|{_COUNT_WORD}) or more "
+    rf"(?P<noun>[a-z]+) are on the battlefield)?$"
+)
+
+
+@dataclass(frozen=True)
+class LandPlayProhibition:
+    """CR 305.1's permission withdrawn by one permanent's printed line.
+
+    ``at_least`` and ``card_type`` are the printed condition — "as long as ten
+    or more lands are on the battlefield" (Limited Resources) — and ``at_least``
+    of 0 is Worms of the Earth's unconditional ban. **A dataclass rather than a
+    bool** because the two are the same sentence with a clause on it, and a
+    reader handed a bool would have had to ask this module a second question to
+    find out whether the clause held: two readings of one prohibition are two
+    chances to disagree, which is the split this whole module exists to prevent.
+
+    The count is over **every** battlefield, because the sentence says "on the
+    battlefield" and names no seat — the same reading the ban itself gets.
+    """
+
+    at_least: int = 0
+    card_type: str = ""
 
 _ADDITIONAL = re.compile(
     rf"^you may play (?:an|(?P<count>{_COUNT_WORD})) additional lands? "
@@ -130,32 +155,86 @@ def land_play_line(normalized_line: str) -> str | None:
         or _ADDITIONAL_EACH_PLAYER.match(line)
     ):
         return "allowance"
-    if _NO_LAND_PLAYS.match(line):
+    prohibited = _NO_LAND_PLAYS.match(line)
+    if prohibited is not None and _prohibition_from(prohibited) is not None:
+        # Through the same reader the gate uses, not through the regex alone: a
+        # condition this module can match but cannot *count* ("as long as three
+        # or more Zombies are on the battlefield") would otherwise be claimed
+        # here and enforced nowhere, which is the gate/dispatch split the
+        # docstring above was written about.
         return "prohibition"
     if _DAMAGE_RIDER.match(line):
         return "damage_rider"
     return None
 
 
-@lru_cache(maxsize=None)
-def lands_cannot_be_played(oracle_text: str) -> bool:
-    """Whether *oracle_text* withdraws CR 305.1's permission to play a land.
+def _prohibition_from(match: "re.Match[str]") -> "LandPlayProhibition | None":
+    """The matched line as a prohibition, or None when its condition names a
+    noun this engine cannot count.
 
-    Read by ``Game._may_play_another_land``, which is the one question every
+    A refusal rather than an unconditional ban: a line saying "as long as ten or
+    more Zombies are on the battlefield" that this read as "players can't play
+    lands" would enforce a prohibition the card never printed, which is the
+    exact direction — wrong, silent, and against the player — that
+    ``activation_restrictions.py`` was written about. Refusing here also keeps
+    ``land_play_line`` honest, so the support gate declines the card rather than
+    admitting it with half its sentence read.
+    """
+    count = match.group("count")
+    if count is None:
+        return LandPlayProhibition()
+    noun = (match.group("noun") or "").rstrip("s")
+    if noun not in CARD_TYPES:
+        return None
+    amount = int(count) if count.isdigit() else _NUMBER_WORDS[count]
+    return LandPlayProhibition(at_least=amount, card_type=noun)
+
+
+@lru_cache(maxsize=None)
+def land_play_prohibition(oracle_text: str) -> "LandPlayProhibition | None":
+    """How *oracle_text* withdraws CR 305.1's permission to play a land, or None.
+
+    Read by ``Game._land_play_refusal``, which is the one question every
     land-drop gate asks — cast validation, the AI's land policy and the web
     layer's playable list — so a prohibition cannot be enforced in one of them
     and not the others. The **support gate reads this same table**
     (``land_play_line`` above), which is what stops a card being admitted with
     its prohibition unenforced: an unenforced "can't" is silent and wrong in the
     player's favour.
+
+    The *condition* is returned rather than evaluated, because this half of the
+    module has no game to evaluate it against — ``prohibition_holds`` below is
+    where the board is read, and keeping the two apart is what lets this stay
+    cached on the immutable text.
     """
     lowered = oracle_text.lower()
     if "play lands" not in lowered:
-        return False
-    return any(
-        _NO_LAND_PLAYS.match(raw_line.strip().rstrip("."))
-        for raw_line in lowered.splitlines()
-    )
+        return None
+    for raw_line in lowered.splitlines():
+        match = _NO_LAND_PLAYS.match(raw_line.strip().rstrip("."))
+        if match is not None:
+            found = _prohibition_from(match)
+            if found is not None:
+                return found
+    return None
+
+
+def prohibition_holds(game, prohibition: LandPlayProhibition) -> bool:
+    """Whether *prohibition*'s printed condition is met right now.
+
+    An unconditional ban always holds (Worms of the Earth). A conditional one
+    counts through the layer accessor rather than the printed type line, for
+    `engine/continuous.py`'s standing reason: Limited Resources counts lands,
+    and an animated land is still a land while a Blood Moon's Mountain is one
+    too — a read of ``card.type_line`` would answer about the card as printed
+    rather than about the permanent on the board.
+    """
+    if prohibition.at_least <= 0:
+        return True
+    return sum(
+        1 for perm in game.all_permanents()
+        if perm.has_type(prohibition.card_type)
+    ) >= prohibition.at_least
 
 
 @lru_cache(maxsize=None)
@@ -277,6 +356,7 @@ def clear_turn_land_play_effects(game) -> None:
 
 __all__ = [
     "LandPlayAllowance",
+    "LandPlayProhibition",
     "clear_turn_land_play_effects",
     "extra_land_plays_this_turn",
     "forbid_land_plays_this_turn",
@@ -284,5 +364,6 @@ __all__ = [
     "land_play_allowance_for",
     "land_play_line",
     "land_plays_forbidden_this_turn",
-    "lands_cannot_be_played",
+    "land_play_prohibition",
+    "prohibition_holds",
 ]

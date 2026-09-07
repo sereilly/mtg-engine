@@ -99,12 +99,7 @@ from .board import (
     ExileUntilLeavesOrUntaps,
     PutSourceIntoZone,
     Attach,
-    BidLifeForControl,
-    ExchangeControl,
-    ExchangeGreatestManaValue,
-    MutualControlOfSets,
     PayOrSacrificeGreatestManaValue,
-    GainControl,
     CantPhaseOut,
     PhaseOut,
     SimultaneousPhasing,
@@ -121,6 +116,14 @@ from .board import (
     DestroyUnlessPay,
     DestroyEachUnlessPaid,
     SacrificeUnlessPay,
+    KeepChosenSacrificeRest,
+)
+from .control_changes import (
+    GainControl,
+    BidLifeForControl,
+    ExchangeControl,
+    ExchangeGreatestManaValue,
+    MutualControlOfSets,
 )
 from .mana import (
     ActivateEachLandsManaAbility,
@@ -275,7 +278,7 @@ Effect = Union[
     TapOrUntap, DoesntUntapNextStep, DoesntUntapWhileSourceTapped,
     SimultaneousUntapAndTap,
     DoesntUntapWhileCounter, UntapChosenByPaying,
-    DelayedSelfAction, RebalanceLands, Attach, ExchangeControl,
+    DelayedSelfAction, RebalanceLands, KeepChosenSacrificeRest, Attach, ExchangeControl,
     ExchangeGreatestManaValue,
     MutualControlOfSets,
     PayOrSacrificeGreatestManaValue,

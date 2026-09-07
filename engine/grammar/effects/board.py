@@ -423,3 +423,104 @@ def parse_simultaneous_phasing(
         stream.reset(mark)
         return None
     return ast.SimultaneousPhasing(returning, leaving)
+
+
+def _accept_keep_slot(stream: TokenStream) -> "ast.KeepSlot | None":
+    """One printed keep — ``an artifact`` / ``five lands they control`` — or
+    None with the cursor untouched.
+
+    The noun phrase is ``parse_counted_subject``, the same reader the sacrifice
+    clause beside it uses: "five lands they control" here and "two Islands"
+    behind an attack cost are one phrase, and one reading is what keeps the
+    keeps and the complement agreeing about what a card asked for.
+    """
+    mark = stream.mark()
+    try:
+        counted = parse_counted_subject(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if counted is None:
+        stream.reset(mark)
+        return None
+    count, described = counted
+    return ast.KeepSlot(count, described)
+
+
+def parse_keep_then_sacrifice_rest(
+    stream: TokenStream, chooser: "ast.PlayerRef"
+) -> "ast.KeepChosenSacrificeRest | None":
+    """``<player> chooses [from among <pool>] <slots>, then sacrifices the
+    rest.`` The subject has been read, so this starts at the verb.
+
+    "Each player chooses from among the permanents they control an artifact, a
+    creature, an enchantment, and a land, then sacrifices the rest." (Cataclysm.)
+    "Each player chooses five lands they control and sacrifices the rest."
+    (Limited Resources.)
+
+    One production for both spellings, and one node, because **"the rest" is a
+    complement and only the first half of the sentence says what of**. Split at
+    the comma the sacrifice would name every permanent on the table and the
+    choice would be a record nothing reads — which is exactly what
+    ``paragraphs._parse_rebalance_lands`` says about the same clause inside
+    Natural Balance, where the words are word-for-word these.
+
+    The pool is the printed "from among …" where the card prints one and the
+    single slot's own noun where it does not, so the lowering has one shape to
+    read. **Several slots with no printed pool refuses**: "chooses an artifact
+    and a creature, then sacrifices the rest" leaves "the rest" naming either
+    the union of the two nouns or the whole battlefield, and a production that
+    picked one would be guessing at a sentence no card prints.
+
+    Refuses without consuming for anything that is not this shape — every other
+    "chooses …" keeps the reading it had — and the tail is required in full: a
+    keep list with no complement behind it is a card that sacrifices nothing
+    while reporting supported.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("chooses", "choose"):
+        return None
+    pool = None
+    if stream.accept_phrase("from", "among"):
+        stream.accept_word("the")
+        try:
+            pool = parse_object_filter(stream)
+        except GrammarError:
+            pool = None
+        if pool is None:
+            stream.reset(mark)
+            return None
+    first = _accept_keep_slot(stream)
+    if first is None:
+        stream.reset(mark)
+        return None
+    slots = [first]
+    while True:
+        loop = stream.mark()
+        stream.accept_punct(",")
+        stream.accept_word("and")
+        following = _accept_keep_slot(stream)
+        if following is None:
+            # The separator belongs to the tail below ("…, **and** a land,
+            # **then** sacrifices…" prints both), so it goes back rather than
+            # being eaten here.
+            stream.reset(loop)
+            break
+        slots.append(following)
+    stream.accept_punct(",")
+    if not stream.accept_word("then", "and"):
+        stream.reset(mark)
+        return None
+    if not (
+        stream.accept_word("sacrifices", "sacrifice")
+        and stream.accept_phrase("the", "rest")
+        and (stream.exhausted or stream.at_punct(".", ";"))
+    ):
+        stream.reset(mark)
+        return None
+    if pool is None:
+        if len(slots) != 1:
+            stream.reset(mark)
+            return None
+        pool = slots[0].filter
+    return ast.KeepChosenSacrificeRest(chooser, pool, tuple(slots))

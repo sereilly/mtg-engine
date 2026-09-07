@@ -99,6 +99,7 @@ from .board import (
     parse_simultaneous_phasing,
     _parse_sacrifice,
     _parse_sacrifice_expansion_permanents,
+    parse_keep_then_sacrifice_rest,
     _parse_delayed_self_action,
     _parse_that_object,
 )
@@ -325,6 +326,7 @@ __all__ = [
     "_parse_put_iterated_card_on_library",
     "parse_put_library_top_into_hand",
     "_parse_sacrifice",
+    "parse_keep_then_sacrifice_rest",
     "_parse_sacrifice_expansion_permanents",
     "_parse_delayed_self_action",
     "_parse_shuffle_graveyard_into_library",
