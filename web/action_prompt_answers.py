@@ -469,6 +469,23 @@ def _action_optional_damage_redirect_confirm(session, req, seat_type):
     if not ok:
         raise HTTPException(status_code=400, detail="invalid damage redirect choice")
 
+@action_handler("draw_becomes_counter_confirm")
+def _action_draw_becomes_counter_confirm(session, req, seat_type):
+    # Pursuit of Knowledge: "you may put a study counter on this enchantment
+    # instead" of drawing.
+    if not any(
+        e["player_index"] == req.seat
+        for e in session.game.pending_draw_becomes_counters
+    ):
+        raise HTTPException(status_code=400, detail="no counter-instead-of-draw choice pending for you")
+    if req.take_the_counter is None:
+        raise HTTPException(status_code=400, detail="take_the_counter (true/false) is required")
+    ok = session.game.confirm_draw_becomes_counter(
+        req.seat, take_the_counter=bool(req.take_the_counter)
+    )
+    if not ok:
+        raise HTTPException(status_code=400, detail="invalid counter-instead-of-draw choice")
+
 @action_handler("resolve_optional_pay")
 def _action_resolve_optional_pay(session, req, seat_type):
     # Color rods (Wooden Sphere, …): "you may pay {1}. If you do, gain life."

@@ -2639,6 +2639,19 @@ class PendingChoicesMixin:
             player_index, 0 if take_the_damage else 1, kind="optional_damage_redirect"
         )
 
+    def confirm_draw_becomes_counter(
+        self, player_index: int, take_the_counter: bool
+    ) -> bool:
+        """Resolve the oldest pending "you may put a counter on this instead of
+        drawing" offer for *player_index* (Pursuit of Knowledge).
+
+        Index 0 is the draw, which is the default a non-interactive seat takes
+        - see the interceptor for why that is the choice a player would make.
+        """
+        return self.resolve_replacement_choice(
+            player_index, 1 if take_the_counter else 0, kind="draw_becomes_counter"
+        )
+
     def confirm_leng_discard(self, player_index: int, to_library: bool) -> bool:
         """Resolve the oldest pending Library of Leng destination choice for
         *player_index*: the discarded card goes on top of their library (the
@@ -9425,6 +9438,25 @@ register_choice(
     # answers could run through one resolver — so nothing is waiting on the
     # answer to carry on. A non-interactive seat takes the stated policy where
     # it stands, exactly as the three offers above do.
+    default_at_arm=True,
+    spectator_visible=True,
+    hidden_for_ai=False,
+)
+
+register_choice(
+    "draw_becomes_counter",
+    resolve=_resolve_replacement,
+    default=_default_replacement,
+    action="draw_becomes_counter_confirm",
+    prompt_key="draw_becomes_counter",
+    blocked_detail=(
+        "choose whether to take the counter instead of the draw (Pursuit of "
+        "Knowledge) before other actions"
+    ),
+    # The draw that armed this was consumed so that both the answer and the
+    # default run through one resolver, and the draw a decline remakes is the
+    # resolver's own business - so nothing is waiting on the answer to carry
+    # on, exactly as for the offers around it.
     default_at_arm=True,
     spectator_visible=True,
     hidden_for_ai=False,

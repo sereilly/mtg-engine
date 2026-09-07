@@ -250,6 +250,15 @@ DRAW_LOOKING_AT_TOP = 20  # Aladdin's Lamp
 # benefit, and this one takes the draw away. Applying a Ring of Ma'rûf or an
 # Aladdin's Lamp first consumes the draw and this never applies — which is the
 # order the player would pick, and the rule permits.
+# An **optional** consuming replacement, and the only one here: "you *may* put
+# a study counter on this enchantment instead" is a decision its own controller
+# makes about their own draw (CR 109.5). Before the four mandatory consumers
+# below and after everything the player armed, which is the same CR 616.1e
+# argument they make: a draw a Lamp has already taken away never puts this
+# question, and the affected player is exactly the one who would choose that
+# order. Being optional, the number matters less than for its neighbours -
+# declining leaves the event for whatever is behind it.
+DRAW_BECOMES_COUNTER = 25  # Pursuit of Knowledge
 DRAW_DISCARD_INSTEAD = 30  # Chains of Mephistopheles
 # Beside it, and last for the same reason: this one takes the draw away too.
 # Between the two the order is arbitrary — no card in the pool prints both, and
@@ -2825,6 +2834,189 @@ def _reveal_top_instead_of_drawing(game, payload: dict) -> ReplacementOutcome | 
     return ReplacementOutcome(replaced=True)
 
 
+#: "If you would draw a card, you may put a **study** counter on this
+#: **enchantment** instead." (Pursuit of Knowledge.)
+#:
+#: Matched by shape rather than listed as a constant, because both the counter
+#: kind and the noun the card calls itself are payload: a creature printing the
+#: same sentence with a page counter is printing the same replacement, and a
+#: literal would buy exactly one card. The self-reference is already normalized
+#: to "this <noun>" before a line reaches any reader here.
+#:
+#: One reader for the interceptor and for the support gate
+#: (``replacement_claims_line`` below), which is the pairing every text-keyed
+#: table in this engine keeps.
+_DRAW_BECOMES_COUNTER_RE = re.compile(
+    r"^if you would draw a card, you may put a (?P<counter>[a-z][a-z'-]*) "
+    r"counter on this (?:creature|artifact|enchantment|land|permanent) instead$"
+)
+
+
+def draw_becomes_counter(line: str) -> str | None:
+    """The counter kind *line* offers in place of a draw, or None."""
+    match = _DRAW_BECOMES_COUNTER_RE.match(line.strip().lower().rstrip("."))
+    return match.group("counter") if match is not None else None
+
+
+def _draw_becomes_counter_sources(game, payload: dict) -> list:
+    """Every permanent offering this substitution for *this* draw.
+
+    "**You**" is the ability's controller (CR 109.5), so only the drawing seat's
+    own permanents are in contention - an opponent's copy offers its own
+    controller the choice about their own draws and says nothing about this one.
+
+    CR 614.5's exclusion is honoured through the same ``exclude_sources`` key
+    every other draw replacement here reads: the draw a declined offer leaves
+    behind goes back through the seam, and a source already asked must not ask
+    again.
+
+    Read off ``effective_card``, because a Clone of one has the sentence
+    (CR 707.2) and one whose text was changed does not.
+
+    Pure, like every applicability predicate in this file: ``effect_ordering``
+    counts the contenders before any of them runs.
+    """
+    exclude = set(payload.get("exclude_sources") or ())
+    seat = game.players.index(payload["player"])
+    return [
+        perm
+        for controller, perm in game.permanents_with_controller()
+        if controller == seat
+        and perm.permanent_id not in exclude
+        and any(
+            draw_becomes_counter(line) is not None
+            for line in (perm.effective_card.oracle_text or "").splitlines()
+        )
+    ]
+
+
+def _applies_draw_becomes_counter(game, payload: dict) -> bool:
+    return (
+        int(payload.get("count", 0)) > 0
+        and bool(_draw_becomes_counter_sources(game, payload))
+    )
+
+
+@replacement_effect(
+    "draw", DRAW_BECOMES_COUNTER, applies=_applies_draw_becomes_counter
+)
+def _counter_instead_of_drawing(game, payload: dict) -> ReplacementOutcome | None:
+    """Pursuit of Knowledge: "If you would draw a card, you may put a study
+    counter on this enchantment instead."
+
+    One draw at a time, because that is what the sentence replaces (CR 121.2
+    makes a multi-card instruction that many draws). The draws queued behind
+    this one go back through the seam so a second source gets its own offer.
+
+    **Optional**, so it is a :class:`ReplacementChoice` rather than an applied
+    effect: ``apply_replacements`` returns synchronously and the answer arrives
+    from a human on a later request. Both answers finish through the one
+    registered resolver, which is what keeps the accepted and the declined path
+    from being two implementations of one sentence.
+
+    The declining answer still *replaces* the event as far as this function is
+    concerned - the draw it leaves is remade through the seam with this source
+    excluded (CR 614.5), which is how the offer is not put twice.
+    """
+    player = payload["player"]
+    seat = game.players.index(player)
+    source = min(
+        _draw_becomes_counter_sources(game, payload),
+        key=lambda perm: perm.permanent_id,
+    )
+    kind = next(
+        counter
+        for counter in (
+            draw_becomes_counter(line)
+            for line in (source.effective_card.oracle_text or "").splitlines()
+        )
+        if counter is not None
+    )
+    excludes = tuple(payload.get("exclude_sources") or ()) + (source.permanent_id,)
+    suspended, drawn = offer_replacement_choice(
+        game,
+        ReplacementChoice(
+            kind="draw_becomes_counter",
+            player_index=seat,
+            # Declining first, and that is the default a non-interactive seat
+            # takes. CR 614.1 leaves the choice to the affected player, and the
+            # engine's rule for an unconstrained one is the choice a player
+            # would make (idiom 8) - a seat that accepted every offer would
+            # never draw another card, in exchange for counters no AI policy
+            # spends. A human seat is asked and may say yes; a headless one
+            # keeps playing.
+            options=("draw the card", f"put a {kind} counter on {source.card.name}"),
+            default_option=0,
+            data={
+                "counter": kind,
+                "source_id": source.permanent_id,
+                "remaining_draws": int(payload["count"]) - 1,
+                "exclude_sources": excludes,
+                "turn_based": bool(payload.get("turn_based")),
+            },
+        ),
+    )
+    if suspended:
+        game.log.append(
+            f"{player.name} may put a {kind} counter on {source.card.name} "
+            "instead of drawing"
+        )
+    payload["drawn"] = drawn
+    return ReplacementOutcome(replaced=True)
+
+
+@replacement_choice("draw_becomes_counter")
+def _resolve_draw_becomes_counter(
+    game, choice: ReplacementChoice, option_index: int
+) -> int:
+    """Apply Pursuit of Knowledge's offer, either way.
+
+    Option 0 declines: the draw this function was asked about is remade through
+    ``_draw_with_replacements`` with the offering permanent excluded, so every
+    *other* draw replacement still gets its turn and this one is not asked
+    twice (CR 614.5).
+
+    Option 1 accepts: the counter goes on and no card is drawn, so a "whenever
+    you draw a card" effect correctly sees one fewer draw.
+
+    The source is addressed by ``permanent_id``: it can leave the battlefield
+    while the offer is queued, and a counter placed on whatever slid into its
+    slot would be a counter on the wrong permanent.
+    """
+    player = game.players[choice.player_index]
+    data = choice.data
+    excludes = tuple(data.get("exclude_sources") or ())
+    remaining = int(data.get("remaining_draws", 0))
+    drawn = 0
+    if option_index == 0:
+        drawn += game._draw_with_replacements(
+            player, 1,
+            turn_based=bool(data.get("turn_based")),
+            exclude_sources=excludes,
+        )
+    else:
+        source = game.permanent_by_id(int(data["source_id"]))
+        if source is None:
+            # The enchantment left while the offer was queued. Nothing to put a
+            # counter on, and the draw was already replaced - CR 614.1's
+            # substitution happened, and this is the "does as much as it can"
+            # end of it.
+            game.log.append(
+                f"{player.name}: the counter had nowhere to go and no card was drawn"
+            )
+        else:
+            from .named_counters import add_counters
+
+            add_counters(source, str(data["counter"]), 1)
+            game.log.append(
+                f"{player.name} put a {data['counter']} counter on "
+                f"{source.card.name} instead of drawing"
+            )
+    if remaining > 0:
+        drawn += game._draw_with_replacements(player, remaining)
+    return drawn
+
+
 def _chains_affected_draws(payload: dict) -> int:
     """How many of this event's draws the exemption leaves.
 
@@ -3516,6 +3708,13 @@ def replacement_claims_line(line: str) -> bool:
     # controller's untap step, remove all wind counters from it instead."
     # (Freyalise's Winds), matched by shape because the counter word is payload.
     if counters_instead_of_untap(normalized) is not None:
+        return True
+    # "If you would draw a card, you may put a study counter on this enchantment
+    # instead." (Pursuit of Knowledge.) Matched by shape because the counter
+    # word and the card's own noun are payload - through the same reader the
+    # interceptor self-selects on, so a wording it cannot read leaves the line
+    # unclaimed rather than admitted with the substitution silently absent.
+    if draw_becomes_counter(normalized) is not None:
         return True
     # "If damage would be dealt to this creature, put that many -1/-1 counters
     # on it instead." (Lichenthrope), matched by shape because the counter kind

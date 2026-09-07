@@ -819,6 +819,24 @@ def _optional_damage_redirect(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("draw_becomes_counter")
+def _draw_becomes_counter(ctx: PromptContext, choices: list) -> dict:
+    """Pursuit of Knowledge: take the counter, or take the draw.
+
+    One offer at a time - the replacement arms one per draw - with how many are
+    still queued behind it, exactly as the redirect above reports.
+    """
+    choice = choices[0]
+    source = ctx.game.permanent_by_id(int(choice.data["source_id"]))
+    return {
+        "player_seat": choice.player_index,
+        "counter": choice.data["counter"],
+        "source_name": source.card.name if source is not None else "",
+        "options": list(choice.options),
+        "remaining": sum(1 for c in choices if c.player_index == choice.player_index),
+    }
+
+
 @prompt_renderer("balance")
 def _balance(ctx: PromptContext, choices: list) -> dict:
     choice = choices[0]

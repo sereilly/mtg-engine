@@ -1060,6 +1060,19 @@ class EffectsMixin:
         ]
 
     @property
+    def pending_draw_becomes_counters(self) -> list[dict]:
+        """Pursuit of Knowledge's outstanding CR 614.1 offers - one per draw a
+        permanent whose text prints the substitution would replace."""
+        return [
+            {
+                "player_index": choice.player_index,
+                "counter": choice.data["counter"],
+                "source_id": choice.data["source_id"],
+            }
+            for choice in pending_choices_for(self, "draw_becomes_counter")
+        ]
+
+    @property
     def pending_optional_damage_redirects(self) -> list[dict]:
         """CR 614.9's outstanding optional offers — one per damage event whose
         recipient a class-scoped redirect watches (Blood of the Martyr)."""
