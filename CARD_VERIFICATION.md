@@ -3,10 +3,10 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **3109**
-- Passed: **566** (392 checked in-game, 174 auto-passed)
+- Passed: **572** (398 checked in-game, 174 auto-passed)
 - Failed: **0**
 - Equivalent to a passing card: **42**
-- Untested: **2501**
+- Untested: **2495**
 
 An *auto-pass* is derived, never recorded: the card has no abilities, or nothing but keywords the engine implements, so its behaviour is the generic combat and keyword code plus its printed numbers, and there is no card-specific path for a manual check to exercise. The note names which. A result recorded in-game always takes precedence over it.
 
@@ -483,7 +483,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Cloud Spirit | ⬜ untested |  |
 | Cloudchaser Eagle | ⬜ untested |  |
 | Coal Golem | ⬜ untested |  |
-| Coat of Arms | ⬜ untested |  |
+| Coat of Arms | ✅ pass |  |
 | Cockatrice | ✅ pass |  |
 | Cocoon | ⬜ untested |  |
 | Coercion | ⬜ untested |  |
@@ -675,8 +675,8 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Divine Offering | ⬜ untested |  |
 | Divine Retribution | ⬜ untested |  |
 | Divine Transformation | ≡ equivalent | same behaviour as Holy Strength |
-| Dizzying Gaze | ⬜ untested |  |
-| Dominating Licid | ⬜ untested |  |
+| Dizzying Gaze | ✅ pass |  |
+| Dominating Licid | ✅ pass |  |
 | Doomsday | ⬜ untested |  |
 | Dormant Volcano | ⬜ untested |  |
 | Double Vision | ⬜ untested |  |
@@ -2442,7 +2442,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Skyshroud Troll | ⬜ untested |  |
 | Skyshroud Troopers | ≡ equivalent | same behaviour as Llanowar Elves |
 | Skyshroud Vampire | ⬜ untested |  |
-| Skyshroud War Beast | ⬜ untested |  |
+| Skyshroud War Beast | ✅ pass |  |
 | Skyway Sniper | ⬜ untested |  |
 | Slaughter | ⬜ untested |  |
 | Sleight of Mind | ✅ pass |  |
@@ -2817,7 +2817,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Tranquil Grove | ⬜ untested |  |
 | Tranquility | ✅ pass |  |
 | Transmogrify | ⬜ untested |  |
-| Transmogrifying Licid | ⬜ untested |  |
+| Transmogrifying Licid | ✅ pass |  |
 | Transmutation | ⬜ untested |  |
 | Transmute Artifact | ⬜ untested |  |
 | Treasure Hunter | ⬜ untested |  |
@@ -2942,7 +2942,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Volcanic Island | ✅ pass |  |
 | Volcanic Salvo | ⬜ untested |  |
 | Volrath's Curse | ⬜ untested |  |
-| Volrath's Dungeon | ⬜ untested |  |
+| Volrath's Dungeon | ✅ pass |  |
 | Volrath's Gardens | ⬜ untested |  |
 | Volrath's Laboratory | ⬜ untested |  |
 | Volrath's Shapeshifter | ⬜ untested |  |

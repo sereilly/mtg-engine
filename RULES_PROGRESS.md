@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**366 / 614 tracked rules covered (59%)** — 2198 tests, 0 unannotated.
+**366 / 614 tracked rules covered (59%)** — 2199 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -277,7 +277,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **116.1** Special actions are actions a player may take when they have priority that don’t use the stack. T... *(5 tests)*
 - [x] **116.2** There are twelve special actions: *(5 tests, subrules cde)*
-- [x] **116.3** If a player takes a special action, that player receives priority afterward. *(2 tests)*
+- [x] **116.3** If a player takes a special action, that player receives priority afterward. *(3 tests)*
 
 ### 117. Timing and Priority
 
@@ -772,7 +772,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 613. Interaction of Continuous Effects
 
-- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(93 tests, subrules abcdefg)*
+- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(94 tests, subrules abcdefg)*
 - [x] **613.2** Within layer 1, apply effects in a series of sublayers in the order described below. Within each ... *(17 tests, subrules ac)*
 - [ ] **613.3** Within layers 2–6, apply effects from characteristic-defining abilities first (see rule 604.3), t...
 - [x] **613.4** Within layer 7, apply effects in a series of sublayers in the order described below. Within each ... *(73 tests, subrules abcd)*
@@ -908,7 +908,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [ ] **704.1** State-based actions are game actions that happen automatically whenever certain conditions (liste...
 - [ ] **704.2** State-based actions are checked throughout the game and are not controlled by any player.
-- [x] **704.3** Whenever a player would get priority (see rule 117, “Timing and Priority”), the game checks for a... *(3 tests)*
+- [x] **704.3** Whenever a player would get priority (see rule 117, “Timing and Priority”), the game checks for a... *(4 tests)*
 - [ ] **704.4** Unlike triggered abilities, state-based actions pay no attention to what happens during the resol...
 - [x] **704.5** The state-based actions are as follows: *(92 tests, subrules abcdefghijkmnpqrsy)*
 - [x] **704.6** Some variant games include additional state-based actions that aren’t normally applicable: *(3 tests, subrules cd)*

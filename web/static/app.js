@@ -18312,7 +18312,15 @@ function renderSpecialActions(state, hasPriority) {
       // Whichever address the entry carries: a hand slot for CR 116.2e and a
       // permanent id for 116.2c/116.2d. The server decides from the same two
       // fields, so the client never has to know which kinds are which.
+      //
+      // `seat` is not optional. It is the one field `GameActionRequest`
+      // requires of every action, `sendAction` does not add it, and this was
+      // the single call site of 124 that left it out — so every CR 116 special
+      // action the UI has ever offered answered a click with a 422 and no
+      // visible error at all. Pinned from the wire side by
+      // `tests/ui/test_special_action_wire.py`.
       sendAction({
+        seat,
         action: "special_action",
         hand_index: entry.hand_index,
         permanent_id: entry.permanent_id,

@@ -135,7 +135,9 @@ def take_special_action(
 
     CR 116.3 gives the player priority again afterwards, which here means the
     action does **not** touch `priority_player_index`, advance a step or pass —
-    a caller treating this as a play would hand the turn on.
+    a caller treating this as a play would hand the turn on. What it *does*
+    mean is :func:`_priority_returns`: a player is about to receive priority,
+    so CR 704.3 checks state-based actions first.
     """
     refusal = special_action_refusal(game, seat, card, kind)
     if refusal is not None:
@@ -158,8 +160,26 @@ def take_special_action(
             if arrived
             else f"{player.name} discarded {card.name}, and it was diverted"
         )
+        _priority_returns(game)
         return None
     return f"no special action named {kind!r}"
+
+
+def _priority_returns(game: "Game") -> None:
+    """CR 116.3 then CR 704.3: the taker receives priority, so state-based
+    actions are checked before they do.
+
+    Here rather than at each caller, because "a special action was taken" has
+    exactly two entry points and thirty consequences. The one that found it is
+    a Licid: "You may pay {U} to end this effect" undoes the type change at
+    once, but *who controls the enchanted creature* is a CR 613 layer-2
+    contribution the sweep in ``mixins/game_ending`` derives from the
+    attachment — so with no check here the Aura stopped being an Aura and the
+    stolen creature stayed stolen until something else happened to resolve.
+    ``phase_steps.pass_priority`` checks after a **resolution**, and a special
+    action is by definition not one (CR 116.1), so nothing else was going to.
+    """
+    game.check_state_based_actions()
 
 
 def available_special_actions(game: "Game", seat: int) -> list[dict]:
@@ -441,7 +461,8 @@ def take_permanent_special_action(
     """Perform *kind* with *permanent* for *seat*; a refusal, or None on success.
 
     CR 116.3 again: the player receives priority afterwards, so nothing here
-    passes, advances a step or touches ``priority_player_index``.
+    passes, advances a step or touches ``priority_player_index`` — and
+    :func:`_priority_returns` runs CR 704.3's check before they get it.
 
     *sacrificed* is which permanent pays a CR 116.2d offer's price — "a
     permanent **of their choice**", so the taker names it. A caller that names
@@ -476,6 +497,7 @@ def take_permanent_special_action(
             f"({permanent.card.name}, CR 116.2d)"
         )
     spec.take(game, seat, permanent)
+    _priority_returns(game)
     return None
 
 

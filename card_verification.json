@@ -290,6 +290,11 @@
       "status": "pass",
       "updated_at": 1782020378.44773
     },
+    "Coat of Arms": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1788819568.2795405
+    },
     "Cockatrice": {
       "reason": "",
       "status": "pass",
@@ -469,6 +474,16 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782591684.9327972
+    },
+    "Dizzying Gaze": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1788819838.8761194
+    },
+    "Dominating Licid": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1788819524.225117
     },
     "Dragon Whelp": {
       "reason": "",
@@ -1595,6 +1610,11 @@
       "status": "pass",
       "updated_at": 1782364012.382203
     },
+    "Skyshroud War Beast": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1788819768.6212142
+    },
     "Sleight of Mind": {
       "reason": "",
       "status": "pass",
@@ -1735,6 +1755,11 @@
       "status": "pass",
       "updated_at": 1782087352.0209591
     },
+    "Transmogrifying Licid": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1788819629.0654411
+    },
     "Tropical Island": {
       "reason": "",
       "status": "pass",
@@ -1814,6 +1839,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1784613050.1401792
+    },
+    "Volrath's Dungeon": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1788819704.4509187
     },
     "Wall of Air": {
       "reason": "",

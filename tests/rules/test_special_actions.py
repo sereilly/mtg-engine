@@ -348,3 +348,55 @@ def test_605_1a_volraths_curse_shuts_off_mana_abilities_and_faiths_fetters_does_
     resolve_stack(game)
     assert allowed.supported, allowed.details
     assert p2.mana_pool.get("G", 0) == 1
+
+
+# --- EXO Phase 5: CR 116.3's other half — the check before priority returns ---
+
+_EXO_PHASE5 = {
+    c.name: c
+    for c in load_cards(_w2g1_set_path("EXO", include_measured=True))
+}
+
+
+@pytest.mark.cr("116.3", "704.3", "613.1b")
+def test_704_3_a_special_action_checks_state_based_actions_before_priority():
+    """"If a player takes a special action, that player receives priority
+    afterward." (CR 116.3.) "Whenever a player would get priority … the game
+    checks for any of the listed conditions for state-based actions." (704.3.)
+
+    Found at Exodus's promotion smoke test, on **Dominating Licid** — the one
+    Licid whose second line is a control change. Ending the effect stops the
+    permanent being an Aura at once, but *who controls the enchanted creature*
+    is a CR 613 layer-2 contribution the sweep in ``mixins/game_ending`` derives
+    from the attachment, so it needs a check to notice the attachment is gone.
+    ``phase_steps.pass_priority`` runs that check after a **resolution**, and
+    CR 116.1 says a special action is not one — so with nothing here the player
+    paid {U}, got their Licid back, and kept the creature until some unrelated
+    spell happened to resolve. They could attack with it first.
+
+    Asserted with no ``check_state_based_actions()`` of its own, which is the
+    whole point: the action is the last thing the test does.
+    """
+    licid = _w2g1_perm(_EXO_PHASE5["Dominating Licid"])
+    bear = _w2g1_perm(_CATALOG["Grizzly Bears"])
+    game, _p1, _p2 = _w2g1_board([licid], [bear], pool={"U": 1})
+    assert game.controller_index_of(bear) == 1
+
+    game.activate_permanent_ability(
+        0, "Dominating Licid", ability_index=0,
+        target_permanent_ids=[bear.permanent_id], target_player_index=1,
+    )
+    resolve_stack(game)
+    game.check_state_based_actions()
+    game.priority_player_index = 0
+    assert game.controller_index_of(bear) == 0, "the Aura's layer-2 contribution"
+
+    assert take_permanent_special_action(
+        game, 0, licid, "end_own_continuous_effect"
+    ) is None
+
+    assert licid.is_creature and not licid.has_type("aura")
+    assert game.controller_index_of(bear) == 1, (
+        "CR 704.3: the contribution is swept before the taker gets priority back"
+    )
+    assert [p.card.name for p in game.players[1].battlefield] == ["Grizzly Bears"]
