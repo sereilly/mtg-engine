@@ -19,6 +19,8 @@ the reason recorded there; ``phrases`` re-exports it, so the import above still
 reads as it was written.
 """
 
+import dataclasses
+
 from .. import ast
 from ..errors import GrammarError
 from ..readers import _parse_entering_counters, accept_source_reference
@@ -61,6 +63,50 @@ def _parse_put_source_into_zone(stream: TokenStream) -> ast.Statement | None:
         return None
     return ast.PutSourceIntoZone(zone)
 
+
+
+def _agreeing_possessive(
+    subject: "ast.Recipient", *, printed: str | None,
+) -> "tuple[ast.Recipient, str | None]":
+    """*subject* with its source pile re-read as the performer's, and the
+    pronoun the destination must then print — or *subject* unchanged and None.
+
+    "Return a creature card from **their** graveyard to **their** hand" (Oath
+    of Ghouls) names one seat twice: the player the enclosing offer is made to.
+    ``parse_object_filter`` records the possessive as ``owner`` (CR 404.1 — a
+    card sits in the graveyard of the player who owns it), and every handler
+    behind this production reads the performer's own pile, so the two are the
+    same seat and the reading is the agreement rather than a widening.
+
+    Only a **graveyard**, and only that one word, because that is the zone the
+    identity holds in: a library and a hand are also their owner's, but no card
+    in the pool prints the pronoun over one here and admitting it would be
+    guessing about a sentence nobody has written.
+
+    *printed* is the word the destination is about to use, and **both halves
+    must print the pronoun**. "…from their graveyard to *your* hand" names two
+    seats and is a sentence no card prints; re-reading its source as the
+    performer's would quietly turn it into one that does. The refusal that
+    already stands for it stays.
+    """
+    if printed != "their":
+        return subject, None
+    filt = getattr(subject, "filter", None)
+    if (
+        filt is None
+        or filt.zone != "graveyard"
+        or filt.zone_owner is None
+        or filt.zone_owner.kind != "owner"
+    ):
+        return subject, None
+    return (
+        dataclasses.replace(
+            subject, filter=dataclasses.replace(
+                filt, zone_owner=ast.PlayerRef("you"),
+            ),
+        ),
+        "their",
+    )
 
 def _parse_return(
     stream: TokenStream, actor: "ast.PlayerRef | None" = None
@@ -194,7 +240,24 @@ def _parse_return(
     else:
         if not stream.accept_word("to"):
             raise stream.error("expected a destination zone after 'return'")
-        destination = _parse_zone(stream)
+        # "…return a creature card from **their** graveyard to **their**
+        # hand." (Oath of Ghouls.) The pronoun agrees with the sentence's
+        # subject — here the player an enclosing offer named — exactly as
+        # ``effects/search`` reads "search **their** library … put that card
+        # into **their** hand". Both halves have to print it, and the
+        # agreement is what makes the reading safe: CR 404.1 puts a card in
+        # the graveyard of the player who owns it, so "their graveyard" and
+        # the performing seat's graveyard are the same pile, and the sentence
+        # says the hand is that same seat's too.
+        #
+        # Read off the *source* phrase rather than from an actor argument
+        # because a "may" parses its action as a bare imperative with no
+        # subject in it — the same position ``search`` reads its own possessive
+        # from.
+        subject, self_possessive = _agreeing_possessive(
+            subject, printed=stream.peek_word(),
+        )
+        destination = _parse_zone(stream, self_possessive=self_possessive)
 
     # "...to the battlefield **tapped**." (Silversmote Ghoul.) CR 110.5b: a
     # permanent enters untapped unless a spell or ability says otherwise, and

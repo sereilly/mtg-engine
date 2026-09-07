@@ -71,6 +71,26 @@ PARSE_LAYERS = [
     # productions carried was there because `nouns` imports `amounts`, which
     # they are no longer in.
     "records",
+    # A seat picked out by **comparing a counted quantity against another
+    # seat's** — "target player who controls more creatures than they do"
+    # (Oath of Druids), "target opponent who has at least two fewer creature
+    # cards in their graveyard than you do" (Keeper of the Dead). The
+    # board-state twin of `records.accept_player_deed`, and its own module
+    # rather than a production in that one because the two differ in what may
+    # enforce them: a deed is a record only a resolution holds, and a
+    # comparison is a count the *picker* can take while CR 601.2c is choosing.
+    #
+    # Above `records`, whose printed-number reader it asks for "at least
+    # **two** more" — the reason that reader became public rather than being
+    # spelled a second time here. Below `nouns`: the counted quantity is a
+    # whole noun phrase, handed down as a parameter exactly as
+    # `accept_player_deed` takes one, so the clause stays readable from
+    # `choices` and `player_verbs` with no edge back up.
+    #
+    # No mirror name to reuse: the clause rides `ast.PlayerRef.compared` and
+    # its payload is written by `lowering/_targets.py` beside every other
+    # narrowing a picker reads, so the lowering side has no module of its own.
+    "seat_comparisons",
     # CR 615.5's additional effect — "you gain life equal to the damage
     # prevented this way", "for each 1 damage prevented this way, put a +1/+1
     # counter on that creature". Pre-split out of `effects/prevention.py` at

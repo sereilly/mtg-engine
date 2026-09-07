@@ -82,6 +82,35 @@ def _lower_choose_target(node: ast.ChooseTarget) -> tuple[OracleInstruction, ...
         _describe_targets(payload, node.subject)
         if "targets" not in payload:
             raise LoweringError("this 'choose' names no player", node=node)
+        if node.chooser is not None:
+            # "**That player** chooses target player who…" (the Oaths). The
+            # seat the card says announces the target, carried into the same
+            # description the picker reads — CR 601.2c's default is the
+            # ability's controller, and under those cards' trigger that is a
+            # different player from the one printed. Refused rather than
+            # dropped for every other referent: a chooser the announcement
+            # cannot resolve would silently fall back to the default, which is
+            # the one player the card says does *not* pick.
+            if node.chooser.kind != "that_player":
+                raise LoweringError(
+                    f"nothing announces a target for the {node.chooser.kind}",
+                    node=node,
+                )
+            if payload["targets"].get("opponents_only"):
+                # "Target **opponent**" is a narrowing the enumerator applies
+                # against the seat that *announces* (CR 115.4), and a printed
+                # chooser is precisely a card saying that seat is somebody
+                # else. Enforced as it stands, the word would exclude the
+                # ability's controller while the card excludes the chooser —
+                # two different players. Refused rather than resolved to
+                # either, exactly as the two-seat phrases elsewhere in this
+                # package refuse.
+                raise LoweringError(
+                    "a printed chooser and \"target opponent\" name the "
+                    "opponent of two different seats",
+                    node=node,
+                )
+            payload["targets"]["chooser"] = node.chooser.kind
         payload["result_key"] = CHOSEN_PLAYER
         return (OracleInstruction("choose_target_player", "", payload),)
     if _names_several_targets(node.subject):

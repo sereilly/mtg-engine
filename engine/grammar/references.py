@@ -156,6 +156,22 @@ def parse_player_ref(stream: TokenStream) -> ast.PlayerRef | None:
     # "they" above, and not a fourth referent. Only the bare two words: "the
     # player who …" is a *description* of a seat and belongs to the productions
     # that read one.
+    # "…**The first player** may reveal cards from the top of their library"
+    # (the Exodus Oaths). Wizards' own disambiguator for a sentence with two
+    # players in it: the one that *chose* is "the first player" and the one
+    # chosen is "the second". So the first is the seat the sentence in front of
+    # this one named — which is what `that_player` means to every consumer
+    # downstream, and which under those cards' trigger the upkeep loop froze —
+    # and the second is the target that sentence announced, read off the record
+    # the choosing step wrote.
+    #
+    # Two words each and both required. The ordinals are the whole content: a
+    # reader that took "the first player" for "the player" would collapse the
+    # two seats the card printed apart.
+    if stream.accept_phrase("the", "first", "player"):
+        return ast.PlayerRef("that_player")
+    if stream.accept_phrase("the", "second", "player"):
+        return ast.PlayerRef("chosen_player")
     mark_the_player = stream.mark()
     if stream.accept_phrase("the", "player"):
         if stream.exhausted or not stream.at_word("who", "with", "whose"):

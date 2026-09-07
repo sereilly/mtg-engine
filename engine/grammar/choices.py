@@ -31,7 +31,9 @@ from .effects.characteristics import _parse_keywords
 from .effects.prevention import _parse_bound_targeting_prevention
 from .errors import GrammarError
 from .phrases import BASIC_LAND_WORDS, _parse_duration
+from .nouns import parse_object_filter
 from .references import parse_recipient, parse_target_spec
+from .seat_comparisons import accept_player_comparison
 from .stream import TokenStream
 from .vocabulary import LAND_TYPES, TYPE_LINE_SUPERTYPES
 
@@ -101,8 +103,36 @@ def _parse_choose_target(stream: TokenStream, parse_statement) -> "ast.ChooseTar
     # asks (does a later sentence bind this choice?), just answered over the
     # rest of the line rather than over one sentence, because a player cannot
     # be bound by a delayed ability's opener the way an object can.
+    #
+    # **And a narrowed choice needs no binder at all.** The rule this whole
+    # module states is that a "choose" sentence must not be the only thing a
+    # card does, because a target chosen and never read is an instruction that
+    # performs nothing. A *comparison* clause is the counter-example and the
+    # reason the test is a question rather than a rule: "Choose target opponent
+    # who controls more creatures than you do" performs the whole of what those
+    # three Keepers print, by refusing the activation when no seat answers
+    # (CR 601.2c) and by countering it when the seat stops answering
+    # (CR 608.2b). Keeper of the Beasts never says "that player" again and is
+    # not a card that does nothing.
     player = _accept_targeted_player(stream)
     if player is not None:
+        # "Choose target opponent **who has more life than you do**" (the
+        # Exodus Keepers). A printed restriction on which seats may be chosen,
+        # read here beside the noun it hangs on and carried to the picker,
+        # which is the only reader that can enforce it (CR 601.2c/602.2b).
+        comparison = accept_player_comparison(stream, parse_object_filter)
+        if comparison is not None:
+            player = dataclasses.replace(player, compared=comparison)
+        # "…**as you activate this ability**." (the Keepers again.) CR 602.2b
+        # already says an activated ability's targets are chosen as it is
+        # activated, so these words restate the rule rather than adding one —
+        # and the engine enforces exactly that, through
+        # `legality.activation_target_refusal` before any cost is paid. Read
+        # rather than left, because a production must consume every token of
+        # its line; consumed only *after* a comparison, so a sentence that
+        # printed the words alone is still nobody's.
+        if comparison is not None:
+            stream.accept_phrase("as", "you", "activate", "this", "ability")
         after_player = stream.mark()
         if not stream.accept_punct("."):
             stream.reset(mark)
@@ -113,7 +143,7 @@ def _parse_choose_target(stream: TokenStream, parse_statement) -> "ast.ChooseTar
         # it, and a production that ate it leaves the cursor mid-sentence where
         # that loop's own "unconsumed text" guard fires.
         stream.reset(after_player)
-        if not binds:
+        if not binds and comparison is None:
             stream.reset(mark)
             return None
         return ast.ChooseTarget(player)

@@ -525,6 +525,23 @@ class StackResolutionMixin:
             # unnarrowed list would offer every permanent in the game for a
             # phrase that names one player's.
             return
+        # "**That player** chooses target player who…" (the Exodus Oaths).
+        # CR 601.2c gives the choice to the ability's controller unless the
+        # card says otherwise, and these say otherwise: the seat that picks is
+        # the one whose upkeep it is. Only the prompt moves — the candidate
+        # list is enumerated from the announcing seat exactly as before,
+        # because every narrowing these cards print carries its own reference
+        # (`compared.than`) and the lowering refuses a printed chooser beside
+        # one that does not.
+        #
+        # A chooser the fire site never froze cannot be asked, and the ability
+        # then announces nothing rather than falling back to the controller —
+        # the same safe direction the three early-outs above take.
+        chooser_index = item.caster_index
+        if spec.get("chooser") is not None:
+            if that_player is None:
+                return
+            chooser_index = that_player
         candidates = self._enumerate_targets(
             item.caster_index, item.card, spec, for_cast=False,
             ability_instruction=instruction,
@@ -567,7 +584,7 @@ class StackResolutionMixin:
             )
             return
         self.arm_pending_choice(
-            "trigger_target", item.caster_index,
+            "trigger_target", chooser_index,
             card_name=item.card.name,
             targets=offered,
             _trigger_item=item,
