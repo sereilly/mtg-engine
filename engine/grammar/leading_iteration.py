@@ -31,7 +31,8 @@ from .effects.attachments import parse_excess_choice_paragraph
 from .effects.cards import _parse_for_each_revealed_discard
 from .sentence_clauses import (_parse_leading_controller_of_each,
                                _parse_leading_count_scale,
-                               _parse_leading_for_each)
+                               _parse_leading_for_each,
+                               _parse_leading_recorded_count)
 from .stream import TokenStream
 from .subject_verb import parse_subject_verb
 
@@ -76,6 +77,18 @@ def parse_leading_iteration(
     per_count = _parse_leading_count_scale(parse_body, stream)
     if per_count is not None:
         return per_count
+    # "**For each card discarded this way,** put two +1/+1 counters on this
+    # creature." (Mind Maggots.) A leading **rate** over what an earlier step of
+    # this same effect recorded — not the count scale above, which is gated on
+    # the phrase naming a zone to go and count, and a scratchpad is not one.
+    #
+    # Read after that one and before the general loop below, and the participle
+    # is what makes the order safe: this refuses every phrase that does not end
+    # in "<participle> this way", so a set-naming "For each …" never reaches it,
+    # and it refuses without consuming so the loop keeps every line it had.
+    per_record = _parse_leading_recorded_count(parse_body, stream)
+    if per_record is not None:
+        return per_record
     # "**For each blue instant card revealed this way,** that player discards
     # that card unless they pay 4 life." (Sirocco.) Read before the general
     # leading loop below, which would take the noun phrase and then fail the

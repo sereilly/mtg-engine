@@ -336,6 +336,36 @@ def _parse_for_each_this_way(stream: TokenStream) -> ast.ThatMuch | None:
     return ast.ThatMuch(key)
 
 
+def scaled_by_recorded_count(
+    printed: "ast.Amount", counted: "ast.ThatMuch", stream: TokenStream
+) -> "ast.Amount":
+    """The one number *"<printed> X for each <unit> <participle> this way"* names.
+
+    "For each card discarded this way, put **two** +1/+1 counters on this
+    creature." (Mind Maggots.) The clause is a **rate**: what the sentence
+    printed is placed once per unit of what an earlier step recorded, so the
+    number is the product — and :class:`ast.Times` is the node the grammar
+    already has for one, minted here so the two printed word orders reach it
+    through one reader.
+
+    A printed 1 folds away rather than becoming ``Times(1, …)``, which is what
+    keeps every card written before a multiplier existed compiling to the
+    byte-identical program it did.
+
+    Refuses anything that is not a printed number, and the refusal is the point:
+    a rate over a quantity the resolution has yet to compute is two unknowns
+    multiplied, which no card prints — and reading the clause while dropping the
+    printed count would place one counter where the card says two.
+    """
+    if not isinstance(printed, ast.Fixed) or printed.value < 1:
+        raise stream.error(
+            "a rate per recorded unit multiplies a printed number"
+        )
+    if printed.value == 1:
+        return counted
+    return ast.Times(printed.value, counted)
+
+
 def _parse_for_each_damage_dealt_to(
     stream: TokenStream,
 ) -> "ast.DamageDealtThisTurn | None":

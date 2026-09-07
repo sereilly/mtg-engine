@@ -24,7 +24,8 @@ from .references import parse_recipient
 from .vocabulary import singular as _singular
 from .stream import TokenStream
 from .phrases import _accept_number, _accept_self_reference
-from .records import accept_additional_cost_paid
+from .records import (_parse_for_each_this_way, accept_additional_cost_paid,
+                      scaled_by_recorded_count)
 from .effects import (_parse_gain_control,
                       _parse_linked_untap_restriction)
 # The toll family left for `tolls` at the thousand-line guard and is re-exported
@@ -327,6 +328,83 @@ def _parse_leading_count_scale(
         stream.reset(mark)
         return None
     return _scale_by_count(parse_body(stream), filt, stream)
+
+
+def _parse_leading_recorded_count(
+    parse_body, stream: TokenStream
+) -> "ast.Statement | None":
+    """``For each <unit> <participle> this way, <effects>`` — a leading **rate**
+    over what an earlier step of this same effect recorded.
+
+    "**For each card discarded this way,** put two +1/+1 counters on this
+    creature." (Mind Maggots.)
+
+    The third sibling of :func:`_parse_leading_for_each` and
+    :func:`_parse_leading_count_scale`, and the difference from both is *what
+    the phrase names*. The loop names a set the effect repeats over; the count
+    scale names a pile in a zone the resolution can go and count; this names
+    neither — it names a **record**, the number the sentence in front of it just
+    produced, which is exactly the question ``records._parse_for_each_this_way``
+    already answers in the trailing printed position.
+
+    So it is that same reader with the word order reversed, which is the whole
+    reason it is a production here rather than a widening of the count scale
+    above: that one is gated on ``filt.zone`` naming somewhere to count, and a
+    scratchpad is not a zone. Reading this clause as a zone count would send the
+    resolution to look for a pile that does not exist and find nothing.
+
+    Refuses without consuming, so every other "For each …" keeps the reader it
+    has — and it is tried **after** them, because those name sets and this names
+    a record, and only this one requires the participle that says so.
+    """
+    mark = stream.mark()
+    counted = _parse_for_each_this_way(stream)
+    if counted is None:
+        return None
+    if not stream.accept_punct(","):
+        stream.reset(mark)
+        return None
+    return _scale_by_recorded_count(parse_body(stream), counted, stream)
+
+
+def _scale_by_recorded_count(
+    statement: "ast.Statement", counted: "ast.ThatMuch", stream: TokenStream
+) -> "ast.Statement":
+    """*statement* with its printed count turned into a rate per *counted* unit.
+
+    :func:`_scale_by_count`'s twin one clause over, and it distributes the same
+    way and refuses in the same direction: a statement with nowhere to carry the
+    rate **raises**, because a rate silently dropped is a card that puts two
+    counters down where it should put two per card discarded.
+
+    The arithmetic is ``records.scaled_by_recorded_count`` — the reader the
+    *trailing* printing of this clause already goes through — so the two word
+    orders cannot come to mean two numbers, which is the rule
+    :func:`_scale_by_count` states about its own pair of spellings.
+    """
+    if isinstance(statement, ast.Sequence):
+        return ast.Sequence(tuple(
+            _scale_by_recorded_count(step, counted, stream)
+            for step in statement.steps
+        ))
+    if isinstance(statement, _SCALABLE_BY_RECORD):
+        return dataclasses.replace(
+            statement,
+            count=scaled_by_recorded_count(statement.count, counted, stream),
+        )
+    raise stream.error("no reading for a leading rate over this effect")
+
+
+#: Which statement nodes can carry a leading rate, and it is the ``count`` field
+#: on each — the same field the trailing printing of the clause replaces
+#: (``effects/counters.py``), so a node reachable from one word order is
+#: reachable from the other with the same meaning.
+#:
+#: A table rather than a chain of ``isinstance`` for ``_SCALABLE_BY_COUNT``'s
+#: reason exactly: the answer is "the node already has a count this clause can
+#: replace", and a node added here is one the trailing spelling can already
+#: reach.
+_SCALABLE_BY_RECORD = (ast.PutCounter,)
 
 
 #: Which statement nodes can carry a leading count, and under which field. A

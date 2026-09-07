@@ -30,6 +30,7 @@ from ._common import (
     _is_enchanted, _is_source, _is_target, _names_several_targets,
     _restrictions_beyond, describe_target_roles, refuse_untestable
 )
+from ._amounts import recorded_count_spec
 from ._records import counts_prevented_damage, names_the_shielded_object
 from ._sweeps import lower_counter_sweep
 from ._counter_stores import lower_loyalty_counters
@@ -62,6 +63,55 @@ PREVENTION_SHIELD_RECORD = "prevention_shield"
 def _amount_value(amount) -> int:
     """A fixed Amount as a plain int, for a payload that carries a number."""
     return amount.value if isinstance(amount, ast.Fixed) else 0
+
+
+def _lower_recorded_count_placement(
+    node: ast.PutCounter, produced: frozenset[str]
+) -> tuple[OracleInstruction, ...]:
+    """"…put **that many** +1/+1 counters on this creature" (Tetravus), and
+    "For each card discarded this way, put **two** +1/+1 counters on this
+    creature" (Mind Maggots).
+
+    One branch because it is one printed idea — a placement whose number an
+    earlier step of the same resolution produced — and **two channels**, because
+    the two sentences say different things about *which* record.
+
+    A bare "that many" names nothing (:class:`ast.ThatMuch` carries ``None`` to
+    say so), so it keeps the ``trigger_count`` key it has always had: its one
+    printing is Tetravus, whose exile step writes exactly that.
+
+    A "this way" clause **names its producer**, and the name was being thrown
+    away — every ``ThatMuch`` reached this branch and left as ``trigger_count``,
+    a key no discard, no destroy and no tap ever writes. Latent rather than live
+    until now (Tetravus was the only card here and its record really is that
+    key), and the failure it was holding is the quiet one: a counter placement
+    that resolves, reports itself done and places **zero**. So a named record
+    goes through ``recorded_count_spec`` onto the ``x_from_count`` channel this
+    same handler already reads for Discordant Spirit — the number is taken by
+    one evaluator (``count_from_payload``), which is also what carries the
+    printed multiplier without a payload key of its own.
+    """
+    spec = recorded_count_spec(node.count, produced, node)
+    if spec is None:
+        if isinstance(node.count, ast.Times):
+            # A factor over something that is not a recorded count — nothing
+            # prints it, and reading it as the bare "that many" below would
+            # place a fraction of what the card says.
+            raise LoweringError(
+                "a multiplied count has no recorded producer to read", node=node
+            )
+        return (
+            OracleInstruction(
+                "add_counter_to_self", "",
+                {"power": 1, "toughness": 1, "count": "trigger_count"},
+            ),
+        )
+    return (
+        OracleInstruction(
+            "add_counter_to_self", "",
+            {"power": 1, "toughness": 1, "count": "x", "x_from_count": spec},
+        ),
+    )
 
 
 def _lower_put_counter(
@@ -804,17 +854,8 @@ def _lower_put_counter(
         return lower_counter_sweep(node)
     if node.counter != "+1/+1" or node.up_to:
         raise LoweringError(f"no handler for {node.counter} counters", node=node)
-    if isinstance(node.count, ast.ThatMuch) and _is_source(node.subject):
-        # "…put **that many** +1/+1 counters on this creature." (Tetravus.) The
-        # number is the one the step before it recorded, so it rides the payload
-        # as the same back-reference key the token maker's "that many" reads —
-        # one phrase, one meaning, wherever in a sentence it appears.
-        return (
-            OracleInstruction(
-                "add_counter_to_self", "",
-                {"power": 1, "toughness": 1, "count": "trigger_count"},
-            ),
-        )
+    if isinstance(node.count, (ast.ThatMuch, ast.Times)) and _is_source(node.subject):
+        return _lower_recorded_count_placement(node, produced)
     if isinstance(node.count, ast.DamageDealtThisTurn) and _is_source(node.subject):
         # "…put a +1/+1 counter on this creature **for each 1 damage dealt to
         # you this turn**." (Discordant Spirit.) The turn's damage ledger rather

@@ -31,8 +31,8 @@ from ...subject_filters import untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
 from ._common import (_REST_OF_TURN, _amount_payload, _describe_targets,
-                      _filter_payload, _is_source, _is_you, _names_several_targets,
-                      _restrictions_beyond)
+                      _filter_payload, _is_source, _is_target, _is_you,
+                      _names_several_targets, _restrictions_beyond)
 
 
 #: The key a Nova Pentacle-shaped redirect writes its opponent's pick under, and
@@ -98,6 +98,40 @@ def _lower_redirect_damage(node: ast.RedirectDamage) -> tuple[OracleInstruction,
         # because the source is.
         return _lower_named_source_redirect(node)
     if node.from_chosen_source and isinstance(node.to, ast.TargetSpec):
+        if isinstance(node.new_recipient, ast.TargetSpec) and _is_target(
+            node.new_recipient
+        ):
+            # "All damage that would be dealt this turn to **target creature you
+            # control** by a source of your choice is dealt to **another target
+            # creature** instead." (Kor Chant.) The branch below's sentence with
+            # its taker announced too, so the announcement carries three answers
+            # — two targets (CR 601.2c) and CR 615.8's chosen source, which is
+            # not a target at all.
+            #
+            # Refused on the **third** answer, and the refusal is about the
+            # announcement rather than about this effect. A chosen source
+            # reaches a resolution on ``choices["chosen_source"]``, which only
+            # ``mixins/stack/activation.py`` writes: a *cast* has no channel for
+            # one. Every spell in the pool that prints the phrase gets away with
+            # that because it names nothing else, so the source rides the
+            # ability's own target slot (``handlers/prevention.chosen_shield_source``
+            # reads it there) — and this card's two slots are already spoken for.
+            #
+            # It is refused rather than lowered onto the documented "no source
+            # recorded, so the record answers to any source" fallback, because
+            # that fallback is safe only for the shields and redirects that
+            # carry ``uses=1``: spent on one instance either way. This one is
+            # blanket for the turn, so any-source would move **every** point of
+            # damage all turn onto the second creature — an effect enormously
+            # wider than the card, in the silent direction.
+            #
+            # Honorable Passage is the same gap in a shipped card; see
+            # SET_PLAYBOOK's Known gaps for the four parts that close both.
+            raise LoweringError(
+                "a cast cannot announce CR 615.8's chosen source beside its "
+                "own targets",
+                node=node,
+            )
         # "The next time a source of your choice would deal damage to **target
         # creature** this turn, that damage is dealt to this creature instead."
         # (Shaman en-Kor.) CR 615.8's chosen source over a protected recipient
