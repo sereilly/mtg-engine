@@ -318,10 +318,15 @@ PUT_FROM_HAND_PERMANENTS = "put_from_hand_permanents"
 #: answers None for a permanent that has left — the CR 400.7 answer a live
 #: object would hide.
 #:
-#: Re-exported from ``oracle_types`` under this module's spelling, the way
-#: ``_BASE_PT_SET_PERMANENTS`` and ``_COUNTERS_PLACED_THIS_WAY`` are: one
-#: string, two ends of the pipeline.
-CONTROL_EXCHANGED_PERMANENTS = CONTROL_EXCHANGED_PERMANENTS
+#: Imported from ``oracle_types`` rather than defined here — one string, two
+#: ends of the pipeline — and **rebound to itself on purpose**, which is the
+#: one line in this file that looks like a mistake and is not. Its two siblings
+#: above rename as they re-export (``_BASE_PT_SET_PERMANENTS`` from
+#: ``BASE_PT_SET_PERMANENTS``); this key keeps its own spelling, so there is
+#: nothing for the assignment to change and its whole job is to give this
+#: paragraph something to be attached to. Deleting it costs the documentation
+#: and buys nothing: the name is already bound by the import at the top, and
+#: ``_records`` imports it from here either way.
 
 
 _RECORDED_PERMANENTS: frozenset[str] = frozenset({

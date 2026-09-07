@@ -10,7 +10,7 @@ How much of the card pool the oracle-text parser (`engine/grammar/`) reads. It i
 | Lowered | That AST mapped onto instructions, a sidecar registry, or a keyword line |
 | Executed | Instructions' categories are switched on, so the grammar's output runs |
 
-Categories currently switched on: `ante, attachments, characteristics, chosen_colors, chosen_numbers, chosen_players, coin_flips, combat_restrictions, control, counted_numbers, counters, counterspells, damage, delayed_triggers, destruction, enter_statics, evasion, game_end, land_statics, life, mana, optional, prevention, pump, recolor, regeneration, retargeting, static_buffs, tapping, targeting, text_change, tokens, turns, upkeep, zones`.
+Categories currently switched on: `ante, attachments, characteristics, chosen_colors, chosen_numbers, chosen_players, coin_flips, combat_restrictions, control, copy_statics, counted_numbers, counters, counterspells, damage, delayed_triggers, destruction, enter_statics, evasion, game_end, land_statics, life, mana, optional, prevention, pump, recolor, regeneration, retargeting, static_buffs, tapping, targeting, text_change, tokens, turns, upkeep, zones`.
 
 ## Coverage by set
 
@@ -35,7 +35,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | WTH | 167 | 249 | 88.0% | 88.0% | 64.7% | 140 |
 | TMP | 335 | 478 | 92.1% | 91.8% | 65.5% | 271 |
 | M21 | 285 | 503 | 87.3% | 87.1% | 61.0% | 237 |
-| STH *(measured)* | 143 | 215 | 86.5% | 86.0% | 60.5% | 120 |
+| STH *(measured)* | 143 | 215 | 88.4% | 88.4% | 62.8% | 124 |
 | **All (shipped)** | **4587** | **6817** | **90.2%** | **89.5%** | **59.7%** | **3386** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -48,10 +48,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 369 | 159 | expected a subject |  |
+| 368 | 158 | expected a subject |  |
 | 107 | 52 | unrecognized effect verb |  |
-| 86 | 42 | unconsumed text |  |
-| 38 | 23 | granted ability in quotes | phase 3 (quoted abilities) |
+| 84 | 40 | unconsumed text |  |
+| 37 | 22 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 13 | 8 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
 | 12 | 11 | expected 'unless defending player controls' |  |
@@ -1119,6 +1119,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Distribute two -2/-1 counters among one or two target creatures.`
 - **Contemplation**
   - `Whenever you cast a spell, you gain 1 life.`
+- **Contempt**
+  - `When enchanted creature attacks, return it and this Aura to their owners' hands at end of combat.`
 - **Contract from Below**
   - `Discard your hand, ante the top card of your library, then draw seven cards.`
   - `Discard your hand, ante the top card of your library, then draw seven cards.`
@@ -4607,6 +4609,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Choose target creature. When that creature dies this turn, return a creature card from its owner's graveyard to the battlefield under the control of that creature's owner.`
 - **Reinforcements**
   - `Put up to three target creature cards from your graveyard on top of your library.`
+- **Reins of Power**
+  - `Untap all creatures you control and all creatures target opponent controls. You and that opponent each gain control of all creatures the other controls until end of turn. Those creatures gain haste until end of turn.`
 - **Relearn**
   - `Return target instant or sorcery card from your graveyard to your hand.`
 - **Relentless Assault**
@@ -5184,6 +5188,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{4}, {T}, Sacrifice this artifact: It deals 3 damage to target creature.`
 - **Silhouette**
   - `Choose target creature. If a spell or ability that targets that creature would cause a source to deal damage to that creature this turn, prevent that damage.`
+- **Silver Wyvern**
+  - `{U}: Change the target of target spell or ability that targets only this creature. The new target must be a creature.`
 - **Silversmote Ghoul**
   - `At the beginning of your end step, if you gained 3 or more life this turn, return this card from your graveyard to the battlefield tapped.`
   - `{1}{B}, Sacrifice this creature: Draw a card.`
@@ -5406,6 +5412,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, sacrifice this creature unless you pay {U}.`
 - **Spined Megalodon**
   - `Whenever this creature attacks, scry 1. (Look at the top card of your library. You may put that card on the bottom.)`
+- **Spined Sliver**
+  - `Whenever a Sliver becomes blocked, that Sliver gets +1/+1 until end of turn for each creature blocking it.`
 - **Spinning Darkness**
   - `Spinning Darkness deals 3 damage to target nonblack creature. You gain 3 life.`
 - **Spiny Starfish**
@@ -6306,6 +6314,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Volrath's Laboratory**
   - `{5}, {T}: Create a 2/2 creature token of the chosen color and type.`
 - **Volrath's Shapeshifter**
+  - `As long as the top card of your graveyard is a creature card, this creature has the full text of that card and has the text "{2}: Discard a card." (This creature has that card's name, mana cost, color, types, abilities, power, and toughness.)`
   - `{2}: Discard a card.`
 - **Volrath's Stronghold**
   - `{T}: Add {C}.`

@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**364 / 614 tracked rules covered (59%)** — 2174 tests, 0 unannotated.
+**366 / 614 tracked rules covered (59%)** — 2192 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -82,8 +82,8 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [610. One-Shot Effects](#610-one-shot-effects) | 2/5 | 40% |
 | [611. Continuous Effects](#611-continuous-effects) | 3/3 | 100% |
 | [612. Text-Changing Effects](#612-text-changing-effects) | 3/10 | 30% |
-| [613. Interaction of Continuous Effects](#613-interaction-of-continuous-effects) | 8/11 | 72% |
-| [614. Replacement Effects](#614-replacement-effects) | 10/17 | 58% |
+| [613. Interaction of Continuous Effects](#613-interaction-of-continuous-effects) | 9/11 | 81% |
+| [614. Replacement Effects](#614-replacement-effects) | 11/17 | 64% |
 | [615. Prevention Effects](#615-prevention-effects) | 7/13 | 53% |
 | [616. Interaction of Replacement and/or Prevention Effects](#616-interaction-of-replacement-andor-prevention-effects) | 2/2 | 100% |
 | [700. General](#700-general) | 2/15 | 13% |
@@ -204,7 +204,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **109.2** If a spell or ability uses a description of an object that includes a card type or subtype, but d...
 - [ ] **109.3** An object’s characteristics are name, mana cost, color, color indicator, card type, subtype, supe...
 - [ ] **109.4** Only objects on the stack or on the battlefield have a controller. Objects that are neither on th...
-- [x] **109.5** The words “you” and “your” on an object refer to the object’s controller, its would-be controller... *(18 tests)*
+- [x] **109.5** The words “you” and “your” on an object refer to the object’s controller, its would-be controller... *(19 tests)*
 
 ### 110. Permanents
 
@@ -241,7 +241,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [ ] **113.1** An ability can be one of three things:
 - [ ] **113.2** Abilities can affect the objects they’re on. They can also affect other objects and/or players.
-- [x] **113.3** There are four general categories of abilities: *(3 tests, subrules c)*
+- [x] **113.3** There are four general categories of abilities: *(4 tests, subrules bc)*
 - [ ] **113.4** Some activated abilities and some triggered abilities are mana abilities. Mana abilities follow s...
 - [ ] **113.5** Some activated abilities are loyalty abilities. Loyalty abilities follow special rules: A player ...
 - [x] **113.6** Abilities of an instant or sorcery spell usually function only while that object is on the stack.... *(11 tests, subrules bgkm)*
@@ -262,13 +262,13 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 115. Targets
 
-- [x] **115.1** Some spells and abilities require their controller to choose one or more targets for them. The ta... *(22 tests, subrules abcd)*
+- [x] **115.1** Some spells and abilities require their controller to choose one or more targets for them. The ta... *(24 tests, subrules abcd)*
 - [x] **115.2** Only permanents are legal targets for spells and abilities, unless a spell or ability (a) specifi... *(3 tests)*
 - [ ] **115.3** The same target can’t be chosen multiple times for any one instance of the word “target” on a spe...
 - [x] **115.4** Some spells and abilities that refer to damage require “any target,” “another target,” “two targe... *(6 tests)*
 - [ ] **115.5** A spell or ability on the stack is an illegal target for itself.
 - [x] **115.6** A spell or ability that requires targets may allow zero targets to be chosen. Such a spell or abi... *(4 tests)*
-- [x] **115.7** Some effects allow a player to change the target(s) of a spell or ability, and other effects allo... *(3 tests, subrules a)*
+- [x] **115.7** Some effects allow a player to change the target(s) of a spell or ability, and other effects allo... *(5 tests, subrules a)*
 - [x] **115.8** Modal spells and abilities may have different targeting requirements for each mode. An effect tha... *(1 tests)*
 - [x] **115.9** Some objects check what another spell or ability is targeting. Depending on the wording, these ma... *(1 tests, subrules a)*
 - [x] **115.10** Spells and abilities can affect objects and players they don’t target. In general, those objects ... *(2 tests, subrules a)*
@@ -333,7 +333,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 121. Drawing a Card
 
-- [x] **121.1** A player draws a card by putting the top card of their library into their hand. This is done as a... *(3 tests)*
+- [x] **121.1** A player draws a card by putting the top card of their library into their hand. This is done as a... *(5 tests)*
 - [x] **121.2** Cards may only be drawn one at a time. If a player is instructed to draw multiple cards, that pla... *(4 tests, subrules a)*
 - [ ] **121.3** If there are no cards in a player’s library and an effect offers that player the choice to draw a...
 - [x] **121.4** A player who attempts to draw a card from a library with no cards in it loses the game the next t... *(4 tests)*
@@ -380,7 +380,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 205. Type Line
 
 - [x] **205.1** The type line is printed directly below the illustration. It contains the card’s card type(s). It... *(8 tests, subrules ab)*
-- [x] **205.2** Card Types *(11 tests, subrules ab)*
+- [x] **205.2** Card Types *(13 tests, subrules ab)*
 - [x] **205.3** Subtypes *(3 tests, subrules bi)*
 - [x] **205.4** Supertypes *(10 tests, subrules abcd)*
 
@@ -483,7 +483,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **400.4** Cards with certain card types can’t enter certain zones. *(1 tests)*
 - [x] **400.5** The order of objects in a library, in a graveyard, or on the stack can’t be changed except when e... *(2 tests)*
 - [ ] **400.6** If an object would move from one zone to another, determine what event is moving the object. If t...
-- [x] **400.7** An object that moves from one zone to another becomes a new object with no memory of, or relation... *(15 tests)*
+- [x] **400.7** An object that moves from one zone to another becomes a new object with no memory of, or relation... *(17 tests)*
 - [ ] **400.8** If an object in the exile zone is exiled, it doesn’t change zones, but it becomes a new object th...
 - [ ] **400.9** If a face-up object in the command zone is turned face down, it becomes a new object.
 - [ ] **400.10** If an object in the command zone is put into the command zone, it doesn’t change zones, but it be...
@@ -493,7 +493,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 401. Library
 
 - [x] **401.1** When a game begins, each player’s deck becomes their library. *(1 tests)*
-- [x] **401.2** Each library must be kept in a single face-down pile. Players can’t look at or change the order o... *(1 tests)*
+- [x] **401.2** Each library must be kept in a single face-down pile. Players can’t look at or change the order o... *(2 tests)*
 - [ ] **401.3** Any player may count the number of cards remaining in any player’s library at any time.
 - [x] **401.4** If an effect puts two or more cards in a specific position in a library at the same time, the own... *(3 tests)*
 - [x] **401.5** Some effects tell a player to play with the top card of their library revealed, or say that a pla... *(1 tests)*
@@ -516,7 +516,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 404. Graveyard
 
-- [x] **404.1** A player’s graveyard is their discard pile. Any object that’s countered, discarded, destroyed, or... *(6 tests)*
+- [x] **404.1** A player’s graveyard is their discard pile. Any object that’s countered, discarded, destroyed, or... *(8 tests)*
 - [ ] **404.2** Each graveyard is kept in a single face-up pile. A player can examine the cards in any graveyard ...
 - [x] **404.3** If an effect or rule puts two or more cards into the same graveyard at the same time, the owner o... *(2 tests)*
 
@@ -754,7 +754,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 611. Continuous Effects
 
 - [x] **611.1** A continuous effect modifies characteristics of objects, modifies control of objects, or affects ... *(3 tests)*
-- [x] **611.2** A continuous effect may be generated by the resolution of a spell or ability. *(38 tests, subrules abc)*
+- [x] **611.2** A continuous effect may be generated by the resolution of a spell or ability. *(40 tests, subrules abc)*
 - [x] **611.3** A continuous effect may be generated by the static ability of an object. *(53 tests, subrules abc)*
 
 ### 612. Text-Changing Effects
@@ -772,13 +772,13 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 613. Interaction of Continuous Effects
 
-- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(87 tests, subrules bcdefg)*
-- [x] **613.2** Within layer 1, apply effects in a series of sublayers in the order described below. Within each ... *(15 tests, subrules ac)*
+- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(91 tests, subrules abcdefg)*
+- [x] **613.2** Within layer 1, apply effects in a series of sublayers in the order described below. Within each ... *(17 tests, subrules ac)*
 - [ ] **613.3** Within layers 2–6, apply effects from characteristic-defining abilities first (see rule 604.3), t...
 - [x] **613.4** Within layer 7, apply effects in a series of sublayers in the order described below. Within each ... *(73 tests, subrules abcd)*
 - [x] **613.5** The application of continuous effects as described by the layer system is continually and automat... *(2 tests)*
-- [ ] **613.6** If an effect should be applied in different layers and/or sublayers, the parts of the effect each...
-- [x] **613.7** Within a layer or sublayer, determining which order effects are applied in is usually done using ... *(29 tests, subrules abe)*
+- [x] **613.6** If an effect should be applied in different layers and/or sublayers, the parts of the effect each... *(1 tests)*
+- [x] **613.7** Within a layer or sublayer, determining which order effects are applied in is usually done using ... *(30 tests, subrules abe)*
 - [x] **613.8** Within a layer or sublayer, determining which order effects are applied in is sometimes done usin... *(8 tests, subrules abc)*
 - [x] **613.9** One continuous effect can override another. Sometimes the results of one effect determine whether... *(6 tests)*
 - [x] **613.10** Some continuous effects affect players rather than objects. For example, an effect might give a p... *(1 tests)*
@@ -802,7 +802,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **614.14** An object may have one ability printed on it that generates a replacement effect which causes one...
 - [ ] **614.15** Some replacement effects are not continuous effects. Rather, they are an effect of a resolving sp...
 - [ ] **614.16** Some replacement effects apply “if an effect would create one or more tokens” or “if an effect wo...
-- [ ] **614.17** Some effects state that something can’t happen. These effects aren’t replacement effects, but fol...
+- [x] **614.17** Some effects state that something can’t happen. These effects aren’t replacement effects, but fol... *(1 tests)*
 
 ### 615. Prevention Effects
 
@@ -852,7 +852,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **701.7** Create *(3 tests, subrules a)*
 - [x] **701.8** Destroy *(7 tests, subrules abc)*
 - [x] **701.9** Discard *(5 tests, subrules ac)*
-- [x] **701.12** Exchange *(7 tests, subrules ab)*
+- [x] **701.12** Exchange *(8 tests, subrules ab)*
 - [x] **701.13** Exile *(7 tests, subrules a)*
 - [x] **701.14** Fight *(7 tests, subrules abd)*
 - [x] **701.17** Mill *(6 tests, subrules a)*
@@ -924,14 +924,14 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 707. Copying Objects
 
 - [ ] **707.1** Some objects become or turn another object into a “copy” of a spell, permanent, or card. Some eff...
-- [x] **707.2** When copying an object, the copy acquires the copiable values of the original object’s characteri... *(29 tests, subrules ab)*
+- [x] **707.2** When copying an object, the copy acquires the copiable values of the original object’s characteri... *(31 tests, subrules abc)*
 - [x] **707.3** The copy’s copiable values become the copied information, as modified by the copy’s status (see r... *(2 tests)*
 - [x] **707.4** Some effects cause a permanent that’s copying a permanent to copy a different object while remain... *(2 tests)*
 - [x] **707.5** An object that enters the battlefield “as a copy” or “that’s a copy” of another object becomes a ... *(2 tests)*
 - [ ] **707.6** When copying a permanent, any choices that have been made for that permanent aren’t copied. Inste...
 - [ ] **707.7** If a pair of linked abilities are copied, those abilities will be similarly linked to one another...
 - [ ] **707.8** When copying a melded permanent or other double-faced permanent, use the copiable values of the f...
-- [x] **707.9** Copy effects may include modifications or exceptions to the copying process. *(12 tests, subrules abc)*
+- [x] **707.9** Copy effects may include modifications or exceptions to the copying process. *(13 tests, subrules abc)*
 - [x] **707.10** To copy a spell, activated ability, or triggered ability means to put a copy of it onto the stack... *(6 tests, subrules ac)*
 - [ ] **707.11** If an effect refers to a permanent by name, the effect still tracks that permanent even if it cha...
 - [ ] **707.12** An effect that instructs a player to cast a copy of an object (and not just copy a spell) follows...
