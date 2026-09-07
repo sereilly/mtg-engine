@@ -28,6 +28,13 @@ ATTACK_AS_THOUGH_NO_DEFENDER = "attack_as_though_no_defender_until_eot"
 #: clause lives, cannot be imported that early.
 CANT_BLOCK_UNTIL_EOT = "cant_block_until_eot"
 
+#: "Target creature can't attack this turn." (Change of Heart.) The attacking
+#: twin of the mark above, in the same channel shape and here for the same
+#: reason. Its own key rather than a second reading of that one: the two are
+#: answered at two different steps, and one flag for both would ground a
+#: creature Panic only meant to stop blocking.
+CANT_ATTACK_UNTIL_EOT = "cant_attack_until_eot_mark"
+
 #: "That creature can block up to two additional creatures this turn." (Yare.)
 #: How many attackers *beyond the printed one* this permanent may block for the
 #: rest of the turn, read by ``_max_blocks_for`` and swept with the turn. A
@@ -56,3 +63,24 @@ MUST_BLOCK_ALL_UNTIL_EOT = "must_block_all_until_eot"
 #: anything leaving the battlefield and a returning permanent is a new object
 #: (CR 400.7) that must not inherit a requirement aimed at its earlier self.
 MUST_BLOCK_ATTACKERS_UNTIL_EOT = "must_block_attackers_until_eot"
+
+#: "Target creature can't block this creature this turn." (Duct Crawler.) The
+#: exact denial mirror of the requirement above, and the same shape for the
+#: same reasons: a list of the forbidden attackers' ``permanent_id``s on the
+#: restricted creature, read by the declare-blockers step and swept with the
+#: turn. A list because two activations name two attackers and both denials
+#: hold; by id because an index is renumbered by anything leaving the
+#: battlefield and a returning permanent is a new object (CR 400.7).
+CANT_BLOCK_ATTACKERS_UNTIL_EOT = "cant_block_attackers_until_eot"
+
+#: "That creature blocks this turn if able." (Provoke.) CR 509.1c's **weakest**
+#: requirement for one turn: block *something* — any one attacker this creature
+#: can legally block — where ``MUST_BLOCK_ATTACKERS_UNTIL_EOT`` names which
+#: attacker and Blaze of Glory's flag names all of them.
+#:
+#: A flag rather than a list, and that is the difference itself: the
+#: requirement is about the creature and not about a pair, so there is no id to
+#: keep and a second copy of the spell asks for nothing more. It is the
+#: one-turn twin of Watchdog's printed static, read at the same place in the
+#: declare-blockers step so the two cannot come to mean different things.
+MUST_BLOCK_UNTIL_EOT = "must_block_until_eot"

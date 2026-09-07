@@ -70,6 +70,32 @@ _ATTACHED_TO_REFERENTS = {("that", "creature"): "target", ("it",): "source"}
 
 
 
+def _accept_cards_in_hand_bound(stream: TokenStream) -> str | None:
+    """``greater than the number of cards in your hand`` (Ensnaring Bridge).
+
+    A bound off a **hidden zone**, which is what separates it from the two
+    counter bounds beside it: no board holds the number, so neither the pure
+    matcher nor a source-relative read can answer it — only a caller holding
+    the seat can. Whose hand is returned rather than baked in, so a card
+    printing "an opponent's hand" is data here and a matcher branch there.
+
+    Read *before* ``parse_comparison``, whose "N or greater" shape opens on a
+    quantity and would refuse these words with "expected a quantity" — a
+    refusal naming the one thing the phrase does not contain. Declines without
+    consuming, so every other bound keeps the reading it has.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase(
+        "greater", "than", "the", "number", "of", "cards", "in",
+    ):
+        stream.reset(mark)
+        return None
+    if stream.accept_phrase("your", "hand"):
+        return "you"
+    stream.reset(mark)
+    return None
+
+
 def _parse_postmodifiers(
     stream: TokenStream,
     d,
@@ -460,6 +486,10 @@ def _parse_postmodifiers(
                 )
                 if source_counters is not None:
                     d.power_at_most_source_counters = source_counters
+                    continue
+                hand_bound = _accept_cards_in_hand_bound(stream)
+                if hand_bound is not None:
+                    d.power_greater_than_cards_in_hand = hand_bound
                     continue
                 d.power = parse_comparison(stream)
                 continue

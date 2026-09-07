@@ -1323,3 +1323,188 @@ def test_the_blocking_requirement_is_its_own_kind_from_the_attacking_one():
     assert combat_restriction_for(
         "this creature attacks each combat if able"
     ).kind == "must_attack_each_combat"
+
+
+# --- STH W1G2: "alone", and the chooser a static substitutes ---
+
+
+def _g2r_creature(name, power, toughness, subtype="Test", keywords=()):
+    text = "\n".join(word.capitalize() for word in keywords)
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line=f"Creature — {subtype}",
+        oracle_text=text, colors=(), color_identity=(),
+        keywords=tuple(word.capitalize() for word in keywords), produced_mana=(),
+        raw={"name": name, "type_line": f"Creature — {subtype}",
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def _g2r_printed(name, type_line, text) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line=type_line,
+        oracle_text=text, colors=(), color_identity=(), keywords=(),
+        produced_mana=(), raw={"name": name, "type_line": type_line},
+    )
+
+
+def _g2r_combat(mine, theirs) -> Game:
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=list(mine)),
+        PlayerState(name="P2", battlefield=list(theirs)),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    return game
+
+
+@pytest.mark.cr("506.5", "508.1c", "509.1b")
+def test_alone_is_a_printed_count_of_one_and_not_a_new_restriction():
+    """CR 506.5 defines attacking alone as being the only creature declared.
+
+    So "can't attack or block alone" is "unless at least one other creature
+    attacks/blocks" with the number written as a word — the very kinds Orcish
+    Conscripts' spelled-out count already produces. The point of the assertion
+    is that the grammar reads *one* rule here rather than inventing a second
+    enforcement site, and that all three printed spellings agree.
+    """
+    from engine.grammar import parse_line
+    from engine.grammar.lower import lower_ability
+
+    def kinds(text):
+        return [
+            (i.kind, i.payload)
+            for i in lower_ability(parse_line(text))
+        ]
+
+    assert kinds("This creature can't attack or block alone.") == [
+        ("cant_attack_unless_others_attack", {"count": 1}),
+        ("cant_block_unless_others_block", {"count": 1}),
+    ]
+    assert kinds("This creature can't attack alone.") == [
+        ("cant_attack_unless_others_attack", {"count": 1}),
+    ]
+    assert kinds("This creature can't block alone.") == [
+        ("cant_block_unless_others_block", {"count": 1}),
+    ]
+
+
+@pytest.mark.cr("506.5")
+def test_the_alone_restriction_is_read_off_the_creature_that_prints_it():
+    """A production ending in a subject has to check it.
+
+    ``declaration_company_required`` takes **one** permanent and reads its own
+    compiled program, so a sentence about a described set has nowhere to be
+    enforced. Refusing in the lowering is what keeps such a card unsupported and
+    named, rather than compiling it with the restriction dropped.
+    """
+    from engine.grammar import parse_line
+    from engine.grammar.errors import LoweringError
+    from engine.grammar.lower import lower_ability
+
+    with pytest.raises(LoweringError):
+        lower_ability(parse_line("Red creatures can't attack or block alone."))
+
+
+@pytest.mark.cr("506.5", "509.1b")
+def test_attacking_alone_is_asked_at_the_declaration_not_at_a_recompute():
+    """"Can't be blocked as long as it's attacking alone" (Dream Prowler).
+
+    The condition is about the declaration the creature is in, so the answer has
+    to move when the declaration does — a value materialized on a layer
+    recompute would be stale the moment a second attacker joined.
+    """
+    lone = _nosick(Permanent(card=_g2r_printed(
+        "Lone Stalker", "Creature — Test",
+        "This creature can't be blocked as long as it's attacking alone.",
+    )))
+    lone.card.raw.update({"power": "2", "toughness": "2"})
+    ally = _nosick(Permanent(card=_g2r_creature("Footman", 2, 2)))
+    blocker = _nosick(Permanent(card=_g2r_creature("Guard", 2, 2)))
+    game = _g2r_combat([lone, ally], [blocker])
+
+    assert game.declare_attackers(0, [0])[0]
+    game.advance_combat_phase()
+    assert not game._can_block_attacker(blocker, lone)
+
+    game.combat_attackers[1] = 1
+    ally.attacking = True
+    assert game._can_block_attacker(blocker, lone)
+
+
+@pytest.mark.cr("509.1a")
+def test_a_static_may_substitute_the_seat_that_chooses_blocks():
+    """CR 509.1a's choices belong to the defending player unless something says
+    otherwise, and Melee is not the only thing that can.
+
+    A static ability derives the substitution from the board every time the
+    question is asked, where the one-shot writes a seat onto the game — so the
+    enchantment leaving is the whole of what ends it, and a one-shot already in
+    effect keeps the seat its own sentence named.
+    """
+    plans = Permanent(card=_g2r_printed(
+        "Battle Plans", "Enchantment",
+        "The attacking player chooses how each creature blocks each combat.",
+    ))
+    blocker = _nosick(Permanent(card=_g2r_creature("Guard", 2, 2)))
+    game = _g2r_combat([plans], [blocker])
+    assert game.block_chooser_index(1) == 0
+
+    # A one-shot already in effect wins: it names a seat outright, and the
+    # derived answer is only consulted when none has been named.
+    game.combat_block_chooser = 1
+    assert game.block_chooser_index(1) == 1
+    game.combat_block_chooser = None
+
+    game.remove_from_battlefield(plans)
+    assert game.block_chooser_index(1) == 1
+
+
+@pytest.mark.cr("609.4")
+def test_an_attack_permission_over_a_class_is_not_a_keyword_removal():
+    """"<Class> can attack as though they didn't have defender."
+
+    CR 609.4 confines an "as though" effect to the stated effect, so the
+    creature keeps the keyword for everything else — what a defender-narrowed
+    filter matches, what layer 6 reports, what "creatures with defender" counts.
+    The noun phrase is payload, so the assertion is both the freed class and the
+    class beside it that stays grounded.
+    """
+    stones = Permanent(card=_g2r_printed(
+        "Standing Stones", "Enchantment",
+        "Wall creatures can attack as though they didn't have defender.",
+    ))
+    wall = _nosick(Permanent(
+        card=_g2r_creature("Stone Wall", 0, 4, "Wall", ("defender",))
+    ))
+    keeper = _nosick(Permanent(
+        card=_g2r_creature("Gate Keeper", 0, 4, "Soldier", ("defender",))
+    ))
+    game = _g2r_combat([wall, keeper], [])
+    assert not game.can_attack(wall, 1)
+
+    game.players[0].battlefield.append(stones)
+    assert game.can_attack(wall, 1)
+    assert not game.can_attack(keeper, 1)
+    assert game._has_keyword(wall, "defender")
+
+
+@pytest.mark.cr("509.1c")
+def test_a_set_block_requirement_refuses_a_phrase_the_matcher_cannot_test():
+    """The row ends in a catch-all, so the negative case is the test that finds
+    the bug: a noun phrase admitted unread would compel *every* creature on the
+    table to block."""
+    assert combat_restriction_for(
+        "all creatures block each combat if able"
+    ).kind == "creatures_must_block"
+    assert combat_restriction_for(
+        "creatures with three heads block each combat if able"
+    ) is None
+    # The per-creature row keeps its own kind: the two are checked at the same
+    # step by different reads, and one kind for both would compel a board.
+    assert combat_restriction_for(
+        "this creature blocks each combat if able"
+    ).kind == "must_block_each_combat"

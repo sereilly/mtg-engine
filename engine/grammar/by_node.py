@@ -308,12 +308,6 @@ _BY_NODE_TYPE: dict[type, object] = {
 #: whichever was consulted first, which is not a fact anyone should have to look
 #: up.
 _BY_NODE_TYPE_WITH_EVENT: dict[type, object] = {
-    # "…all creatures with magnet counters on them block **that creature** this
-    # turn if able" (Magnetic Web). The attacker the requirement names may be
-    # the object the firing event was about, so the lowering has to know which
-    # event fired — and refuses the pronoun under one that records no attacker
-    # rather than compiling a requirement aimed at nothing.
-    ast.BlocksThisTurnIfAble: _lower_blocks_this_turn_if_able,
     # "…**that player** exiles all cards from their library" (Thought Lash),
     # "…**that player** mills a card" (Reef Pirates), "…**that player**
     # discards a card" (Anvil of Bogardan): each names the seat the fire site
@@ -375,6 +369,25 @@ _BY_NODE_TYPE_WITH_EVENT: dict[type, object] = {
     # a "you may …" offer where `dispatch_event` is already None.
     ast.PutGraveyardPositionOntoBattlefield:
         _lower_put_graveyard_position_onto_battlefield,
+}
+
+
+#: The fourth registry, and the only node that needs **both**: what the firing
+#: event froze *and* what earlier steps of this same effect recorded.
+#:
+#: "…all creatures with magnet counters on them block **that creature** this
+#: turn if able" (Magnetic Web) reads the event — the attacker the requirement
+#: names is the object the trigger fired on. "**That creature** blocks this turn
+#: if able" (Provoke) reads the records — the creature compelled is the one the
+#: sentence in front of it untapped. One printed sentence, two pronouns, two
+#: different questions, and dropping either argument answers one of them with
+#: whatever the resolution happened to be holding.
+#:
+#: A fourth table rather than a chain branch, for the third table's stated
+#: reason: ``lower_statement`` is dispatch and this is a registry. Disjoint from
+#: the three above like every other pair of them.
+_BY_NODE_TYPE_WITH_EVENT_AND_PRODUCED: dict[type, object] = {
+    ast.BlocksThisTurnIfAble: _lower_blocks_this_turn_if_able,
 }
 
 

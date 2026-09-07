@@ -38,7 +38,8 @@ from ._common import (
     _describe_targets, _is_source, _names_several_targets, _restrictions_beyond,
     testable_filter_payload,
 )
-from ._record_keys import CHOSEN_PLAYER
+from ._record_keys import (CHOSEN_PLAYER, DAMAGE_RECIPIENT,
+                           _UNTAPPED_PERMANENTS)
 
 
 #: The noun phrase a sentence may use to name the set an earlier step of the
@@ -298,6 +299,39 @@ def _lower_attacks_this_turn_if_able(
                 {"subject": described},
             ),
         )
+    if (
+        isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier == "that"
+        and DAMAGE_RECIPIENT in produced
+    ):
+        # "This artifact deals 1 damage to target creature. **That creature**
+        # attacks this turn if able." (Bullwhip.) The pronoun names the object
+        # an earlier step of this same resolution hit, not a second target —
+        # CR 601.2c fixed one creature when the ability was activated, and a
+        # target description here would make the picker ask for it twice.
+        #
+        # Gated on the damage step's own record rather than assumed: with
+        # nothing in front of it the words name nothing, and a requirement that
+        # resolved against whichever object the context happened to hold would
+        # compel a creature the card never mentions. The same shape the
+        # keyword-grant family uses for "that creature gains haste".
+        #
+        # A bound object carries no narrowing to honour — the noun restates
+        # what the step in front already found — so anything beyond the printed
+        # type refuses rather than being dropped.
+        if _restrictions_beyond(node.subject.filter, frozenset({"card_types"})):
+            raise LoweringError(
+                "a bound attack requirement reads the permanent an earlier "
+                "step damaged and nothing narrower",
+                node=node,
+            )
+        if node.subject.filter.card_types not in ((), ("creature",)):
+            raise LoweringError(
+                "an attack requirement names a creature", node=node
+            )
+        return (
+            OracleInstruction("force_bound_to_attack_until_eot", "", {}),
+        )
     if isinstance(node.subject, ast.TargetSpec) and node.subject.targeted:
         if _names_several_targets(node.subject):
             raise LoweringError(
@@ -336,6 +370,7 @@ def _lower_attacks_this_turn_if_able(
 def _lower_blocks_this_turn_if_able(
     node: ast.BlocksThisTurnIfAble,
     event: str | None = None,
+    produced: frozenset[str] = frozenset(),
 ) -> tuple[OracleInstruction, ...]:
     """CR 509.1c's requirement for one turn, on named creatures and aimed at one
     named attacker (Trumpeting Armodon, Magnetic Web).
@@ -355,6 +390,43 @@ def _lower_blocks_this_turn_if_able(
     quantified noun phrase, which reaches every creature it describes and so
     carries no picker at all.
     """
+    if node.attacker is None:
+        # "**That creature** blocks this turn if able." (Provoke.) No attacker
+        # named, which is the *weakest* CR 509.1c requirement rather than a
+        # dropped half: the creature must block something it legally can, which
+        # is what Watchdog's printed static already says and what the
+        # declare-blockers step already checks. Its own kind for that reason —
+        # the narrowed one records which attacker is owed, and a list with
+        # nothing in it would compel nobody.
+        #
+        # The subject is the object the sentence in front of this one untapped,
+        # gated on that step's own record: with nothing in front the pronoun
+        # names nobody, and a requirement resolved against whatever the
+        # resolution happened to hold would compel a creature the card never
+        # mentions.
+        if not (
+            isinstance(node.subject, ast.TargetSpec)
+            and node.subject.quantifier == "that"
+            and _UNTAPPED_PERMANENTS in produced
+        ):
+            raise LoweringError(
+                "an unaimed block requirement names the permanent an earlier "
+                "step of this effect untapped",
+                node=node,
+            )
+        if _restrictions_beyond(node.subject.filter, frozenset({"card_types"})):
+            raise LoweringError(
+                "a bound block requirement reads the permanent an earlier "
+                "step untapped and nothing narrower",
+                node=node,
+            )
+        if node.subject.filter.card_types not in ((), ("creature",)):
+            raise LoweringError(
+                "a block requirement names a creature", node=node
+            )
+        return (
+            OracleInstruction("force_bound_to_block_until_eot", "", {}),
+        )
     if isinstance(node.attacker, ast.TargetSpec) and _is_source(node.attacker):
         attacker = "source"
     elif (

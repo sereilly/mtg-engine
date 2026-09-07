@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 from ._common import (recorded_permanent_ids, 
     attached_host,
+    bound_permanent,
     block_pair_permanents,
     flip_coin,
     resolve_own_combatant,
@@ -22,6 +23,9 @@ from ..combat_permissions import (ADDITIONAL_BLOCKS_UNTIL_EOT,
                                   MUST_BLOCK_ALL_UNTIL_EOT,
                                   MUST_BLOCK_ATTACKERS_UNTIL_EOT,
                                   ATTACK_AS_THOUGH_NO_DEFENDER,
+                                  CANT_ATTACK_UNTIL_EOT,
+                                  CANT_BLOCK_ATTACKERS_UNTIL_EOT,
+                                  MUST_BLOCK_UNTIL_EOT,
                                   CANT_BLOCK_UNTIL_EOT)
 from ..pt import add_pt_modifier
 from ..rampage import rampage_bonus
@@ -764,6 +768,64 @@ def force_target_to_attack_until_eot(game: Game, instruction: OracleInstruction,
     return True, "resolved"
 
 
+@effect_handler("force_bound_to_attack_until_eot")
+def force_bound_to_attack_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"This artifact deals 1 damage to target creature. **That creature**
+    attacks this turn if able." (Bullwhip.)
+
+    The same CR 508.1a requirement as the targeted kind above, on the object an
+    earlier step of this resolution already acted on rather than on a second
+    choice. ``bound_permanent`` is the reader every "that creature" goes
+    through, so a requirement inside a loop names the iteration's object and one
+    outside it names the ability's own target (CR 601.2c) -- and no picker is
+    involved either way, which is the whole difference from the kind above.
+
+    No noun phrase is re-tested: the sentence in front of this one already found
+    the creature, and asking again would be a second reading of one choice.
+    Whether it is still a creature is the requirement's own business -- the mark
+    means nothing on a permanent that cannot attack, and "if able" is what makes
+    that harmless.
+    """
+    chosen = bound_permanent(game, context)
+    if chosen is None:
+        game.log.append(
+            f"{context.card.name}: nothing left for the attack requirement"
+        )
+        return True, "resolved"
+    chosen.metadata["must_attack_until_eot"] = True
+    game.log.append(f"{chosen.card.name} must attack this turn if able")
+    return True, "resolved"
+
+
+@effect_handler("force_bound_to_block_until_eot")
+def force_bound_to_block_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Untap target creature you don't control. **That creature blocks this
+    turn if able.**" (Provoke.)
+
+    CR 509.1c's weakest requirement, for one turn, on the creature the sentence
+    in front of this one untapped: block *something* it legally can. The
+    narrowed kind below records **which** attacker is owed; this one records
+    only that a block is, which is why it is a flag rather than a list -- there
+    is no pair here, and an empty list would compel nobody.
+
+    ``bound_permanent`` is the reader every "that creature" goes through, so
+    the pronoun means the ability's own target outside a loop and the
+    iteration's object inside one, and no picker is involved either way.
+
+    Nothing is re-tested: the untap in front of it already found the creature,
+    and "if able" is what makes the mark harmless on one that cannot block.
+    """
+    chosen = bound_permanent(game, context)
+    if chosen is None:
+        game.log.append(
+            f"{context.card.name}: nothing left for the block requirement"
+        )
+        return True, "resolved"
+    chosen.metadata[MUST_BLOCK_UNTIL_EOT] = True
+    game.log.append(f"{chosen.card.name} blocks this turn if able")
+    return True, "resolved"
+
+
 @effect_handler("force_target_to_block_until_eot")
 def force_target_to_block_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Target creature blocks this creature this turn if able." (Trumpeting
@@ -1236,6 +1298,95 @@ def target_cant_block_until_eot(game: Game, instruction: OracleInstruction, cont
         return True, "resolved"
     target_creature.metadata[CANT_BLOCK_UNTIL_EOT] = True
     game.log.append(f"{target_creature.card.name} can't block this turn")
+    return True, "resolved"
+
+
+@effect_handler("target_cant_attack_until_eot")
+def target_cant_attack_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Target creature can't attack this turn." (Change of Heart.)
+
+    The attacking twin of ``target_cant_block_until_eot`` above, and the same
+    shape: a mark on the one permanent the spell chose, swept with the turn by
+    ``_EOT_METADATA_KEYS``, read by ``declare_attackers_step.can_attack``.
+
+    Not the blanket ``cant_attack_until_eot`` beside it -- that arms a
+    board-wide filter, and a targeted restriction routed through it would
+    ground every creature its noun phrase describes.
+
+    The printed noun phrase is re-asked here, not only at announcement, for the
+    reason every other targeted combat mark gives: a target that stopped being
+    a creature between the two is no longer what the card names (CR 608.2b).
+    """
+    from ..subject_filters import subject_matches
+
+    described = (instruction.payload.get("targets") or {}).get("filter") or {}
+    observer = (
+        game.players.index(context.caster) if context.caster in game.players
+        else None
+    )
+    target_creature = resolve_target_permanent(
+        game, context,
+        predicate=lambda perm: subject_matches(
+            game, perm, described,
+            observer=observer, source=context.source_permanent,
+        ),
+        fallback_on_invalid_choice=False,
+    )
+    if target_creature is None:
+        game.log.append(f"{context.card.name}: its target is gone (608.2b)")
+        return True, "resolved"
+    target_creature.metadata[CANT_ATTACK_UNTIL_EOT] = True
+    game.log.append(f"{target_creature.card.name} can't attack this turn")
+    return True, "resolved"
+
+
+@effect_handler("target_cant_block_source_until_eot")
+def target_cant_block_source_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Target creature can't block this creature this turn." (Duct Crawler.)
+
+    CR 509.1b's denial narrowed to one named attacker — the ability's own
+    source — and the exact mirror of ``force_target_to_block_until_eot`` above,
+    down to why it is recorded the way it is: the forbidden attacker's
+    ``permanent_id`` appended to a list on the restricted creature, because two
+    activations name two attackers and both denials hold, and because an
+    attacker that leaves and returns is a new object (CR 400.7) whose new id
+    the old denial does not name.
+
+    With no source on the battlefield there is no attacker for the denial to be
+    about, so nothing is recorded — a mark with no id in it would be a "can't
+    block at all" this card never prints.
+    """
+    from ..subject_filters import subject_matches
+
+    attacker = context.source_permanent
+    if attacker is None or not game.is_on_battlefield(attacker):
+        game.log.append(
+            f"{context.card.name}: its own attacker has left, so nothing is "
+            "denied a block"
+        )
+        return True, "resolved"
+    described = (instruction.payload.get("targets") or {}).get("filter") or {}
+    observer = (
+        game.players.index(context.caster) if context.caster in game.players
+        else None
+    )
+    chosen = resolve_target_permanent(
+        game, context,
+        predicate=lambda perm: subject_matches(
+            game, perm, described, observer=observer, source=attacker,
+        ),
+        fallback_on_invalid_choice=False,
+    )
+    if chosen is None:
+        game.log.append(f"{context.card.name}: its target is gone (608.2b)")
+        return True, "resolved"
+    denied = list(chosen.metadata.get(CANT_BLOCK_ATTACKERS_UNTIL_EOT) or ())
+    if attacker.permanent_id not in denied:
+        denied.append(attacker.permanent_id)
+    chosen.metadata[CANT_BLOCK_ATTACKERS_UNTIL_EOT] = denied
+    game.log.append(
+        f"{chosen.card.name} can't block {attacker.card.name} this turn"
+    )
     return True, "resolved"
 
 

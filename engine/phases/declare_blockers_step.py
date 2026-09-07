@@ -17,6 +17,8 @@ from ..combat_permissions import (ADDITIONAL_BLOCKS_UNTIL_EOT,
                                   CAN_BLOCK_ANY_NUMBER_UNTIL_EOT,
                                   MUST_BLOCK_ALL_UNTIL_EOT,
                                   MUST_BLOCK_ATTACKERS_UNTIL_EOT,
+                                  MUST_BLOCK_UNTIL_EOT,
+                                  CANT_BLOCK_ATTACKERS_UNTIL_EOT,
                                   CANT_BLOCK_UNTIL_EOT)
 from ..combat_restrictions import declaration_company_required, participation_cap
 from ..evasion_negation import negated_evasion_abilities
@@ -475,9 +477,16 @@ class DeclareBlockersStepMixin:
             if assignments.get(blocker_idx):
                 continue
             program = compile_card_oracle(blocker.effective_card)
-            if not any(
+            # And the granted half (Provoke): a requirement a spell put on this
+            # one creature for the turn, swept by the cleanup step. Read beside
+            # the three above because all four answer the same question — must
+            # this creature block *something*? — and a reader that knew only
+            # three of them would let the fourth through.
+            if not blocker.metadata.get(MUST_BLOCK_UNTIL_EOT) and not any(
                 i.kind == "must_block_each_combat" for i in program.instructions
-            ) and not aura_restriction_active(blocker, "must_block_each_combat"):
+            ) and not aura_restriction_active(
+                blocker, "must_block_each_combat"
+            ) and not self._board_compels_block(blocker):
                 continue
             able = False
             for attacker_idx in own_attackers:
@@ -833,6 +842,34 @@ class DeclareBlockersStepMixin:
                     caps.append(int(instr.payload.get("count", 1)))
         return min(caps) if caps else None
 
+    def _board_compels_block(self, blocker: Permanent) -> bool:
+        """The board-reaching half of Watchdog's requirement.
+
+        "All creatures block each combat if able." (Invasion Plans.) Printed on
+        an enchantment nobody is blocking with, so it is found by scanning the
+        board rather than read off the blocker's own program — the requirement
+        twin of ``creatures_cant_block`` in ``_can_block_attacker`` and the
+        block-side mirror of ``_must_attack_if_able``'s ``creatures_must_attack``
+        scan, over the same ``subject`` payload and the same ``subject_matches``.
+
+        The observer is the seat whose ability this is (CR 109.5), so a
+        "creatures **you** control" printing would compel that seat's creatures
+        rather than the blocker's controller's.
+        """
+        for source_perm in self.all_permanents():
+            source_seat = self.controller_index_of(source_perm)
+            for instr in compile_card_oracle(
+                source_perm.effective_card
+            ).instructions:
+                if instr.kind != "creatures_must_block":
+                    continue
+                if subject_matches(
+                    self, blocker, dict(instr.payload.get("subject") or {}),
+                    observer=source_seat, source=source_perm,
+                ):
+                    return True
+        return False
+
     def _can_block_attacker(self, blocker: Permanent, attacker: Permanent) -> bool:
         if attacker.metadata.get("cant_be_blocked_until_eot"):
             return False
@@ -881,6 +918,15 @@ class DeclareBlockersStepMixin:
         # and a reader that knew only two of them would let the third through.
         if blocker.metadata.get(CANT_BLOCK_UNTIL_EOT):
             return False
+        # And the *named-attacker* half (Duct Crawler): "can't block **this
+        # creature** this turn" denies one pairing rather than every block, so
+        # it is asked here — where the pair is in hand — rather than beside the
+        # three blanket reads above. By ``permanent_id``, so an attacker that
+        # left and came back is a new object the old denial does not name
+        # (CR 400.7).
+        denied_attackers = blocker.metadata.get(CANT_BLOCK_ATTACKERS_UNTIL_EOT)
+        if denied_attackers and attacker.permanent_id in denied_attackers:
+            return False
 
         # And the board-wide half: "Creatures with flying can't attack **or
         # block**…" (Katabatic Winds). A restriction printed on a permanent
@@ -905,6 +951,19 @@ class DeclareBlockersStepMixin:
         attacker_kinds = {i.kind for i in attacker_program.instructions}
 
         if "cant_be_blocked" in attacker_kinds:
+            return False
+
+        # "This creature can't be blocked **as long as it's attacking alone**."
+        # (Dream Prowler.) CR 506.5's condition, asked at the declaration
+        # rather than materialized on a recompute — for the reason the
+        # conditional static below is: the answer changes the moment another
+        # attacker joins or leaves, and blocking is the read that matters.
+        # ``creature_attacking_alone`` is the one reader of the rule, shared
+        # with Errantry's attack-side restriction.
+        if (
+            "cant_be_blocked_while_attacking_alone" in attacker_kinds
+            and self.creature_attacking_alone(attacker)
+        ):
             return False
 
         # "This creature can't be blocked as long as …" (Tome Anima). Asked

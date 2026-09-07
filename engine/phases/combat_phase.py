@@ -91,11 +91,47 @@ class CombatPhaseMixin:
         defender rather than stalling a declaration nobody can make.
         """
         chooser = self.combat_block_chooser
-        if chooser is None or not (0 <= chooser < len(self.players)):
+        if chooser is None:
+            # "The attacking player chooses how each creature blocks each
+            # combat." (Invasion Plans.) The same substitution as a *static*
+            # ability, so the seat is derived here rather than stored: an
+            # enchantment that leaves stops choosing, with nothing to undo.
+            #
+            # The seat it names is the active player — CR 506.2 makes the
+            # attacking player the one whose turn it is — and it is asked only
+            # when no one-shot has already named a chooser, so a Melee cast
+            # under an Invasion Plans keeps the seat its own sentence named.
+            #
+            # What moves is every CR 509.1a decision, where the printed
+            # sentence moves only "how". On the card that prints it that is the
+            # same set: its other line compels every able creature to block, so
+            # "which creatures block" is settled by the requirement before the
+            # chooser is asked. A card printing this sentence *without* such a
+            # requirement would hand over one decision more than it says, which
+            # is why the note is here rather than in a commit message.
+            if self._board_substitutes_block_chooser():
+                return self.active_player_index
+            return defender_index
+        if not (0 <= chooser < len(self.players)):
             return defender_index
         if self.players[chooser].lost:
             return defender_index
         return chooser
+
+    def _board_substitutes_block_chooser(self) -> bool:
+        """Whether any permanent's static moves CR 509.1a's choices to the
+        attacking player.
+
+        A board scan for the same reason ``creatures_cant_attack`` is one: the
+        sentence is printed on a permanent that is not in the combat it changes.
+        """
+        from ..oracle import compile_card_oracle
+
+        return any(
+            instr.kind == "attacker_chooses_blocks"
+            for perm in self.all_permanents()
+            for instr in compile_card_oracle(perm.effective_card).instructions
+        )
 
     def _has_any_legal_attacker(self, attacker_index: int, defender_index: int) -> bool:
         if attacker_index < 0 or attacker_index >= len(self.players):

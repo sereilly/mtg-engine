@@ -152,8 +152,72 @@ def _lower_combat_restriction(
     # blocker gate's three keys, and is held to `TESTABLE_SUBJECT_FILTER_KEYS`
     # for the reason that set exists: a narrowing the matcher cannot test would
     # ground creatures the card never named.
+    # "This creature can't attack or block alone." (Mogg Flunkies.) CR 506.5
+    # and CR 509.1b's "alone" is a floor of one on the declaration this
+    # creature joins, which is exactly what ``declaration_company_required``
+    # already reads for Orcish Conscripts' printed count — so the three
+    # spellings lower to those two kinds and add no enforcement site. The
+    # compound returns *both*, over one subject read once, for the reason
+    # ``CombatRestriction.also_kinds`` exists on the text-table side: two rows
+    # reading one sentence could come to disagree about who it restricts.
+    if node.kind in ("cant_attack_alone", "cant_block_alone",
+                     "cant_attack_or_block_alone"):
+        if not _is_source(node.subject):
+            # Both kinds are read off the creature's *own* compiled program at
+            # the declaration (`declaration_company_required` takes one
+            # permanent), so a sentence about a described set has nowhere to be
+            # enforced and would be dropped rather than applied.
+            raise LoweringError(
+                "the alone restriction is read off the creature that prints it",
+                node=node,
+            )
+        emitted: list[OracleInstruction] = []
+        if node.kind != "cant_block_alone":
+            emitted.append(
+                OracleInstruction(
+                    "cant_attack_unless_others_attack", "", {"count": 1}
+                )
+            )
+        if node.kind != "cant_attack_alone":
+            emitted.append(
+                OracleInstruction(
+                    "cant_block_unless_others_block", "", {"count": 1}
+                )
+            )
+        return tuple(emitted)
     if node.kind == "cant_attack_until_eot":
         payload = dict(node.payload)
+        # "**Target creature** can't attack this turn." (Change of Heart.) The
+        # exact mirror of the blanket can't-block's targeted branch below, and
+        # its own kind for that branch's reason: the blanket arms a board-wide
+        # filter the attack gate tests, where this marks the one permanent the
+        # spell chose, and folding them would ground every creature the noun
+        # phrase describes — which on "target creature" is the whole board.
+        #
+        # Read before the plural gate rather than after it: the sentence is one
+        # printed template with two subjects, and refusing the singular one on
+        # "reads a plural subject" is the refusal Stronghold's census carried
+        # for a card whose sentence the engine can enforce end to end.
+        if (
+            isinstance(node.subject, ast.TargetSpec)
+            and node.subject.quantifier == "target"
+        ):
+            if payload.get("duration") not in _REST_OF_TURN:
+                # Checked rather than defaulted, exactly as the blanket does:
+                # the mark is swept by the cleanup step, so a restriction with
+                # any other window would end at the wrong time or never.
+                raise LoweringError(
+                    "a targeted can't-attack with no end-of-turn duration has "
+                    "nothing to sweep it",
+                    node=node,
+                )
+            targeted_attack: dict[str, object] = {}
+            _describe_targets(targeted_attack, node.subject)
+            return (
+                OracleInstruction(
+                    "target_cant_attack_until_eot", "", targeted_attack
+                ),
+            )
         if not isinstance(node.subject, ast.TargetSpec) or (
             node.subject.quantifier not in ("all", "each")
         ):
@@ -470,6 +534,51 @@ def _lower_combat_restriction(
         return (
             OracleInstruction(
                 "cant_block_subject", "", {"blockee_filters": [described]}
+            ),
+        )
+    # "Target creature can't block this creature this turn." (Duct Crawler.)
+    # CR 509.1b's denial aimed at one *named attacker*, which makes it the
+    # mirror of Trumpeting Armodon's requirement rather than of the blanket:
+    # both halves of the pair are printed, and a lowering that dropped the
+    # attacker would forbid the creature from blocking anything at all.
+    if node.kind == "cant_block_named_attacker_until_eot":
+        payload = dict(node.payload)
+        if payload.get("duration") not in _REST_OF_TURN:
+            raise LoweringError(
+                "a named-attacker block denial with no end-of-turn duration "
+                "has nothing to sweep it",
+                node=node,
+            )
+        attacker = payload.get("attacker")
+        if not (isinstance(attacker, ast.TargetSpec) and _is_source(attacker)):
+            # The handler records the attacker by ``permanent_id`` off the
+            # ability's own source. Any other referent has nothing to resolve
+            # against at resolution, and a denial that recorded no id would be
+            # a "can't block at all" the card does not print.
+            raise LoweringError(
+                "the attacker this creature may not block is the ability's "
+                "own source",
+                node=node,
+            )
+        if not (
+            isinstance(node.subject, ast.TargetSpec) and node.subject.targeted
+        ):
+            raise LoweringError(
+                "the named-attacker block denial marks the creature the "
+                "ability chose",
+                node=node,
+            )
+        if _names_several_targets(node.subject):
+            raise LoweringError(
+                "the block denial marks one creature; nothing here collects "
+                "several",
+                node=node,
+            )
+        denied: dict[str, object] = {}
+        _describe_targets(denied, node.subject)
+        return (
+            OracleInstruction(
+                "target_cant_block_source_until_eot", "", denied
             ),
         )
     if node.kind == "cant_block_until_eot":

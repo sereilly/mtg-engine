@@ -172,6 +172,13 @@ class ObjectFilter:
     #: the name for the two fields above's reason: this is the only direction
     #: printed, and a general `op` would be five comparisons nothing exercises.
     power_at_most_source_counters: str | None = None
+    #: "creatures with power **greater than the number of cards in your
+    #: hand**" (Ensnaring Bridge). A bound off a *hidden zone* rather than off
+    #: a board — so it is neither a printed number nor a count the pure matcher
+    #: can reach, and it lands on its own key like the two above it. The value
+    #: is whose hand ("you"), because that is the only part the sentence
+    #: parameterizes; the operator is in the name for the field above's reason.
+    power_greater_than_cards_in_hand: str | None = None
     named: str | None = None
     #: "…a creature with flying **not named Escaped Shapeshifter**" — the
     #: negative of ``named``, when the excluded name is spelled out. A name
@@ -920,6 +927,9 @@ class ObjectFilter:
         if self.power_at_most_source_counters is not None:
             key = "power_at_most_source_counters"
             payload[key] = self.power_at_most_source_counters
+        if self.power_greater_than_cards_in_hand is not None:
+            key = "power_greater_than_cards_in_hand"
+            payload[key] = self.power_greater_than_cards_in_hand
         # "with power 4 or greater" (Turret Ogre's intervening-if). Same rule
         # as mana_value: a literal bound rides the payload and the matcher
         # tests it against the layer-computed stat; a variable bound stays

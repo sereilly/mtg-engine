@@ -690,6 +690,9 @@ _COVERED_ELSEWHERE = {
     # --- W1G5 ---
     "power_at_most_source_counters":
         "test_w1g5_a_power_bound_counts_the_ability_s_own_source_counters",
+    # --- STH W1G2 ---
+    "power_greater_than_cards_in_hand":
+        "test_sth_w1g2_a_power_bound_counts_the_observer_s_hand",
 }
 
 
@@ -2131,3 +2134,58 @@ def test_chosen_keyword_is_read_off_the_ability_s_source(pool):
     assert subject_matches(game, grounded, described, source=splicer)
     # With no source there is nothing to have chosen, and the key refuses.
     assert not subject_matches(game, flier, described)
+
+
+# --- STH W1G2: a bound off a hidden zone ------------------------------------
+
+
+def test_sth_w1g2_a_power_bound_counts_the_observer_s_hand(pool):
+    """"Creatures with power greater than the number of cards in your hand
+    can't attack." (Ensnaring Bridge.)
+
+    The bound is the size of a **hidden zone**, which is what puts it here
+    rather than in the pure matcher: no characteristic of the creature and no
+    count on any board answers it, only the seat whose ability the sentence is
+    (CR 109.5). Strictly greater, because that is the word printed — a creature
+    exactly at the count still attacks, and reading the tie the other way is
+    the whole difference on an empty hand.
+
+    A caller with no observer narrows to nothing, which on a *restriction* is
+    the direction that lets a creature attack rather than grounding it on a
+    clause nobody could read.
+    """
+    from engine.pt import add_pt_modifier
+
+    bridge = Permanent(card=pool["Grizzly Bears"])   # stands in for the source
+    lions = Permanent(card=pool["Savannah Lions"])   # 2/1
+    ogre = Permanent(card=pool["Gray Ogre"])         # 2/2
+    game = Game(players=[
+        PlayerState(
+            name="P1", battlefield=[bridge],
+            hand=[pool["Grizzly Bears"], pool["Savannah Lions"]],
+        ),
+        PlayerState(name="P2", battlefield=[lions, ogre]),
+    ])
+    described = {
+        "type_filter": "creature", "power_greater_than_cards_in_hand": "you",
+    }
+
+    assert not subject_matches(game, lions, described, observer=0), (
+        "power 2 against a hand of 2 is not *greater* than it"
+    )
+    game.players[0].hand.pop()
+    assert subject_matches(game, lions, described, observer=0), (
+        "one card in hand, and a 2-power creature is over the line"
+    )
+    assert not subject_matches(game, lions, described), (
+        "with no observer there is no hand to count, so the phrase narrows to "
+        "nothing rather than to every creature on the table"
+    )
+
+    # CR 613 layer 7: the *computed* power. An anthem is what puts a creature
+    # over the threshold, and the count is re-read every time the question is
+    # asked.
+    game.players[0].hand.append(pool["Gray Ogre"])
+    assert not subject_matches(game, ogre, described, observer=0), "at the bound"
+    add_pt_modifier(ogre, 1, 0)
+    assert subject_matches(game, ogre, described, observer=0), "pumped over it"

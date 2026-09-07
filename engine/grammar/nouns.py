@@ -223,6 +223,8 @@ class _FilterDraft:
     mana_value_equals_source_counters: str | None = None
     #: See ``ast.ObjectFilter.power_at_most_source_counters``.
     power_at_most_source_counters: str | None = None
+    #: See ``ast.ObjectFilter.power_greater_than_cards_in_hand``.
+    power_greater_than_cards_in_hand: str | None = None
     toughness: ast.Comparison | None = None
     # "…with power equal to or greater than the enchanted creature's toughness"
     # (Ironclaw Curse) — see ``ast.SourceRelativeComparison``.
@@ -929,6 +931,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         mana_value_at_most_counters=d.mana_value_at_most_counters,
         mana_value_equals_source_counters=d.mana_value_equals_source_counters,
         power_at_most_source_counters=d.power_at_most_source_counters,
+        power_greater_than_cards_in_hand=d.power_greater_than_cards_in_hand,
         zone=d.zone,
         zone_owner=d.zone_owner,
         is_card=d.is_card,

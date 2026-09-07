@@ -677,6 +677,8 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # The one-shot, turn-scoped blanket ("Creatures without flying can't block
     # this turn", Destructive Tampering's second mode).
     "cant_block_until_eot": "combat_restrictions",
+    "target_cant_attack_until_eot": "combat_restrictions",
+    "target_cant_block_source_until_eot": "combat_restrictions",
     "target_cant_block_until_eot": "combat_restrictions",
     # The permission twin of the two above (Yare): CR 509.1b's block-count
     # ceiling raised for a turn rather than a restriction imposed for one.
@@ -733,6 +735,8 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # same CR 508.1a requirement on a creature the caster chose rather
     # than on the effect's own source.
     "force_target_to_attack_until_eot": "combat_restrictions",
+    "force_bound_to_attack_until_eot": "combat_restrictions",
+    "force_bound_to_block_until_eot": "combat_restrictions",
     # "**Non-Wall creatures the active player controls** attack this turn if
     # able." (Maddening Imp.) The same CR 508.1a requirement over every creature
     # a printed noun phrase describes — the mirror of the block twin two rows

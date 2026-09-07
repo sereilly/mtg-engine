@@ -445,8 +445,17 @@ class LegalityMixin:
         seat = self.controller_index_of(perm)
         return any(
             i.kind == "cant_be_blocked"
-            # "…as long as <condition>" (Tome Anima): unblockable exactly
-            # while the condition holds, so the UI tag tracks the state.
+            # "…as long as it's attacking alone" (Dream Prowler): CR 506.5's
+            # condition, asked of the board rather than of a payload, so the
+            # tag comes and goes with the declaration exactly as the blocker
+            # gate's answer does. Read here too because a creature the gate
+            # will refuse every blocker on is what this predicate is *for* —
+            # the two answering differently is the UI promising a block the
+            # step then rejects.
+            or (
+                i.kind == "cant_be_blocked_while_attacking_alone"
+                and self.creature_attacking_alone(perm)
+            )
             or (
                 i.kind == "conditional_static"
                 and i.payload.get("cant_be_blocked")

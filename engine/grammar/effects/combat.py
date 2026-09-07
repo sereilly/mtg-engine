@@ -45,6 +45,33 @@ def _parse_cant_attack_or_block(
     stream.expect_word("can't", "cannot")
 
     if stream.accept_word("attack"):
+        # "This creature can't attack **or block alone**." (Mogg Flunkies.)
+        # CR 506.5 defines "attacking alone" as being the only creature
+        # declared as an attacker, so the word is a *count*: this is the
+        # printed-word spelling of "unless at least one other creature attacks"
+        # two branches down, and it lowers to that very kind rather than to a
+        # restriction of its own. One sentence, two prohibitions, one subject —
+        # the shape ``CombatRestriction.also_kinds`` names on the text-table
+        # side, and the lowering returns the pair.
+        #
+        # Read here, in front of the duration probe, because "alone" is a word
+        # neither that probe nor the "unless" clauses take: without it the
+        # sentence fell all the way through to "expected 'unless defending
+        # player controls'", a refusal naming a phrase the card does not print.
+        #
+        # Each half is accepted on its own as well as in the conjunction. The
+        # word means the same thing in all three spellings, and a production
+        # that read the compound but refused "can't block alone" would hand the
+        # half-sentence the same misleading refusal this branch exists to
+        # remove.
+        if stream.accept_word("alone"):
+            return ast.CombatRestriction(
+                subject, "cant_attack_alone", (("count", 1),)
+            )
+        if stream.accept_phrase("or", "block", "alone"):
+            return ast.CombatRestriction(
+                subject, "cant_attack_or_block_alone", (("count", 1),)
+            )
         # "That creature can't attack during its controller's next turn."
         # (Wall of Dust's block trigger.) A one-shot restriction with a stated
         # window rather than a static ability — the window is the whole of the
@@ -192,6 +219,13 @@ def _parse_cant_attack_or_block(
         )
 
     if stream.accept_word("block"):
+        # "…can't block **alone**." The blocking half of Mogg Flunkies' word,
+        # read here for the reason the attack half is read above its own
+        # duration probe: "alone" opens none of the readings below it.
+        if stream.accept_word("alone"):
+            return ast.CombatRestriction(
+                subject, "cant_block_alone", (("count", 1),)
+            )
         # "…**unless at least two other creatures block**." (Orcish Conscripts.)
         # The blocking twin of the attack clause above, CR 509.1b's side of the
         # same rule, and read here before the two shapes below because it opens
@@ -206,6 +240,38 @@ def _parse_cant_attack_or_block(
                     subject, "cant_block_unless_others_block", (("count", count),)
                 )
             stream.reset(block_others)
+        # "Target creature can't block **this creature** this turn." (Duct
+        # Crawler.) CR 509.1b narrowed to one *named attacker* — the ability's
+        # own source — where the `cant_block_subject` branch below narrows to a
+        # class of them. The pair (blocker, attacker) is what a block is
+        # (CR 509.1a), so this is the denial twin of Trumpeting Armodon's
+        # requirement rather than a wording of the blanket.
+        #
+        # Read in front of the duration probe because the probe is gated on the
+        # word "this" and cannot tell "this turn" from "this creature": with
+        # the noun unread the sentence refused at "expected a duration after
+        # can't block", a refusal naming a word the card does print, two words
+        # later than the one it could not read.
+        named_mark = stream.mark()
+        if stream.at_word("this") and stream.peek_word(1) != "turn":
+            blocked = parse_recipient(stream)
+            if blocked is not None:
+                duration = _parse_duration(stream)
+                if duration.kind is None:
+                    # A named attacker with no window is a permanent
+                    # restriction the card did not print, and the widening
+                    # direction on a *denial* is the one that silently gives
+                    # the ability more reach than the sentence.
+                    raise stream.error(
+                        "expected a duration after the attacker this creature "
+                        "can't block"
+                    )
+                return ast.CombatRestriction(
+                    subject,
+                    "cant_block_named_attacker_until_eot",
+                    (("attacker", blocked), ("duration", duration.kind)),
+                )
+            stream.reset(named_mark)
         # "Creatures without flying can't block this turn." (Destructive
         # Tampering's second mode): no object after "block" — the restriction
         # is a blanket over the *subject*, scoped by the printed duration.
@@ -856,6 +922,14 @@ def _parse_blocks_this_turn_if_able(
     mark = stream.mark()
     if not stream.accept_word("blocks", "block"):
         return None
+    # "That creature **blocks this turn if able**." (Provoke.) No attacker at
+    # all — the weakest CR 509.1c requirement, and the one Watchdog prints as a
+    # static: block *something* you legally can. Read first, on the words
+    # themselves, because the two recipient readers below would otherwise be
+    # asked to decline "this" as a noun and the sentence would refuse at the
+    # wrong place.
+    if stream.accept_phrase("this", "turn", "if", "able"):
+        return ast.BlocksThisTurnIfAble(subject, None)
     attacker = parse_recipient(stream)
     if attacker is None:
         # "…block **that creature** this turn if able" (Magnetic Web). A

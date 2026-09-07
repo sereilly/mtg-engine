@@ -28,6 +28,7 @@ from ..untap_restrictions import (
     permanent_in_limited_scope,
     self_untap_attacked_last_turn,
     self_untap_counter_condition,
+    self_untap_opponent_board_condition,
     self_untap_line,
     untap_restriction_for,
 )
@@ -122,6 +123,33 @@ def _self_untap_blocked(game, permanent, seat: int) -> bool:
         if self_untap_attacked_last_turn(line, name):
             if attacked_during_seats_last_turn(game, permanent, seat):
                 blocked = True
+            continue
+        # "…if an opponent controls two or more creatures" (Walking Dream).
+        # A fact about somebody else's board, re-asked every untap step for the
+        # reason the two conditions above are: the loose reading below would
+        # freeze the creature the moment the line was printed and never let go.
+        #
+        # "An opponent" is *any one* of them (CR 102.1), so each seat's own
+        # board is counted separately — summing them would freeze the Dream on
+        # a table where two opponents hold one creature each, which is a board
+        # no opponent controls.
+        board = self_untap_opponent_board_condition(line, name)
+        if board is not None:
+            threshold, described = board
+            controller = game.controller_index_of(permanent)
+            for other in range(len(game.players)):
+                if other == controller:
+                    continue
+                matching = sum(
+                    1
+                    for perm in game.controlled_by(other)
+                    if subject_matches(
+                        game, perm, described, observer=other, source=permanent
+                    )
+                )
+                if matching >= threshold:
+                    blocked = True
+                    break
             continue
         return True
     return blocked

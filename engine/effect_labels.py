@@ -83,6 +83,11 @@ ACTIVATED_LABELS: dict[str, str] = {
     # clause only became a grammar production in this set's second wave; before
     # that the kind existed and no activated ability reached it.
     "target_cant_block_until_eot": "activated_restriction",
+    # "{1}{R}: Target creature can't block this creature this turn."
+    # (Duct Crawler.) The same denial as the row above, narrowed to one
+    # named attacker, so it reads the same bucket: what the ability is for
+    # is that a block may not happen.
+    "target_cant_block_source_until_eot": "activated_restriction",
     # Subterranean Spirit damages a described set, beside
     # `deal_damage_each_creature_and_player`.
     "deal_damage_each_matching": "activated_damage",

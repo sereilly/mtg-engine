@@ -342,3 +342,87 @@ def test_a_counted_anthem_condition_is_evaluated_as_a_count():
     assert _power() == 3
     seat.battlefield.pop()
     assert _power() == 2
+
+
+# --- STH W1G2: reminder text is not a second sentence ---
+
+from engine.models import CardDefinition
+
+
+def _g2s_permanent(name, type_line, text) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line=type_line,
+        oracle_text=text, colors=(), color_identity=(), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": type_line,
+             "power": "1", "toughness": "1"},
+    )
+
+
+def test_a_reminder_behind_a_claimed_sentence_does_not_take_the_claim_away():
+    """CR 207.2: italic parenthetical text has no game function.
+
+    The gate that lets a *creature* carry an "enchanted creature …" line asks
+    first whether the line is one sentence — because the table behind it
+    searches rather than anchors, so a second real sentence would be claimed
+    whole and silently unread. It was asking that of the **raw** line, where
+    every reader downstream had already dropped the reminder, so a full stop
+    inside the brackets counted as a sentence boundary.
+
+    Corrupting Licid is the card in this pool that showed it: the fear grant is
+    derived end to end and the card compiled unsupported on a period nobody
+    reads. Both directions are asserted here — the reminder must not cost the
+    claim, and a genuine second sentence must still take it away, which is the
+    property the check exists for.
+    """
+    with_reminder = _g2s_permanent(
+        "Reminded Worm", "Creature — Licid",
+        "Enchanted creature has fear. (It can't be blocked except by artifact "
+        "creatures and/or black creatures.)",
+    )
+    assert compile_card_oracle(with_reminder).supported
+
+    bare = _g2s_permanent(
+        "Bare Worm", "Creature — Licid", "Enchanted creature has fear.",
+    )
+    assert compile_card_oracle(bare).supported
+
+    # The control: a real second sentence nothing implements still refuses the
+    # line, which is what stops the claim standing in for text nobody read.
+    two_sentences = _g2s_permanent(
+        "Talkative Worm", "Creature — Licid",
+        "Enchanted creature has fear. Enchanted creature levitates gently.",
+    )
+    assert not compile_card_oracle(two_sentences).supported
+
+
+def test_a_static_creature_line_may_carry_several_whitelisted_kinds():
+    """One printed sentence, two prohibitions, one subject.
+
+    The gate is a whitelist of *kinds*, and its arity check was incidental to
+    that: ``CombatRestriction.also_kinds`` has let a text-table row produce
+    several instructions from one sentence since Katabatic Winds, and the
+    grammar had no way to. Mogg Flunkies' "can't attack or block alone" is the
+    first line that needs it — with the arity check in place the whole card came
+    back "text too complex" for a sentence both halves of which are enforced.
+
+    The negative is what keeps the widening out: a line lowering to a kind the
+    whitelist does not name is still refused, however many of its siblings it
+    does name.
+    """
+    flunkies = _g2s_permanent(
+        "Rowdy Goblin", "Creature — Goblin",
+        "This creature can't attack or block alone.",
+    )
+    program = compile_card_oracle(flunkies)
+    assert program.supported, program.reason
+    assert [i.kind for i in program.instructions] == [
+        "cant_attack_unless_others_attack",
+        "cant_block_unless_others_block",
+    ]
+
+    unlisted = _g2s_permanent(
+        "Rowdy Thief", "Creature — Goblin",
+        "This creature can't attack or block alone and gains you the game.",
+    )
+    assert not compile_card_oracle(unlisted).supported

@@ -4332,25 +4332,35 @@ _GRAMMAR_STATIC_CREATURE_KINDS = frozenset(
 )
 
 
-def _grammar_static_creature_instruction(
+def _grammar_static_creature_instructions(
     line: str, card_name: str | None = None
-) -> OracleInstruction | None:
-    """The static contribution the grammar reads out of a creature's line.
+) -> tuple[OracleInstruction, ...]:
+    """The static contributions the grammar reads out of a creature's line.
 
     Carrion Grub's "gets +X/+0, where X is the greatest power among creature
     cards in your graveyard" is a layer-7c contribution whose *size* is
     computed, which no text-keyed table can express — the size is the whole
     variable part.
+
+    **Several, not one.** The gate is a whitelist of *kinds*, and the arity was
+    incidental to it: one printed sentence may carry several prohibitions over
+    one subject, which is the shape ``CombatRestriction.also_kinds`` has named
+    on the text-table side since Katabatic Winds. Mogg Flunkies' "can't attack
+    or block alone" is the grammar's first, and with the arity check in place
+    the whole card came back "text too complex" for a line both halves of which
+    the engine enforces. Every instruction still has to name a whitelisted
+    kind — a line that lowered to one of these *and* something else is not a
+    static contribution and keeps its refusal.
     """
     compiled = compile_grammar_line(normalize_creature_line(line), card_name=card_name)
-    if not compiled.usable or len(compiled.instructions) != 1:
-        return None
-    instruction = compiled.instructions[0]
-    return (
-        instruction
-        if instruction.kind in _GRAMMAR_STATIC_CREATURE_KINDS
-        else None
-    )
+    if not compiled.usable or not compiled.instructions:
+        return ()
+    if any(
+        instruction.kind not in _GRAMMAR_STATIC_CREATURE_KINDS
+        for instruction in compiled.instructions
+    ):
+        return ()
+    return tuple(compiled.instructions)
 
 
 def _restriction_line(line: str, card_name: str | None) -> str:
@@ -4391,13 +4401,23 @@ def _one_sentence(line: str) -> bool:
     unread. That is Mirage's single-whitelist-word failure exactly, and
     Volrath's Curse is the card in this pool that shows it: its restriction
     sentence is implemented and the CR 116.2d offer printed behind it is not.
+
+    **Reminder text is not a sentence** (CR 207.2). It is parenthetical, it
+    states no rule, and every reader downstream has already dropped it —
+    `normalize_creature_line` strips it before the derivation tables see the
+    line, so counting its full stop here asked the question of a different
+    string than the one being claimed. Corrupting Licid is the card that shows
+    it: "Enchanted creature has fear. (It can't be blocked except by artifact
+    creatures and/or black creatures.)" is one printed sentence with a
+    parenthesis behind it, `auras.aura_continuous_claim` implements it end to
+    end, and the card compiled unsupported on the period inside the brackets.
     """
-    outside = _QUOTED_SPAN.sub("", line or "")
+    outside = _PARENTHETICAL_RE.sub("", _QUOTED_SPAN.sub("", line or ""))
     return outside.strip().rstrip(".").count(".") == 0
 
 
 def _is_supported_static_creature_line(line: str, card_name: str | None = None) -> bool:
-    if _grammar_static_creature_instruction(line, card_name) is not None:
+    if _grammar_static_creature_instructions(line, card_name):
         return True
     normalized = normalize_creature_line(line)
     if normalized.startswith("protection from "):
@@ -4863,9 +4883,9 @@ def _parse_creature_program(
         # 4. Static text
         if _is_supported_static_creature_line(line, card_name):
             normalized = normalize_creature_line(line)
-            grammar_static = _grammar_static_creature_instruction(line, card_name)
-            if grammar_static is not None:
-                instructions.append(grammar_static)
+            grammar_static = _grammar_static_creature_instructions(line, card_name)
+            if grammar_static:
+                instructions.extend(grammar_static)
                 static_lines.append(normalized)
                 continue
             # Characteristic-defining P/T (CR 604.3). One instruction kind
