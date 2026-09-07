@@ -263,6 +263,26 @@ _EVENT_SUBJECT_OBJECTS: frozenset[str] = frozenset({
     # the stack (CR 603.3) and lethal damage puts it in a graveyard before then,
     # where CR 400.7 makes it a new object.
     "creature_dealt_damage",
+    # "Whenever a Sliver becomes blocked, **that Sliver** gets +1/+1 until end
+    # of turn for each creature blocking it." (Spined Sliver.) The creature
+    # that became blocked — the attacker, which is the half this board-wide
+    # event is announced *about*; its partner is the blocker, and
+    # `ROLE_NAMES_BLOCK_PARTNER` below is where a printed role word reaches
+    # that one instead.
+    #
+    # Both of the kind's fire sites stamp the id
+    # (`declare_blockers_step._fire_board_wide_block_triggers` for CR 509.3d's
+    # narrowed reading, `_announce_bare_board_wide_blocks` for CR 509.3c's bare
+    # one), which is what this table is a claim about — and the *source*-scoped
+    # scan one screen up announces `creature_becomes_blocked`, a different kind
+    # that is not here.
+    #
+    # Not `_BLOCK_PAIR_EVENTS`, deliberately: under that set "that creature"
+    # names the *other* half of the pair, and `binds_block_pair` additionally
+    # requires the printed narrowing that makes a bare firing name one creature.
+    # A bare "becomes blocked" has several blockers and one attacker, so the
+    # attacker is exactly the referent a bare firing can answer for.
+    "matching_creature_becomes_blocked",
 })
 
 

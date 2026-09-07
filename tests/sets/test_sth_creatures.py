@@ -791,3 +791,246 @@ def test_g4_a_prose_mana_payment_with_no_rate_refuses_the_line():
             "Pay {1} for each +1/+1 counter on target creature: "
             "Regenerate this creature."
         )
+
+
+# --- W2G5: Spined Sliver ---
+
+import pytest
+
+from engine import Game, PlayerState
+from engine.models import CardDefinition, Permanent
+from engine.oracle import compile_card_oracle
+from tests.helpers import _nosick, resolve_stack
+
+
+def _w2g5_creature(name, power, toughness, subtype="Test"):
+    """A vanilla creature of one printed subtype, so a Sliver can be told from
+    a bystander without either of them carrying an ability."""
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0,
+        type_line=f"Creature - {subtype}", oracle_text="",
+        colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": name, "type_line": f"Creature - {subtype}",
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def _w2g5_combat(set_pool, blockers, extra_attackers=()):
+    """Spined Sliver attacks, *blockers* creatures block it, triggers resolve.
+
+    *extra_attackers* are ``(name, power, toughness, subtype)`` tuples that
+    attack alongside it and are each blocked by one further creature — which is
+    how the "a Sliver" in the printed condition is told apart from "this
+    creature": the Sliver whose blockers are counted must be the one the event
+    was announced about, not the permanent whose ability is watching.
+
+    Returns the game, both seats, and a name -> permanent map of the attackers.
+    """
+    p0 = PlayerState(name="P0")
+    p1 = PlayerState(name="P1")
+    sliver = _nosick(Permanent(card=set_pool("STH")["Spined Sliver"]))
+    p0.battlefield.append(sliver)
+    attackers = {"Spined Sliver": sliver}
+    for name, power, toughness, subtype in extra_attackers:
+        perm = _nosick(Permanent(card=_w2g5_creature(name, power, toughness, subtype)))
+        p0.battlefield.append(perm)
+        attackers[name] = perm
+    for index in range(blockers + len(extra_attackers)):
+        p1.battlefield.append(
+            _nosick(Permanent(card=_w2g5_creature(f"Wall {index}", 0, 4)))
+        )
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    attacking = list(range(len(attackers)))
+    assert game.declare_attackers(0, attacking, 1)[0], game.log
+    resolve_stack(game)
+    game.advance_combat_phase()
+    # Every one of the first *blockers* creatures onto the Sliver; each extra
+    # attacker takes exactly one of the rest.
+    assignment = {index: 0 for index in range(blockers)}
+    for offset in range(len(extra_attackers)):
+        assignment[blockers + offset] = 1 + offset
+    assert game.declare_blockers(1, assignment)[0], game.log
+    return game, p0, p1, attackers
+
+
+def test_w2g5_spined_sliver_is_supported(set_pool):
+    program = compile_card_oracle(set_pool("STH")["Spined Sliver"])
+    assert program.supported
+    assert [t.instruction.kind for t in program.triggered_abilities] == [
+        "pump_event_subject"
+    ]
+
+
+def test_w2g5_two_blockers_give_it_plus_two(set_pool):
+    """"…gets +1/+1 until end of turn **for each creature blocking it**."
+
+    The printed number sizes one repetition and the count multiplies it, so two
+    blockers is +2/+2 and not +1/+1. A count that was dropped, or measured
+    against the wrong permanent, reads +0/+0 or +1/+1 here — which is why the
+    assertion is on the number rather than on the pump having happened.
+    """
+    game, p0, _p1, attackers = _w2g5_combat(set_pool, blockers=2)
+    sliver = attackers["Spined Sliver"]
+    assert (sliver.effective_power, sliver.effective_toughness) == (2, 2)
+    resolve_stack(game)
+    assert (sliver.effective_power, sliver.effective_toughness) == (4, 4)
+
+
+def test_w2g5_one_blocker_gives_it_plus_one(set_pool):
+    game, _p0, _p1, attackers = _w2g5_combat(set_pool, blockers=1)
+    resolve_stack(game)
+    sliver = attackers["Spined Sliver"]
+    assert (sliver.effective_power, sliver.effective_toughness) == (3, 3)
+
+
+def test_w2g5_it_becomes_blocked_once_however_many_block_it(set_pool):
+    """CR 509.3c: a creature becomes blocked **once**, however many creatures
+    block it — while the *count* in this card's own amount is how many are
+    blocking it.
+
+    The two readings are easy to fuse into one, and fusing them doubles the
+    card: two firings of +2/+2 is a 6/6. So the number of triggers is asserted
+    on the stack, before anything resolves, rather than inferred from the P/T
+    the two readings would disagree about.
+    """
+    game, _p0, _p1, attackers = _w2g5_combat(set_pool, blockers=3)
+    assert len(game.stack) == 1, [item.name for item in game.stack]
+    resolve_stack(game)
+    sliver = attackers["Spined Sliver"]
+    assert (sliver.effective_power, sliver.effective_toughness) == (5, 5)
+
+
+def test_w2g5_the_boost_ends_at_cleanup(set_pool):
+    """"…until end of turn." The boost is a modification the cleanup step takes
+    back (CR 514.2), not a base-P/T write."""
+    game, _p0, _p1, attackers = _w2g5_combat(set_pool, blockers=2)
+    resolve_stack(game)
+    sliver = attackers["Spined Sliver"]
+    assert sliver.effective_power == 4
+    game.resolve_cleanup_step(0)
+    assert (sliver.effective_power, sliver.effective_toughness) == (2, 2)
+
+
+def test_w2g5_it_pumps_the_sliver_the_event_named_not_itself(set_pool):
+    """"Whenever **a Sliver** becomes blocked" — not "this creature".
+
+    The card watches every Sliver on the table, so the creature both pronouns
+    name is the one the *event* was announced about, and the ability's own
+    source is a bystander. Counting around the source instead would have read
+    the wrong creature's blockers; here the Sliver that is not attacking has no
+    blockers at all, so that reading gives +0/+0 to a creature the card says
+    gets +1/+1.
+    """
+    p0 = PlayerState(name="P0")
+    p1 = PlayerState(name="P1")
+    watcher = _nosick(Permanent(card=set_pool("STH")["Spined Sliver"]))
+    victim = _nosick(Permanent(card=_w2g5_creature("Muscle Sliver", 1, 1, "Sliver")))
+    p0.battlefield.extend([watcher, victim])
+    for index in range(2):
+        p1.battlefield.append(
+            _nosick(Permanent(card=_w2g5_creature(f"Wall {index}", 0, 4)))
+        )
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    # Only the second Sliver attacks; the watcher stays home.
+    assert game.declare_attackers(0, [1], 1)[0], game.log
+    resolve_stack(game)
+    game.advance_combat_phase()
+    # Both walls onto the attacker, which is the *second* of P0's permanents.
+    assert game.declare_blockers(1, {0: 1, 1: 1})[0], game.log
+    resolve_stack(game)
+
+    assert (victim.effective_power, victim.effective_toughness) == (3, 3)
+    assert (watcher.effective_power, watcher.effective_toughness) == (2, 2)
+
+
+def test_w2g5_a_blocked_non_sliver_does_not_fire_it(set_pool):
+    """The printed noun phrase is the whole narrowing, and it is tested twice:
+    the trigger's own condition filters the announcement, and the lowering
+    carries "that **Sliver**" to the resolution so a creature that stopped
+    answering the clause is not pumped either."""
+    game, _p0, _p1, attackers = _w2g5_combat(
+        set_pool, blockers=1, extra_attackers=[("Grizzly", 2, 2, "Bear")],
+    )
+    assert len(game.stack) == 1, [item.name for item in game.stack]
+    resolve_stack(game)
+    bear = attackers["Grizzly"]
+    assert (bear.effective_power, bear.effective_toughness) == (2, 2)
+    assert attackers["Spined Sliver"].effective_power == 3
+
+
+def _w2g5_probe(text):
+    """A Sliver whose only printed line is *text*, for the gate's refusals."""
+    return CardDefinition(
+        name="Probe", mana_cost="", cmc=0.0, type_line="Creature - Sliver",
+        oracle_text=text, colors=(), color_identity=(), keywords=(),
+        produced_mana=(),
+        raw={"name": "Probe", "type_line": "Creature - Sliver",
+             "power": "2", "toughness": "2"},
+    )
+
+
+@pytest.mark.parametrize("line, why", [
+    (
+        "At the beginning of your upkeep, that Sliver gets +1/+1 until end of "
+        "turn for each creature blocking it.",
+        "no fire site freezes an object for an upkeep trigger, so the words "
+        "name nothing",
+    ),
+    (
+        "Whenever a Sliver becomes blocked, that Sliver gets +1/+1 for each "
+        "creature blocking it.",
+        "a durationless modification is a continuous effect the layers own",
+    ),
+    (
+        "Whenever a Sliver becomes blocked, that Sliver you control gets +1/+1 "
+        "until end of turn for each creature blocking it.",
+        "the carried noun phrase must be one the resolution can re-test",
+    ),
+])
+def test_w2g5_the_event_subject_pump_refuses_what_it_cannot_answer(line, why):
+    """The positive cases above always pass; these are the ones that find the
+    bug. Each is a sentence one word away from Spined Sliver's, and each would
+    compile a supported card that pumps nothing — the silent shape neither
+    ``--hollow-lines`` nor ``parse_coverage`` can see."""
+    program = compile_card_oracle(_w2g5_probe(line))
+    assert not program.supported, why
+    assert [t.instruction for t in program.triggered_abilities] == [None], why
+
+
+def test_w2g5_the_gate_is_the_event_and_not_the_printed_word(set_pool):
+    """The branch is admitted by ``_EVENT_SUBJECT_OBJECTS``, never by the
+    pronoun: a *different* event that freezes its subject reads the same
+    sentence and lands on the same kind. Asserted so the gate cannot quietly
+    narrow to one trigger condition and still pass every test above."""
+    program = compile_card_oracle(_w2g5_probe(
+        "Whenever a Sliver attacks, that Sliver gets +1/+1 until end of turn "
+        "for each creature blocking it."
+    ))
+    assert program.supported
+    assert [t.instruction.kind for t in program.triggered_abilities] == [
+        "pump_event_subject"
+    ]
+
+
+def test_w2g5_the_count_is_carried_as_a_relation_not_a_board_scan(set_pool):
+    """"…for each creature blocking **it**" is a relation to one permanent, and
+    the payload has to say so: read as a bare "for each creature" the count
+    would be the whole battlefield, which is a pump that is too big rather than
+    a pump that is missing."""
+    program = compile_card_oracle(set_pool("STH")["Spined Sliver"])
+    payload = program.triggered_abilities[0].instruction.payload
+    assert payload["x_from_count"]["blocking_source"] is True
+    assert payload["duration"] == "end_of_turn"
+    assert payload["filter"] == {"subtype_filter": "sliver"}

@@ -24,7 +24,8 @@ what is missing instead of producing an effect that never ends.
 import dataclasses
 
 from ...oracle_types import OracleInstruction
-from ...subject_filters import (unimplemented_filter_keywords,
+from ...subject_filters import (object_only_filter,
+                                unimplemented_filter_keywords,
                                 untestable_filter_keys)
 from .. import ast
 from ..errors import LoweringError
@@ -36,7 +37,7 @@ from ._amounts import (
     _x_definition_spec,
 )
 from ...oracle_types import MILLED_THIS_WAY
-from ._events import binds_block_pair
+from ._events import binds_block_pair, _EVENT_SUBJECT_OBJECTS
 from ._common import (
     chargeable_card_filter,
     _describe_targets,
@@ -272,6 +273,72 @@ def _lower_pump(
                     OracleInstruction(
                         "pump_target_creature_until_eot", "", payload
                     ),
+                )
+            # "Whenever a Sliver becomes blocked, **that Sliver** gets +1/+1
+            # until end of turn **for each creature blocking it**." (Spined
+            # Sliver.) A fifth reading, and the second whose subject is neither
+            # the source nor a class. The branch above and this one print the
+            # same two pronouns and mean the same relation by them; what differs
+            # is who chose the object. Barreling Attack's was *targeted*, so the
+            # count waits for a picker; this one was chosen by nobody — the
+            # trigger fired about it (CR 603.10), and the fire site froze its id
+            # before the effect existed.
+            #
+            # Gated on `_EVENT_SUBJECT_OBJECTS` rather than on the printed word,
+            # exactly as the keyword removal and the copy one family over are:
+            # under any other trigger "that Sliver" names an object no fire site
+            # recorded, and the pump would land on nothing while the card
+            # compiled clean.
+            #
+            # The noun phrase is carried and re-checked at resolution rather
+            # than dropped, for that removal's reason: it restates the trigger's
+            # own narrowing, and a word consumed and never read is a word that
+            # could be deleted with no change to what the card does.
+            if (
+                isinstance(node.subject, ast.TargetSpec)
+                and node.subject.quantifier == "that"
+                and not node.subject.targeted
+                and node.per_each.blocking_bound_target
+                and node.duration.kind is not None
+                and event in _EVENT_SUBJECT_OBJECTS
+            ):
+                duration = _TARGET_PUMP_DURATIONS.get(node.duration.kind)
+                if duration is None:
+                    raise LoweringError(
+                        "no pump handler ends at this duration", node=node
+                    )
+                described = _filter_payload(node.subject.filter)
+                if object_only_filter(described) is None:
+                    raise LoweringError(
+                        "the event subject's pump carries a restriction the "
+                        "resolution cannot test", node=node,
+                    )
+                # The same rewrite the two branches around this one make,
+                # pointed at the third referent: "blocking it" is a relation to
+                # one named permanent, and `count_from_payload` resolves
+                # `blocking_source` against whichever permanent the handler
+                # hands it — here the event's subject, which is what the kind
+                # says and why no `relative_to` marker is needed.
+                counted = dataclasses.replace(
+                    node.per_each,
+                    blocking_bound_target=False, blocking_source=True,
+                )
+                subject_payload: dict[str, object] = {
+                    "power": _per_each_amount(
+                        node.power, node.power_negative, node
+                    ),
+                    "toughness": _per_each_amount(
+                        node.toughness, node.toughness_negative, node
+                    ),
+                    "x_from_count": count_spec(
+                        counted, node, offset=_per_each_offset(node)
+                    ),
+                    "duration": duration,
+                }
+                if described:
+                    subject_payload["filter"] = described
+                return (
+                    OracleInstruction("pump_event_subject", "", subject_payload),
                 )
             # "**Enchanted creature** gets +1/+1 for each other creature you
             # control." (Vampirism.) The same CR 613 layer-7c contribution the

@@ -2230,6 +2230,70 @@ def remove_event_subject_keyword(game: Game, instruction: OracleInstruction, con
     return True, "resolved"
 
 
+@effect_handler("pump_event_subject")
+def pump_event_subject(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Whenever a Sliver becomes blocked, **that Sliver** gets +1/+1 until end
+    of turn for each creature blocking it." (Spined Sliver.)
+
+    ``pump_target_creature_until_eot``'s subject read off the *event* instead of
+    off a target, which is the same move ``remove_event_subject_keyword`` one
+    screen down makes for a keyword: the trigger chose nothing, so the object is
+    the one the fire site froze (CR 603.10) — by id, because by resolution the
+    attacker may have been destroyed and a board search would find a look-alike.
+
+    **The count is measured against that same permanent**, which is the whole
+    reason this cannot be an existing kind with a flag. One sentence, two
+    pronouns, and both name the creature that became blocked; the ability's own
+    source is a *different* Sliver whenever the trigger watched somebody else's
+    (the condition is "a Sliver", not "this creature"), and counting around the
+    source would then have read the wrong creature's blockers. So the frozen
+    permanent is handed to ``count_from_payload`` as its source, and
+    ``blocking_source`` resolves against it.
+
+    CR 509.3c is the fire site's business, not this handler's: a creature
+    becomes blocked **once** however many creatures block it, so this resolves
+    once and the number of blockers is the size of the boost rather than the
+    number of firings.
+
+    The printed noun phrase is re-checked here rather than trusted from the
+    announcement, for the reason every other rebound subject is: the words the
+    lowering carried are the words that have to hold when the ability resolves.
+    """
+    from ..subject_filters import subject_matches
+
+    bound = (context.trigger_context or {}).get("event_subject_permanent_id")
+    subject = game.permanent_by_id(bound) if isinstance(bound, int) else None
+    if subject is None or not game.is_on_battlefield(subject):
+        game.log.append(f"{context.card.name}: the creature it named is gone")
+        return True, "resolved"
+    described = instruction.payload.get("filter")
+    if described and not subject_matches(
+        game, subject, described,
+        observer=game.players.index(context.caster),
+        source=context.source_permanent,
+    ):
+        game.log.append(
+            f"{context.card.name}: {subject.card.name} no longer answers the clause"
+        )
+        return True, "resolved"
+    x_value = context.x_value
+    x_count = instruction.payload.get("x_from_count")
+    if isinstance(x_count, dict):
+        x_value = count_from_payload(game, context, x_count, source=subject)
+    # The sign is already inside the ``times_x`` amount the lowering built, so
+    # the negation flags ``pump_self`` reads are deliberately not consulted —
+    # the same double-negation trap Johtull Wurm sprang one package over.
+    power_delta = resolve_amount(instruction.payload.get("power", 0), x_value)
+    toughness_delta = resolve_amount(instruction.payload.get("toughness", 0), x_value)
+    until = str(instruction.payload.get("duration") or "end_of_turn")
+    apply_temp_pt_boost(subject, power_delta, toughness_delta, until=until)
+    game.log.append(
+        f"{context.card.name} gives {subject.card.name} "
+        f"{power_delta:+d}/{toughness_delta:+d} until " + until.replace("_", " ")
+    )
+    return True, "resolved"
+
+
 @effect_handler("grant_self_keyword_until_eot")
 def grant_self_keyword_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"This creature gains <keyword(s)> until end of turn." (Fetid Imp.)"""
