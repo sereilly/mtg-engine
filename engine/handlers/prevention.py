@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..shields import (
+    make_counting_pool,
     make_source_type_shield,
     make_targeting_source_shield,
     add_shield,
@@ -39,7 +40,8 @@ if TYPE_CHECKING:
 
 
 def _grant_pool(
-    recipient, amount: int, source_name: str | None, source_filter: dict | None = None
+    recipient, amount: int, source_name: str | None, source_filter: dict | None = None,
+    counter: str = "",
 ):
     """Arm one CR 615.7 numeric shield on *recipient* and return it.
 
@@ -60,6 +62,17 @@ def _grant_pool(
     """
     if amount <= 0:
         return None
+    if counter:
+        # "…**For each 1 damage prevented this way, put a +1/+1 counter on that
+        # creature.**" (Temper.) CR 615.5's additional effect, so it is the
+        # shield's own interceptor that performs it as the points are absorbed —
+        # a different `Shield.kind` and therefore a different interceptor, which
+        # is the whole reason `kind` exists. No `source_filter`: no card prints
+        # this rider on a shield that also names its source, and the lowering
+        # refuses the pair rather than arming one half of it.
+        return add_shield(
+            recipient, make_counting_pool(amount, counter, source_name)
+        )
     return add_shield(
         recipient, make_numeric_pool(amount, source_name, source_filter)
     )
@@ -73,6 +86,7 @@ def apply_prevention_shield(
     source_name: str | None = None,
     context: OracleExecutionContext | None = None,
     source_filter: dict | None = None,
+    counter: str = "",
 ) -> str:
     """Grant `amount` prevention shields to a chosen creature, or otherwise to the
     target player. Records `source_name` (the granting card) so the UI can show
@@ -87,7 +101,9 @@ def apply_prevention_shield(
         permanent = target.battlefield[target_permanent_index]
         _record_shield(
             context,
-            _grant_pool(permanent, amount, source_name, source_filter),
+            _grant_pool(
+                permanent, amount, source_name, source_filter, counter,
+            ),
             permanent,
         )
         game.log.append(f"{permanent.card.name} gains prevention shield for {amount} damage")
@@ -372,6 +388,11 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
     apply_prevention_shield(
         game, target, context.target_permanent_index, amount, source_name,
         context=context, source_filter=source_filter,
+        # Temper's CR 615.5 rider. Only the chosen-creature branch reads it —
+        # the lowering refuses the rider on every other recipient, because
+        # "that creature" has nothing to point at when the shield goes round a
+        # player.
+        counter=str(instruction.payload.get("rider_counter") or ""),
     )
     return True, "resolved"
 
@@ -1007,6 +1028,51 @@ def lock_damage_to_target(game: Game, instruction: OracleInstruction, context: O
     game.log.append(
         f"damage dealt to {perm.card.name} this turn can't be prevented or "
         f"redirected ({context.card.name})"
+    )
+    return True, "resolved"
+
+
+@effect_handler("prevent_damage_by_target_spell_until_eot")
+def prevent_damage_by_target_spell_until_eot(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """Hidden Retreat: "Put a card from your hand on top of your library:
+    Prevent all damage that would be dealt by target instant or sorcery spell
+    this turn."
+
+    The shield hangs off the **stack item**, not off a recipient and not off the
+    card, and that is the whole of what makes this card possible — the exact
+    reasoning Reverberation's redirect gives one family over. A spell's damage
+    source is its printed ``CardDefinition`` (CR 109.5), one object per card and
+    handed out once per copy by the deck builder, so a shield matching on the
+    source would silence a *second* copy too. A ``StackItem`` is one object per
+    cast, and ``prevention._resolving_object_shields`` is where the damage paths
+    reach it.
+
+    The chosen spell's type is re-checked here rather than trusted from the
+    activation: CR 608.2b asks whether the target is still legal when the
+    ability resolves, and a spell that has changed type in between is one this
+    card no longer names.
+    """
+    from ..shields import make_resolving_object_shield
+
+    item = context.stack_target
+    card_name = getattr(context.card, "name", "")
+    if item is None or not any(entry is item for entry in game.stack):
+        game.log.append(
+            f"{card_name}: the spell it named is no longer on the stack"
+        )
+        return True, "resolved"
+    wanted = instruction.payload.get("card_types") or ()
+    if wanted and getattr(item.card, "primary_type", None) not in wanted:
+        game.log.append(
+            f"{card_name}: {item.card.name} is no longer the "
+            f"{'/'.join(str(t) for t in wanted)} spell it named"
+        )
+        return True, "resolved"
+    add_shield(item, make_resolving_object_shield(item.card, card_name or None))
+    game.log.append(
+        f"{card_name}: damage {item.card.name} would deal this turn is prevented"
     )
     return True, "resolved"
 

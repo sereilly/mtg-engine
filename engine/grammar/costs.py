@@ -796,6 +796,18 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
             # the same cost aimed somewhere else and *can* be unpayable.
             mark = stream.mark()
             stream.advance()
+            # "Put **a card from your hand on top of your library**" (Hidden
+            # Retreat). The other thing a cost's "put" can move, and the payer
+            # chooses which card but nothing narrows it — so it is read here,
+            # before the counter branch below, whose counter-kind probe would
+            # take "a" and then refuse the line at "card".
+            if stream.accept_phrase(
+                "a", "card", "from", "your", "hand", "on", "top", "of", "your",
+                "library",
+            ):
+                costs.append(ast.PutHandCardOnLibraryCost())
+                stream.accept_punct(",")
+                continue
             if stream.accept_word("a", "an"):
                 # The kind through the counter vocabulary rather than off a bare
                 # word: a P/T counter is spelled in symbols (CR 122.1a), so

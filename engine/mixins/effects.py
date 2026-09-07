@@ -24,6 +24,28 @@ from ..trigger_utils import iter_triggered_abilities, make_trigger_event, matchi
 from ..damage_redirects import source_matches
 from ..search_filters import card_has_type
 
+def _damage_word_matches(trig, combat: bool) -> bool:
+    """Whether *trig* watches the kind of damage that was just dealt.
+
+    "Whenever this creature is dealt **combat** damage" (Wall of Essence, Wall
+    of Souls) reads the printed word off the condition's ``damage_combat``
+    payload — the same key ``events._damage_dealt_filter`` reads for the same
+    printed word on the *dealing* side of the event, deliberately, because one
+    word answered by two spellings is how two dispatch scopes come to disagree
+    about what it means.
+
+    An absent key is every other card watching this event, and means every kind
+    of damage. The "noncombat" value has no printing on this side of the event
+    and is honoured anyway: the key is shared, so the reading has to be.
+    """
+    word = trig.condition.payload.get("damage_combat")
+    if word == "combat":
+        return combat
+    if word == "noncombat":
+        return not combat
+    return True
+
+
 class EffectsMixin:
     def _fire_delayed_combat_damage_triggers(
         self, attacker: "Permanent", defending_player: "PlayerState", amount: int
@@ -97,7 +119,9 @@ class EffectsMixin:
                 ))
         self._enqueue_triggered_batch(events)
 
-    def _fire_dealt_damage_triggers(self, permanent: Permanent, amount: int = 0) -> None:
+    def _fire_dealt_damage_triggers(
+        self, permanent: Permanent, amount: int = 0, *, combat: bool = False,
+    ) -> None:
         """Put 'whenever this creature is dealt damage' triggers (Fungusaur,
         Brash Taunter) onto the stack; they resolve off the stack (CR 603.3)
         rather than inline.
@@ -106,6 +130,16 @@ class EffectsMixin:
         because "it deals **that much** damage" (Brash Taunter) has nowhere else
         to read it: by the time the trigger resolves, the marked damage may have
         been added to by something else or wiped by a cleanup.
+
+        *combat* is whether this was combat damage, which the two Stronghold
+        Walls print ("whenever this creature is dealt **combat** damage") and
+        every other card watching this event does not. It is the caller's
+        because the event object is not in scope here — a fact of the damage
+        rather than of the permanent — and `apply_damage_to_creature`, the
+        non-combat entry point, says so in its own name. Defaulting False is the
+        direction that does *less*: a combat site that forgot the flag would
+        leave a narrowed trigger unfired, where a default of True would fire it
+        on a Shock.
 
         The instruction-kind filter is gone. It named `add_counter_to_self` —
         Fungusaur's one shape — so every other card written with this condition
@@ -147,6 +181,7 @@ class EffectsMixin:
             # damage" would otherwise be announced twice for its own damage —
             # once here and once below.
             if "damaged_filter" not in trig.condition.payload
+            and _damage_word_matches(trig, combat)
         ]
         # "Whenever **enchanted creature** is dealt damage…" (Binding Agony).
         # The same event watched by something attached to the damaged creature
@@ -157,6 +192,8 @@ class EffectsMixin:
         for seat, attachment, trig in attached_subject_triggers(
             self, permanent, {"creature_dealt_damage"}, "damaged_attached",
         ):
+            if not _damage_word_matches(trig, combat):
+                continue
             events.append(make_trigger_event(
                 # CR 603.3a: the ability's controller is the *attachment's*
                 # controller, never the damaged creature's — which on this card
@@ -182,6 +219,8 @@ class EffectsMixin:
         ):
             described = trig.condition.payload.get("damaged_filter")
             if not described or trig.instruction is None:
+                continue
+            if not _damage_word_matches(trig, combat):
                 continue
             if not subject_matches(
                 self, permanent, described, observer=seat, source=observer

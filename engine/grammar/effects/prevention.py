@@ -27,8 +27,10 @@ from ..names import accept_source_card_name
 from ..readers import _parse_keyword_list, accept_source_reference
 from ..stream import TokenStream
 from ..vocabulary import CARD_TYPES, COLOR_WORDS
+from ..amounts import accept_counter_kind
 from ..phrases import (_parse_duration, _parse_opponents_choice,
                        accept_or_planeswalker, parse_bound_subject)
+from ..records import _parse_for_each_this_way
 
 
 def _parse_prevent(stream: TokenStream) -> ast.PreventDamage:
@@ -84,17 +86,25 @@ def _parse_prevent(stream: TokenStream) -> ast.PreventDamage:
     # CR 601.2d's division on the prevention side of the event, read after the
     # recipient because that is where the card prints it.
     division = _accept_division_rider(stream)
+    # "…**For each 1 damage prevented this way, put a +1/+1 counter on that
+    # creature.**" (Temper.) CR 615.5's additional effect, printed on a
+    # *counted* pool where every other card in the pool prints it on a
+    # chosen-source shield — so it is the same reader, called from a second
+    # sentence, and deliberately not a second reader: two productions for one
+    # printed clause would make which riders a card may carry depend on which
+    # shield printed them.
+    prevented_rider = _parse_prevented_this_way_rider(stream)
     alternate = _parse_instead_rider(stream)
     if alternate is None:
         return ast.PreventDamage(
             amount, to=recipient, duration=duration, dealt_by=dealt_by,
-            division=division,
+            division=division, prevented_rider=prevented_rider,
         )
     described, larger = alternate
     return ast.PreventDamage(
         amount, to=recipient, duration=duration, dealt_by=dealt_by,
         alternate_amount=larger, alternate_subject=described,
-        division=division,
+        division=division, prevented_rider=prevented_rider,
     )
 
 
@@ -484,6 +494,14 @@ def _parse_prevented_this_way_rider(stream: TokenStream) -> "ast.PreventedRider 
     is the same clause and the amount is the same number — what the two cards do
     with it is the row above.
 
+    Temper prints the quantity in **front** of the verb instead: "For each 1
+    damage prevented this way, put a +1/+1 counter on that creature." Read here
+    rather than by a reader of its own, because it is the same clause about the
+    same record — a second production would make which riders a card can carry
+    depend on which of the two printed orders it used. Its counter kind is
+    payload (CR 122.1), which is why it is a branch and not a row of the fixed
+    word table above.
+
     Read here rather than as a sentence of its own for
     :func:`_parse_instead_rider`'s reason one screen up: it refers to an amount
     that does not exist yet, so a statement layer that split them would run it
@@ -495,6 +513,27 @@ def _parse_prevented_this_way_rider(stream: TokenStream) -> "ast.PreventedRider 
     mark = stream.mark()
     if not stream.accept_punct("."):
         return None
+    # "**For each 1 damage prevented this way,** put a +1/+1 counter on that
+    # creature." (Temper.) ``records._parse_for_each_this_way`` is the same
+    # reader Sacred Boon's *trailing* clause goes through, so "damage prevented
+    # this way" names the same record from either printed position. "That
+    # creature" is the shielded one and is not read as a noun phrase: the
+    # interceptor holds the recipient it just absorbed for, so there is nothing
+    # to resolve and any other subject is a sentence this does not implement.
+    #
+    # Tried first, and it refuses without consuming, so every other rider keeps
+    # the reading it has.
+    counted = _parse_for_each_this_way(stream)
+    if counted is not None and counted.source == "prevention_shield":
+        if stream.accept_punct(",") and stream.accept_phrase("put", "a"):
+            token = accept_counter_kind(stream)
+            if token is not None and stream.accept_word("counter") and (
+                stream.accept_phrase("on", "that", "creature")
+            ):
+                stream.accept_punct(".")
+                return ast.PreventedRider("put_counter", counter=str(token.text))
+    stream.reset(mark)
+    stream.accept_punct(".")
     # "**If damage from a black source is prevented this way,** you gain that
     # much life." (Shadowbane.) The same rider with a condition in front of it
     # and the quantity spelled "that much" instead of repeating the clause —

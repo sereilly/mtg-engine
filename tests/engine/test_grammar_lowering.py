@@ -5144,14 +5144,37 @@ def test_a_divided_shield_refuses_a_single_named_recipient():
     assert "divided shield" in (result.lowering_error or "")
 
 
-def test_a_counted_redirect_off_the_source_refuses_a_narrowed_target():
-    """Zhalfirin Crusader's sentence admits only "any target" (CR 115.4): the
-    printed words are what make the taker a player as readily as a permanent,
-    and a narrowed object target is a different picker. Refused rather than
-    widened."""
+def test_a_counted_redirect_off_the_source_carries_a_narrowed_target():
+    """Zhalfirin Crusader prints "any target" and the five en-Kor creatures
+    print "target creature you control"; one production reads both and the
+    difference is the description on ``targets``.
+
+    The narrowing has to *arrive*, which is what this asserts: the handler
+    re-checks the printed noun phrase at resolution (CR 608.2b), so a payload
+    that lost "you control" would be an ability moving the damage onto an
+    opponent's creature."""
     result = compile_line(
         "The next 1 damage that would be dealt to this creature this turn is "
-        "dealt to target creature instead."
+        "dealt to target creature you control instead."
+    )
+
+    assert result.lowered
+    instruction, = result.instructions
+    assert instruction.kind == "redirect_next_damage_from_source_until_eot"
+    assert instruction.payload["targets"]["filter"] == {
+        "type_filter": "creature", "controller": "you",
+    }
+
+
+def test_a_counted_redirect_off_the_source_refuses_a_player_target():
+    """The taker of a *narrowed* redirect is a permanent and only a permanent.
+    "Any target" (CR 115.4) is the one spelling that admits a player, because
+    the printed words are what put a seat and an object on the same footing;
+    "target player" names a seat the narrowed reading has no record for, and is
+    refused rather than resolved to whoever the resolution happened to hold."""
+    result = compile_line(
+        "The next 1 damage that would be dealt to this creature this turn is "
+        "dealt to target player instead."
     )
 
     assert result.parsed and not result.lowered

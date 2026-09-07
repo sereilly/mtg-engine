@@ -59,7 +59,29 @@ END_OF_TURN = "end_of_turn"
 
 #: "Prevent the next N damage that would be dealt to <recipient> this turn"
 #: (CR 615.7). Spent by points, not by instances.
+#: "Prevent all damage that would be dealt by **target instant or sorcery
+#: spell** this turn." (Hidden Retreat.) A blanket with no points and no uses,
+#: hung off the **stack item** rather than off a recipient — the exact twin of
+#: ``DamageRedirect``'s Reverberation record one module over, and for its
+#: reason: a spell's damage source is its printed ``CardDefinition`` (CR 109.5),
+#: one object per card and shared by every copy, so a shield matching on the
+#: source would silence a second copy too. A ``StackItem`` is one object per
+#: cast, and ``Game.resolving_items`` is where a damage path can reach it.
+PREVENT_BY_RESOLVING_OBJECT = "prevent_by_resolving_object"
 PREVENT_NEXT_N = "prevent_next_n"
+#: "Prevent the next X damage that would be dealt to target creature this turn.
+#: **For each 1 damage prevented this way, put a +1/+1 counter on that
+#: creature.**" (Temper.) CR 615.7's point pool with CR 615.5's additional
+#: effect on it — the counters go on *as* the points are absorbed, at the moment
+#: the damage would have been dealt, which is why this is a shield kind and not
+#: a step of the spell's resolution: at resolution the pool has absorbed nothing
+#: and the placement would be zero counters for ever.
+#:
+#: Its own kind rather than a ``counter`` field on the pool above, for the
+#: reason ``kind`` exists: it names the interceptor that consumes the shield,
+#: and what that interceptor does after absorbing is the whole difference — the
+#: exact split ``PREVENT_AND_GAIN_LIFE`` and ``PREVENT_WHOLE`` already are.
+PREVENT_NEXT_N_AND_COUNTERS = "prevent_next_n_and_counters"
 #: "…prevent all but N of that damage" — a cap, spent whole on one instance.
 PREVENT_ALL_BUT = "prevent_all_but"
 #: "…prevent that damage. You gain life equal to the damage prevented this way"
@@ -223,6 +245,10 @@ class Shield:
     #: (:func:`drop_spent`), because whoever holds a reference is exactly whoever
     #: the card gave the number to.
     prevented: int = 0
+    #: The CR 122.1a counter this shield's rider places, one per point it
+    #: absorbs (Temper's "+1/+1"). Empty for every shield whose rider places
+    #: none, which is every other shield in the pool.
+    counter: str = ""
 
     @property
     def color(self) -> str | None:
@@ -522,6 +548,43 @@ def make_numeric_pool(
         amount=amount,
         uses=None,
         source_filter=dict(source_filter) if source_filter else None,
+        source_name=source_name,
+    )
+
+
+def make_resolving_object_shield(source, source_name: str | None = None) -> Shield:
+    """Hidden Retreat's blanket over one cast spell's damage.
+
+    No ``amount`` and no ``uses``: "prevent **all** damage … this turn" is every
+    event that spell deals for the rest of the turn, and the cleanup sweep is
+    what ends it. ``source`` is the spell's own card, so damage another source
+    deals while it resolves — a sorcery that has a creature deal it — is left
+    where the card put it; the *cast* is what the shield is found by, and the
+    card is what it answers to.
+    """
+    return Shield(
+        kind=PREVENT_BY_RESOLVING_OBJECT,
+        amount=None,
+        uses=None,
+        source=source,
+        source_name=source_name,
+    )
+
+
+def make_counting_pool(
+    amount: int, counter: str, source_name: str | None = None
+) -> Shield:
+    """Temper's pool: CR 615.7's points with CR 615.5's counters behind them.
+
+    ``make_numeric_pool`` with the rider's counter recorded and a kind of its
+    own, because ``kind`` is what selects the interceptor and this pool's
+    interceptor places counters as it absorbs.
+    """
+    return Shield(
+        kind=PREVENT_NEXT_N_AND_COUNTERS,
+        amount=amount,
+        uses=None,
+        counter=counter,
         source_name=source_name,
     )
 

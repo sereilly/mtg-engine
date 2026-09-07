@@ -433,6 +433,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "prevent_all_combat_damage_to_matching": "prevention",
     "prevent_all_combat_damage_except_from": "prevention",
     "prevent_damage_by_target_until_eot": "prevention",
+    # Hidden Retreat: the same shield with a *spell* as the source it
+    # silences. Same family — the damage does not happen — and its own
+    # kind because a spell is chosen from the stack and recognised by
+    # its cast rather than by the source object.
+    "prevent_damage_by_target_spell_until_eot": "prevention",
     "prevent_damage_to_target_until_eot": "prevention",
     # The negation of both families (Whippoorwill): no shield and no redirect
     # may touch the marked creature's damage. Filed with prevention because
@@ -481,6 +486,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "redirect_next_damage_to_source_until_eot": "damage",
     # Zhalfirin Crusader: the same sentence with its two ends swapped.
     "redirect_next_damage_from_source_until_eot": "damage",
+    # Shaman en-Kor: CR 615.8's chosen source over a **targeted** protected
+    # creature. Same family: what moves is still the recipient of one damage
+    # event, and which end of it the sentence announces is payload.
+    "redirect_chosen_source_damage_off_target_until_eot": "damage",
     "recolor_target_from_text": "recolor",
     # The same layer-5 colour change with a duration and several targets
     # (Dwarven Song and its four siblings). Same category: what differs is how

@@ -126,6 +126,13 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
      ("this", "creature", "blocks", "or", "becomes", "blocked")),
     ("creature_blocks", ("this", "creature", "blocks")),
     ("creature_becomes_blocked", ("this", "creature", "becomes", "blocked")),
+    # "…is dealt **combat** damage" (Wall of Essence, Wall of Souls). One kind
+    # with the bare row below, because the narrowing is payload on the
+    # compiler's side (`damage_combat` in engine/oracle.py) and this table has
+    # only to agree about *which event* the words name — the arrangement the
+    # upkeep and draw-step rows already use.
+    ("creature_dealt_damage",
+     ("this", "creature", "is", "dealt", "combat", "damage")),
     ("creature_dealt_damage", ("this", "creature", "is", "dealt", "damage")),
     ("permanent_becomes_untapped", ("this", "creature", "becomes", "untapped")),
     ("permanent_becomes_untapped", ("this", "artifact", "becomes", "untapped")),

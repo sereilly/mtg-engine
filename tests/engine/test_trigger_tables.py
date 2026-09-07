@@ -117,7 +117,14 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     "matching_creature_becomes_blocked":
         "whenever a creature becomes blocked by a creature with lesser power",
     "creature_attacks_or_blocks": "whenever this creature attacks or blocks",
-    "creature_dealt_damage": "whenever this creature is dealt damage",
+    # Both printed spellings, because the narrowing is a named group on a second
+    # pattern (Wall of Essence, Wall of Souls) — without the entry the shadowing
+    # guard would only ever check the bare one, which is the lookup being by
+    # kind.
+    "creature_dealt_damage": (
+        "whenever this creature is dealt damage",
+        "whenever this creature is dealt combat damage",
+    ),
     "creature_dealt_damage_by_self_dies": "whenever a creature dealt damage by this creature this turn dies",
     # One kind, four printed subjects: a quantified class (Lifetap), the
     # source itself (City of Brass), the permanent this one is attached to

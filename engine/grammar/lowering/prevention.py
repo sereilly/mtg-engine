@@ -16,6 +16,7 @@ this name so the mirror re-forms instead of forking.
 from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
+from ..phrases import is_pt_counter
 from ..vocabulary import IMPLEMENTED_KEYWORDS
 from ._blankets import _lower_prevent_all
 from ._events import CHOSEN_DAMAGE_SOURCE
@@ -93,6 +94,76 @@ def _alternate_amount(node: ast.PreventDamage) -> dict | None:
     return {"filter": described, "amount": larger}
 
 
+def _counted_pool_counter_rider(node: ast.PreventDamage) -> str | None:
+    """The counter Temper's CR 615.5 rider places, or None for every other card.
+
+    "Prevent the next X damage that would be dealt to target creature this turn.
+    **For each 1 damage prevented this way, put a +1/+1 counter on that
+    creature.**"
+
+    The pool's rider rather than the chosen-source shield's, which is the only
+    other shape in this file that carries one — so it is read here, in front of
+    the refusal every other branch shares, rather than inside the pool's own
+    payload: those branches were written before any rider existed and read none
+    of it, and one printed on a Circle or a blanket would arm without it and
+    report the card supported.
+
+    Every refusal is a way the sentence could otherwise mean more than it says:
+
+    * the shield must be the plain counted pool. A half, a blanket, a
+      colour-scoped Circle, a division and a second size all reach a different
+      interceptor, and none of them places a counter — the rider would be
+      dropped.
+    * the counter must be a CR 122.1a power/toughness kind, because that is
+      what the interceptor places (``Game.place_pt_counters``). An invented
+      counter (CR 122.1's open half) has no reader behind this rider and would
+      be a card reporting supported while placing nothing.
+    * the rider carries no condition. "If damage from a black source is
+      prevented this way" is a property of the source that the interceptor
+      would ignore, which is a card paying for damage it never said it would.
+    * the shield must go around a **chosen creature**. "That creature" is the
+      one the sentence in front named, so a pool armed on a player, on the
+      ability's own source or on the permanent it enchants leaves the pronoun
+      pointing at nobody — and a counter placed on a player is not a counter
+      this engine has.
+    """
+    rider = node.prevented_rider
+    if rider is None or rider.effect != "put_counter":
+        return None
+    if (
+        node.from_filter is not None
+        or node.dealt_by is not None
+        or node.dealt_by_others
+        or node.combat_only
+        or node.division is not None
+        or node.to_others
+        or node.alternate_amount is not None
+        or node.alternate_subject is not None
+        or rider.source_colors
+        or isinstance(node.amount, (ast.AllOf, ast.Half))
+    ):
+        raise LoweringError(
+            "only the plain counted pool places counters for what it prevented",
+            node=node,
+        )
+    if not is_pt_counter(rider.counter):
+        raise LoweringError(
+            f"nothing places a {rider.counter} counter for damage prevented "
+            "this way",
+            node=node,
+        )
+    if (
+        not isinstance(node.to, ast.TargetSpec)
+        or node.to.quantifier not in ("target", "any_target")
+        or "creature" not in node.to.filter.card_types
+    ):
+        raise LoweringError(
+            "the counters go on the creature the shield was announced on",
+            node=node,
+        )
+    return rider.counter
+
+
 def _lower_prevent_damage(
     node: ast.PreventDamage, produced: frozenset[str] = frozenset()
 ) -> tuple[OracleInstruction, ...]:
@@ -154,7 +225,8 @@ def _lower_prevent_damage(
             "recipient",
             node=node,
         )
-    if node.prevented_rider is not None and (
+    counter_rider = _counted_pool_counter_rider(node)
+    if counter_rider is None and node.prevented_rider is not None and (
         node.from_filter != ast.ObjectFilter()
         or not isinstance(node.amount, ast.Fixed)
         or node.combat_only
@@ -511,6 +583,14 @@ def _lower_prevent_damage(
     }
     if alternate is not None:
         payload["amount_if"] = alternate
+    if counter_rider is not None:
+        # CR 615.5's additional effect on the pool: the counters go on as the
+        # points are absorbed, not when the spell resolves, so the kind travels
+        # with the shield and the interceptor places them. A key on the same
+        # instruction rather than a second one, because the two are one effect —
+        # `Shield.kind` is what picks the interceptor and this key is what that
+        # interceptor is.
+        payload["rider_counter"] = counter_rider
     # "…dealt to this creature **by Torrent of Lava** this turn." Whose damage
     # the shield answers to, on the same shield rather than as a kind of its
     # own: CR 615.9 rechecks a *recorded property* against the source when the

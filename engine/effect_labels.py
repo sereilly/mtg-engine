@@ -365,6 +365,7 @@ ACTIVATED_LABELS: dict[str, str] = {
     # ability, and that kind is only ever produced by a *spell* — nothing
     # would reach a row for it, which is what the dead-entry guard says.
     "prevent_damage_by_target_until_eot": "activated_prevent",
+    "prevent_damage_by_target_spell_until_eot": "activated_prevent",
     "redirect_damage_from_target_until_eot": "activated_prevent",
     # …and the counted twin, which moves a *pool of points* onto the
     # permanent whose ability it is (Daughter of Autumn, Hazduhr the Abbot).
@@ -375,6 +376,9 @@ ACTIVATED_LABELS: dict[str, str] = {
     # when it deals none.
     "redirect_next_damage_to_source_until_eot": "activated_prevent",
     "redirect_next_damage_from_source_until_eot": "activated_prevent",
+    # Shaman en-Kor's second ability, and the same reason: what it is *for* is
+    # keeping damage off the creature it named.
+    "redirect_chosen_source_damage_off_target_until_eot": "activated_prevent",
     # Quarum Trench Gnomes changes what a land produces. The mana is the point,
     # which is what `activated_mana` answers.
     "produce_mana_instead": "activated_mana",
