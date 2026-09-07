@@ -311,7 +311,7 @@ def _lower_damage_shape(
     # is itself the source of that damage (`_bites`). Probed before the
     # quantity branches below because the amount is a *read* rather than a
     # number — and after the counted ones above, which a bite never is.
-    bite = lower_bite(node, produced)
+    bite = lower_bite(node, produced, event)
     if bite is not None:
         return bite
 

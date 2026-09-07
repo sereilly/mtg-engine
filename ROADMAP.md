@@ -1336,6 +1336,102 @@ biter, where `payload["biter"]` has exactly one value today; and that handler
 biting a **player**, which it cannot — it resolves its victim through
 `resolve_target_permanent` and "any target" (CR 115.4) includes players.
 
+### Wave 2, W2G2 — a choice somebody else makes (2 of 2)
+
+**137 → 139 supported.** Landed: **Pandemonium** and **Mogg Assassin**, the two
+cards whose printed sentence hands a target or a choice to a seat that is not
+the ability's controller (CR 603.3d). `oracle_diff` moved **2 of 3,109** — those
+two — and no dataclass gained a field, so the raw number is the filtered one.
+Hollow lines 0, `parse_coverage --set EXO` 0 unclaimed, `picker_sweep --set EXO`
+0 findings. **No hook added, and none removed.**
+
+**Both declines had expired in part, and the expired part was the same one.**
+W1G2 wrote of Pandemonium that "nothing models a target chosen by a seat other
+than the ability's controller"; W1G1 had built exactly that in the same wave for
+the Oaths — `_choose_trigger_targets` reads `spec["chooser"]` and arms the
+prompt on the named seat, and CR 115.4's `any` is already one of the kinds it
+picks for. What was missing was **one word** in that reader
+(`event_subject_controller`, which is a different frozen key from the Oaths'
+`that_player`) and the carry of the key onto the `any` kind in
+`_from_targets_payload`. And W1G5 wrote of Mogg Assassin that "You choose target
+creature an opponent controls" needs a controller narrowing on a
+resolution-time choice; it needs no such thing, because **"you choose target X"
+is CR 601.2c's default said out loud** and lowers to the announcement every
+other "Choose target creature" lowers to — where "an opponent controls" is an
+ordinary `targets` filter the enumerator has always read.
+
+That reframing is what buys the rest of the card. The announcement is gated by
+`legality.activation_target_refusal` **before the tap cost is paid**, which
+matters: Mogg Assassin taps as its cost, and a refusal at resolution would tap
+it for nothing every turn the opponent's board is empty. It is refused with the
+creature untapped.
+
+**What each card really cost.**
+
+* **Pandemonium** — a parse ("of their choice" after "any target", which
+  `postmodifiers.py`'s clause of the same words cannot reach because CR 115.4's
+  union has no head noun to hang off); one `_bites.py` branch whose biter is the
+  event subject and whose bitten end is the union; `biter: "event_subject"` in
+  `handlers/damage.source_bites_target` and a face path beside its permanent
+  one; the chooser word in the trigger picker; and **the `may` rebind**.
+* **Mogg Assassin** — the "whole sentence or nothing" tail on
+  `parse_player_chooses_permanent` read as "whole **clause**", so two chooser
+  clauses joined by ", and" reach `statements.py`'s joining loop; the announced
+  reading above; `choose_target_permanent` recording what it announced and whose
+  it is, exactly as its plural has recorded since Retribution; `chosen_player`
+  as the chooser of a second pick when a step of the same effect recorded one;
+  and two new quantifiers for "the creature you chose" / "…your opponent chose".
+
+**The `may` rebind was the one thing no census could have found, and it was
+found by driving a game.** `handlers/control_flow._offer_to_seat` moves
+`context.target` onto the seat an offer was made to, so "that player" inside the
+offer means the player who took it. Pandemonium's offer is made to the entering
+creature's controller and its action carries a target that seat had *already
+announced* — so the rebind overwrote it and the damage went to the offered seat.
+A player who aimed at their opponent shot themselves, with nothing red, nothing
+logged and every instrument green.
+
+The fix is not a payload key: it is `targeting.announces_a_target`, moved out of
+`mixins/stack/resolution.py` where the trigger picker already asked the same
+question, and given `described_only`. That parameter is the whole finding.
+A bare `recipient: "target_player"` is a family's spelling for "whoever this
+resolution's target is" — which for an offer is the seat the rebind itself sets
+("any player may … have this enchantment deal 5 damage to **that player**",
+Worms of the Earth) — while a `targets` **description** is what the picker reads
+and what the announcement was made from. Only the second is evidence that a
+choice already exists to preserve. Measured rather than guessed: of the pool's
+`may`s that rebind, **eleven** name a seat the event froze and exactly **one**
+carries a `targets` description. Worms of the Earth is the card that says why
+the distinction is needed — it went red on the first, wider reading.
+
+**Which record "the creature you chose" names is not a fact about this card.**
+The two new quantifiers map onto this engine's two ways of making a choice:
+the ability's controller picks at announcement (CR 601.2c), so "you chose" is
+the `choose_target_permanent` step's record; every other seat picks at
+resolution through the ordinary `choose_permanent` prompt, so "your opponent
+chose" is that step's. Both gated on the record having been written, so a card
+printing either phrase without a step in front of it refuses by name rather than
+destroying nothing.
+
+**And the CR citation the brief asked for was the wrong subrule.** The brief
+pointed at CR 705.3 ("an effect may state a flip's result"), which is in
+`rules_progress.py`'s denominator as untested and which Mogg Assassin does not
+print — no effect states its result. What it does exercise is the last sentence
+of **CR 705.2**: *only the player who flips the coin wins or loses the flip*.
+It is the pool's first card whose flip decides between **two different players'**
+choices, so it is the first on which "you win the flip" and "the seat that chose"
+are different players; every earlier flip in the pool has one seat making every
+decision, which makes the rule unobservable. Two tests in
+`tests/rules/test_coin_flips.py`, and 705.3 stays honestly untested.
+
+**One module to watch that no brief named.** `lowering/destruction.py` finished
+at **994** — six lines under the guard, and a third tight module beside the two
+wave 2 was warned about (`lowering/exile.py` 996, `lowering/conditions.py` 995,
+both W2G4's). Neither of those was touched by this group. The cut, when it comes,
+is along the line the module's own branches already draw: the back-reference
+destroys (`that`, the two `chosen_by_*`, the delayed agent) read a record and
+choose nothing, while everything else describes a noun phrase.
+
 ## Stronghold (STH) — shipped (143/143, manifest index 18)
 
 **Ingest census: 97/143 supported (67.8%), 142 of 143 cards new to the pool.**

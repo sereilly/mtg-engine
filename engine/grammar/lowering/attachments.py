@@ -29,8 +29,8 @@ from ._common import (_describe_targets, _filter_payload, _is_source, _is_target
                       _restrictions_beyond)
 from ._amounts import count_spec
 from ._events import (CHOSEN_PERMANENT as _ATTACH_HOST_KEY,
-                      _EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_PLAYERS,
-                      _RECORDED_PERMANENTS)
+                      CHOSEN_PLAYER, _EVENT_SUBJECT_CONTROLLERS,
+                      _EVENT_SUBJECT_PLAYERS, _RECORDED_PERMANENTS)
 
 
 def _lower_attach_to_recorded(
@@ -354,7 +354,45 @@ def _lower_choose_permanents(
     return (OracleInstruction("choose_permanents", "", payload),)
 
 
-def _lower_choose_permanent(node: ast.ChoosePermanent) -> tuple[OracleInstruction, ...]:
+def _lower_announced_choice(
+    node: ast.ChoosePermanent,
+) -> "tuple[OracleInstruction, ...] | None":
+    """"**You** choose target creature an opponent controls" (Mogg Assassin).
+
+    CR 601.2c/602.2b: a target is chosen as the spell is cast or the ability is
+    activated, by the object's controller — so a sentence naming *that* seat as
+    the chooser is the default said out loud, and it lowers to the announcement
+    every other "Choose target creature" lowers to (Reincarnation, Glyph of
+    Life) rather than to a prompt at resolution.
+
+    Which matters in both directions. The picker offers the printed noun phrase
+    at activation, so ``legality.activation_target_refusal`` can decline an
+    ability with no legal target **before the tap cost is paid** — and Mogg
+    Assassin taps as its cost, so a refusal after the fact is a real loss. And
+    the narrowing a resolution-time prompt could not carry ("an opponent
+    controls" is a seat, which ``_lower_choose_permanent`` below refuses
+    outright) is an ordinary ``targets`` filter here, read by the enumerator
+    every other targeted line goes through.
+
+    None for every other chooser, which keeps the resolution-time reading for
+    the seats that really do pick then — an opponent, the seat an event froze,
+    the seat this effect chose.
+    """
+    if node.chooser.kind != "you" or node.optional or node.host_for_source:
+        return None
+    spec = node.spec
+    if not spec.targeted or spec.quantifier != "target" or spec.count != 1:
+        return None
+    payload: dict[str, object] = {}
+    _describe_targets(payload, spec)
+    if "targets" not in payload:
+        return None
+    return (OracleInstruction("choose_target_permanent", "", payload),)
+
+
+def _lower_choose_permanent(
+    node: ast.ChoosePermanent, produced: frozenset[str] = frozenset()
+) -> tuple[OracleInstruction, ...]:
     """"<player> chooses <noun phrase> that this card could enchant."
     (Takklemaggot.)
 
@@ -404,11 +442,27 @@ def _lower_choose_permanent(node: ast.ChoosePermanent) -> tuple[OracleInstructio
         # The singular's half of the plural's announcement above, and the same
         # reason: a printed "target" is a seat the caster chooses.
         scoped["targets"] = dict(announced)
+    seat = _CHOOSER_SEATS[node.chooser.kind]
+    if node.chooser.kind == "that_player" and CHOSEN_PLAYER in produced:
+        # "You choose target creature an opponent controls, and **that
+        # opponent** chooses target creature." (Mogg Assassin.) No event fired —
+        # this is an activated ability — so the seat the pronoun names is the
+        # one an earlier *step of this same effect* recorded, which is exactly
+        # what Retribution's "that player chooses and sacrifices" reads, under
+        # the same key and through the same ``_chooser_seat`` row.
+        #
+        # Gated on ``produced`` rather than tried as a fallback, for the reason
+        # ``_lower_choose_permanents`` states about its own pronoun: without a
+        # step that really wrote the record the words name nobody, and a prompt
+        # armed for a guessed seat is a decision taken from the wrong player.
+        # A *trigger* whose fire site froze the seat writes no such record, so
+        # its own "that player" keeps the frozen reading.
+        seat = "chosen_player"
     payload: dict[str, object] = {
         "filter": _filter_payload(described),
         "result_key": _ATTACH_HOST_KEY,
         "prompt": "Choose a permanent.",
-        "chooser": _CHOOSER_SEATS[node.chooser.kind],
+        "chooser": seat,
         "optional": node.optional,
         # Appended rather than inserted, for ``_lower_choose_permanents``'
         # stated reason: the payload is compared as a repr by

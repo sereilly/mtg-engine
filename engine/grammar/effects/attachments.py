@@ -177,6 +177,24 @@ def parse_excess_choice_paragraph(stream: TokenStream) -> "ast.Statement | None"
     return ast.Sequence((choose, phase_out))
 
 
+def _at_clause_end(stream: TokenStream) -> bool:
+    """Whether the cursor is at the end of a clause this production may stop on.
+
+    The end of the line, the end of a sentence, or a conjunction the statement
+    layer joins on — ``and``/``then``, bare or after the Oxford comma. Exactly
+    the boundaries ``statements.parse_statement``'s joining loop consumes, so a
+    production stopping here hands the rest of the line to the reader that can
+    take it; anything else left in the stream refuses the line, which is full
+    token consumption doing its job.
+    """
+    return (
+        stream.exhausted
+        or stream.at_punct(".", ";")
+        or stream.at_word("and", "then")
+        or (stream.at_punct(",") and stream.peek_word(1) in ("and", "then"))
+    )
+
+
 def parse_player_chooses_permanent(
     stream: TokenStream, chooser: "ast.PlayerRef"
 ) -> "ast.ChoosePermanent | None":
@@ -225,13 +243,22 @@ def parse_player_chooses_permanent(
         # control"; this card spells it with the chooser as the sentence's
         # subject, and both arrive here as one node.
         #
-        # The whole sentence or nothing: a targeted phrase with anything behind
-        # it is a sentence this production has no answer for, and it keeps
-        # whatever refusal it had.
+        # The whole **clause** or nothing: a targeted phrase with anything
+        # behind it that is not a clause boundary is a sentence this production
+        # has no answer for, and it keeps whatever refusal it had.
+        #
+        # A conjunction is a boundary. "You choose target creature an opponent
+        # controls, **and** that opponent chooses target creature." (Mogg
+        # Assassin) is two chooser clauses in one sentence, and the joining loop
+        # in ``statements.py`` reads the second one — but only if this
+        # production stops at the comma instead of rewinding over the whole
+        # line. Reading the rule as "ends the sentence" rather than "ends the
+        # clause" is what made two seats' choices unparseable while either one
+        # alone parsed.
         if (
             spec.quantifier != "target"
             or spec.count != 1
-            or not (stream.exhausted or stream.at_punct(".", ";"))
+            or not _at_clause_end(stream)
         ):
             stream.reset(mark)
             return None

@@ -301,6 +301,34 @@ def _at_counted_target(stream: TokenStream) -> bool:
     return bool(is_number) and stream.peek_word(1) == "target"
 
 
+def _any_target_chooser(stream: TokenStream) -> ast.ObjectFilter:
+    """The filter an "any target" carries: empty, or "**of their choice**".
+
+    "…deal damage equal to its power to **any target of their choice**"
+    (Pandemonium). Who picks, and it has to be read here rather than by
+    ``postmodifiers.py``'s clause of the same words: that one hangs off a head
+    noun, and "any target" is CR 115.4's fixed union with no noun to hang off —
+    the phrase would be left as unconsumed text and the whole line refused.
+
+    The field is the same one the noun-phrase spelling sets, so every gate that
+    already looks for it looks for this. That matters in the direction the gate
+    fails: ``_filter_payload`` refuses ``their_choice`` outright unless the
+    caller says it performs the choice itself, so a lowering that has nowhere
+    to ask the named player declines the line rather than quietly handing the
+    pick to the ability's controller — which on this card is the opposite seat
+    from the printed one.
+
+    Only "their" is read, exactly as the noun-phrase clause reads it: "of your
+    choice" after a target would be a different card, and no production wants
+    that reading by accident.
+    """
+    probe = stream.mark()
+    if stream.accept_word("of") and stream.accept_phrase("their", "choice"):
+        return ast.ObjectFilter(their_choice=True)
+    stream.reset(probe)
+    return ast.ObjectFilter()
+
+
 def parse_target_spec(stream: TokenStream) -> ast.TargetSpec | None:
     """Parse a quantified object reference, or return None if the cursor is not
     at one."""
@@ -308,7 +336,9 @@ def parse_target_spec(stream: TokenStream) -> ast.TargetSpec | None:
 
     # CR 115.4 "any target" — creatures, players, planeswalkers, battles.
     if stream.accept_phrase("any", "target"):
-        return ast.TargetSpec("any_target", targeted=True)
+        return ast.TargetSpec(
+            "any_target", _any_target_chooser(stream), targeted=True
+        )
 
     # The same union spelled out: "target creature, planeswalker, or player"
     # (Martyrdom). CR 115.4 says "any target" *is* that list, and Oracle keeps
@@ -337,7 +367,9 @@ def parse_target_spec(stream: TokenStream) -> ast.TargetSpec | None:
         and stream.accept_word("or")
         and stream.accept_word("player")
     ):
-        return ast.TargetSpec("any_target", targeted=True)
+        return ast.TargetSpec(
+            "any_target", _any_target_chooser(stream), targeted=True
+        )
     stream.reset(long_union)
 
     # "…chooses and sacrifices **one of those creatures**." (Retribution.) One

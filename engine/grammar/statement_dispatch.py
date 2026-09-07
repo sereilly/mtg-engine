@@ -85,6 +85,7 @@ from .lowering import (
     _lower_for_each_tapped,
     _lower_for_each_chosen,
     _lower_for_each_short_of_this_way,
+    _lower_announced_choice,
     _lower_choose_permanent,
     _lower_choose_permanents,
     _lower_gain_control,
@@ -696,7 +697,15 @@ def lower_statement(
         # told which it is.
         if statement.spec.quantifier in ("up_to", "any_number"):
             return _lower_choose_permanents(statement, produced, event=event)
-        return _lower_choose_permanent(statement)
+        # "**You** choose target creature …": the chooser the card names is
+        # CR 601.2c's default, so the pick is the *announcement* rather than a
+        # prompt at resolution. Tried first because the two produce different
+        # instruction kinds and only this one can say which — the prompt below
+        # has no reading of the printed word "target" at all.
+        announced = _lower_announced_choice(statement)
+        if announced is not None:
+            return announced
+        return _lower_choose_permanent(statement, produced)
 
     if isinstance(statement, ast.Exile):
         # `produced` is the gate on "exile **that token**": the phrase names

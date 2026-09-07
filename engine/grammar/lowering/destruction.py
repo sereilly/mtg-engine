@@ -494,6 +494,43 @@ def _lower_destroy(
             ),
         )
 
+    # "If you win the flip, destroy **the creature you chose**. If you lose the
+    # flip, destroy **the creature your opponent chose**." (Mogg Assassin.) Two
+    # back-references to two *different* choosers' picks, and which record each
+    # names follows from how this engine models the two choices rather than from
+    # anything about this card:
+    #
+    # * the ability's controller picks at **announcement** (CR 601.2c), so
+    #   "you chose" is the ``choose_target_permanent`` step's record;
+    # * any other seat picks at **resolution**, through the ordinary
+    #   ``choose_permanent`` prompt, so "your opponent chose" is that step's.
+    #
+    # Both gated on the record really having been written, which is the rule
+    # every back-reference in this package follows: without the step in front of
+    # it the words name nothing, and a destroy reading an empty record is a card
+    # that compiles clean and destroys nothing.
+    if spec.quantifier in _CHOSEN_BY_RECORDS:
+        record = _CHOSEN_BY_RECORDS[spec.quantifier]
+        if record not in produced:
+            raise LoweringError(
+                f"back-reference to {record!r} with no producer in this effect",
+                node=node,
+            )
+        if _restrictions_beyond(filt, frozenset({"card_types"})):
+            # The noun restates what was chosen; it does not narrow it. A phrase
+            # carrying anything more would be describing a *different* object,
+            # and the record cannot be re-filtered — the pick is already made.
+            raise LoweringError(
+                "a chosen object carries no narrowing the destroy could honour",
+                node=node,
+            )
+        chosen_payload: dict[str, object] = {"permanents_from": record}
+        if node.no_regen:
+            chosen_payload["bypass_regeneration"] = True
+        return (
+            OracleInstruction("destroy_target_permanent", "", chosen_payload),
+        )
+
     # "…destroy **that planeswalker**." (Hooded Blightfang.) "That" is not a
     # target the card ever asked for — it is the object the trigger's event was
     # about, which the fire site stamps onto the stack item by permanent id. So
@@ -625,6 +662,17 @@ def _lower_destroy(
     _describe_targets(payload, spec)
     return (OracleInstruction("destroy_target_permanent", "", payload),)
 
+
+
+#: Which scratchpad record each "the <noun> <somebody> chose" phrase names.
+#:
+#: Two entries and they are not two cards: they are this engine's two ways of
+#: making a choice, named by the seat that made it. ``back_references`` reads
+#: the printed clause into the quantifier; this says what the quantifier means.
+_CHOSEN_BY_RECORDS: dict[str, str] = {
+    "chosen_by_you": CHOSEN_TARGET_PERMANENTS,
+    "chosen_by_opponent": CHOSEN_PERMANENT,
+}
 
 
 def _lower_destroy_of_their_choice(

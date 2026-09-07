@@ -137,6 +137,37 @@ def parse_pair_ordinal_subject(stream: TokenStream) -> "ast.TargetSpec | None":
     return ast.TargetSpec(ordinal, ast.ObjectFilter(card_types=(noun,)))
 
 
+#: The two printed relative clauses that say *which* of an effect's own choices
+#: a definite noun phrase names, and the quantifier each becomes.
+#:
+#: "If you win the flip, destroy **the creature you chose**. If you lose the
+#: flip, destroy **the creature your opponent chose**." (Mogg Assassin.) A
+#: sentence whose effect made two picks has two back-references, and English
+#: distinguishes them by *who chose* — the same rule ``_accept_pair_ordinal``
+#: above follows for a pair distinguished by position, and the same reason it is
+#: the quantifier rather than a word to skip: nothing accepts either unless it
+#: says so, so a lowering written for one must fail by name rather than receive
+#: the other.
+_CHOOSER_RELATIVES: dict[tuple[str, ...], str] = {
+    ("you", "chose"): "chosen_by_you",
+    ("your", "opponent", "chose"): "chosen_by_opponent",
+}
+
+
+def _accept_chooser_relative(stream: TokenStream) -> str | None:
+    """The quantifier a trailing "you chose" / "your opponent chose" names.
+
+    None with the cursor untouched when the noun phrase carries no such clause,
+    which is every other card in the pool.
+    """
+    for words, quantifier in _CHOOSER_RELATIVES.items():
+        mark = stream.mark()
+        if stream.accept_phrase(*words):
+            return quantifier
+        stream.reset(mark)
+    return None
+
+
 def parse_bound_subject(stream: TokenStream) -> "ast.TargetSpec | None":
     """``that <card type>`` / ``those <card type>s``, or None if that is not
     what is at the cursor.
@@ -202,11 +233,19 @@ def parse_bound_subject(stream: TokenStream) -> "ast.TargetSpec | None":
     # theirs: the whole block".
     if noun == "permanent":
         stream.advance()
-        return ast.TargetSpec(ordinal or "that", ast.ObjectFilter())
+        return ast.TargetSpec(
+            _accept_chooser_relative(stream) or ordinal or "that",
+            ast.ObjectFilter(),
+        )
     if noun in CARD_TYPES:
         stream.advance()
+        # "…destroy the creature **you chose**" — read after the noun, where
+        # English puts it, and it wins over the ordinal for the reason both are
+        # quantifiers at all: it is the more specific of the two, and no printed
+        # card carries both.
         return ast.TargetSpec(
-            ordinal or "that", ast.ObjectFilter(card_types=(noun,))
+            _accept_chooser_relative(stream) or ordinal or "that",
+            ast.ObjectFilter(card_types=(noun,)),
         )
     # "…**That Dragon** gains haste until end of turn." (Zirilan of the
     # Claw.) English names a back-reference by whatever noun distinguishes
@@ -252,7 +291,26 @@ def _parse_that_object(stream: TokenStream) -> ast.TargetSpec | None:
     ordinal = parse_pair_ordinal_subject(stream)
     if ordinal is not None:
         return ordinal
+    # "destroy **the creature you chose**" / "**…your opponent chose**" (Mogg
+    # Assassin) — the definite article plus the relative clause that says which
+    # of this effect's own picks the words name, read through the same table the
+    # subject position reads it through.
+    #
+    # The **whole phrase or nothing**: a bare "the creature" is the definite
+    # back-reference ``parse_bound_subject`` handles and it means something else
+    # entirely, so a partial match rewinds and this production declines, exactly
+    # as ``parse_target_spec``'s spelled-out "any target" union does.
     mark = stream.mark()
+    if stream.accept_word("the"):
+        noun = stream.peek_word()
+        if noun is not None and noun in CARD_TYPES:
+            stream.advance()
+            chosen = _accept_chooser_relative(stream)
+            if chosen is not None:
+                return ast.TargetSpec(
+                    chosen, ast.ObjectFilter(card_types=(noun,))
+                )
+        stream.reset(mark)
     if not stream.accept_word("that"):
         return None
     noun = stream.peek_word()

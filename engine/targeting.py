@@ -2727,7 +2727,15 @@ def _from_targets_payload(targets) -> dict | None:
     if kind == "roles":
         return roles_spec(targets)
     if kind == "any":
-        return {"kind": "any"}
+        spec = {"kind": "any"}
+        # "…to any target **of their choice**" (Pandemonium). Who announces,
+        # carried onto CR 115.4's union exactly as it is carried onto the two
+        # player kinds below, through the same reader: the seat that picks is a
+        # printed fact about the sentence and not about which noun the slot
+        # admits, so a kind that dropped it would hand the choice to the
+        # ability's controller — the one seat this card says does not make it.
+        _carry_player_comparison(spec, targets)
+        return spec
     if kind == "divided":
         # Fireball: "X damage divided evenly … among any number of targets".
         # The UI picks the targets and X follows from how many were chosen, so
@@ -3649,4 +3657,105 @@ def cast_picker_expected(card, program) -> bool:
         return True                                     # CR 707.9a
     return any(
         _cost_picker_spec(cost) is not None for cost in additional_costs(card)
+    )
+
+
+#: The quantifiers a lowered ``targets`` description uses for a printed
+#: "target"/"any target". Read as evidence rather than as a spec: what is
+#: wanted is only "did the printed line say *target*?", because the spec itself
+#: comes from a kind table that fills in a default where the line said nothing.
+_ANNOUNCED_QUANTIFIERS = frozenset({"target", "any_target"})
+
+#: ...and the words a lowering writes when it keeps the announcement as a plain
+#: payload value instead: ``recipient``/``who``/``actor`` naming the seat this
+#: instruction targets, ``controller`` inside a sweep's noun phrase ("each
+#: artifact **target opponent** controls", Corrosion), ``controlled_by`` and
+#: ``count_from.owner`` naming whose board a choice is made off ("choose a land
+#: **that player** controls", Equipoise, where "that player" is the target
+#: named one clause earlier).
+#:
+#: A set of *values* rather than a list of keys, because the keys are one per
+#: effect family and the words are three for the whole pool — and because a
+#: key list is the thing that goes stale when the next family picks a fourth
+#: name for the same slot.
+ANNOUNCED_PLAYER_WORDS = frozenset({"target", "target_player", "target_opponent"})
+
+
+def announces_a_target(payload, *, described_only: bool = False) -> bool:
+    """Whether the printed line this payload was lowered from named a target.
+
+    Two callers, which is why it lives here rather than beside either: the
+    trigger picker asks it before announcing a target (CR 603.3d), and
+    ``handlers/control_flow``'s ``may`` asks it before rebinding
+    ``context.target`` onto the seat an offer was made to — an offer whose
+    action carries an announced target must not overwrite it, because the seat
+    that was offered and the target that was chosen are two different answers.
+
+    ``derive_instruction_spec`` answers a different question — "what would a
+    picker offer for an instruction of this kind" — and for a **spell** that is
+    the right one everywhere: a kind that targets a player targets a player,
+    and the kind table may say so on its own. A *trigger* needs the narrower
+    question, because the same instruction kinds are also reached with the seat
+    already decided by the firing event, and announcing those would put a
+    picker in front of a phrase that names nobody:
+
+    * "…deals damage to a player, **that player** discards a card" (Abyssal
+      Specter) — the seat is the one that was damaged;
+    * "At the beginning of each player's draw step, **that player** draws…"
+      (Anvil of Bogardan) — the seat is whose step it is;
+    * "…**defending player** discards three cards" (Mindstab Thrull).
+
+    Worse than a redundant prompt, the kind table's default is *wider* than the
+    card: ``target_loses_life`` answers ``{"kind": "player"}`` with no
+    narrowing, so Vito's "target **opponent**" would have been offered its own
+    controller's face.
+
+    So the evidence is the lowering's own record of the phrase — the ``targets``
+    description, or one of the bare words a family that keeps no such
+    description writes instead (:data:`ANNOUNCED_PLAYER_WORDS`). Walked rather
+    than read off one key for :func:`_target_filter_controller`'s reason: the
+    description sits at the payload's top level for one kind and under a
+    wrapper for the next.
+
+    Evidence, never the answer on its own: this is asked only of an instruction
+    whose *spec* already says a player is chosen, so a per-player loop that
+    spells its iterated seat "target_player" (Lim-Dûl's Hex) never reaches
+    here — ``derive_instruction_spec`` answers None for a ``for_each``.
+
+    *described_only* drops the bare-word half, and the ``may`` handler is the
+    caller that needs it. A bare ``recipient: "target_player"`` is a family's
+    spelling for "whoever this resolution's target is" — which for an offer is
+    the **seat it was made to**, set by the rebind itself: "any player may
+    sacrifice two lands or have this enchantment deal 5 damage to **that
+    player**" (Worms of the Earth) says the seat that answered, not a target
+    anybody announced. A ``targets`` description is the other thing entirely:
+    it is what the picker reads and what CR 603.3d's announcement was made
+    from, so it is the only evidence that a choice already exists to preserve.
+    """
+    if isinstance(payload, dict):
+        targets = payload.get("targets")
+        if (
+            isinstance(targets, dict)
+            and targets.get("quantifier") in _ANNOUNCED_QUANTIFIERS
+        ):
+            return True
+        for value in payload.values():
+            if (
+                not described_only
+                and isinstance(value, str)
+                and value in ANNOUNCED_PLAYER_WORDS
+            ):
+                return True
+            if announces_a_target(value, described_only=described_only):
+                return True
+        return False
+    if isinstance(payload, (list, tuple)):
+        return any(
+            announces_a_target(entry, described_only=described_only)
+            for entry in payload
+        )
+    inner = getattr(payload, "payload", None)
+    return (
+        False if inner is None
+        else announces_a_target(inner, described_only=described_only)
     )

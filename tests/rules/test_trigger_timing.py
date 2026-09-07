@@ -740,7 +740,7 @@ def test_603_3d_a_kind_table_default_never_widens_the_printed_phrase():
     answer comes from**. This test used to assert the symptom: Vito's lowering
     kept no target description, so ``derive_instruction_spec`` answered the kind
     table's bare ``{"kind": "player"}`` - every seat, the caster's own included
-    - and the printed-evidence gate (``_prints_a_target``) declined to announce
+    - and the printed-evidence gate (``targeting.announces_a_target``) declined to announce
     rather than offer a phrase-widening picker, leaving the standing opponent.
 
     That was a workaround for a missing fact. ``lowering/life._lower_lose_life``

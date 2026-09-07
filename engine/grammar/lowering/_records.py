@@ -296,6 +296,17 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # and the sacrifice behind it is about to empty one of the two slots. The
     # set is the primary, being what a step of this kind always records.
     "choose_target_permanents": (CHOSEN_TARGET_PERMANENTS, CHOSEN_PLAYER),
+    # "**You** choose target creature an opponent controls, and **that
+    # opponent** chooses target creature." (Mogg Assassin.) The singular of the
+    # row above, recording the same two things under the same two keys: which
+    # permanent this effect announced, and whose it is. One object always has
+    # one controller, so the seat needs no "controlled by the same" relation to
+    # be well defined — which is the only reason the plural's row has to earn it.
+    #
+    # The set record is what "**the creature you chose**" reads two sentences
+    # later: by then the resolution has armed a second, resolution-time choice,
+    # and ``context.target`` is one slot that cannot hold both answers.
+    "choose_target_permanent": (CHOSEN_TARGET_PERMANENTS, CHOSEN_PLAYER),
     # "Target player loses all poison counters. Leeches deals **that much**
     # damage to that player." The removal records how many actually came off,
     # which is the only place the sentence behind it can read the number: by

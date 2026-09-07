@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**366 / 614 tracked rules covered (59%)** — 2196 tests, 0 unannotated.
+**366 / 614 tracked rules covered (59%)** — 2198 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -918,7 +918,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 705. Flipping a Coin
 
 - [x] **705.1** Some cards refer to flipping a coin. A coin used in a flip must be a two-sided object with easily... *(1 tests)*
-- [x] **705.2** Some effects that instruct a player to flip a coin care only about whether the coin comes up head... *(2 tests)*
+- [x] **705.2** Some effects that instruct a player to flip a coin care only about whether the coin comes up head... *(4 tests)*
 - [ ] **705.3** An effect may state that a coin flip has a certain result and/or that a certain player wins a coi...
 
 ### 707. Copying Objects
