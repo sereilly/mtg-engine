@@ -36,7 +36,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | TMP | 335 | 478 | 92.1% | 91.8% | 65.5% | 271 |
 | STH | 143 | 215 | 88.4% | 88.4% | 62.8% | 124 |
 | M21 | 285 | 503 | 87.3% | 87.1% | 61.0% | 237 |
-| EXO *(measured)* | 143 | 207 | 72.5% | 67.6% | 45.9% | 90 |
+| EXO *(measured)* | 143 | 207 | 73.4% | 69.1% | 47.3% | 92 |
 | **All (shipped)** | **4730** | **7032** | **90.2%** | **89.5%** | **59.8%** | **3510** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -72,8 +72,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 3 | 2 | remove-from-combat acts on the object the sentence already chose |  |
 | 3 | 1 | expected 'of' |  |
 | 3 | 3 | unrecognized "can't be" restriction |  |
-| 3 | 3 | a counter-removal cost only reads the ability's own source |  |
 | 2 | 1 | expected 'the number of' in a where-clause |  |
+| 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
 
 ## Cards executing through the grammar
 
@@ -4431,6 +4431,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, look at the top two cards of your library. You may sacrifice this enchantment and pay {2}{G}{G}. If you do, put one of those cards into your hand. If you don't, put one of those cards on the bottom of your library.`
 - **Presence of the Master**
   - `Whenever a player casts an enchantment spell, counter it.`
+- **Price of Progress**
+  - `Price of Progress deals damage to each player equal to twice the number of nonbasic lands that player controls.`
 - **Pridemalkin**
   - `When this creature enters, put a +1/+1 counter on target creature you control.`
   - `Each creature you control with a +1/+1 counter on it has trample. (It can deal excess combat damage to the player or planeswalker it's attacking.)`
@@ -5539,6 +5541,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Spike Breeder**
   - `{2}, Remove a +1/+1 counter from this creature: Put a +1/+1 counter on target creature.`
   - `{2}, Remove a +1/+1 counter from this creature: Create a 1/1 green Spike creature token.`
+- **Spike Cannibal**
+  - `When this creature enters, move all +1/+1 counters from all creatures onto it.`
 - **Spike Colony**
   - `{2}, Remove a +1/+1 counter from this creature: Put a +1/+1 counter on target creature.`
 - **Spike Drone**
@@ -5551,6 +5555,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}, Remove a +1/+1 counter from this creature: Regenerate this creature.`
 - **Spike Rogue**
   - `{2}, Remove a +1/+1 counter from this creature: Put a +1/+1 counter on target creature.`
+  - `{2}, Remove a +1/+1 counter from a creature you control: Put a +1/+1 counter on this creature.`
 - **Spike Soldier**
   - `{2}, Remove a +1/+1 counter from this creature: Put a +1/+1 counter on target creature.`
   - `Remove a +1/+1 counter from this creature: This creature gets +2/+2 until end of turn.`

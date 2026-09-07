@@ -12,7 +12,8 @@ change a characteristic; where it sits is incidental.
 import dataclasses
 
 from .. import ast
-from ..amounts import accept_counters_on_source, accept_fraction_head, accept_life_gain_cap, accept_rounding, expect_pt, parse_amount, parse_equal_to
+from ..amounts import accept_counters_on_source, accept_fraction_head, accept_rounding, expect_pt, parse_amount, parse_equal_to
+from ..bounds import accept_life_gain_cap
 from ..records import (_parse_for_each_this_way, accept_counters_removed_for_cost,
                       accept_plus_per_cost_paid,
                       parse_for_each_milled_this_way)

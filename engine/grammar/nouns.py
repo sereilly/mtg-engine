@@ -27,7 +27,7 @@ from .names import parse_card_name
 from .stream import TokenStream
 from .abilities import _accept_ability_noun, _accept_ability_source
 from .postmodifiers import _parse_postmodifiers
-from .amounts import parse_comparison  # re-exported: a comparison bounds an amount
+from .bounds import parse_comparison  # re-exported: a comparison bounds an amount
 from .readers import _SELF_NOUNS, accept_source_reference
 from .vocabulary import GENERIC_NOUNS as _GENERIC_NOUNS
 from .vocabulary import singular as _singular

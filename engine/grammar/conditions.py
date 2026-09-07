@@ -21,7 +21,7 @@ import dataclasses
 from . import ast
 from .amounts import parse_amount
 from .errors import GrammarError
-from .amounts import parse_comparison
+from .bounds import parse_comparison
 from .nouns import parse_object_filter
 from .readers import accept_source_reference, accept_source_reference_spec
 from .references import parse_player_ref, parse_target_spec

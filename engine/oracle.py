@@ -2762,11 +2762,38 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     # counters untouched; Balduvian Hydra's "+1/+0" prevention shield did the
     # same. Both compiled clean, and nothing could have caught it but reading
     # the parsed cost.
-    removal_cost = re.search(
-        r"\bremove an? ([a-z]+|[+-]\d+/[+-]\d+) counter from ", cost_lower
-    )
-    remove_counter = removal_cost.group(1) if removal_cost else None
+    # "{2}, Remove a +1/+1 counter from **a creature you control**" (Spike
+    # Rogue) — the same cost paid off a permanent the payer picks. The mirror of
+    # ``put_counter_filter`` above and read exactly as it is: the regex only
+    # *delimits* the noun phrase to the end of its cost segment, and what the
+    # phrase names is read by the noun parser through
+    # ``_chargeable_counter_target``, so a phrase it refuses charges no counter
+    # at all rather than charging an unnarrowed one.
+    #
+    # Read **before** every self-referring row below and not after them, which
+    # is the whole of what makes it correct: the plain row's "from " matches
+    # anything at all, so a chosen phrase read second is read as the *source's*
+    # counter — Spike Rogue paying by shrinking itself and growing itself back,
+    # an ability that costs nothing and can be activated for ever. The chosen
+    # regex cannot make the opposite mistake: it requires the phrase to open
+    # with "a"/"an", which no self-reference does.
+    remove_counter_filter = None
+    remove_counter = None
     remove_counter_count: int | str = 1
+    chosen_removal = re.search(
+        r"\bremove an? ([a-z]+|[+-]\d+/[+-]\d+) counter from "
+        r"(an? [^,:]+?)\s*(?=,|:|$)",
+        cost_lower,
+    )
+    if chosen_removal is not None:
+        remove_counter_filter = _chargeable_counter_target(chosen_removal.group(2))
+        if remove_counter_filter is not None:
+            remove_counter = chosen_removal.group(1)
+    if remove_counter is None:
+        removal_cost = re.search(
+            r"\bremove an? ([a-z]+|[+-]\d+/[+-]\d+) counter from ", cost_lower
+        )
+        remove_counter = removal_cost.group(1) if removal_cost else None
     if remove_counter is None:
         # "Remove **any number of** charge counters from this artifact" (the
         # five Mana Batteries). The same cost with the count left to the payer,
@@ -2848,6 +2875,7 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         sacrifice_also_filter=sacrifice_also_filter,
         remove_counter=remove_counter,
         remove_counter_count=remove_counter_count,
+        remove_counter_filter=remove_counter_filter,
         pay_life=_life_payment_cost(cost_lower),
         pay_life_per_counter=_life_payment_per_counter(cost_lower),
         mana_per_counter=per_counter_counter,

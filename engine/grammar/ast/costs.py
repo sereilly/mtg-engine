@@ -403,8 +403,24 @@ class ExileGraveyardPositionCost:
 
 @dataclass(frozen=True)
 class RemoveCounterCost:
+    """"Remove a **corpse** counter from this creature" as part of an
+    activation cost (Scavenging Ghoul).
+
+    *subject* is where the counter comes off when the card names something
+    other than the source: "{2}, Remove a +1/+1 counter from **a creature you
+    control**" (Spike Rogue). ``None`` is the source, which is what every
+    printing before it meant and what the field's absence has to keep meaning —
+    the mirror of :class:`PutCounterCost`'s own field, one direction over.
+
+    Both spellings can be unpayable and that is the point of carrying the
+    phrase: CR 601.2h makes an activation whose cost cannot be paid no
+    activation at all, and which permanents *can* pay is exactly what the noun
+    phrase says. A phrase the charger cannot test would be dropped, and a
+    dropped narrowing here is an ability payable when the card says it is not.
+    """
     counter: str = "+1/+1"
     count: Amount = field(default_factory=lambda: Fixed(1))
+    subject: "ObjectFilter | None" = None
 
 
 Cost = Union[

@@ -399,6 +399,17 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
         if ability.cost.put_counter_filter is not None:
             continue
 
+        # "Remove a +1/+1 counter from a creature you control" (Spike Rogue).
+        # The same trade in the opposite direction and the same reason the
+        # policy cannot price it: the score below reads the *effect*, so moving
+        # a counter from one creature to another reads as a free +1/+1 — and
+        # the AI would shuttle its board's counters onto the Spike every main
+        # phase for no net gain. Derived from the compiled cost, so it names no
+        # card. The self-referring spelling is left alone: that one is priced by
+        # the source's own counters, which the score does read.
+        if ability.cost.remove_counter_filter is not None:
+            continue
+
         # "Exile the top card of your library" (Royal Herbalist, Phyrexian
         # Devourer). The same floor one zone over, and the sharper case for it:
         # the resource spent is the seat's remaining turns (CR 704.5b — a player

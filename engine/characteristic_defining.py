@@ -134,6 +134,16 @@ def _type_count_plus(match: re.Match) -> dict[str, object]:
         "card_type": match.group("card_type"),
         "scope": _WHOSE_BATTLEFIELD[match.group("whose")],
     }
+    # "…equal to the number of **nonbasic** lands the chosen player controls."
+    # (Skyshroud War Beast.) A supertype the counted object must *not* have
+    # (CR 205.4a), which is a fifth capture on this row rather than a row of its
+    # own — Drift of the Dead's "snow" is the same question in the positive
+    # direction and already rides ``supertype``. Its own key because the two
+    # can be printed together ("nonbasic snow lands" is a phrase this grammar
+    # would then read for free), and because a single key holding a negation
+    # would have to spell the sign somewhere.
+    if match.groupdict().get("nonsupertype"):
+        payload["exclude_supertype"] = match.group("nonsupertype")
     if match.group("plus"):
         payload["plus"] = int(match.group("plus"))
     half = _DEFINED_HALF[match.group("half")]
@@ -481,6 +491,7 @@ _PATTERNS: tuple[tuple[re.Pattern[str], object], ...] = (
             r"toughness is) equal to "
             r"(?:(?P<plus>\d+) plus )?the number of "
             r"(?P<state>tapped |untapped )?"
+            r"(?:non(?P<nonsupertype>basic|snow|legendary) )?"
             r"(?P<card_type>artifact|creature|enchantment|land)s "
             r"(?P<whose>you|your opponents|the chosen player) controls?$"
         ),

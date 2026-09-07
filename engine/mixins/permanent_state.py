@@ -192,6 +192,13 @@ def _count_dynamic_pt(
     # characteristic — so a land Arcum's Weathervane thawed stops counting and
     # one it froze starts, which is the whole point of the Weathervane.
     supertype = payload.get("supertype")
+    # "…the number of **nonbasic** lands the chosen player controls" (Skyshroud
+    # War Beast). The mirror of the line above, in the same layer and asked the
+    # same way: an effect that *made* a land basic stops it counting, and one
+    # that took the supertype away starts it. Its own key rather than a sign on
+    # ``supertype``, because a card printing both narrowings ("nonbasic snow
+    # lands") is then this template rather than a new one.
+    excluded_supertype = payload.get("exclude_supertype")
     # "the number of **other** Rats on the battlefield" (Pestilence Rats): the
     # source itself is excluded by identity (CR 109.5), never by name — a
     # second Rat with the same name is a different permanent.
@@ -207,6 +214,11 @@ def _count_dynamic_pt(
     for battlefield in battlefields:
         for perm in battlefield:
             if supertype is not None and not perm.has_supertype(supertype):
+                continue
+            if (
+                excluded_supertype is not None
+                and perm.has_supertype(excluded_supertype)
+            ):
                 continue
             if tapped is not None and bool(perm.tapped) is not bool(tapped):
                 continue
