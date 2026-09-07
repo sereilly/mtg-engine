@@ -198,6 +198,18 @@ def _opponents_turn_after_upkeep(game: "Game", caster_index: int) -> bool:
     )
 
 
+def _during_your_end_step(game: "Game", caster_index: int) -> bool:
+    # Necrologia: the end step of the caster's own turn (CR 513.1), not the
+    # cleanup step after it and not an opponent's. "Your" is the seat check;
+    # the step check is the phase and step pair the ending phase reports,
+    # because the ending phase also contains the cleanup step.
+    return (
+        game.active_player_index == caster_index
+        and game.current_turn_phase == "ending"
+        and game.current_step == "end"
+    )
+
+
 def _during_an_opponents_upkeep(game: "Game", caster_index: int) -> bool:
     # Festival: legal only while an opponent's upkeep step is the current step.
     # Both halves are asked — the seat *and* the step — because either alone is
@@ -214,6 +226,11 @@ CAST_RESTRICTIONS: tuple[CastRestriction, ...] = (
         _during_an_opponents_upkeep,
         "can only be cast during an opponent's upkeep",
         names_seat="active",
+    ),
+    CastRestriction(
+        "cast this spell only during your end step",
+        _during_your_end_step,
+        "can only be cast during your end step",
     ),
     CastRestriction(
         "cast this spell only during your declare attackers step",

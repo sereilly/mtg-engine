@@ -20,6 +20,8 @@ effect into one resolution, which was one sacrifice in the right place for the
 wrong reason and two sacrifices as soon as the cost became real.
 """
 
+import re
+
 import pytest
 
 from engine import Game, PlayerState, load_cards
@@ -405,6 +407,22 @@ _W2G1_VIS = {
 }
 
 
+def _w2g1_measured() -> dict:
+    """Every card in the `measured` half of the manifest, by name.
+
+    Built lazily rather than at import: the shipped assertion beside it is the
+    one that must not depend on a set being present.
+    """
+    pool: dict = {}
+    shipped = set(_w2g1_paths())
+    for path in _w2g1_paths(include_measured=True):
+        if path in shipped:
+            continue
+        for card in load_cards(path):
+            pool.setdefault(card.name, card)
+    return pool
+
+
 @pytest.mark.cr("601.2b", "118.9")
 def test_601_2b_a_printed_cost_nothing_charges_makes_the_card_unsupported():
     """The standing invariant, as a gate.
@@ -445,14 +463,37 @@ def test_601_2b_no_shipped_card_carries_a_cost_sentence_nothing_charges():
     A gate that refuses a printed cost is only safe while nothing shipped
     prints one the tables cannot read — and "safe today" is not a property a
     brief can carry forward, so it is asserted over the pool instead.
+
+    **The two roles get two assertions, which is what Exodus's ingest showed
+    was missing.** This read both halves and demanded both be empty, so it went
+    red the day a `measured` set arrived printing buyback with a non-mana cost
+    — an ingest is red on arrival for cards nobody can deck, which is the
+    shape ``scripts/parse_coverage.py``'s docstring says not to build. The
+    shipped half is the safety claim and stays an emptiness assertion. The
+    measured half gets the invariant that is actually true there and is the
+    whole point of the gate: a card printing a cost nothing charges is
+    **unsupported**. That is a property rather than a list, it holds at every
+    ingest, and Phase 4 cannot promote the set until the shipped assertion
+    covers it.
     """
-    unread = []
+    shipped, measured = [], []
     for path in _w2g1_paths(include_measured=True):
+        is_shipped = path in _w2g1_paths()
         for card in load_cards(path):
             for line in (card.oracle_text or "").split("\n"):
                 if _w2g1_unread_add(line) or _w2g1_unread_alt(line):
-                    unread.append((card.name, line.strip()))
-    assert unread == [], f"cards printing a cost nothing charges: {unread}"
+                    (shipped if is_shipped else measured).append(
+                        (card.name, line.strip())
+                    )
+    assert shipped == [], f"shipped cards printing a cost nothing charges: {shipped}"
+
+    admitted = sorted(
+        {name for name, _ in measured if _w2g1_compile(_w2g1_measured()[name]).supported}
+    )
+    assert admitted == [], (
+        "measured cards printing a cost nothing charges that the support gate "
+        f"admitted anyway — each would resolve for a price it does not print: {admitted}"
+    )
 
 
 @pytest.mark.cr("601.2b", "701.21a")
@@ -619,17 +660,54 @@ def test_107_3a_every_card_in_the_pool_whose_x_is_in_a_cost_is_named():
     is the first card in the pool whose *target count* is the announcement this
     census is about, so a picker that did not ask for the X would not merely
     resolve for nothing -- it would refuse the cast outright (CR 601.2c).
+
+    **Hatred and Necrologia (Exodus) are the fifth and sixth, and their arrival
+    is what showed this guard was inverted.** It asserted a *list of the cards
+    the reader already detects*, so a seventh card that ``cast_announces_x``
+    **missed** would leave the list unchanged and the test green — the guard was
+    silent on exactly the regression its own docstring says it pins, and loud
+    only when the engine got a new card right. What it asserts now is the
+    property: an independent text probe over every printed cost sentence,
+    compared against the reader in both directions. The list of names is gone,
+    for the reason ``tests/ui/test_cast_target_kinds.py`` records one set
+    earlier — a list of the cards that satisfy a property expires when a set
+    prints the next one; the property does not.
     """
     from engine.cast_costs import cast_announces_x
 
-    outside = sorted(
+    #: The other reading of "this card announces an X in a cost", owing nothing
+    #: to ``cast_costs``: the printed line *is* a cost sentence (CR 601.2b's
+    #: additional cost, buyback's, or CR 118.9's alternative) and it spells an X
+    #: outside the reminder text.
+    cost_line = re.compile(
+        r"^(as an additional cost to cast this spell,|buyback"
+        r"|.*rather than pay this spell's mana cost)",
+        re.I,
+    )
+    probe = {
         card.name
         for card in _W4G2_POOL.values()
-        if cast_announces_x(card) and "{X}" not in (card.mana_cost or "").upper()
+        for line in (card.oracle_text or "").splitlines()
+        if cost_line.match(line.strip())
+        and re.search(r"\bX\b", line.split("(")[0])
+    }
+    detected = {
+        card.name for card in _W4G2_POOL.values() if cast_announces_x(card)
+    }
+    assert not (probe - detected), (
+        "cards printing an X inside a cost sentence that cast_announces_x does "
+        f"not read — the browser offers them no X box: {sorted(probe - detected)}"
     )
-    assert outside == [
-        "Fire Covenant", "Firestorm", "Haunting Misery", "Infernal Harvest",
-    ], outside
+
+    # The half the old list was really watching, kept as a *derived* census: an
+    # X the mana cost does not carry is the one CR 107.3a case the client cannot
+    # find on its own, so every such card must be one the probe agrees about.
+    outside = {
+        name for name in detected
+        if "{X}" not in (_W4G2_POOL[name].mana_cost or "").upper()
+    }
+    assert outside <= probe, sorted(outside - probe)
+    assert outside, "no card announces an X outside its mana cost — vacuous"
 
 
 @pytest.mark.cr("107.3a", "119.4", "601.2h")

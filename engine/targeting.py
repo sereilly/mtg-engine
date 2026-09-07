@@ -1310,6 +1310,15 @@ def _graveyard_return_spec(payload: dict) -> dict:
     count = (payload.get("targets") or {}).get("count")
     if isinstance(count, int) and count > 1:
         spec["max_targets"] = count
+        # And the quantifier that goes with it, for the reason
+        # `_from_targets_payload` reads it: "Return **two** target creature
+        # cards" (Death's Duet) is CR 601.2c's fixed number and "Return **up
+        # to** two" (Sanguine Indulgence) is not. This builder settles its own
+        # spec, so the generic reading never runs and the distinction the
+        # grammar has parsed all along was dropped here alone — the picker
+        # offered "up to 2" for a card that prints a number.
+        if (payload.get("targets") or {}).get("quantifier") == "exactly":
+            spec["exact_targets"] = True
     elif count == "x":
         # "Return **X** target creature cards from your graveyard to your
         # hand." (Shattered Crypt.) There is no number here — it is the
