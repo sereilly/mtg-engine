@@ -172,12 +172,21 @@ def _lower_graveyard_cards_on_library_top(
         raise LoweringError(
             "the graveyard-to-library handler moves chosen cards", node=node
         )
-    # "Any number of" (Drafna's Restoration) and "up to three" (Reinforcements)
-    # are the two ceilings this handler can honour. Any other quantifier names a
-    # different set — "target" is one card and "all" chooses nothing — and the
-    # handler resolves a *list* of chosen slots, so it would either move one card
-    # where the sentence said several or move several where it said one.
-    if subject.quantifier not in ("any_number", "up_to"):
+    # "Any number of" (Drafna's Restoration), "up to three" (Reinforcements)
+    # and the bare "target" (Volrath's Stronghold) are the three quantifiers
+    # this handler can honour, and all three are a *count* over the same chosen
+    # list — the slot resolver takes ``count`` slots and moves exactly what it
+    # was handed. What is refused is a quantifier that chooses nothing: "all"
+    # names a set the sentence never asked anybody to pick, and the handler has
+    # no picker to fill from it.
+    #
+    # "target" used to be refused here on the reading that this handler moves a
+    # list and that sentence moves one card. It moves one card *because the
+    # list is one long*: the description carries the printed quantifier through
+    # to the picker, so the difference between "target" and "up to one" is
+    # whether the announcement may be empty (CR 601.2c / CR 602.2b), which is
+    # the gate's question rather than this handler's.
+    if subject.quantifier not in ("any_number", "up_to", "target"):
         raise LoweringError(
             "the graveyard-to-library handler moves a chosen list of cards",
             node=node,
@@ -278,11 +287,17 @@ def _chosen_graveyard_cards(
         # targets there are — a number the picker knows and this lowering does
         # not. "Up to three" (Reinforcements) prints one, and it rides the same
         # description every counted target list uses.
+        # The **printed** quantifier, not "up_to" for everything counted: a
+        # bare "target creature card" (Volrath's Stronghold) is a target the
+        # announcement must fill and "up to one" is one it may decline, and
+        # CR 602.2b refuses the activation of the first with nothing paid. The
+        # count is the same number either way, so every card written before
+        # "target" was admitted here sends a byte-identical payload.
         "targets": (
             {"quantifier": "any_number", "kind": "card", "unbounded": True}
             if subject.quantifier == "any_number"
             else {
-                "quantifier": "up_to", "kind": "card",
+                "quantifier": subject.quantifier, "kind": "card",
                 "count": int(subject.count or 1),
             }
         ),

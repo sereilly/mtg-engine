@@ -392,6 +392,18 @@ class ObjectFilter:
     # through the very matcher testing the attachment, so whatever a noun phrase
     # can say about a permanent it can say about a host, once.
     attached_to_filter: "ObjectFilter | None" = None
+    #: "…a card **with the same name as target nontoken creature**" (Mask of
+    #: the Mimic). CR 201.2 compared against an object the *same sentence*
+    #: chooses, which is why the field holds that object's own description
+    #: rather than a name: the name is not knowable until the spell is cast.
+    #:
+    #: Its own field beside ``named`` rather than a value in it, for
+    #: ``pay_life_x``'s reason one module over: every reader of ``named`` is a
+    #: string comparison, and a sentinel in it would be compared as a card
+    #: name — a search that finds a card literally called "target nontoken
+    #: creature", which is no card at all and therefore a tutor that finds
+    #: nothing while the spell reports supported.
+    named_as_target: "ObjectFilter | None" = None
     # "Return all Auras attached to **target permanent you own** to their
     # owners' hands." (Scarab of the Unseen.) The host again, and neither of the
     # two fields above can say it: ``attached_to`` names a referent some earlier
@@ -751,6 +763,8 @@ class ObjectFilter:
             payload["exclude_types"] = list(self.excluded_types)
         if self.attached_to_filter is not None:
             payload["attached_to_filter"] = self.attached_to_filter.to_payload()
+        if self.named_as_target is not None:
+            payload["named_as_target"] = self.named_as_target.to_payload()
         if self.controller_controls is not None:
             payload["controller_controls"] = self.controller_controls.to_payload()
         # Additive keys — handlers read these with .get() defaults.

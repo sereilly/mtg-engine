@@ -59,7 +59,8 @@ from engine.grammar import compile_line as compile_grammar_line  # noqa: E402
 from engine.grammar.lowering._events import OPPONENT_CHOSE_MODE  # noqa: E402
 from engine.oracle_types import (OracleInstruction,  # noqa: E402
                                  x_spend_colors_from_text)
-from engine.alternative_costs import alternative_cost_claims_line  # noqa: E402
+from engine.alternative_costs import (  # noqa: E402
+    alternative_cost_claims_line, granted_alternative_cost_claims_line)
 from engine.cast_costs import cast_cost_claims_line  # noqa: E402
 from engine.activation_restrictions import (  # noqa: E402
     global_activation_ban_line)
@@ -81,7 +82,9 @@ from engine.cast_timing import (grants_flash,  # noqa: E402
                                 static_flash_permission)
 from engine.replacements import replacement_claims_line  # noqa: E402
 from engine.life_prohibitions import life_gain_ban_line  # noqa: E402
-from engine.cost_modifiers import cost_modifier_claims_line, cost_modifiers_for  # noqa: E402
+from engine.cost_modifiers import (cost_modifier_claims_line,  # noqa: E402
+                                  cost_modifier_reduction_sentences,
+                                  cost_modifiers_for)
 from engine.draw_step_modifiers import (  # noqa: E402
     draw_step_bonus_for, draw_step_skip_line,
 )
@@ -398,6 +401,10 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # and Pyrokinesis sat in the unclaimed list with their defining line, which
     # is what an alternative cost with nothing behind it looks like from here.
     ("alternative_costs.py", alternative_cost_claims_line),
+    # Dream Halls: CR 118.9's alternative cost granted to every spell from a
+    # board rather than printed on the spell. The same table, found by a
+    # different question — see ``alternative_costs.granted_alternative_cost``.
+    ("alternative_costs.py (granted)", granted_alternative_cost_claims_line),
     # "This creature can't be destroyed by lethal damage unless lethal damage
     # dealt by a single source is marked on it." (Ogre Enforcer.) CR 704.5g
     # narrowed by the permanent's own text — a state-based action, so there is
@@ -969,6 +976,16 @@ CARD_CHANNELS: tuple[tuple[str, object], ...] = (
     (
         "auras.py (attached ability cost reduction)",
         lambda card, s: s in aura_cost_reduction_sentences(card.oracle_text or ""),
+    ),
+    (
+        # Heartstone: the identical two-sentence reduction printed by a
+        # permanent that enchants nothing. The amount and its floor mean
+        # nothing apart, so the reader matches them joined and names the pair
+        # here.
+        "cost_modifiers.py (board ability cost reduction)",
+        lambda card, s: s in cost_modifier_reduction_sentences(
+            card.oracle_text or ""
+        ),
     ),
     (
         # Snowblind, the second reader shaped that way: the penalty, the two

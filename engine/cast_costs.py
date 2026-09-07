@@ -233,6 +233,25 @@ class AdditionalCost:
     #: be a property of the card alone. ``None`` means every zone, which is what
     #: an "as an additional cost to cast this spell" line means.
     from_zone: str | None = None
+    #: "**Buyback—Sacrifice a land**." (Constant Mists.) CR 601.2b's optional
+    #: additional cost when the price is *not* mana: the key the caster's
+    #: announcement names this whole cost by, or ``None`` for the ordinary
+    #: mandatory cost every field above describes.
+    #:
+    #: Its own field rather than a member of :attr:`optional_mana`, because
+    #: those are runs of symbols the cast folds into the spell's mana payment
+    #: and this is a permanent ``_pay_additional_costs`` collects — one field
+    #: could not hold both, and a sacrifice charged as mana is a price nobody
+    #: pays. And a flag on the *cost* rather than on each clause, because the
+    #: sentence it comes from is one offer: "you may sacrifice a land" is taken
+    #: whole or declined whole, so there is no sentence in which one clause is
+    #: optional and its neighbour is not.
+    #:
+    #: When set, every price this cost describes is charged only if the
+    #: announcement took it — so ``_unpayable_additional_cost`` must not refuse
+    #: the cast of a caster who declined (an offer is not a price, CR 601.2b),
+    #: and ``_pay_additional_costs`` must not collect one.
+    optional_key: str | None = None
 
     def life_charged(self, x_value: int | None) -> int:
         """How much life this cost takes, given the announced X.
@@ -670,6 +689,17 @@ def read_sacrifice_all_clause(phrase: str) -> dict | None:
     return chargeable_sacrifice_payload(described)
 
 
+#: "As an additional cost to cast this spell, **you may** sacrifice a land."
+#: CR 601.2b's optional additional cost in its non-mana form — the sentence
+#: ``expand_buyback_line`` writes for Constant Mists.
+#:
+#: A prefix on the whole sentence rather than a row in ``_COST_CLAUSES``,
+#: because "may" governs every clause after it: a caster who declines pays none
+#: of them, and a row would have made it a property of the one clause it
+#: matched.
+_OPTIONAL_COST_CLAUSE = re.compile(r"^you may (?P<rest>.+)$")
+
+
 def _read_cost_clauses(costs: str) -> dict | None:
     """The fields the clauses of one cost sentence fill, or None.
 
@@ -688,7 +718,24 @@ def _read_cost_clauses(costs: str) -> dict | None:
         "sacrifice_all_filter": None, "discard_whole_hand": False,
         "return_filter": None, "return_count": 1, "return_count_x": False,
         "optional_mana": (),
+        "optional_key": None,
     }
+    # CR 601.2b's optional non-mana price. Tested **after** the mana-offer row,
+    # which claims "you may pay {1}{R} …" whole: stripping the prefix first
+    # would leave "pay {1}{R}" for a table whose only mana row wants the words
+    # back, and the sentence would refuse. So the specific reading wins and this
+    # only sees a sentence it did not claim.
+    sentence = costs.strip()
+    if _COST_CLAUSES[0][0].match(sentence) is None:
+        offered = _OPTIONAL_COST_CLAUSE.match(sentence)
+        if offered is not None:
+            # The key is the clause text itself, which is what makes the
+            # announcement's key and the rewrite's key the same string by
+            # construction: ``_buyback_line_offer`` reads it back off the
+            # ``AdditionalCost`` this builds rather than normalizing the printed
+            # line a second time.
+            fields["optional_key"] = offered.group("rest").strip()
+            costs = fields["optional_key"]
     for clause in re.split(r",\s*|\s+and\s+", costs):
         clause = clause.strip()
         if not clause:
@@ -973,6 +1020,15 @@ _BUYBACK_LINE = re.compile(
 #: heard of the keyword and casting the spell for its printed mana alone.
 _BUYBACK_SHAPE = re.compile(r"^buyback\b", re.IGNORECASE)
 
+#: "**Buyback—Sacrifice a land**." (Constant Mists.) CR 702.27's cost is any
+#: cost, not a run of mana symbols, and the printed form for a non-mana one puts
+#: it after an em dash rather than after a space. Every other buyback in the
+#: pool is mana; this shape is the one the keyword's rewrite could not read, so
+#: the card was refused by the support gate rather than cast for its mana alone.
+_BUYBACK_COST_LINE = re.compile(
+    r"^buyback\s*[—–-]\s*(?P<cost>.+)$", re.IGNORECASE
+)
+
 _BUYBACK_REMINDER = re.compile(r"\([^)]*\)")
 
 #: CR 702.27a's first static ability, spelled as the sentence
@@ -981,28 +1037,69 @@ BUYBACK_RULES_TEXT = (
     "As an additional cost to cast this spell, you may pay {cost}."
 )
 
+#: The same static ability when the cost is not mana. "Pay" is the mana verb, so
+#: the printed clause carries its own ("sacrifice a land") and the rewrite only
+#: supplies the preamble and CR 601.2b's "may".
+BUYBACK_COST_RULES_TEXT = (
+    "As an additional cost to cast this spell, you may {cost}."
+)
 
-def _buyback_line_cost(line: str) -> str | None:
-    """The canonical mana symbols one printed buyback line offers, or None.
 
-    Canonical — ``mana_cost_label``'s spelling, the same one
-    ``_optional_mana_offers`` gives the rewritten sentence — because that string
-    is the key the announcement is recorded under and the key
-    :func:`buyback_paid` reads it back by. Two spellings of one cost would make
-    the read-back miss a payment that was really made, which is a card that
+def _buyback_line_offer(line: str) -> tuple[str, str] | None:
+    """``(announcement key, rules sentence)`` for one buyback line, or None.
+
+    The key is what ``optional_cost_payments`` is keyed by and what
+    :func:`buyback_paid` reads back, so it must be *one* string on both sides.
+    For a mana cost it is ``mana_cost_label``'s canonical spelling, the same one
+    ``_optional_mana_offers`` gives the rewritten sentence. For a non-mana cost
+    it is read straight back off the :class:`AdditionalCost` the rewritten
+    sentence produces — not normalized a second time here, because a second
+    normalization is a second answer, and the two disagreeing is a card that
     charged its buyback and went to the graveyard anyway.
+
+    A non-mana cost the table cannot charge returns None, which leaves
+    :func:`unread_cost_sentence` reporting the card rather than casting it for
+    its printed mana with a price nobody was offered.
     """
     from .mana_payment import mana_cost_from_symbols, mana_cost_label
 
     stripped = " ".join(_BUYBACK_REMINDER.sub("", line or "").split())
     stripped = stripped.strip().rstrip(".")
     match = _BUYBACK_LINE.match(stripped)
+    if match is not None:
+        symbols = mana_cost_from_symbols(match.group("cost"))
+        if not symbols:
+            return None
+        label = mana_cost_label(symbols)
+        return label, BUYBACK_RULES_TEXT.format(cost=label)
+    match = _BUYBACK_COST_LINE.match(stripped)
     if match is None:
         return None
-    symbols = mana_cost_from_symbols(match.group("cost"))
-    if not symbols:
+    # The printed clause opens a line, so it is capitalized ("Sacrifice a
+    # land"); mid-sentence it is not. Only the first letter is touched — a
+    # wholesale lowercasing would eat a printed subtype ("sacrifice a Goblin"),
+    # which the noun reader needs the case of.
+    clause = match.group("cost").strip().rstrip(".")
+    sentence = BUYBACK_COST_RULES_TEXT.format(
+        cost=clause[:1].lower() + clause[1:]
+    )
+    read = _printed_additional_cost(sentence)
+    if read is None or read.optional_key is None:
         return None
-    return mana_cost_label(symbols)
+    return read.optional_key, sentence
+
+
+def _buyback_line_cost(line: str) -> str | None:
+    """The canonical key one printed buyback line's offer is announced by, or
+    None.
+
+    Canonical for :func:`_buyback_line_offer`'s reason: this string is the key
+    the announcement is recorded under and the key :func:`buyback_paid` reads it
+    back by, and two spellings of one cost would make the read-back miss a
+    payment that was really made.
+    """
+    offer = _buyback_line_offer(line)
+    return None if offer is None else offer[0]
 
 
 def is_buyback_line(line: str) -> bool:
@@ -1013,8 +1110,8 @@ def is_buyback_line(line: str) -> bool:
 
 def expand_buyback_line(line: str) -> str | None:
     """The CR 702.27a rules text for one printed buyback line, or None."""
-    cost = _buyback_line_cost(line)
-    return None if cost is None else BUYBACK_RULES_TEXT.format(cost=cost)
+    offer = _buyback_line_offer(line)
+    return None if offer is None else offer[1]
 
 
 def expand_buyback_lines(oracle_text: str) -> str:

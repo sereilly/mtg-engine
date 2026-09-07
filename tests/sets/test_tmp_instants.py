@@ -380,13 +380,21 @@ def test_g2_an_unreadable_buyback_line_makes_the_card_unsupported():
     """The gate, tested with an invented printing rather than a real card: a
     buyback whose cost this file cannot read must refuse the card, because the
     alternative is a spell cast at its printed mana cost with the price nobody
-    was offered."""
-    assert unread_cost_sentence("Buyback-Sacrifice a creature.") == (
-        "buyback-sacrifice a creature"
-    )
-    assert expand_buyback_line("Buyback-Sacrifice a creature.") is None
+    was offered.
+
+    The example used to be "Buyback-Sacrifice a creature", which Stronghold's
+    Constant Mists made **readable** — CR 702.27's cost is any cost, and the
+    rewrite now writes a non-mana one as CR 601.2b's optional sentence. So the
+    unreadable case has to name a clause ``_COST_CLAUSES`` genuinely does not
+    charge, or the gate is being tested against a price the engine collects.
+    """
+    assert unread_cost_sentence("Buyback-Flip a coin.") == "buyback-flip a coin"
+    assert expand_buyback_line("Buyback-Flip a coin.") is None
     assert unread_cost_sentence("Buyback {3}") is None, (
         "a readable one is claimed, not refused"
+    )
+    assert unread_cost_sentence("Buyback-Sacrifice a creature.") is None, (
+        "a non-mana cost the table charges is claimed too"
     )
 
 

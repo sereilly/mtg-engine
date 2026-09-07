@@ -183,6 +183,14 @@ def search_matches(card, data: dict, *, game=None, owner=None) -> bool:
     named = restrictions.get("named")
     if named is not None and name_key(card.name) != name_key(named):
         return False
+    # "a card **with the same name as target nontoken creature**" (Mask of the
+    # Mimic). ``handlers/zones._search_restrictions`` turns the question into an
+    # ordinary ``named`` as the search is armed; the key surviving *without* one
+    # means the target was gone by then (CR 608.2b), and a search whose name
+    # nothing supplied finds nothing rather than everything. Read here so a
+    # caller that armed the search some other way cannot lose the narrowing.
+    if restrictions.get("named_from_target") and named is None:
+        return False
     # "a card named Alpine Watchdog **and/or** a card named Igneous Cur"
     # (Alpine Houndmaster). Each find has its own name; this is the union the
     # *picker* offers, and which name each find actually consumed is settled by

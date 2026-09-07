@@ -112,6 +112,47 @@ def _lower_reveal_top_sorting_by_chosen_name(
     )
 
 
+def _lower_reveal_top_sorting_by_filter(
+    node: "ast.RevealTopSortingByFilter",
+) -> tuple[OracleInstruction, ...]:
+    """"Reveal the top four cards of your library. Put all **land cards**
+    revealed this way into your hand and the rest into your graveyard." (Mulch.)
+
+    :func:`_lower_reveal_top_sorting_by_chosen_name` with the predicate printed
+    on the card, which is why this one takes no ``produced``: the sentence
+    carries its own test, so there is no earlier step whose absence could turn
+    the sort into a mill.
+
+    The filter goes through ``card_only_filter`` for
+    :func:`_lower_reveal_until`'s reason — a pile off a library is cards
+    (CR 400.1), so a restriction that can only be tested on a permanent is one
+    the sort would silently drop, and dropping it here would put the whole pile
+    in the hand.
+    """
+    described = card_only_filter(node.filter.to_payload())
+    if described is None:
+        raise LoweringError(
+            "the sorted reveal cannot test this restriction on a card",
+            node=node,
+        )
+    count = _amount_payload(node.count)
+    if not isinstance(count, int) or count <= 0:
+        raise LoweringError(
+            "the revealed pile is a fixed number of cards", node=node
+        )
+    return (
+        OracleInstruction(
+            "reveal_top_sorting_by_filter", "",
+            {
+                "amount": count,
+                "filter": described,
+                "match_zone": node.match_zone,
+                "rest_zone": node.rest_zone,
+            },
+        ),
+    )
+
+
 def _lower_graveyard_top_opponent_chooses(
     node: "ast.GraveyardTopOpponentChooses",
 ) -> tuple[OracleInstruction, ...]:

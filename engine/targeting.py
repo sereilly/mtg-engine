@@ -929,8 +929,17 @@ _KIND_TO_SPEC: dict[str, dict] = {
 }
 
 
-def _cost_picker_spec(cost) -> dict | None:
+def _cost_picker_spec(cost, *, announced: dict | None = None) -> dict | None:
     """The picker a choosable cost needs, or None when the cost chooses nothing.
+
+    *announced* is CR 601.2b's answer so far, for the one cost kind that is an
+    **offer** rather than a price (Constant Mists' "Buyback—Sacrifice a land").
+    A declined offer charges nothing, so it chooses nothing and gets no picker —
+    which is what keeps a caster who is not buying the card back from being
+    asked to name a land. The check is here rather than in the callers because
+    all three of them (the cast picker, the "should this card raise a picker?"
+    ratchet and the picker sweep) must give one answer; a caller that forgot
+    would report a picker the cast never raises.
 
     Shared by the cast and activation sides because the *choice* is the same on
     both — CR 601.2b and CR 602.2b are the same announcement step — and only
@@ -948,6 +957,9 @@ def _cost_picker_spec(cost) -> dict | None:
     what is accepted cannot disagree.
     """
     if cost is None:
+        return None
+    offer_key = getattr(cost, "optional_key", None)
+    if offer_key is not None and not (announced or {}).get(offer_key):
         return None
     if getattr(cost, "discard_cards", 0):
         spec = {
@@ -1836,7 +1848,9 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
 }
 
 
-def _cast_cost_picker(card, from_zone: str) -> dict | None:
+def _cast_cost_picker(
+    card, from_zone: str, *, announced: dict | None = None
+) -> dict | None:
     """The picker a printed additional cost needs when *card* is cast from
     *from_zone*, or None when the costs charged there choose nothing.
 
@@ -1849,7 +1863,7 @@ def _cast_cost_picker(card, from_zone: str) -> dict | None:
     enchant target and made the card uncastable from either zone.
     """
     for cost in costs_charged_from(card, from_zone):
-        cost_spec = _cost_picker_spec(cost)
+        cost_spec = _cost_picker_spec(cost, announced=announced)
         if cost_spec is not None:
             # The zone the cast leaves, carried so the enumerator can tell a
             # hand cast from a graveyard one: CR 601.2a withholds the spell
@@ -1910,7 +1924,10 @@ def _cast_target_spec(card, program) -> dict | None:
     ])
 
 
-def derive_cast_spec(card, program, *, from_zone: str = "hand") -> dict | None:
+def derive_cast_spec(
+    card, program, *, from_zone: str = "hand",
+    optional_cost_payments: dict | None = None,
+) -> dict | None:
     """The cast-time spec of *card* cast from *from_zone*, or None when it
     chooses nothing.
 
@@ -1924,7 +1941,9 @@ def derive_cast_spec(card, program, *, from_zone: str = "hand") -> dict | None:
     client to send it on the cost field and to say "sacrifice" rather than
     "target".
     """
-    cost_spec = _cast_cost_picker(card, from_zone)
+    cost_spec = _cast_cost_picker(
+        card, from_zone, announced=optional_cost_payments
+    )
     target_spec = _cast_target_spec(card, program)
     if cost_spec is None:
         return target_spec

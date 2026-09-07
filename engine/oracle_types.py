@@ -362,6 +362,22 @@ class ActivatedAbilityCost:
     #: charged too low is a free ability; too high is a refused one, and only
     #: the first is silent.
     pay_life_per_counter: str | None = None
+    #: "**Pay {1} for each +1/+1 counter on this creature**" (Skeleton
+    #: Scavengers). The counter whose count multiplies
+    #: :attr:`mana_per_counter_cost` below, on the ability's **own source** --
+    #: the same restriction ``pay_life_per_counter`` states one field up, and
+    #: for its reason: a counter on anything else is a board read the charger
+    #: does not have in hand.
+    #:
+    #: Its own pair of fields rather than more of ``mana``, because those pips
+    #: are the whole cost and these are a *rate*. Folded in, Skeleton
+    #: Scavengers would regenerate for {1} however large it has grown, which is
+    #: a strictly cheaper card -- and a cost charged too low is a free ability
+    #: where one charged too high is a refused one, so only the first is
+    #: silent.
+    mana_per_counter: str | None = None
+    #: What **one** counter costs, as a symbol dict like :attr:`mana`.
+    mana_per_counter_cost: dict[str, int] | None = None
     #: "Pay 2 life **or {2}**" (Tidal Control). The mana that may be paid
     #: *instead of* ``pay_life`` above, as a symbol dict like ``mana``.
     #: CR 601.2h: the payer chooses between the printed alternatives as the

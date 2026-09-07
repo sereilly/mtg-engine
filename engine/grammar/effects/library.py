@@ -326,6 +326,22 @@ def parse_look_top_cycle_tail(
     return ast.LookTopCycleForLife(count, life_cost)
 
 
+def _accept_that_library(stream: TokenStream) -> bool:
+    """Consume a back-reference to the library the look already named.
+
+    Three printed spellings for one thing — "that library", "the library",
+    "that player's library" — and Ransack prints two of them in one sentence
+    ("on the bottom of **that library** … the rest on top of **the library**").
+    Read as one because they are one: the look named the pile, and a sentence
+    that meant a *different* library would have to say which.
+    """
+    if stream.accept_phrase("that", "player", "'s", "library"):
+        return True
+    return stream.accept_phrase("that", "library") or stream.accept_phrase(
+        "the", "library"
+    )
+
+
 def _parse_look_other_library_tail(
     stream: TokenStream, count, owner: ast.PlayerRef
 ) -> ast.Statement:
@@ -370,6 +386,30 @@ def _parse_look_other_library_tail(
         ):
             return ast.LookAtLibraryTop(count, owner, may_bottom=True)
     stream.reset(bottomed)
+    # "**Put any number of them on the bottom of that library in any order and
+    # the rest on top of the library in any order.**" (Ransack.) The same offer
+    # Coral Fighters prints, at a size where the words have to change: with one
+    # card looked at there is nothing to count and nothing to order, so that
+    # card says "that card" and this one says "any number of them". The
+    # decision is one decision either way — which of the looked-at cards go to
+    # the bottom, and in what order the rest go back — which is why both reach
+    # ``may_bottom`` rather than one of them growing a second flag that lowers
+    # to the same instruction.
+    counted_bottom = stream.mark()
+    if (
+        stream.accept_punct(".")
+        and stream.accept_phrase(
+            "put", "any", "number", "of", "them", "on", "the", "bottom", "of",
+        )
+        and _accept_that_library(stream)
+        and stream.accept_phrase(
+            "in", "any", "order", "and", "the", "rest", "on", "top", "of",
+        )
+        and _accept_that_library(stream)
+        and stream.accept_phrase("in", "any", "order")
+    ):
+        return ast.LookAtLibraryTop(count, owner, may_bottom=True)
+    stream.reset(counted_bottom)
     # "**Exile one of those cards and put the rest back on top of that player's
     # library in any order.**" (Sealed Fate.) The look-and-pick template over
     # somebody else's pile: the cards are the opponent's and every decision

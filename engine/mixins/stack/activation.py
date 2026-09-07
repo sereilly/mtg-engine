@@ -26,7 +26,8 @@ from ...activation_restrictions import (
     reads_activation_tally,
 )
 from ...auras import attached_ability_cost_reduction, aura_restriction_active
-from ...cost_modifiers import (ability_cost_tax, ability_self_reduction_amount,
+from ...cost_modifiers import (ability_cost_reduction, ability_cost_tax,
+                               ability_self_reduction_amount,
                                 sacrifice_taxes)
 from ...cost_tap_records import record_tapped_to_pay
 from ...cost_x_definitions import cost_x_is_defined, cost_x_value
@@ -98,6 +99,34 @@ def activation_life_cost(cost, permanent) -> int:
     from ...named_counters import counters_on
 
     return int(cost.pay_life) * counters_on(permanent, str(per_counter))
+
+
+def activation_mana_per_counter(cost, permanent) -> dict[str, int]:
+    """The mana a per-counter rate owes right now, as a symbol dict.
+
+    ``ActivatedAbilityCost.mana_per_counter_cost`` is what **one** counter
+    costs; this multiplies it by how many the source carries.
+    :func:`activation_life_cost`'s twin one resource over, and a function for
+    its reason: CR 601.2f's cost is computed at activation and asked twice --
+    once by the payability gate and once by the payment -- and both must get
+    the same number.
+
+    Empty for every ability printing no such rate, which is all but one card in
+    the pool, and empty for a source that has left the battlefield: a counter
+    nobody can count is none.
+    """
+    rate = getattr(cost, "mana_per_counter_cost", None)
+    counter = getattr(cost, "mana_per_counter", None)
+    if not rate or not counter or permanent is None:
+        return {}
+    from ...named_counters import counters_on
+
+    many = counters_on(permanent, str(counter))
+    return {
+        symbol: amount * many
+        for symbol, amount in rate.items()
+        if amount and many
+    }
 
 
 def _pool_covers(pool: dict, required: dict) -> bool:
@@ -1607,6 +1636,15 @@ class AbilityActivationMixin:
             )
 
         required_cost = dict(ability.cost.mana)
+        # "Pay {1} **for each +1/+1 counter on this creature**" (Skeleton
+        # Scavengers). CR 601.2f computes the cost as the ability is
+        # activated, so the rate is multiplied here -- the same moment
+        # ``activation_life_cost`` reads its own counter, and by the same
+        # count, so a card printing both would price them off one board.
+        for symbol, count in activation_mana_per_counter(
+            ability.cost, permanent
+        ).items():
+            required_cost[symbol] = required_cost.get(symbol, 0) + int(count)
         # "…**or {2}**" when the pool covered it. Folded into the ordinary
         # payment rather than charged beside it, so every tax, reduction and
         # restricted-bucket rule below applies to it exactly as to a printed
@@ -1749,7 +1787,27 @@ class AbilityActivationMixin:
         # applied after the subtraction rather than as a clamp inside it. A {2}
         # ability reduced by {2} pays {1}, not nothing; a {B} ability is
         # already at the floor and pays {B}.
-        aura_discount, floor = attached_ability_cost_reduction(permanent)
+        aura_discount, aura_floor = attached_ability_cost_reduction(permanent)
+        # "Activated abilities of creatures cost {1} less to activate. This
+        # effect can't reduce the mana in that cost to less than one mana."
+        # (Heartstone.) The identical rider from a permanent that enchants
+        # nothing, so it is read off the board rather than off what is attached
+        # -- and folded into the *same* application, because CR 601.2f applies
+        # every reduction to one cost. Two applications would each measure the
+        # floor against a cost the other had already cut.
+        board_discount, reducing_names, board_floor = ability_cost_reduction(
+            self, controller_index, permanent
+        )
+        aura_discount += board_discount
+        # The **highest** floor, for ``attached_ability_cost_reduction``'s
+        # reason: two reductions must not cancel each other's protection
+        # against a free ability.
+        floor = max(aura_floor, board_floor)
+        if reducing_names:
+            self.log.append(
+                f"{permanent.card.name}'s ability is cheapened by "
+                f"{', '.join(reducing_names)}"
+            )
         if aura_discount:
             before_total = sum(required_cost.values())
             generic = required_cost.get("generic", 0)

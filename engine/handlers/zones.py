@@ -467,6 +467,35 @@ def timetwister(game: Game, instruction: OracleInstruction, context: OracleExecu
     return True, "resolved"
 
 
+def _search_restrictions(game: Game, payload: dict, context) -> dict:
+    """The armed search's restrictions, with the ones only a resolution can
+    answer resolved.
+
+    ``named_from_target`` is "a card **with the same name as target nontoken
+    creature**" (Mask of the Mimic): the name is the chosen target's, which is
+    not knowable when the card compiles. It is turned into an ordinary ``named``
+    here, so every seat answers the same search — the engine re-checking a
+    pick, the AI choosing for itself and the web picker offering a list all read
+    ``search_filters.search_matches`` and none of them has a target in hand.
+
+    A target that is gone by resolution (CR 608.2b removes it) leaves the key in
+    place and no name behind it, and ``search_matches`` then matches nothing:
+    the search finds no card rather than every card, which is the direction a
+    dropped narrowing must never fail in.
+    """
+    restrictions = dict(payload.get("restrictions") or {})
+    if not restrictions.get("named_from_target"):
+        return restrictions
+    # Through the seam every handler resolves a chosen permanent by, so the
+    # name read here is the object the announcement named -- an index alone
+    # renumbers the moment anything leaves the battlefield, and the sacrifice
+    # this card charges as an additional cost has already left one.
+    chosen = resolve_target_permanent(game, context)
+    if chosen is not None:
+        restrictions["named"] = chosen.card.name
+    return restrictions
+
+
 @effect_handler("search_library")
 def search_library(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     caster = context.caster
@@ -569,7 +598,7 @@ def search_library(game: Game, instruction: OracleInstruction, context: OracleEx
         count=count,
         card_type=instruction.payload.get("card_type", "any"),
         zones=zones,
-        restrictions=dict(instruction.payload.get("restrictions") or {}),
+        restrictions=_search_restrictions(game, instruction.payload, context),
         destination=instruction.payload.get("destination", "hand"),
         # "…put one onto the battlefield tapped and the other into your hand"
         # (Cultivate): one entry per find, in the printed order. A counted
@@ -895,15 +924,73 @@ def reveal_top_sorting_by_chosen_name(game: Game, instruction: OracleInstruction
     game.log.append(
         f"{caster.name} revealed {', '.join(card.name for card in revealed)}"
     )
-    match_zone = str(instruction.payload.get("match_zone", "hand"))
-    rest_zone = str(instruction.payload.get("rest_zone", "graveyard"))
+    _place_sorted_reveal(
+        game, caster, revealed, instruction.payload,
+        lambda card: bool(named) and card.name == named,
+    )
+    return True, "resolved"
+
+
+def _place_sorted_reveal(game, caster, revealed, payload, matches) -> None:
+    """Split one revealed pile between its two printed zones.
+
+    The half :func:`reveal_top_sorting_by_chosen_name` and
+    :func:`reveal_top_sorting_by_filter` share: the two cards differ in what
+    "matches" means and in nothing else, so the predicate is the argument and
+    the procedure is written once. Two copies would be one card's fix landing
+    on one of them.
+
+    Both zones are reached through the seams that own them
+    (``put_card_into_hand``, ``put_card_into_graveyard``), never by appending to
+    a list: CR 903.9b rides the first and the discard/mill watchers ride the
+    second.
+    """
+    match_zone = str(payload.get("match_zone", "hand"))
+    rest_zone = str(payload.get("rest_zone", "graveyard"))
     for card in revealed:
-        matched = bool(named) and card.name == named
-        zone = match_zone if matched else rest_zone
+        zone = match_zone if matches(card) else rest_zone
         if zone == "hand":
             game.put_card_into_hand(caster, card)
         else:
             game.put_card_into_graveyard(caster, card, from_zone="library")
+
+
+@effect_handler("reveal_top_sorting_by_filter")
+def reveal_top_sorting_by_filter(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Reveal the top four cards of your library. Put all land cards revealed
+    this way into your hand and the rest into your graveyard." (Mulch.)
+
+    :func:`reveal_top_sorting_by_chosen_name` with the predicate printed on the
+    card rather than read out of the resolution's scratchpad. One step for both
+    printed sentences for that handler's reason: "the rest" is exactly what the
+    first did not take, so split apart the second would move cards out of a
+    pile nothing had recorded.
+
+    CR 701.20 shows the cards and moves none of them, so the pile is taken off
+    the library here and every card is placed by this handler. Fewer cards than
+    the printed number is an ordinary board — the reveal shows what is there.
+    """
+    caster = context.caster
+    seat = game.players.index(caster)
+    count = resolve_amount(
+        instruction.payload.get("amount", 0) or 0, context.x_value
+    )
+    revealed = caster.library[:max(int(count), 0)]
+    if not revealed:
+        game.log.append(f"{caster.name} has no cards to reveal")
+        return True, "resolved"
+    del caster.library[:len(revealed)]
+    game.record_reveal(seat, [card.name for card in revealed])
+    game.log.append(
+        f"{caster.name} revealed {', '.join(card.name for card in revealed)}"
+    )
+    described = dict(instruction.payload.get("filter") or {})
+    _place_sorted_reveal(
+        game, caster, revealed, instruction.payload,
+        lambda card: _card_matches_filter(
+            card, described, game=game, owner=caster
+        ),
+    )
     return True, "resolved"
 
 

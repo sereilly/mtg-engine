@@ -32,7 +32,8 @@ from .lowering.where_x import lower_where_x
 from .lowering.control_flow import (
     _lower_may, _lower_one_of, _lower_unless_player_pays,
 )
-from .lowering.board import _lower_sacrifice_unless_pay
+from .lowering.board import (_lower_exile_one_of_chosen,
+                            _lower_sacrifice_unless_pay)
 from .lowering.sequences import _lower_steps
 from .lowering.loops import (
     _lower_for_each,
@@ -696,6 +697,17 @@ def lower_statement(
         # every clause under it, and Whippoorwill's "exile **the creature**" is
         # the third sentence of one — so it lowers under a `Sequence` and would
         # see no event at all through `dispatch_event`.
+        # "Exile **one of those creatures** and put two +1/+1 counters on the
+        # other." (Cannibalize.) Read here, before the exile family sees the
+        # node, because it is the *board* family's shape rather than the exile
+        # family's: the pick among a set an earlier sentence chose, which is
+        # where ``_lower_sacrifice_one_of_chosen`` already sits. Routing it
+        # here is what keeps ``exile`` from importing ``board``, which the
+        # family rule forbids and which is the whole reason a dispatcher
+        # exists. None means the node is an ordinary exile.
+        chosen = _lower_exile_one_of_chosen(statement, statement.subject, produced)
+        if chosen is not None:
+            return chosen
         return _lower_exile(statement, produced, event)
 
     if isinstance(statement, ast.Sequence):

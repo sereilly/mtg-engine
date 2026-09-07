@@ -9670,6 +9670,31 @@ function renderActivationPrompt() {
         rows.push(`<div class="prompt-choice-row">${buttons.join("")}</div>`);
         continue;
       }
+      if (offer.kind === "optional_cost") {
+        // CR 601.2b's optional price when it is *not* mana: Constant Mists'
+        // "Buyback—Sacrifice a land". Taken or declined, never counted --
+        // there is no repeated spelling of one in the pool, and the payment
+        // collects one permanent. The key rides on `symbols` like every other
+        // offer's, so the counter handler below is shared.
+        const payable = Number(offer.max_times || 0) > 0;
+        const on = Number(pending.taken[offer.symbols] || 0) > 0;
+        rows.push(
+          `<div>${escapeHtml(offer.label)}: ${escapeHtml(offer.symbols)}`
+          + (payable ? "." : " — you can't pay it right now.")
+          + "</div>",
+        );
+        if (payable) {
+          rows.push(
+            '<div class="prompt-choice-row">'
+            + `<button type="button" class="prompt-choice-btn${on ? "" : " selected"}"`
+            + ` data-offer-symbols="${escapeHtml(offer.symbols)}" data-offer-times="0">Don't pay</button>`
+            + `<button type="button" class="prompt-choice-btn${on ? " selected" : ""}"`
+            + ` data-offer-symbols="${escapeHtml(offer.symbols)}" data-offer-times="1">Pay it</button>`
+            + "</div>",
+          );
+        }
+        continue;
+      }
       // An optional additional mana cost: how many times, 0 to the ceiling the
       // backend computed from this seat's pool and board.
       const max = Number(offer.max_times || 0);

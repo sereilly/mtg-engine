@@ -113,9 +113,24 @@ def test_the_pool_has_costs_of_both_kinds_to_check():
 @pytest.mark.parametrize("card_name,zone", _cast_cost_cards())
 def test_every_printed_cast_cost_derives_a_picker(card_name, zone):
     """CR 601.2b: the caster announces how they will pay, so there has to be
-    somewhere to announce it."""
+    somewhere to announce it.
+
+    An *optional* price (Constant Mists' "Buyback—Sacrifice a land") is
+    announced before the picker is asked for, so the question here is asked of
+    the caster who **takes** it. A declined offer charges nothing and rightly
+    derives nothing — a picker raised for it would ask a caster who is not
+    buying the card back to name a land they will not lose.
+    """
     card = _POOL[card_name]
-    spec = derive_cast_spec(card, compile_card_oracle(card), from_zone=zone)
+    announced = {
+        cost.optional_key: 1
+        for cost in additional_costs(card)
+        if cost.optional_key is not None
+    }
+    spec = derive_cast_spec(
+        card, compile_card_oracle(card), from_zone=zone,
+        optional_cost_payments=announced or None,
+    )
 
     assert spec is not None, (
         f"{card_name} charges a printed additional cost when cast from the "

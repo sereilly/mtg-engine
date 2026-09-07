@@ -545,6 +545,30 @@ class RevealTopSortingByChosenName:
 
 
 @dataclass(frozen=True)
+class RevealTopSortingByFilter:
+    """``Reveal the top four cards of your library. Put all land cards revealed
+    this way into your hand and the rest into your graveyard.`` (Mulch.)
+
+    :class:`RevealTopSortingByChosenName` with the predicate printed on the
+    card. Both sentences for that node's reason — one pile, and "the rest"
+    names exactly what the first half did not take — and its two destinations
+    for the same one.
+
+    The difference from its sibling is what "matches" means, and it is the
+    whole difference: this sentence carries its own test, so there is no
+    earlier step to demand and no record whose absence could silently sort the
+    pile the wrong way. ``filter`` is that test, in the ordinary object-filter
+    vocabulary, so a card printing "all creature cards" is this production
+    unchanged.
+    """
+
+    count: Amount
+    filter: ObjectFilter
+    match_zone: str = "hand"
+    rest_zone: str = "graveyard"
+
+
+@dataclass(frozen=True)
 class RevealTopToHandOrBottom:
     """"Reveal the top card of your library. If it's a <filter>, put it into
     your hand. Otherwise, put it on the bottom of your library." (Garruk,

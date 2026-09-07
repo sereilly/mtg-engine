@@ -81,6 +81,50 @@ def _optional_cost_offers(
     }
 
 
+def _optional_cost_keys(
+    costs: "tuple[AdditionalCost, ...]",
+) -> dict[str, bool]:
+    """Every CR 601.2b optional price announceable for this cast, mapped to
+    whether it is repeatable.
+
+    Two kinds, one namespace, because the announcement carries one map: a run of
+    mana symbols the cast folds into its payment ("you may pay {1}{R}") and a
+    non-mana price ``_pay_additional_costs`` collects ("Buyback—Sacrifice a
+    land"). A caster names either by the same key, so the check that a named
+    offer exists has to see both — a check that saw only the mana ones would
+    refuse Constant Mists' buyback as a cost the card does not print.
+    """
+    keys = {
+        offer.symbols: offer.repeatable
+        for cost in costs
+        for offer in cost.optional_mana
+    }
+    for cost in costs:
+        if cost.optional_key is not None:
+            # A printed non-mana price is taken once or declined; there is no
+            # "any number of times" spelling of one in the pool, and admitting a
+            # count would charge a sacrifice the payment collects once.
+            keys.setdefault(cost.optional_key, False)
+    return keys
+
+
+def optional_cost_taken(cost: "AdditionalCost", taken: dict | None) -> bool:
+    """Whether *cost* is charged on this cast (CR 601.2b).
+
+    True for every mandatory cost, which is all but one card in the pool, and
+    for an optional one exactly when the announcement took it. The one reader
+    the gate, the payment and the picker share — an offer the gate refused for
+    and the payment then declined to collect would be a spell uncastable for a
+    price it never charges.
+    """
+    if cost.optional_key is None:
+        return True
+    try:
+        return int((taken or {}).get(cost.optional_key, 0) or 0) > 0
+    except (TypeError, ValueError):
+        return False
+
+
 def _optional_cost_announcement(
     card: CardDefinition,
     costs: "tuple[AdditionalCost, ...]",
@@ -99,25 +143,25 @@ def _optional_cost_announcement(
     *optional* means and the only default that cannot charge a player for a
     price they did not accept.
     """
-    offers = _optional_cost_offers(costs)
+    offers = _optional_cost_keys(costs)
     taken: dict[str, int] = {}
     for symbols, times in (announced or {}).items():
         count = int(times or 0)
         if count <= 0:
             continue
-        offer = offers.get(str(symbols))
-        if offer is None:
+        key = str(symbols)
+        if key not in offers:
             printed = ", ".join(sorted(offers)) or "none"
             return {}, (
                 f"{card.name} prints no additional cost of {symbols} "
                 f"(it offers: {printed}) (CR 601.2b)"
             )
-        if count > 1 and not offer.repeatable:
+        if count > 1 and not offers[key]:
             return {}, (
-                f"{card.name}'s additional cost of {offer.symbols} may be paid "
+                f"{card.name}'s additional cost of {key} may be paid "
                 f"once, not {count} times (CR 601.2b)"
             )
-        taken[offer.symbols] = count
+        taken[key] = count
     return taken, None
 
 
@@ -1496,6 +1540,9 @@ class SpellCastingMixin:
             # together, and the gate that could not see the other one would
             # admit a cast that then took the caster below 0 (CR 119.4).
             life_already_owed=life_owed,
+            # CR 601.2b's announcement, made above: an optional price is a
+            # price only for the caster who took it.
+            taken=optional_paid,
         )
         if unpayable is not None:
             self.log.append(unpayable)
@@ -1637,6 +1684,7 @@ class SpellCastingMixin:
             cost_permanent_ids=cost_permanent_ids,
             cost_hand_card=cost_hand_card,
             x_value=resolved_x_value,
+            taken=optional_paid,
         )
         sacrificed_for_cost = cost_spoils["sacrificed_for_cost"]
         exiled_for_cost = cost_spoils["exiled_for_cost"]
@@ -1886,6 +1934,7 @@ class SpellCastingMixin:
         from_zone: str,
         x_value: int | None = None,
         life_already_owed: int = 0,
+        taken: dict[str, int] | None = None,
     ) -> str | None:
         """Why *card*'s printed additional costs can't be paid, or None.
 
@@ -1901,6 +1950,13 @@ class SpellCastingMixin:
         """
         caster = self.players[caster_index]
         for cost in costs:
+            # CR 601.2b's *optional* price (Constant Mists' buyback). An offer
+            # nobody took costs nothing, so it cannot make the spell
+            # uncastable -- and one that *was* taken is a price like any other
+            # from here down, gated on the same board this reads for the
+            # mandatory ones.
+            if not optional_cost_taken(cost, taken):
+                continue
             if cost.sacrifice_filter is not None:
                 # "…, sacrifice **two** creatures." (Phyrexian Tribute.) The
                 # *count* is what makes such a cost unpayable: one creature is
@@ -2101,14 +2157,68 @@ class SpellCastingMixin:
     # The printed alternative cost (CR 118.9)
     # ------------------------------------------------------------------
 
+    def applicable_alternative_costs(
+        self, caster_index: int, card: CardDefinition
+    ) -> tuple[AlternativeCost, ...]:
+        """Every CR 118.9 alternative cost this cast of *card* may be paid with.
+
+        Two sources, one list, because CR 118.9a limits how many may be
+        *applied* and says nothing about where they come from: the costs the
+        card prints on itself (Force of Will) and the costs a permanent on some
+        battlefield grants every spell (Dream Halls). One reader, because the
+        offer, the announcement's check, the CR 601.2h gate and the payment all
+        ask this same question -- and a source only some of them knew about
+        would be an offer the cast refuses, or worse, a price the gate never
+        measured.
+
+        The board is scanned through the control seam and read off each
+        permanent's *effective* card, the rule ``cost_modifiers._tax`` follows
+        one file over: a permanent whose text an effect has changed grants what
+        it currently says.
+        """
+        from ...alternative_costs import granted_alternative_cost
+
+        found = list(alternative_costs(card))
+        for _seat, permanent in self.permanents_with_controller():
+            granted = granted_alternative_cost(
+                permanent.effective_card.oracle_text or ""
+            )
+            if granted is not None:
+                found.append(granted)
+        return tuple(found)
+
+    def _shares_a_color(self, one, other, seat: int) -> bool:
+        """Whether two cards *seat* owns share a colour (CR 105.2, CR 202.2).
+
+        Through ``object_colors`` rather than off ``CardDefinition.colors``, so
+        a card whose colour an effect has changed (Celestial Dawn: "nonland
+        cards you own that aren't on the battlefield") answers with the colour
+        it *has* — the same reader ``search_filters.card_colors`` asks, and the
+        reason the seat is a parameter rather than inferred: the override is
+        per-player.
+
+        A colourless card shares a colour with nothing, which is why this is an
+        intersection and not a "no restriction" default: Dream Halls cannot cast
+        an artifact, and a reading that let it would be a strictly better card
+        than the one printed.
+        """
+        from ...object_colors import card_colors
+
+        return bool(
+            frozenset(card_colors(self, one, seat))
+            & frozenset(card_colors(self, other, seat))
+        )
+
     def _alternative_cost_payers(
         self,
         caster_index: int,
         cost: AlternativeCost,
         *,
         spell_hand_index: int | None,
+        spell: "CardDefinition | None" = None,
     ) -> list["CardDefinition"]:
-        """The cards in hand that could pay *cost*'s exile, in hand order.
+        """The cards in hand that could pay *cost*'s exile or discard, in hand
+        order.
 
         One enumeration for the gate, the named-card check and the payment, the
         arrangement ``_discard_cost_payers`` and ``_additional_cost_candidates``
@@ -2122,12 +2232,35 @@ class SpellCastingMixin:
         deck repeats one immutable ``CardDefinition`` per copy, so an identity
         filter would refuse it along with the spell.
         """
-        return [
+        # Whichever half of the hand this cost reaches for. ``None`` on both is
+        # a cost that takes no card at all, and the empty tuple is "any card" --
+        # two different things, which is why the choice is on the field being
+        # None rather than on the tuple being empty.
+        wanted = (
+            cost.exile_from_hand if cost.exile_from_hand is not None
+            else cost.discard_from_hand
+        )
+        payers = [
             held
             for position, held in enumerate(self.players[caster_index].hand)
             if position != spell_hand_index
-            and card_matches_any(held, cost.exile_from_hand or ())
+            and card_matches_any(held, wanted or ())
         ]
+        if cost.shares_color_with_spell:
+            # "…a card **that shares a color with that spell**" (Dream Halls).
+            # A relation between two objects, so it is answered here where both
+            # are in hand rather than in the filter, which describes one.
+            if spell is None:
+                # No spell to compare against is no shared colour, which is the
+                # direction a dropped narrowing has to fail in: a caller that
+                # forgot to say which spell offers nothing rather than
+                # everything.
+                return []
+            payers = [
+                held for held in payers
+                if self._shares_a_color(held, spell, caster_index)
+            ]
+        return payers
 
     def _graveyard_exile_candidates(
         self, caster_index: int, cost: "AdditionalCost"
@@ -2188,7 +2321,7 @@ class SpellCastingMixin:
         additional costs' gate at CR 601.2h, after X and the targets are
         announced, and asking it twice would be two answers to one question.
         """
-        printed = alternative_costs(card)
+        printed = self.applicable_alternative_costs(caster_index, card)
         if not taking_it:
             return None, None, None
         if not printed:
@@ -2206,10 +2339,10 @@ class SpellCastingMixin:
                 f"one may be applied (CR 118.9a)"
             )
         cost = printed[0]
-        if cost.exile_from_hand is None:
+        if cost.exile_from_hand is None and cost.discard_from_hand is None:
             return cost, None, None
         payable = self._alternative_cost_payers(
-            caster_index, cost, spell_hand_index=spell_hand_index
+            caster_index, cost, spell_hand_index=spell_hand_index, spell=card,
         )
         if named_hand_index is None:
             # Nothing named is the deterministic default, which keeps AI and
@@ -2221,12 +2354,12 @@ class SpellCastingMixin:
         if not 0 <= named_hand_index < len(hand):
             return None, None, (
                 f"{card.name} can't be cast: no card at hand position "
-                f"{named_hand_index} to exile for its alternative cost"
+                f"{named_hand_index} to pay its alternative cost"
             )
         if named_hand_index == spell_hand_index:
             return None, None, (
                 f"{card.name} can't be cast: it is on the stack (CR 601.2a) and "
-                "cannot be exiled to pay for itself"
+                "cannot pay for itself"
             )
         if not any(held is hand[named_hand_index] for held in payable):
             # A named card that does not answer the printed phrase is an error,
@@ -2269,8 +2402,11 @@ class SpellCastingMixin:
                 f"{card.name} can't be cast: {caster.name} cannot pay "
                 f"{cost.pay_life} life with {caster.life} remaining (CR 601.2h)"
             )
-        if cost.exile_from_hand is not None and not self._alternative_cost_payers(
-            caster_index, cost, spell_hand_index=spell_hand_index
+        if (
+            cost.exile_from_hand is not None
+            or cost.discard_from_hand is not None
+        ) and not self._alternative_cost_payers(
+            caster_index, cost, spell_hand_index=spell_hand_index, spell=card,
         ):
             return (
                 f"{card.name} can't be cast: no card in hand answers its "
@@ -2386,6 +2522,28 @@ class SpellCastingMixin:
                     + ", ".join(held.name for held in paid)
                     + f" from their graveyard to cast {card.name}"
                 )
+        if cost.discard_from_hand is not None:
+            # "…its controller may **discard** a card…" (Dream Halls.) The
+            # hand's other destination, and the one card leaves through
+            # ``take_card_from_hand`` for the exile's reason below: a deck
+            # repeats one immutable ``CardDefinition`` per copy, so every copy
+            # in a hand is the same Python object and an identity filter would
+            # bin all of them.
+            paying = chosen
+            if paying is None or not any(held is paying for held in caster.hand):
+                return
+            self.take_card_from_hand(caster, paying)
+            # Through ``_discard_card``, never straight to the graveyard: a
+            # discard is CR 701.9a's event whether it pays a cost or not, so
+            # Library of Leng's replacement (CR 701.9c) still redirects it and
+            # every watcher of "whenever you discard a card" still fires. The
+            # additional cost's discard one file over goes through the same
+            # seam, for the same reason.
+            self._discard_card(caster, paying)
+            self.log.append(
+                f"{caster.name} discarded {paying.name} to cast {card.name}"
+            )
+            return
         if cost.exile_from_hand is None:
             return
         paying = chosen
@@ -2418,6 +2576,7 @@ class SpellCastingMixin:
         cost_hand_card: "CardDefinition | None",
         x_value: int | None = None,
         cost_permanent_ids: list[int] | None = None,
+        taken: dict[str, int] | None = None,
     ) -> dict:
         """Perform *card*'s printed additional costs, returning what they ate.
 
@@ -2439,6 +2598,12 @@ class SpellCastingMixin:
         sacrificed: Permanent | None = None
         exiled: Permanent | None = None
         for cost in costs:
+            # CR 601.2b's *optional* price, collected only when the
+            # announcement took it -- the same reader ``_unpayable_additional_cost``
+            # skips it by, so a cost the gate priced and one the payment
+            # collects cannot come apart.
+            if not optional_cost_taken(cost, taken):
+                continue
             # "…, **exile X creature cards from your graveyard**." (Haunting
             # Misery.) A *card* payment, so nothing leaves the battlefield and
             # `exiled` above — which carries the Permanent a battlefield exile

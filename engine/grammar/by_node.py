@@ -52,6 +52,7 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_add_mana_for_tappe
                        _lower_exile_cost_sacrifices, _lower_exile_graveyard,
                        _lower_reveal_hand, _lower_reveal_random_from_hand,
                        _lower_graveyard_top_to_library,
+                       _lower_reveal_top_sorting_by_filter,
                        _lower_look_at_hand, _lower_look_at_library_top,
                        _lower_look_top_cycle_for_life,
                        _lower_separate_library_top_into_piles,
@@ -244,6 +245,7 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.ExileGraveyardPosition: _lower_exile_graveyard_position,
     ast.LookTopExileRandom: _lower_look_top_exile_random,
     ast.RevealTopOpponentChooses: _lower_reveal_top_opponent_chooses,
+    ast.RevealTopSortingByFilter: _lower_reveal_top_sorting_by_filter,
     # The same pick over a pile a **search** found (Intuition), which is
     # why it is a row of its own rather than a field on that node: a search
     # finds what a player picks out of a hidden zone (CR 701.23a), where a

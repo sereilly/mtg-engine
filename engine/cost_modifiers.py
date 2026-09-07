@@ -118,6 +118,17 @@ class CostModifier:
     #: the same reason ``life`` and ``sacrifice_filter`` are their own fields
     #: and their own readers.
     symbols: tuple[tuple[str, int], ...] = ()
+    #: "...**This effect can't reduce the mana in that cost to less than one
+    #: mana**." (Heartstone.) How much mana a cost this modifier *reduces* must
+    #: still hold afterwards, over the whole cost rather than its generic part --
+    #: "the mana in that cost" is every symbol of it.
+    #:
+    #: 0 on every increase and on a reduction printed without the rider, which
+    #: is the honest floor: nothing below zero. Its own field rather than a
+    #: clamp folded into ``amount``, because the clamp is a property of the
+    #: *result* and cannot be expressed as a smaller subtraction -- a {2}
+    #: reduction meets the floor on a {2} ability and not on a {3} one.
+    floor: int = 0
 
 
 @dataclass(frozen=True)
@@ -275,6 +286,26 @@ _ABILITY_TAX = re.compile(
     r"\{(?P<amount>\d+)\} more to activate"
 )
 
+#: "Activated abilities of creatures cost {1} less to activate. **This
+#: effect can't reduce the mana in that cost to less than one mana.**"
+#: (Heartstone.)
+#:
+#: The same subject as ``_ABILITY_TAX`` in the other direction, and **both
+#: sentences are required** for ``auras._ABILITY_COST_REDUCTION``'s reason one
+#: module over: the floor is not decoration, it is what stops a {1} ability
+#: becoming free, and a pattern claiming only the first sentence would leave
+#: the second unclaimed while quietly implementing a cheaper card. The two are
+#: printed as one line, which is why this reads across the full stop.
+_ABILITY_REDUCTION = re.compile(
+    rf"activated abilities of (?:(?P<colour>{_COLOURS}) )?(?P<type>{_TYPE_LIST})s? cost "
+    r"\{(?P<amount>\d+)\} less to activate\. this effect can't reduce the mana "
+    r"in that cost to less than (?P<floor>one|two|three) mana"
+)
+
+#: The floor's printed number words, the same three ``engine/auras.py`` reads
+#: for the identical rider.
+_ABILITY_FLOOR_WORDS = {"one": 1, "two": 2, "three": 3}
+
 
 @lru_cache(maxsize=None)
 def cost_modifiers_for(oracle_text: str) -> tuple[CostModifier, ...]:
@@ -324,6 +355,17 @@ def cost_modifiers_for(oracle_text: str) -> tuple[CostModifier, ...]:
                 applies_to="activate",
                 colour=_COLOR_WORD_TO_SYMBOL.get(match.group("colour") or ""),
                 card_types=_types_named(match.group("type")),
+            )
+        )
+    for match in _ABILITY_REDUCTION.finditer(text):
+        modifiers.append(
+            CostModifier(
+                amount=int(match.group("amount")),
+                applies_to="activate",
+                reduces=True,
+                colour=_COLOR_WORD_TO_SYMBOL.get(match.group("colour") or ""),
+                card_types=_types_named(match.group("type")),
+                floor=_ABILITY_FLOOR_WORDS[match.group("floor")],
             )
         )
     for match in _SACRIFICE_SYMBOL_TAX.finditer(text):
@@ -441,7 +483,8 @@ def cost_modifier_claims_line(line: str) -> bool:
     if any(
         (match := pattern.match(text)) is not None and match.end() == len(text)
         for pattern in (
-            _ABILITY_TAX, _TARGETING_LIFE_TAX, _TARGETING_MANA_TAX,
+            _ABILITY_TAX, _ABILITY_REDUCTION, _TARGETING_LIFE_TAX,
+            _TARGETING_MANA_TAX,
         )
     ):
         return True
@@ -531,7 +574,27 @@ def _tax(
     every battlefield, because a cost modifier is not scoped to its own
     controller's side unless the card says so.
     """
+    total, names, _floor = _tax_floored(
+        game, card, applies_to, wanted=wanted,
+        controller_index=controller_index, targeted=targeted,
+    )
+    return total, names
+
+
+def _tax_floored(
+    game, card, applies_to: str, *, wanted: str,
+    controller_index: int | None = None, targeted=(),
+) -> tuple[int, list[str], int]:
+    """:func:`_tax` plus the highest floor any contributing modifier names.
+
+    One loop rather than two, because a second walk would be a second answer to
+    "which modifiers apply to this object?" -- and the two disagreeing is a
+    reduction charged under somebody else's floor. The floor is the **maximum**
+    for ``auras.attached_ability_cost_reduction``'s reason: two reductions must
+    not cancel each other's protection against a free ability.
+    """
     total = 0
+    floor = 0
     names: list[str] = []
     for seat, permanent in game.permanents_with_controller():
         # effective_card: a colour word rewritten by Sleight of Mind (CR 613
@@ -581,8 +644,9 @@ def _tax(
             ):
                 continue
             total += modifier.amount
+            floor = max(floor, modifier.floor)
             names.append(permanent.card.name)
-    return total, names
+    return total, names, floor
 
 
 def _stack_tax(
@@ -822,6 +886,49 @@ def ability_cost_tax(game, controller_index: int, source) -> tuple[int, list[str
         game, source.effective_card, "activate", wanted="more",
         controller_index=controller_index,
     )
+
+
+def ability_cost_reduction(
+    game, controller_index: int, source
+) -> tuple[int, list[str], int]:
+    """Generic mana **off** *source*'s activation cost, the reducing permanents'
+    names, and the floor those permanents impose.
+
+    :func:`ability_cost_tax`'s twin, and deliberately its mirror down to the
+    ``effective_card``: a copied or animated permanent is discounted on what it
+    currently is, exactly as it is taxed on what it currently is.
+
+    The floor rides back with the amount rather than being asked for separately,
+    because the two come from the same modifiers -- a caller reading them apart
+    could apply one permanent's reduction under another's floor.
+    """
+    return _tax_floored(
+        game, source.effective_card, "activate", wanted="less",
+        controller_index=controller_index,
+    )
+
+
+def cost_modifier_reduction_sentences(oracle_text: str) -> tuple[str, ...]:
+    """The sentences :data:`_ABILITY_REDUCTION` reads, or empty.
+
+    The reduction is **two sentences on one printed line** -- the amount and the
+    floor -- and neither means anything alone, so the reader matches them
+    joined. This names the pair for a caller that walks a card sentence by
+    sentence (``scripts/parse_coverage.py``), which would otherwise report the
+    floor as text nothing read. The same arrangement
+    ``auras.aura_cost_reduction_sentences`` makes for the identical rider on an
+    Aura.
+    """
+    found: list[str] = []
+    for line in (oracle_text or "").split("\n"):
+        text = " ".join(line.strip().lower().split()).rstrip(".")
+        match = _ABILITY_REDUCTION.match(text)
+        if match is None or match.end() != len(text):
+            continue
+        found.extend(
+            sentence.strip() for sentence in text.split(". ") if sentence.strip()
+        )
+    return tuple(found)
 
 
 # ---------------------------------------------------------------------------

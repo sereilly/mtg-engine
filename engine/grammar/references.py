@@ -570,6 +570,14 @@ def parse_target_spec(stream: TokenStream) -> ast.TargetSpec | None:
         if stream.accept_phrase("controlled", "by", "the", "same", "opponent"):
             filt = dataclasses.replace(filt, controller="opponent")
             same_controller = True
+        # "…**controlled by the same player**." (Cannibalize.) The relation
+        # without the narrowing: "the same" still says the two targets share a
+        # seat, and "player" names any of them — the caster's own creatures
+        # included, which is the whole difference from Retribution and is why
+        # no ``controller`` key is set. Setting one would be a card that cannot
+        # be aimed at its own controller's board, which is a different card.
+        elif stream.accept_phrase("controlled", "by", "the", "same", "player"):
+            same_controller = True
     return ast.TargetSpec(
         quantifier, filt, count,
         count_from_x=exactly_x,

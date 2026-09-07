@@ -625,7 +625,13 @@ class LegalityMixin:
         # narrow the picker (own_only, stack filters, sacrifice_cost, ...).
         # There is no text cascade behind this any more: a program that
         # describes no cast-time choice means the spell makes none.
-        spec = derive_cast_spec(card, program, from_zone=from_zone) or {"kind": "none"}
+        spec = derive_cast_spec(
+            card, program, from_zone=from_zone,
+            # CR 601.2b's answer so far, for the one cost kind that is an offer
+            # rather than a price: a declined buyback asks the caster to name
+            # nothing, and a taken one needs the picker its price implies.
+            optional_cost_payments=optional_cost_payments,
+        ) or {"kind": "none"}
         spec["requires_target"] = spec["kind"] != "none"
         # CR 107.3c: a spell that defines its own X takes the announcement away
         # from the caster, so the picker must not ask for one — and a divided
@@ -779,7 +785,11 @@ class LegalityMixin:
         answered = {str(key): int(value) for key, value in (taken or {}).items()}
         offers: list[dict] = []
 
-        for cost in alternative_costs(card):
+        # Printed **and** granted (Dream Halls' board-wide offer), through the
+        # one reader the announcement's check and the CR 601.2h gate also ask:
+        # an offer this picker could not describe is a price no client can take,
+        # which is the whole of what the alternative-cost prompt exists for.
+        for cost in self.applicable_alternative_costs(caster_index, card):
             entry: dict = {
                 "kind": "alternative",
                 "label": cost.describe(),
@@ -787,9 +797,13 @@ class LegalityMixin:
                     caster_index, card, cost, spell_hand_index=spell_hand_index,
                 ) is None,
             }
-            if cost.exile_from_hand is not None:
+            if (
+                cost.exile_from_hand is not None
+                or cost.discard_from_hand is not None
+            ):
                 payers = self._alternative_cost_payers(
                     caster_index, cost, spell_hand_index=spell_hand_index,
+                    spell=card,
                 )
                 # By hand *position*, because that is what the wire carries and
                 # what CR 601.2a's withholding is expressed in: a deck repeats
@@ -809,9 +823,48 @@ class LegalityMixin:
             # describing an announcement the engine will not accept.
             break
 
+        # Which of these offers is the card's **buyback** (CR 702.27a), so the
+        # prompt can name the price rather than showing a bare "{3}" or a bare
+        # "sacrifice a land". Read before the walk below because the non-mana
+        # offer needs it too, and asked of the same reader the rewrite and the
+        # resolution use, so a card whose keyword this engine cannot read is
+        # never labelled as having one.
+        buyback = buyback_cost(card.oracle_text or "")
+        charged = costs_charged_from(card, from_zone)
+        # CR 601.2b's optional **non-mana** price (Constant Mists'
+        # "Buyback—Sacrifice a land"). Emitted before the mana walk below and
+        # before its early return, because a card printing only this one prints
+        # no optional mana at all — and an offer nobody is shown is an offer
+        # nobody can take, which for a buyback is the whole of the keyword.
+        for cost in charged:
+            if cost.optional_key is None:
+                continue
+            offers.append({
+                "kind": "optional_cost",
+                # The same field name the mana offers carry, because it is the
+                # same thing: the key ``optional_cost_payments`` is read back
+                # by. The client's counter and ``_optional_cost_announcement``
+                # both address an offer by it, so one name keeps them one path.
+                "symbols": cost.optional_key,
+                "label": (
+                    "buyback" if buyback == cost.optional_key
+                    else cost.describe()
+                ),
+                "repeatable": False,
+                # CR 601.2h through the gate itself rather than a second board
+                # reading: an offer this shows as payable is one the cast will
+                # accept, priced by the function that would refuse it.
+                "max_times": 1 if self._unpayable_additional_cost(
+                    caster_index, card, (cost,),
+                    spell_hand_index=spell_hand_index, from_zone=from_zone,
+                    taken={cost.optional_key: 1},
+                ) is None else 0,
+                "times": answered.get(cost.optional_key, 0),
+            })
+
         every_offer = [
             offer
-            for cost in costs_charged_from(card, from_zone)
+            for cost in charged
             for offer in cost.optional_mana
         ]
         if not every_offer:
@@ -822,17 +875,11 @@ class LegalityMixin:
         pool = dict(caster.mana_pool)
         lands = untapped_mana_lands(self.controlled_by(caster_index))
         printed = mana_cost_from_symbols(card.mana_cost or "") or {}
-        # Which of these offers is the card's **buyback** (CR 702.27a), so the
-        # prompt can name the price rather than showing a bare "{3}". The
-        # keyword is a rewrite (``cast_costs.expand_buyback_lines``), which is
-        # what makes it an ordinary offer everywhere else — and the one place
-        # the word still has to survive is the sentence a player reads before
-        # deciding. Worthy Cause is why: it prints a buyback *and* a mandatory
-        # sacrifice, and "Pay {2}" beside "sacrifice a creature" says nothing
-        # about which price buys the card back. Asked of the same reader the
-        # rewrite and the resolution use, so a card whose keyword this engine
-        # cannot read is never labelled as having one.
-        buyback = buyback_cost(card.oracle_text or "")
+        # ``buyback`` was read above, before the non-mana offers that also need
+        # it. Worthy Cause is why the word survives to the prompt at all: it
+        # prints a buyback *and* a mandatory sacrifice, and "Pay {2}" beside
+        # "sacrifice a creature" says nothing about which price buys the card
+        # back.
         for offer in every_offer:
             one = offer.cost
             # What the rest of the announcement has already claimed, so the
