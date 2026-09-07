@@ -48,6 +48,27 @@ GRAMMAR = Path(__file__).resolve().parent.parent.parent / "engine" / "grammar"
 # order is therefore an assertion about the split, not a convention — a
 # condition that grew a need for an effect would fail here.
 PARSE_LAYERS = [
+    # The mutable mirror of `ast.ObjectFilter` a noun phrase accumulates into,
+    # and the hand-written copy that freezes it. The bottom of the parse side:
+    # it reads `ast` and the dataclass machinery, nothing in it consumes a
+    # token, and nothing here is a production. Split out of `nouns` at Exodus'
+    # second wave, when the paragraph recording why the draft carries
+    # `slots=True` took that module four lines past the guard below.
+    #
+    # Its own file because the two halves are one *bug*: the field lists are
+    # written twice, the filter is frozen and the draft is not, and a field on
+    # one and not the other loses a printed narrowing in silence — the phrase
+    # parses, the card compiles, and the effect reaches a strictly larger set
+    # than the card prints. The guard over the pair is the only instrument in
+    # the repo that can see it, and a guard over two halves wants them in one
+    # file. The draft is not `nouns`' property either: five modules write onto
+    # it, each taking it as a parameter.
+    #
+    # No mirror name to reuse — `ast/_references.py` holds the `ObjectFilter`
+    # and `ast/_payloads.py` the other direction out of it, so both AST words
+    # are spoken for and the *draft* has no AST twin at all. `nouns` re-exports
+    # both names, as it does `readers` and `bounds`, so no caller moved.
+    "filter_draft",
     # Small printed readers `nouns` shares *upward* — a comparison, a
     # self-reference. Below it because nothing about them is about a filter.
     "readers",
@@ -1275,7 +1296,7 @@ def test_layers_only_import_downward(layers):
     "package,shared,roof",
     [
         ("effects", (), ()),
-        ("lowering", ("_common", "_filters", "_events", "_deaths", "_delays", "_amounts", "_counted_damage", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_conjuncts", "_bound_returns", "_described_returns", "_piles", "_counter_stores", "_blankets", "_zone_categories", "_record_keys", "categories", "conditions"), ()),
+        ("lowering", ("_common", "_filters", "_events", "_deaths", "_delays", "_amounts", "_counted_damage", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_conjuncts", "_bound_returns", "_bound_exiles", "_described_returns", "_piles", "_counter_stores", "_blankets", "_zone_categories", "_record_keys", "_record_conditions", "categories", "conditions"), ()),
         # `costs` is shared beside `_core` rather than a family: a cost is
         # charged on the way to the stack and never lowered, so it has no
         # `effects/` or `lowering/` twin to be a family of — and both
@@ -1678,6 +1699,30 @@ FAMILY_SHARED = {
     # halves of the split ask them, which is what makes this a floor rather
     # than a file that happened to be cut in half.
     "_bound_returns",
+    # `_bound_exiles` split out of `lowering/exile.py` at Exodus' second wave,
+    # when that module sat four lines under the guard — wave 1 had trimmed its
+    # own comment to stay under rather than split mid-round, which was the right
+    # call then and is not a state to ship. It is `_bound_returns`' twin one
+    # keyword action over and carries its name for its reason: every reading in
+    # it names its object by reference rather than choosing one, so nothing is
+    # matched and nothing is picked, and every narrowing the sentence prints
+    # beyond the reference is a **refusal** rather than a payload. What is left
+    # in `exile` picks its object out of the game — an announced target, a swept
+    # match, a prompted pile — and carries a filter to its handler; not one
+    # branch that moved carries one, which is the same test `_bound_returns`
+    # applies to `returns`.
+    # It has two entry points rather than one, and that is the cut being
+    # faithful rather than tidy: `_lower_exile` reads the restated noun phrase
+    # ("that creature") *before* the sweep and hand quantifiers and the pronouns
+    # ("the creature", "it", "the token") *after* them, so one function would
+    # have moved a branch across the sweep — a behaviour change dressed as a
+    # split. Each returns None where the sentence is not its own.
+    # A floor for `_bound_returns`' reason exactly: `exile` is its only reader
+    # and a family may not import a sibling. `_entering_counter_payload`
+    # travelled with it and is read back up, because both halves write the
+    # counters a card enters exile with and a fragment two readers share belongs
+    # in the one below them.
+    "_bound_exiles",
     # `_described_returns` split out of `_bound_returns` at Exodus' Phase 0,
     # eleven lines under the guard with two of wave 1's groups due to land in
     # it and no single group able to cross it alone — a floor every lowering
@@ -1802,6 +1847,34 @@ FAMILY_SHARED = {
     # `_deaths` and no family at all — and deliberately not `_records`, so the
     # module that writes these keys and the module that names them cannot cycle.
     "_record_keys",
+    # `_record_conditions` split out of `lowering/conditions.py` at Exodus'
+    # second wave, when that module sat five lines under the guard. It is the
+    # lowering-side mirror of the cut `ast/conditions.py` took when *it*
+    # crossed: a clause answered by looking at the game now — a board count, a
+    # zone's height, a life total, whose turn it is — against one answered by
+    # reading a record of something already done. `ast/records.py` says that
+    # line was written here first, "card by card, in prose".
+    # The mirror was measured rather than assumed, which is what the seam rule
+    # asks: every one of `_lower_condition`'s forty-nine branches is a bare
+    # `isinstance` on a distinct node class, and each was read against which
+    # half of `ast` defines its node. No branch spans the two, and the halves
+    # share no helper and no import beyond `ast` and `LoweringError` — four
+    # module-level helpers stayed and seven imports left, with none read on both
+    # sides. Order cannot be part of the division either, since forty-nine
+    # mutually exclusive `isinstance` tests with no `elif` among them answer the
+    # same however they are ordered.
+    # The name keeps the mirror's word and disambiguates by what it holds,
+    # because `lowering/_records.py` is taken by a sibling of the same subject
+    # (the `_PRODUCES` table) — the move `_record_keys` above made when the
+    # spellings of those keys left `_events`. Three modules, one word, three
+    # questions: what a step records, what the key is called, and what a
+    # sentence may ask of it.
+    # A floor for `conditions`' own reason: three callers in three different
+    # places read a condition, and one living in a family would couple the rest
+    # to that family. `conditions` hands the sentence down as its last act, the
+    # arrangement `_bound_returns` has with `_described_returns`, and nothing
+    # reads back.
+    "_record_conditions",
 }
 
 
