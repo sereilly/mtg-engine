@@ -146,3 +146,63 @@ def test_g4_the_buyback_offer_reaches_the_picker_only_when_it_is_taken(set_pool)
     )
     assert taken["kind"] == "land" and taken["sacrifice_cost"] is True
     assert [t["name"] for t in taken["valid_targets"]] == ["Forest"]
+
+
+@pytest.mark.cr("601.2b", "201.2", "701.23a")
+def test_g4_mask_of_the_mimic_tutors_the_targets_name(set_pool):
+    """"As an additional cost to cast this spell, sacrifice a creature." /
+    "Search your library for a card with the same name as target nontoken
+    creature, put that card onto the battlefield, then shuffle."
+
+    The cost sentence was already read — the census' refusal site for it was
+    the *grammar's*, and ``cast_costs.additional_cost_for_line`` claims that
+    line in full. What nothing read was the search's noun phrase: a name
+    comparison against an object the same sentence **chooses**, so the name is
+    not knowable until the spell is cast and what the payload carries is the
+    question rather than the answer.
+    """
+    game, caster, victim = _g4_duel([set_pool("STH")["Mask of the Mimic"]])
+    caster.battlefield.append(Permanent(card=_G4_LEA["Mons's Goblin Raiders"]))
+    victim.battlefield.append(Permanent(card=_G4_LEA["Serra Angel"]))
+    caster.library = [
+        _G4_LEA["Black Lotus"], _G4_LEA["Serra Angel"], _G4_LEA["Forest"],
+    ]
+
+    spec = game.cast_target_spec(0, set_pool("STH")["Mask of the Mimic"])
+    assert spec["kind"] == "creature"
+    assert spec["cost_spec"]["sacrifice_cost"] is True, "the sacrifice is its own picker"
+
+    result = game.cast_from_hand(
+        0, "Mask of the Mimic", target_player_index=1, target_permanent_index=0,
+    )
+    assert result.supported, result.details
+    assert caster.battlefield == [], "the additional cost ate the Goblin"
+
+    game.resolve_top_of_stack()
+    pending = game.pending_search_library
+    assert pending is not None
+    assert pending["restrictions"]["named"] == "Serra Angel", (
+        "the name is read off the chosen target as the search is armed"
+    )
+
+    assert not game.confirm_search_library(0, 0), "Black Lotus is not that name"
+    assert game.confirm_search_library(0, 1)
+    assert [p.card.name for p in caster.battlefield] == ["Serra Angel"]
+
+
+@pytest.mark.cr("608.2b", "701.23a")
+def test_g4_a_name_from_a_target_that_left_finds_nothing(set_pool):
+    """The dropped-narrowing direction, asserted rather than assumed.
+
+    ``named_from_target`` is a question, and a search whose question nothing
+    answered must find **no** card rather than every card — so the key alone,
+    with no name behind it, refuses each candidate.
+    """
+    from engine.search_filters import search_matches
+
+    card = _G4_LEA["Serra Angel"]
+    assert not search_matches(card, {"restrictions": {"named_from_target": True}})
+    assert search_matches(
+        card,
+        {"restrictions": {"named_from_target": True, "named": "Serra Angel"}},
+    )

@@ -101,6 +101,34 @@ def activation_life_cost(cost, permanent) -> int:
     return int(cost.pay_life) * counters_on(permanent, str(per_counter))
 
 
+def activation_mana_per_counter(cost, permanent) -> dict[str, int]:
+    """The mana a per-counter rate owes right now, as a symbol dict.
+
+    ``ActivatedAbilityCost.mana_per_counter_cost`` is what **one** counter
+    costs; this multiplies it by how many the source carries.
+    :func:`activation_life_cost`'s twin one resource over, and a function for
+    its reason: CR 601.2f's cost is computed at activation and asked twice --
+    once by the payability gate and once by the payment -- and both must get
+    the same number.
+
+    Empty for every ability printing no such rate, which is all but one card in
+    the pool, and empty for a source that has left the battlefield: a counter
+    nobody can count is none.
+    """
+    rate = getattr(cost, "mana_per_counter_cost", None)
+    counter = getattr(cost, "mana_per_counter", None)
+    if not rate or not counter or permanent is None:
+        return {}
+    from ...named_counters import counters_on
+
+    many = counters_on(permanent, str(counter))
+    return {
+        symbol: amount * many
+        for symbol, amount in rate.items()
+        if amount and many
+    }
+
+
 def _pool_covers(pool: dict, required: dict) -> bool:
     """Whether *pool* alone pays *required*, coloured pips first.
 
@@ -1591,6 +1619,15 @@ class AbilityActivationMixin:
             )
 
         required_cost = dict(ability.cost.mana)
+        # "Pay {1} **for each +1/+1 counter on this creature**" (Skeleton
+        # Scavengers). CR 601.2f computes the cost as the ability is
+        # activated, so the rate is multiplied here -- the same moment
+        # ``activation_life_cost`` reads its own counter, and by the same
+        # count, so a card printing both would price them off one board.
+        for symbol, count in activation_mana_per_counter(
+            ability.cost, permanent
+        ).items():
+            required_cost[symbol] = required_cost.get(symbol, 0) + int(count)
         # "…**or {2}**" when the pool covered it. Folded into the ordinary
         # payment rather than charged beside it, so every tax, reduction and
         # restricted-bucket rule below applies to it exactly as to a printed

@@ -94,3 +94,78 @@ def test_g4_hermit_druid_over_a_library_with_no_basic_mills_it_all(set_pool):
     assert caster.library == []
     assert caster.hand == []
     assert [c.name for c in caster.graveyard] == ["Black Lotus", "Healing Salve"]
+
+
+@pytest.mark.cr("601.2f", "701.19a")
+def test_g4_skeleton_scavengers_costs_one_mana_per_counter(set_pool):
+    """"Pay {1} for each +1/+1 counter on this creature: Regenerate this
+    creature. When it regenerates this way, put a +1/+1 counter on it."
+
+    Only the *cost* was new. "When it regenerates this way" is Matopi Golem's
+    delayed trigger and the regeneration is the ordinary shield — what nothing
+    read was a mana payment written as prose, whose size is a board read rather
+    than a printed number. Charged flat, the creature would regenerate for {1}
+    however large it had grown.
+    """
+    game, caster, victim = _g4_board()
+    victim.hand.append(_G4_LEA["Lightning Bolt"])
+    game.enforce_mana_costs = True
+    skeleton = Permanent(card=set_pool("STH")["Skeleton Scavengers"])
+    game._put_permanent_onto_battlefield(0, skeleton, None)
+
+    from engine.named_counters import counters_on
+
+    assert counters_on(skeleton, "+1/+1") == 1, "it enters with one"
+
+    caster.mana_pool["C"] = 1
+    assert game.activate_permanent_ability(
+        0, "Skeleton Scavengers", ability_index=0,
+    ).supported
+    game.resolve_top_of_stack()
+    assert caster.mana_pool["C"] == 0, "one counter, one mana"
+    assert skeleton.regeneration_shield == 1
+
+    # The shield is spent, which is what "regenerates this way" watches for —
+    # CR 701.19c is explicit that creating one is not regenerating.
+    game.enforce_mana_costs = False
+    game.cast_from_hand(
+        1, "Lightning Bolt", target_player_index=0, target_permanent_index=0,
+    )
+    game.resolve_top_of_stack()
+    game._settle()
+    assert any(perm is skeleton for perm in caster.battlefield), "it regenerated"
+    assert skeleton.tapped
+    assert counters_on(skeleton, "+1/+1") == 2
+
+    # …and the second activation is priced off the board it now has.
+    game.enforce_mana_costs = True
+    caster.mana_pool["C"] = 1
+    assert not game.activate_permanent_ability(
+        0, "Skeleton Scavengers", ability_index=0,
+    ).supported, "two counters is two mana"
+    caster.mana_pool["C"] = 2
+    assert game.activate_permanent_ability(
+        0, "Skeleton Scavengers", ability_index=0,
+    ).supported
+    assert caster.mana_pool["C"] == 0
+
+
+def test_g4_a_prose_mana_payment_with_no_rate_refuses_the_line():
+    """The gate on the production above, written as its refusal.
+
+    A bare "Pay {1}:" is the mana symbol spelled twice, and admitting it would
+    make the grammar's reading and ``oracle.parse_activated_ability_cost``'s
+    disagree: that reader charges a flat {1} for it, and this one would charge
+    a rate over a counter nothing named. The positive case always passes; this
+    is the one that finds the bug.
+    """
+    from engine.grammar.errors import GrammarError
+    from engine.grammar.parser import parse_line
+
+    with pytest.raises(GrammarError):
+        parse_line("Pay {1}: Regenerate this creature.")
+    with pytest.raises(GrammarError):
+        parse_line(
+            "Pay {1} for each +1/+1 counter on target creature: "
+            "Regenerate this creature."
+        )

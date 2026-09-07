@@ -21,7 +21,7 @@ from .amounts import parse_amount
 from .effects import _expect_counter_kind
 from .phrases import _parse_card_alternatives, accept_graveyard_position
 from .errors import GrammarError
-from .lexer import MANA, SELF
+from .lexer import MANA, PT, SELF, WORD
 from .lowering._common import (_PAYLOAD_HONOURED_FILTER_FIELDS,
                                _restrictions_beyond, chargeable_tap_filter,
                                graveyard_position_payload)
@@ -363,6 +363,39 @@ def _parse_counter_removal_cost(stream: TokenStream) -> ast.RemoveCounterCost:
     return ast.RemoveCounterCost(counter, count)
 
 
+def _accept_mana_run(
+    stream: TokenStream,
+) -> tuple[tuple[str, int], ...] | None:
+    """A run of mana symbols at the cursor as ``(symbol, count)`` pairs, or None
+    with the cursor where it was.
+
+    The same symbols ``_parse_costs``' own mana branch reads, gathered here for
+    a payment written as prose ("Pay {1} for each ...") -- where the symbols are
+    a *rate* rather than the cost, so they must not reach the pips dict that
+    branch accumulates into.
+    """
+    mark = stream.mark()
+    pips: dict[str, int] = {}
+    while True:
+        token = stream.accept_kind(MANA)
+        if token is None:
+            break
+        symbol = token.text.strip("{}")
+        if symbol.isdigit():
+            pips["generic"] = pips.get("generic", 0) + int(symbol)
+        elif symbol in ("W", "U", "B", "R", "G", "C"):
+            pips[symbol] = pips.get(symbol, 0) + 1
+        else:
+            # {T}, {X} and the hybrids: a rate this cannot multiply. Refused
+            # whole rather than read as the part that matched.
+            stream.reset(mark)
+            return None
+    if not pips:
+        stream.reset(mark)
+        return None
+    return tuple(sorted(pips.items()))
+
+
 def _accept_per_counter(stream: TokenStream) -> str | None:
     """``for each <kind> counter on this <noun>`` at the cursor, as the counter's
     printed name — or None with the cursor where it was.
@@ -377,10 +410,16 @@ def _accept_per_counter(stream: TokenStream) -> str | None:
     if not stream.accept_phrase("for", "each"):
         stream.reset(mark)
         return None
-    counter = stream.peek_word()
-    if counter is None:
+    # "for each **+1/+1** counter" (Skeleton Scavengers). A counter named by a
+    # power/toughness change is its own token kind, so a reader that asked only
+    # for a word saw nothing here and refused the clause -- which for an
+    # activation cost is the ability's whole line. The name is the token's text
+    # either way, which is what ``named_counters`` is keyed by.
+    named = stream.peek()
+    if named is None or named.kind not in (WORD, PT):
         stream.reset(mark)
         return None
+    counter = named.text
     stream.advance()
     if not stream.accept_word("counter", "counters"):
         stream.reset(mark)
@@ -696,6 +735,28 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
                         stream.accept_punct(",")
                         continue
             stream.reset(attached)
+            # "Pay **{1} for each +1/+1 counter on this creature**" (Skeleton
+            # Scavengers). A mana payment rather than a life one, read here
+            # because the amount parser below wants a number and would refuse
+            # the line on the symbol -- the same one-token gap the attached
+            # mana cost above answers.
+            #
+            # The per-counter clause is **required**: a bare "Pay {1}" is the
+            # mana symbol spelled twice, and admitting it here would charge a
+            # flat rate for a cost whose whole point is that it grows.
+            per_counter_mana = _accept_mana_run(stream)
+            if per_counter_mana is not None:
+                rate = _accept_per_counter(stream)
+                if rate is None:
+                    stream.reset(mark)
+                    raise stream.error(
+                        "a mana payment written as prose is charged only per counter"
+                    )
+                costs.append(
+                    ast.PayManaPerCounterCost(per_counter_mana, rate)
+                )
+                stream.accept_punct(",")
+                continue
             amount = parse_amount(stream)
             if not isinstance(amount, ast.Fixed) or amount.value <= 0:
                 stream.reset(mark)

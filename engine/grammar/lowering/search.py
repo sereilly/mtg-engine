@@ -41,7 +41,8 @@ from ._events import _back_reference_payload
 # _restrictions_beyond, because nothing in the flow tests one: the player would
 # simply be offered their whole library.
 _SEARCH_HONOURED_FILTER_FIELDS = (
-    frozenset({"card_types", "is_card", "supertypes"}) | SEARCH_RESTRICTIONS
+    frozenset({"card_types", "is_card", "supertypes", "named_as_target"})
+    | SEARCH_RESTRICTIONS
 )
 
 
@@ -119,6 +120,34 @@ def _lower_search_library(node: ast.SearchLibrary) -> tuple[OracleInstruction, .
     restrictions: dict[str, object] = {}
     if filt.named is not None:
         restrictions["named"] = filt.named
+    # "…a card **with the same name as target nontoken creature**" (Mask of the
+    # Mimic). The name is not knowable here — the target is chosen as the spell
+    # is cast (CR 601.2c) — so what travels is the *question*, and the handler
+    # answers it off ``context.target`` when the search is armed. A restriction
+    # the picker could not test would leave the player choosing from their whole
+    # library, which is what this key exists to prevent rather than to become.
+    if filt.named_as_target is not None:
+        if filt.named is not None:
+            # Two names for one find, and only one can be honoured. Refused
+            # whole rather than charged as the half that matched, which is this
+            # module's rule everywhere else.
+            raise LoweringError(
+                "one find is named once", node=node
+            )
+        restrictions["named_from_target"] = True
+        # Built from the filter the phrase read, through the one description
+        # builder every other targeted lowering uses -- so what the picker
+        # offers, what the gate admits and what the handler reads the name off
+        # are one answer.
+        payload_targets: dict[str, object] = {}
+        _describe_targets(
+            payload_targets,
+            ast.TargetSpec(
+                quantifier="target",
+                filter=filt.named_as_target,
+                targeted=True,
+            ),
+        )
     if filt.mana_value is not None:
         # A comparison the predicate cannot apply, or a bound that is not a
         # number ("with mana value X"), refuses rather than lowering to a search
@@ -185,6 +214,11 @@ def _lower_search_library(node: ast.SearchLibrary) -> tuple[OracleInstruction, .
         restrictions["named_among"] = list(node.named_alternatives)
         destinations = destinations * len(node.named_alternatives)
     payload: dict[str, object] = {"count": len(destinations), "card_type": card_type}
+    if filt.named_as_target is not None:
+        # The spell's own target (CR 601.2c), so ``engine/targeting.py`` raises
+        # the picker and ``legality`` gates the announcement — the search's find
+        # is chosen at resolution and this is not that choice.
+        payload.update(payload_targets)
     if node.unbounded:
         # "…for **any number of** Goblin cards" (Goblin Recruiter). The ceiling
         # is the zone rather than the card, and only the resolution knows how

@@ -467,6 +467,35 @@ def timetwister(game: Game, instruction: OracleInstruction, context: OracleExecu
     return True, "resolved"
 
 
+def _search_restrictions(game: Game, payload: dict, context) -> dict:
+    """The armed search's restrictions, with the ones only a resolution can
+    answer resolved.
+
+    ``named_from_target`` is "a card **with the same name as target nontoken
+    creature**" (Mask of the Mimic): the name is the chosen target's, which is
+    not knowable when the card compiles. It is turned into an ordinary ``named``
+    here, so every seat answers the same search — the engine re-checking a
+    pick, the AI choosing for itself and the web picker offering a list all read
+    ``search_filters.search_matches`` and none of them has a target in hand.
+
+    A target that is gone by resolution (CR 608.2b removes it) leaves the key in
+    place and no name behind it, and ``search_matches`` then matches nothing:
+    the search finds no card rather than every card, which is the direction a
+    dropped narrowing must never fail in.
+    """
+    restrictions = dict(payload.get("restrictions") or {})
+    if not restrictions.get("named_from_target"):
+        return restrictions
+    # Through the seam every handler resolves a chosen permanent by, so the
+    # name read here is the object the announcement named -- an index alone
+    # renumbers the moment anything leaves the battlefield, and the sacrifice
+    # this card charges as an additional cost has already left one.
+    chosen = resolve_target_permanent(game, context)
+    if chosen is not None:
+        restrictions["named"] = chosen.card.name
+    return restrictions
+
+
 @effect_handler("search_library")
 def search_library(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     caster = context.caster
@@ -569,7 +598,7 @@ def search_library(game: Game, instruction: OracleInstruction, context: OracleEx
         count=count,
         card_type=instruction.payload.get("card_type", "any"),
         zones=zones,
-        restrictions=dict(instruction.payload.get("restrictions") or {}),
+        restrictions=_search_restrictions(game, instruction.payload, context),
         destination=instruction.payload.get("destination", "hand"),
         # "…put one onto the battlefield tapped and the other into your hand"
         # (Cultivate): one entry per find, in the printed order. A counted

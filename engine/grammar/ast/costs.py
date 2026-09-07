@@ -196,6 +196,28 @@ class PayAttachedManaCost:
 
 
 @dataclass(frozen=True)
+class PayManaPerCounterCost:
+    """``Pay {1} for each +1/+1 counter on this creature`` (Skeleton
+    Scavengers).
+
+    A mana payment whose *size* is a board read rather than a printed number,
+    which is why it cannot be the ordinary ``ManaCost`` beside it: those pips
+    are the whole cost, and these are a **rate**. Charged flat, Skeleton
+    Scavengers regenerates for {1} however large it has grown, which is a
+    strictly cheaper card and the direction a cost must never drift in.
+
+    ``pips`` is what one counter costs, in the same symbol vocabulary
+    ``ManaCost`` carries. ``counter`` is the counter's printed name, and only
+    the ability's **own source** is counted -- the same restriction
+    ``PayLifeCost.per_counter`` states, and for its reason: a counter on
+    anything else is a board read the charger does not have in hand.
+    """
+
+    pips: tuple[tuple[str, int], ...]
+    counter: str
+
+
+@dataclass(frozen=True)
 class PayLifeCost:
     """``Pay 4 life`` in front of a colon — an activation cost (CR 119.4).
 
@@ -367,7 +389,8 @@ class RemoveCounterCost:
 
 
 Cost = Union[
-    ManaCost, TapSelf, SacrificeCost, DiscardCost, PayLifeCost, ExileSelf,
+    ManaCost, TapSelf, SacrificeCost, DiscardCost, PayLifeCost,
+    PayManaPerCounterCost, ExileSelf,
     ExileCost, ExileTopOfLibraryCost, ExileGraveyardPositionCost,
     RemoveCounterCost, PayAttachedManaCost,
     ReturnSelfToHandCost

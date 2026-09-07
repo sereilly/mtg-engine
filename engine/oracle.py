@@ -2199,6 +2199,46 @@ def _chosen_keyword_options(cost_lower: str) -> tuple[str, ...]:
     return tuple(options)
 
 
+#: "Pay {1} for each +1/+1 counter on this creature" (Skeleton Scavengers).
+#: The grammar's ``_accept_mana_run`` + ``_accept_per_counter`` pair, read as
+#: prose because this is the reader that *builds the cost*: the grammar
+#: consumes the clause so the line parses, and nothing lowers a cost node.
+#: The two therefore have to admit the same clauses, which is why both require
+#: the "for each" tail and both count only the ability's own source.
+_MANA_PER_COUNTER_COST = re.compile(
+    r"\bpay ((?:\{[^{}]+\})+) for each ([a-z]+|[+-]\d+/[+-]\d+) counters? "
+    r"on this [a-z]+\b"
+)
+
+
+def _split_mana_per_counter(
+    cost_part: str,
+) -> tuple[str, dict[str, int] | None, str | None]:
+    """*cost_part* with a per-counter mana payment removed, plus what it costs.
+
+    ``(remaining clause, one counter's symbols, the counter's name)``. The
+    clause is **taken out** rather than merely read, because the mana scan that
+    follows would otherwise add the rate to the flat cost as well -- a cost
+    charged twice at the first counter and far too little at the fifth.
+    """
+    match = _MANA_PER_COUNTER_COST.search(cost_part.lower())
+    if match is None:
+        return cost_part, None, None
+    rate = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0, "generic": 0}
+    for token in _MANA_TOKEN_RE.findall(match.group(1).upper()):
+        if token.isdigit():
+            rate["generic"] += int(token)
+        elif token in {"W", "U", "B", "R", "G", "C"}:
+            rate[token] += 1
+        else:
+            # {T} or {X} in a rate: a shape neither reader charges. Left in the
+            # clause so the mana scan sees it and the grammar refuses the line,
+            # rather than being silently dropped.
+            return cost_part, None, None
+    remaining = cost_part[: match.start()] + cost_part[match.end():]
+    return remaining, rate, match.group(2)
+
+
 def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     required = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0, "generic": 0}
     requires_tap = False
@@ -2213,6 +2253,14 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     # beside the life and charge both halves of an "or", which is exactly what
     # this reader did until the split existed.
     cost_part, alternative_mana = _split_mana_alternative(cost_part)
+    # "**Pay {1} for each +1/+1 counter on this creature**" (Skeleton
+    # Scavengers). Split off before the mana scan below for
+    # ``_split_mana_alternative``'s reason: a scan that read the whole clause
+    # would put the *rate* into ``required`` and charge it flat, which is a
+    # regeneration that stays {1} however large the creature has grown.
+    cost_part, per_counter_mana, per_counter_counter = (
+        _split_mana_per_counter(cost_part)
+    )
     loyalty, loyalty_x_sign = _parse_loyalty_cost(cost_part)
     if loyalty is not None or loyalty_x_sign is not None:
         # A loyalty symbol is the whole cost (CR 606.4); reading the clause
@@ -2707,6 +2755,8 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         remove_counter_count=remove_counter_count,
         pay_life=_life_payment_cost(cost_lower),
         pay_life_per_counter=_life_payment_per_counter(cost_lower),
+        mana_per_counter=per_counter_counter,
+        mana_per_counter_cost=per_counter_mana,
         alternative_mana=alternative_mana,
         tap_attached=_taps_the_attached_permanent(cost_lower),
         sacrifice_attached=_sacrifices_the_attached_permanent(cost_lower),

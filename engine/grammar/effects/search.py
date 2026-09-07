@@ -31,10 +31,43 @@ from .. import ast
 from ..amounts import parse_amount
 from ..errors import GrammarError
 from ..nouns import parse_object_filter
-from ..references import parse_player_ref
+from ..references import parse_player_ref, parse_target_spec
 from ..stream import TokenStream
 from ..phrases import _parse_zone
 
+
+
+def _accept_same_name_as_target(
+    stream: TokenStream,
+) -> "ast.TargetSpec | None":
+    """``with the same name as target <noun phrase>`` at the cursor, as the
+    target it names — or None with the cursor where it was.
+
+    CR 201.2's name comparison against an object the sentence *chooses*, which
+    is what separates it from the two spellings ``names.accept_name_comparison``
+    already reads: those compare against the board ("another permanent") or
+    against the event that fired ("that name"), and neither adds a target to
+    the spell.
+
+    Every word is required and the target is read by the ordinary target
+    parser, so what the search may find and what the spell announces are one
+    phrase. A tail this cannot read leaves the cursor untouched and the line
+    refuses, which is the whole point: a dropped "same name" is a tutor for
+    any card at all.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("with", "the", "same", "name", "as"):
+        stream.reset(mark)
+        return None
+    try:
+        spec = parse_target_spec(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if spec is None or not spec.targeted:
+        stream.reset(mark)
+        return None
+    return spec
 
 
 def _parse_search_library(stream: TokenStream) -> ast.Statement:
@@ -185,6 +218,15 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
     # "a card named X" is read by the noun parser, like every other restriction
     # on what may be found — `_restrictions_beyond` sees it on the filter.
     filt = parse_object_filter(stream)
+    # "…a card **with the same name as target nontoken creature**" (Mask of the
+    # Mimic). Read here rather than inside the noun parser because the phrase
+    # ends in a *target*: `nouns` would have to reach into `references` for it,
+    # which is the coupling the family rule exists to prevent — and this
+    # production already reads a target nowhere else, so the phrase costs one
+    # call.
+    named_target = _accept_same_name_as_target(stream)
+    if named_target is not None:
+        filt = dataclasses.replace(filt, named_as_target=named_target.filter)
     # "…**and/or** a card named Igneous Cur" (Alpine Houndmaster): a second
     # find with its own name, and the "and/or" is what makes each one optional.
     # Collected here because the names are the only thing that differs between
