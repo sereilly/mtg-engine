@@ -12,24 +12,24 @@ The measures are **ceilings**, the opposite direction to `GRAMMAR_COVERAGE.md`'s
 
 ## The headline
 
-**59 of 2824 supported cards (2.1%)** carry at least one name-keyed entry, across **65 entries** in 6 registries. The pool is 2824 cards, 100.0% supported.
+**58 of 2824 supported cards (2.1%)** carry at least one name-keyed entry, across **64 entries** in 6 registries. The pool is 2824 cards, 100.0% supported.
 
-Held at this rate, supporting the 26,113-card release line would need about **601 hand-written entries** covering **546 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
+Held at this rate, supporting the 26,113-card release line would need about **592 hand-written entries** covering **536 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
 
 ## By set
 
 | Set | Cards | Supported | Hooked cards | Rules lines | Hooked lines | Entries | Entries/100 supported |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 290 (100.0%) | 33 (11.4%) | 388 | 31 (8.0%) | 37 | 12.8 |
-| LEB | 292 | 292 (100.0%) | 33 (11.3%) | 389 | 31 (8.0%) | 37 | 12.7 |
-| 2ED | 292 | 292 (100.0%) | 33 (11.3%) | 389 | 31 (8.0%) | 37 | 12.7 |
+| LEA | 290 | 290 (100.0%) | 32 (11.0%) | 388 | 30 (7.7%) | 36 | 12.4 |
+| LEB | 292 | 292 (100.0%) | 32 (11.0%) | 389 | 30 (7.7%) | 36 | 12.3 |
+| 2ED | 292 | 292 (100.0%) | 32 (11.0%) | 389 | 30 (7.7%) | 36 | 12.3 |
 | ARN | 78 | 78 (100.0%) | 20 (25.6%) | 107 | 18 (16.8%) | 22 | 28.2 |
 | ATQ | 85 | 85 (100.0%) | 3 (3.5%) | 120 | 3 (2.5%) | 3 | 3.5 |
-| 3ED | 296 | 296 (100.0%) | 27 (9.1%) | 389 | 26 (6.7%) | 30 | 10.1 |
+| 3ED | 296 | 296 (100.0%) | 26 (8.8%) | 389 | 25 (6.4%) | 29 | 9.8 |
 | LEG | 310 | 310 (100.0%) | 2 (0.6%) | 430 | 2 (0.5%) | 2 | 0.6 |
 | DRK | 119 | 119 (100.0%) | 1 (0.8%) | 167 | 1 (0.6%) | 1 | 0.8 |
 | FEM | 102 | 102 (100.0%) | 0 (0.0%) | 190 | 0 (0.0%) | 0 | 0.0 |
-| 4ED | 368 | 368 (100.0%) | 19 (5.2%) | 520 | 18 (3.5%) | 21 | 5.7 |
+| 4ED | 368 | 368 (100.0%) | 18 (4.9%) | 520 | 17 (3.3%) | 20 | 5.4 |
 | ICE | 373 | 373 (100.0%) | 1 (0.3%) | 601 | 0 (0.0%) | 1 | 0.3 |
 | HML | 115 | 115 (100.0%) | 0 (0.0%) | 190 | 0 (0.0%) | 0 | 0.0 |
 | ALL | 144 | 144 (100.0%) | 0 (0.0%) | 251 | 0 (0.0%) | 0 | 0.0 |
@@ -39,8 +39,8 @@ Held at this rate, supporting the 26,113-card release line would need about **60
 | WTH | 167 | 167 (100.0%) | 0 (0.0%) | 249 | 0 (0.0%) | 0 | 0.0 |
 | TMP | 335 | 335 (100.0%) | 1 (0.3%) | 485 | 0 (0.0%) | 1 | 0.3 |
 | M21 | 285 | 285 (100.0%) | 0 (0.0%) | 503 | 0 (0.0%) | 0 | 0.0 |
-| STH *(measured)* | 143 | 97 (67.8%) | 0 (0.0%) | 150 | 0 (0.0%) | 0 | 0.0 |
-| **Whole pool (shipped, deduped)** | **2824** | **2824 (100.0%)** | **59 (2.1%)** | **4431** | **55 (1.2%)** | **65** | **2.3** |
+| STH *(measured)* | 143 | 100 (69.9%) | 0 (0.0%) | 154 | 0 (0.0%) | 0 | 0.0 |
+| **Whole pool (shipped, deduped)** | **2824** | **2824 (100.0%)** | **58 (2.1%)** | **4431** | **54 (1.2%)** | **64** | **2.3** |
 
 *(measured)* — STH are ingested for measurement and **not shipped**: `cards/manifest.json` lists them under `measured`, the engine's catalog does not load them, and no player can put one in a deck. They are reported here and excluded from the ALL row and from the ceilings, because a ratchet over a set nobody has implemented would fire on its composition rather than on anything anyone did. A measured set moves up to `sets` when it is fully supported.
 
@@ -50,7 +50,7 @@ Held at this rate, supporting the 26,113-card release line would need about **60
 
 | Registry | Cards | Entries |
 | --- | ---: | ---: |
-| `CARD_LINE_INSTRUCTIONS` | 54 | 55 |
+| `CARD_LINE_INSTRUCTIONS` | 53 | 54 |
 | `ON_LEAVE_BATTLEFIELD` | 6 | 6 |
 | `DRAW_STEP_MODIFIERS` | 1 | 1 |
 | `ON_SELF_RESOLVED` | 1 | 1 |
@@ -94,7 +94,6 @@ Held at this rate, supporting the 26,113-card release line would need about **60
 - **Jade Statue** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Jeweled Bird** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Kudzu** (`CARD_LINE_INSTRUCTIONS`) — 1 line
-- **Mana Short** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Metamorphosis** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Mijae Djinn** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Nafs Asp** (`CARD_LINE_INSTRUCTIONS`) — 1 line

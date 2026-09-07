@@ -339,11 +339,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         "may attach this aura to a land of their choice":
             _line("destroy_tapped_land_and_reoffer_aura", "triggered_destruction"),
     },
-    'Mana Short': {
-        'tap all lands target player controls and that player loses all unspent '
-        'mana':
-            _line('tap_target_player_lands_and_drain_mana', 'spell_pattern'),
-    },
     # Mana bought with the mana value of the creature its additional cost ate.
     # The cost itself is not the hook's — it is the general CR 601.2b table
     # (engine/cast_costs.py), paid while casting — so the key is the *effect*

@@ -381,6 +381,17 @@ def destroy_all_matching(game: Game, instruction: OracleInstruction, context: Or
     # An unresolvable seat ends the resolution, for the reason every relation
     # above ends it: a dropped narrowing on a sweep is not a card that does
     # less, it is one that takes the board.
+    # "Destroy all creatures **target player** controls." (Mogg Infestation;
+    # Simoon prints the same noun phrase with "opponent" and the damage sweep
+    # already hands it over.) A seat *this* resolution chose (CR 115.4), which
+    # no read of a permanent can supply — so it goes to the matcher, which
+    # refuses the word without one. Absent it, the phrase fell through the
+    # matcher's seat comparisons and the sweep took every creature on the table.
+    targeted_seat = (
+        game.players.index(context.target)
+        if context.target is not None and context.target in game.players
+        else None
+    )
     attacking_seat: int | None = None
     if filters.get("controller") == "that_player":
         frozen = frozen_that_player_seat(game, context)
@@ -400,6 +411,7 @@ def destroy_all_matching(game: Game, instruction: OracleInstruction, context: Or
         and subject_matches(
             game, perm, filters,
             observer=observer, source=context.source_permanent,
+            targeted_player=targeted_seat,
         )
         and (host is None or perm.metadata.get("attached_to") is host)
         and (event_name is None or perm.effective_card.name == event_name)

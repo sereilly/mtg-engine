@@ -106,11 +106,28 @@ def parse_excess_choice_paragraph(stream: TokenStream) -> "ast.Statement | None"
         stream.reset(mark)
         return None
     whose = parse_player_ref(stream)
-    if whose is None or whose.kind not in _EXCESS_COUNT_SEATS:
+    folded = False
+    if whose is None:
+        # "for each land **target player controls** in excess of …": the seat
+        # clause is inside the noun phrase, because ``parse_object_filter``
+        # reads "target player controls" as a controller narrowing — it has
+        # always read "target **opponent** controls" that way, and the wider
+        # noun arrived with Mogg Infestation. One printed phrase with two places
+        # it can be consumed, so the seat is lifted back off the filter here and
+        # both spellings build the same node. Left unread, this card's whole
+        # ability went unsupported the day the noun parser learned the word.
+        seat = counted.controller
+        if seat not in _EXCESS_COUNT_SEATS:
+            stream.reset(mark)
+            return None
+        whose = ast.PlayerRef(seat)
+        counted = dataclasses.replace(counted, controller=None)
+        folded = True
+    if whose.kind not in _EXCESS_COUNT_SEATS:
         stream.reset(mark)
         return None
     if not (
-        stream.accept_word("controls")
+        (folded or stream.accept_word("controls"))
         and stream.accept_phrase("in", "excess", "of", "the", "number", "you", "control")
         and stream.accept_punct(",")
         and stream.accept_word("choose")

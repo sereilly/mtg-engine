@@ -1519,29 +1519,27 @@ def create_token(game: Game, instruction: OracleInstruction, context: OracleExec
     who = payload.get("recipient_players")
     if who == "each_opponent":
         recipients = list(game.opponents_of(controller_index))
-    elif who == "target_opponent":
-        # "**Target** opponent creates …" (Phantasmal Sphere, Phelddagrif). The
-        # seat chosen when the ability went on the stack (CR 115.4), read off
-        # the context rather than guessed — with no target chosen there is
-        # nobody the card names, and creating the token for the controller
-        # instead would be the opposite of what it says.
-        chosen = context.target
-        recipients = [] if chosen is None else [game.seat_index(chosen)]
-    elif who == "each_player":
-        recipients = [i for i, p in enumerate(game.players) if not p.lost]
-    elif who == "target_opponent":
-        # "**Target opponent** creates a 1/1 green Hippo creature token."
-        # (Phelddagrif.) One chosen seat rather than every opponent, read the
-        # way every other targeted-seat handler reads it. A target that has
-        # left the game makes no token (CR 800.4a) rather than falling back to
-        # the controller, which would hand the tokens to the wrong side of the
-        # card's own drawback.
+    elif who in ("target_opponent", "that_player"):
+        # "**Target** opponent creates …" (Phantasmal Sphere, Phelddagrif) and
+        # "…**that player** creates …" (Mogg Infestation). One chosen seat
+        # rather than every opponent, read off the context rather than guessed:
+        # with no target chosen there is nobody the card names, and creating the
+        # token for the controller instead would be the opposite of what it
+        # says. A target that has left the game makes no token (CR 800.4a).
+        #
+        # One branch for both words because the seat is found the same way — the
+        # difference between them is which seats the *picker* offers, which is
+        # the ``targets`` description the lowering writes, not this lookup. This
+        # used to be two branches, the second of them unreachable behind the
+        # first, so the ``lost`` check it carried was never run.
         chosen = context.target
         recipients = (
             [game.players.index(chosen)]
             if chosen is not None and chosen in game.players and not chosen.lost
             else []
         )
+    elif who == "each_player":
+        recipients = [i for i, p in enumerate(game.players) if not p.lost]
     for seat in recipients:
       # The per-recipient count, evaluated here rather than above: "for each
       # untapped Forest **they** control" is a different number for each seat,

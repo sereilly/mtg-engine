@@ -96,6 +96,18 @@ def accept_seat_relation(stream: TokenStream, d) -> bool:
     if stream.accept_phrase("target", "opponent", "controls"):
         d.controller = "target_opponent"
         return True
+    # "Destroy all creatures **target player** controls." (Mogg Infestation.)
+    # The row above with CR 102's wider noun: the spell chooses a seat and the
+    # objects are described relative to it, so it is a targeted-seat key rather
+    # than a relative one — `subject_matches` already answers both under the
+    # same branch, and `targeting.py` already offers a player picker for it.
+    #
+    # Not folded into "target opponent": a player may be their own target
+    # (Mogg Infestation is printed to be aimed either way), and reading the
+    # narrower word would take a legal announcement away from the caster.
+    if stream.accept_phrase("target", "player", "controls"):
+        d.controller = "target_player"
+        return True
 
     # "Non-Wall creatures **the active player controls**" (Maddening Imp),
     # "Creatures **the active player controls**" (Siren's Call). CR 102.1: the

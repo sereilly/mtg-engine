@@ -10,7 +10,7 @@ unclaimed text. Do not edit by hand.
 - Fully claimed: **2822**
 - With acknowledged simplifications: **2**
 - With UNCLAIMED text (must fix or acknowledge): **0**
-- With deletion-probe findings (ignored words): **271**
+- With deletion-probe findings (ignored words): **272**
 
 ## Measured sets — reported, not gated
 
@@ -200,6 +200,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Magnetic Web | `all creatures with magnet counters on them block that creature this tu` | all |
 | Malignant Growth | `that player draws an additional card for each growth counter on this e` | additional enchantment, |
 | Mammoth Harness | `the other creature gains first strike until end of turn` | other |
+| Mana Short | `tap all lands target player controls and that player loses all unspent` | all |
 | Mana Vault | `if this artifact is tapped, it deals 1 damage to you` | artifact |
 | Mana Web | `tap all lands that player controls that could produce any type of mana` | all |
 | Marsh Gas | `all creatures get -2/-0 until end of turn` | all |
@@ -339,14 +340,14 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 
 | Channel | Sentences claimed |
 | --- | --- |
-| parse rule | 2695 |
+| parse rule | 2696 |
 | activation cost | 1196 |
 | trigger table | 807 |
 | static-line table | 676 |
 | keyword table | 596 |
 | aura enchant noun (oracle_instructions attach) | 198 |
 | activation_restrictions.py | 109 |
-| card_hooks bespoke (name-keyed) | 90 |
+| card_hooks bespoke (name-keyed) | 89 |
 | cast_costs.py | 47 |
 | loyalty cost | 33 |
 | oracle.py (modal trigger head) | 29 |

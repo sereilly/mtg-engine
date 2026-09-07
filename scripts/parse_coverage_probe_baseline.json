@@ -1033,6 +1033,13 @@
   ]
  },
  {
+  "card": "Mana Short",
+  "clause": "tap all lands target player controls and that player loses all unspent mana",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Mana Vault",
   "clause": "if this artifact is tapped, it deals 1 damage to you",
   "ignored": [

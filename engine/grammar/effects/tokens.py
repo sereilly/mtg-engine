@@ -202,6 +202,14 @@ _TOKEN_RECIPIENT_PREFIXES: tuple[tuple[tuple[str, ...], str], ...] = (
     (("each", "player"), "each_player"),
     (("each", "opponent"), "each_opponent"),
     (("target", "opponent"), "target_opponent"),
+    # "For each creature that died this way, **that player** creates two 1/1 red
+    # Goblin creature tokens." (Mogg Infestation.) Anaphoric rather than
+    # descriptive — the seat is the one an earlier sentence of the same spell
+    # targeted — which is the reading "**that player** discards a card" and
+    # "that player loses 1 life" already take on a spell, off the same
+    # resolution's own target. A row here rather than a fourth branch, because
+    # what differs from the three above is one string.
+    (("that", "player"), "that_player"),
 )
 
 

@@ -16,16 +16,16 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Set | Cards | Lines | Parsed | Lowered | Executed | Cards executing |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 388 | 86.3% | 84.8% | 48.2% | 170 |
-| LEB | 292 | 389 | 86.4% | 84.8% | 48.3% | 171 |
-| 2ED | 292 | 389 | 86.4% | 84.8% | 48.3% | 171 |
+| LEA | 290 | 388 | 86.6% | 85.1% | 48.5% | 171 |
+| LEB | 292 | 389 | 86.6% | 85.1% | 48.6% | 172 |
+| 2ED | 292 | 389 | 86.6% | 85.1% | 48.6% | 172 |
 | ARN | 78 | 108 | 77.8% | 74.1% | 51.9% | 46 |
 | ATQ | 85 | 120 | 90.8% | 90.8% | 63.3% | 68 |
-| 3ED | 296 | 389 | 88.4% | 86.4% | 50.6% | 177 |
+| 3ED | 296 | 389 | 88.7% | 86.6% | 50.9% | 178 |
 | LEG | 310 | 431 | 89.6% | 88.4% | 58.7% | 217 |
 | DRK | 119 | 167 | 96.4% | 96.4% | 73.7% | 101 |
 | FEM | 102 | 191 | 99.0% | 99.0% | 75.9% | 99 |
-| 4ED | 368 | 520 | 91.9% | 91.3% | 55.0% | 250 |
+| 4ED | 368 | 520 | 92.1% | 91.5% | 55.2% | 251 |
 | ICE | 373 | 601 | 89.5% | 89.0% | 63.4% | 301 |
 | HML | 115 | 189 | 93.7% | 93.7% | 65.1% | 93 |
 | ALL | 144 | 251 | 90.4% | 90.0% | 70.5% | 132 |
@@ -35,8 +35,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | WTH | 167 | 249 | 88.0% | 88.0% | 64.7% | 140 |
 | TMP | 335 | 478 | 92.1% | 91.8% | 65.5% | 271 |
 | M21 | 285 | 503 | 87.3% | 87.1% | 61.0% | 237 |
-| STH *(measured)* | 143 | 215 | 72.6% | 67.4% | 45.1% | 90 |
-| **All (shipped)** | **4587** | **6817** | **90.2%** | **89.5%** | **59.6%** | **3381** |
+| STH *(measured)* | 143 | 215 | 73.5% | 68.8% | 46.5% | 93 |
+| **All (shipped)** | **4587** | **6817** | **90.2%** | **89.5%** | **59.7%** | **3386** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
 
@@ -50,7 +50,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ---: | ---: | --- | --- |
 | 382 | 172 | expected a subject |  |
 | 109 | 54 | unrecognized effect verb |  |
-| 92 | 44 | unconsumed text |  |
+| 86 | 42 | unconsumed text |  |
 | 38 | 23 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 34 | unrecognized activation cost |  |
 | 13 | 8 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
@@ -76,7 +76,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 ## Cards executing through the grammar
 
-3381 cards, 4063 lines.
+3386 cards, 4068 lines.
 
 - **Abandon Hope**
   - `Look at target opponent's hand and choose X cards from it. That player discards those cards.`
@@ -3456,6 +3456,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Sacrifice this artifact: Add one mana of any color.`
 - **Lotus Vale**
   - `{T}: Add three mana of any one color.`
+- **Lowland Basilisk**
+  - `Whenever this creature deals damage to a creature, destroy that creature at end of combat.`
 - **Lure of Prey**
   - `You may put a green creature card from your hand onto the battlefield.`
 - **Maddening Imp**
@@ -3517,6 +3519,12 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}, {T}: Add one mana of any color.`
 - **Mana Severance**
   - `Search your library for any number of land cards, exile them, then shuffle.`
+- **Mana Short**
+  - `Tap all lands target player controls and that player loses all unspent mana.`
+  - `Tap all lands target player controls and that player loses all unspent mana.`
+  - `Tap all lands target player controls and that player loses all unspent mana.`
+  - `Tap all lands target player controls and that player loses all unspent mana.`
+  - `Tap all lands target player controls and that player loses all unspent mana.`
 - **Mana Vault**
   - `At the beginning of your upkeep, you may pay {4}. If you do, untap this artifact.`
   - `At the beginning of your draw step, if this artifact is tapped, it deals 1 damage to you.`
@@ -3764,6 +3772,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Mogg Hollows**
   - `{T}: Add {C}.`
   - `{T}: Add {R} or {G}. This land doesn't untap during your next untap step.`
+- **Mogg Infestation**
+  - `Destroy all creatures target player controls. For each creature that died this way, that player creates two 1/1 red Goblin creature tokens.`
 - **Mogg Maniac**
   - `Whenever this creature is dealt damage, it deals that much damage to target opponent or planeswalker.`
 - **Mogg Raider**
@@ -6308,6 +6318,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Put a -0/-1 counter on this creature: Add {G}. Activate only once each turn.`
 - **Wall of Runes**
   - `When this creature enters, scry 1. (Look at the top card of your library. You may put that card on the bottom.)`
+- **Wall of Tears**
+  - `Whenever this creature blocks a creature, return that creature to its owner's hand at end of combat.`
 - **Wall of Tombstones**
   - `At the beginning of your upkeep, change this creature's base toughness to 1 plus the number of creature cards in your graveyard. (This effect lasts indefinitely.)`
 - **Wall of Water**
