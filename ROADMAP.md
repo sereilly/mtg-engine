@@ -487,10 +487,14 @@ before citing it.**
   subject-group machinery could read a narrowing. Still standing for the
   trigger; the cost and effect halves stopped being covered by it in round 56,
   when two cards printed the narrowing.
-- **"Pay {X} life" as an additional cost** (Fire Covenant). X is announced as
-  the spell is cast (CR 601.2b) and this engine resolves it *after* additional
-  costs are charged, so a clause for it would charge zero. It stays in the
-  parse-coverage backlog, which is where an unimplemented cost belongs.
+- **Drained 2026-09-05, at VIS wave 4: "pay {X} life" as an additional cost.**
+  This bullet read "X is announced as the spell is cast (CR 601.2b) and this
+  engine resolves it *after* additional costs are charged, so a clause for it
+  would charge zero" — true when written, and untrue from the round that gave
+  the cast spec its X. Fire Covenant compiles supported and is cast with the
+  life paid. **The bullet aged the way a Known-gaps premise ages**: nothing
+  edited it, the work simply landed under a different heading (the cast-offer
+  picker), and a reader planning around "unimplemented" would have re-done it.
 
 ### Idioms these rounds established
 
@@ -827,19 +831,35 @@ applies to the rest of the core-set line.
 **Alliances shipped 2026-09-02** — the section below is its ingest estimate,
 kept because its predictions were graded in the retrospective.
 
-**Mirage shipped 2026-09-04** at index 13, **Visions 2026-09-05** at index 14
-and **Weatherlight 2026-09-05** at index 16. That closes the Mirage block, and
-with it the sequencing constraint this paragraph was written for: **6ED is now
-the next work set**, and its 152 new cards are the Mirage block's reprints,
-which is why it waited. A core set ingested before its sources arrives carrying
-cards nothing supports with their origins mis-stamped; all three sources now
-ship.
+**Mirage shipped 2026-09-04** at index 13, **Visions 2026-09-05** at index 14,
+**Weatherlight 2026-09-05** at index 16 and **Tempest 2026-09-06** at index 17.
 
-**Its row is stale and must be re-measured before it is planned.** The table
-above reads 53 new-and-unsupported at a lines-per-distinct-sentence of 1.00,
-measured against the post-HML compiler — five sets and roughly 1,500 grammar
-lines ago, and the last four re-fetches were each stale by the time they were
-read. Fetch it to a scratch directory (never `cards/`), and read **all five**
+**Which set is next is a rule, not a name, and this paragraph kept writing the
+name.** It has said "6ED is the next work set" since Weatherlight shipped, and
+Tempest shipping falsified it the same way 5ED shipping falsified ALL's "it
+appends" — nothing edited the sentence, the pool moved underneath it. So the
+rule, which does not expire:
+
+> Take the **earliest unshipped set by release date** whose reprint sources all
+> ship. A set ingested before a set it reprints from stamps those cards with the
+> wrong `original_printing`, and the prefix guard cannot see it (it compares
+> what is already there); `test_the_shipped_sets_are_in_printing_order` is the
+> assertion that can.
+
+Under that rule today the answer is **Stronghold** (1998-03-02, 143 printings,
+137 new to the release line) — the Tempest block's second set, whose source now
+ships. Exodus, Urza's Saga and Urza's Legacy follow it, and **6ED comes after
+all four**, not before: it is dated 1999-04-21, and the same "sources first"
+argument that made it wait for the Mirage block makes it wait for the Tempest
+and Urza ones. `set_progress.json` now reads **0 new cards** for it against the
+release line.
+
+**Every candidate row below is stale and must be re-measured before it is
+planned**, 6ED's most of all. The table reads 53 new-and-unsupported at a
+lines-per-distinct-sentence of 1.00, measured against the post-HML compiler —
+seven sets and several thousand grammar lines ago, and the last four re-fetches
+were each stale by the time they were read. Stronghold has **never** been
+measured here at all. Fetch it to a scratch directory (never `cards/`), and read **all five**
 instruments beside each other, not the refusal census alone: the fragment census
 found this set's spine where the sentence census read 1.03 and named nothing,
 `--hollow-lines` and `parse_coverage` between them added thirteen work-list

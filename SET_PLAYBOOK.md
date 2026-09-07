@@ -344,6 +344,32 @@ readers are no longer a short list somebody can hold in their head while adding
 a producer, which is the condition under which "safe by which cards exist"
 stops being safe.
 
+**Drained 2026-09-05, at VIS wave 1** (`09a5f9ad`), as the arity decision rather
+than as a bug fix, which is what the entry above asked for. The channel is
+**always a sequence**, read by `handlers/_common.recorded_permanent_ids` and
+nowhere else: a producer writing a bare id is read as a sequence of one, and the
+readers that want a single object go through a sibling that asserts it got one
+rather than normalising locally. Both local normalisations are gone.
+
+**And Visions found the half nobody had named, at wave 4.** Settling an arity is
+only half of settling a channel — the other half is the **element type**.
+Equipoise chose the right permanents and **phased out none of them**, logging "0
+permanent(s) phased out" while reporting supported with every sentence claimed
+and no hollow line, because `recorded_permanent_ids` filtered on
+`isinstance(entry, int)` while `chosen_this_way_objects` holds live `Permanent`s.
+A channel whose arity is settled and whose element type is not fails exactly the
+way the arity did: silently, on one card, in the direction of doing nothing.
+Whoever settles the next shared channel owes both questions in the same round.
+
+**This entry outlived its own drain by two sets, which is the process finding
+worth keeping.** It was drained at VIS wave 1 and went on being carried as open
+through the VIS, WTH and TMP retrospectives, each of which re-read it and left it
+— because a Known-gaps entry is read as a work item and nobody re-checks a work
+item's *premise* against the code. That is the same failure mode the alternative-
+cost entry hit from the other side (its premise "the set is measured" expired at
+a promotion). **Phase 6 owes each entry it carries forward a check that the entry
+is still true**, not just a check that its work is still undone.
+
 **Added at ALL's Phase 6: an optional cost has no picker, and two cost kinds now
 want the same one.** `web/_cost_picker_spec` models a **mandatory** additional
 cost — "you will pay {1}{R}" — and both of the optional kinds this engine has
@@ -528,6 +554,13 @@ which deeds are picker-answerable and a refusal for the rest, and it moves Fire
 and Brimstone's and Diseased Vermin's compiled programs, so it owes its own
 `oracle_diff` too.
 
+**This entry was written twice in one Phase 6**, once by wave 4 and once by the
+retrospective, and the two copies sat fifty lines apart under near-identical
+headings for three sets. The second said strictly less and neither pointed at
+the other, so a reader who found one had no way to know the other existed.
+**A Phase 6 that adds an entry reads the list first** — it is short enough to
+read and long enough to hide a duplicate in.
+
 Drained 2026-08-28: **the verification backlog is accepted as-is.** It sat here
 as the largest standing debt — 708 of 1,162 cards with no recorded in-game
 result, grown by four promotions — with derived `equivalent` named as the lever
@@ -576,16 +609,6 @@ seat is owed a prompt, because the game correctly waits (CR 608.2, CR 117.3b).
 One helper hung the whole suite the moment a card started announcing a trigger
 target. Drain the registry's default instead. Worth a sweep by whoever next
 writes one.
-
-**Added at VIS's Phase 6: `_PLAYER_DEEDS` has two rows and `PlayerRef` carries
-two more clauses as bools.** "Who attacked this turn" and `damaged_by_source`
-each have their own parse site and their own picker enforcement. Folding them in
-is one row plus a picker read — but the two existing `_PLAYER_DEEDS` kinds are
-*resolution-time* seat records that the picker cannot enforce, so a naive fold
-gives the picker one generic key it answers for one row and silently passes for
-the other two. That is an unenforced seat narrowing acting on every player,
-which is the exact failure the family exists to prevent. It needs a design
-decision, not a row.
 
 **Drained 2026-09-05, at WTH's wave 1: the cast-side "target opponent" offered
 the caster's own face.** W1G5 took it and the activation side with it, and fixed
