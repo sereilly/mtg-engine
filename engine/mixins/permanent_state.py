@@ -52,6 +52,10 @@ from ..land_animation import (
     LandAnimation,
     land_animation_from_payload,
 )
+from ..zone_copies import (
+    ZONE_TOP_COPY_KIND,
+    zone_top_copy_from_payload,
+)
 from ..cast_restrictions import CHOSEN_CARD_NAMES
 from ..land_types import (
     CHOSEN_LAND_TYPES,
@@ -1178,6 +1182,48 @@ class PermanentStateMixin:
             return None
         return candidate
 
+    def _refresh_zone_copies(self) -> None:
+        """Re-point every continuous copy whose source is a position in a zone.
+
+        "As long as the top card of your graveyard is a creature card, this
+        creature has the full text of that card…" (Volrath's Shapeshifter,
+        ``engine/zone_copies.py``.) CR 613 layer 1a, and the only layer-1 effect
+        in the pool with no moment to be recorded at — the answer changes when a
+        card is discarded, when a creature dies, when a spell finishes
+        resolving, with no trigger and no event.
+
+        So what is rebuilt here is only **where to look**: which seat's zone,
+        and what the card there has to be. ``copies.copiable_card`` resolves it
+        on every read, so a graveyard that changes between two recomputes is
+        seen immediately rather than at the next pass — which matters, because
+        nothing in this engine refreshes on a card entering a graveyard.
+
+        The static is read off ``recorded_copiable_card`` and never off
+        ``effective_card``. The copy replaces the permanent's rules text, so
+        reading the effective card would lose the ability that generated the
+        copy and drop it on the next pass — the effect would flicker on and off
+        one recompute at a time. CR 613.6 says the same thing from the rules
+        side: an effect that has started to apply keeps applying even if the
+        ability generating it is removed.
+        """
+        for perm in self.all_permanents():
+            copies.clear_derived_copy_sources(perm)
+        for seat, perm in self.permanents_with_controller():
+            program = compile_card_oracle(copies.recorded_copiable_card(perm))
+            for instr in program.instructions:
+                if instr.kind != ZONE_TOP_COPY_KIND:
+                    continue
+                copies.set_derived_copy_source(
+                    perm,
+                    # CR 109.5: "your" in an ability is its controller, which is
+                    # what makes this a *refresh* and not a one-time arming —
+                    # a permanent that changes controller starts reading the new
+                    # controller's graveyard on the next recompute.
+                    owner=self.players[seat],
+                    spec=zone_top_copy_from_payload(instr.payload),
+                    key=instr.kind,
+                )
+
     def _refresh_static_land_types(self, all_permanents: list[Permanent]) -> None:
         """Apply static basic-land-type changes (e.g. Conversion: "All Mountains
         are Plains."). Recomputed every call so a land reverts the moment the
@@ -1456,6 +1502,12 @@ class PermanentStateMixin:
 
     def _refresh_dynamic_creatures(self) -> None:
         all_permanents = list(self.all_permanents())
+        # **Layer 1 before everything else** (CR 613.1a): a permanent whose
+        # copiable values are read out of a zone has to be re-pointed before any
+        # line below reads its `effective_card`, because that read is what folds
+        # the copy in. Everything from here down — the land animations, the
+        # global statics, the lord buffs — starts from what layer 1 leaves.
+        self._refresh_zone_copies()
         # Clear the derived layer-7c channel this method rebuilds. Everything
         # contributed below is a *conditional* continuous effect, so it is
         # recomputed from the current board rather than adjusted incrementally.

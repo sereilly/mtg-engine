@@ -43,6 +43,7 @@ what a wrapper carries belongs beside what builds one.
 from ...lord_buffs import (LORD_BUFF_KIND)
 from ...enter_tapped_statics import ENTER_TAPPED_STATIC_KIND
 from ...land_animation import LAND_ANIMATION_KIND
+from ...zone_copies import ZONE_TOP_COPY_KIND
 from ...land_types import STATIC_LAND_TYPE_KIND, STATIC_SUPERTYPE_REMOVAL_KIND
 from .control_changes import BID_LIFE_FOR_CONTROL_KIND
 from .ownership import OWNERSHIP_INSTRUCTION_CATEGORIES
@@ -156,6 +157,14 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # above: nothing about it is a P/T contribution or a land, and the
     # consumer is the entry seam rather than a continuous recompute.
     ENTER_TAPPED_STATIC_KIND: "enter_statics",
+    # A permanent's continuous copy of a card at a **position in a zone**
+    # ("As long as the top card of your graveyard is a creature card, this
+    # creature has the full text of that card", Volrath's Shapeshifter). Its
+    # own category rather than any static above: it is CR 613 layer *1*, the
+    # sublayer that produces the copiable values every other layer starts from,
+    # and its consumer is `engine/copies.py`'s derived channel rather than a
+    # P/T refresh or an entry seam.
+    ZONE_TOP_COPY_KIND: "copy_statics",
     "set_base_pt_target_until_eot": "pump",
     # "…becomes a 3/3 Sphinx creature … until end of turn" (Riddleform).
     # The "pump" family, because what the sentence does is set a P/T — the

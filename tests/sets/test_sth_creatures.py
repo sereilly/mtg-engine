@@ -791,3 +791,173 @@ def test_g4_a_prose_mana_payment_with_no_rate_refuses_the_line():
             "Pay {1} for each +1/+1 counter on target creature: "
             "Regenerate this creature."
         )
+
+
+# --- W2G4: Volrath's Shapeshifter ---
+
+import pytest as _g4_pytest
+
+from engine import Game as _G4Game, PlayerState as _G4PlayerState
+from engine.models import Permanent as _G4Permanent
+from engine.oracle import compile_card_oracle as _g4_compile
+from engine.zone_copies import ZONE_TOP_COPY_KIND, zone_top_copy_for
+
+_G4_SHIFTER = "Volrath's Shapeshifter"
+_G4_DISCARD = "{2}: Discard a card."
+
+
+def _g4_rig(set_pool, top=()):
+    """A Shapeshifter on the battlefield with *top* already in its graveyard.
+
+    The graveyard is loaded oldest-first, so the last entry is the printed top
+    card (CR 404.1).
+    """
+    shifter = _G4Permanent(card=set_pool("STH")[_G4_SHIFTER])
+    shifter.metadata["summoning_sickness_turn"] = -99
+    seats = [
+        _G4PlayerState(name="P1", battlefield=[shifter], graveyard=list(top)),
+        _G4PlayerState(name="P2"),
+    ]
+    game = _G4Game(players=seats)
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    return game, seats, shifter
+
+
+def test_g4_volraths_shapeshifter_compiles_its_static_and_its_activated_line(set_pool):
+    """Both printed lines, and the static one carries the copy as data.
+
+    The card used to report `creature text too complex` on the static line while
+    its `{2}: Discard a card.` read fine — supported would have been the *wrong*
+    answer for it, because a card is supported when any of its lines is and the
+    line that makes it a card was the refused one.
+    """
+    program = _g4_compile(set_pool("STH")[_G4_SHIFTER])
+    assert program.supported
+    kinds = [instruction.kind for instruction in program.instructions]
+    assert ZONE_TOP_COPY_KIND in kinds
+    payload = next(
+        i.payload for i in program.instructions if i.kind == ZONE_TOP_COPY_KIND
+    )
+    assert payload["zone"] == "graveyard"
+    assert payload["card_type"] == "creature"
+    # The quoted grant is carried as printed text, capital and all, because it
+    # is compiled as an ordinary line wherever the copy puts it.
+    assert payload["grants_text"] == [_G4_DISCARD]
+    assert [a.source_line for a in program.activated_abilities] == [_G4_DISCARD]
+
+
+def test_g4_with_no_creature_on_top_it_is_its_printed_self(set_pool, catalog_by_name):
+    """An empty graveyard and a graveyard topped by a land are the same answer:
+    the condition is false and the printed 0/1 stands."""
+    game, seats, shifter = _g4_rig(set_pool)
+    assert shifter.effective_card.name == _G4_SHIFTER
+    assert (shifter.effective_power, shifter.effective_toughness) == (0, 1)
+
+    seats[0].graveyard.append(catalog_by_name["Mountain"])
+    assert shifter.effective_card.name == _G4_SHIFTER
+    assert (shifter.effective_power, shifter.effective_toughness) == (0, 1)
+
+
+def test_g4_a_creature_on_top_is_copied_whole(set_pool, catalog_by_name):
+    """Name, mana cost, type line, text, P/T and keywords — CR 707.2's whole
+    list, because the copy hands over every copiable value."""
+    game, seats, shifter = _g4_rig(set_pool, [catalog_by_name["Shivan Dragon"]])
+    copied = shifter.effective_card
+
+    assert copied.name == "Shivan Dragon"
+    assert copied.mana_cost == "{4}{R}{R}"
+    assert "Dragon" in copied.type_line
+    assert (shifter.effective_power, shifter.effective_toughness) == (5, 5)
+    assert game._has_keyword(shifter, "flying")
+    assert shifter.has_type("creature") and shifter.is_creature
+    assert "{R}: This creature gets +1/+0 until end of turn." in copied.oracle_text
+
+
+def test_g4_the_copy_follows_the_top_card_with_no_event(set_pool, catalog_by_name):
+    """The whole difficulty of this card in one assertion.
+
+    Nothing fires when a graveyard is reordered — no trigger, no event, no
+    state-based action — so a copy *recorded* at some moment would be whatever
+    the graveyard looked like at the last recompute. What is recorded here is
+    only where to look, and the answer is re-derived on every characteristic
+    read.
+    """
+    game, seats, shifter = _g4_rig(set_pool, [catalog_by_name["Grizzly Bears"]])
+    assert shifter.effective_card.name == "Grizzly Bears"
+
+    seats[0].graveyard.append(catalog_by_name["Shivan Dragon"])
+    assert shifter.effective_card.name == "Shivan Dragon"
+    assert (shifter.effective_power, shifter.effective_toughness) == (5, 5)
+
+    seats[0].graveyard.append(catalog_by_name["Lightning Bolt"])
+    assert shifter.effective_card.name == _G4_SHIFTER
+    assert (shifter.effective_power, shifter.effective_toughness) == (0, 1)
+
+    seats[0].graveyard.pop()
+    assert shifter.effective_card.name == "Shivan Dragon"
+
+
+def test_g4_the_discard_ability_survives_the_copy_and_feeds_it(
+    set_pool, catalog_by_name
+):
+    """The card's engine, driven: the granted "{2}: Discard a card." is on the
+    copy too, so discarding a creature card makes the Shapeshifter that
+    creature. Without CR 707.9a's grant the copy would eat the ability that
+    reloads it and the card would work exactly once."""
+    game, seats, shifter = _g4_rig(set_pool, [catalog_by_name["Grizzly Bears"]])
+    seats[0].hand = [catalog_by_name["Shivan Dragon"], catalog_by_name["Forest"]]
+    assert shifter.effective_card.name == "Grizzly Bears"
+
+    lines = [
+        a.source_line for a in _g4_compile(shifter.effective_card).activated_abilities
+    ]
+    assert _G4_DISCARD in lines
+    game.activate_permanent_ability(
+        0, _G4_SHIFTER, ability_index=lines.index(_G4_DISCARD)
+    )
+    game._settle()
+    assert game.confirm_discard(0, [0])
+
+    assert [c.name for c in seats[0].graveyard][-1] == "Shivan Dragon"
+    assert shifter.effective_card.name == "Shivan Dragon"
+    assert game._has_keyword(shifter, "flying")
+
+
+def test_g4_an_artifact_creature_card_is_a_creature_card(set_pool, catalog_by_name):
+    """CR 205.2b: an object satisfies any effect that applies to any of its card
+    types. ``CardDefinition.primary_type`` answers "artifact" for the artifact
+    creatures in this pool, so a reader asking it would leave Battering Ram on
+    top of a graveyard uncopied."""
+    ram = catalog_by_name["Battering Ram"]
+    assert "artifact creature" in ram.type_line.lower()
+    game, seats, shifter = _g4_rig(set_pool, [ram])
+    assert shifter.effective_card.name == "Battering Ram"
+
+
+@_g4_pytest.mark.parametrize(
+    "line",
+    [
+        # A rider the derivation would not perform.
+        "As long as the top card of your graveyard is a creature card, this "
+        "creature has the full text of that card and gains flying.",
+        # A pile whose owner is not the ability's controller.
+        "As long as the top card of an opponent's graveyard is a creature card, "
+        "this creature has the full text of that card.",
+        # A zone this engine keeps no order for.
+        "As long as the top card of your deck is a creature card, this creature "
+        "has the full text of that card.",
+        # A subtype where the sentence template wants a card type.
+        "As long as the top card of your graveyard is a Goblin card, this "
+        "creature has the full text of that card.",
+    ],
+)
+def test_g4_the_table_refuses_what_it_cannot_perform(line):
+    """The negative half, which is the half that finds the bug.
+
+    A derivation table that matched a prefix would let a card report supported
+    with the rest of its sentence silently unread — Mirage's
+    single-whitelist-word failure. Each of these differs from the template by
+    exactly one thing the engine would not do.
+    """
+    assert zone_top_copy_for(line) is None
