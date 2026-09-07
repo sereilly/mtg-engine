@@ -117,3 +117,63 @@ def test_w1g4_the_unmultiplied_printing_is_byte_identical():
 
     assert [i.kind for i in instructions] == ["deal_damage_equal_to_swamps"]
     assert instructions[0].payload == {}
+
+
+# --- W1G4 (cont.): a quoted ability granted to a described set --------------
+
+from engine.models import Permanent as _G4rPerm
+from engine.oracle import compile_card_oracle as _g4r_compile
+from engine.targeting import derive_cast_spec as _g4r_cast_spec
+
+
+def _g4r_creature(card):
+    """A creature already on the battlefield."""
+    permanent = _G4rPerm(card=card)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    return permanent
+
+
+def test_w1g4_resuscitate_grants_only_the_casters_creatures(set_pool):
+    """"Until end of turn, creatures you control gain "{1}: Regenerate this
+    creature.""
+
+    A *described* set rather than a chosen one: nothing is targeted, and the
+    board is walked as the effect resolves (CR 611.2c fixes the members then).
+    The same layer-6 addition ``grant_team_keyword_until_eot`` already makes
+    with a keyword, so it is the same kind with a filter on the payload — one
+    reader of what the noun phrase means, one place a quoted ability is
+    recorded.
+    """
+    exo, lea = set_pool("EXO"), set_pool("LEA")
+    mine, theirs = _g4r_creature(lea["Grizzly Bears"]), _g4r_creature(lea["Grizzly Bears"])
+    game, _p0, _p1 = _g4i_duel(mine=[mine], theirs=[theirs],
+                               hand=[exo["Resuscitate"]])
+
+    assert game.cast_from_hand(0, "Resuscitate").supported
+    _g4i_resolve(game)
+
+    granted = [
+        a.source_line for a in _g4r_compile(mine.effective_card).activated_abilities
+    ]
+    assert granted == ["{1}: Regenerate this creature"]
+    assert not (theirs.effective_card.oracle_text or "").strip(), (
+        '"you control" is a narrowing, and a dropped one would reach the table'
+    )
+
+    result = game.activate_permanent_ability(0, "Grizzly Bears", ability_index=0)
+    assert result.supported, result.details
+    _g4i_resolve(game)
+    assert any("regeneration shield" in line for line in game.log), game.log
+
+
+def test_w1g4_resuscitate_announces_no_target(set_pool):
+    """The Cleanse class, in the direction the picker sweep watches.
+
+    ``grant_target_ability_text`` serves four printings and only one of them
+    chooses; answering "creature" for a described set puts a picker in front of
+    a spell that targets nothing, and the prompt then aborts the cast on a
+    board with no creature at all.
+    """
+    resuscitate = set_pool("EXO")["Resuscitate"]
+
+    assert _g4r_cast_spec(resuscitate, _g4r_compile(resuscitate)) is None

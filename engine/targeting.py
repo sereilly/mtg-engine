@@ -1675,6 +1675,34 @@ def _counted_scope_spec(payload: dict) -> dict | None:
     return player_pronoun_spec(spec.get("owner"))
 
 
+def _ability_text_grant_spec(payload: dict) -> dict | None:
+    """Who a quoted-ability grant reaches is what decides whether it targets.
+
+    ``grant_target_ability_text`` serves four printings and only one of them
+    chooses: a named target (Life Matrix), the object the sentence in front of
+    it bound (Dreams of the Dead), the creatures an earlier step recorded
+    (Dread Wight) — and, since Resuscitate, a **described set** ("creatures you
+    control gain …"), which is CR 611.2c's board walked at resolution and
+    chooses nobody.
+
+    The same reading :func:`_forced_sacrifice_spec` makes one kind over, and the
+    same reason it has to be made here: only the payload can tell the printings
+    apart, and answering "creature" for all of them puts a picker in front of a
+    spell that targets nothing — the Cleanse class, where the prompt aborts the
+    cast on a board with no legal answer.
+
+    The two recorded readings are restated rather than left to the generic
+    fall-through, because a ``_KIND_TO_SPEC_FROM_PAYLOAD`` row is read
+    *instead of* it: a row that answered None for them would take Life Matrix's
+    picker away.
+    """
+    if payload.get("filter") is not None:
+        return None
+    if payload.get("permanents_from") or payload.get("on_block_pair"):
+        return None
+    return _from_targets_payload(payload.get("targets")) or {"kind": "creature"}
+
+
 def _control_gift_spec(payload: dict) -> dict | None:
     """"**Target opponent** gains control of this creature …" (Chaos Lord.)
 
@@ -1871,6 +1899,7 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     # inside a noun phrase, which is the only thing that separates this row
     # from the two sweeps above it.
     "draw_controller_cards": _counted_scope_spec,
+    "grant_target_ability_text": _ability_text_grant_spec,
     "give_control_of_source_to_player": _control_gift_spec,
     "choose_permanents": _chosen_from_target_player_spec,
     "target_gains_life": _life_gain_spec,

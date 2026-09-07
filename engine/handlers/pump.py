@@ -1854,6 +1854,39 @@ def grant_target_ability_text(game: Game, instruction: OracleInstruction, contex
         if not granted:
             game.log.append(f"{context.card.name}: nothing was left to grant to")
         return True, "resolved"
+    described = instruction.payload.get("filter")
+    if described is not None:
+        # "Until end of turn, **creatures you control** gain "{1}: Regenerate
+        # this creature."" (Resuscitate.) A described set, so the board is
+        # walked now and the members lock in (CR 611.2c) — the mirror of
+        # ``grant_team_keyword_until_eot`` above, which is the same layer-6
+        # addition with a keyword recorded instead of a line, and it is walked
+        # the same way for that reason: one reader of what the printed noun
+        # phrase means, with the caster as observer (CR 109.5), so "you
+        # control" here and on a keyword grant are one question.
+        from ..subject_filters import subject_matches
+
+        caster_index = game.players.index(context.caster)
+        seats = (
+            range(len(game.players))
+            if instruction.payload.get("every_seat")
+            else (caster_index,)
+        )
+        granted = 0
+        for seat in seats:
+            for permanent in game.controlled_by(seat):
+                if not subject_matches(
+                    game, permanent, described, observer=caster_index,
+                    source=context.source_permanent,
+                ):
+                    continue
+                _grant_ability_texts(game, permanent, instruction, context)
+                granted += 1
+        game.log.append(
+            f"{context.card.name}: {granted} permanent(s) gain "
+            + ", ".join(instruction.payload.get("abilities") or ())
+        )
+        return True, "resolved"
     target_creature = resolve_target_permanent(
         game, context, predicate=_target_grant_predicate(game, instruction, context)
     )

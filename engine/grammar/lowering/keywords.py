@@ -28,7 +28,8 @@ from ._common import (_describe_several_targets, _describe_targets, _filter_payl
                       _durationless_reason, _is_created_token, _is_landwalk,
                       _refuse_bare_chosen_ability,
                       _restrictions_beyond, _is_enchanted,
-                      _is_source, _is_target, _names_several_targets)
+                      _is_source, _is_target, _names_several_targets,
+                      testable_filter_payload)
 
 #: Where a landwalk whose land type is not printed reads that type from
 #: (Excavator: "landwalk of each of the land types of **the sacrificed land**").
@@ -724,6 +725,42 @@ def _lower_gain_ability_text(
         types = tuple(node.subject.filter.card_types)
         if types:
             payload["subject_types"] = types
+        return (OracleInstruction("grant_target_ability_text", "", payload),)
+    # "Until end of turn, **creatures you control** gain "{1}: Regenerate this
+    # creature."" (Resuscitate.) A *described* set rather than a chosen one:
+    # nothing is targeted, so no ``targets`` description is emitted and the
+    # board is read as the effect resolves (CR 611.2c fixes the set then).
+    #
+    # The same shape ``grant_team_keyword_until_eot`` already has one grant over
+    # — a keyword and a quoted ability are the same layer-6 addition and differ
+    # only in what is recorded — so this is the *same* kind with a filter on the
+    # payload rather than a second channel: ``_grant_ability_texts`` is already
+    # the one place a quoted ability is written, and a set is a loop around it,
+    # exactly as the bound plural above is.
+    #
+    # Every key of the printed phrase must be testable, because the receiver
+    # applies it with ``subject_matches``: a narrowing dropped here is a grant
+    # reaching creatures the sentence excludes.
+    if (
+        isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier in ("all", "each")
+        and not node.subject.targeted
+    ):
+        described = testable_filter_payload(
+            node.subject.filter,
+            refusal="a team grant cannot narrow by",
+            node=node,
+            require_narrowing=False,
+        )
+        # Whose creatures. "Creatures **you control**" is the caster's board and
+        # nothing else; a phrase naming no controller reaches every seat, which
+        # is the same pair of scopes the keyword grant reads and for its reason
+        # (Stampede is castable by the defending player).
+        payload["filter"] = {
+            key: value for key, value in described.items() if key != "controller"
+        }
+        if node.subject.filter.controller != "you":
+            payload["every_seat"] = True
         return (OracleInstruction("grant_target_ability_text", "", payload),)
     if not _is_target(node.subject):
         raise LoweringError("unsupported granted-ability subject", node=node)

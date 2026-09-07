@@ -182,6 +182,7 @@ from .library import (
 # wave — see that module's docstring for the line.
 from .reveal import (
     _parse_reveal_top,
+    accept_subject_reveals_top_of_library,
     parse_bin_revealed_card,
     parse_graveyard_top_opponent_chooses,
 )
@@ -347,6 +348,7 @@ __all__ = [
     "_parse_play_with_hand_revealed",
     "parse_exile_random_card_from_hand",
     "_parse_reveal_hand",
+    "accept_subject_reveals_top_of_library",
     "_parse_reveal_hand_and_choose",
     "_parse_exile_graveyard_position",
     "_parse_exile_top_of_library",

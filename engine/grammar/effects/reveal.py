@@ -563,3 +563,31 @@ def parse_graveyard_top_opponent_chooses(
         chosen_fate=_PICKED_CARD_FATES[verb],
         other_fate=_OTHER_CARD_FATES[other],
     )
+
+
+def accept_subject_reveals_top_of_library(
+    stream: TokenStream, subject: "ast.PlayerRef"
+) -> "ast.RevealTop | None":
+    """``<player> reveals the top card of their library`` — or None, unconsumed.
+
+    "At the beginning of the upkeep of enchanted creature's controller, **that
+    player reveals the top card of their library**." (Paroxysm.) The
+    subject-verb spelling of :func:`_parse_reveal_top`'s "of target opponent's
+    library", and it produces the **same node**: which library is opened is the
+    only thing that differs between the two printings, and the pool prints both
+    (Prophecy the imperative, Paroxysm the subject-verb). Two nodes would be two
+    places for "whose deck" to be answered.
+
+    The possessive is required to be "their", the back-reference to the subject
+    this production was handed. A sentence naming a second seat there
+    ("that player reveals the top card of **your** library") is a phrase nobody
+    prints and one this node cannot express — it carries one player — so it
+    refuses without consuming rather than opening the wrong deck.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("reveals", "reveal"):
+        return None
+    if not stream.accept_phrase("the", "top", "card", "of", "their", "library"):
+        stream.reset(mark)
+        return None
+    return ast.RevealTop(subject)

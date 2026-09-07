@@ -2157,6 +2157,46 @@ _PROTECTION_GRANT = re.compile(
 )
 
 
+#: "Enchanted creature gets +1/+1 and **is an artifact in addition to its other
+#: types**." (Transmogrifying Licid.) The same rider one level up the type
+#: hierarchy: `_TYPE_ADDITION_GRANT` above adds a creature *subtype* (CR 205.3),
+#: this adds a *card type* (CR 205.2), and both are CR 613 layer 4 additions
+#: that never replace.
+#:
+#: Its own pattern rather than a widened alternation in that one, because the
+#: two grants go into different fields of the same contribution — a subtype
+#: handed to ``card_types`` makes the permanent a "Knight" *type*, which nothing
+#: on any board is — and because the shapes differ: Dub prints a keyword between
+#: the P/T and the type where this prints nothing at all.
+#:
+#: The P/T half is deliberately not read here. ``_STATIC_PT_GRANT`` is an
+#: unanchored *search* for exactly this reason (see its comment): the two halves
+#: of one printed line live in two layers, and each is read by the reader that
+#: owns its layer.
+_CARD_TYPE_ADDITION_GRANT = re.compile(
+    rf"^{_ATTACHED} {_NOUN}(?: gets [+-]\d+/[+-]\d+ and)? is an? "
+    r"(?P<card_type>artifact|enchantment|land|creature) "
+    r"in addition to its other types$"
+)
+
+
+def aura_card_type_grants(oracle_text: str) -> tuple[str, ...]:
+    """Card **types** an Aura adds to what it enchants (CR 613 layer 4).
+
+    :func:`aura_type_grants`' twin one level up CR 205's hierarchy — a *card
+    type* (CR 205.2) rather than a creature subtype (CR 205.3) — and separate
+    because the two go into different fields of the contribution the layer
+    engine takes. "In addition to its other types" is the printed rider that
+    makes it an addition; nothing here ever replaces.
+    """
+    granted: list[str] = []
+    for raw_line in oracle_text.splitlines():
+        match = _CARD_TYPE_ADDITION_GRANT.match(_line_text(raw_line))
+        if match is not None:
+            granted.append(match.group("card_type"))
+    return tuple(granted)
+
+
 def aura_type_grants(oracle_text: str) -> tuple[str, ...]:
     """Creature subtypes an Aura *adds* to what it enchants (CR 613 layer 4).
 
@@ -2476,6 +2516,38 @@ def aura_animates_artifact(oracle_text: str) -> bool:
     )
 
 
+#: "**You control** enchanted creature." (Control Magic, Dominating Licid;
+#: Steal Artifact prints the same sentence one noun over.) CR 613 layer 2,
+#: derived from the attachment on every state-based pass rather than performed
+#: when an Aura *spell* resolves — which is the difference the Licids force. A
+#: Licid becomes an Aura through an activated ability and attaches through
+#: ``attach_source_to_target``; no Aura spell ever resolves, so the resolution-
+#: time reading reached it not at all.
+_ATTACHED_CONTROL_CHANGE = re.compile(rf"^you control {_ATTACHED} {_NOUN}$")
+
+
+def aura_grants_control(attachment) -> bool:
+    """Whether *attachment* says its controller controls what it is attached to.
+
+    Asked of the permanent rather than of a string, because the text that
+    matters is ``effective_card`` — a Licid's printed lines survive its type
+    change, and a copy or a text-changing effect is read here for the reason
+    every other derivation in this file reads it (CR 613 layers 1 and 3).
+
+    Read by the state-based sweep in ``mixins/game_ending.py`` in **both**
+    directions: it records the contribution while the attachment holds and ends
+    it when the attachment does not. That is why the claim in
+    :func:`aura_continuous_claim` is honest — the effect really is derived from
+    the Aura's own text on every pass, with no remembered delta to undo, which
+    is what the rest of this file means by "continuous".
+    """
+    text = attachment.effective_card.oracle_text or ""
+    return any(
+        _ATTACHED_CONTROL_CHANGE.match(_line_text(raw_line))
+        for raw_line in text.splitlines()
+    )
+
+
 # ---------------------------------------------------------------------------
 # Which lines the derivations above already account for
 # ---------------------------------------------------------------------------
@@ -2658,6 +2730,10 @@ def aura_continuous_claim(line: str) -> str | None:
         return "combat-damage shield — prevention._attached_combat_shield"
     if _PROTECTION_LINE.match(normalized):
         return "protection grant — auras.aura_protection_colors"
+    if _CARD_TYPE_ADDITION_GRANT.match(normalized):
+        return "card-type addition (layer 4) — auras.aura_card_type_grants"
+    if _ATTACHED_CONTROL_CHANGE.match(normalized):
+        return "control change (layer 2) — auras.aura_grants_control"
     if aura_animates_artifact(normalized):
         return "artifact animation (layers 4 and 7b) — auras.animating_auras"
     if aura_ability_cost_reduction(normalized):

@@ -620,12 +620,17 @@ class OracleInstructionsMixin:
             # untap step derives it from the attached Aura's own text
             # (auras.aura_restriction_active).
 
-            # Control effect: a CR 613 layer-2 contribution from this Aura
-            # (e.g. Control Magic). Recorded, not performed — the Aura leaving
-            # drops the contribution rather than restoring a remembered seat.
-            if "you control enchanted creature" in text:
-                if self.take_control(target_creature, caster_index, source=aura_permanent):
-                    self.log.append(f"{aura_permanent.card.name} took control of {target_creature.card.name}")
+            # The control effect is no longer read here. "You control enchanted
+            # creature" is a CR 613 layer-2 contribution *derived from the
+            # attachment* on every state-based pass
+            # (`auras.aura_grants_control`, swept in `mixins/game_ending.py`),
+            # which is what it always was in the rules and what this branch
+            # could only approximate: it fired when an Aura **spell** resolved,
+            # so a Licid — which becomes an Aura through an activated ability
+            # and attaches through `attach_source_to_target` — reached it not at
+            # all, and an Aura that changed hands kept naming the seat that cast
+            # it. The sweep answers both, in both directions, and this
+            # substring test would now record the same contribution twice.
 
             # P/T is no longer recorded here: it is derived from the Aura on
             # every recompute, so removal has nothing to subtract. What remains

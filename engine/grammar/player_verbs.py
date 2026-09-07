@@ -67,6 +67,7 @@ from .effects import (
     _parse_return,
     _parse_reveal_hand,
     _parse_sacrifice,
+    accept_subject_reveals_top_of_library,
     _parse_simultaneous_untap_and_tap,
     _parse_skip_step,
     _parse_tap_untap,
@@ -230,6 +231,15 @@ def parse_player_subject_verb(
         revealed = _parse_reveal_hand(stream, source_spec)
         if revealed is not None:
             return revealed
+        # "…, **that player reveals the top card of their library**."
+        # (Paroxysm.) The other object the verb takes, read here because the
+        # hand production above declines without consuming and said so — this
+        # is the reading it was leaving room for. The same node the imperative
+        # spelling produces ("Reveal the top card of target opponent's
+        # library", Prophecy), so which library is opened has one answer.
+        top = accept_subject_reveals_top_of_library(stream, source_spec)
+        if top is not None:
+            return top
     # "**Each player** returns all creature cards from their graveyard to
     # the battlefield." (All Hallow's Eve.) The return production with a
     # printed subject: only the bare imperative ("Return target creature

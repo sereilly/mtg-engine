@@ -327,7 +327,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | parse rule | 2823 |
 | activation cost | 1255 |
 | trigger table | 839 |
-| static-line table | 732 |
+| static-line table | 740 |
 | keyword table | 621 |
 | aura enchant noun (oracle_instructions attach) | 204 |
 | activation_restrictions.py | 112 |
@@ -336,13 +336,13 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | loyalty cost | 33 |
 | oracle.py (modal trigger head) | 29 |
 | cost_modifiers.py | 24 |
-| auras.py (attached effect) | 22 |
+| auras.py (attached effect) | 20 |
 | mixin text scan | 16 |
-| aura static (oracle_instructions/permanent_state) | 15 |
 | activation_permissions.py | 11 |
 | special_actions.py (permanent offer) | 11 |
 | cast_timing.py (granted flash) | 10 |
 | cast_timing.py (cleanup sacrifice rider) | 10 |
+| aura static (oracle_instructions/permanent_state) | 9 |
 | oracle.py (delayed trigger) | 8 |
 | alternative_costs.py | 7 |
 | draw_step_modifiers.py | 5 |

@@ -3140,6 +3140,34 @@ class PermanentStateMixin:
         for source_perm, buff in gathered:
             observer = self.controller_index_of(source_perm)
             for target_perm in _reached_by(source_perm, buff):
+                if buff.per_shared_creature_type:
+                    # "Each creature gets +1/+1 **for each other creature on
+                    # the battlefield that shares at least one creature type
+                    # with it**." (Coat of Arms.) The one scale in this family
+                    # counted **per buffed creature** rather than off the
+                    # source: the set it counts is defined by a relation to the
+                    # creature being buffed, so two creatures under the same
+                    # Coat of Arms take different numbers and the multiply
+                    # cannot be lifted out of this loop the way
+                    # ``per_counter``'s is.
+                    #
+                    # Zero shared types is no contribution rather than a zero
+                    # one, exactly as the per-counter branch above treats an
+                    # empty artifact: the buff carries only a P/T delta, so
+                    # there is nothing else it could still be giving.
+                    scale = self._creatures_sharing_a_type_with(target_perm)
+                    if scale <= 0:
+                        continue
+                    _add_static_buff(
+                        target_perm,
+                        replace(
+                            buff,
+                            power=buff.power * scale,
+                            toughness=buff.toughness * scale,
+                        ),
+                        observer,
+                    )
+                    continue
                 _add_static_buff(target_perm, buff, observer)
 
         # Step 3: conditional self-grants — the keyword half of "…as long as
@@ -3196,6 +3224,48 @@ class PermanentStateMixin:
         "chosen_color_permanent": "_chosen_color_permanent_condition",
         "chosen_color_most_common": "_chosen_color_most_common_condition",
     }
+
+    def _creatures_sharing_a_type_with(self, permanent: Permanent) -> int:
+        """How many *other* creatures on the battlefield share a creature type
+        with *permanent* (Coat of Arms).
+
+        Types through the layer accessor, not the printed line: a Clone, an
+        animated land given a creature type and a Magical Hack's rewritten word
+        are all CR 613 layer 4, and Coat of Arms counts what a permanent *is*
+        rather than what it was printed as. ``computed_types`` is the same
+        reader ``has_type`` goes through, so the answer here and the answer to
+        "is this a Goblin?" cannot disagree.
+
+        Every battlefield, because the printed phrase names no controller — the
+        sentence says "on the battlefield", which in a two-seat game is both of
+        them.
+
+        A creature with no creature types at all shares nothing and is counted
+        by nobody, which is the printed card: a typeless token under a Coat of
+        Arms gets +0/+0.
+        """
+        # Function-level, like the LAND_TYPES read one method family over: the
+        # vocabulary is loaded from `data/vocabulary/` and this module is
+        # imported by the grammar's own consumers.
+        from ..grammar.vocabulary import CREATURE_TYPES as CREATURE_TYPE_WORDS
+        from ..layer_bridge import computed_types
+
+        mine = {
+            subtype for subtype in computed_types(permanent)[1]
+            if subtype in CREATURE_TYPE_WORDS
+        }
+        if not mine:
+            return 0
+        total = 0
+        for other in self.all_permanents():
+            if other is permanent or not other.is_creature:
+                continue
+            if mine & {
+                subtype for subtype in computed_types(other)[1]
+                if subtype in CREATURE_TYPE_WORDS
+            }:
+                total += 1
+        return total
 
     def _lord_buff_condition(
         self, seat: int, source_perm: Permanent, condition: str | dict
