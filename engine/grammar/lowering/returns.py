@@ -21,9 +21,9 @@ from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
 from ._events import _back_reference_payload
-from ._bound_returns import (_graveyard_to_hand_payload,
-                             _reads_no_return_restriction,
-                             lower_untargeted_return)
+from ._bound_returns import lower_untargeted_return
+from ._described_returns import (_graveyard_to_hand_payload,
+                                 _reads_no_return_restriction)
 from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS, _describe_targets, _is_target,
     _restrictions_beyond, _describe_several_card_targets,
@@ -280,8 +280,12 @@ def _lower_return_to_zone(
                 "return_creature_from_graveyard_to_hand", "", several_cards
             ),
         )
-    # Every reading that needs no target — the event named the object, it is
-    # the ability's own source, or it is a described sweep — is the floor's.
+    # Every reading that needs no target is the floors'. `_bound_returns`
+    # takes the ones that name their object by reference — the event recorded
+    # it, or it is the ability's own source — and hands the rest down to
+    # `_described_returns`, whose object is a set the sentence describes and
+    # the board decides. One call either way: they are one
+    # printed-specificity order split across two files, not two contracts.
     # It answers None only for an object a player chooses, which is the
     # targeted path below; a refusal raised in there is final.
     untargeted = lower_untargeted_return(node, subject, event, produced)

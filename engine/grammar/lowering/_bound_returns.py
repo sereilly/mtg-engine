@@ -1,108 +1,54 @@
-"""The **floor** of the return family: a return whose object nothing targets.
+"""A return whose object the sentence names by **reference**.
 
-Split off `returns.py` at the line that file already drew. A sentence names the
-object it returns in one of three ways and only one of them is a target: the
-firing event recorded it ("return **that card**"), it is the ability's own
-source ("return **this card**"), or it is a description the handler sweeps
-("return **all** Auras attached to..."). Everything here is one of those three;
-the moment a player chooses the object, `returns` handles it.
+Split off `returns.py` at the line that file already drew: a return whose
+object nothing targets, against one a player chooses (CR 115). Split again at
+Exodus' Phase 0, when the readings underneath it had reached 989 lines with two
+of the wave's groups due to land here — this half keeps the readings that
+*name* their object, and `_described_returns` took the ones that describe it.
 
-That distinction is why the refusals in here are so narrow. An untargeted
-return has no index to read, so each reading is bound to the one event whose
-fire site actually records what it needs. Under any other event the pronoun
-names a card nobody wrote down — the handler would find nothing, and the card
-would compile supported and do nothing, which is the failure the gates below
-exist to refuse rather than to perform.
+There are two references and the module is named for both. The firing event
+recorded the object ("return **that card**", "return **it**"), or it is the
+ability's own source ("return **this card**"). Either way the object was fixed
+before this sentence ran, so nothing is matched and nothing is picked: the only
+question left is where that object is *now*, and the answer is a seat, a zone
+and a rider — never a filter. Which is why every narrowing check below is a
+**refusal** rather than a payload. The noun phrase restates the reference (CR
+109.5: "this creature" is the word the card happens to call itself by), and an
+adjective beyond the restatement is one no handler here reads. Not one branch
+in this file carries a filter to a handler; every branch in the other file
+does.
+
+That distinction is also why these refusals are so narrow. An untargeted return
+has no index to read, so each *event*-bound reading is bound to the one event
+whose fire site actually records what it needs. Under any other event the
+pronoun names a card nobody wrote down — the handler would find nothing, and
+the card would compile supported and do nothing, which is the failure the gates
+below exist to refuse rather than to perform.
 
 A floor rather than a second family, because `returns` is its only reader and a
 family may not import a sibling; `_sweeps` sits beside `_common` on the same
-footing. The two predicates at the top are here for the same reason: both
-halves of the split ask them.
+footing. It reads `_described_returns`, and nothing reads back: the last thing
+:func:`lower_untargeted_return` does is hand the sentence down to the described
+half, so one call still covers every untargeted reading in printed-specificity
+order and `returns`' call site did not move.
 """
 
 from __future__ import annotations
 
-import dataclasses
-
-from ...oracle_types import CHOSEN_THIS_WAY_OBJECTS, OracleInstruction
-from ...subject_filters import untestable_filter_keys
+from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
 from ._deaths import BOUND_CARD_EVENTS
 from ._delays import _BOUND_OBJECT_DELAYED_EVENTS
-from ._events import (CHOSEN_PERMANENT as _ATTACH_HOST_KEY,
-                      EVENT_SUBJECT_OWNER, _EVENT_SUBJECT_OWNERS)
+from ._described_returns import lower_described_return
+from ._events import CHOSEN_PERMANENT as _ATTACH_HOST_KEY
 from ._common import (
-    _PAYLOAD_HONOURED_FILTER_FIELDS,
-    chargeable_card_filter,
-    _filter_payload,
     _is_attached_host_pronoun,
-    _is_enchanted,
     _is_source,
     _restrictions_beyond,
     _source_return_reach,
 )
 
-
-def _reads_no_return_restriction(filt: ast.ObjectFilter) -> bool:
-    """Whether *filt* carries a narrowing none of the zone-change handlers reads.
-
-    All three take their whole instruction from the card: two read an empty
-    payload and the third reads one boolean. So any adjective beyond the card
-    type is invisible to them, and a filter carrying one has to refuse — "return
-    target *black* creature card from your graveyard to your hand" lowered to
-    Raise Dead's instruction would happily return a white one.
-    """
-    tri_state = (filt.tapped, filt.attacking, filt.blocking, filt.blocked)
-    return bool(
-        filt.supertypes or filt.subtypes or filt.colors or filt.excluded_colors
-        or filt.excluded_types or filt.excluded_subtypes or filt.with_keywords
-        or filt.without_keywords or filt.controller or filt.power or filt.toughness
-        or filt.mana_value or filt.named or filt.other_than_source
-        or filt.is_source or filt.is_enchanted
-        or any(state is not None for state in tri_state)
-    )
-
-
-def _graveyard_to_hand_payload(filt: ast.ObjectFilter) -> dict[str, object]:
-    """The card-type half of a graveyard-to-hand return's payload.
-
-    One function because the one-card and several-card branches have to narrow
-    *identically*: the named card type is a filter the handler applies, so it is
-    carried rather than collapsed - reading "artifact card" as "any card" would
-    let Reconstruction return a creature. A *union* ("instant or sorcery card",
-    Shipwreck Dowser) travels as its own additive key, so Raise Dead's payload
-    stays byte-identical. Two copies of this is how "up to two target artifact
-    cards" ends up returning a creature.
-    """
-    # "Return target **Griffin** card from your graveyard to your hand."
-    # (Mtenda Griffin.) A printed subtype, carried the way the reanimation's
-    # colours are: its own additive key, tested by the same
-    # ``graveyard_card_matches`` the picker and the cast gate ask, so a payload
-    # written before this is byte-identical. Only the targeted graveyard-to-hand
-    # branch lifts it out of ``_reads_no_return_restriction``; every other
-    # caller here still refuses a subtype at that gate, so the key is absent for
-    # all of them.
-    subtypes = {"graveyard_subtypes": list(filt.subtypes)} if filt.subtypes else {}
-    # "…return a **basic** land card from your graveyard to your hand."
-    # (Harvest Wurm.) CR 205.4a's supertype, carried on the key
-    # ``graveyard_card_matches`` already reads — it was written for Lodestone
-    # Bauble's "basic land cards" and asks the printed type line, which for a
-    # card in a graveyard is the whole of what there is (CR 613.1). Additive
-    # like the subtype above, so every payload written before this is
-    # byte-identical, and lifted out of ``_reads_no_return_restriction`` only by
-    # the branch whose handler asks that predicate.
-    if filt.supertypes:
-        subtypes = {**subtypes, "supertypes": list(filt.supertypes)}
-    if len(filt.card_types) > 1:
-        return {
-            "any_card": False,
-            "card_type": None,
-            "card_types": list(filt.card_types),
-            **subtypes,
-        }
-    card_type = filt.card_types[0] if filt.card_types else None
-    return {"any_card": card_type is None, "card_type": card_type, **subtypes}
 
 
 def _returns_itself_to_the_battlefield(node: "ast.ReturnToZone", subject) -> bool:
@@ -133,6 +79,7 @@ def _returns_itself_to_the_battlefield(node: "ast.ReturnToZone", subject) -> boo
     )
 
 
+
 def lower_untargeted_return(
     node: ast.ReturnToZone,
     subject,
@@ -145,6 +92,10 @@ def lower_untargeted_return(
     which is `returns`' half. A `LoweringError` raised in here is final: it
     means the shape *is* one of these readings and the engine has no handler
     for this variant of it.
+
+    The referencing readings are here and the describing ones are one module
+    over, and the tail call at the bottom is what keeps that a *file* boundary
+    rather than a change of contract: one call, one order, one answer.
     """
     # "Return **that card** to its owner's hand." (Puppet Master.) The bound
     # object: the card of the creature whose death fired the trigger, which by
@@ -608,382 +559,9 @@ def lower_untargeted_return(
         return (
             OracleInstruction("return_source_card_to_battlefield", "", payload),
         )
-    # "…you may return **an** instant or sorcery card from your graveyard to
-    # your hand." (Experimental Overload.) Chosen but not targeted (CR 115.1):
-    # the card is in the chooser's own graveyard, so there is nothing for
-    # targeting to protect — no shroud, no protection, no "changes target"
-    # effect can reach it — and the picker the targeted spelling already uses is
-    # the same picker. Admitted only in that shape: a *bare* quantifier over
-    # anyone else's zone, or over the battlefield, still refuses.
-    if (
-        isinstance(subject, ast.TargetSpec)
-        and subject.quantifier == "a"
-        and subject.count == 1
-        and subject.filter.is_card
-        and subject.filter.zone == "graveyard"
-        and subject.filter.zone_owner is not None
-        and subject.filter.zone_owner.kind == "you"
-        and node.to.name == "hand"
-        and node.to.owner is not None
-        and node.to.owner.kind == "you"
-    ):
-        # The supertype is lifted out of the blanket refusal here because this
-        # is the branch whose handler asks ``graveyard_card_matches``, which
-        # tests it — everywhere else in this file the gate still refuses one,
-        # and a phrase whose adjective no reader tests is a return wider than
-        # the card prints.
-        if _reads_no_return_restriction(
-            dataclasses.replace(subject.filter, supertypes=())
-        ):
-            raise LoweringError("no return handler honours this restriction", node=node)
-        return (
-            OracleInstruction(
-                "return_creature_from_graveyard_to_hand", "",
-                _graveyard_to_hand_payload(subject.filter),
-            ),
-        )
-    # "Return a creature card from **its owner's** graveyard to the battlefield
-    # **under the control of that creature's owner**." (Reincarnation.)
-    #
-    # Both possessives name one player and it is neither of the two a return
-    # normally knows: not the chooser (CR 608.2c makes that the ability's
-    # controller, who picks the card) and not the card's own owner in the
-    # tautological sense (CR 404.2 puts every card in its owner's graveyard, so
-    # that reading would admit every graveyard on the table). They name the
-    # object *this sentence is about* — the creature the delayed ability was
-    # bound to — which is why this shape is admitted only under an event whose
-    # fire site actually froze that owner. Under any other trigger the words
-    # name a player nobody recorded.
-    #
-    # It lowers to the ordinary open-zone pick, with the two seats as payload:
-    # the picker, the AI and the resolver all read them through
-    # `engine.search_filters.searched_seat` / `landing_seat`, so one answer
-    # decides whose graveyard is shown and whose battlefield receives.
-    if (
-        isinstance(subject, ast.TargetSpec)
-        and subject.quantifier == "a"
-        and subject.count == 1
-        and subject.filter.is_card
-        and subject.filter.zone == "graveyard"
-        and subject.filter.zone_owner is not None
-        and subject.filter.zone_owner.kind == "owner"
-        and node.to.name == "battlefield"
-        and node.under_control_of is not None
-        and node.under_control_of.kind == "owner"
-    ):
-        if event not in _EVENT_SUBJECT_OWNERS:
-            raise LoweringError(
-                "\"its owner\" names the object this sentence is about, and no "
-                "trigger here recorded one",
-                node=node,
-            )
-        if node.entering_tapped or _reads_no_return_restriction(subject.filter):
-            raise LoweringError("no return handler honours this restriction", node=node)
-        if len(subject.filter.card_types) != 1:
-            raise LoweringError("the graveyard pick reads one card type", node=node)
-        return (
-            OracleInstruction(
-                "search_library", "",
-                {
-                    "zones": ("graveyard",),
-                    "card_type": subject.filter.card_types[0],
-                    "destination": "battlefield",
-                    "zone_owner": EVENT_SUBJECT_OWNER,
-                    "battlefield_owner": EVENT_SUBJECT_OWNER,
-                },
-            ),
-        )
-    # "Return to your hand all enchantments you both own and control" (Remove
-    # Enchantments). A *sweep* bounce: not one chosen object but every
-    # permanent a noun phrase names, which is the bounce path below with the
-    # picker taken out — same destination, same CR 400.3 owner's hand, same
-    # question about whether the narrowing can be tested.
-    #
-    # Held to the two gates the targeted bounce is held to, and for the reason
-    # a sweep makes louder: a narrowing dropped from a pick returns the wrong
-    # permanent, and a narrowing dropped from a sweep returns the table.
-    if (
-        isinstance(subject, ast.TargetSpec)
-        and subject.quantifier in ("all", "each")
-        and not subject.targeted
-        and node.to.name == "hand"
-        and node.from_zone is None
-        and not subject.filter.is_card
-        and subject.filter.zone == "battlefield"
-    ):
-        if node.entering_tapped or node.under_control_of or node.repetitions:
-            raise LoweringError("the sweep bounce reads no rider", node=node)
-        filt = subject.filter
-        attached_referent: str | None = None
-        # "…all white Auras you own **attached to it**" (Word of Undoing). A
-        # relation rather than a characteristic, so it rides beside the filter
-        # the way the sweep *destroy* already carries it (Turn to Slag) — and
-        # it is honoured here rather than left in the unread set, because a
-        # dropped attachment relation on a sweep returns every white Aura on
-        # the board rather than the ones on the creature.
-        unread = _restrictions_beyond(
-            filt, _PAYLOAD_HONOURED_FILTER_FIELDS | {
-                "attached_to", "attached_to_target",
-            }
-        )
-        if unread:
-            raise LoweringError(
-                "the sweep bounce cannot read " + ", ".join(sorted(unread)), node=node
-            )
-        swept = _filter_payload(filt)
-        untestable = untestable_filter_keys(swept)
-        if untestable:
-            raise LoweringError(
-                "the sweep bounce cannot test " + ", ".join(sorted(untestable)),
-                node=node,
-            )
-        if filt.attached_to is not None:
-            # Added **after** the testability check, because it is not a key
-            # ``subject_matches`` answers: no read of the Aura alone can say
-            # what it is attached to, so the handler resolves the referent and
-            # compares hosts by identity — the same split ``exclude_self``
-            # makes, and the same one the sweep destroy already makes for this
-            # very key.
-            #
-            # Only the referent the resolution can name. "source" is a
-            # permanent's own attachments (Rabid Wombat's count clause);
-            # `rebinding` points the pronoun at the sentence's target where one
-            # was chosen, so what arrives here is "target" — and anything else
-            # refuses rather than sweeping the board.
-            if filt.attached_to != "target":
-                raise LoweringError(
-                    "the sweep bounce resolves an attachment to the spell's "
-                    f"target, not to the {filt.attached_to}", node=node,
-                )
-            attached_referent = filt.attached_to
-        host_target: dict[str, object] | None = None
-        if filt.attached_to_target is not None:
-            # "Return all Auras attached to **target permanent you own** to
-            # their owners' hands." (Scarab of the Unseen.) The same relation
-            # the referent above carries, with this spell choosing the host
-            # instead of pointing at a host an earlier clause chose — so the
-            # handler resolves it exactly the same way (``attached_to:
-            # "target"``, compared by id) and the only extra thing this shape
-            # owes is the target *description*, which is what the picker offers.
-            # Without it the ability targets a permanent no picker names, and
-            # the sweep would find nothing on a host nobody chose.
-            if attached_referent is not None:
-                raise LoweringError(
-                    "the sweep bounce names one host, not a referent and a "
-                    "target", node=node,
-                )
-            attached_referent = "target"
-            host_target = {
-                "quantifier": "target",
-                "kind": "object",
-                "filter": _filter_payload(filt.attached_to_target),
-            }
-        # Every permanent goes to *its owner's* hand (CR 400.3), which is what
-        # the handler does whatever the card printed. "…to your hand" is
-        # therefore only the same sentence when the noun phrase says you own
-        # them — the distinction Obelisk of Undoing already makes for the
-        # targeted bounce, and the one that matters the moment a permanent has
-        # been stolen.
-        owner_ref = node.to.owner
-        if owner_ref is None or owner_ref.kind not in ("owner", "you"):
-            raise LoweringError("the sweep bounce returns a permanent to its owner", node=node)
-        if owner_ref.kind == "you" and filt.owner != "you":
-            raise LoweringError(
-                "\"to your hand\" is not \"to its owner's hand\" unless the "
-                "phrase says you own it", node=node,
-            )
-        bounce_payload: dict[str, object] = {"filter": swept}
-        if attached_referent is not None:
-            # Beside the filter, never inside it: the handler resolves the
-            # referent and compares hosts by identity, and a key inside the
-            # filter would reach ``subject_matches``, which has no answer for it.
-            bounce_payload["attached_to"] = attached_referent
-        if host_target is not None:
-            bounce_payload["targets"] = host_target
-        return (OracleInstruction("return_all_matching", "", bounce_payload),)
-    # "**Each player** returns all creature cards from their graveyard to the
-    # battlefield." (All Hallow's Eve.) A sweep *reanimation*: every card a
-    # noun phrase names, out of a graveyard and onto the battlefield, with
-    # nothing chosen and nothing targeted.
-    #
-    # Who returns them is the whole difference between this card and a card
-    # that wins the game, so the actor and the graveyard's owner are checked
-    # **against each other** rather than either being read alone: "each player
-    # … from their graveyard" is one claim said twice, and a pairing this
-    # cannot resolve refuses instead of picking one half.
-    if (
-        isinstance(subject, ast.TargetSpec)
-        and subject.quantifier in ("all", "each")
-        and not subject.targeted
-        and subject.filter.is_card
-        and subject.filter.zone == "graveyard"
-        and node.to.name == "battlefield"
-        and node.to.owner is None
-    ):
-        if (
-            node.entering_tapped
-            or node.under_control_of
-            or node.repetitions
-            or node.also_stack
-        ):
-            raise LoweringError("the sweep reanimation reads no rider", node=node)
-        actor = node.actor.kind if node.actor is not None else None
-        owner = (
-            subject.filter.zone_owner.kind
-            if subject.filter.zone_owner is not None
-            else None
-        )
-        if actor == "each_player" and owner in ("owner", "each_player"):
-            who = "each_player"
-        elif actor is None and owner == "you":
-            who = "you"
-        else:
-            raise LoweringError(
-                "the sweep reanimation reads \"each player … their graveyard\" "
-                "or an unnamed subject over your own",
-                node=node,
-            )
-        # Through the *card* gate every other printed card phrase runs through,
-        # with the zone taken off first: the zone is read above, by this
-        # production, and leaving it on would make the shared gate refuse a
-        # phrase it can answer. Everything else — the narrowing, the keys the
-        # card matcher cannot test — is that gate's answer and not a second
-        # copy of it here.
-        scoped = dataclasses.replace(
-            subject.filter, zone="battlefield", zone_owner=None
-        )
-        swept = chargeable_card_filter(scoped)
-        if swept is None:
-            raise LoweringError(
-                "the sweep reanimation cannot read this card phrase", node=node
-            )
-        return (
-            OracleInstruction(
-                "return_all_cards_from_graveyard", "",
-                {"filter": swept, "who": who},
-            ),
-        )
-    # "{W}: Return **enchanted creature** to its owner's hand." (Sun Clasp.)
-    # The Aura's own attachment, which CR 303.4b names rather than chooses — so
-    # there is no target, no picker and nothing in the resolution context to
-    # read. Its own instruction kind for `destroy_attached_permanent`'s reason
-    # one family over: what the handler has to *find* is different from every
-    # other bounce here, and a payload flag on the targeted kind would leave a
-    # handler that resolves an index looking for one nobody collected.
-    #
-    # The card types are honoured because on this phrase they are not a
-    # restriction: "enchanted creature" is the Aura's enchant clause said again
-    # (CR 303.4a), and an Aura attached to something its own clause excludes has
-    # already been swept away by CR 704.5m. Any *other* narrowing refuses —
-    # dropping one would bounce a permanent the sentence spared.
-    if (
-        _is_enchanted(subject)
-        and node.from_zone is None
-        and node.to.name == "hand"
-        and node.to.owner is not None
-        and node.to.owner.kind == "owner"
-    ):
-        assert isinstance(subject, ast.TargetSpec)
-        if node.entering_tapped or node.under_control_of or node.repetitions:
-            raise LoweringError("the attached bounce reads no rider", node=node)
-        leftovers = _restrictions_beyond(
-            subject.filter, frozenset({"is_enchanted", "card_types"})
-        )
-        if leftovers:
-            raise LoweringError(
-                f"the attached bounce does not honour {leftovers[0]!r}", node=node
-            )
-        return (OracleInstruction("return_attached_permanent_to_hand", "", {}),)
-    # "Return **a creature you control** to its owner's hand." (Shrieking Drake,
-    # Stampeding Wildebeests.) "…**two Forests** you control to their owner's
-    # hand" (Bull Elephant), "…**three basic lands** you control" (Ovinomancer),
-    # "…**an untapped Island** you control" (the Karoo land cycle, Waterspout
-    # Djinn) — one production, the count and the noun phrase as data.
-    #
-    # Chosen, not targeted (CR 115.1): the sentence names a set on the
-    # controller's own battlefield and the controller picks out of it, so
-    # nothing is announced, nothing is re-checked at CR 608.2b, and shroud
-    # cannot save a permanent from its own controller's hand. That makes it the
-    # pick-then-act pair three other lowering families already emit
-    # (`tapping`'s Koskun Falls price, `counters`, `destruction`): the prompt
-    # records which permanents, the step behind it acts on the record.
-    #
-    # Narrow on purpose, and every clause below is load-bearing:
-    #
-    # * the quantifier is an article or a bare count — "target" is `returns`'
-    #   bounce and "all" is the sweep above, and reading either here would take
-    #   a picker away from a card that prints one;
-    # * `controller == "you"` is what makes this a price the offered seat pays,
-    #   which is the question `_action_is_takeable` puts in front of the
-    #   "sacrifice it unless you return …" offer;
-    # * every remaining key must be one `subject_matches` answers, or the
-    #   prompt would offer permanents the printed phrase excludes — "an
-    #   **untapped** Island" being exactly that.
-    if (
-        isinstance(subject, ast.TargetSpec)
-        and subject.quantifier in ("a", "an")
-        and not subject.targeted
-        and not subject.filter.is_card
-        and subject.filter.zone == "battlefield"
-        and subject.filter.controller == "you"
-        and node.from_zone is None
-        and node.to.name == "hand"
-        and node.to.owner is not None
-        and node.to.owner.kind == "owner"
-    ):
-        if (
-            node.entering_tapped
-            or node.under_control_of
-            or node.repetitions
-            or node.also_stack
-            or node.attached_to is not None
-        ):
-            raise LoweringError("the chosen bounce reads no rider", node=node)
-        # The seat clause is read *here* — it becomes the prompt's
-        # ``controlled_by`` — so it is taken off the filter rather than left on
-        # it, exactly as the tap price one family over does. Leaving it would
-        # be the one narrowing named twice, and a phrase named twice is a
-        # phrase two readers are free to disagree about.
-        described = _filter_payload(
-            dataclasses.replace(subject.filter, controller=None)
-        )
-        untestable = untestable_filter_keys(described)
-        if untestable:
-            raise LoweringError(
-                "the chosen bounce cannot test " + ", ".join(sorted(untestable)),
-                node=node,
-            )
-        count = int(subject.count or 1)
-        return (
-            OracleInstruction(
-                "choose_permanents", "",
-                {
-                    "result_key": CHOSEN_THIS_WAY_OBJECTS,
-                    "chooser": "you",
-                    # Off the *chooser's* own battlefield, which is what "you
-                    # control" says — named once as the seat asked and once as
-                    # the board drawn from.
-                    "controlled_by": "chooser",
-                    "filter": described,
-                    "up_to": count,
-                    # **A floor as well as a ceiling**, and this is the half
-                    # "up to two Plains" never needed. The printed count here
-                    # is indivisible: returning one of Bull Elephant's two
-                    # Forests is not paying its price, and a prompt that
-                    # accepted one would let the Elephant stay for half of what
-                    # it costs. CR 601.2h asks what a player is *able* to do,
-                    # and a partial answer is not one of them.
-                    "at_least": count,
-                    "prompt": (
-                        "Choose a permanent to return to its owner's hand."
-                        if count == 1 else
-                        f"Choose {count} permanents to return to their "
-                        "owners' hands."
-                    ),
-                },
-            ),
-            OracleInstruction(
-                "return_recorded_permanents_to_hand", "",
-                {"permanents_from": CHOSEN_THIS_WAY_OBJECTS},
-            ),
-        )
+    # Everything past here names its object by describing it — a set swept
+    # whole, or a set the controller picks out of — which is
+    # `_described_returns`' question and not this one. Handed down rather than
+    # returned to `returns`, so the printed-specificity order stays one list in
+    # one place and the caller keeps one call.
+    return lower_described_return(node, subject, event)
