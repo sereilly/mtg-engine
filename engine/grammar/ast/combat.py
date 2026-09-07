@@ -398,7 +398,15 @@ class BlocksThisTurnIfAble:
     which attacker they must block*. "Blocks **each attacking creature**"
     (Blaze of Glory) is the same sentence with the second half unnarrowed, and
     is read by its own whole-card production today.
+
+    ``attacker`` is ``None`` where the sentence names none — "That creature
+    **blocks this turn if able**" (Provoke). That is the weakest CR 509.1c
+    requirement rather than a missing half: the creature must block *something*
+    it legally can, which is exactly what Watchdog's printed static says. It is
+    optional on the node rather than a second node because everything else
+    about the sentence is identical, and a reader that forgot the distinction
+    would be handed ``None`` rather than silently aiming at the source.
     """
 
     subject: Recipient
-    attacker: Recipient
+    attacker: "Recipient | None" = None

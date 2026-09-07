@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 from ._common import (recorded_permanent_ids, 
     attached_host,
+    bound_permanent,
     block_pair_permanents,
     flip_coin,
     resolve_own_combatant,
@@ -24,6 +25,7 @@ from ..combat_permissions import (ADDITIONAL_BLOCKS_UNTIL_EOT,
                                   ATTACK_AS_THOUGH_NO_DEFENDER,
                                   CANT_ATTACK_UNTIL_EOT,
                                   CANT_BLOCK_ATTACKERS_UNTIL_EOT,
+                                  MUST_BLOCK_UNTIL_EOT,
                                   CANT_BLOCK_UNTIL_EOT)
 from ..pt import add_pt_modifier
 from ..rampage import rampage_bonus
@@ -763,6 +765,64 @@ def force_target_to_attack_until_eot(game: Game, instruction: OracleInstruction,
         return True, "resolved"
     chosen.metadata["must_attack_until_eot"] = True
     game.log.append(f"{chosen.card.name} must attack this turn if able")
+    return True, "resolved"
+
+
+@effect_handler("force_bound_to_attack_until_eot")
+def force_bound_to_attack_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"This artifact deals 1 damage to target creature. **That creature**
+    attacks this turn if able." (Bullwhip.)
+
+    The same CR 508.1a requirement as the targeted kind above, on the object an
+    earlier step of this resolution already acted on rather than on a second
+    choice. ``bound_permanent`` is the reader every "that creature" goes
+    through, so a requirement inside a loop names the iteration's object and one
+    outside it names the ability's own target (CR 601.2c) -- and no picker is
+    involved either way, which is the whole difference from the kind above.
+
+    No noun phrase is re-tested: the sentence in front of this one already found
+    the creature, and asking again would be a second reading of one choice.
+    Whether it is still a creature is the requirement's own business -- the mark
+    means nothing on a permanent that cannot attack, and "if able" is what makes
+    that harmless.
+    """
+    chosen = bound_permanent(game, context)
+    if chosen is None:
+        game.log.append(
+            f"{context.card.name}: nothing left for the attack requirement"
+        )
+        return True, "resolved"
+    chosen.metadata["must_attack_until_eot"] = True
+    game.log.append(f"{chosen.card.name} must attack this turn if able")
+    return True, "resolved"
+
+
+@effect_handler("force_bound_to_block_until_eot")
+def force_bound_to_block_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Untap target creature you don't control. **That creature blocks this
+    turn if able.**" (Provoke.)
+
+    CR 509.1c's weakest requirement, for one turn, on the creature the sentence
+    in front of this one untapped: block *something* it legally can. The
+    narrowed kind below records **which** attacker is owed; this one records
+    only that a block is, which is why it is a flag rather than a list -- there
+    is no pair here, and an empty list would compel nobody.
+
+    ``bound_permanent`` is the reader every "that creature" goes through, so
+    the pronoun means the ability's own target outside a loop and the
+    iteration's object inside one, and no picker is involved either way.
+
+    Nothing is re-tested: the untap in front of it already found the creature,
+    and "if able" is what makes the mark harmless on one that cannot block.
+    """
+    chosen = bound_permanent(game, context)
+    if chosen is None:
+        game.log.append(
+            f"{context.card.name}: nothing left for the block requirement"
+        )
+        return True, "resolved"
+    chosen.metadata[MUST_BLOCK_UNTIL_EOT] = True
+    game.log.append(f"{chosen.card.name} blocks this turn if able")
     return True, "resolved"
 
 

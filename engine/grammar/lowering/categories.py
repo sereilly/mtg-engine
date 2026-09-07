@@ -735,6 +735,8 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # same CR 508.1a requirement on a creature the caster chose rather
     # than on the effect's own source.
     "force_target_to_attack_until_eot": "combat_restrictions",
+    "force_bound_to_attack_until_eot": "combat_restrictions",
+    "force_bound_to_block_until_eot": "combat_restrictions",
     # "**Non-Wall creatures the active player controls** attack this turn if
     # able." (Maddening Imp.) The same CR 508.1a requirement over every creature
     # a printed noun phrase describes — the mirror of the block twin two rows

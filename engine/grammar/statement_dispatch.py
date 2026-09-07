@@ -135,6 +135,7 @@ from .lowering import (
 #: matched a given node.
 from .statement_dispatch_naming import lower_naming_statement
 from .by_node import (_BY_NODE_TYPE, _BY_NODE_TYPE_WITH_EVENT,
+                      _BY_NODE_TYPE_WITH_EVENT_AND_PRODUCED,
                       _BY_NODE_TYPE_WITH_PRODUCED)
 
 
@@ -213,6 +214,11 @@ def lower_statement(
     lowering = _BY_NODE_TYPE_WITH_PRODUCED.get(type(statement))
     if lowering is not None:
         return lowering(statement, produced)
+    # …and the fourth: a node carrying two pronouns, one answered by the firing
+    # event and one by the records (see `_BY_NODE_TYPE_WITH_EVENT_AND_PRODUCED`).
+    lowering = _BY_NODE_TYPE_WITH_EVENT_AND_PRODUCED.get(type(statement))
+    if lowering is not None:
+        return lowering(statement, event, produced)
 
     # "Sacrifice **it** unless you pay its mana cost reduced by {2}" (Flash).
     # In the chain rather than in the name-only table above because the pronoun

@@ -17,6 +17,7 @@ from ..combat_permissions import (ADDITIONAL_BLOCKS_UNTIL_EOT,
                                   CAN_BLOCK_ANY_NUMBER_UNTIL_EOT,
                                   MUST_BLOCK_ALL_UNTIL_EOT,
                                   MUST_BLOCK_ATTACKERS_UNTIL_EOT,
+                                  MUST_BLOCK_UNTIL_EOT,
                                   CANT_BLOCK_ATTACKERS_UNTIL_EOT,
                                   CANT_BLOCK_UNTIL_EOT)
 from ..combat_restrictions import declaration_company_required, participation_cap
@@ -476,7 +477,12 @@ class DeclareBlockersStepMixin:
             if assignments.get(blocker_idx):
                 continue
             program = compile_card_oracle(blocker.effective_card)
-            if not any(
+            # And the granted half (Provoke): a requirement a spell put on this
+            # one creature for the turn, swept by the cleanup step. Read beside
+            # the three above because all four answer the same question — must
+            # this creature block *something*? — and a reader that knew only
+            # three of them would let the fourth through.
+            if not blocker.metadata.get(MUST_BLOCK_UNTIL_EOT) and not any(
                 i.kind == "must_block_each_combat" for i in program.instructions
             ) and not aura_restriction_active(
                 blocker, "must_block_each_combat"

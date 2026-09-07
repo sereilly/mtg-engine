@@ -72,3 +72,15 @@ MUST_BLOCK_ATTACKERS_UNTIL_EOT = "must_block_attackers_until_eot"
 #: hold; by id because an index is renumbered by anything leaving the
 #: battlefield and a returning permanent is a new object (CR 400.7).
 CANT_BLOCK_ATTACKERS_UNTIL_EOT = "cant_block_attackers_until_eot"
+
+#: "That creature blocks this turn if able." (Provoke.) CR 509.1c's **weakest**
+#: requirement for one turn: block *something* — any one attacker this creature
+#: can legally block — where ``MUST_BLOCK_ATTACKERS_UNTIL_EOT`` names which
+#: attacker and Blaze of Glory's flag names all of them.
+#:
+#: A flag rather than a list, and that is the difference itself: the
+#: requirement is about the creature and not about a pair, so there is no id to
+#: keep and a second copy of the spell asks for nothing more. It is the
+#: one-turn twin of Watchdog's printed static, read at the same place in the
+#: declare-blockers step so the two cannot come to mean different things.
+MUST_BLOCK_UNTIL_EOT = "must_block_until_eot"

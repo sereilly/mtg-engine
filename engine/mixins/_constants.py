@@ -6,14 +6,11 @@ from ..combat_permissions import (ADDITIONAL_BLOCKS_UNTIL_EOT,
                                   ATTACK_AS_THOUGH_NO_DEFENDER,
                                   CAN_BLOCK_ANY_NUMBER_UNTIL_EOT,
                                   CANT_ATTACK_UNTIL_EOT,
-    # "Target creature can't block **this creature** this turn." (Duct
-    # Crawler.) The denial twin of MUST_BLOCK_ATTACKERS_UNTIL_EOT below,
-    # and swept for its reason: the list is the whole of "this turn".
-    CANT_BLOCK_ATTACKERS_UNTIL_EOT,
                                   CANT_BLOCK_ATTACKERS_UNTIL_EOT,
                                   CANT_BLOCK_UNTIL_EOT,
                                   MUST_BLOCK_ALL_UNTIL_EOT,
-                                  MUST_BLOCK_ATTACKERS_UNTIL_EOT)
+                                  MUST_BLOCK_ATTACKERS_UNTIL_EOT,
+                                  MUST_BLOCK_UNTIL_EOT)
 from ..damage_events import (DAMAGE_DENIES_REGENERATION,
                              DAMAGE_EXILES_INSTEAD)
 from ..next_damage import NEXT_DAMAGE_KEYS
@@ -54,6 +51,11 @@ _EOT_METADATA_KEYS = (
     # for its reason: the list of forbidden attackers is the whole of "this
     # turn", and one nothing cleared would follow the creature all game.
     CANT_BLOCK_ATTACKERS_UNTIL_EOT,
+    # "That creature blocks this turn if able." (Provoke.) The unaimed
+    # requirement, swept with the turn like every other one-turn combat mark —
+    # a flag nothing cleared would oblige the creature to block every combat
+    # for the rest of the game.
+    MUST_BLOCK_UNTIL_EOT,
     # "That creature can block up to two additional creatures **this turn**."
     # (Yare.) The sweep is the duration: the record is a count on the permanent
     # and nothing else ends it.

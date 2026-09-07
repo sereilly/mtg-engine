@@ -922,6 +922,14 @@ def _parse_blocks_this_turn_if_able(
     mark = stream.mark()
     if not stream.accept_word("blocks", "block"):
         return None
+    # "That creature **blocks this turn if able**." (Provoke.) No attacker at
+    # all — the weakest CR 509.1c requirement, and the one Watchdog prints as a
+    # static: block *something* you legally can. Read first, on the words
+    # themselves, because the two recipient readers below would otherwise be
+    # asked to decline "this" as a noun and the sentence would refuse at the
+    # wrong place.
+    if stream.accept_phrase("this", "turn", "if", "able"):
+        return ast.BlocksThisTurnIfAble(subject, None)
     attacker = parse_recipient(stream)
     if attacker is None:
         # "…block **that creature** this turn if able" (Magnetic Web). A
