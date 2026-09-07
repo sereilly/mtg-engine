@@ -767,7 +767,11 @@ class LegalityMixin:
         answered = {str(key): int(value) for key, value in (taken or {}).items()}
         offers: list[dict] = []
 
-        for cost in alternative_costs(card):
+        # Printed **and** granted (Dream Halls' board-wide offer), through the
+        # one reader the announcement's check and the CR 601.2h gate also ask:
+        # an offer this picker could not describe is a price no client can take,
+        # which is the whole of what the alternative-cost prompt exists for.
+        for cost in self.applicable_alternative_costs(caster_index, card):
             entry: dict = {
                 "kind": "alternative",
                 "label": cost.describe(),
@@ -775,9 +779,13 @@ class LegalityMixin:
                     caster_index, card, cost, spell_hand_index=spell_hand_index,
                 ) is None,
             }
-            if cost.exile_from_hand is not None:
+            if (
+                cost.exile_from_hand is not None
+                or cost.discard_from_hand is not None
+            ):
                 payers = self._alternative_cost_payers(
                     caster_index, cost, spell_hand_index=spell_hand_index,
+                    spell=card,
                 )
                 # By hand *position*, because that is what the wire carries and
                 # what CR 601.2a's withholding is expressed in: a deck repeats

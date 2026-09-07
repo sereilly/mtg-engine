@@ -46,6 +46,7 @@ from __future__ import annotations
 import re
 
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import TYPE_CHECKING
 
 from .oracle_types import _COLOR_WORD_TO_SYMBOL
@@ -74,6 +75,25 @@ class AlternativeCost:
     #: free one, so this is checked before anything is spent.
     pay_life: int = 0
     exile_from_hand: tuple[dict, ...] | None = None
+    #: "…its controller may **discard a card** that shares a color with that
+    #: spell." (Dream Halls.) The same tuple-of-payloads vocabulary
+    #: ``exile_from_hand`` one field up carries, one destination over -- and its
+    #: own field for that field's reason: a discarded card is in a graveyard
+    #: afterwards and an exiled one is not, and a spell may read either back.
+    #: ``None`` means "no discard", never "any card".
+    discard_from_hand: tuple[dict, ...] | None = None
+    #: "…a card **that shares a color with that spell**." (Dream Halls.) A
+    #: relation between the card paying and the spell being cast, which no
+    #: filter payload can express: ``card_matches_any`` tests one card against a
+    #: description, and this asks about two objects at once (CR 105.2, CR
+    #: 202.2).
+    #:
+    #: Its own flag rather than a colour list, because *which* colours answer is
+    #: not knowable until a spell is being cast -- and a colourless spell shares
+    #: a colour with nothing, so it simply cannot be paid for this way. Dropped,
+    #: the cost would let any card in hand pay for any spell, which is the
+    #: cheaper direction a cost must never drift in.
+    shares_color_with_spell: bool = False
     #: "You may **sacrifice two Mountains** rather than pay this spell's mana
     #: cost." (Fireblast, and the same cycle's Snuff Out one colour over.) The
     #: same ``(filter, count)`` pair ``cast_costs.AdditionalCost`` carries, read
@@ -120,6 +140,14 @@ class AlternativeCost:
         parts = []
         if self.pay_life:
             parts.append(f"pay {self.pay_life} life")
+        if self.discard_from_hand is not None:
+            parts.append(
+                f"discard {_a_card_answering(self.discard_from_hand)}"
+                + (
+                    " that shares a color with it"
+                    if self.shares_color_with_spell else ""
+                )
+            )
         if self.exile_from_hand is not None:
             parts.append(f"exile {_a_card_answering(self.exile_from_hand)} from your hand")
         if self.sacrifice_filter is not None:
@@ -182,6 +210,34 @@ _EXILE_GRAVEYARD_POSITION = re.compile(r"^exile (the (?:top|bottom) .+)$")
 
 _PAY_LIFE = re.compile(r"^pay (\d+) life$")
 
+#: "…its controller may **discard a card that shares a color with that
+#: spell**." (Dream Halls.) The noun phrase is delimited here and *read* by
+#: ``oracle._chargeable_discard_filters``, exactly as the exile clause above
+#: delimits its own -- a regex approximating the noun parser is a second reader
+#: of one phrase.
+#:
+#: The colour relation is part of the pattern rather than of the noun, because
+#: it is not a property of the card at all: it is a comparison between the card
+#: paying and the spell being cast, and no filter payload can hold it.
+_DISCARD_FROM_HAND = re.compile(
+    r"^discard (?P<noun>.+?)"
+    r"(?P<sharing> that shares a color with that spell)?$"
+)
+
+#: "**Rather than pay the mana cost for a spell, its controller may** discard a
+#: card that shares a color with that spell." (Dream Halls.)
+#:
+#: CR 118.9's alternative cost granted from a **board** rather than printed on
+#: the spell, which is the whole of what makes it a different reader: every
+#: sentence ``_ALTERNATIVE_COST_PREAMBLE`` matches is about the card it is
+#: printed on ("*this spell's* mana cost"), and this one is about every spell
+#: anybody casts. The relationship is ``cost_modifiers``' to ``cast_costs``, one
+#: rule over.
+_GRANTED_ALTERNATIVE_COST = re.compile(
+    r"^rather than pay the mana cost for a spell, its controller may "
+    r"(?P<costs>.+)$"
+)
+
 #: The printed word for each colour symbol, for :meth:`AlternativeCost.describe`
 #: alone. Inverted from ``oracle_types._COLOR_WORD_TO_SYMBOL`` rather than
 #: written out, so the two spellings of one mapping cannot drift.
@@ -231,6 +287,8 @@ def _read_cost_clauses(costs: str) -> dict | None:
     fields: dict = {
         "pay_life": 0,
         "exile_from_hand": None,
+        "discard_from_hand": None,
+        "shares_color_with_spell": False,
         "sacrifice_filter": None,
         "sacrifice_count": 1,
         "exile_graveyard_position": None,
@@ -282,6 +340,28 @@ def _read_cost_clauses(costs: str) -> dict | None:
                 return None
             fields["exile_from_hand"] = named
             continue
+        # "**discard a card that shares a color with that spell**" (Dream
+        # Halls). The hand's other destination, read through the same noun
+        # reader the exile above uses so what may pay a printed discard is one
+        # answer wherever the discard is printed. The colour relation is
+        # carried rather than folded into the filter, because it is a question
+        # about *two* objects and a filter describes one.
+        discarded = _DISCARD_FROM_HAND.match(clause)
+        if discarded is not None:
+            if fields["discard_from_hand"] is not None:
+                # Two discard clauses would need two alternatives lists and one
+                # field cannot hold two; folded together they would read as a
+                # union, which is a strictly cheaper cost than the two printed.
+                return None
+            named = _chargeable_discard_filters(discarded.group("noun"))
+            if named is None:
+                # The phrase names something the payment path cannot enumerate
+                # or cannot test. Refused whole rather than charged as the part
+                # that was read -- the all-or-nothing rule above.
+                return None
+            fields["discard_from_hand"] = named
+            fields["shares_color_with_spell"] = bool(discarded.group("sharing"))
+            continue
         # "**sacrifice two Mountains**" (Fireblast). Read through the additional
         # cost's own reader, never a second split of the same words: the two
         # rules print one clause, and a phrase admitted here that
@@ -306,6 +386,7 @@ def _read_cost_clauses(costs: str) -> dict | None:
     if (
         not fields["pay_life"]
         and fields["exile_from_hand"] is None
+        and fields["discard_from_hand"] is None
         and fields["sacrifice_filter"] is None
         and fields["exile_graveyard_position"] is None
     ):
@@ -360,6 +441,69 @@ def alternative_costs(card: CardDefinition) -> tuple[AlternativeCost, ...]:
     return tuple(found)
 
 
+@lru_cache(maxsize=None)
+def granted_alternative_cost(oracle_text: str) -> "AlternativeCost | None":
+    """The alternative cost this permanent grants **every spell**, or None.
+
+    "Rather than pay the mana cost for a spell, its controller may discard a
+    card that shares a color with that spell." (Dream Halls.) The board-wide
+    twin of :func:`alternative_cost_for_line`, and its own reader for
+    ``cost_modifiers``' reason one rule over: a printed cost is a property of
+    the card being cast and a granted one is a property of a permanent on some
+    battlefield, so the two are found by different questions even though what
+    they charge is one vocabulary.
+
+    Read off the whole text a line at a time, so a permanent printing the
+    sentence beside other abilities still grants it.
+
+    Cached on the text, which is immutable on a ``CardDefinition``, because
+    this is asked of **every permanent on every battlefield** for every card in
+    every hand on every poll -- the same arrangement and the same reason
+    ``cost_modifiers.cost_modifiers_for`` states, down to the substring test
+    that answers for the whole pool but one card without matching anything.
+    """
+    if "rather than pay the mana cost" not in (oracle_text or "").lower():
+        return None
+    for line in (oracle_text or "").split("\n"):
+        match = _GRANTED_ALTERNATIVE_COST.match(
+            " ".join(line.strip().lower().split()).rstrip(".")
+        )
+        if match is None:
+            continue
+        fields = _read_cost_clauses(match.group("costs"))
+        if fields is None:
+            continue
+        return AlternativeCost(match.group(0), **fields)
+    return None
+
+
+def granted_alternative_cost_claims_line(line: str) -> bool:
+    """Whether *line* is, in its entirety, the granted sentence above.
+
+    The support gate and the parse-coverage report both ask this, so what the
+    engine implements and what it claims to have read cannot drift -- the same
+    seam :func:`alternative_cost_claims_line` is for the printed half.
+    """
+    return granted_alternative_cost(line) is not None
+
+
+def unread_granted_alternative_cost_sentence(line: str) -> str | None:
+    """*line* if it grants an alternative cost this table cannot charge, else
+    None.
+
+    :func:`unread_alternative_cost_sentence`'s twin, and the same defect one
+    scope wider: a granted cost nobody reads is a permanent that sits on the
+    battlefield doing nothing while its card reports whatever its other lines
+    say. Dream Halls has no other lines, so today the gate reports it
+    unsupported -- which is the honest answer and the one this exists to keep.
+    """
+    normalized = " ".join(line.strip().lower().split()).rstrip(".")
+    match = _GRANTED_ALTERNATIVE_COST.match(normalized)
+    if match is not None and _read_cost_clauses(match.group("costs")) is None:
+        return match.group(0)
+    return None
+
+
 def unread_alternative_cost_sentence(line: str) -> str | None:
     """*line* if it announces an alternative cost this table cannot charge,
     else None.
@@ -392,5 +536,8 @@ __all__ = [
     "alternative_cost_claims_line",
     "alternative_cost_for_line",
     "alternative_costs",
+    "granted_alternative_cost",
+    "granted_alternative_cost_claims_line",
     "unread_alternative_cost_sentence",
+    "unread_granted_alternative_cost_sentence",
 ]

@@ -59,7 +59,8 @@ from engine.grammar import compile_line as compile_grammar_line  # noqa: E402
 from engine.grammar.lowering._events import OPPONENT_CHOSE_MODE  # noqa: E402
 from engine.oracle_types import (OracleInstruction,  # noqa: E402
                                  x_spend_colors_from_text)
-from engine.alternative_costs import alternative_cost_claims_line  # noqa: E402
+from engine.alternative_costs import (  # noqa: E402
+    alternative_cost_claims_line, granted_alternative_cost_claims_line)
 from engine.cast_costs import cast_cost_claims_line  # noqa: E402
 from engine.activation_restrictions import (  # noqa: E402
     global_activation_ban_line)
@@ -400,6 +401,10 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # and Pyrokinesis sat in the unclaimed list with their defining line, which
     # is what an alternative cost with nothing behind it looks like from here.
     ("alternative_costs.py", alternative_cost_claims_line),
+    # Dream Halls: CR 118.9's alternative cost granted to every spell from a
+    # board rather than printed on the spell. The same table, found by a
+    # different question — see ``alternative_costs.granted_alternative_cost``.
+    ("alternative_costs.py (granted)", granted_alternative_cost_claims_line),
     # "This creature can't be destroyed by lethal damage unless lethal damage
     # dealt by a single source is marked on it." (Ogre Enforcer.) CR 704.5g
     # narrowed by the permanent's own text — a state-based action, so there is

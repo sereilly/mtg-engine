@@ -53,6 +53,7 @@ from .equipment import expand_equip_lines, has_equip_ability, is_equip_line
 from .alternative_costs import (
     alternative_cost_claims_line,
     unread_alternative_cost_sentence,
+    unread_granted_alternative_cost_sentence,
 )
 from .cast_costs import cast_cost_claims_line, unread_cost_sentence
 from .special_actions import special_action_line
@@ -5806,6 +5807,20 @@ def _derived_static_claims(
         for line in (oracle_text or "").splitlines()
     ):
         claims.append(BOARD_FREE_CAST_CLAIM)
+    # "Rather than pay the mana cost for a spell, its controller may discard a
+    # card that shares a color with that spell." (Dream Halls.) CR 118.9's
+    # alternative cost granted from a board rather than printed on the spell,
+    # read at every cast by ``applicable_alternative_costs`` -- so there is no
+    # instruction, and the enchantment's whole text is this sentence, which
+    # means no claim is an unsupported card however well the offer works. The
+    # arrangement Aluren's permission above has, one rule over.
+    from .alternative_costs import granted_alternative_cost_claims_line
+
+    if any(
+        granted_alternative_cost_claims_line(line)
+        for line in (oracle_text or "").splitlines()
+    ):
+        claims.append("alternative_costs")
     # "You can't cast creature spells." (Steel Golem prints it on a creature;
     # an artifact or enchantment printing it reads the same.) CR 601.3a scoped
     # to the permanent's own controller, read off the board at every cast — so
@@ -6193,6 +6208,10 @@ def _compile_card_oracle(
         unread_cost = (
             unread_cost_sentence(raw_line)
             or unread_alternative_cost_sentence(raw_line)
+            # …and the granted half (Dream Halls), for the same reason one
+            # scope wider: a sentence this table half-reads would be a
+            # permanent offering a price nothing collects.
+            or unread_granted_alternative_cost_sentence(raw_line)
         )
         if unread_cost is not None:
             return OracleProgram(
