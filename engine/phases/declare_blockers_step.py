@@ -17,6 +17,7 @@ from ..combat_permissions import (ADDITIONAL_BLOCKS_UNTIL_EOT,
                                   CAN_BLOCK_ANY_NUMBER_UNTIL_EOT,
                                   MUST_BLOCK_ALL_UNTIL_EOT,
                                   MUST_BLOCK_ATTACKERS_UNTIL_EOT,
+                                  CANT_BLOCK_ATTACKERS_UNTIL_EOT,
                                   CANT_BLOCK_UNTIL_EOT)
 from ..combat_restrictions import declaration_company_required, participation_cap
 from ..evasion_negation import negated_evasion_abilities
@@ -880,6 +881,15 @@ class DeclareBlockersStepMixin:
         # above because all three answer the same question about the blocker,
         # and a reader that knew only two of them would let the third through.
         if blocker.metadata.get(CANT_BLOCK_UNTIL_EOT):
+            return False
+        # And the *named-attacker* half (Duct Crawler): "can't block **this
+        # creature** this turn" denies one pairing rather than every block, so
+        # it is asked here — where the pair is in hand — rather than beside the
+        # three blanket reads above. By ``permanent_id``, so an attacker that
+        # left and came back is a new object the old denial does not name
+        # (CR 400.7).
+        denied_attackers = blocker.metadata.get(CANT_BLOCK_ATTACKERS_UNTIL_EOT)
+        if denied_attackers and attacker.permanent_id in denied_attackers:
             return False
 
         # And the board-wide half: "Creatures with flying can't attack **or

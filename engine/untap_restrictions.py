@@ -304,6 +304,51 @@ _SELF_UNTAP_ATTACKED_LAST_TURN = re.compile(
 )
 
 
+#: "This creature doesn't untap during your untap step **if an opponent
+#: controls two or more creatures**." (Walking Dream.) The fourth member of
+#: this family, and the first whose condition is a fact about somebody else's
+#: board rather than about the permanent itself — which changes nothing about
+#: why it needs a row: the loose substring probe in ``phases/untap_step.py``
+#: fires on any line carrying the phrase, so without one the Dream would have
+#: stayed tapped for the rest of the game whatever the opponent controlled.
+#:
+#: The threshold and the noun phrase are both payload, for this file's standing
+#: reason: a card printing "three or more artifacts" is the same restriction,
+#: and spelling either into the pattern would buy one card. The noun goes
+#: through :func:`_blocked_subject`, the one reader of a plural noun phrase in
+#: this module, so this row and the count limits above cannot come to disagree
+#: about what "red creatures" names.
+_SELF_UNTAP_OPPONENT_BOARD = re.compile(
+    rf"^this {_SELF_NOUN} {re.escape(SELF_DOESNT_UNTAP_PHRASE)} "
+    rf"if an opponent controls (?P<count>{_COUNT_WORD}) or more "
+    r"(?P<subject>.+)$"
+)
+
+
+def self_untap_opponent_board_condition(
+    line: str, card_name: str | None = None
+) -> tuple[int, dict] | None:
+    """``(threshold, filter payload)`` for the opponent-board untap condition.
+
+    None when *line* does not state one, **and also** when it states one whose
+    noun phrase the parser cannot read or the matcher cannot test — a
+    narrowing dropped here would freeze the permanent on a board the card
+    never describes, which is this file's one forbidden direction.
+
+    Read by :func:`self_untap_line` — so the support gate admits the line — and
+    by ``engine/phases/untap_step.py``, so the step that keeps the permanent
+    tapped asks the same condition the gate claimed.
+    """
+    normalized = _collapse_self_name(line.strip().lower(), card_name).rstrip(".")
+    match = _SELF_UNTAP_OPPONENT_BOARD.match(normalized)
+    if match is None:
+        return None
+    described = _blocked_subject(match.group("subject"))
+    if described is None:
+        return None
+    return _NUMBER_WORDS[match.group("count")], described
+
+
 def self_untap_attacked_last_turn(line: str, card_name: str | None = None) -> bool:
     """Whether *line* is the attack-conditioned form of the untap restriction.
 
@@ -356,6 +401,7 @@ _SELF_UNTAP_LINE_PATTERNS: tuple[tuple[re.Pattern, str], ...] = (
     ),
     (_SELF_UNTAP_COUNTER_CONDITION, "doesnt_untap_with_counter"),
     (_SELF_UNTAP_ATTACKED_LAST_TURN, "doesnt_untap_if_attacked_last_turn"),
+    (_SELF_UNTAP_OPPONENT_BOARD, "doesnt_untap_if_opponent_board"),
     (
         re.compile(
             rf"^{re.escape(SELF_MAY_KEEP_TAPPED_PHRASE)} this {_SELF_NOUN} "

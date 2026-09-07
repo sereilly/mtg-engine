@@ -23,6 +23,7 @@ from ..combat_permissions import (ADDITIONAL_BLOCKS_UNTIL_EOT,
                                   MUST_BLOCK_ATTACKERS_UNTIL_EOT,
                                   ATTACK_AS_THOUGH_NO_DEFENDER,
                                   CANT_ATTACK_UNTIL_EOT,
+                                  CANT_BLOCK_ATTACKERS_UNTIL_EOT,
                                   CANT_BLOCK_UNTIL_EOT)
 from ..pt import add_pt_modifier
 from ..rampage import rampage_bonus
@@ -1276,6 +1277,56 @@ def target_cant_attack_until_eot(game: Game, instruction: OracleInstruction, con
         return True, "resolved"
     target_creature.metadata[CANT_ATTACK_UNTIL_EOT] = True
     game.log.append(f"{target_creature.card.name} can't attack this turn")
+    return True, "resolved"
+
+
+@effect_handler("target_cant_block_source_until_eot")
+def target_cant_block_source_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Target creature can't block this creature this turn." (Duct Crawler.)
+
+    CR 509.1b's denial narrowed to one named attacker — the ability's own
+    source — and the exact mirror of ``force_target_to_block_until_eot`` above,
+    down to why it is recorded the way it is: the forbidden attacker's
+    ``permanent_id`` appended to a list on the restricted creature, because two
+    activations name two attackers and both denials hold, and because an
+    attacker that leaves and returns is a new object (CR 400.7) whose new id
+    the old denial does not name.
+
+    With no source on the battlefield there is no attacker for the denial to be
+    about, so nothing is recorded — a mark with no id in it would be a "can't
+    block at all" this card never prints.
+    """
+    from ..subject_filters import subject_matches
+
+    attacker = context.source_permanent
+    if attacker is None or not game.is_on_battlefield(attacker):
+        game.log.append(
+            f"{context.card.name}: its own attacker has left, so nothing is "
+            "denied a block"
+        )
+        return True, "resolved"
+    described = (instruction.payload.get("targets") or {}).get("filter") or {}
+    observer = (
+        game.players.index(context.caster) if context.caster in game.players
+        else None
+    )
+    chosen = resolve_target_permanent(
+        game, context,
+        predicate=lambda perm: subject_matches(
+            game, perm, described, observer=observer, source=attacker,
+        ),
+        fallback_on_invalid_choice=False,
+    )
+    if chosen is None:
+        game.log.append(f"{context.card.name}: its target is gone (608.2b)")
+        return True, "resolved"
+    denied = list(chosen.metadata.get(CANT_BLOCK_ATTACKERS_UNTIL_EOT) or ())
+    if attacker.permanent_id not in denied:
+        denied.append(attacker.permanent_id)
+    chosen.metadata[CANT_BLOCK_ATTACKERS_UNTIL_EOT] = denied
+    game.log.append(
+        f"{chosen.card.name} can't block {attacker.card.name} this turn"
+    )
     return True, "resolved"
 
 

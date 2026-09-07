@@ -536,6 +536,51 @@ def _lower_combat_restriction(
                 "cant_block_subject", "", {"blockee_filters": [described]}
             ),
         )
+    # "Target creature can't block this creature this turn." (Duct Crawler.)
+    # CR 509.1b's denial aimed at one *named attacker*, which makes it the
+    # mirror of Trumpeting Armodon's requirement rather than of the blanket:
+    # both halves of the pair are printed, and a lowering that dropped the
+    # attacker would forbid the creature from blocking anything at all.
+    if node.kind == "cant_block_named_attacker_until_eot":
+        payload = dict(node.payload)
+        if payload.get("duration") not in _REST_OF_TURN:
+            raise LoweringError(
+                "a named-attacker block denial with no end-of-turn duration "
+                "has nothing to sweep it",
+                node=node,
+            )
+        attacker = payload.get("attacker")
+        if not (isinstance(attacker, ast.TargetSpec) and _is_source(attacker)):
+            # The handler records the attacker by ``permanent_id`` off the
+            # ability's own source. Any other referent has nothing to resolve
+            # against at resolution, and a denial that recorded no id would be
+            # a "can't block at all" the card does not print.
+            raise LoweringError(
+                "the attacker this creature may not block is the ability's "
+                "own source",
+                node=node,
+            )
+        if not (
+            isinstance(node.subject, ast.TargetSpec) and node.subject.targeted
+        ):
+            raise LoweringError(
+                "the named-attacker block denial marks the creature the "
+                "ability chose",
+                node=node,
+            )
+        if _names_several_targets(node.subject):
+            raise LoweringError(
+                "the block denial marks one creature; nothing here collects "
+                "several",
+                node=node,
+            )
+        denied: dict[str, object] = {}
+        _describe_targets(denied, node.subject)
+        return (
+            OracleInstruction(
+                "target_cant_block_source_until_eot", "", denied
+            ),
+        )
     if node.kind == "cant_block_until_eot":
         payload = dict(node.payload)
         if payload.get("duration") not in _REST_OF_TURN:

@@ -240,6 +240,38 @@ def _parse_cant_attack_or_block(
                     subject, "cant_block_unless_others_block", (("count", count),)
                 )
             stream.reset(block_others)
+        # "Target creature can't block **this creature** this turn." (Duct
+        # Crawler.) CR 509.1b narrowed to one *named attacker* — the ability's
+        # own source — where the `cant_block_subject` branch below narrows to a
+        # class of them. The pair (blocker, attacker) is what a block is
+        # (CR 509.1a), so this is the denial twin of Trumpeting Armodon's
+        # requirement rather than a wording of the blanket.
+        #
+        # Read in front of the duration probe because the probe is gated on the
+        # word "this" and cannot tell "this turn" from "this creature": with
+        # the noun unread the sentence refused at "expected a duration after
+        # can't block", a refusal naming a word the card does print, two words
+        # later than the one it could not read.
+        named_mark = stream.mark()
+        if stream.at_word("this") and stream.peek_word(1) != "turn":
+            blocked = parse_recipient(stream)
+            if blocked is not None:
+                duration = _parse_duration(stream)
+                if duration.kind is None:
+                    # A named attacker with no window is a permanent
+                    # restriction the card did not print, and the widening
+                    # direction on a *denial* is the one that silently gives
+                    # the ability more reach than the sentence.
+                    raise stream.error(
+                        "expected a duration after the attacker this creature "
+                        "can't block"
+                    )
+                return ast.CombatRestriction(
+                    subject,
+                    "cant_block_named_attacker_until_eot",
+                    (("attacker", blocked), ("duration", duration.kind)),
+                )
+            stream.reset(named_mark)
         # "Creatures without flying can't block this turn." (Destructive
         # Tampering's second mode): no object after "block" — the restriction
         # is a blanket over the *subject*, scoped by the printed duration.

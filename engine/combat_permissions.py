@@ -63,3 +63,12 @@ MUST_BLOCK_ALL_UNTIL_EOT = "must_block_all_until_eot"
 #: anything leaving the battlefield and a returning permanent is a new object
 #: (CR 400.7) that must not inherit a requirement aimed at its earlier self.
 MUST_BLOCK_ATTACKERS_UNTIL_EOT = "must_block_attackers_until_eot"
+
+#: "Target creature can't block this creature this turn." (Duct Crawler.) The
+#: exact denial mirror of the requirement above, and the same shape for the
+#: same reasons: a list of the forbidden attackers' ``permanent_id``s on the
+#: restricted creature, read by the declare-blockers step and swept with the
+#: turn. A list because two activations name two attackers and both denials
+#: hold; by id because an index is renumbered by anything leaving the
+#: battlefield and a returning permanent is a new object (CR 400.7).
+CANT_BLOCK_ATTACKERS_UNTIL_EOT = "cant_block_attackers_until_eot"
