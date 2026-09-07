@@ -41,12 +41,14 @@ from .damage_locks import (
     _parse_damage_cant_be_prevented,
     parse_source_damage_lock,
 )
-from .prevention import (
-    _parse_prevent,
-    _parse_prevent_all,
+from .damage_instances import (
     _parse_source_of_choice_effect,
     _parse_choose_damage_source,
     _parse_chosen_source_next_damage,
+)
+from .prevention import (
+    _parse_prevent,
+    _parse_prevent_all,
     _parse_bound_targeting_prevention,
 )
 from .redirection import (

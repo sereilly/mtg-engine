@@ -792,18 +792,34 @@ this list already says does not travel with a wave. Whoever takes it owes the
 element-type question in the same round, which is the half Visions found nobody
 had named.
 
-**Added at STH's Phase 6: two grammar modules sit near the cap with nobody to
-own them, and one of them has a measured seam.** `effects/prevention.py` is at
-990 lines and W1G1 verified by call graph that it splits into two components
-with **zero edges between them** — the printed shield sentence (≈395 lines) and
-CR 615.8's "a source of your choice" (≈533). One coupling blocks the cut and
-that group introduced it deliberately, unifying the CR 615.5 rider reader:
-resolving it means moving `_parse_prevented_this_way_rider` and
-`_PREVENTED_THIS_WAY_RIDERS` to a floor both families read, and the candidate
-(`records.py`) would need `amounts.accept_counter_kind`, which `records`' own
-docstring says its split *removed* a cycle with. `lowering/sequences.py` is at
-920 after wave 2 moved two fusers into it, and four of its six fusers open on a
-`(Tap, payoff)` pair. `ast/_references.py` is at 997 and its real seam is
+**Cleared at EXO's Phase 0 — and the measured seam was right, which is the
+first time an inherited one has been.** `effects/prevention.py` was at 990 with
+two of wave 1's groups about to land in it, and STH's W1G1 had reported by call
+graph that it split into two components with **zero edges between them**. Read
+as a lead and re-measured, the call graph was exactly that: seven functions
+reachable from the shield entry points, six from CR 615.8's, and one node
+(`_parse_prevented_this_way_rider` + `_PREVENTED_THIS_WAY_RIDERS`) called by
+both. It cut into `effects/prevention.py` (429), `effects/damage_instances.py`
+(469) and a new floor `grammar/prevented_riders.py` (183), moving **0 of 2,966**
+compiled programs. Two corrections worth carrying, because both are the shape a
+seam report takes when it is written from a call graph alone:
+
+* **The reported line counts were the halves, not the files.** ≈395/≈533 sums
+  past the module, because the shared rider was counted into one of them and
+  the header into neither. A seam report should say what the *files* would be.
+* **The reported cut left the file unbalanced and it was one function.**
+  Silhouette's `_parse_bound_targeting_prevention` is an isolated node — no
+  call edges either way — so the call graph cannot place it and the report put
+  it with the 615.8 half on physical position alone. It is a shield around a
+  named recipient, prints no "next time" and chooses no source, and it belongs
+  with the shields; moving it there is what made the two halves 429 and 469
+  instead of 386 and 512.
+
+The `records.py` objection was right and understated: `amounts.py` imports
+`records` at **module level**, so reading `amounts.accept_counter_kind` from
+inside `records` is a real import cycle, not only a docstring's warning.
+`lowering/sequences.py` is at 920 after STH's wave 2 moved two fusers into it,
+and four of its six fusers open on a `(Tap, payoff)` pair. `ast/_references.py` is at 997 and its real seam is
 measured too — `ObjectFilter.to_payload`, 307 lines, 31% of the file, whose only
 free names are `Fixed` and `TYPE_LINE_SUPERTYPES` — with a cost the next round
 must budget: `test_grammar_layering.py` hard-codes `ast`'s shared tuple, so a

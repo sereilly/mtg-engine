@@ -71,6 +71,25 @@ PARSE_LAYERS = [
     # productions carried was there because `nouns` imports `amounts`, which
     # they are no longer in.
     "records",
+    # CR 615.5's additional effect — "you gain life equal to the damage
+    # prevented this way", "for each 1 damage prevented this way, put a +1/+1
+    # counter on that creature". Pre-split out of `effects/prevention.py` at
+    # Exodus' Phase 0, and it is here rather than in either half for the reason
+    # this file's family rule gives: `effects/` has no shared module, so a
+    # fragment two of its families need lives one level up or one of them
+    # imports the other. The clause is deliberately read by **one** production —
+    # two would make which riders a card may carry depend on which shield
+    # printed them — so both prevention families call down to it.
+    #
+    # Above `records`, which it reads for Temper's leading "for each 1 damage
+    # prevented this way", and not *in* it: every production there answers
+    # "how many?" with an `Amount` where this returns a whole rider, and
+    # `amounts` imports `records` at module level, so reaching
+    # `amounts.accept_counter_kind` from inside `records` would close the very
+    # cycle that module's split removed. No mirror name to reuse — the rider
+    # rides on `ast.PreventDamage.prevented_rider` and lowers inside the shield
+    # lowering, so the lowering side has no module of its own to fork.
+    "prevented_riders",
     # An ability on the stack (CR 113.7a) has no card and no type line, so it
     # shares no vocabulary with the filter parser that reads one. Below
     # `nouns`, which returns the moment one of these matches.
@@ -438,12 +457,15 @@ LOWER_LAYERS = [
 # `prevention` joined on the parse side when `effects/damage.py` reached the
 # size guard: the shields, the redirects and Whippoorwill's lock split off,
 # reusing `lowering/prevention.py`'s name so the two halves mirror rather than
-# fork. It carries the **redirects** as well, which the lowering side keeps in a
-# family of its own — `_parse_source_of_choice_effect` reads one printed
-# sentence and returns either node (CR 615.8's "a source of your choice" names
-# the damage; the clause after the comma decides what happens to it), so two
-# parse modules would be one importing the other, which is precisely the
-# coupling this list exists to forbid.
+# fork. It carried the **redirects** as well until Visions gave them
+# `effects/redirection.py`, and it carried CR 615.8's until Exodus gave it
+# `effects/damage_instances.py`; what it keeps is the shield that names a
+# recipient. `_parse_source_of_choice_effect` still reads one printed sentence
+# and returns either node (CR 615.8's "a source of your choice" names the
+# damage; the clause after the comma decides what happens to it), which is why
+# it moved whole rather than being divided — two parse modules would be one
+# importing the other, which is precisely the coupling this list exists to
+# forbid.
 # `counters` joined the parse side when `effects/characteristics.py` reached
 # the size guard, reusing the name `lowering/counters.py` had carried since it
 # left the same family one package over — the mirror re-forming rather than
@@ -560,7 +582,36 @@ LOWER_LAYERS = [
 # a reveal lowers to one instruction however elaborately its sentence is
 # printed. A near-empty `lowering/reveal.py` would buy back the symmetry and
 # cost the thing symmetry is for.
-EFFECT_FAMILIES = ["damage", "characteristics", "base_pt", "types", "board", "cards", "exile", "stack", "combat", "game", "mana", "library", "search", "reveal", "control_changes", "prevention", "redirection", "damage_locks", "counters", "tapping", "attachments", "tokens", "returns", "text_changes", "destruction", "zones", "hand"]
+# `damage_instances` split off `effects/prevention.py` at Exodus' Phase 0, when
+# that module sat **ten** lines under the guard below with two of wave 1's five
+# groups about to land productions in it — the shared-module case
+# SET_PLAYBOOK.md says to pre-split rather than to brief. The line is the CR's
+# own, and both halves of it are printed in rule 615: a CR 615.7 shield is a
+# pool spent by points and "count[s] only the amount of damage; the number of
+# events or sources dealing it doesn't matter", where CR 615.8 modifies "the
+# next instance of damage from that source, regardless of how much damage that
+# is". So `prevention` keeps the sentences that name **what is protected** and
+# this one takes the sentences that name **whose damage it is** — the Circles of
+# Protection, Nova Pentacle, Mercenaries, Soltari Guerrillas and Desperate
+# Gambit — whose recipient is optional and, on Penance, absent.
+#
+# The call graph was already two components with **zero edges between them**,
+# and the one coupling was deliberate: both halves called
+# `_parse_prevented_this_way_rider`, the single reader of CR 615.5's rider. It
+# went down to `grammar/prevented_riders.py` rather than travelling with either
+# — the same move `_expect_counter_kind` and `_parse_further_subjects` made when
+# `counters` and `destruction` left their families.
+#
+# `_parse_source_of_choice_effect` returning either node is why this half could
+# not go to `redirection`, and moving it whole is what keeps that true: no
+# module holds half of it, and this one carries both endings for the reason it
+# always did. There is no import between the two modules in either direction.
+# Parse-only, the same shape `search`, `reveal`, `text_changes` and
+# `damage_locks` record: all six productions lower a few lines from the shields'
+# in `lowering/prevention.py` and `lowering/redirection.py`, because a Circle of
+# Protection lowers to one shield instruction however many ways its sentence
+# spells the source. The words are where the work is.
+EFFECT_FAMILIES = ["damage", "characteristics", "base_pt", "types", "board", "cards", "exile", "stack", "combat", "game", "mana", "library", "search", "reveal", "control_changes", "prevention", "damage_instances", "redirection", "damage_locks", "counters", "tapping", "attachments", "tokens", "returns", "text_changes", "destruction", "zones", "hand"]
 # `redirection` arrived on the parse side at Visions' first wave, a set after
 # the lowering side split it off `lowering/damage.py` — the mirror re-forming
 # rather than a new vocabulary, which is what this file asks a split to do.
@@ -571,11 +622,13 @@ EFFECT_FAMILIES = ["damage", "characteristics", "base_pt", "types", "board", "ca
 # (Shimian Night Stalker, Blood of the Martyr), Soul Echo's counters-instead-of-
 # damage and Blind Fury's doubling. CR 615 removes the damage; all four of those
 # leave it happening and change one of its terms.
-# `_parse_source_of_choice_effect` deliberately stays in `prevention`: it reads
-# CR 615.8's seven opening words and returns *either* node depending on the
-# clause after the comma, so a module holding half of it would import the other
-# half — the coupling this file's family rule exists to prevent. There is no
-# import between the two modules in either direction.
+# `_parse_source_of_choice_effect` did not go with them, and still has not: it
+# reads CR 615.8's seven opening words and returns *either* node depending on
+# the clause after the comma, so a module holding half of it would import the
+# other half — the coupling this file's family rule exists to prevent. At
+# Exodus' Phase 0 it moved **whole**, into `damage_instances` above, which
+# changes nothing about that: one printed sentence, one production, one module,
+# and no import between any of the three in either direction.
 # `damage_locks` split off `effects/prevention.py` at Tempest's third wave,
 # when Soltari Guerrillas' redirect tail took that module three lines past the
 # guard. The line is the one `lowering/prevention.py`'s own section header had
@@ -745,7 +798,18 @@ EFFECT_FAMILIES = ["damage", "characteristics", "base_pt", "types", "board", "ca
 # nobody may see, so what it has to carry is which cards the phrase admits and
 # where each find lands.
 LOWERING_FAMILIES = [
-    f for f in EFFECT_FAMILIES if f not in ("text_changes", "damage_locks")
+    f for f in EFFECT_FAMILIES if f not in (
+        "text_changes", "damage_locks",
+        # `damage_instances` is `damage_locks`' reason one word over: all six
+        # of its productions lower in `lowering/prevention.py` and
+        # `lowering/redirection.py`, a few lines from the shields', because a
+        # Circle of Protection lowers to one shield instruction however many
+        # ways its sentence spells the source. The guard that made it a parse
+        # family fired on the *productions*; the lowerings never crossed
+        # anything, and a near-empty `lowering/damage_instances.py` would buy
+        # back the symmetry and cost the thing symmetry is for.
+        "damage_instances",
+    )
 # `base_pt` was appended here when it was a lowering family with no parse twin.
 # Tempest's first wave gave it one — `effects/characteristics.py` crossed the
 # guard a second time and split along the same CR 613.4b line — so it now
@@ -980,6 +1044,14 @@ AST_FAMILIES = [
     if family not in (
         "search", "control_changes", "prevention", "counters",
         "attachments", "returns",
+        # `damage_instances` is `prevention`'s own reason, which is why it sits
+        # beside it: `PreventDamage`, `RedirectDamage`, `ChooseDamageSource` and
+        # `ChosenSourceNextDamage` are facts about a **damage event** and live
+        # in `ast/damage.py` with every other one — the same four the shields
+        # build, which is the point. The guard that made this a parse family
+        # fired on the productions, and splitting the nodes out to match would
+        # put a node in one family with its other reader in another.
+        "damage_instances",
         # `damage_locks` is `prevention`'s own reason one line up: the node the
         # two sentences build (`DamageCantBePreventedOrRedirected`) is a
         # statement about a damage event, so it sits in `ast/damage.py` with
