@@ -6183,6 +6183,194 @@ class PendingChoicesMixin:
         self.discard_pending_choice(choice)
         return True
 
+    # -- Keep a described set, sacrifice the rest ----------------------------
+    #
+    # "Each player chooses from among the permanents they control an artifact, a
+    # creature, an enchantment, and a land, then sacrifices the rest."
+    # (Cataclysm.) "...chooses five lands they control and sacrifices the rest."
+    # (Limited Resources.) One prompt per seat over that seat's own board, whose
+    # *answer* is what the sacrifice takes the complement of - which is why the
+    # sacrificing lives in the resolver rather than in a step behind it: "the
+    # rest" is not a set anything can name until the keeps are known.
+    #
+    # Not ``arm_forced_sacrifice`` with a count, and that is the whole reason
+    # this is its own kind. A count works while the keeps are one noun (Natural
+    # Balance's five lands is "sacrifice held minus five lands"), and it stops
+    # working the moment two slots can want the same permanent: a player whose
+    # only permanents are two artifact creatures keeps *both* - one as the
+    # artifact and one as the creature - where "sacrifice all but one artifact"
+    # and "sacrifice all but one creature" would take one each and leave
+    # nothing. So the keeps are an assignment, and the number the card allows is
+    # the size of a **maximum matching** between the permanents and the slots.
+
+    def keep_choice_candidates(self, player_index: int, pool: dict) -> list:
+        """The seat's own permanents the pool phrase describes.
+
+        Its own battlefield and no other, and that is CR 701.21a rather than a
+        convenience: a player cannot sacrifice a permanent they do not control,
+        so a pool reaching another board would offer keeps whose complement
+        could not be taken.
+        """
+        return [
+            perm for perm in self.controlled_by(player_index)
+            if subject_matches(self, perm, pool or {})
+        ]
+
+    @staticmethod
+    def _keep_slot_filters(slots) -> list[dict]:
+        """The printed slots expanded to one filter per keep.
+
+        "Five lands" is one printed slot and five keeps; the matching below
+        works over keeps, because what it answers is which *permanent* fills
+        which, and a count is not a thing a permanent can be assigned to.
+        """
+        expanded: list[dict] = []
+        for slot in slots or ():
+            described = dict(slot.get("filter") or {})
+            expanded.extend([described] * max(0, int(slot.get("count", 0))))
+        return expanded
+
+    def _match_keeps(self, candidates: list, slot_filters: list[dict]) -> dict:
+        """Assign as many of *candidates* to distinct slots as possible.
+
+        Kuhn's augmenting-path matching, for ``mana_payment.plan_payment``'s
+        stated reason one module over: a greedy pass under-reports, and CR 609.3
+        makes the answer "as much as possible" rather than "as much as the first
+        pass happened to find". A player controlling an artifact creature and a
+        plain artifact keeps both - the plain one as the artifact, the creature
+        one as the creature - where a greedy walk that spent the artifact slot
+        on the artifact creature would report one keep and sacrifice the other.
+
+        Returns ``{slot index: permanent}``; its *size* is how many the card
+        lets that seat keep, which is what the answer below is checked against.
+        """
+        taken: dict[int, object] = {}
+
+        def assign(perm, seen: set[int]) -> bool:
+            for index, described in enumerate(slot_filters):
+                if index in seen or not subject_matches(self, perm, described):
+                    continue
+                seen.add(index)
+                if index not in taken or assign(taken[index], seen):
+                    taken[index] = perm
+                    return True
+            return False
+
+        for perm in candidates:
+            assign(perm, set())
+        return taken
+
+    def arm_keep_permanents(
+        self, player_index: int, *, pool: dict, slots: list, reason: str,
+    ) -> None:
+        """Ask *player_index* which of their permanents to keep, then take the
+        rest (Cataclysm, Limited Resources).
+
+        A seat with nothing in the pool is not prompted and nothing is logged as
+        happening to them: an empty pool has an empty complement, so there is no
+        decision and no sacrifice. CR 101.3 rather than a shortcut.
+        """
+        candidates = self.keep_choice_candidates(player_index, pool)
+        if not candidates:
+            return
+        self.arm_pending_choice(
+            "keep_permanents", player_index,
+            pool=dict(pool or {}),
+            slots=[
+                {"count": int(s.get("count", 0)), "filter": dict(s.get("filter") or {})}
+                for s in (slots or ())
+            ],
+            reason=reason,
+        )
+
+    def confirm_keep_permanents(self, player_index: int, permanent_ids: list) -> bool:
+        """*permanent_ids* names the permanents to **keep**, by stable id."""
+        return self.resolve_pending_choice(
+            "keep_permanents", player_index, permanent_ids=permanent_ids
+        )
+
+    def _resolve_keep_permanents(
+        self, choice: PendingChoice, permanent_ids: list
+    ) -> bool:
+        """Validated whole before anything is sacrificed.
+
+        Three things are checked and the third is the one a client cannot be
+        trusted with: the ids name permanents still in the pool, they can be
+        assigned to distinct slots, and there are **as many of them as the board
+        allows**. CR 608.2d lets a player choose only what is legal and CR 609.3
+        makes the effect do as much as it can, so keeping fewer than the card
+        offers is not one of the answers - and a prompt that accepted a short
+        list would let a seat sacrifice permanents the card said they could
+        keep.
+        """
+        ids = [pid for pid in (permanent_ids or []) if isinstance(pid, int)]
+        if len(ids) != len(permanent_ids or []) or len(set(ids)) != len(ids):
+            return False
+        pool = choice.data.get("pool") or {}
+        slot_filters = self._keep_slot_filters(choice.data.get("slots"))
+        live = self.keep_choice_candidates(choice.player_index, pool)
+        kept = []
+        for pid in ids:
+            perm = self.permanent_by_id(pid)
+            if perm is None or not any(perm is candidate for candidate in live):
+                return False
+            kept.append(perm)
+        allowed = len(self._match_keeps(live, slot_filters))
+        if len(kept) != allowed:
+            return False
+        if len(self._match_keeps(kept, slot_filters)) != len(kept):
+            # The set is short enough but not *assignable*: two keeps wanting
+            # the same single slot ("an artifact, a creature" answered with two
+            # plain artifacts) is a pair the card never offered.
+            return False
+        self._sacrifice_the_rest(choice, live, kept)
+        self.discard_pending_choice(choice)
+        return True
+
+    def _sacrifice_the_rest(self, choice: PendingChoice, live: list, kept: list) -> None:
+        """Everything in the pool that was not kept, given up together.
+
+        Every permanent is resolved before any of them leaves, which is
+        ``_resolve_balance``'s rule beside this one and for its reason: a
+        sacrifice can trigger something that moves another permanent, and a list
+        gathered afterwards would be a second read of a board that had changed.
+        """
+        player = self.players[choice.player_index]
+        reason = choice.data.get("reason", "Effect")
+        doomed = [
+            perm for perm in live
+            if not any(perm is keeper for keeper in kept)
+        ]
+        for perm in doomed:
+            self.sacrifice_permanent(perm)
+        self.log.append(
+            f"{player.name} kept "
+            + (", ".join(perm.card.name for perm in kept) if kept else "nothing")
+            + f" and sacrificed {len(doomed)} permanent(s) ({reason})"
+        )
+
+    def _default_keep_permanents(self, choice: PendingChoice) -> None:
+        """The stated policy: **a maximum keep, in board order.**
+
+        Board order rather than a valuation, which is every other permanent
+        prompt's rule here and for its reason - seed-determinism is what AI and
+        headless play need, and a seat that should keep its best permanents
+        wants a weight in ``engine/ai_valuation.py`` rather than a branch here.
+        Maximum rather than greedy because the matching says so; the card is not
+        offering a choice about *how many*.
+        """
+        pool = choice.data.get("pool") or {}
+        live = self.keep_choice_candidates(choice.player_index, pool)
+        slot_filters = self._keep_slot_filters(choice.data.get("slots"))
+        picks = list(self._match_keeps(live, slot_filters).values())
+        ordered = [perm for perm in live if any(perm is pick for pick in picks)]
+        chosen = [
+            pid for pid in (self.permanent_id_of(perm) for perm in ordered)
+            if pid is not None
+        ]
+        if not self._resolve_keep_permanents(choice, chosen):
+            self.discard_pending_choice(choice)
+
     # -- Balance -------------------------------------------------------------
 
     def _resolve_balance(self, choice: PendingChoice, land_indices, creature_indices, hand_indices) -> bool:
@@ -9568,4 +9756,25 @@ register_choice(
     default_at_arm=True,
     spectator_visible=True,
     hidden_for_ai=False,
+)
+
+register_choice(
+    "keep_permanents",
+    resolve=lambda game, choice, r: game._resolve_keep_permanents(
+        choice, r.get("permanent_ids") or []
+    ),
+    default=lambda game, choice: game._default_keep_permanents(choice),
+    action="keep_permanents_confirm",
+    prompt_key="keep_permanents",
+    blocked_detail="choose which permanents to keep before other actions",
+    # The sacrifice is this prompt's own resolver rather than a step behind it,
+    # so nothing inside the resolution is waiting on the answer - but the
+    # *other* seats' prompts are armed by the same instruction and the object
+    # stays on the stack until the last of them is answered (CR 608.2), which is
+    # what the gate above buys.
+    #
+    # A non-interactive seat never queues it: the resolution has to finish, and
+    # the stated maximum keep is taken where the effect stands.
+    default_at_arm=True,
+    spectator_visible=True,
 )

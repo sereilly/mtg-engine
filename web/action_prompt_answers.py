@@ -302,6 +302,26 @@ def _action_permanent_set_choice_confirm(session, req, seat_type):
     ):
         raise HTTPException(status_code=400, detail="invalid permanent selection")
 
+@action_handler("keep_permanents_confirm")
+def _action_keep_permanents_confirm(session, req, seat_type):
+    # Cataclysm / Limited Resources: the permanents this seat *keeps*, by stable
+    # id. The engine re-checks them against the same pool rule the prompt was
+    # rendered from and against how many the board allows, so a client cannot
+    # keep fewer than the card offers (which would sacrifice permanents it said
+    # were safe) or more.
+    pending = next(
+        (c for c in session.game.pending_choices_of("keep_permanents")),
+        None,
+    )
+    if pending is None:
+        raise HTTPException(status_code=400, detail="no keep choice pending")
+    if req.seat != pending.player_index:
+        raise HTTPException(status_code=400, detail="not your choice")
+    if not session.game.confirm_keep_permanents(
+        req.seat, req.target_permanent_ids or []
+    ):
+        raise HTTPException(status_code=400, detail="invalid keep selection")
+
 @action_handler("tap_any_number_confirm")
 def _action_tap_any_number_confirm(session, req, seat_type):
     pending = next(

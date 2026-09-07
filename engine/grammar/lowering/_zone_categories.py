@@ -171,6 +171,11 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     "return_exiled_source_to_graveyard": "zones",
     "transmute_by_sacrifice": "zones",
     "rebalance_lands": "zones",
+    # "Each player chooses <slots> …, then sacrifices the rest."
+    # (Cataclysm; Limited Resources.) The same category as every other
+    # sacrifice — what a keep-and-sacrifice adds is which permanents are
+    # spared, and what happens to the rest is the ordinary zone change.
+    "keep_chosen_sacrifice_rest": "zones",
     "place_held_card": "zones",
     "look_top_pick_to_hand": "zones",
     "look_top_exile_random": "zones",

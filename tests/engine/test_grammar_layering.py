@@ -1080,14 +1080,15 @@ LOWERING_FAMILIES = [
 # the symmetry and cost the thing symmetry is for: one home per node, findable
 # from the family name. Same asymmetry, opposite direction, as `zones`/`exile`
 # above — which the lowering side carries and the parse side does not.
-# Two families exist on the parse and lowering sides but not in the AST, and
-# both for the same reason: the size guard fired on the *productions* and the
-# *lowerings*, never on the inventory. What a search or a control change IS —
-# the pile and its filter, the seat and its timestamp — is a handful of nodes
-# that sit perfectly well beside the board and card ones, and a near-empty
-# `ast/library.py` or `ast/control_changes.py` would buy back the symmetry and
-# cost the thing symmetry is for: one home per node, findable from the family
-# name. Same asymmetry, opposite direction, as `zones`/`exile` above.
+# `search` exists on the parse and lowering sides but not in the AST, and for
+# the same reason: the size guard fired on the *productions* and the
+# *lowerings*, never on the inventory. What a search IS — the pile and its
+# filter, the fate of what was found — is a handful of nodes that sit perfectly
+# well beside the board and card ones, and a near-empty `ast/search.py` would
+# buy back the symmetry and cost the thing symmetry is for: one home per node,
+# findable from the family name. Same asymmetry, opposite direction, as
+# `zones`/`exile` above. (`control_changes` was the second of that pair until
+# Exodus's second wave; see the note under the list.)
 # `prevention` is the third, and the same reason a third time: `PreventDamage`,
 # `RedirectDamage` and `DamageCantBePreventedOrRedirected` are three nodes that
 # sit perfectly well beside the damage ones they describe, and the guard that
@@ -1118,7 +1119,7 @@ LOWERING_FAMILIES = [
 AST_FAMILIES = [
     family for family in EFFECT_FAMILIES
     if family not in (
-        "search", "control_changes", "prevention", "counters",
+        "search", "prevention", "counters",
         "attachments", "returns",
         # `permissions` is `reveal`'s reason one family over: `CastPermission`
         # is a *card* node and sits in `ast/cards.py` with every other one, so
@@ -1232,6 +1233,25 @@ AST_FAMILIES = [
 # length: the two reader-side families disagree about four of them and always
 # have, so following either would have split the family down the middle. The
 # other exclusions above still hold.
+#
+# `control_changes` left it at Exodus's second wave, the third time and the same
+# way. Its exclusion read "a near-empty `ast/control_changes.py` would buy back
+# the symmetry"; the module that came out is 205 lines, so the word that expired
+# was *near-empty*. The inventory fired again — `ast/board.py` sat at 977 with a
+# wave about to add a node to it — and the cut is the line that module's own
+# docstring already draws: "destruction, bouncing, control, sacrifice". The five
+# nodes that moved (`GainControl`, `BidLifeForControl`, `ExchangeControl`,
+# `ExchangeGreatestManaValue`, `MutualControlOfSets`) all answer "which seat
+# does this permanent answer to", where the rest of `board` answers what happens
+# *to* it. The other exclusions above still hold.
+#
+# One correction the same reading turned up: the `zones` note below says
+# `ShuffleLibrary`, `ShuffleGraveyardIntoLibrary` and `ShuffleHandIntoLibrary`
+# "live in `ast/cards.py`, `ast/library.py` and `ast/exile.py`". All three live
+# in `ast/board.py` and always have. The exclusion it argues for is still right
+# — the guard that made `zones` a family fired on `effects/library.py`, not on
+# the inventory — but the module names in it were never checked, because a
+# comment naming a module is not something any test reads.
 
 
 def _imports(path: Path) -> list[tuple[int, str, bool]]:

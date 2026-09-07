@@ -2907,6 +2907,58 @@ def rebalance_lands(game: Game, instruction: OracleInstruction, context: OracleE
     return True, "pending_rebalance_lands"
 
 
+@effect_handler("keep_chosen_sacrifice_rest")
+def keep_chosen_sacrifice_rest(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Each player chooses from among the permanents they control an artifact,
+    a creature, an enchantment, and a land, then sacrifices the rest."
+    (Cataclysm.) "Each player chooses five lands they control and sacrifices the
+    rest." (Limited Resources' entry trigger.)
+
+    One prompt per seat, over that seat's own board, armed through the standing
+    ``keep_permanents`` machinery: the answer is the keeps and the prompt's own
+    resolver takes the complement, because "the rest" is not a set anything can
+    name until the keeps are known.
+
+    ``who`` is the same vocabulary ``sacrifice_matching_permanent`` reads and it
+    is read the same way — absent means the effect's own controller (CR 109.5),
+    "each player" is every living seat in seat order so the AI simulation stays
+    seed-reproducible, and an unrecognized value **fails the instruction** rather
+    than defaulting to the caster. Taking somebody else's board apart is the
+    wrong direction to guess in, which is the reason that handler gives and the
+    reason this one repeats it.
+
+    Every seat's pool is read before any of them answers, and it does not need
+    to be: one player's sacrifices cannot change another's board, so re-reading
+    per seat would give the same answer. What it *would* add is a question about
+    what an intervening trigger did, which the card does not ask.
+    """
+    payload = instruction.payload
+    who = payload.get("who")
+    caster_index = game.players.index(context.caster)
+    if who is None:
+        seats = [caster_index]
+    elif who == "each_player":
+        seats = [
+            seat for seat, player in enumerate(game.players) if not player.lost
+        ]
+    elif who == "each_opponent":
+        seats = list(game.opponents_of(caster_index))
+    else:
+        return False, f"no seat named {who!r} keeps and sacrifices"
+    pool = dict(payload.get("pool") or {})
+    slots = list(payload.get("slots") or ())
+    if not slots:
+        # A keep list the lowering refuses to build is a sentence that would
+        # sacrifice the whole pool. Refused here too rather than performed,
+        # because a handler improvising the card's most destructive reading is
+        # exactly the silent failure this repo keeps finding.
+        return False, "a keep-and-sacrifice keeps something"
+    card_name = getattr(context.card, "name", "") or "Effect"
+    for seat in seats:
+        game.arm_keep_permanents(seat, pool=pool, slots=slots, reason=card_name)
+    return True, "resolved"
+
+
 @effect_handler("swap_land_types_until_eot")
 def swap_land_types_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Choose a land type and a basic land type. Each land of the first chosen

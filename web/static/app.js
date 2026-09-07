@@ -8427,6 +8427,82 @@ function renderPermanentSetChoiceModal(info) {
   }
 }
 
+// Cataclysm and Limited Resources: "…chooses <slots>, then sacrifices the
+// rest." The seat picks what *survives*, over its own battlefield, and
+// everything else in the pool goes.
+//
+// The confirm button is disabled until exactly `keep_count` are selected, and
+// that number comes from the server rather than from counting the slots: how
+// many a seat may keep is a maximum matching between their permanents and the
+// printed slots (CR 609.3), so two artifact creatures fill both the artifact
+// and the creature slot where two plain artifacts fill one. The engine refuses
+// a short or unassignable answer either way — this only keeps the player from
+// sending one.
+let keepPermanentsSelected = new Set();
+
+function getKeepPermanentsInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.keep_permanents;
+  if (!info) return null;
+  if (info.player_seat !== seat) return null;
+  return info;
+}
+
+function renderKeepPermanentsModal(info) {
+  const modal = document.getElementById("keepPermanentsModal");
+  if (!modal) return;
+  if (!info) {
+    modal.classList.add("hidden");
+    keepPermanentsSelected = new Set();
+    return;
+  }
+  modal.classList.remove("hidden");
+  const keepCount = Number(info.keep_count || 0);
+  const subtitle = document.getElementById("keepPermanentsSubtitle");
+  const slots = (info.slots || [])
+    .map((slot) => `${slot.count} ${slot.type}${slot.count === 1 ? "" : "s"}`)
+    .join(", ");
+  if (subtitle) {
+    subtitle.textContent =
+      `${info.card_name}: keep ${slots || "permanents"} — choose ${keepCount}. ` +
+      `Everything else you control that it names is sacrificed.`;
+  }
+  const list = document.getElementById("keepPermanentsList");
+  const confirmBtn = document.getElementById("keepPermanentsConfirmBtn");
+  const syncConfirm = () => {
+    if (confirmBtn) confirmBtn.disabled = keepPermanentsSelected.size !== keepCount;
+  };
+  if (list) {
+    list.innerHTML = (info.candidates || [])
+      .map((entry) => {
+        const selectedClass = keepPermanentsSelected.has(entry.id) ? " selected" : "";
+        return `<div class="library-card-choice${selectedClass}" data-id="${entry.id}"><div class="library-card-text-placeholder">${escapeHtml(entry.name)}</div><div class="library-card-choice-name">keep</div></div>`;
+      })
+      .join("") || `<div class="modal-empty-note">Nothing to keep.</div>`;
+    list.querySelectorAll(".library-card-choice").forEach((el) => {
+      el.addEventListener("click", () => {
+        const id = Number(el.dataset.id);
+        if (keepPermanentsSelected.has(id)) keepPermanentsSelected.delete(id);
+        else if (keepPermanentsSelected.size < keepCount) keepPermanentsSelected.add(id);
+        else return;
+        el.classList.toggle("selected");
+        syncConfirm();
+      });
+    });
+  }
+  syncConfirm();
+  if (confirmBtn && !confirmBtn.dataset.bound) {
+    confirmBtn.dataset.bound = "1";
+    confirmBtn.addEventListener("click", async () => {
+      const ids = [...keepPermanentsSelected];
+      keepPermanentsSelected = new Set();
+      delete confirmBtn.dataset.bound;
+      modal.classList.add("hidden");
+      await sendAction({ seat, action: "keep_permanents_confirm", target_permanent_ids: ids });
+    });
+  }
+}
+
 // Fatal Lore: the targets of the mode an *opponent* chose (CR 700.2e, then
 // CR 601.2c). The other half of the opponent-mode prompt, on the caster's seat
 // this time, and still inside the announcement — nobody has priority until it
@@ -16774,6 +16850,7 @@ function renderState(state, { skipStaleCheck = false } = {}) {
   renderSearchExileModal(getSearchExileInfo(state));
   renderUntapUpToModal(getUntapUpToInfo(state));
   renderPermanentSetChoiceModal(getPermanentSetChoiceInfo(state));
+  renderKeepPermanentsModal(getKeepPermanentsInfo(state));
   renderModalModeTargetsModal(getModalModeTargetsInfo(state));
   renderLookTopPickModal(getLookTopPickInfo(state));
   renderRevealedHandPickModal(getRevealedHandPickInfo(state));

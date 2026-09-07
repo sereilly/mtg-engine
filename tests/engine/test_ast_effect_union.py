@@ -53,6 +53,12 @@ _NOT_STATEMENTS = {
     # lowered instruction. `_lower_prevent_damage` folds it into which shield is
     # armed and nothing dispatches on it.
     "PreventedRider",
+    # One keep of a KeepChosenSacrificeRest - how many permanents may fill it
+    # and what they must be (Cataclysm's "an artifact", Limited Resources' "five
+    # lands"). A term of the sentence's payload rather than a step: the
+    # lowering expands the whole tuple into the instruction's `slots` key and
+    # nothing dispatches on it.
+    "KeepSlot",
 }
 
 

@@ -12,7 +12,7 @@ from ..events import emit
 from ..life_prohibitions import life_gain_banned
 from ..land_play_allowance import (
     LandPlayAllowance, extra_land_plays_this_turn, land_play_allowance_for,
-    land_plays_forbidden_this_turn, lands_cannot_be_played,
+    land_plays_forbidden_this_turn, land_play_prohibition, prohibition_holds,
 )
 from ..models import CardDefinition, Permanent, PlayerState
 from ..pt import add_plus1_counters, add_pt_counters
@@ -1803,15 +1803,21 @@ class EffectsMixin:
         # extra plays adds up to one a player may take — a Fastbond beside a
         # Worms of the Earth is still no land drops. Every battlefield, because
         # the sentence names no seat.
+        # "…**as long as ten or more lands are on the battlefield**" (Limited
+        # Resources) is the same withdrawal with a board count on it, so the
+        # condition rides the record and is asked here rather than being a
+        # second table: one prohibition, one reader, and a card whose condition
+        # is not met is a card that bans nothing at all.
         banning = next(
             (
-                perm for perm in self.all_permanents()
-                if lands_cannot_be_played(perm.effective_card.oracle_text)
+                (perm, found) for perm in self.all_permanents()
+                if (found := land_play_prohibition(perm.effective_card.oracle_text))
+                is not None and prohibition_holds(self, found)
             ),
             None,
         )
         if banning is not None:
-            return f"no player can play lands ({banning.card.name})"
+            return f"no player can play lands ({banning[0].card.name})"
         # "Target player can't play lands this turn." (Solfatara.) The same
         # withdrawal for one seat and one turn, asked in the same place and for
         # the same reason: no number of extra plays adds up to one a prohibited

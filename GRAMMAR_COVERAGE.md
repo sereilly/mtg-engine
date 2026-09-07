@@ -36,7 +36,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | TMP | 335 | 478 | 92.5% | 92.3% | 65.7% | 271 |
 | STH | 143 | 215 | 88.4% | 88.4% | 62.8% | 124 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| EXO *(measured)* | 143 | 207 | 87.9% | 87.4% | 63.8% | 122 |
+| EXO *(measured)* | 143 | 207 | 89.4% | 88.9% | 64.7% | 124 |
 | **All (shipped)** | **4730** | **7032** | **90.5%** | **89.8%** | **59.8%** | **3510** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -49,7 +49,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 362 | 160 | expected a subject |  |
+| 361 | 159 | expected a subject |  |
 | 111 | 56 | unrecognized effect verb |  |
 | 85 | 41 | unconsumed text |  |
 | 37 | 22 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -70,10 +70,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 4 | 1 | expected a destination zone after 'return' |  |
 | 3 | 1 | expected 'of' |  |
 | 3 | 3 | unrecognized "can't be" restriction |  |
-| 3 | 3 | expected 'a' |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 1 | expected 'the number of' in a where-clause |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
+| 1 | 1 | expected what to gain control of |  |
 
 ## Cards executing through the grammar
 
@@ -874,6 +874,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{2}, {T}: Add {U} or {R}.`
 - **Cat Burglar**
   - `{2}{B}, {T}: Target player discards a card. Activate only as a sorcery.`
+- **Cataclysm**
+  - `Each player chooses from among the permanents they control an artifact, a creature, an enchantment, and a land, then sacrifices the rest.`
 - **Catacomb Dragon**
   - `Whenever this creature becomes blocked by a nonartifact, non-Dragon creature, that creature gets -X/-0 until end of turn, where X is half the creature's power, rounded down.`
 - **Cave People**
@@ -3498,6 +3500,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature attacks and isn't blocked, it assigns no combat damage this turn and defending player loses 4 life.`
 - **Lim-Dûl's Vault**
   - `Look at the top five cards of your library. As many times as you choose, you may pay 1 life, put those cards on the bottom of your library in any order, then look at the top five cards of your library. Then shuffle and put the last cards you looked at this way on top in any order.`
+- **Limited Resources**
+  - `When this enchantment enters, each player chooses five lands they control and sacrifices the rest.`
 - **Lion's Eye Diamond**
   - `Discard your hand, Sacrifice this artifact: Add three mana of any one color. Activate only as an instant.`
 - **Living Armor**

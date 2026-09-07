@@ -57,6 +57,7 @@ from .effects import (
     _parse_exile_entire_library,
     _parse_extra_turn,
     _parse_mill,
+    parse_keep_then_sacrifice_rest,
     _parse_play_with_hand_revealed,
     _parse_player_adds_mana,
     _parse_player_exiles_graveyard,
@@ -285,6 +286,18 @@ def parse_player_subject_verb(
         types = parse_choose_card_type(stream, source_spec)
         if types is not None:
             return types
+        # "Each player **chooses five lands they control and sacrifices the
+        # rest**." (Limited Resources; Cataclysm prints the four-slot
+        # spelling.) Read **before** the bare pick below, and that order is
+        # load-bearing rather than stylistic: this sentence's keep list is a
+        # printed *count* in front of a plural, and `parse_target_spec` — the
+        # first thing that production reaches for — **raises** on one
+        # ("expected 'a' at 'five lands they control'"). A branch that raises
+        # takes the line with it, so a reader that ran second would never be
+        # asked. Declines without consuming, like every arm around it.
+        kept = parse_keep_then_sacrifice_rest(stream, source_spec)
+        if kept is not None:
+            return kept
         # "That creature's controller **chooses a creature that this card
         # could enchant**." (Takklemaggot.) Read first because it declines
         # without consuming, where the paragraph below expects "a card
