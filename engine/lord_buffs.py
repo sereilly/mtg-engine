@@ -351,6 +351,27 @@ class LordBuff:
     # After ``lost_keywords`` for that field's own reason: the positional
     # callers above must keep the arguments they were written with.
     per_counter: str | None = None
+    # "Each creature gets +1/+1 **for each other creature on the battlefield
+    # that shares at least one creature type with it**." (Coat of Arms.) The
+    # same shape as ``per_counter`` and the one thing that is genuinely
+    # different about it: the multiplier is counted **per buffed creature**
+    # rather than off the source, because the set it counts is defined by a
+    # relation to the creature the buff is being applied to. So it cannot be
+    # folded into the delta when the sentence compiles, and it cannot even be
+    # folded once per recompute — two creatures under the same Coat of Arms
+    # get different numbers.
+    #
+    # A flag rather than a phrase, because there is exactly one relation to
+    # count and naming it in the payload would be inventing a vocabulary with
+    # one word in it. A card printing a *different* relation adds a value here
+    # and a branch in the one place that reads it.
+    #
+    # Only the P/T delta scales, for ``per_counter``'s reason exactly, and
+    # :func:`lord_buff_for` refuses the combination the same way.
+    #
+    # After ``per_counter`` for that field's own reason: the positional callers
+    # above must keep the arguments they were written with.
+    per_shared_creature_type: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -378,6 +399,34 @@ _KEYWORD_RE = re.compile(r"^ha(?:ve|s) (?P<keywords>.+)$")
 _PER_COUNTER_RE = re.compile(
     r"^(?P<effect>.+?) for each (?P<counter>[a-z][a-z-]*) counter on this [a-z]+$"
 )
+
+
+#: "…gets +1/+1 **for each other creature on the battlefield that shares at
+#: least one creature type with it**." (Coat of Arms.) The trailing scale
+#: clause, lifted off the effect for `_PER_COUNTER_RE`'s reason exactly — the
+#: P/T patterns are anchored at both ends, so a tail left on refuses the whole
+#: line and the anthem vanishes.
+#:
+#: Spelled out rather than parameterised. What varies between this sentence and
+#: any other "for each" is the *set being counted*, and the set here is defined
+#: by a relation to the buffed creature that only one reader can answer; a
+#: pattern with a capture would admit relations nothing counts.
+_PER_SHARED_TYPE_RE = re.compile(
+    r"^(?P<effect>.+?) for each other creature on the battlefield that "
+    r"shares at least one creature type with it$"
+)
+
+
+def _split_per_shared_type(effect: str) -> tuple[str, bool]:
+    """*effect* with Coat of Arms' trailing scale clause removed.
+
+    Returns ``(effect, whether the clause was there)`` — the twin of
+    :func:`_split_per_counter` one multiplier over, and split for its reason.
+    """
+    match = _PER_SHARED_TYPE_RE.match(effect)
+    if match is None:
+        return effect, False
+    return match.group("effect").strip(), True
 
 
 def _split_per_counter(effect: str) -> tuple[str, str | None]:
@@ -719,6 +768,7 @@ def lord_buff_for(normalized_line: str) -> LordBuff | None:
         return None
     effect = clause[match.start():].strip()
     effect, per_counter = _split_per_counter(effect)
+    effect, per_shared_type = _split_per_shared_type(effect)
 
     keywords: tuple[str, ...] = ()
     protection_from: tuple[str, ...] = ()
@@ -795,6 +845,14 @@ def lord_buff_for(normalized_line: str) -> LordBuff | None:
     if any(not grantable_protection_quality(word) for word in protection_from):
         return None
 
+    if per_shared_type and (
+        keywords or protection_from or granted_ability or per_counter
+        or not (power or toughness)
+    ):
+        # ``per_counter``'s refusal, one multiplier over and for its reason: the
+        # scale multiplies a P/T delta and nothing else, and two scales on one
+        # sentence is a product nothing computes.
+        return None
     if per_counter is not None and (
         keywords or protection_from or granted_ability or not (power or toughness)
     ):
@@ -807,6 +865,7 @@ def lord_buff_for(normalized_line: str) -> LordBuff | None:
     return LordBuff(
         subject, power, toughness, keywords, protection_from, granted_ability,
         condition, per_counter=per_counter,
+        per_shared_creature_type=per_shared_type,
     )
 
 
@@ -864,6 +923,8 @@ def lord_buff_payload(buff: LordBuff) -> dict[str, object]:
         payload["condition"] = buff.condition
     if buff.per_counter:
         payload["per_counter"] = buff.per_counter
+    if buff.per_shared_creature_type:
+        payload["per_shared_creature_type"] = True
     return payload
 
 
@@ -893,6 +954,7 @@ def lord_buff_from_payload(payload: dict) -> LordBuff:
         granted_ability=payload.get("granted_ability"),
         condition=payload.get("condition"),
         per_counter=payload.get("per_counter"),
+        per_shared_creature_type=bool(payload.get("per_shared_creature_type")),
     )
 
 

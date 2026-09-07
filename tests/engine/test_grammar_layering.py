@@ -171,6 +171,24 @@ PARSE_LAYERS = [
     # Below `postmodifiers`, which calls it and is never imported back, and
     # above `readers`, whose source-reference production two of its arms ask.
     "histories",
+    # A printed **bound on a quantity** — a threshold it is compared against
+    # ("power 3 or greater") or a ceiling it may not exceed ("but not more than
+    # the creature's toughness"). Split out of `amounts` at Exodus' wave 1, on
+    # the seam that module had already written down in prose: its own comment
+    # said a comparison "lives with the amounts it compares rather than with
+    # the filter that happens to carry one", and the section below it was
+    # headed "Caps on a quantity". The cut is those two sections whole.
+    #
+    # Ranked where `amounts` cannot be: this reads `parse_amount` and nothing
+    # in `amounts` reads back, so unlike its parent it is not half of the
+    # `nouns` recursion. Above `readers`, which is where these names could
+    # *not* go for that same reason — a comparison takes an amount, and
+    # `amounts` reads `readers` through `records`.
+    #
+    # Below `postmodifiers`, `nouns` and `conditions`, its three callers, and
+    # `nouns` still re-exports `parse_comparison` under its own name so no
+    # caller of `nouns.parse_comparison` moved.
+    "bounds",
     # The trailing half of a noun phrase. Below `nouns`, which hands it the
     # recursive parser rather than being imported back — "blocking target
     # attacking creature" nests a whole phrase.

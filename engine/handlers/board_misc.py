@@ -2066,6 +2066,66 @@ def move_counter_from_self(game: Game, instruction: OracleInstruction, context: 
     return True, "resolved"
 
 
+@effect_handler("move_all_counters_to_self")
+def move_all_counters_to_self(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"When this creature enters, move all +1/+1 counters from all creatures
+    onto it." (Spike Cannibal.)
+
+    :func:`move_counter_from_self` read from the other end — the destination is
+    the ability's own source and the sources are a *described* set, so nothing
+    is chosen and nothing is targeted and the board is read as the effect
+    resolves (CR 611.2c).
+
+    **CR 122.5 makes it one action**, which is why it is one handler rather than
+    a counter sweep composed with a placement: the number placed is exactly the
+    number the board gave up, and an emptied board places nothing at all. The
+    same reason ``move_counter_from_self`` is one handler, over a set.
+
+    The source is skipped rather than counted. Moving a counter from a permanent
+    onto itself does nothing (CR 122.5 — it is one object), and the Spike is a
+    creature the phrase names: taking its counters off and putting the same
+    number back is the same answer with a state-trigger event in the middle that
+    never happened.
+
+    Reads and writes through the shared counter seams
+    (``named_counters.counters_on`` / ``remove_counters`` and
+    ``Game.place_pt_counters``), so a P/T counter brings its layer 7c
+    contribution with it in both directions (CR 122.1a).
+    """
+    from ..subject_filters import subject_matches
+
+    destination = context.source_permanent
+    if destination is None or not game.is_on_battlefield(destination):
+        game.log.append(f"{context.card.name}: nothing to move the counters onto")
+        return True, "resolved"
+    counter = str(instruction.payload.get("counter", "+1/+1"))
+    described = dict(instruction.payload.get("filter") or {})
+    observer = (
+        game.players.index(context.caster) if context.caster in game.players else None
+    )
+    taken = 0
+    for perm in game.all_permanents():
+        if perm is destination:
+            continue
+        if not subject_matches(
+            game, perm, described, observer=observer, source=destination
+        ):
+            continue
+        held = counters_on(perm, counter)
+        if held <= 0:
+            continue
+        remove_counters(perm, counter, held)
+        taken += held
+    if taken <= 0:
+        game.log.append(f"{context.card.name}: no {counter} counters to move")
+        return True, "resolved"
+    game.place_pt_counters(destination, counter, taken)
+    game.log.append(
+        f"Moved {taken} {counter} counter(s) onto {destination.card.name}"
+    )
+    return True, "resolved"
+
+
 @effect_handler("remove_all_counters_from_bound")
 def remove_all_counters_from_bound(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"When this creature leaves the battlefield or becomes untapped, remove

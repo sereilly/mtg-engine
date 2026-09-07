@@ -682,7 +682,13 @@ class AbilityActivationMixin:
         # this function is arranged that way already: every other cost checks
         # its payability here and pays further down.
         counters_removed_for_cost = 0
-        if ability.cost.remove_counter:
+        # "{2}, Remove a +1/+1 counter from **a creature you control**" (Spike
+        # Rogue). The same cost off a permanent the payer picks, collected
+        # further down with the other chosen costs — where `cost_permanent_ids`
+        # is read — rather than here, because the candidate list is a board
+        # scan and not a look at the source. This branch stays the
+        # self-referring reading and nothing else.
+        if ability.cost.remove_counter and ability.cost.remove_counter_filter is None:
             from ...named_counters import counters_on
 
             kind = ability.cost.remove_counter
@@ -1532,6 +1538,57 @@ class AbilityActivationMixin:
                 named[0] if named else self.default_sacrifice_pick(candidates)
             )
 
+        # "{2}, **Remove a +1/+1 counter from a creature you control**: …"
+        # (Spike Rogue). The exact mirror of the block above — the same chosen
+        # noun phrase, the same `cost_permanent_ids` channel — and unpayable in
+        # one more way than the placing twin is: the permanent must not merely
+        # match the phrase, it must be *holding* the counters (CR 601.2h). A
+        # candidate list that ignored the counters would refuse the activation
+        # further down with the mana already spent, or pay nothing at all.
+        #
+        # The default pick is deliberately **not** `default_sacrifice_pick`: the
+        # permanent this cost touches is not given up, it is shrunk by one
+        # counter, and the honest default is the one with the most to spare —
+        # the seat's own answer is what `cost_permanent_ids` carries when there
+        # is one.
+        counter_removal_permanent = None
+        if ability.cost.remove_counter_filter is not None:
+            from ...named_counters import counters_on
+
+            kind = ability.cost.remove_counter
+            wanted = ability.cost.remove_counter_count
+            needed = int(wanted) if isinstance(wanted, int) else 1
+            described = ability.cost.remove_counter_filter
+            candidates = [
+                perm
+                for perm in self.controlled_by(controller_index)
+                if subject_matches(
+                    self, perm, described,
+                    observer=controller_index, source=permanent,
+                )
+                and counters_on(perm, str(kind)) >= needed
+            ]
+            if not candidates:
+                details = (
+                    f"{permanent.card.name}: no "
+                    f"{filter_head_noun(described)} with a {kind} counter to "
+                    "remove"
+                )
+                self.log.append(details)
+                return SimulationResult(permanent.card.name, False, "unsupported", details)
+            named = [
+                found
+                for found in (
+                    self.permanent_by_id(pid) for pid in (cost_permanent_ids or [])
+                )
+                if found is not None and any(c is found for c in candidates)
+            ]
+            counter_removal_permanent = (
+                named[0] if named
+                else max(candidates, key=lambda perm: counters_on(perm, str(kind)))
+            )
+            counters_removed_for_cost = needed
+
         # "{T}, Sacrifice a creature **and a Swamp**: …" (Viscerid Drone). The
         # second object a conjoined sacrifice names, collected here rather than
         # in the branch above because it is a *different* noun phrase with its
@@ -1631,9 +1688,21 @@ class AbilityActivationMixin:
         if counters_removed_for_cost:
             from ...named_counters import remove_counters
 
+            # The chosen permanent when the card named one (Spike Rogue), and
+            # the source otherwise (Scavenging Ghoul). One payment either way:
+            # what differs is only which permanent gives the counters up, which
+            # is the whole of `remove_counter_filter` — the same arrangement the
+            # placing twin makes below with `counter_cost_permanent`.
+            payer = counter_removal_permanent or permanent
             remove_counters(
-                permanent, ability.cost.remove_counter, counters_removed_for_cost
+                payer, ability.cost.remove_counter, counters_removed_for_cost
             )
+            if payer is not permanent:
+                self.log.append(
+                    f"{payer.card.name} gave up {counters_removed_for_cost} "
+                    f"{ability.cost.remove_counter} counter(s) "
+                    f"({permanent.card.name}'s cost)"
+                )
 
         required_cost = dict(ability.cost.mana)
         # "Pay {1} **for each +1/+1 counter on this creature**" (Skeleton
@@ -2906,6 +2975,7 @@ def _graveyard_cost_refusal(cost) -> str | None:
         ("put_counter_filter", "a counter cost on a chosen permanent"),
         ("sacrifice_also_filter", "a conjoined sacrifice cost"),
         ("remove_counter", "a counter-removal cost"),
+        ("remove_counter_filter", "a counter-removal cost on a chosen permanent"),
         ("tap_count", "a tap-other-permanents cost"),
         ("return_to_hand_count", "a return-other-permanents-to-hand cost"),
         ("untap_filter", "an untap-another-permanent cost"),

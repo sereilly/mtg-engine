@@ -340,27 +340,43 @@ def _parse_counter_removal_cost(stream: TokenStream) -> ast.RemoveCounterCost:
     carried verbatim (CR 122.1 lets a counter have any name) and the
     surrounding words pin the structure.
 
-    The subject must be the ability's own source: :class:`ast.RemoveCounterCost`
-    has no subject field, so "remove a counter from target creature" would be
-    consumed and then read as the source's counter. That refuses instead.
+    The source is read first, and by ``accept_source_reference`` rather than by
+    the noun parser, because identity is the whole question in that spelling —
+    the cost gives up a counter on *this* permanent and nothing about the
+    permanent's characteristics is consulted. It is also the reader that knows a
+    card naming itself is naming the source ("Remove a dream counter from
+    **Rasputin**"), which the noun parser reads only in the "this <noun>"
+    spelling; going through the filter first meant the self-named spelling
+    refused with the noun parser's error rather than being read at all.
 
-    Asked of ``accept_source_reference`` rather than of the noun parser, because
-    identity is the whole question here — the cost gives up a counter on *this*
-    permanent and nothing about the permanent's characteristics is consulted. It
-    is also the reader that knows a card naming itself is naming the source
-    ("Remove a dream counter from **Rasputin**"), which the noun parser reads
-    only in the "this <noun>" spelling; going through the filter first meant the
-    self-named spelling refused with the noun parser's error rather than being
-    read at all.
+    "{2}, Remove a +1/+1 counter from **a creature you control**" (Spike Rogue)
+    is the same cost paid off a permanent the payer picks, and it is read
+    through the same pair the *placing* twin above is —
+    :func:`_parse_cost_object` for what the phrase names and
+    :func:`_is_chargeable_counter_target` for whether the payment path can find
+    it. One reader for both directions, so a phrase this admits and the charger
+    refuses cannot exist: that gap is an ability the grammar lets through and
+    nothing charges, which is an ability activated for free.
     """
     stream.expect_word("remove")
     count = ast.Fixed(1) if stream.accept_word("a", "an") else parse_amount(stream)
     counter = _expect_counter_kind(stream, " to remove").text
     stream.expect_word("counter", "counters")
     stream.expect_word("from")
-    if not accept_source_reference(stream):
-        raise stream.error("a counter-removal cost only reads the ability's own source")
-    return ast.RemoveCounterCost(counter, count)
+    if accept_source_reference(stream):
+        return ast.RemoveCounterCost(counter, count)
+    marked = stream.mark()
+    try:
+        subject = _parse_cost_object(stream, "remove a counter from")
+    except GrammarError:
+        subject = None
+    if subject is not None and _is_chargeable_counter_target(subject):
+        return ast.RemoveCounterCost(counter, count, subject=subject)
+    stream.reset(marked)
+    raise stream.error(
+        "a counter-removal cost reads the ability's own source or a permanent "
+        "the payer can be asked for"
+    )
 
 
 def _accept_mana_run(

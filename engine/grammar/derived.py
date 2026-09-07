@@ -67,6 +67,7 @@ from ..land_types import (
     static_supertype_removal_for,
     static_supertype_removal_payload,
 )
+from .lexer import strip_reminder_text
 from ..lord_buffs import LORD_BUFF_KIND, lord_buff_for, lord_buff_payload
 from ..oracle_types import OracleInstruction
 from ..zone_copies import (
@@ -129,11 +130,21 @@ def _normalized(line: str) -> str:
     """The line as the derivation tables see it.
 
     Every matcher below takes what ``oracle.normalize_creature_line`` produces,
-    so this reduction has to be the same one: lowercased, whitespace collapsed,
-    trailing stop dropped. Reminder text is already gone by the time the parser
-    is reached, because the lexer strips it.
+    so this reduction has to be the same one: reminder text removed, lowercased,
+    whitespace collapsed, trailing stop dropped.
+
+    **The reminder strip is this function's job and used to say it was somebody
+    else's.** The comment here read "reminder text is already gone by the time
+    the parser is reached, because the lexer strips it" — true of the
+    *productions*, which read the lexer's tokens, and false here: ``parse_line``
+    hands this function the line it was given, unchanged, so a table saw the
+    parentheses the productions never do. Every matcher is anchored at both
+    ends, so what that produced was not a mis-match but a silent non-match, and
+    it was invisible for as long as no card printed a derived line with a
+    reminder on it. Coat of Arms is the first, and its anthem simply did not
+    exist.
     """
-    return " ".join(line.split()).strip().lower().rstrip(".")
+    return " ".join(strip_reminder_text(line)[0].split()).strip().lower().rstrip(".")
 
 
 def derived_instruction_for_line(line: str) -> tuple[str, OracleInstruction] | None:

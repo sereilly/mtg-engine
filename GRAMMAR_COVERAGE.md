@@ -16,28 +16,28 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Set | Cards | Lines | Parsed | Lowered | Executed | Cards executing |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 388 | 86.6% | 85.1% | 48.5% | 171 |
-| LEB | 292 | 389 | 86.6% | 85.1% | 48.6% | 172 |
-| 2ED | 292 | 389 | 86.6% | 85.1% | 48.6% | 172 |
+| LEA | 290 | 388 | 87.1% | 85.6% | 48.5% | 171 |
+| LEB | 292 | 389 | 87.1% | 85.6% | 48.6% | 172 |
+| 2ED | 292 | 389 | 87.1% | 85.6% | 48.6% | 172 |
 | ARN | 78 | 108 | 77.8% | 74.1% | 51.9% | 46 |
 | ATQ | 85 | 120 | 90.8% | 90.8% | 63.3% | 68 |
-| 3ED | 296 | 389 | 88.7% | 86.6% | 50.9% | 178 |
+| 3ED | 296 | 389 | 89.2% | 87.1% | 50.9% | 178 |
 | LEG | 310 | 431 | 89.6% | 88.4% | 58.7% | 217 |
 | DRK | 119 | 167 | 96.4% | 96.4% | 73.7% | 101 |
 | FEM | 102 | 191 | 99.0% | 99.0% | 75.9% | 99 |
-| 4ED | 368 | 520 | 92.1% | 91.5% | 55.2% | 251 |
-| ICE | 373 | 601 | 89.5% | 89.0% | 63.4% | 301 |
+| 4ED | 368 | 520 | 92.5% | 91.9% | 55.2% | 251 |
+| ICE | 373 | 601 | 89.9% | 89.4% | 63.4% | 301 |
 | HML | 115 | 189 | 93.7% | 93.7% | 65.1% | 93 |
 | ALL | 144 | 251 | 90.4% | 90.0% | 70.5% | 132 |
-| MIR | 335 | 545 | 93.2% | 93.0% | 63.9% | 281 |
+| MIR | 335 | 545 | 93.4% | 93.2% | 63.9% | 281 |
 | VIS | 167 | 278 | 89.6% | 89.6% | 61.5% | 138 |
-| 5ED | 434 | 631 | 93.7% | 93.3% | 60.7% | 318 |
-| WTH | 167 | 249 | 88.0% | 88.0% | 64.7% | 140 |
-| TMP | 335 | 478 | 92.1% | 91.8% | 65.5% | 271 |
+| 5ED | 434 | 631 | 94.1% | 93.8% | 60.7% | 318 |
+| WTH | 167 | 249 | 88.4% | 88.4% | 64.7% | 140 |
+| TMP | 335 | 478 | 92.5% | 92.3% | 65.7% | 271 |
 | STH | 143 | 215 | 88.4% | 88.4% | 62.8% | 124 |
-| M21 | 285 | 503 | 87.3% | 87.1% | 61.0% | 237 |
-| EXO *(measured)* | 143 | 207 | 84.1% | 83.1% | 60.4% | 116 |
-| **All (shipped)** | **4730** | **7032** | **90.2%** | **89.5%** | **59.8%** | **3510** |
+| M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
+| EXO *(measured)* | 143 | 207 | 87.0% | 87.0% | 63.3% | 121 |
+| **All (shipped)** | **4730** | **7032** | **90.5%** | **89.8%** | **59.8%** | **3510** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
 
@@ -49,9 +49,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 385 | 167 | expected a subject |  |
-| 112 | 57 | unrecognized effect verb |  |
-| 87 | 43 | unconsumed text |  |
+| 364 | 162 | expected a subject |  |
+| 111 | 56 | unrecognized effect verb |  |
+| 85 | 41 | unconsumed text |  |
 | 37 | 22 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 14 | 13 | expected 'unless defending player controls' |  |
@@ -70,14 +70,14 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 4 | 1 | expected a destination zone after 'return' |  |
 | 3 | 1 | expected 'of' |  |
 | 3 | 3 | unrecognized "can't be" restriction |  |
-| 3 | 3 | a counter-removal cost only reads the ability's own source |  |
 | 3 | 3 | expected 'a' |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 1 | expected 'the number of' in a where-clause |  |
+| 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
 
 ## Cards executing through the grammar
 
-3510 cards, 4203 lines.
+3510 cards, 4204 lines.
 
 - **Abandon Hope**
   - `Look at target opponent's hand and choose X cards from it. That player discards those cards.`
@@ -1093,6 +1093,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this creature enters, destroy target enchantment.`
 - **Coal Golem**
   - `{3}, Sacrifice this creature: Add {R}{R}{R}.`
+- **Coat of Arms**
+  - `Each creature gets +1/+1 for each other creature on the battlefield that shares at least one creature type with it. (For example, if two Goblin Warriors and a Goblin Shaman are on the battlefield, each gets +2/+2.)`
 - **Cockatrice**
   - `Whenever this creature blocks or becomes blocked by a non-Wall creature, destroy that creature at end of combat.`
   - `Whenever this creature blocks or becomes blocked by a non-Wall creature, destroy that creature at end of combat.`
@@ -1751,6 +1753,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of each player's first main phase, that player adds {G}{G}.`
 - **Eladamri, Lord of Leaves**
   - `Other Elf creatures have forestwalk. (They can't be blocked as long as defending player controls a Forest.)`
+  - `Other Elves have shroud. (They can't be the targets of spells or abilities.)`
 - **Elder Druid**
   - `{3}{G}, {T}: You may tap or untap target artifact, creature, or land.`
   - `{3}{G}, {T}: You may tap or untap target artifact, creature, or land.`
@@ -4272,6 +4275,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of the upkeep of enchanted creature's controller, that player may pay {4}. If the player does, untap the creature.`
 - **Parapet**
   - `Creatures you control get +0/+1.`
+- **Paroxysm**
+  - `At the beginning of the upkeep of enchanted creature's controller, that player reveals the top card of their library. If that card is a land card, destroy that creature. Otherwise, it gets +3/+3 until end of turn.`
 - **Part Water**
   - `X target creatures gain islandwalk until end of turn. (They can't be blocked as long as defending player controls an Island.)`
 - **Patagia Golem**
@@ -4473,6 +4478,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, look at the top two cards of your library. You may sacrifice this enchantment and pay {2}{G}{G}. If you do, put one of those cards into your hand. If you don't, put one of those cards on the bottom of your library.`
 - **Presence of the Master**
   - `Whenever a player casts an enchantment spell, counter it.`
+- **Price of Progress**
+  - `Price of Progress deals damage to each player equal to twice the number of nonbasic lands that player controls.`
 - **Pridemalkin**
   - `When this creature enters, put a +1/+1 counter on target creature you control.`
   - `Each creature you control with a +1/+1 counter on it has trample. (It can deal excess combat damage to the player or planeswalker it's attacking.)`
@@ -4814,6 +4821,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Return target creature card from your graveyard to the battlefield.`
   - `Return target creature card from your graveyard to the battlefield.`
   - `Return target creature card from your graveyard to the battlefield.`
+- **Resuscitate**
+  - `Until end of turn, creatures you control gain "{1}: Regenerate this creature."`
 - **Retribution**
   - `Choose two target creatures controlled by the same opponent. That player chooses and sacrifices one of those creatures. Put a -1/-1 counter on the other.`
 - **Retribution of the Meek**
@@ -5587,6 +5596,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Spike Breeder**
   - `{2}, Remove a +1/+1 counter from this creature: Put a +1/+1 counter on target creature.`
   - `{2}, Remove a +1/+1 counter from this creature: Create a 1/1 green Spike creature token.`
+- **Spike Cannibal**
+  - `When this creature enters, move all +1/+1 counters from all creatures onto it.`
 - **Spike Colony**
   - `{2}, Remove a +1/+1 counter from this creature: Put a +1/+1 counter on target creature.`
 - **Spike Drone**
@@ -5599,6 +5610,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}, Remove a +1/+1 counter from this creature: Regenerate this creature.`
 - **Spike Rogue**
   - `{2}, Remove a +1/+1 counter from this creature: Put a +1/+1 counter on target creature.`
+  - `{2}, Remove a +1/+1 counter from a creature you control: Put a +1/+1 counter on this creature.`
 - **Spike Soldier**
   - `{2}, Remove a +1/+1 counter from this creature: Put a +1/+1 counter on target creature.`
   - `Remove a +1/+1 counter from this creature: This creature gets +2/+2 until end of turn.`

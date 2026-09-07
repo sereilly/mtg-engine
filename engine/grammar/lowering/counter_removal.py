@@ -267,8 +267,14 @@ def _lower_move_counter(node: "ast.MoveCounter") -> tuple[OracleInstruction, ...
     happens is the *source's* counter store, which is this module's question,
     and the placement is the tail of it.
 
-    Three refusals, each a way the sentence could otherwise do more than it
-    says:
+    ``Move all +1/+1 counters from all creatures onto it.`` (Spike Cannibal.)
+    The same action read from the other end — the destination is the source and
+    the *sources* are a described set — handled by the first branch below and
+    given its own kind for the reason CR 122.5 gives: a move is one action, so
+    the number placed is the number the board actually gave up.
+
+    Three refusals on the ordinary reading, each a way the sentence could
+    otherwise do more than it says:
 
     * The source must be the ability's **own permanent**. Every printing of
       this sentence names it, and a wording naming something else would be an
@@ -281,6 +287,39 @@ def _lower_move_counter(node: "ast.MoveCounter") -> tuple[OracleInstruction, ...
       the handler cannot re-ask at resolution, and a move of zero is a move
       that silently does nothing.
     """
+    # "When this creature enters, move **all +1/+1 counters from all creatures**
+    # onto it." (Spike Cannibal.) The move read from the other end: the
+    # *destination* is the ability's own source and the sources are a described
+    # set, which is the mirror of the branch below rather than a variant of it —
+    # so it is its own kind, for `remove_all_counters_from_matching`'s reason
+    # exactly. One instruction, not a sweep composed with a placement, because
+    # CR 122.5 makes a move one action: the number placed is the number actually
+    # taken, and a composed pair would place a printed number whatever the board
+    # gave up.
+    #
+    # Emptying only, and the set is a description the shared matcher can test.
+    # "Move **a** +1/+1 counter from all creatures" is a decrement over a set
+    # nobody prints, and a count lowered onto this handler would empty every
+    # creature the card says to decrement by one.
+    if (
+        _is_source(node.destination)
+        and isinstance(node.source, ast.TargetSpec)
+        and node.source.quantifier == "all"
+        and not node.source.targeted
+        and isinstance(node.count, ast.AllOf)
+    ):
+        described = testable_filter_payload(
+            node.source.filter,
+            refusal="a counter-move sweep cannot test this restriction",
+            node=node,
+            require_narrowing=False,
+        )
+        return (
+            OracleInstruction(
+                "move_all_counters_to_self", "",
+                {"counter": node.counter, "filter": described},
+            ),
+        )
     if not _is_source(node.source):
         raise LoweringError(
             "a counter is moved off the ability's own permanent", node=node

@@ -35,9 +35,9 @@ from typing import Callable
 
 from . import ast
 from .amounts import (accept_counter_kind, accept_counters_on_it_bound,
-                      accept_source_counter_bound,
-                      accept_comparative_characteristic,
-                      accept_source_relative_comparison, parse_comparison)
+                      accept_source_counter_bound)
+from .bounds import (accept_comparative_characteristic,
+                     accept_source_relative_comparison, parse_comparison)
 from .errors import GrammarError
 from .histories import accept_history_relation, accept_relative_clause_history
 from .lexer import PT, SELF

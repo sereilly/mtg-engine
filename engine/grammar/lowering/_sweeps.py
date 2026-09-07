@@ -176,7 +176,7 @@ def lower_each_matching_damage(
 
 
 def lower_counted_sweep_damage(
-    node: ast.DealDamage, recipient: ast.TargetSpec
+    node: ast.DealDamage, recipient: ast.TargetSpec, *, multiplier: int = 1
 ) -> tuple[OracleInstruction, ...]:
     """"…it deals damage to **each nonblue creature without flying** equal to
     half the number of Islands you control, rounded down." (Floodgate.)
@@ -223,7 +223,9 @@ def lower_counted_sweep_damage(
             {
                 "amount": "x",
                 "filter": described,
-                X_FROM_COUNT: count_spec(node.amount.filter, node),
+                X_FROM_COUNT: count_spec(
+                    node.amount.filter, node, multiplier=multiplier
+                ),
             },
         ),
     )

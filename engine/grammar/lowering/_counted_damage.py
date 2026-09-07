@@ -100,7 +100,7 @@ _BOARD_COUNTS_WITH_BASE = frozenset(
 _LOOPED_PLAYER_RECIPIENTS = frozenset({"each_player", "each_opponent"})
 
 
-def _recipient_seat_count(node: ast.DealDamage) -> dict | None:
+def _recipient_seat_count(node: ast.DealDamage, multiplier: int = 1) -> dict | None:
     """The count spec for "…equal to the number of <filter> **that player**
     controls", or None when the clause does not narrow to the recipient.
 
@@ -123,7 +123,9 @@ def _recipient_seat_count(node: ast.DealDamage) -> dict | None:
         raise LoweringError(
             "a per-recipient count cannot also name a zone owner", node=node
         )
-    spec = count_spec(dataclasses.replace(filt, controller=None), node)
+    spec = count_spec(
+        dataclasses.replace(filt, controller=None), node, multiplier=multiplier
+    )
     # `owner` is how the *single*-X evaluator picks a seat, and this spec is
     # never read through that path — the loop hands it each recipient directly.
     # Dropped rather than left saying "you", which is the one seat the phrase
@@ -314,7 +316,7 @@ def _damaged_player_is(recipients: tuple[ast.Recipient, ...], kind: str) -> bool
 
 
 def _lower_counted_damage(
-    node: ast.DealDamage, event: str | None = None
+    node: ast.DealDamage, event: str | None = None, *, multiplier: int = 1
 ) -> tuple[OracleInstruction, ...]:
     """"…deals damage to that player equal to the number of Swamps they control."
     (Karma.)
@@ -322,12 +324,25 @@ def _lower_counted_damage(
     Both halves are checked, not just the count: the handler damages the player
     whose upkeep is resolving, so lowering a clause that damages someone else
     onto it would hit the wrong seat while the card still reported as supported.
+
+    *multiplier* is the printed factor in front of the count — "equal to
+    **twice** the number of nonbasic lands that player controls" (Price of
+    Progress) — unwrapped by the caller and handed to ``count_spec``, which is
+    where every other scaled count in this engine carries it (``_scaled``
+    applies it once, for every aggregate). It reaches each spec-building branch
+    below rather than being applied to a number here, because there is no
+    number here: the count is taken at resolution, per seat.
     """
     assert isinstance(node.amount, ast.CountOf)
     if (
         node.amount.filter == _SWAMPS_THEY_CONTROL
         and _damaged_player_is(node.recipients, "that_player")
         and node.riders == ast.DamageRiders()
+        # Karma's fused kind carries no number of its own — it counts Swamps and
+        # deals that much — so a factor lowered onto it would be dropped. A
+        # multiplied printing falls through to the general per-seat spec below,
+        # which does carry one.
+        and multiplier == 1
     ):
         return (OracleInstruction("deal_damage_equal_to_swamps", "", {}),)
     # "…deals damage to any target equal to the number of Dogs you control."
@@ -344,7 +359,7 @@ def _lower_counted_damage(
     # player** controls" (Typhoon). One number per seat, so it travels on its
     # own key and only onto the two recipients whose handler branch loops.
     if isinstance(recipient, ast.PlayerRef):
-        per_recipient = _recipient_seat_count(node)
+        per_recipient = _recipient_seat_count(node, multiplier)
         if per_recipient is not None:
             # "At the beginning of **each player's** upkeep, this enchantment
             # deals damage to **that player** equal to the number of snow lands
@@ -431,7 +446,8 @@ def _lower_counted_damage(
     ):
         raise LoweringError("no handler aims this counted damage", node=node)
     payload: dict[str, object] = {
-        "amount": "x", X_FROM_COUNT: count_spec(node.amount.filter, node),
+        "amount": "x",
+        X_FROM_COUNT: count_spec(node.amount.filter, node, multiplier=multiplier),
     }
     if isinstance(recipient, ast.PlayerRef):
         # The seat comes off the resolution context either way — but *that a

@@ -40,7 +40,7 @@ Held at this rate, supporting the 26,113-card release line would need about **56
 | TMP | 335 | 335 (100.0%) | 1 (0.3%) | 485 | 0 (0.0%) | 1 | 0.3 |
 | STH | 143 | 143 (100.0%) | 0 (0.0%) | 215 | 0 (0.0%) | 0 | 0.0 |
 | M21 | 285 | 285 (100.0%) | 0 (0.0%) | 503 | 0 (0.0%) | 0 | 0.0 |
-| EXO *(measured)* | 143 | 128 (89.5%) | 0 (0.0%) | 183 | 0 (0.0%) | 0 | 0.0 |
+| EXO *(measured)* | 143 | 137 (95.8%) | 0 (0.0%) | 200 | 0 (0.0%) | 0 | 0.0 |
 | **Whole pool (shipped, deduped)** | **2966** | **2966 (100.0%)** | **58 (2.0%)** | **4645** | **54 (1.2%)** | **64** | **2.2** |
 
 *(measured)* — EXO are ingested for measurement and **not shipped**: `cards/manifest.json` lists them under `measured`, the engine's catalog does not load them, and no player can put one in a deck. They are reported here and excluded from the ALL row and from the ceilings, because a ratchet over a set nobody has implemented would fire on its composition rather than on anything anyone did. A measured set moves up to `sets` when it is fully supported.

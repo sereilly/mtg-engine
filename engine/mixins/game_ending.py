@@ -6,10 +6,11 @@ from functools import lru_cache
 from ..lethal_damage import lethal_damage_destroys
 from ..control import (
     LINKED_CONTROL_CONDITIONS,
+    change_control,
     control_changes,
     end_control_change,
 )
-from ..auras import auras_attached_to
+from ..auras import aura_grants_control, auras_attached_to
 from ..equipment import is_equipment, unattach_illegal_equipment
 from ..models import Permanent, PlayerState
 from ..oracle import compile_card_oracle
@@ -490,6 +491,64 @@ class GameEndingMixin:
                             "effect ended)"
                         )
                     changed = True
+
+            # "**You control** enchanted creature." (Control Magic, Steal
+            # Artifact, Dominating Licid.) CR 613 layer 2 derived from the
+            # *attachment* rather than performed once when an Aura spell
+            # resolves — which is what the Licids force: a Licid becomes an Aura
+            # through an activated ability and attaches through
+            # `attach_source_to_target`, so no Aura spell ever resolves and the
+            # resolution-time reading reached it not at all.
+            #
+            # Both directions here, in one pass, because that is what makes the
+            # claim in `auras.aura_continuous_claim` true: while the attachment
+            # holds the contribution is recorded, and the moment it does not the
+            # contribution is dropped and whatever else says who controls the
+            # permanent decides. There is no remembered delta and no list of
+            # detach sites to keep in step — the Licid's own "you may pay {U} to
+            # end this effect", CR 704.5m's fallen Aura and an Equipment moved
+            # to a new host are all just "not attached any more" on the next
+            # pass.
+            #
+            # Idempotent by construction: a contribution that already names the
+            # seat is left alone, so the sweep does not churn timestamps every
+            # time state-based actions run (which is constantly, CR 704.3).
+            for held in list(self.all_permanents()):
+                attachments = auras_attached_to(held)
+                for attachment in attachments:
+                    if not aura_grants_control(attachment):
+                        continue
+                    # CR 109.5: the ability's controller is the *attachment's*
+                    # controller, read through the layer that answers it — so an
+                    # opponent stealing the Control Magic takes the creature too.
+                    seat = self.controller_index_of(attachment)
+                    if seat is None:
+                        continue
+                    recorded = next(
+                        (entry for entry in control_changes(held)
+                         if entry["source"] is attachment),
+                        None,
+                    )
+                    if recorded is not None and recorded["controller_index"] == seat:
+                        continue
+                    change_control(held, seat, source=attachment)
+                    self._sync_control()
+                    self.log.append(
+                        f"{attachment.card.name} gives control of "
+                        f"{held.card.name} to {self.players[seat].name}"
+                    )
+                    changed = True
+                for entry in list(control_changes(held)):
+                    source = entry["source"]
+                    if not isinstance(source, Permanent):
+                        continue
+                    if not aura_grants_control(source):
+                        continue
+                    if any(one is source for one in attachments):
+                        continue
+                    if end_control_change(held, source=source):
+                        self._sync_control()
+                        changed = True
 
             # 704.5d: a token in any zone but the battlefield ceases to exist.
             # The zone seams (put_card_into_hand / put_card_into_library) and

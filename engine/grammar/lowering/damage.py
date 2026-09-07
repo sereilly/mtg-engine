@@ -250,6 +250,21 @@ def _lower_damage_shape(
     # the picker are whatever the quantity underneath already lowers to.
     if isinstance(node.amount, ast.Half):
         return _lower_halved_damage(node, event, produced)
+    # "…deals damage to each player equal to **twice** the number of nonbasic
+    # lands that player controls." (Price of Progress.) A printed factor over a
+    # counted quantity, unwrapped here and handed to the count branch below as a
+    # number rather than as a node: `count_spec` already carries a `multiplier`
+    # (CR 107.3, `handlers/_common._scaled` applies it once for every
+    # aggregate), so the factor travels the channel every other scaled count
+    # travels and no handler learns a new key.
+    #
+    # Read *before* the count branch and only over a `CountOf`, because that is
+    # the one definition below that can carry a factor: a `Times` over anything
+    # else falls to the refusal at the end of this function rather than silently
+    # losing the word, which on this card would be half the damage it prints.
+    multiplier, amount = 1, node.amount
+    if isinstance(amount, ast.Times) and isinstance(amount.of, ast.CountOf):
+        multiplier, node = amount.factor, dataclasses.replace(node, amount=amount.of)
     if isinstance(node.amount, ast.CountOf):
         # "…deals damage to **each nonblue creature without flying** equal to
         # half the number of Islands you control" (Floodgate). A described set
@@ -262,8 +277,10 @@ def _lower_damage_shape(
             and node.recipients[0].quantifier in ("each", "all")
             and not node.recipients[0].targeted
         ):
-            return lower_counted_sweep_damage(node, node.recipients[0])
-        return _lower_counted_damage(node, event)
+            return lower_counted_sweep_damage(
+                node, node.recipients[0], multiplier=multiplier
+            )
+        return _lower_counted_damage(node, event, multiplier=multiplier)
     # "…equal to the sacrificed creature's power" (Freyalise Supplicant, under
     # the half above). A characteristic of what the cost ate rather than a count
     # of anything on a board, so it sits beside the count rather than inside it.

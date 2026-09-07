@@ -278,7 +278,7 @@ def _parse_where_x_alternatives(stream: TokenStream) -> "ast.Amount":
     # follows, read here so it scales every one of them rather than only the
     # count: "twice the greatest power among …" would mean the same thing and
     # needs no second production. The factor is payload — see ``ast.Times``.
-    factor = _accept_multiplier(stream)
+    factor = accept_multiplier(stream)
     if factor is not None:
         scaled = parse_where_x_definition_body(stream)
         # "…where X is twice the number of age counters on this enchantment
@@ -305,12 +305,18 @@ def _parse_where_x_alternatives(stream: TokenStream) -> "ast.Amount":
     return parse_where_x_definition_body(stream)
 
 
-def _accept_multiplier(stream: TokenStream) -> int | None:
+def accept_multiplier(stream: TokenStream) -> int | None:
     """``twice`` / ``three times`` in front of a quantity, or None.
 
     Two spellings because English has two: a single word for 2 and an
     ``<n> times`` phrase for everything above it. Both produce a factor, so
     nothing downstream can tell which one the card printed.
+
+    Public because two front ends print the multiplier in front of the same
+    quantities: this module's ", where X is …" trailer and
+    ``amounts.parse_equal_to``'s "equal to …". A second copy is the fork
+    SET_PLAYBOOK records from Revised's round 8 — which definitions a card may
+    scale would depend on which sentence it printed them in.
     """
     word = stream.peek_word()
     if word in _MULTIPLIER_WORDS:

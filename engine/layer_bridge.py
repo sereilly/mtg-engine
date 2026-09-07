@@ -29,6 +29,7 @@ from .auras import (
     aura_keyword_removals,
     aura_pt_grant_per_counter,
     aura_static_pt_grant,
+    aura_card_type_grants,
     aura_type_grants,
     auras_attached_to,
 )
@@ -783,14 +784,24 @@ def collect_type_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
     # change below, and why the two cannot share a call. Derived from the Aura's
     # own text on every recompute and stamped with the moment it attached
     # (CR 613.7b), so detaching one simply stops contributing the type.
+    #
+    # "…and is an **artifact** in addition to its other types."
+    # (Transmogrifying Licid.) The same rider one level up CR 205's hierarchy,
+    # so it is the same contribution with the words in the other field: a card
+    # type (CR 205.2) rather than a creature subtype (CR 205.3). Read from a
+    # separate function for that reason — handing "artifact" to ``subtypes``
+    # would make the permanent an artifact-*subtype* nothing on any board is,
+    # and handing "Knight" to ``card_types`` would make it a card type.
     for aura in auras_attached_to(perm):
         added = aura_type_grants(aura.effective_card.oracle_text)
-        if not added:
+        added_card_types = aura_card_type_grants(aura.effective_card.oracle_text)
+        if not added and not added_card_types:
             continue
         effects.append(
             add_types(
                 only,
                 subtypes=list(added),
+                card_types=list(added_card_types),
                 timestamp=int(aura.metadata.get("aura_timestamp", 0)),
                 label=f"aura:{aura.card.name}",
             )

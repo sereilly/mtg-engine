@@ -553,6 +553,22 @@ class ActivatedAbilityCost:
     #: arguments ``parse_activated_ability_cost`` passes are at the front, so a
     #: field inserted among them silently rebinds one of them.
     chosen_keyword_options: tuple[str, ...] = ()
+    #: Spike Rogue: "{2}, **Remove a +1/+1 counter from a creature you
+    #: control**: …". Which permanent the ``remove_counter`` above comes off,
+    #: when the card names one instead of the source. ``None`` is the source —
+    #: Scavenging Ghoul's reading and every printing before this one — never
+    #: "any permanent", for ``sacrifice_filter``'s reason: an empty filter would
+    #: let the payment come off anything at all.
+    #:
+    #: The exact mirror of ``put_counter_filter``, and beside ``remove_counter``
+    #: for that pair's reason: they answer different questions, and this one
+    #: alone decides *which* permanents can pay — a payer whose only creature
+    #: with a counter on it is an opponent's cannot pay at all (CR 601.2h).
+    #:
+    #: Last for ``chosen_keyword_options``' stated reason — the positional
+    #: arguments ``parse_activated_ability_cost`` passes are at the front, so a
+    #: field inserted among them silently rebinds one of them.
+    remove_counter_filter: dict | None = None
 
     @property
     def is_loyalty(self) -> bool:

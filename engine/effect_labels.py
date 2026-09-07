@@ -889,6 +889,7 @@ TRIGGERED_LABELS: dict[str, str] = {
     # registry, and these are ordinary triggers that go on the stack, where the
     # prefix is read.
     "move_counter_from_self": "triggered_counter",
+    "move_all_counters_to_self": "triggered_counter",
     "remove_counter_from_self": "triggered_counter",
     "remove_all_counters_from_self": "triggered_counter",
     "remove_counter_from_attached": "triggered_counter",

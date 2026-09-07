@@ -47,6 +47,14 @@ from .cast_costs import additional_costs, costs_charged_from
 from .divided_damage import CARD_DIVIDED, CHOSEN, DIVIDED_TARGETS, divided_entry
 from .enter_effects import copy_on_enter_type
 from .oracle_types import _COLOR_WORD_TO_SYMBOL
+
+#: The payload key a computed amount's count spec is stamped under. Spelled here
+#: rather than imported from ``oracle_types`` beside the module's other
+#: constants because this module is read by ``legality`` and the cast path and
+#: nothing else needs the name. Two readers: :func:`_counted_scope_spec`, which
+#: asks whose board the count names, and :func:`cast_time_count_spec`, which
+#: asks whether it is taken at the announcement.
+_X_FROM_COUNT = "x_from_count"
 from .subject_filters import filter_head_noun, unimplemented_filter_keywords
 
 # "Enchant creature", "Enchant land", ... — but NOT "Enchant creature card in a
@@ -1667,6 +1675,58 @@ def _matching_sweep_spec(payload: dict) -> dict | None:
     return _from_targets_payload(payload.get("targets"))
 
 
+def _counted_scope_spec(payload: dict) -> dict | None:
+    """"Draw a card for each tapped creature **target opponent** controls."
+    (Theft of Dreams.)
+
+    :func:`_sweep_controller_spec` one payload key over. There the seat sits
+    inside the noun phrase of a *sweep*; here it sits inside the ``x_from_count``
+    spec of a **counted amount** — ``count_spec`` lifts a "target opponent"
+    controller narrowing onto the spec's ``owner`` (``lowering/_amounts``),
+    because nothing downstream tests a controller key and the count has to be
+    *scoped* to a player instead. That lift is the whole announcement: the seat
+    is a CR 115.4 choice made at the announcement (CR 601.2c) and every other
+    ``owner`` value names a seat the rules already fix ("you", "all", the seat a
+    firing event froze), which the shared pronoun reader answers None for.
+
+    Without the row the derivation offered no picker at all, the client sent a
+    bare cast and the engine refused it — the Roots class, and the one
+    ``picker_sweep.py`` finding in Exodus.
+    """
+    spec = payload.get(_X_FROM_COUNT)
+    if not isinstance(spec, dict):
+        return None
+    return player_pronoun_spec(spec.get("owner"))
+
+
+def _ability_text_grant_spec(payload: dict) -> dict | None:
+    """Who a quoted-ability grant reaches is what decides whether it targets.
+
+    ``grant_target_ability_text`` serves four printings and only one of them
+    chooses: a named target (Life Matrix), the object the sentence in front of
+    it bound (Dreams of the Dead), the creatures an earlier step recorded
+    (Dread Wight) — and, since Resuscitate, a **described set** ("creatures you
+    control gain …"), which is CR 611.2c's board walked at resolution and
+    chooses nobody.
+
+    The same reading :func:`_forced_sacrifice_spec` makes one kind over, and the
+    same reason it has to be made here: only the payload can tell the printings
+    apart, and answering "creature" for all of them puts a picker in front of a
+    spell that targets nothing — the Cleanse class, where the prompt aborts the
+    cast on a board with no legal answer.
+
+    The two recorded readings are restated rather than left to the generic
+    fall-through, because a ``_KIND_TO_SPEC_FROM_PAYLOAD`` row is read
+    *instead of* it: a row that answered None for them would take Life Matrix's
+    picker away.
+    """
+    if payload.get("filter") is not None:
+        return None
+    if payload.get("permanents_from") or payload.get("on_block_pair"):
+        return None
+    return _from_targets_payload(payload.get("targets")) or {"kind": "creature"}
+
+
 def _control_gift_spec(payload: dict) -> dict | None:
     """"**Target opponent** gains control of this creature …" (Chaos Lord.)
 
@@ -1858,6 +1918,12 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     # the same reader — what is being *chosen* is a seat, whatever the sweep
     # then does to that seat's permanents.
     "add_counter_to_each_matching": _sweep_controller_spec,
+    # "Draw a card for each tapped creature **target opponent** controls."
+    # (Theft of Dreams.) The seat is inside the counted amount rather than
+    # inside a noun phrase, which is the only thing that separates this row
+    # from the two sweeps above it.
+    "draw_controller_cards": _counted_scope_spec,
+    "grant_target_ability_text": _ability_text_grant_spec,
     "give_control_of_source_to_player": _control_gift_spec,
     "choose_permanents": _chosen_from_target_player_spec,
     "target_gains_life": _life_gain_spec,
@@ -2962,13 +3028,6 @@ def destroy_subject_filter(payload: dict) -> dict:
         key: value for key, value in payload.items()
         if key not in _DESTROY_NON_SUBJECT_KEYS
     }
-
-
-#: The payload key a where-clause's count is stamped under. Spelled here rather
-#: than imported from ``oracle_types`` beside the module's other constants
-#: because this module is read by ``legality`` and the cast path and nothing
-#: else needs the name — the one reader is :func:`cast_time_count_spec` below.
-_X_FROM_COUNT = "x_from_count"
 
 
 def cast_time_count_spec(program, *, mode_index: int | None = None) -> dict | None:

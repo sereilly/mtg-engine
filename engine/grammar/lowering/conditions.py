@@ -282,6 +282,20 @@ def _lower_condition(
         # card an exile step of this same effect took out of a graveyard — and
         # a second producer means a second key, never this one widened, for the
         # reason `amount_from` and `amount_from_trigger` are two keys.
+        #
+        # "…that player reveals the top card of their library. **If that card
+        # is a land card**, …" (Paroxysm.) The second producer, and it gets the
+        # second *key* rather than a widening of this one: the sentence is
+        # asking exactly what ``RevealedCardIs`` asks, so it is re-asked as that
+        # node instead of growing a branch here. Which producer ran is the whole
+        # question — Chaos Harlequin prints the same four words after an exile —
+        # and it is only in view at this point, which is what the branch below
+        # already says about the exile reading.
+        if "exiled_cards" not in produced and "revealed_card" in produced:
+            return _lower_condition(
+                ast.RevealedCardIs(condition.filter),
+                produced, event, referent, event_subject,
+            )
         if "exiled_cards" not in produced:
             raise LoweringError(
                 "'it' with nothing in this effect that named what it moved",
