@@ -1058,6 +1058,167 @@ The ingest's other yield was **Crovax the Cursed**, the eleventh legend whose
 printed text calls it by its first word ("put a +1/+1 counter on Crovax"), read
 the same way as the ten before it.
 
+### Wave 1 — what it bought: 97 → 138 of 143, and three zeroes
+
+Forty-one cards in one wave, and the number that matters more is what the three
+sentence-level instruments read afterwards: **no hollow line, 143/143 sentences
+claimed, no picker finding**. That is the state Mirage needed a fourth wave to
+reach, and it is a direct return on Phase 1's decision to run all three at the
+*ingest* rather than at the promotion gate — the seven supported-but-inert cards
+were work-list entries from day one instead of gate findings after the work they
+could have shaped was already done.
+
+| Group | Landed | Declined | Hooks |
+| --- | --: | --: | --- |
+| G1 damage prevention / redirection | 9 / 9 | 0 | none added |
+| G2 combat restrictions | 12 / 12 | 0 | none added |
+| G3 combat triggers / retargeting | 5 / 9 | 4, parts enumerated | **1 retired** |
+| G4 library, graveyard, costs | 10 / 11 | 1, parts enumerated | none added |
+| G5 player triggers / replacements | 9 / 9 | 0 | none added |
+
+**Zero hooks added and one retired**, under an instruction every brief carried.
+Mana Short's whole line became a grammar production as a *side effect* of G3
+teaching the noun parser "target player controls": 65 entries over 59 cards →
+64 over 58, reliance 2.1% and falling while the pool grew. That is the fourth
+consecutive set where saying it in the brief did the work rather than the
+reviewer.
+
+**Every group corrected roughly a third of its brief, and the corrections went
+one way: the work was cheaper than the estimate.** The instruction to read a
+refusal site as a lead rather than a diagnosis is what produces this, and five
+cases are worth keeping because each names a different way a census entry
+misleads:
+
+* **Corrupting Licid** was briefed as a keyword-table problem, pointed at
+  `UNSUPPORTED_KEYWORDS` and Legends' rampage. Fear is implemented and grantable
+  and the derivation works end to end. The refusal was `oracle._one_sentence`
+  counting the full stop inside CR 207.2 **reminder text** — asked of the raw
+  line while every reader downstream had already stripped it. One line.
+* **The en-Kor cycle** was briefed as the largest item in G1's list. Its
+  lowering admitted only `any_target`, with a docstring claiming a narrowed
+  object target "would be a different picker". It isn't — the narrowing rides
+  the ordinary `targets` description and the picker derives itself. **Five cards
+  for a two-line widening.** It was the cheapest card in the group.
+* **Invasion Plans' second half** — "the attacking player chooses how each
+  creature blocks" — was briefed as reaching `web/combat_prompts.py` and the
+  declare-blockers step. It touched neither: `Game.block_chooser_index` was
+  already there for Melee, and the whole half was one derived branch plus a
+  board scan.
+* **Overgrowth** was briefed as G5's near-cap `effects/mana.py` risk. It was
+  three characters of regex: Wild Growth's pattern read exactly **one** mana
+  symbol and Overgrowth prints `{G}{G}`. That module was never opened.
+* **Mask of the Mimic's** first line was briefed as a refusal to re-probe. It is
+  claimed in full by `cast_costs.additional_cost_for_line`; the census entry was
+  the *grammar* declining a line a text table owns, which never gates it.
+
+**A refusal site was manufactured by probe order twice**, the shape Giant Oyster
+recorded at Legends: Mogg Flunkies refused at `expected 'unless defending player
+controls'` and Ransack at `expected 'counter or counters'`, and neither phrase
+appears in either sentence.
+
+### The live defects the wave found in already-shipped cards
+
+None of these is a Stronghold card, and none had a failing test:
+
+* **Meddle** (MIR): "…and that target is a creature" was asked by the picker
+  before the spell was cast and **never again**, so a spell re-aimed at a face
+  in between was still retargeted by a card that only ever names one pointed at
+  a creature. `legality._single_target_is` is now the one reader and
+  `_retarget_subject` asks it at resolution, where CR 608.2b does.
+* **Wall of Roots** (MIR): `legality._COST_VERBS` was missing `put`, so
+  "Put a -0/-1 counter on this creature: Add {G}" was classified as a *cast-time
+  effect* rather than an activated ability in every reader built on
+  `_cast_lines` / `_activated_lines`. Found from the other end, by a picker-sweep
+  finding on a Stronghold card.
+* **`create_token`'s recipient table had two `target_opponent` branches**, the
+  second unreachable behind the first — so the CR 800.4a lost-player check it
+  carried never ran for Phelddagrif or Phantasmal Sphere.
+* **`destroy_all_matching` and `tap_all_matching` never handed the matcher the
+  chosen seat**, and `destroy_all_matching` derived no cast spec at all. Latent
+  rather than live — no shipped card printed the phrase — but it is what would
+  have silently broken Mana Short the moment its hook retired, in the same
+  round.
+* **`engine/static_bonuses.py` line 340 holds literal backspace bytes** where a
+  regex word boundary was meant, so its "and" and "and from" alternatives have
+  never fired and only the comma splits. It predates this set, and a repo-wide
+  scan for control characters in `.py` files finds exactly it and one harmless
+  docstring twin. **Not fixed** — it wants its own round with a differential,
+  because making those alternatives fire changes what the table reads.
+
+### Integration: zero caps crossed, and the pre-split prediction graded
+
+Five branches merged one at a time, full suite between each. **Every conflict in
+the wave was a per-set test file and every one was two appends** — resolved by
+the base + ours-tail + theirs-tail reconstruction with its prefix assertion,
+then the per-line survival sweep over *every* block in *every* per-set file
+(Alliances' follow-up rule). The sweep was clean each time, which is the result
+you want and cannot assume. Nothing else conflicted: the duplicate-idea sweep
+found **no name added by two branches**, and the cross-module shadow scan found
+no name defined in two modules and imported unaliased by a file that defines it.
+
+**No module crossed a cap at integration**, the first wave in this project where
+none did. Phase 0 pre-split the one shared-and-tight module (`subject_verb.py`)
+and briefed the rest as owned, and each owner split its own in round. Both
+splits are worth recording because **both rejected the seam they were briefed
+with**:
+
+* G3 found `lowering/destruction.py`'s docstring seam already spent and the
+  obvious second seam (immediate against delayed) **illegal** — `delayed` is a
+  lowering family and families may not import each other. It cut instead on
+  `lowering/loops.py`'s docstring ("every function here is a different reading
+  of *what is the set?*"), moving `_lower_for_each_destroyed`, which iterates a
+  set an earlier step recorded.
+* G4 did not create a module at all. `lowering/exile.py` crossed on
+  Cannibalize's 60 lines, and rather than fork a family it **moved the function
+  to where its twin already lived** — `lowering/board.py`, beside
+  `_lower_sacrifice_one_of_chosen` — dispatched before `_lower_exile` so no
+  family imports another.
+* G5 *started* a split of `exile.py` into a new `hand.py`, hit the
+  family-independence guard, and reverted: the right home for its production was
+  `lowering/linked_exile.py`, whose stated subject is "cards exiled *with* a
+  source", which is exactly Portcullis. The five post-split scans caught the
+  missing name immediately, which is why the revert was cheap.
+
+The lesson is one the playbook only half had: **a cap breach is more often a
+misplaced function than a missing module.** Two of the three were resolved by
+moving code to a home that already existed.
+
+### Two instrument findings worth keeping
+
+**`oracle_diff`'s raw number was useless for two of five groups and the filtered
+one was exact.** G1 read 1,093 changed of 2,966 and G4 read the same 1,093; both
+were repr noise from defaulted dataclass fields (`hand_to_library_top`,
+`mana_per_counter`, `optional_key`, `named_as_target`, `floor`,
+`Shield.counter`). Stripping each new field's default spelling from both sides
+gave 9 and 10 — **exactly each group's own cards, and nothing else in the
+pool**. Alliances recorded this and it is now routine; what is new is that the
+full repr is what makes the narrowing class visible in the first place, so
+suppressing the field rather than filtering the comparison would have been the
+wrong fix.
+
+**Three groups ran a second differential over a text-keyed table**, which
+`oracle_diff` structurally cannot see. G5 built a baseline worktree at the
+fan-out commit and diffed every claimed line over both manifest roles: 2,131 →
+2,138 claimed lines, every addition on its own cards, and the single change to
+an existing card was Wild Growth's `'G'` → `('G',)`, the widening's return type,
+verified behaviourally identical. G1's `_COST_VERBS` differential was exactly
+two lines and named both. That is the standard Phase 3's entry asks for.
+
+### Wave 2 — five cards, one group each
+
+The five wave-1 declines, each carried forward as the parts list its group
+wrote: Contempt (7 parts, one already built by its own decliner), Reins of Power
+(5), Silver Wyvern (6, two reported already done), Volrath's Shapeshifter (5,
+the hardest card in the set) and Spined Sliver (4, blocked on a split).
+
+**Spined Sliver is the wave's own evidence for the caps rule.** G3 declined it
+naming the blocker precisely: its one remaining part belongs in
+`lowering/characteristics.py`, which sat at 993/1000 and **belonged to no
+group** — the unowned-module case Weatherlight's control experiment predicted
+would drift. Phase 0 read that module as shared and chose not to pre-split it,
+and the cost was exactly one card carried into a second wave. It is owned in
+wave 2, and splitting it is the first half of that group's job.
+
 ## Tempest (TMP) — shipped (335/335, manifest index 17)
 
 **Ingest census: 227/335 supported (67.8%), 309 of 335 cards new to the pool.**
