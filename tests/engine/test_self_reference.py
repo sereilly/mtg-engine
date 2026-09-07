@@ -103,6 +103,12 @@ def test_no_card_in_the_pool_loses_a_word_to_the_expansion(_r28_pool):
     Starke", and the control seam resolves a source by name. "Starke" is not a
     word the game uses to describe objects, so the expansion is right to write
     the whole name.
+
+    Stronghold added the eleventh, and it is the same case a third way: Crovax
+    the Cursed's upkeep trigger puts and removes counters "on Crovax", and its
+    activated ability says "Crovax gains flying". "Crovax" is not a word the
+    game uses to describe objects, so all three occurrences are the legend
+    naming itself.
     """
     changed = {
         card.name
@@ -123,4 +129,5 @@ def test_no_card_in_the_pool_loses_a_word_to_the_expansion(_r28_pool):
         "Purraj of Urborg",
         "Maraxus of Keld",
         "Starke of Rath",
+        "Crovax the Cursed",
     }

@@ -12,6 +12,32 @@ unclaimed text. Do not edit by hand.
 - With UNCLAIMED text (must fix or acknowledge): **0**
 - With deletion-probe findings (ignored words): **271**
 
+## Measured sets — reported, not gated
+
+Cards in a `measured` set (see `cards/manifest.json`) that the
+compiler calls **supported** while carrying a printed line nothing
+implements. They are the debt behind that set's progress number, and
+`--hollow-lines` sees only the ones that produced an *ability part* —
+a line yielding nothing at all leaves that probe nothing to find.
+
+Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
+`HOOK_RELIANCE.md`'s ceilings exclude the same sets: a ratchet over a
+set nobody has implemented fires on its composition rather than on
+anything anyone did, and every ingest would arrive red.
+
+**6 unclaimed sentence(s) across 4 supported card(s).**
+
+- **Mox Diamond**
+  - `if this artifact would enter, you may discard a land card instead`
+  - `if you do, put this artifact onto the battlefield`
+  - `if you don't, put it into its owner's graveyard`
+- **Provoke**
+  - `that creature blocks this turn if able`
+- **Pursuit of Knowledge**
+  - `if you would draw a card, you may put a study counter on this enchantment instead`
+- **Volrath's Stronghold**
+  - `{1}{b}, {t}: put target creature card from your graveyard on top of your library`
+
 ## Acknowledged simplifications
 
 | Card | Sentence | Why it is acceptable |

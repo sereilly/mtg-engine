@@ -306,6 +306,17 @@ PARSE_LAYERS = [
     # and an opening is one of two shapes. Below `subject_verb`, which asks it
     # first and is never imported back.
     "imperatives",
+    # The verbs whose subject is a *seat* — "target player draws a card", "each
+    # player sacrifices a creature", "that player may pay {R}{R}". Split out of
+    # `subject_verb` at the guard below, along the seam that module's dispatch
+    # had drawn for itself: one contiguous run of branches, every one gated on
+    # `isinstance(source_spec, ast.PlayerRef)`, and nothing between them was.
+    # Below `subject_verb`, which asks it in one call at the point the run's
+    # first branch sat — the branches are arms of one fall-through chain and
+    # their order is the production — and which hands both its upward calls
+    # (`parse_optional_action`, and itself for the "you put …" re-entry) rather
+    # than being imported back.
+    "player_verbs",
     # The `<subject> <verb> …` opening. Split out of `statements` at the guard
     # below, and under it: `statements` hands it `parse_optional_action` rather
     # than being imported back, the same inversion `delayed` makes.
