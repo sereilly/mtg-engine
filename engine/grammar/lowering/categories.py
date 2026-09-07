@@ -476,6 +476,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "redirect_next_damage_to_source_until_eot": "damage",
     # Zhalfirin Crusader: the same sentence with its two ends swapped.
     "redirect_next_damage_from_source_until_eot": "damage",
+    # Shaman en-Kor: CR 615.8's chosen source over a **targeted** protected
+    # creature. Same family: what moves is still the recipient of one damage
+    # event, and which end of it the sentence announces is payload.
+    "redirect_chosen_source_damage_off_target_until_eot": "damage",
     "recolor_target_from_text": "recolor",
     # The same layer-5 colour change with a duration and several targets
     # (Dwarven Song and its four siblings). Same category: what differs is how

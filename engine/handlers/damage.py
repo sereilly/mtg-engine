@@ -1940,6 +1940,77 @@ def redirect_damage_until_eot(
     return True, "resolved"
 
 
+@effect_handler("redirect_chosen_source_damage_off_target_until_eot")
+def redirect_chosen_source_damage_off_target_until_eot(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """Shaman en-Kor: "{1}{W}: The next time a source of your choice would deal
+    damage to target creature this turn, that damage is dealt to this creature
+    instead."
+
+    Two announcements, on two channels. The **protected creature** is a target
+    (CR 601.2c), so it arrives through the ability's ordinary target resolution
+    and is re-checked against the printed noun phrase here (CR 608.2b). The
+    **source** is CR 615.8's "a source of your choice", which is not a target at
+    all and rides ``choices["chosen_source"]`` — read straight off that channel
+    rather than through ``chosen_shield_source``, whose fallback reads the
+    ability's *target* as the source and would arm the record against the very
+    creature it is guarding.
+
+    A whole instance rather than a point pool: "the next **time**" is one damage
+    event however large, which is ``uses=1`` with no ``amount``. The damage is
+    still dealt in full by the same source and only its recipient changes, so
+    lifelink and every "whenever ~ deals damage" see all of it — the reason this
+    is a redirect record and not a shield.
+
+    With no source recorded — an AI or headless activation picks none — the
+    record answers to any source, which is the fallback every card printing the
+    phrase already takes (Reverse Damage, Jade Monolith): the effect is spent on
+    one instance either way.
+    """
+    from ..subject_filters import subject_matches
+
+    card_name = getattr(context.card, "name", "")
+    taker = context.source_permanent
+    if taker is None or not game.is_on_battlefield(taker):
+        game.log.append(f"{card_name}: nothing is there to take the damage")
+        return True, "resolved"
+    described = (instruction.payload.get("targets") or {}).get("filter") or {}
+    caster = context.caster
+    observer = game.players.index(caster) if caster in game.players else None
+    protected = resolve_target_permanent(
+        game,
+        context,
+        predicate=lambda perm: subject_matches(
+            game, perm, described, observer=observer, source=taker
+        ),
+        # No scan-the-board fallback: a redirect armed on a creature nobody
+        # named moves damage the player never chose to move.
+        fallback_players=(),
+    )
+    if protected is None:
+        game.log.append(f"{card_name}: its target is gone, nothing is redirected")
+        return True, "resolved"
+    moved_source = context.choices.get("chosen_source")
+    add_redirect(
+        protected,
+        DamageRedirect(
+            new_recipient=taker,
+            source=moved_source,
+            uses=int(instruction.payload.get("uses", 1) or 1),
+            source_name=card_name or None,
+        ),
+    )
+    source_name = getattr(
+        getattr(moved_source, "card", moved_source), "name", "any source"
+    )
+    game.log.append(
+        f"{card_name}: the next damage {source_name} would deal to "
+        f"{protected.card.name} this turn is dealt to {taker.card.name} instead"
+    )
+    return True, "resolved"
+
+
 @effect_handler("redirect_next_damage_to_source_until_eot")
 def redirect_next_damage_to_source_until_eot(
     game: Game, instruction: OracleInstruction, context: OracleExecutionContext
@@ -2069,21 +2140,43 @@ def redirect_next_damage_from_source_until_eot(
     the effect do nothing, and the damage lands on the Crusader as though the
     ability had never been activated. Nothing here has to hold the taker in
     play.
+
+    The five en-Kor creatures print the same sentence with the taker **narrowed**
+    — "…is dealt to target creature you control instead" — so the printed noun
+    phrase is re-checked here at resolution (CR 608.2b) rather than trusted from
+    the activation, through ``subject_matches`` with the ability's controller as
+    the observer, because "creature **you control**" is that seat's "you"
+    (CR 109.5). That check is the whole difference between the two spellings:
+    with an empty description it admits everything, which is what "any target"
+    means.
     """
+    from ..subject_filters import subject_matches
+
     card_name = getattr(context.card, "name", "")
     protected = context.source_permanent
     if protected is None or not game.is_on_battlefield(protected):
         game.log.append(f"{card_name}: its own source is gone")
         return True, "resolved"
+    described = (instruction.payload.get("targets") or {}).get("filter") or {}
+    caster = context.caster
+    observer = game.players.index(caster) if caster in game.players else None
     # "…is dealt to **any target** instead" — CR 115.4's union, read the way
     # every other any-target effect reads it: a permanent when one was named,
     # and the resolution's player otherwise. The permanent is asked first
     # because naming one also fills the player slot with whoever controls it.
     taker = resolve_target_permanent(
-        game, context, predicate=lambda perm: True, fallback_players=(),
+        game, context,
+        predicate=lambda perm: subject_matches(
+            game, perm, described, observer=observer, source=protected
+        ),
+        fallback_players=(),
         fallback_on_invalid_choice=False,
     )
-    if taker is None:
+    if taker is None and not described:
+        # Only the union spelling has a player to fall back to. A narrowed
+        # object phrase names a permanent and nothing else, so reading the
+        # resolution's player here would move the damage onto a seat the card
+        # never offered.
         taker = context.target
     if taker is None or getattr(taker, "lost", False):
         game.log.append(f"{card_name}: its target is gone, nothing is redirected")

@@ -370,6 +370,9 @@ ACTIVATED_LABELS: dict[str, str] = {
     # when it deals none.
     "redirect_next_damage_to_source_until_eot": "activated_prevent",
     "redirect_next_damage_from_source_until_eot": "activated_prevent",
+    # Shaman en-Kor's second ability, and the same reason: what it is *for* is
+    # keeping damage off the creature it named.
+    "redirect_chosen_source_damage_off_target_until_eot": "activated_prevent",
     # Quarum Trench Gnomes changes what a land produces. The mana is the point,
     # which is what `activated_mana` answers.
     "produce_mana_instead": "activated_mana",

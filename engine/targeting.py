@@ -1723,7 +1723,29 @@ def _retarget_spec(payload: dict) -> dict:
     return spec
 
 
+def _off_target_chosen_source_redirect_spec(payload: dict) -> dict | None:
+    """Shaman en-Kor's second ability: "The next time **a source of your
+    choice** would deal damage to **target creature** this turn…"
+
+    Two announcements in one activation, which is Jade Monolith's shape: the
+    creature is a target (CR 601.2c) and the source is CR 615.8's choice, which
+    is not a target at all. So the target description is read the ordinary way
+    and ``requires_source`` is what tells the client to ask for the second.
+
+    ``source_of_choice`` cannot carry it, as it does for Nova Pentacle and the
+    Circles: that flag makes the *only* prompt a source picker, and this ability
+    has a real target to announce.
+    """
+    described = _from_targets_payload(payload.get("targets"))
+    if described is None:
+        return None
+    return {**described, "requires_source": True}
+
+
 _KIND_TO_SPEC_FROM_PAYLOAD = {
+    "redirect_chosen_source_damage_off_target_until_eot": (
+        _off_target_chosen_source_redirect_spec
+    ),
     "choose_new_spell_target": _retarget_spec,
     "change_target_spell_target": _retarget_spec,
     "put_graveyard_cards_on_library_top": _graveyard_to_library_spec,

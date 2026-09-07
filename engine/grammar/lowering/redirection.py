@@ -97,6 +97,15 @@ def _lower_redirect_damage(node: ast.RedirectDamage) -> tuple[OracleInstruction,
         # armed it. Both facts belong to one branch: the seats are known only
         # because the source is.
         return _lower_named_source_redirect(node)
+    if node.from_chosen_source and isinstance(node.to, ast.TargetSpec):
+        # "The next time a source of your choice would deal damage to **target
+        # creature** this turn, that damage is dealt to this creature instead."
+        # (Shaman en-Kor.) CR 615.8's chosen source over a protected recipient
+        # the ability *announces* rather than one it is printed on — which is
+        # why it is a kind of its own and not the branch below with a flag: the
+        # record hangs off the target instead of off the caster, and the picker
+        # has a creature to ask for as well as the source.
+        return _lower_chosen_source_redirect_off_target(node)
     if not _is_you(node.to):
         raise LoweringError(
             "a redirect is armed on its controller; no handler protects "
@@ -204,6 +213,93 @@ _REDIRECT_PROTECTED_SEATS: dict[str, str] = {
     "opponent": "opponents",
     "each_opponent": "opponents",
 }
+
+
+def _lower_chosen_source_redirect_off_target(
+    node: ast.RedirectDamage,
+) -> tuple[OracleInstruction, ...]:
+    """Shaman en-Kor: "{1}{W}: The next time a source of your choice would deal
+    damage to **target creature** this turn, that damage is dealt to this
+    creature instead."
+
+    CR 615.8's "a source of your choice" with CR 614.9's verb, and the one
+    printing in the pool whose **protected** recipient is announced as a target.
+    Every other chosen-source redirect is armed on the ability's controller
+    (``to_self``), so the record has nowhere to go but the caster; this one
+    hangs off the creature it watches, which is where a record normally lives
+    (``engine/damage_redirects.py``: a record lives on the recipient whose
+    damage it moves).
+
+    Its own instruction rather than a flag on ``redirect_damage_from_chosen_source_until_eot``
+    for the reason every kind in this module is its own: the picker is keyed on
+    the kind, and this ability announces **two** choices — the creature it
+    protects (CR 601.2c) and the source whose damage moves (CR 615.8) — where
+    that one announces the source alone.
+
+    Every refusal below is a way the sentence could otherwise mean more than it
+    says:
+
+    * the bound must be printed. "**The next time**" is one instance; a blanket
+      printing would move every point that source deals all turn, which is a
+      different card with no handler.
+    * the source is named once. A chosen source beside a targeted one is two
+      answers to one question.
+    * the duration must be this turn, because that is what the sweeps give it.
+    * the protected creature must be one target the phrase describes, and every
+      key of that phrase must be one ``subject_matches`` can test — the target
+      is re-checked at resolution (CR 608.2b) and a narrowing the matcher would
+      drop is a redirect covering strictly more creatures than the card prints.
+    * the damage must move onto the permanent whose ability this is. Jade
+      Monolith's "that source deals that damage to **you**" is the same
+      arrangement with the caster as the taker, and it reaches no production
+      here — its sentence is in the active voice and the parse refuses it — so
+      admitting the recipient would be a branch no card can reach.
+    * a combat scope, an opponent's pick and an optional replacement all have
+      readings on the redirects above and none here.
+    """
+    if not node.one_shot:
+        raise LoweringError(
+            "a chosen-source redirect off a target moves one instance", node=node
+        )
+    if node.dealt_by is not None:
+        raise LoweringError(
+            "a redirect names its source once: either a chosen source or a "
+            "target",
+            node=node,
+        )
+    if node.duration.kind not in _REST_OF_TURN:
+        raise LoweringError("a recorded redirect lasts exactly this turn", node=node)
+    if node.combat_only or node.chooser is not None or node.optional:
+        raise LoweringError(
+            "a chosen-source redirect off a target names no combat scope, no "
+            "other chooser and no offer",
+            node=node,
+        )
+    spec = node.to
+    if spec.quantifier != "target" or _names_several_targets(spec):
+        raise LoweringError(
+            "a chosen-source redirect protects one announced target", node=node
+        )
+    if not _is_source(node.new_recipient):
+        raise LoweringError(
+            "a chosen-source redirect off a target moves the damage onto the "
+            "permanent whose ability it is",
+            node=node,
+        )
+    payload: dict[str, object] = {"uses": 1, "new_recipient": "source"}
+    _describe_targets(payload, spec)
+    untestable = untestable_filter_keys(
+        (payload.get("targets") or {}).get("filter") or {}
+    )
+    if untestable:
+        raise LoweringError(
+            "a redirect cannot test " + ", ".join(sorted(untestable)), node=node
+        )
+    return (
+        OracleInstruction(
+            "redirect_chosen_source_damage_off_target_until_eot", "", payload
+        ),
+    )
 
 
 def _lower_named_source_redirect(
@@ -635,15 +731,21 @@ def _lower_next_damage_redirect_from_source(
     other would arm a redirect pointing back at the creature it protects, which
     is a card that silently does nothing at all.
 
-    Only "any target" (CR 115.4) is admitted: the printed word is what makes the
-    taker a player as readily as a permanent, and ``DamageRedirect`` has carried
-    both since it was written. A narrowed object target would be a different
-    picker and is refused rather than widened.
+    Two spellings of the taker, and the difference is payload rather than a
+    kind. "Any target" (CR 115.4) makes it a player as readily as a permanent,
+    and ``DamageRedirect`` has carried both since it was written. A **narrowed
+    object** target — "…is dealt to target creature you control instead", the
+    sentence the five en-Kor creatures share verbatim — names a permanent and
+    only a permanent, so the description rides on ``targets`` and the handler
+    re-checks it at resolution (CR 608.2b) the way its twin one function up
+    already does. Held to what ``subject_matches`` can test for that twin's
+    reason: a narrowing the matcher would drop is a redirect that moves the
+    damage onto a creature the card never offered.
     """
     spec = node.new_recipient
     if (
         not isinstance(spec, ast.TargetSpec)
-        or spec.quantifier != "any_target"
+        or spec.quantifier not in ("target", "any_target")
         or _names_several_targets(spec)
     ):
         raise LoweringError(
@@ -653,6 +755,15 @@ def _lower_next_damage_redirect_from_source(
         )
     payload: dict[str, object] = {"amount": _amount_payload(node.amount)}
     _describe_targets(payload, spec)
+    if spec.quantifier == "target":
+        untestable = untestable_filter_keys(
+            (payload.get("targets") or {}).get("filter") or {}
+        )
+        if untestable:
+            raise LoweringError(
+                "a redirect cannot test " + ", ".join(sorted(untestable)),
+                node=node,
+            )
     return (
         OracleInstruction(
             "redirect_next_damage_from_source_until_eot", "", payload
