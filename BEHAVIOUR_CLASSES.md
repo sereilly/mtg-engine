@@ -4,9 +4,9 @@ Cards the engine resolves through the same code paths, differing only in values 
 
 A card whose class contains a **verified** card needs no separate manual pass: it exercises no engine path that card didn't. This is weaker than checking the card — it inherits its peer's correctness, and cannot catch a card whose data breaks a generic path.
 
-- Cards in the catalog: **2966**
-- Distinct behaviours: **2693**
-- Cards sharing a behaviour with another: **386** in **113** classes
+- Cards in the catalog: **3109**
+- Distinct behaviours: **2829**
+- Cards sharing a behaviour with another: **397** in **117** classes
 - Unverified cards covered by a verified peer: **135**
 
 | Size | Cards |
@@ -33,13 +33,14 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 5 | Hematite Talisman, Lapis Lazuli Talisman, Malachite Talisman, Nacre Talisman, Onyx Talisman |
 | 5 | **Ice Storm**, Rain of Tears, **Sinkhole**, **Stone Rain**, Winter's Grasp |
 | 4 | Benthic Behemoth, Devouring Deep, Pale Bears, Segovian Leviathan |
+| 4 | Burn Bright, Scare Tactics, Shield Wall, Warrior's Honor |
 | 4 | Clergy en-Vec, Femeref Healer, Orim, Samite Healer, **Samite Healer** |
 | 4 | **Deathlace**, **Lifelace**, **Purelace**, **Thoughtlace** |
+| 4 | Ekundu Griffin, Sabertooth Wyvern, Sky Spirit, Thunder Spirit |
 | 4 | Firefly, **Granite Gargoyle**, Hellkite Punisher, **Shivan Dragon** |
 | 4 | Metallic Sliver, **Obsianus Golem**, Phyrexian Hulk, Phyrexian Walker |
 | 3 | Bog Imp, **Mahamoti Djinn**, Storm Crow |
 | 3 | Breezekeeper, Teferi's Drake, Tolarian Drake |
-| 3 | Burn Bright, Shield Wall, Warrior's Honor |
 | 3 | Canopy Spider, Giant Mantis, **Giant Spider** |
 | 3 | Cat Warriors, Heartwood Treefolk, **Shanodin Dryads** |
 | 3 | Cloud Djinn, Cloud Elemental, Cloud Spirit |
@@ -47,15 +48,16 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 3 | Darkness, **Fog**, Holy Day |
 | 3 | Dauthi Marauder, Soltari Foot Soldier, Thalakos Sentry |
 | 3 | Drowned, Restless Dead, Walking Dead |
-| 3 | Ekundu Griffin, Sky Spirit, Thunder Spirit |
 | 3 | Fetid Horror, **Frozen Shade**, Hoar Shade |
 | 3 | Fyndhorn Elves, **Llanowar Elves**, Skyshroud Troopers |
+| 3 | Killer Whale, Manta Riders, Whiptongue Frog |
 | 3 | **Prodigal Sorcerer**, Rootwater Hunter, Zuran Spellcaster |
 | 3 | Spirit Shield, Tawnos's Weaponry, Zelyon Sword |
 | 2 | Adarkar Sentinel, Dragon Engine |
 | 2 | **Aladdin's Ring**, **Rod of Ruin** |
 | 2 | Aliban's Tower, **Righteousness** |
 | 2 | Anaba Bodyguard, Tundra Wolves |
+| 2 | Ardent Militia, Standing Troops |
 | 2 | Armor Sliver, Barbed Sliver |
 | 2 | Armor of Faith, **Holy Armor** |
 | 2 | **Army of Allah**, Morale |
@@ -101,6 +103,7 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 2 | Kjeldoran Skycaptain, Kjeldoran Skyknight |
 | 2 | Knight of Stromgald, Order of the Ebon Hand |
 | 2 | Krovikan Fetish, Ritual of Steel |
+| 2 | Lightning Elemental, Raging Goblin |
 | 2 | Living Plane, Nature's Revolt |
 | 2 | Mesa Falcon, Pearl Dragon |
 | 2 | **Mesa Pegasus**, Teremko Griffin |
@@ -115,6 +118,7 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 2 | **Phantasmal Forces**, Spindrift Drake |
 | 2 | **Piety**, Rally |
 | 2 | **Plains**, Snow-Covered Plains |
+| 2 | Plated Rootwalla, Rootwalla |
 | 2 | **Resurrection**, Rise Again |
 | 2 | Rock Basilisk, **Thicket Basilisk** |
 | 2 | **Shatter**, Verdigris |

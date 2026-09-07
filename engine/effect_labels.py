@@ -604,6 +604,24 @@ ACTIVATED_LABELS: dict[str, str] = {
     # "chosen from a zone nobody sees" -- this one is revealed as it goes and
     # can whiff, and a deck with no white card left exiles itself.
     "reveal_until_match": "activated_library",
+    # --- Exodus, at its promotion -----------------------------------------
+    # Two kinds the promotion gate surfaced, which is the asymmetry
+    # ``measured_grammar_abilities``' docstring explains: "no ability falls
+    # back" reads the **shipped** pool, so a measured set's new kinds cannot
+    # fire this guard until the entry moves.
+    #
+    # Thrull Surgeon looks at a hand and takes a card out of it. Beside
+    # ``look_at_target_hand`` (Orcish Spy) rather than beside the discard
+    # kinds, and settled by its own twin: ``reveal_hand_and_choose`` is already
+    # ``triggered_look`` in the table below, and the two positions of one kind
+    # do not name two different things. The discard is the tail of looking,
+    # not what the ability is for.
+    "reveal_hand_and_choose": "activated_look",
+    # Volrath's Dungeon puts a card from a hand on top of its owner's library,
+    # beside the three ``put_*_on_library_top`` rows above. Their note is the
+    # reason one bucket covers a fourth: which zone the card comes from is not
+    # what the ability does, and the library is still the object it acts on.
+    "put_hand_cards_on_library": "activated_library",
 }
 
 # Instruction kind -> label, for an ability the grammar reads in the **triggered**
@@ -1006,6 +1024,20 @@ TRIGGERED_LABELS: dict[str, str] = {
     # keyword change, and a report saying "pump" of an ability that can *shrink*
     # the creature to a 1/1 is the misleading kind this table refuses.
     "become_copy_of_bound_permanent": "triggered_copy",
+    # --- Exodus, at its promotion -----------------------------------------
+    # One kind, and it was **masked** exactly as Tempest's four were: the
+    # activated half of
+    # ``test_no_grammar_read_ability_falls_back_to_the_category_default``
+    # asserts first, so this row could not be seen until Thrull Surgeon's and
+    # Volrath's Dungeon's landed above. A guard with two assertions reports the
+    # first one only, and that is now twice.
+    #
+    # Limited Resources' entry has each player keep five lands and give up the
+    # rest. ``sacrifice_matching_permanent`` is already `triggered_sacrifice`
+    # on this side, and which permanents survive is payload: what the ability
+    # is for is that permanents are sacrificed. Deliberately not a `board`
+    # word — the keeps are how the sacrifice is *chosen*, not a second act.
+    "keep_chosen_sacrifice_rest": "triggered_sacrifice",
 }
 
 # The one instruction kind whose label depends on what triggered it: `may` wraps

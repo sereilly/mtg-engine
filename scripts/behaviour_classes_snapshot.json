@@ -225,6 +225,12 @@
     "Segovian Leviathan"
   ],
   [
+    "Burn Bright",
+    "Scare Tactics",
+    "Shield Wall",
+    "Warrior's Honor"
+  ],
+  [
     "Clergy en-Vec",
     "Femeref Healer",
     "Orim, Samite Healer",
@@ -235,6 +241,12 @@
     "Lifelace",
     "Purelace",
     "Thoughtlace"
+  ],
+  [
+    "Ekundu Griffin",
+    "Sabertooth Wyvern",
+    "Sky Spirit",
+    "Thunder Spirit"
   ],
   [
     "Firefly",
@@ -257,11 +269,6 @@
     "Breezekeeper",
     "Teferi's Drake",
     "Tolarian Drake"
-  ],
-  [
-    "Burn Bright",
-    "Shield Wall",
-    "Warrior's Honor"
   ],
   [
     "Canopy Spider",
@@ -299,11 +306,6 @@
     "Walking Dead"
   ],
   [
-    "Ekundu Griffin",
-    "Sky Spirit",
-    "Thunder Spirit"
-  ],
-  [
     "Fetid Horror",
     "Frozen Shade",
     "Hoar Shade"
@@ -312,6 +314,11 @@
     "Fyndhorn Elves",
     "Llanowar Elves",
     "Skyshroud Troopers"
+  ],
+  [
+    "Killer Whale",
+    "Manta Riders",
+    "Whiptongue Frog"
   ],
   [
     "Prodigal Sorcerer",
@@ -338,6 +345,10 @@
   [
     "Anaba Bodyguard",
     "Tundra Wolves"
+  ],
+  [
+    "Ardent Militia",
+    "Standing Troops"
   ],
   [
     "Armor Sliver",
@@ -520,6 +531,10 @@
     "Ritual of Steel"
   ],
   [
+    "Lightning Elemental",
+    "Raging Goblin"
+  ],
+  [
     "Living Plane",
     "Nature's Revolt"
   ],
@@ -574,6 +589,10 @@
   [
     "Plains",
     "Snow-Covered Plains"
+  ],
+  [
+    "Plated Rootwalla",
+    "Rootwalla"
   ],
   [
     "Resurrection",

@@ -1421,3 +1421,99 @@ def test_w2g2_any_target_without_the_phrase_still_announces_normally():
     (bite,) = compiled.instructions
     assert bite.payload["targets"] == {"quantifier": "any_target", "kind": "any"}
     assert bite.payload["biter"] == "event_subject"
+
+
+# --- Phase 4: the printed subject of a damage sentence ---
+
+from engine import Game as _P4Game, PlayerState as _P4PlayerState
+from engine.auras import attach_aura as _p4_attach
+from engine.models import CardDefinition as _P4CardDefinition
+from engine.models import Permanent as _P4Permanent
+from engine.oracle import compile_card_oracle as _p4_compile
+from tests.helpers import resolve_stack as _p4_resolve
+
+
+def _p4_creature(name, power, toughness, colors=()):
+    return _P4CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature - Test",
+        oracle_text="", colors=colors, color_identity=colors, keywords=(),
+        produced_mana=(), raw={"power": str(power), "toughness": str(toughness)},
+    )
+
+
+def _p4_board(set_pool):
+    """Dizzying Gaze attached to a host, with a flyer to shoot at."""
+    host = _P4Permanent(card=_p4_creature("Host", 3, 3, colors=("G",)))
+    flyer = _P4Permanent(card=_P4CardDefinition(
+        name="Flyer", mana_cost="", cmc=0.0, type_line="Creature - Bird",
+        oracle_text="Flying", colors=(), color_identity=(), keywords=("Flying",),
+        produced_mana=(), raw={"power": "2", "toughness": "2"}))
+    gaze = _P4Permanent(card=set_pool("EXO")["Dizzying Gaze"])
+    game = _P4Game(players=[
+        _P4PlayerState(name="P1", battlefield=[host, gaze]),
+        _P4PlayerState(name="P2", battlefield=[flyer]),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    _p4_attach(gaze, host)
+    return game, host, flyer, gaze
+
+
+def test_dizzying_gaze_damage_comes_from_the_enchanted_creature(set_pool):
+    """"**Enchanted creature** deals 1 damage to target creature with flying."
+
+    CR 119.3: the source of the damage is the object the card names, and here
+    that is the host rather than the Aura. Found by
+    ``scripts/parse_coverage.py``'s deletion probe at the promotion gate —
+    deleting the word "enchanted" left the compiled program *identical*, which
+    is the probe's whole signal that a rule matched while ignoring a word.
+
+    The engine had the rule backwards in a way no other card could show: the
+    Aura is red and the host green, so protection from red would have stopped
+    damage the rules say comes from a green creature. Every other card in the
+    pool printing this shape says "**this Aura** deals" or grants a quoted
+    ability, and both of those already name the right source; Dizzying Gaze is
+    the only one that prints the direct form.
+    """
+    game, host, flyer, gaze = _p4_board(set_pool)
+    before = len(game.log)
+    game.activate_permanent_ability(
+        0, "Dizzying Gaze", target_player_index=1, target_permanent_index=0
+    )
+    _p4_resolve(game)
+    assert flyer.damage_marked == 1
+    dealt = [l for l in game.log[before:] if "dealt 1 damage" in l]
+    assert dealt == ["Host dealt 1 damage to Flyer"], game.log[before:]
+
+
+def test_dizzying_gaze_deals_nothing_once_it_has_fallen_off(set_pool):
+    """An Aura with no host has nothing to deal the damage *with*, and must
+    deal none rather than falling back to biting as itself — the rule
+    ``source_bites_target``'s attached branch already states, now shared."""
+    game, host, flyer, gaze = _p4_board(set_pool)
+    game.remove_from_battlefield(host)
+    before = len(game.log)
+    game.activate_permanent_ability(
+        0, "Dizzying Gaze", target_player_index=1, target_permanent_index=0
+    )
+    _p4_resolve(game)
+    assert flyer.damage_marked == 0
+    assert any("nothing to deal the damage" in l for l in game.log[before:])
+
+
+def test_farrels_mantle_still_carries_its_own_attached_dealer(catalog_by_name):
+    """The regression the differential caught, kept.
+
+    The post-condition that gives Dizzying Gaze its dealer first *refused*
+    Farrel's Mantle — a shipped card that was already correct — because its
+    lowering is `source_bites_target` rather than `deal_damage`. The question
+    the check asks is whether the dealer survives, not which family answered
+    it, and one card going quietly unsupported is what the check was written
+    to prevent.
+    """
+    program = _p4_compile(catalog_by_name["Farrel's Mantle"])
+    assert program.supported
+    (trigger,) = program.triggered_abilities
+    (bite,) = trigger.instruction.payload["action"]
+    assert bite.payload["biter"] == "attached"

@@ -48,7 +48,7 @@ from ._sweeps import (
 from ._common import (
     _describe_several_targets, _names_several_targets, _amount_payload,
     card_divided_each_description,
-    _filter_payload, _is_source, _is_you, _targets_payload,
+    _filter_payload, _is_enchanted, _is_source, _is_you, _targets_payload,
     player_deed_payload, testable_filter_payload
 )
 from ._events import (DAMAGED_PERMANENT_CONTROLLER, damage_trigger_names_damaged_end, _chosen_cast_amount, _EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_OBJECTS, _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER, LOOP_BOUND_PLAYER, SWEPT_CONTROLLER_SEATS, _back_reference_payload, _RECORDED_PERMANENTS)
@@ -194,7 +194,56 @@ def _lower_damage(
             "no damage handler carries the printed can't-be-prevented lock here",
             node=node,
         )
+    lowered = _with_attached_dealer(node, lowered)
     return lowered
+
+
+def _with_attached_dealer(
+    node: ast.DealDamage, lowered: tuple[OracleInstruction, ...],
+) -> tuple[OracleInstruction, ...]:
+    """"**Enchanted creature** deals 1 damage to …" (Dizzying Gaze).
+
+    The printed subject of a damage sentence, which this module had never read:
+    every branch of :func:`_lower_damage_shape` builds its payload from the
+    *recipients* and the amount, so an Aura's own ability dealt the damage as
+    the **Aura**. CR 119.3 makes that the wrong source — protection from the
+    host's colour would not have stopped it and protection from the Aura's
+    would, which is the rule backwards — and the log said so out loud.
+
+    ``biter: "attached"`` is not a new key. ``_bites`` has emitted it since
+    Farrel's Mantle for the power-reading form of the same sentence, with the
+    same reasoning written down: CR 113.7a leaves the ability the Aura's, so
+    only the **dealer** moves. One name for one fact; what was missing is that
+    a *fixed* amount never reached it.
+
+    A post-condition rather than a line in each branch, for the reason the
+    riders above are one: a branch added later gets it for free. And it
+    **refuses** rather than dropping the subject, because a shape that cannot
+    carry the dealer is a card whose damage would come from the wrong object —
+    the failure this whole function exists to make loud.
+    """
+    if node.source is None or not _is_enchanted(node.source):
+        return lowered
+    if len(lowered) == 1 and lowered[0].payload.get("biter") == "attached":
+        # Already carried. ``_bites`` stamps this key itself for the
+        # power-reading form (Farrel's Mantle), and stamping it twice here
+        # would be one fact with two producers — but the *refusal* below would
+        # be worse: the differential caught this branch turning a shipped,
+        # correct card unsupported, because its kind is `source_bites_target`
+        # rather than `deal_damage`. The question is whether the dealer
+        # survives, not which family answered it.
+        return lowered
+    if len(lowered) != 1 or lowered[0].kind != "deal_damage":
+        raise LoweringError(
+            "no damage handler carries the printed attached dealer here",
+            node=node,
+        )
+    instruction = lowered[0]
+    return (
+        dataclasses.replace(
+            instruction, payload={**instruction.payload, "biter": "attached"}
+        ),
+    )
 
 
 def _lock_survives(lowered: tuple[OracleInstruction, ...]) -> bool:

@@ -128,6 +128,13 @@
   ]
  },
  {
+  "card": "Avenging Druid",
+  "clause": "you may reveal cards from the top of your library until you reveal a land card. if you do, put that card onto the battlefield and put all other cards revealed this way into your graveyard",
+  "ignored": [
+   "put"
+  ]
+ },
+ {
   "card": "Awakening",
   "clause": "untap all creatures and lands",
   "ignored": [
@@ -959,6 +966,13 @@
   ]
  },
  {
+  "card": "Keeper of the Dead",
+  "clause": "choose target opponent who has at least two fewer creature cards in their graveyard than you do as you activate this ability. destroy target nonblack creature that player controls",
+  "ignored": [
+   "cards"
+  ]
+ },
+ {
   "card": "Kjeldoran Frostbeast",
   "clause": "destroy all creatures blocking or blocked by this creature",
   "ignored": [
@@ -978,6 +992,14 @@
   "clause": "each creature without flanking blocking this creature gets -1/-1 until end of turn",
   "ignored": [
    "each"
+  ]
+ },
+ {
+  "card": "Kor Chant",
+  "clause": "all damage that would be dealt this turn to target creature you control by a source of your choice is dealt to another target creature instead",
+  "ignored": [
+   "target",
+   "another"
   ]
  },
  {
@@ -1082,6 +1104,13 @@
   ]
  },
  {
+  "card": "Manabond",
+  "clause": "you may reveal your hand and put all land cards from it onto the battlefield. if you do, discard your hand",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Marsh Gas",
   "clause": "all creatures get -2/-0 until end of turn",
   "ignored": [
@@ -1098,6 +1127,13 @@
  {
   "card": "Mind Games",
   "clause": "tap target artifact, creature, or land",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
+  "card": "Mind Over Matter",
+  "clause": "you may tap or untap target artifact, creature, or land",
   "ignored": [
    "or"
   ]
@@ -1168,6 +1204,13 @@
   ]
  },
  {
+  "card": "Nausea",
+  "clause": "all creatures get -1/-1 until end of turn",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Needle Storm",
   "clause": "needle storm deals 4 damage to each creature with flying",
   "ignored": [
@@ -1179,6 +1222,44 @@
   "clause": "destroy all artifacts, creatures, and enchantments",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Oath of Druids",
+  "clause": "that player chooses target player who controls more creatures than they do and is their opponent. the first player may reveal cards from the top of their library until they reveal a creature card. if the first player does, that player puts that card onto the battlefield and all other cards revealed this way into their graveyard",
+  "ignored": [
+   "first"
+  ]
+ },
+ {
+  "card": "Oath of Ghouls",
+  "clause": "that player chooses target player whose graveyard has fewer creature cards in it than their graveyard does and is their opponent. the first player may return a creature card from their graveyard to their hand",
+  "ignored": [
+   "cards",
+   "first"
+  ]
+ },
+ {
+  "card": "Oath of Lieges",
+  "clause": "that player chooses target player who controls more lands than they do and is their opponent. the first player may search their library for a basic land card, put that card onto the battlefield, then shuffle",
+  "ignored": [
+   "first"
+  ]
+ },
+ {
+  "card": "Oath of Mages",
+  "clause": "that player chooses target player who has more life than they do and is their opponent. the first player may have this enchantment deal 1 damage to the second player",
+  "ignored": [
+   "first",
+   "have",
+   "enchantment"
+  ]
+ },
+ {
+  "card": "Oath of Scholars",
+  "clause": "that player chooses target player who has more cards in hand than they do and is their opponent. the first player may discard their hand and draw three cards",
+  "ignored": [
+   "first"
   ]
  },
  {
@@ -1207,6 +1288,20 @@
   "clause": "regenerate target black or green creature",
   "ignored": [
    "or"
+  ]
+ },
+ {
+  "card": "Pandemonium",
+  "clause": "that creature's controller may have it deal damage equal to its power to any target of their choice",
+  "ignored": [
+   "have"
+  ]
+ },
+ {
+  "card": "Paroxysm",
+  "clause": "that player reveals the top card of their library. if that card is a land card, destroy that creature. otherwise, it gets +3/+3 until end of turn",
+  "ignored": [
+   "card,"
   ]
  },
  {
@@ -1413,6 +1508,14 @@
   ]
  },
  {
+  "card": "Scalding Salamander",
+  "clause": "you may have it deal 1 damage to each creature without flying defending player controls",
+  "ignored": [
+   "have",
+   "each"
+  ]
+ },
+ {
   "card": "Scarab of the Unseen",
   "clause": "return all auras attached to target permanent you own to their owners' hands. draw a card at the beginning of the next turn's upkeep",
   "ignored": [
@@ -1572,6 +1675,13 @@
   "clause": "target creature you control gets +x/+0 until end of turn, where x is the number of creature cards in your graveyard. sacrifice that creature at the beginning of the next end step",
   "ignored": [
    "cards"
+  ]
+ },
+ {
+  "card": "Spike Cannibal",
+  "clause": "move all +1/+1 counters from all creatures onto it",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -1937,6 +2047,14 @@
   "card": "Wall of Caltrops",
   "clause": "if at least one other wall creature is blocking that creature and no non-wall creatures are blocking that creature, this creature gains banding until end of turn",
   "ignored": [
+   "creature"
+  ]
+ },
+ {
+  "card": "Wall of Nets",
+  "clause": "exile all creatures blocked by this creature",
+  "ignored": [
+   "all",
    "creature"
   ]
  },

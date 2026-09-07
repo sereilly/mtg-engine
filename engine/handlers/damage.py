@@ -90,6 +90,31 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
     source_permanent = context.source_permanent
     x_value = context.x_value
 
+    # ``biter: "attached"`` — "**Enchanted creature** deals 1 damage to target
+    # creature with flying" (Dizzying Gaze). The same key
+    # ``source_bites_target`` has read since Farrel's Mantle and for the same
+    # reason: CR 113.7a leaves the ability the Aura's and CR 119.3 makes the
+    # *host* the damage's source, so only the dealer moves. Read here rather
+    # than at each of this handler's dozen `source=` call sites, because the
+    # source is chosen once and spent everywhere.
+    #
+    # An Aura that has fallen off has no host, and deals nothing rather than
+    # falling back to biting as itself — which is the branch above's rule and
+    # the one that keeps the wrong source from coming back by another door.
+    if instruction.payload.get("biter") == "attached":
+        host = attached_host(game, source_permanent)
+        if host is None:
+            game.log.append(f"{card.name}: nothing to deal the damage")
+            return True, "resolved"
+        source_permanent = host
+        # …and the *log* moves with it. Every message below names ``card``, and
+        # for every other card in the pool that is the object dealing the
+        # damage; here it is the Aura, so leaving it would have this handler
+        # report a source the rule says is not the source. ``card`` is read for
+        # nothing else once ``source_permanent`` is known non-None, which the
+        # early return above guarantees.
+        card = host.card
+
     # Rocket Launcher: "Destroy this artifact at the beginning of the next end
     # step." A consequence of having activated, so it is marked here rather
     # than sequenced — the end step's existing delayed-destruction sweep does
@@ -137,8 +162,13 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         # The power is computed (CR 613), which is the whole card — the counter
         # this same trigger placed a step earlier is what pushes it over the
         # line.
-        from ._common import attached_host
-
+        #
+        # (``attached_host`` used to be re-imported here. It is already bound at
+        # module level, and a function-level import of a name the module has —
+        # harmless while it was the only reader — made the whole name *local*,
+        # so the attached-dealer read added above it raised `UnboundLocalError`
+        # before this line ever ran. Python scopes a name per function, not per
+        # statement.)
         host = attached_host(game, source_permanent)
         damage = max(0, host.effective_power) if host is not None else 0
     else:
