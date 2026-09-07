@@ -48,6 +48,7 @@ from .lowering import (
     _fused_discard_then_draw,
     _fused_draw_then_discard,
     _fused_exile_then_controller_life,
+    _fused_exile_event_subject_until_source_leaves,
     _lower_add_mana,
     _lower_become_color,
     _lower_cant_be,
@@ -727,6 +728,17 @@ def lower_statement(
         # the loop above, because the loop's rows all take the steps and nothing
         # else.
         fused = _fused_cost_repeated_destroys(statement.steps, lower_statement)
+        if fused is not None:
+            return fused
+        # "Exile that creature. Return that card to the battlefield … when this
+        # artifact leaves the battlefield." (Portcullis.) Beside the loop rather
+        # than in it, for `_fused_cost_repeated_destroys`' reason one line up:
+        # the rows above take the steps and nothing else, and this pair is a
+        # CR 610.3 link only under an event that froze the object the first
+        # sentence exiles.
+        fused = _fused_exile_event_subject_until_source_leaves(
+            statement.steps, event
+        )
         if fused is not None:
             return fused
         _refuse_unfused_distinctness(statement.steps)

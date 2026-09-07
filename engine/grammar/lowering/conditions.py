@@ -26,7 +26,8 @@ from .. import ast
 from ..errors import LoweringError
 from ...subject_filters import card_only_filter, untestable_filter_keys
 from ._common import _filter_payload, _is_enchanted, _restrictions_beyond
-from ._events import (ATTACHED_PERMANENT_CONTROLLER, _EVENT_SUBJECT_PLAYERS, COUNTED_NUMBER,
+from ._events import (ATTACHED_PERMANENT_CONTROLLER, _EVENT_SUBJECT_OBJECTS,
+                      _EVENT_SUBJECT_PLAYERS, COUNTED_NUMBER,
                       EVENT_SUBJECT_PLAYER)
 
 #: What ``targets.kind`` on a guarded effect says the pronoun "it" names, and
@@ -95,11 +96,33 @@ def _condition_seat(condition, player, event, what: str) -> str:
 _SAME_NAME_EVENTS = frozenset({"player_casts_spell", "spell_cast"})
 
 
+def _subject_could_be_counted(event_subject, counted) -> bool:
+    """Whether the object a trigger's condition named could be one of the
+    permanents *counted* describes.
+
+    The test behind "other" resolving to the **event's** subject rather than to
+    the ability's source: a word contrasts with something that could otherwise
+    be in the set, and if the trigger's subject is a land while the count is
+    over creatures then the two noun phrases are about different things and the
+    word must mean the source.
+
+    Card types only, and both directions asked: an unnarrowed subject (a bare
+    "it") names anything and so could be counted, and an unnarrowed count
+    counts anything and so includes any subject.
+    """
+    subject_types = frozenset(getattr(event_subject, "card_types", ()) or ())
+    counted_types = frozenset(counted.card_types or ())
+    if not subject_types or not counted_types:
+        return True
+    return bool(subject_types & counted_types)
+
+
 def _lower_condition(
     condition: ast.Condition,
     produced: frozenset[str] = frozenset(),
     event: str | None = None,
     referent: str | None = None,
+    event_subject=None,
 ) -> dict[str, object]:
     """*produced* names the scratchpad values earlier steps of this same effect
     recorded. It defaults to empty, which is what refuses a coin-flip condition
@@ -115,6 +138,13 @@ def _lower_condition(
     condition guards — what "it" names. Only the conditional lowering can supply
     it, so every other caller leaves it None and the clauses that need one
     refuse there.
+
+    *event_subject* is the trigger's own noun phrase, threaded for the one
+    clause whose meaning depends on it: "two or more **other** creatures" reads
+    "other" against the nearest antecedent, and on a trigger that named one that
+    is the event's subject rather than the ability's source. Only
+    :func:`lower.lower_ability` holds both, so every other caller leaves it None
+    and the word keeps its source reading.
     """
     if isinstance(condition, ast.SelfInGraveyardWithCardsAbove):
         # CR 113.6b and CR 404.3 in one payload. ``functions_from`` is the same
@@ -498,9 +528,34 @@ def _lower_condition(
                 "filter": condition.filter.to_payload(),
                 "op": condition.comparison.op,
             }
+        described = condition.filter.to_payload()
+        # "if there are two or more **other** creatures on the battlefield"
+        # (Portcullis), under "whenever **a creature** enters".
+        #
+        # English's "other" contrasts with the nearest antecedent noun phrase,
+        # and here that is the *trigger's own subject* rather than the ability's
+        # source — an artifact is not one of the creatures being counted, so it
+        # cannot be what the word excludes. The noun parser has no event in view
+        # and records the only exclusion it can (``other_than_source``); this is
+        # the one place the trigger's subject and the condition's noun phrase
+        # are both readable, so it is where the referent is decided.
+        #
+        # Narrowly: only when the event freezes its subject *and* the two noun
+        # phrases name the same card types, so the subject really could be one
+        # of the objects counted. Anywhere else the word keeps the source
+        # reading it has always had — "whenever this creature attacks, if you
+        # control no other creatures" is the source and means the same thing
+        # either way.
+        if (
+            described.get("exclude_self")
+            and event in _EVENT_SUBJECT_OBJECTS
+            and _subject_could_be_counted(event_subject, condition.filter)
+        ):
+            described.pop("exclude_self", None)
+            described["exclude_event_subject"] = True
         return {
             "kind": "on_battlefield",
-            "filter": condition.filter.to_payload(),
+            "filter": described,
             "count": condition.comparison.value.value,
             "op": condition.comparison.op,
         }

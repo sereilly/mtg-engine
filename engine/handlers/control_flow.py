@@ -314,13 +314,33 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             game.players.index(context.caster)
             if context.caster in game.players else None
         )
+        filters = dict(payload.get("filter") or {})
+        # "if there are two or more **other** creatures on the battlefield"
+        # (Portcullis), under "whenever a creature enters". The word excludes
+        # the object the *firing event* was about, not the ability's source —
+        # which the lowering decided, because that is the one place the trigger's
+        # noun phrase and the condition's are both in view. Carried out here
+        # rather than by the matcher for ``exclude_self``'s reason two branches
+        # up: the excluded object is a permanent the caller holds, not a
+        # characteristic a filter can test.
+        #
+        # An event that froze no id excludes nothing, which is the loud
+        # direction: it counts one *more* permanent than the card means, so a
+        # trigger whose threshold this decides fires where it should not — and
+        # every event this key is emitted under stamps the id.
+        excluded_id = (
+            (context.trigger_context or {}).get("event_subject_permanent_id")
+            if filters.pop("exclude_event_subject", None)
+            else None
+        )
         count = sum(
             1
             for permanent in game.all_permanents()
-            if subject_matches(
+            if permanent.permanent_id != excluded_id
+            and subject_matches(
                 game,
                 permanent,
-                payload.get("filter") or {},
+                filters,
                 observer=observer,
                 source=context.source_permanent,
             )

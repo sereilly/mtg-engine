@@ -194,6 +194,7 @@ from .exile import (
 # fell — a move that renamed anything would be a rename wearing a move's
 # clothes.
 from .linked_exile import (
+    _fused_exile_event_subject_until_source_leaves,
     _lower_exile_graveyard_until_leaves,
     _lower_put_exiled_pile_top_into_hand,
     _lower_exile_top_of_library,
@@ -611,6 +612,7 @@ __all__ = [
     "_SEARCH_EXILE_HONOURED",
     "_lower_cast_from_exiled_with",
     "_lower_cast_permission",
+    "_fused_exile_event_subject_until_source_leaves",
     "_lower_exile_graveyard_until_leaves",
     "_lower_put_exiled_pile_top_into_hand",
     "_lower_force_chosen_creature_to_attack",
