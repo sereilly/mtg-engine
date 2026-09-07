@@ -960,6 +960,104 @@ engine charges an alternative or repeated cost correctly and the browser can
 only announce the default — recorded as a named four-part item in
 SET_PLAYBOOK.md's Known gaps.
 
+## Stronghold (STH) — measured (97/143 at ingest, manifest index 18)
+
+**Ingest census: 97/143 supported (67.8%), 142 of 143 cards new to the pool.**
+Registered under `measured` on 2026-09-06 at release date 1998-03-02, which
+places it after Tempest (1997-10-14) and before M21 — printing-order **index
+18**, appended at the end of the pre-M21 run for the second consecutive set.
+
+Only **Shock** has been printed here before, and it is in Tempest, which is
+earlier. So no card's origin can move from any position in the pre-M21 run and
+the printing-order prefix guard is blind for the seventh consecutive set;
+`test_the_shipped_sets_are_in_printing_order` is again the assertion that can
+fire, and Phase 4 rehearses the wrong insert regardless.
+
+The supported percentage is **the same 67.8% Tempest opened with**, over a set
+one-third the size. That coincidence is worth noting only because the two sets
+are the same block and the second inherits the first's machinery: shadow,
+buyback and the slivers all arrived with TMP, so STH's remaining 46 are what the
+block's own vocabulary did *not* cover.
+
+**Phase 2's first sweep is empty and the second is nearly so.** Every card is
+`layout: normal` and every printed type already ships, so nothing gates Phase 4
+absolutely. Of the keywords, only **fear** (CR 702.36) turns up as a whole
+card's refusal (Corrupting Licid), and it arrives as a *front-end* refusal with
+every grammar line clean — which is the shape SET_PLAYBOOK Phase 2 warns about:
+`oracle.UNSUPPORTED_KEYWORDS` is a third table that outranks the registry diff,
+so a keyword can be implemented in full and still cost every card that prints
+it. Legends' rampage did exactly that.
+
+**The refusal census reads 46 cards over 50 lines, and its largest site — 18
+cards at "expected a subject" — is the generic error rather than a family.**
+SET_PLAYBOOK's "a refusal site is a work-list entry, not a diagnosis" is the
+whole reading of this census: those 18 cards have nothing in common except that
+the sentence opens with something no subject reader claimed. The **fragment**
+census is where the leverage is, and it names one group boundary outright: five
+cards (the en-Kor cycle) print `{0}: The next 1 damage that would be dealt to
+this creature this turn is dealt to target creature you control instead.`
+verbatim, and it is *unlowered* rather than unparsed.
+
+**Seven cards report supported and do less than they print**, and Phase 1 is
+where they were found rather than Phase 4 — Fallen Empires' lesson, applied.
+`--hollow-lines` names Volrath's Stronghold (an activated ability with no
+instruction behind it); `parse_coverage --set STH` names Mox Diamond (three
+unclaimed sentences), Provoke, Pursuit of Knowledge and the same Volrath's
+Stronghold; and `picker_sweep --set STH` names Provoke and Volrath's Stronghold
+again. Volrath's Stronghold is all three at once and is one card, not three
+bugs.
+
+### Phase 0's caps prediction, and the one pre-split it bought
+
+Ten grammar modules sat within 30 lines of the 1,000-line guard. Applying
+Weatherlight's rule — **a shared module is pre-split, an owned one is briefed,
+and there is no third option** — exactly one qualified as shared-and-tight:
+`subject_verb.py`, 13 lines under, and the module every group's "expected a
+subject" work reaches.
+
+Its seam was not chosen; it was **read off the dispatch**. The branches from
+"adds" through "may" are one contiguous run, every one gated on
+`isinstance(source_spec, ast.PlayerRef)`, with nothing between them that is
+not — a seam the code had drawn for itself and the docstring had never
+mentioned. `player_verbs.py` takes the run **whole and in order**, because
+those branches are arms of one fall-through chain and their order *is* the
+production: the caller asks one reader at the point the first branch sat and
+falls through where the last one did. 987 lines becomes 529 and 533, and
+`oracle_diff` reports 0 changed of 2,966.
+
+The other nine are briefed: `effects/mana.py` to G5, `effects/cards.py` to G4,
+`lowering/destruction.py` to G3, and the genuinely shared remainder
+(`lowering/characteristics.py` at 7 left, `amounts.py`, `nouns.py`,
+`lowering/control_flow.py`, `ast/_references.py`, `statements.py`) named in
+every brief with the instruction to keep additions small and report a crossing.
+Whether that last group needed pre-splitting too is the prediction this set
+grades.
+
+### Wave 1 — five groups
+
+| Group | Area | Cards |
+| --- | --- | --: |
+| G1 | damage prevention, redirection, damage-event triggers | 9 |
+| G2 | combat restrictions and requirements (CR 506/508/509) | 12 |
+| G3 | combat triggers, delayed end-of-combat effects, retargeting | 9 |
+| G4 | library/graveyard manipulation and unusual costs | 11 |
+| G5 | player-action triggers and CR 614 replacements | 9 |
+
+The split is by **grammar family**, not by printed type, so every group has
+creatures and every group appends to the same per-set test files — which is why
+those six files were opened on `main` before the fan-out with the block header.
+
+**One test is red on `main` for the duration**, and that is deliberate.
+Constant Mists prints `Buyback—Sacrifice a land`, a buyback cost that is **not
+mana**, and `cast_costs._BUYBACK_LINE` reads a run of mana symbols — so CR
+601.2b's no-unread-cost gate refuses the card rather than casting it for its
+printed mana alone. The refusal is the gate working; the card is G4's. Every
+brief names the failure so no group mistakes the baseline for its own breakage.
+
+The ingest's other yield was **Crovax the Cursed**, the eleventh legend whose
+printed text calls it by its first word ("put a +1/+1 counter on Crovax"), read
+the same way as the ten before it.
+
 ## Tempest (TMP) — shipped (335/335, manifest index 17)
 
 **Ingest census: 227/335 supported (67.8%), 309 of 335 cards new to the pool.**
