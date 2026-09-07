@@ -1019,6 +1019,7 @@ def _retarget_subject(game: Game, context: OracleExecutionContext, instruction):
     the wrong one — the look-alike bug that ``permanent_id`` solves on the
     battlefield.
     """
+    from ..legality import _single_target_is
     from ..targeting import single_spell_target
 
     card_name = getattr(context.card, "name", "")
@@ -1045,6 +1046,19 @@ def _retarget_subject(game: Game, context: OracleExecutionContext, instruction):
     ):
         game.log.append(
             f"{card_name}: {item.card.name} no longer has a single target that is you"
+        )
+        return None
+    # "…and **that target is a creature**" (Meddle), "…that targets only **a
+    # player**" (Rebound). CR 608.2b asked a second time about the *other*
+    # object's target, through the reader the picker used — the same
+    # arrangement the seat question above has, and the one this restriction did
+    # not: it was checked when the ability was activated and never again, so a
+    # spell re-aimed at a face in between was still retargeted by a card that
+    # only ever named one pointed at a creature.
+    wanted_type = instruction.payload.get("current_target_type")
+    if wanted_type is not None and not _single_target_is(game, chosen, wanted_type):
+        game.log.append(
+            f"{card_name}: {item.card.name}'s target is no longer a {wanted_type}"
         )
         return None
     return item, chosen

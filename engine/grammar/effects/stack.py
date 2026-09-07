@@ -371,6 +371,50 @@ def _expect_replaced_graveyard(stream: TokenStream) -> None:
         stream.expect_word(word)
 
 
+#: The nouns a "that targets only <noun>" clause may name, and what each means
+#: to the picker's ``current_target_type``. Closed, for
+#: ``_CHANGE_TARGET_NEW_TARGETS``' reason one module over: a noun consumed here
+#: and unknown to the gate is a retarget offered every spell on the stack.
+_TARGETS_ONLY_NOUNS: frozenset[str] = frozenset({"player", "creature"})
+
+
+def _accept_targets_only(stream: TokenStream) -> str | None:
+    """``target spell that targets only a <noun>`` — consumed whole, or None
+    with the cursor untouched.
+
+    (Rebound: "…target spell that targets only a player.") CR 115.9a's count
+    and the shape of the one target, printed as a single relative clause where
+    Reflecting Mirror prints them as "with a single target" plus "if that target
+    is you" and Meddle prints them as a condition. Three spellings of two
+    restrictions, so this produces the very node those two already produce.
+
+    Read here rather than by the shared noun parser, which cannot: its "that
+    targets <noun phrase>" postmodifier parses an **object** filter, "only a
+    player" is not one, and its failure unwinds the whole target spec — the
+    line refused at "expected the spell whose target to change" while naming a
+    production that works.
+
+    The noun is checked rather than merely consumed, for the reason
+    ``_attach_new_target_bound`` checks its own: a restriction the gate cannot
+    ask about would be read and then dropped, and a dropped restriction here is
+    an ability that re-aims spells the card never let it touch.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("target", "spell"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("that", "targets", "only"):
+        stream.reset(mark)
+        return None
+    stream.accept_word("a", "an")
+    noun = stream.peek_word()
+    if noun not in _TARGETS_ONLY_NOUNS:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    return noun
+
+
 def _parse_change_target(stream: TokenStream) -> "ast.ChangeTarget | None":
     """``Change the target of target spell with a single target [if that target
     is <player>].`` (Reflecting Mirror; Deflection and Divert print the first
@@ -404,6 +448,21 @@ def _parse_change_target(stream: TokenStream) -> "ast.ChangeTarget | None":
     if not (stream.at_word("target") and stream.peek_word(1) == "spell"):
         stream.reset(mark)
         return None
+    # "…target spell **that targets only a player**." (Rebound.) The clause
+    # spelling of the two restrictions the branch below reads as a noun phrase
+    # plus an "if"; the spec is built here for ``_parse_conditional_retarget``'s
+    # reason — the count is what the words say and there is nothing else in the
+    # phrase for the shared parser to find.
+    only = _accept_targets_only(stream)
+    if only is not None:
+        return ast.ChangeTarget(
+            ast.TargetSpec(
+                "target",
+                ast.ObjectFilter(target_count=1, zone="stack"),
+                targeted=True,
+            ),
+            current_target_type=only,
+        )
     subject = parse_target_spec(stream)
     if subject is None:
         raise stream.error("expected the spell whose target to change")
