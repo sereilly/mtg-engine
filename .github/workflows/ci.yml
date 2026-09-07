@@ -139,10 +139,39 @@ jobs:
       # long tail of pool-wide guards at 2-6s each — the sweeps that walk every
       # card scale with the pool, and that is what grew. `-m "not slow"` would
       # not help, because the batch tests are not the growth.
+      # BASELINE 470 -> 571, BUDGET unchanged (2026-09-07, the Phase 0 before
+      # Stronghold). Run 34081047302 on the Tempest retrospective commit read
+      # `suite wall time: 571s` at 16,780 tests. The suite grew 14.4% in tests
+      # and 21.5% in runner wall time since the 470s reading, so the
+      # super-linearity the ICE note found is still there and still mild.
+      #
+      # **BUDGET is deliberately not raised**, and the trigger is why. Every
+      # previous raise was taken with the suite near the gate — HML's at 90% of
+      # the old budget, VIS's at 94%. This run is **60%** of 940 and the creep
+      # warning did not fire. Raising a budget nothing is pressing against would
+      # be raising the number instead of obeying it (idiom 13), so it waits for
+      # a reading that needs it.
+      #
+      # What that costs, recorded so the next reader does not have to re-derive
+      # it: BUDGET is now 1.65x BASELINE rather than the ~2x this gate is
+      # documented to want, which puts the creep warning (1.5x = 857s) only 9%
+      # below the gate instead of ~22%. The warning still fires first, so the
+      # ordering holds, but the room between them is thin. **The next raise
+      # takes BUDGET to ~1,140 to restore the 2x**, and should be taken on the
+      # reading that pushes the suite past ~750s rather than on a set boundary.
+      #
+      # And the method note gets a data point that cuts against its own caution.
+      # The local serial wall on the same commit was 569s against this runner's
+      # 571s — a 1.00 multiplier, where HML measured 1.72 and 1.88. The
+      # discipline still stands (BASELINE takes the step's own output, and one
+      # coincidence is not a calibration), but the runner is no longer slower
+      # than this local machine, so a local reading is no longer the
+      # *conservative* estimate the note assumes it is. It can now under- or
+      # over-state, which is a second reason not to feed it in.
       - name: Run the test suite, enforcing the time budget
         env:
           BUDGET: 940
-          BASELINE: 470
+          BASELINE: 571
         run: |
           START=$(date +%s)
           STATUS=0

@@ -21,6 +21,7 @@ import pytest
 from engine import Game, PlayerState
 from engine.card_loader import load_catalog, load_cards, manifest_set_path
 from engine.oracle import compile_card_oracle
+from tests.helpers import resolve_stack
 from engine.special_actions import (available_special_actions,
                                     special_action_line,
                                     special_action_refusal,
@@ -211,8 +212,7 @@ def test_116_2c_a_licid_may_pay_to_end_the_effect_its_own_ability_made():
         0, "Enraging Licid", ability_index=0,
         target_permanent_index=1, target_player_index=0,
     )
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     # Resolving the stack leaves nobody holding priority in this rig; the offer
     # is about the moment a player *has* it (CR 116.2c), so the test says which.
     game.priority_player_index = 0
@@ -260,8 +260,7 @@ def test_205_1a_a_licid_stops_being_a_creature_and_loses_its_own_ability():
         0, "Quickening Licid", ability_index=0,
         target_permanent_index=1, target_player_index=0,
     )
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert not licid.is_creature
     assert not licid.has_type("licid")
@@ -346,7 +345,6 @@ def test_605_1a_volraths_curse_shuts_off_mana_abilities_and_faiths_fetters_does_
     game._refresh_dynamic_creatures()
 
     allowed = game.activate_permanent_ability(1, "Llanowar Elves", ability_index=0)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     assert allowed.supported, allowed.details
     assert p2.mana_pool.get("G", 0) == 1

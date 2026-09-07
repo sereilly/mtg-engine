@@ -122,6 +122,70 @@ def _damage_dealt(game, recipient, amount: int, source=None, combat: bool = Fals
     ).dealt
 
 
+def resolve_stack(game, *, limit: int = 200) -> int:
+    """Resolve every object on *game*'s stack and settle the decisions it arms.
+
+    **Use this instead of ``while game.stack: game.resolve_top_of_stack()``.**
+    That loop is a latent hang, and the hang is the engine being correct.
+    CR 608.2 says a resolution is not over until its last instruction is done and
+    CR 117.3b says nobody receives priority until then, so an object that stopped
+    to ask an interactive seat something stays on the stack and
+    ``resolve_top_of_stack`` reports False for it. The bare loop then spins on a
+    stack that never empties: no failure, no output, the whole suite wedged on
+    one test. It costs nothing until a card in the test's pool starts asking
+    something — which is why such a loop survives review, and why one of them
+    stopped a run the day a trigger began announcing a target.
+
+    Decisions are settled through the registry's own default path
+    (``auto_resolve_pending_choices``, and the CR 614 replacement queue beside
+    it) — the same answers an AI or headless seat takes — so a test written with
+    this helper sees what a non-interactive game would have done. That happens
+    **whether or not anything is left on the stack**, because the hazard is the
+    resolution being unfinished rather than the stack being non-empty: a prompt
+    still owed means steps behind it have not run, and a test that asserts on the
+    board there is reading a half-applied effect. A test that means to *inspect*
+    a prompt should resolve by hand instead; this helper's job is to finish.
+
+    ``kinds`` is deliberately not offered. Drain order is load-bearing only where
+    a default consumes randomness (a library search shuffles), and a test that
+    needs that ordering wants the engine call itself rather than a helper hiding
+    which kinds it drained.
+
+    Returns the number of stack objects resolved. Raises rather than looping
+    forever when nothing can progress — a prompt nothing defaults is a bug in the
+    registry, and this names what is owed instead of timing the run out.
+    """
+    resolved = 0
+    for _ in range(limit):
+        before = (
+            len(game.stack),
+            len(game.pending_choices),
+            len(game.pending_replacement_choices),
+        )
+        if game.stack and game.resolve_top_of_stack():
+            resolved += 1
+        game.auto_resolve_pending_choices()
+        game.auto_resolve_pending_replacement_choices()
+        after = (
+            len(game.stack),
+            len(game.pending_choices),
+            len(game.pending_replacement_choices),
+        )
+        if not game.stack and not game.pending_choices:
+            return resolved
+        if after == before:
+            raise AssertionError(
+                f"the stack stopped moving with {len(game.stack)} object(s) on "
+                f"it and nothing that could be answered: waiting on "
+                f"{game.waiting_prompt()!r}, owed "
+                f"{[c.kind for c in game.pending_choices]}"
+            )
+    raise AssertionError(
+        f"the stack did not drain in {limit} iterations; {len(game.stack)} "
+        f"object(s) left, owed {[c.kind for c in game.pending_choices]}"
+    )
+
+
 def _get(all_cards, name: str):
     return next(card for card in all_cards if card.name == name)
 

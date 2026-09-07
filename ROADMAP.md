@@ -54,20 +54,40 @@ Anything that weakens these is a regression regardless of what it enables:
 1. **No silent wrongness.** A card may fail loudly as unsupported with a
    reason; it may never resolve as something other than what it says.
 2. **The suite stays fast.** **16,780 tests**, CI budget **940s**, CI-measured
-   baseline **470s** (`ci.yml`). Tempest added 1,167 tests across four waves and
-   the budget has **not** been re-read in CI since — the local serial wall on
-   the promotion commit is 569s, which is a different machine and not
-   comparable to the 470s figure. **The next set's Phase 0 owes a CI reading**
-   before deciding whether the baseline moved: a local number cannot tell creep
-   from a faster laptop, and quoting one as if it could is how a baseline stops
-   meaning anything. Both moved at Weatherlight's Phase 0 from run
-   33977035005 on the Visions promotion commit — `suite wall time: 470s`, 94%
-   of the old budget with the creep warning already firing — and the local
-   `--durations` read shows no single culprit: a 27s parse-coverage setup, one
-   17s AI simulation, then a long tail of pool-wide guards at 2–6s each. The
-   sweeps that walk every card scale with the pool, and that is what grew. The budget catches a step change; the baseline
+   baseline **571s** (`ci.yml`). Read 2026-09-07 at the Phase 0 before
+   Stronghold, from run 34081047302 on the Tempest retrospective commit:
+   `suite wall time: 571s`, **60% of budget**, creep warning not firing. That
+   discharges the reading the previous entry owed — 215 commits, every
+   Weatherlight wave and the whole of Tempest, had been sitting unpushed, so
+   nothing since the Visions promotion had ever been timed on the runner.
+   **A baseline cannot be read from a branch nobody pushed**, which is the part
+   worth remembering: the number went stale for two sets because CI had no
+   commit to measure, not because anyone declined to look.
+
+   The growth is real and mild: +14.4% tests took +21.5% runner wall time, the
+   same super-linearity ICE measured. **BUDGET is deliberately not raised.**
+   Every previous raise was taken against the gate — HML's at 90% of the old
+   budget, VIS's at 94% — and 60% is not pressing against anything; raising a
+   number nothing is straining is idiom 13's failure. What it costs is recorded
+   in `ci.yml`: BUDGET is now 1.65x BASELINE rather than the ~2x this gate wants,
+   so the creep warning sits 9% below the gate instead of ~22%. It still fires
+   first. **The next raise takes BUDGET to ~1,140**, on the reading that crosses
+   ~750s rather than on a set boundary.
+
+   **And the local-versus-runner caution gained a data point that cuts against
+   it.** The local serial wall on that same commit was 569s against the runner's
+   571s — a 1.00 multiplier where HML measured 1.72 and 1.88. The discipline is
+   unchanged (BASELINE takes the step's own output; one coincidence is not a
+   calibration), but the runner is no longer *slower* than this local machine,
+   so a local reading is no longer the conservative estimate the method note
+   below assumes. It can now err either way.
+
+   The local `--durations` read still shows no single culprit: a 27s
+   parse-coverage setup, one 17s AI simulation, then a long tail of pool-wide
+   guards at 2–6s each. The sweeps that walk every card scale with the pool, and
+   that is what grew. The budget catches a step change; the baseline
    is what catches creep, and it is the number to keep honest. Raising the
-   budget is a decision, not maintenance — it has been raised four times on
+   budget is a decision, not maintenance — it has been raised five times on
    purpose.
 
    **`ELAPSED` is runner-measured, and that is the whole lesson.** The two
