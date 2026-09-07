@@ -1,10 +1,10 @@
 # Scaling Roadmap
 
-Target: grow the card pool from **2,824** unique cards (LEA/LEB/2ED/ARN/ATQ/
-3ED/LEG/DRK/FEM/4ED/ICE/HML/ALL/MIR/VIS/5ED/WTH/TMP/M21, all shipped and all
+Target: grow the card pool from **2,966** unique cards (LEA/LEB/2ED/ARN/ATQ/
+3ED/LEG/DRK/FEM/4ED/ICE/HML/ALL/MIR/VIS/5ED/WTH/TMP/STH/M21, all shipped and all
 supported)
 to the full release line — **137 sets, 33,594 printings, 26,113 unique cards**
-per `set_progress.json`. Nineteen sets, and the recent arrivals span the whole
+per `set_progress.json`. Twenty sets, and the recent arrivals span the whole
 range: Tempest is the largest work set yet at 335 cards and 309 of them new —
 larger than Ice Age's 346-card addition only in total size, and the first set
 here to need four waves; 4ED and 5ED are pure reprint sets that bought printings rather than
@@ -866,13 +866,21 @@ rule, which does not expire:
 > what is already there); `test_the_shipped_sets_are_in_printing_order` is the
 > assertion that can.
 
-Under that rule today the answer is **Stronghold** (1998-03-02, 143 printings,
-137 new to the release line) — the Tempest block's second set, whose source now
-ships. Exodus, Urza's Saga and Urza's Legacy follow it, and **6ED comes after
-all four**, not before: it is dated 1999-04-21, and the same "sources first"
-argument that made it wait for the Mirage block makes it wait for the Tempest
-and Urza ones. `set_progress.json` now reads **0 new cards** for it against the
-release line.
+**Stronghold shipped 2026-09-07** at index 18, and the rule re-derives the next
+answer rather than this paragraph naming one: **Exodus** (1998-06-15), the
+Tempest block's third set, whose two sources now ship. Urza's Saga and Urza's
+Legacy follow it, and **6ED comes after all three**, not before: it is dated
+1999-04-21, and the same "sources first" argument that made it wait for the
+Mirage block makes it wait for the Tempest and Urza ones. `set_progress.json`
+now reads **0 new cards** for it against the release line.
+
+**Stronghold is the reason to run the rule rather than read the name**, and it
+is worth one sentence here because the failure was in this file. Its ingest
+entry recorded "Shock is in Tempest, which is earlier, so no card's origin can
+move from any position" — an inference from the block, not a reading of the
+data. Shock is in **M21**. The wrong-insert rehearsal at Phase 4 is what found
+it, which is why that step is not a formality even for a set that is 142/143
+new.
 
 **Every candidate row below is stale and must be re-measured before it is
 planned**, 6ED's most of all. The table reads 53 new-and-unsupported at a
@@ -960,18 +968,26 @@ engine charges an alternative or repeated cost correctly and the browser can
 only announce the default — recorded as a named four-part item in
 SET_PLAYBOOK.md's Known gaps.
 
-## Stronghold (STH) — measured (97/143 at ingest, manifest index 18)
+## Stronghold (STH) — shipped (143/143, manifest index 18)
 
 **Ingest census: 97/143 supported (67.8%), 142 of 143 cards new to the pool.**
 Registered under `measured` on 2026-09-06 at release date 1998-03-02, which
 places it after Tempest (1997-10-14) and before M21 — printing-order **index
 18**, appended at the end of the pre-M21 run for the second consecutive set.
 
-Only **Shock** has been printed here before, and it is in Tempest, which is
-earlier. So no card's origin can move from any position in the pre-M21 run and
-the printing-order prefix guard is blind for the seventh consecutive set;
-`test_the_shipped_sets_are_in_printing_order` is again the assertion that can
-fire, and Phase 4 rehearses the wrong insert regardless.
+Only **Shock** has been printed here before, and the prefix guard is blind for
+the seventh consecutive set; `test_the_shipped_sets_are_in_printing_order` is
+again the assertion that can fire.
+
+**This paragraph said something else until Phase 4 rehearsed the wrong insert,
+and the correction is the finding.** It read "Shock is in Tempest, which is
+earlier, so no card's origin can move from any position" — an inference from
+the block rather than a reading of the data. Shock is in **M21**, not Tempest.
+So STH's position decides Shock's own `original_printing`: `sth` at index 18,
+`m21` appended after M21, with every guard green either way because the prefix
+comparison only ever tests whether an *existing* card's origin moves. That is
+Mirage's Volcanic Geyser exactly, arriving in the set most likely to be waved
+through as all-new. **Count a reprint against the set that actually prints it.**
 
 The supported percentage is **the same 67.8% Tempest opened with**, over a set
 one-third the size. That coincidence is worth noting only because the two sets
@@ -1218,6 +1234,79 @@ group** — the unowned-module case Weatherlight's control experiment predicted
 would drift. Phase 0 read that module as shared and chose not to pre-split it,
 and the cost was exactly one card carried into a second wave. It is owned in
 wave 2, and splitting it is the first half of that group's job.
+
+### Wave 2 — five for five, and every parts list was stale in the cheap direction
+
+All five landed. **The re-probe instruction is the finding**, and its evidence
+here is uniform: Contempt's seven parts came back three-already-built and one
+right-for-the-wrong-reason; Volrath's Shapeshifter's five came back two-expired;
+Reins of Power's five came back three-expired, with its group calling the card
+"about half a day of a round" against a brief that named it one of the two
+hardest left; Spined Sliver's fourth part needed nothing at all; and Silver
+Wyvern's six came back with the two its own decliner had flagged as done
+genuinely done, and one landing in the wrong file.
+
+**The sharpest correction is a warning about how a decline is written.**
+Volrath's Shapeshifter was declined partly on "granting a quoted activated
+ability is unimplemented — `parser.py` raises `GrammarError('granted ability in
+quotes')`". That is true and irrelevant: `copies.py` has carried `grants_text`
+since Tempest's Unstable Shapeshifter, CR 707.9a lines are appended to the
+copied oracle text and compiled like any other line, and **the parser never
+reads a quote at all**. The absence of the wrong channel was read as the absence
+of the mechanism — the second consecutive set to record that exact shape.
+
+Two more live defects in shipped cards, neither with a failing test:
+
+* **Thawing Glaciers** (ALL) returned itself to hand from the *graveyard* if it
+  was destroyed between activation and the cleanup step. CR 400.7 makes that a
+  different object.
+* **`return_source_card_to_owners_hand` read its owner as
+  `metadata.get("base_controller_index", 0)`** — a third answer to a question
+  `control.base_controller` documents, so on any board that recorded no base
+  controller the card went to the wrong player's hand. Invisible to
+  `oracle_diff`: runtime only.
+
+### The promotion, and what the rehearsal cost
+
+Seven guards red, **five real findings**, two ratchets. The five: two activated
+and three triggered kinds taking a category default rather than a table row; a
+sixth row for Burgeoning, which did not change (Horn of Greed gave `land_played`
+a third value on its seat axis and the pair reached the by-condition table for
+the first time); Elven Rite missing from the AI's divided inventory; and
+**Skeleton Scavengers' cost disagreeing between the client and the engine** —
+`app.js` read `Pay {1} for each +1/+1 counter on this creature` and found a flat
+`{1}`, so the menu would auto-tap one mana for a price the engine computes as
+{N}. That is the "Pay 2 life or {2}" defect exactly, and it is fixed the way
+that one was.
+
+The two ratchets, read rather than accepted: grammar coverage's All row grows
+4,587 → 4,730 printings and parsed **holds at 90.2%** — nothing to credit the
+parser for, which is the trap that row sets. Hook reliance keeps 58 hooked cards
+and falls to **2.0%**, because 143 supported cards arrived carrying none.
+
+**Final: 143/143 supported, 0 hooked, 0 hollow lines, 143/143 sentences claimed,
+0 picker findings.** Stronghold is the **fifth** set to reach 100% with zero
+name-keyed hooks, and the second running to *retire* one while growing the pool.
+Ten group agents over two waves, every one finished.
+
+`simulate_ai_games.py --set STH`: 568 interactions over ten games, two declined
+casts, both Mind Games with no legal target on an empty board.
+
+### Phase 5, and the one thing no engine instrument could see
+
+The smoke step found `web/serialization.py` sending `is_aura: False` for a Licid
+that had become an Aura and attached itself to a creature. The engine was right
+at every seam it owns, and the field beside the bug — `"type"` — was already
+sending "Enchantment — Aura" from the layer-aware reader.
+
+What makes it worth a paragraph is that **the documented fix is also wrong
+here**. "Becomes an Aura enchantment" is a CR 613 layer-4 type change, so it
+moves nothing on the card: `perm.effective_card.type_line`, which CLAUDE.md
+names as the accessor for "what does it say?", still reads "Creature — Licid"
+afterwards. Only `has_type` / `is_creature` / `displayed_type_line` answer. This
+is the second site of the class in two sets and the second found by a promotion
+smoke test rather than by a guard, because `tests/engine/test_layer_reads.py`
+scans `engine/` only.
 
 ## Tempest (TMP) — shipped (335/335, manifest index 17)
 

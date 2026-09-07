@@ -756,12 +756,80 @@ honouring the narrowing, the `you_cast_spell` delayed-trigger subject filter
 honouring one, and a `targets` payload on `recolor_target_from_text` so the spec
 stops coming from a shared kind.
 
+**Drained 2026-09-06, in commit `2a2fe8dc` — which landed the day *before*
+Stronghold's ingest, and the entry was carried through all of Phase 1 anyway.**
+`parse_object_filter` records `zone="stack"` for the bare head noun, the two
+lowerings honour the narrowing, and Ersatz Gnomes' first ability now derives
+`{"kind": "stack"}`. **The finding is not the fix, it is how long the entry
+outlived it.** This list already records that "a Known-gaps entry is read as a
+work item and nobody re-checks a work item's *premise*", and the very next set
+re-read this one, wrote it into a group brief as live, and only found out at
+Phase 6 — because Phase 6 is now the step that checks. The group corrected it
+in its report, which is the other mechanism working. **Both are needed: the
+check at Phase 6 catches what a brief asserts, and the brief's "tell me what
+this got wrong" catches what Phase 6 has not reached yet.**
+
+**Added at STH's Phase 4: `StackItem.target_permanent_id` carries two arities,
+across 119 reader sites.** `stack/activation` and `stack/casting` stamp the
+whole `target_permanent_ids` *list*; a prompt's answer in `stack/choices` stamps
+a bare id. This is the `permanents_from` shape one level up and it is much
+larger — twenty files, against that channel's eight.
+
+It has already cost one live defect. `chosen_permanent` is the seam whose whole
+job is "prefer the stable id", and it asked `isinstance(permanent_id, int)`, so
+it silently ignored every list and fell through to the index its twelve callers
+had. `deal_damage`'s single-permanent branch was gated on the index for the same
+reason, so an `any_target` ability named by id alone fell past it and burned the
+**player** — reproduced on Rod of Ruin, 20 to 19, with the named creature
+untouched. `web/actions.py` fills an index in and masked it from every game.
+
+Settled *at the seam* rather than a thirteenth time at a call site:
+`oracle_types.single_chosen_id` is the arity rule, read by `chosen_permanent`
+and by that gate. One element is one address; several is not and gets None
+rather than a guess at slot zero. **What is left is the field**, and folding 119
+readers onto one shape is a pool-wide refactor rather than a fix — the kind
+this list already says does not travel with a wave. Whoever takes it owes the
+element-type question in the same round, which is the half Visions found nobody
+had named.
+
+**Added at STH's Phase 6: two grammar modules sit near the cap with nobody to
+own them, and one of them has a measured seam.** `effects/prevention.py` is at
+990 lines and W1G1 verified by call graph that it splits into two components
+with **zero edges between them** — the printed shield sentence (≈395 lines) and
+CR 615.8's "a source of your choice" (≈533). One coupling blocks the cut and
+that group introduced it deliberately, unifying the CR 615.5 rider reader:
+resolving it means moving `_parse_prevented_this_way_rider` and
+`_PREVENTED_THIS_WAY_RIDERS` to a floor both families read, and the candidate
+(`records.py`) would need `amounts.accept_counter_kind`, which `records`' own
+docstring says its split *removed* a cycle with. `lowering/sequences.py` is at
+920 after wave 2 moved two fusers into it, and four of its six fusers open on a
+`(Tap, payoff)` pair. `ast/_references.py` is at 997 and its real seam is
+measured too — `ObjectFilter.to_payload`, 307 lines, 31% of the file, whose only
+free names are `Fixed` and `TYPE_LINE_SUPERTYPES` — with a cost the next round
+must budget: `test_grammar_layering.py` hard-codes `ast`'s shared tuple, so a
+new `_payloads` module must be added there or a shared module importing a family
+breaks the layer order.
+
 **Added at TMP's Phase 5: `tests/engine/test_layer_reads.py` scans `engine/`
 only.** `web/serialization.py` asked "is this a creature" of
 `perm.card.type_line` — the printed type, the exact second answer that guard
 exists to catch — and no guard could see it because `web/` is outside the scan.
 Fixed at the one site found; the scope is not. Widening it means reading every
 type/colour/P/T question in `web/` against the layer accessors, which is a round.
+
+**STH's Phase 5 found the second site, and it says the entry was right to stay
+open.** `is_aura` read the printed type line, so a **Licid** — "this creature
+loses this ability and becomes an Aura enchantment" — reached the client as a
+non-Aura while the engine had it right at every seam it owns. The part worth
+carrying is *why the usual instinct also fails here*: "becomes an Aura
+enchantment" is a CR 613 **layer-4** type change, and layer 1 folds a copy while
+layer 3 folds a text change, so `perm.effective_card.type_line` still reads
+"Creature — Licid" too. Reaching for `effective_card` is the documented fix for
+"what does it say?" and it is the *wrong* fix for "what type is it?"; only the
+layer accessors (`has_type`, `is_creature`, `layer_bridge.displayed_type_line`)
+answer. `tests/ui/test_layer_reads_on_the_wire.py` now pins both known sites
+from the wire side. Two promotion smoke tests in a row have found one of these,
+which is the argument for the widened scan rather than a third.
 
 ## Phase 0 — Pre-flight
 
@@ -814,6 +882,27 @@ instruments current.
    one sentence earlier where the code agreed. A cut on the reported line would
    have bought 42 lines out of 940. **A split's seam gets the same treatment as a
    refusal site.**
+
+   **Stronghold priced the other half of that rule: a shared-and-tight module
+   left un-split costs a card.** Ten modules sat within 30 lines at Phase 0 and
+   exactly one — `subject_verb.py`, 13 under, reached by every group's work —
+   was pre-split. `lowering/characteristics.py` at **7** under was read as
+   shared, judged too expensive, and briefed instead. Wave 1's G3 then declined
+   **Spined Sliver** naming that module as the whole blocker ("it needs a split
+   first, and splitting a shared module mid-wave is the integration cost the
+   playbook warns about"), and the card went into a second wave for a reason
+   that had nothing to do with the card. The rule is not "pre-split the
+   tightest"; it is **pre-split every module two groups will reach**, and the
+   count of those is what Phase 0 has to produce.
+
+   **And a cap breach is more often a misplaced function than a missing
+   module.** Three crossings across STH's two waves and only one made a new
+   file: G4 moved its production to `lowering/board.py` where its twin already
+   lived, G5 reverted a new module and put its production in
+   `lowering/linked_exile.py`, whose stated subject already covered it, and W2G5
+   moved two fusers into `lowering/sequences.py` because that module's docstring
+   says a fuser lives with the sequence it folds. Ask "where does this already
+   belong?" before "what should this module be called?".
 
    **Weatherlight tested that sentence in both directions and it held exactly.**
    Wave 1 gave each of the seven tight modules a **single owning group**, named
@@ -2075,3 +2164,58 @@ it — the cards compile, claim every sentence and play correctly. Read what the
 slot; `unless_player_pays` labelled with a family rather than a shape, plus its
 guard's blind spot; the bare `spell` noun dropped pool-wide, with Ersatz Gnomes
 live; `test_layer_reads` scanning `engine/` only). *Nothing drained.*
+
+### STH — 2026-09-07
+
+*The caps rule was applied once and skipped once, and skipping it cost a card.*
+Ten modules sat within 30 lines at Phase 0; one shared-and-tight module was
+pre-split and `lowering/characteristics.py` at **7** under was read as shared,
+judged too expensive and briefed instead. Wave 1 declined **Spined Sliver**
+naming that module as the entire blocker. Phase 0's text now says the rule is
+"pre-split every module two groups will reach", not "pre-split the tightest",
+and adds the wave's other splitting finding: **a cap breach is more often a
+misplaced function than a missing module** — three crossings, one new file, the
+other two resolved by moving code to a home that already existed.
+
+*Both wave-2 groups that were briefed with a seam refused it, and both were
+right.* `lowering/characteristics.py`'s docstring seam was four splits out of
+date and would have bought 45 lines; `ast/_references.py`'s reported seam was
+measured at 29 lines of 997 and shown to invert `_primitives.py`'s stated
+invariant. "A split's seam is a lead, not a fact" now has two more instances and
+they were both *briefed* leads, which is the case that matters: the integrator
+is as capable of handing over a wrong seam as a previous group is.
+
+*Re-probing a decline paid on every card of wave 2, and the sharpest one is a
+warning about how a decline is written.* Volrath's Shapeshifter was declined
+partly on "granting a quoted activated ability is unimplemented — `parser.py`
+raises GrammarError". It has been implemented since Tempest, via `grants_text`,
+and **the parser never reads a quote at all**. The absence of the wrong channel
+was read as the absence of the mechanism, for the second set running. Contempt's
+seven parts came back three-already-built; Reins of Power's five came back
+three-expired against a brief that called it one of the two hardest cards left.
+
+*Phase 6's own new rule paid immediately and found its own limit.* Checking that
+each carried Known-gaps entry is still **true** found the bare-`spell` entry
+drained the day before this set's ingest — after it had been re-read at Phase 1
+and written into a group brief as live. The group corrected it in its report.
+Both mechanisms are needed and neither is sufficient: Phase 6 catches what a
+brief asserts, and the brief's "tell me what this got wrong" catches what Phase
+6 has not reached yet.
+
+*Phase 4's wrong-insert rehearsal found something in a set that looked immune.*
+142 of 143 cards are new, so the ROADMAP entry written at Phase 1 said no card's
+origin could move from any position. Wrong: the one reprint is **Shock**, whose
+only other printing is **M21** rather than Tempest, so the insert decides its
+origin — Volcanic Geyser's shape in a set whose single shared card makes it look
+impossible. Count a reprint against the set that actually prints it.
+
+*Phase 5's wire check found its second instance in two sets*, and the entry now
+carries why the obvious fix is also wrong: a Licid's "becomes an Aura
+enchantment" is a layer-**4** type change, so `effective_card.type_line` — the
+documented answer to "what does it say?" — is as blind as the printed one.
+
+*Two items added to Known gaps* (`StackItem.target_permanent_id`'s two arities
+across 119 reader sites, already paid for with one live defect; three near-cap
+grammar modules with no owner, two with measured seams). *One drained* (the bare
+noun `spell`, drained before the set began). *One amended* (the `web/` layer-read
+scan, with its second site).
