@@ -45,6 +45,18 @@ def _g3e_creature(name, power, toughness, subtype="Beast"):
     )
 
 
+def _g3e_plain_aura(name="Test Charm"):
+    """An Aura with no effect of its own, so "that are enchanted" is the only
+    thing under test - Maniacal Rage would supply a `cant_block` of its own and
+    the block half would pass whether or not the relative clause was read."""
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Enchantment - Aura",
+        oracle_text="Enchant creature", colors=(), color_identity=(),
+        keywords=("Enchant",), produced_mana=(),
+        raw={"name": name, "type_line": "Enchantment - Aura"},
+    )
+
+
 def _g3e_ready(perm):
     perm.metadata["summoning_sickness_turn"] = -99
     return perm
@@ -109,8 +121,9 @@ def test_song_of_serenity_grounds_only_the_enchanted_creatures(set_pool):
 
     bare = _g3e_ready(Permanent(card=_g3e_creature("Free", 2, 2)))
     bound = _g3e_ready(Permanent(card=_g3e_creature("Bound", 2, 2)))
-    aura = Permanent(card=set_pool("EXO")["Maniacal Rage"])
-    game = _g3e_table([bare, bound, aura, song], [])
+    aura = Permanent(card=_g3e_plain_aura())
+    raider = _g3e_ready(Permanent(card=_g3e_creature("Raider", 1, 1)))
+    game = _g3e_table([bare, bound, aura, song], [raider])
     attach_aura(aura, bound)
     game._recompute_continuous_effects()
 
@@ -118,6 +131,10 @@ def test_song_of_serenity_grounds_only_the_enchanted_creatures(set_pool):
     assert game.can_attack(bare, 1), (
         "the relative clause is the whole of what keeps an unenchanted "
         "creature attacking"
+    )
+    assert not game._can_block_attacker(bound, raider)
+    assert game._can_block_attacker(bare, raider), (
+        "both prohibitions are enforced at their own step, over the same phrase"
     )
 
 
