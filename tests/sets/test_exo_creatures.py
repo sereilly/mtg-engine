@@ -1171,3 +1171,241 @@ def test_kor_chant_refuses_on_the_announcement_rather_than_the_effect(set_pool):
     )
     assert line.parse_error is None
     assert "chosen source" in (line.lowering_error or "")
+
+
+# --- W2G5: a comparison that stops holding while the ability is on the stack ---
+#
+# "…who has more life than you do **as you activate this ability**" is a
+# restriction on which seats may be chosen (CR 601.2c), and the picker enforces
+# it. CR 608.2b asks the same question again as the object resolves, and until
+# now nothing did — so a Keeper activated against a player who was ahead paid
+# out anyway once that player fell behind in response. The ability is not a
+# spell, so the engine's general 608.2b gate deliberately does not reach it;
+# `legality.stale_comparison_refusal` covers exactly this printed clause and
+# says so.
+
+from engine import Game as _G5Game, PlayerState as _G5PlayerState
+from engine.models import CardDefinition as _G5Card, Permanent as _G5Permanent
+from tests.helpers import resolve_stack as _g5_resolve_stack
+
+
+def _g5_body(name, colors=()):
+    return _G5Card(
+        name=name, mana_cost="{1}", cmc=1.0, type_line="Creature — Bear",
+        oracle_text="", colors=tuple(colors), color_identity=tuple(colors),
+        keywords=(), produced_mana=(),
+        raw={"name": name, "type_line": "Creature — Bear", "power": "1",
+             "toughness": "1", "colors": list(colors)},
+    )
+
+
+def _g5_keeper_on_the_stack(set_pool, keeper, *, lives=(20, 25), theirs=(),
+                            my_gy=(), their_gy=(), hands=((), ())):
+    """Activate *keeper* at seat 1 and leave the ability **on the stack**.
+
+    ``queue_permanent_ability`` rather than ``activate_permanent_ability``:
+    the latter settles the stack before returning, which is a game in which
+    nothing can ever happen in response — and "in response" is the whole
+    question here.
+    """
+    subject = _G5Permanent(card=set_pool("EXO")[keeper])
+    subject.metadata["summoning_sickness_turn"] = -99
+    players = [
+        _G5PlayerState(
+            name="P0", life=lives[0], battlefield=[subject],
+            graveyard=list(my_gy), hand=list(hands[0]),
+            library=[_g5_body("Mine %d" % i) for i in range(5)],
+        ),
+        _G5PlayerState(
+            name="P1", life=lives[1],
+            battlefield=[_G5Permanent(card=c) for c in theirs],
+            graveyard=list(their_gy), hand=list(hands[1]),
+            library=[_g5_body("Theirs %d" % i) for i in range(5)],
+        ),
+    ]
+    game = _G5Game(players=players)
+    game.enforce_mana_costs = False
+    game._settle()
+    game.start_turn(0)
+    queued = game.queue_permanent_ability(
+        0, keeper, permanent_index=0, target_player_index=1,
+    )
+    assert queued.supported, queued.details
+    assert len(game.stack) == 1, game.log
+    return game, players[0], players[1]
+
+
+def test_w2g5_keeper_of_the_light_is_countered_when_the_lead_disappears(set_pool):
+    """CR 608.2b: an object whose every target has become illegal does not
+    resolve. The opponent was ahead when the ability was activated and is not
+    when it would resolve, so there is no legal target left and no life is
+    gained — where before the check the 3 life arrived regardless.
+    """
+    game, seat0, seat1 = _g5_keeper_on_the_stack(
+        set_pool, "Keeper of the Light", lives=(20, 25),
+    )
+
+    seat1.life = 15
+    _g5_resolve_stack(game)
+
+    assert seat0.life == 20, "the ability was countered, so nothing was gained"
+    assert game.stack == []
+    assert any("608.2b" in line for line in game.log), game.log
+
+
+def test_w2g5_keeper_of_the_light_still_pays_out_when_the_lead_holds(set_pool):
+    """The other direction, because a gate that refuses everything also passes
+    the test above. The lead narrows and still holds, so the ability resolves.
+    """
+    game, seat0, seat1 = _g5_keeper_on_the_stack(
+        set_pool, "Keeper of the Light", lives=(20, 25),
+    )
+
+    seat1.life = 21
+    _g5_resolve_stack(game)
+
+    assert seat0.life == 23
+    assert not any("608.2b" in line for line in game.log), game.log
+
+
+def test_w2g5_keeper_of_the_mind_is_countered_when_the_hands_even_up(set_pool):
+    """The same clause counted off a hand instead of a life total, so the
+    re-check is reading the printed noun phrase rather than one hard-wired
+    quantity: "at least two more cards in hand than you do", margin two.
+    """
+    game, seat0, seat1 = _g5_keeper_on_the_stack(
+        set_pool, "Keeper of the Mind",
+        hands=((), [_g5_body("Theirs %d" % i) for i in range(3)]),
+    )
+    before = len(seat0.hand)
+
+    del seat1.hand[1:]
+    _g5_resolve_stack(game)
+
+    assert len(seat0.hand) == before, "no card was drawn"
+    assert any("608.2b" in line for line in game.log), game.log
+
+
+def test_w2g5_keeper_of_the_dead_prints_two_targets_and_is_left_alone(set_pool):
+    """CR 608.2b is **all-or-nothing**, and this is the card that bounds the
+    gate: "Choose target opponent … Destroy target nonblack creature that
+    player controls" prints the word twice, so one target going illegal is not
+    every target going illegal and the ability still resolves.
+
+    The creature is destroyed and the ability is not countered. That is the
+    honest answer for a gate that only claims the one-target case — and it is
+    also why the gate counts the printed quantifiers rather than assuming the
+    seat is the whole announcement.
+    """
+    game, _seat0, seat1 = _g5_keeper_on_the_stack(
+        set_pool, "Keeper of the Dead",
+        theirs=(_g5_body("Victim"),),
+        my_gy=[_g5_body("Dead %d" % i) for i in range(3)],
+    )
+
+    # In response the opponent's graveyard fills and the margin is gone.
+    seat1.graveyard.extend(_g5_body("Theirs %d" % i) for i in range(3))
+    _g5_resolve_stack(game)
+
+    assert [p.card.name for p in seat1.battlefield] == []
+    assert not any("608.2b" in line for line in game.log), game.log
+
+
+def _g5_keeper_of_the_dead_table(set_pool, boards, my_gy):
+    """Keeper of the Dead on seat 0 at a table of ``len(boards)`` seats.
+
+    Not the two-seat helper above: the question here is *which opponent* the
+    picker offers, and at two seats there is only ever one answer.
+    """
+    keeper = _G5Permanent(card=set_pool("EXO")["Keeper of the Dead"])
+    keeper.metadata["summoning_sickness_turn"] = -99
+    players = []
+    for seat, board in enumerate(boards):
+        players.append(_G5PlayerState(
+            name="P%d" % seat,
+            battlefield=([keeper] if seat == 0 else [])
+            + [_G5Permanent(card=c) for c in board],
+            graveyard=list(my_gy) if seat == 0 else [],
+            library=[_g5_body("L%d-%d" % (seat, i)) for i in range(5)],
+        ))
+    game = _G5Game(players=players)
+    game.enforce_mana_costs = False
+    game._settle()
+    game.start_turn(0)
+    return game, keeper
+
+
+def _g5_offered_seats(game):
+    spec = game.activation_target_spec(0, 0, 0)
+    return sorted(
+        entry["seat"] for entry in spec["valid_targets"]
+        if entry.get("kind") == "player"
+    )
+
+
+def test_w2g5_keeper_of_the_dead_needs_the_second_slot_fillable_too(set_pool):
+    """CR 602.2b/601.2c: **every** target is chosen as the ability is
+    activated, so an opponent with no nonblack creature is not a legal
+    announcement — and the cost is never paid.
+
+    Before this the derivation answered with the first description it found,
+    the second slot was narrowed by nothing, and the ability tapped the Keeper
+    to resolve into "no valid target permanent found".
+    """
+    game, keeper = _g5_keeper_of_the_dead_table(
+        set_pool, [[], []], [_g5_body("Dead %d" % i) for i in range(3)],
+    )
+
+    result = game.queue_permanent_ability(
+        0, "Keeper of the Dead", permanent_index=0, target_player_index=1,
+    )
+
+    assert not result.supported
+    assert not keeper.tapped, "refused before any cost was paid"
+    assert game.stack == []
+
+
+def test_w2g5_keeper_of_the_dead_reads_the_printed_colour_on_that_slot(set_pool):
+    """"…target **nonblack** creature that player controls". The slot is
+    enumerated with its own filter, so an opponent whose only creature is black
+    cannot be named either — a check that asked "any creature?" would pass this
+    and the ability would still resolve into nothing.
+    """
+    game, keeper = _g5_keeper_of_the_dead_table(
+        set_pool, [[], [_g5_body("Blacky", ["B"])]],
+        [_g5_body("Dead %d" % i) for i in range(3)],
+    )
+
+    result = game.queue_permanent_ability(
+        0, "Keeper of the Dead", permanent_index=0, target_player_index=1,
+    )
+
+    assert not result.supported
+    assert not keeper.tapped
+
+
+def test_w2g5_the_keeper_picker_offers_exactly_the_seats_the_gate_admits(set_pool):
+    """The invariant this narrowing had to be built around, not merely beside:
+    ``activation_target_refusal`` is asked over the very list
+    ``activation_target_spec`` hands the browser, so a seat one of them accepts
+    is a seat the other accepts.
+
+    Three seats and the two failure directions in one board — seat 1 answers
+    the graveyard comparison and has nothing that can be destroyed, seat 2
+    answers it and does. A narrowing added to the gate alone would leave the
+    browser offering P1 and the server refusing the click.
+    """
+    boards = [[], [], [_g5_body("Reachable", ["W"])]]
+    graveyard = [_g5_body("Dead %d" % i) for i in range(3)]
+    game, _keeper = _g5_keeper_of_the_dead_table(set_pool, boards, graveyard)
+
+    assert _g5_offered_seats(game) == [2]
+
+    for seat, admitted in ((1, False), (2, True)):
+        fresh, _fresh_keeper = _g5_keeper_of_the_dead_table(
+            set_pool, [[], [], [_g5_body("Reachable", ["W"])]], graveyard,
+        )
+        result = fresh.queue_permanent_ability(
+            0, "Keeper of the Dead", permanent_index=0, target_player_index=seat,
+        )
+        assert result.supported is admitted, (seat, result.details)

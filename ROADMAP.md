@@ -358,6 +358,22 @@ last re-probed. Re-probe before scheduling one.
   the spell or ability doesn't resolve") is one gate,
   `legality.illegal_targets_refusal`, asked once above the instructions;
   CR 601.2c's announcement half is its twin, `legality.cast_target_refusal`.
+
+  **One clause is now asked of abilities too, deliberately as a separate,
+  separately-named gate** (EXO wave 2): `legality.stale_comparison_refusal`
+  re-asks a *printed comparison between two seats* — "target opponent who has
+  more life than you do" (the Exodus Keepers), "target player who controls more
+  creatures than they do" (the Oaths) — as the object resolves, through the
+  same `player_comparisons.seat_answers_comparison` the picker was built from.
+  It is bounded twice: only where the derived spec carries `compared`, and only
+  where that seat is the object's **only** printed target, because CR 608.2b is
+  all-or-nothing and a second still-legal target means the object resolves.
+  Keeper of the Dead prints two and is deliberately left alone. This is *not* a
+  down payment on widening the gate below — the three declines there are
+  unchanged, and a partial version of them wearing a general name would be worse
+  than none, which is why the two gates are two calls with two docstrings rather
+  than one branch.
+
   Three parts of the rule are deliberately not asked, each with its own reason
   and each worth its own round:
 
