@@ -1775,6 +1775,11 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     # same picker — the spec is about what is being *chosen*, not about what is
     # then done to it.
     "redirect_damage_from_target_spell_until_eot": _counter_spec,
+    # Hidden Retreat names a spell on the stack the same way a counter
+    # does, and narrows it the same way ("target **instant or sorcery**
+    # spell"), so it derives the same picker — the spec is about what is
+    # being *chosen*, not about what is then done to it.
+    "prevent_damage_by_target_spell_until_eot": _counter_spec,
     "return_creature_from_graveyard_to_hand": _graveyard_return_spec,
     "reanimate_creature": _reanimation_spec,
     # Hakim, Loreweaver. The same graveyard picker, narrowed by the payload

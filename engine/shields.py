@@ -59,6 +59,15 @@ END_OF_TURN = "end_of_turn"
 
 #: "Prevent the next N damage that would be dealt to <recipient> this turn"
 #: (CR 615.7). Spent by points, not by instances.
+#: "Prevent all damage that would be dealt by **target instant or sorcery
+#: spell** this turn." (Hidden Retreat.) A blanket with no points and no uses,
+#: hung off the **stack item** rather than off a recipient — the exact twin of
+#: ``DamageRedirect``'s Reverberation record one module over, and for its
+#: reason: a spell's damage source is its printed ``CardDefinition`` (CR 109.5),
+#: one object per card and shared by every copy, so a shield matching on the
+#: source would silence a second copy too. A ``StackItem`` is one object per
+#: cast, and ``Game.resolving_items`` is where a damage path can reach it.
+PREVENT_BY_RESOLVING_OBJECT = "prevent_by_resolving_object"
 PREVENT_NEXT_N = "prevent_next_n"
 #: "Prevent the next X damage that would be dealt to target creature this turn.
 #: **For each 1 damage prevented this way, put a +1/+1 counter on that
@@ -539,6 +548,25 @@ def make_numeric_pool(
         amount=amount,
         uses=None,
         source_filter=dict(source_filter) if source_filter else None,
+        source_name=source_name,
+    )
+
+
+def make_resolving_object_shield(source, source_name: str | None = None) -> Shield:
+    """Hidden Retreat's blanket over one cast spell's damage.
+
+    No ``amount`` and no ``uses``: "prevent **all** damage … this turn" is every
+    event that spell deals for the rest of the turn, and the cleanup sweep is
+    what ends it. ``source`` is the spell's own card, so damage another source
+    deals while it resolves — a sorcery that has a creature deal it — is left
+    where the card put it; the *cast* is what the shield is found by, and the
+    card is what it answers to.
+    """
+    return Shield(
+        kind=PREVENT_BY_RESOLVING_OBJECT,
+        amount=None,
+        uses=None,
+        source=source,
         source_name=source_name,
     )
 

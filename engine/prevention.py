@@ -73,6 +73,7 @@ from .shields import (END_OF_TURN as SHIELD_END_OF_TURN, PREVENT_ALL_BUT,
                       PREVENT_AND_DAMAGE_SOURCE, PREVENT_AND_GAIN_LIFE,
                       PREVENT_HALF, PREVENT_FROM_COLOR,
                       PREVENT_FROM_SUBJECT, PREVENT_FROM_TARGETING_SOURCE,
+                      PREVENT_BY_RESOLVING_OBJECT,
                       PREVENT_NEXT_N, PREVENT_NEXT_N_AND_COUNTERS,
                       PREVENT_WHOLE, PREVENT_AND_EXILE,
                       PREVENT_TEAM, Shield, drop_spent, shields_on)
@@ -189,6 +190,12 @@ COLOR_SHIELD = 500  # Circle of Protection
 #: the rider is what the card was played for, and CR 616.1e lets the affected
 #: player choose any order anyway — this is only the default a non-interactive
 #: seat takes.
+#: Hidden Retreat's blanket over one cast spell. With the other blankets rather
+#: than with the consumable shields, and before them: it is a flag rather than a
+#: charge, so applying it costs its controller nothing and letting it go first
+#: keeps a consumable from being spent on damage that was never going to be
+#: dealt — the reason stated at the top of this list for every blanket on it.
+SPELL_BLANKET = 13
 POOL_WITH_COUNTERS = 599
 POOL = 600  # "Prevent the next N damage" (CR 615.7)
 # A permanent's own static prevention, which is never used up by the event —
@@ -616,6 +623,32 @@ def _class_shields(game, recipient) -> list[Shield]:
     return found
 
 
+def _resolving_object_shields(game) -> list[Shield]:
+    """The shields hanging off the stack object whose instructions are running.
+
+    Hidden Retreat — "Prevent all damage that would be dealt by target instant
+    or sorcery spell this turn" — shields no recipient at all: it stops whatever
+    that *one spell* would deal, to anyone. So its shield hangs off the spell,
+    which is the same rule every other one follows (it lives on the object it
+    watches), and it is reached through ``Game.resolving_items`` rather than by
+    matching the damage's source.
+
+    **That is the only way a spell can be recognised.** A spell's damage source
+    is its printed ``CardDefinition`` (CR 109.5) — one object per *card*, handed
+    out once per copy by the deck builder — so a shield matching on the source
+    would silence a second copy too, on a card that named one. A ``StackItem``
+    is one object per cast, and this seam is where it is knowable.
+
+    The exact twin of ``damage_redirects.resolving_object_redirects``, down to
+    being empty while a resolution waits on a prompt: damage dealt after a
+    CR 616.1e question was asked mid-resolution is outside this. The direction is
+    the safe one — the damage lands as it would have without the shield — and it
+    is stated rather than hidden.
+    """
+    items = getattr(game, "resolving_items", None) or ()
+    return list(shields_on(items[-1])) if items else []
+
+
 def _live(game, event: dict, kind: str, *, chosen: bool | None = None):
     """Shields of *kind* on the event's recipient that could modify this event.
 
@@ -631,7 +664,15 @@ def _live(game, event: dict, kind: str, *, chosen: bool | None = None):
     # it. A team shield covers its holder as well as the phrase ("**you** and/or
     # creatures you control"), so it is not excluded from the holder's own list;
     # and a permanent is never in that list, so nothing is counted twice.
-    for shield in list(shields_on(recipient)) + _class_shields(game, recipient):
+    for shield in (
+        list(shields_on(recipient))
+        + _class_shields(game, recipient)
+        # …and the shields on the stack object currently resolving, which watch
+        # no recipient at all (Hidden Retreat). Every recipient it damages finds
+        # the same one shield, which is what "prevent **all** damage that would
+        # be dealt by that spell" means.
+        + _resolving_object_shields(game)
+    ):
         if shield.kind != kind or shield.spent:
             continue
         if chosen is not None and (shield.source is not None) != chosen:
@@ -1163,6 +1204,20 @@ def _prevent_from_targeting_source(game, event: dict) -> PreventionOutcome | Non
     never is.
     """
     return _spend(game, event, PREVENT_FROM_TARGETING_SOURCE)
+
+
+@prevention_effect(SPELL_BLANKET, applies=_arms(PREVENT_BY_RESOLVING_OBJECT))
+def _prevent_by_resolving_object(game, event: dict) -> PreventionOutcome | None:
+    """Hidden Retreat: "Prevent all damage that would be dealt by target instant
+    or sorcery spell this turn."
+
+    A blanket, so every event that spell deals is prevented in full and the
+    cleanup sweep is what ends it. Which spell is asked by the seam the shield
+    was found through — ``_resolving_object_shields`` — and *what* it answers to
+    is the spell's own card, so a sorcery that has a creature deal the damage
+    leaves that creature's damage alone.
+    """
+    return _spend(game, event, PREVENT_BY_RESOLVING_OBJECT)
 
 
 def _log_pool_prevention(game, event: dict, used: list[Shield], prevented: int) -> None:

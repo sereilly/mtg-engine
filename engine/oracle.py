@@ -2266,6 +2266,16 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     # number leaves the cost unread, which keeps this reader and the grammar's
     # (``grammar/costs._accept_exile_top_of_library``, which admits only a fixed
     # positive count) admitting exactly the same clauses.
+    # "**Put a card from your hand on top of your library**:" (Hidden Retreat).
+    # The cost's twin of the grammar's ``PutHandCardOnLibraryCost``, admitting
+    # exactly the words that one admits — a second reader of one clause is how
+    # a cost comes to be charged more widely than the card prints. Anchored on
+    # the whole phrase for that reason: "put a card on top of your library" with
+    # no zone named is a different payment and has no charger.
+    hand_to_library_top = 1 if re.search(
+        r"\bput a card from your hand on top of your library\b",
+        cost_lower,
+    ) else 0
     exile_top_of_library = 0
     top_exile = re.search(
         r"\bexile the top (?:(\w+) cards|card) of your library\b", cost_lower
@@ -2722,6 +2732,7 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         sacrifice_attached=_sacrifices_the_attached_permanent(cost_lower),
         mana_from_attached=_pays_the_attached_permanents_mana_cost(cost_lower),
         exile_top_of_library=exile_top_of_library,
+        hand_to_library_top=hand_to_library_top,
         exile_graveyard_position=exile_graveyard_position,
         untap_filter=_chargeable_untap_cost(cost_lower),
         chosen_keyword_options=_chosen_keyword_options(cost_lower),

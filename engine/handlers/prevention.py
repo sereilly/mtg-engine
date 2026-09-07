@@ -1032,6 +1032,51 @@ def lock_damage_to_target(game: Game, instruction: OracleInstruction, context: O
     return True, "resolved"
 
 
+@effect_handler("prevent_damage_by_target_spell_until_eot")
+def prevent_damage_by_target_spell_until_eot(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """Hidden Retreat: "Put a card from your hand on top of your library:
+    Prevent all damage that would be dealt by target instant or sorcery spell
+    this turn."
+
+    The shield hangs off the **stack item**, not off a recipient and not off the
+    card, and that is the whole of what makes this card possible — the exact
+    reasoning Reverberation's redirect gives one family over. A spell's damage
+    source is its printed ``CardDefinition`` (CR 109.5), one object per card and
+    handed out once per copy by the deck builder, so a shield matching on the
+    source would silence a *second* copy too. A ``StackItem`` is one object per
+    cast, and ``prevention._resolving_object_shields`` is where the damage paths
+    reach it.
+
+    The chosen spell's type is re-checked here rather than trusted from the
+    activation: CR 608.2b asks whether the target is still legal when the
+    ability resolves, and a spell that has changed type in between is one this
+    card no longer names.
+    """
+    from ..shields import make_resolving_object_shield
+
+    item = context.stack_target
+    card_name = getattr(context.card, "name", "")
+    if item is None or not any(entry is item for entry in game.stack):
+        game.log.append(
+            f"{card_name}: the spell it named is no longer on the stack"
+        )
+        return True, "resolved"
+    wanted = instruction.payload.get("card_types") or ()
+    if wanted and getattr(item.card, "primary_type", None) not in wanted:
+        game.log.append(
+            f"{card_name}: {item.card.name} is no longer the "
+            f"{'/'.join(str(t) for t in wanted)} spell it named"
+        )
+        return True, "resolved"
+    add_shield(item, make_resolving_object_shield(item.card, card_name or None))
+    game.log.append(
+        f"{card_name}: damage {item.card.name} would deal this turn is prevented"
+    )
+    return True, "resolved"
+
+
 @effect_handler("prevent_damage_by_target_until_eot")
 def prevent_damage_by_target_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Prevent all [combat] damage that would be dealt by target creature this

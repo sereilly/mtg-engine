@@ -428,6 +428,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "prevent_all_combat_damage_to_matching": "prevention",
     "prevent_all_combat_damage_except_from": "prevention",
     "prevent_damage_by_target_until_eot": "prevention",
+    # Hidden Retreat: the same shield with a *spell* as the source it
+    # silences. Same family — the damage does not happen — and its own
+    # kind because a spell is chosen from the stack and recognised by
+    # its cast rather than by the source object.
+    "prevent_damage_by_target_spell_until_eot": "prevention",
     "prevent_damage_to_target_until_eot": "prevention",
     # The negation of both families (Whippoorwill): no shield and no redirect
     # may touch the marked creature's damage. Filed with prevention because

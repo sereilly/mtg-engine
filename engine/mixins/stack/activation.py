@@ -1133,6 +1133,23 @@ class AbilityActivationMixin:
                     permanent.card.name, False, "unsupported", details
                 )
 
+        # "Put a card from your hand on top of your library" (Hidden Retreat).
+        # CR 118.3: a player cannot pay a cost without the resources to pay it,
+        # so an empty hand pays nothing at all and CR 602.5c makes the ability
+        # unactivatable rather than free. Checked here with the other costs and
+        # paid below with them, so a refusal further down does not leave a hand
+        # already short.
+        if ability.cost.hand_to_library_top > len(controller.hand):
+            details = (
+                f"{permanent.card.name}: {controller.name} has "
+                f"{len(controller.hand)} card(s) in hand and its cost puts "
+                f"{ability.cost.hand_to_library_top} on top of their library"
+            )
+            self.log.append(details)
+            return SimulationResult(
+                permanent.card.name, False, "unsupported", details
+            )
+
         if ability.cost.exile_top_of_library > len(controller.library):
             details = (
                 f"{permanent.card.name}: {controller.name} has "
@@ -2038,6 +2055,40 @@ class AbilityActivationMixin:
                 f"to activate {permanent.card.name}"
             )
 
+        if ability.cost.hand_to_library_top:
+            # The payer chooses which card (CR 601.2b, reached through
+            # CR 602.2b), so the choice arrives with the action that pays —
+            # ``cost_hand_index``, the same channel the discard cost reads.
+            # Naming nothing takes the deterministic first card, which is what
+            # keeps AI and headless play unblocked.
+            #
+            # Through ``take_card_from_hand`` and ``put_card_into_library``, the
+            # two seams: a hand repeats one immutable ``CardDefinition`` per
+            # copy, so an identity filter over it removes *every* copy where the
+            # caller then puts one back, and CR 903.9b's commander check has no
+            # single fire site for "put into a library".
+            for _ in range(ability.cost.hand_to_library_top):
+                index = (
+                    cost_hand_index
+                    if isinstance(cost_hand_index, int)
+                    and 0 <= cost_hand_index < len(controller.hand)
+                    else 0
+                )
+                paid = controller.hand[index]
+                self.take_card_from_hand(controller, paid)
+                # ``from_battlefield=None`` said out loud: this card comes
+                # off a *hand*, so there is no CR 614 leaves-the-battlefield
+                # replacement to tell — and the seam guard reads the word
+                # rather than guessing from the function around it.
+                self.put_card_into_library(
+                    controller, paid, position="top", from_battlefield=None,
+                )
+                cost_hand_index = None
+                self.log.append(
+                    f"{controller.name} put {paid.name} on top of their library "
+                    f"to activate {permanent.card.name}"
+                )
+
         if ability.cost.exile_top_of_library:
             from_library = [
                 controller.library.pop(0)
@@ -2804,6 +2855,7 @@ def _graveyard_cost_refusal(cost) -> str | None:
         ("sacrifice_attached", "a sacrifice-the-attached-permanent cost"),
         ("mana_from_attached", "a cost read off an attached permanent"),
         ("exile_top_of_library", "a library-exile cost"),
+        ("hand_to_library_top", "a put-a-card-on-your-library cost"),
         ("pay_life", "a life cost"),
         ("loyalty", "a loyalty cost"),
         ("loyalty_x_sign", "a loyalty cost"),

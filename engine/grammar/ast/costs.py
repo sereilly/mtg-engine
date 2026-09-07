@@ -333,6 +333,25 @@ class ExileTopOfLibraryCost:
 
 
 @dataclass(frozen=True)
+class PutHandCardOnLibraryCost:
+    """"Put a card from your hand on top of your library" in front of a colon
+    (Hidden Retreat).
+
+    CR 118.3 admits it like any other cost and CR 118.1 makes the payment the
+    printed action, so an empty hand cannot pay it at all — CR 602.5c then makes
+    the ability unactivatable rather than free.
+
+    Its own node rather than a :class:`DiscardCost` with a destination on it,
+    because a discard is CR 701.9's *graveyard* and this card never touches one:
+    the paid card is still in the library, still drawable, and every reader that
+    asks "what did this cost put in a graveyard" would get the wrong answer.
+    Nothing is *matched* either — the payer picks any card in hand — so there is
+    no filter to carry.
+    """
+    count: int = 1
+
+
+@dataclass(frozen=True)
 class ExileGraveyardPositionCost:
     """"Exile the top card of your graveyard" (Alms, Nature's Kiss) / "Exile the
     top creature card of your graveyard" (Necratog, Zombie Scavengers) in front
@@ -369,6 +388,7 @@ class RemoveCounterCost:
 Cost = Union[
     ManaCost, TapSelf, SacrificeCost, DiscardCost, PayLifeCost, ExileSelf,
     ExileCost, ExileTopOfLibraryCost, ExileGraveyardPositionCost,
+    PutHandCardOnLibraryCost,
     RemoveCounterCost, PayAttachedManaCost,
     ReturnSelfToHandCost
 ]

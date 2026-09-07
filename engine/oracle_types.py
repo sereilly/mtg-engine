@@ -422,6 +422,12 @@ class ActivatedAbilityCost:
     #: positional arguments ``parse_activated_ability_cost`` passes are at the
     #: front, so a field inserted among them silently rebinds one of them.
     exile_top_of_library: int = 0
+    #: "**Put a card from your hand on top of your library**:" (Hidden Retreat).
+    #: How many cards the payer moves from hand to the top of their library.
+    #: Beside ``discard_cards`` rather than folded into it: a discard is
+    #: CR 701.9's graveyard, and this card's payment stays in the library where
+    #: it can be drawn again — the whole reason the ability is repeatable.
+    hand_to_library_top: int = 0
     #: Wandering Mage: "{B}, **Put a -1/-1 counter on a creature you control**:
     #: …". Which permanent the ``put_counter`` above goes on, when the card
     #: names one instead of the source. ``None`` is the source — Mazemind Tome's

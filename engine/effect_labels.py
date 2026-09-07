@@ -360,6 +360,7 @@ ACTIVATED_LABELS: dict[str, str] = {
     # ability, and that kind is only ever produced by a *spell* — nothing
     # would reach a row for it, which is what the dead-entry guard says.
     "prevent_damage_by_target_until_eot": "activated_prevent",
+    "prevent_damage_by_target_spell_until_eot": "activated_prevent",
     "redirect_damage_from_target_until_eot": "activated_prevent",
     # …and the counted twin, which moves a *pool of points* onto the
     # permanent whose ability it is (Daughter of Autumn, Hazduhr the Abbot).

@@ -216,6 +216,52 @@ def _lower_prevent_all(
                     node=node,
                 )
             payload["also_blocking_target"] = True
+        if (
+            isinstance(spec, ast.TargetSpec)
+            and spec.quantifier == "target"
+            and spec.filter.zone == "stack"
+        ):
+            # "…dealt by **target instant or sorcery spell** this turn."
+            # (Hidden Retreat.) The source is a spell, not a permanent, which
+            # is why it is a kind of its own and not this payload with a zone
+            # on it: a spell is chosen from the stack and is recognised at
+            # damage time by the *cast* rather than by the source object — the
+            # exact axis ``redirection._lower_spell_damage_redirect`` splits on
+            # one family over, and for the same reason (CR 109.5 makes a
+            # spell's source its printed card, shared by every copy).
+            #
+            # Read before the ``targets`` description below, which would put a
+            # stack-scoped filter through ``_filter_payload`` and refuse the
+            # line at "no handler reads a filter scoped to the stack".
+            if not spec.filter.card_types:
+                # "target **instant or sorcery** spell". Without a type this
+                # reads "target spell", which is a strictly wider card — and
+                # the handler tests the chosen spell against this union at
+                # resolution (CR 608.2b), so an empty one would admit every
+                # spell on the stack.
+                raise LoweringError(
+                    "this spell shield names no kind of spell", node=node
+                )
+            if _restrictions_beyond(
+                spec.filter, frozenset({"card_types", "zone"})
+            ):
+                raise LoweringError(
+                    "the spell shield narrows its target by type and nothing "
+                    "else",
+                    node=node,
+                )
+            if node.combat_only or node.dealt_by_others or payload.get("on_source"):
+                raise LoweringError(
+                    "a spell's damage is never combat damage and never has a "
+                    "second source",
+                    node=node,
+                )
+            return (
+                OracleInstruction(
+                    "prevent_damage_by_target_spell_until_eot", "",
+                    {"card_types": list(spec.filter.card_types)},
+                ),
+            )
         if spec.quantifier == "target":
             _describe_targets(payload, spec)
         # "…dealt by **that creature** this turn" (Telekinesis): the object the
