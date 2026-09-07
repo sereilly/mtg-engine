@@ -266,3 +266,76 @@ def test_a_card_type_test_over_a_zone_reads_every_printed_type(sth, catalog):
     # And the printed card, end to end.
     game, seats, shifter = _rig(sth, [ram])
     assert shifter.effective_card.name == "Battering Ram"
+
+
+def _invented(name, text):
+    """A card nothing in the pool prints, with the template's sentence in it."""
+    from engine.models import CardDefinition
+
+    return CardDefinition(
+        name=name, mana_cost="{3}{U}", cmc=4.0,
+        type_line="Creature — Shapeshifter", oracle_text=text,
+        power="0", toughness="1", colors=("U",), color_identity=("U",),
+        keywords=(), produced_mana=(), raw={},
+    )
+
+
+@pytest.mark.cr("613.1a", "121.1")
+def test_the_template_reads_a_library_top_no_card_in_the_pool_prints(catalog):
+    """The zone is payload, so the same sentence over a library works with no
+    code — and reads the **front** of the list (CR 121.1), not the end.
+
+    An invented card, for the reason ``tests/rules/test_land_animation.py``
+    uses one: a test that names only the printed card passes against an
+    implementation keyed on that card, so it cannot tell a template from a hook
+    in disguise.
+    """
+    mirror = _invented(
+        "Librarian's Mirror",
+        "As long as the top card of your library is a creature card, this "
+        "creature has the full text of that card.",
+    )
+    program = compile_card_oracle(mirror)
+    assert program.supported
+    assert [i.payload["zone"] for i in program.instructions] == ["library"]
+
+    perm = Permanent(card=mirror)
+    seats = [PlayerState(name="P1", battlefield=[perm]), PlayerState(name="P2")]
+    game = Game(players=seats)
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    assert perm.effective_card.name == "Librarian's Mirror"
+
+    seats[0].library.insert(0, catalog["Shivan Dragon"])
+    seats[0].library.append(catalog["Grizzly Bears"])
+    assert perm.effective_card.name == "Shivan Dragon", "the front, not the end"
+    assert (perm.effective_power, perm.effective_toughness) == (5, 5)
+
+
+@pytest.mark.cr("613.1a", "205.2b")
+def test_the_template_reads_a_card_type_no_card_in_the_pool_names(catalog):
+    """The card type is payload too, and the condition is CR 205.2b's question,
+    so "an artifact card" finds an artifact creature and declines a plain
+    creature."""
+    mimic = _invented(
+        "Scrap Mimic",
+        "As long as the top card of your graveyard is an artifact card, this "
+        'creature has the full text of that card and has the text '
+        '"{1}: Draw a card."',
+    )
+    program = compile_card_oracle(mimic)
+    assert program.supported
+    assert [i.payload["card_type"] for i in program.instructions] == ["artifact"]
+
+    perm = Permanent(card=mimic)
+    seats = [PlayerState(name="P1", battlefield=[perm]), PlayerState(name="P2")]
+    game = Game(players=seats)
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    seats[0].graveyard.append(catalog["Grizzly Bears"])
+    assert perm.effective_card.name == "Scrap Mimic", "a creature is not an artifact"
+
+    seats[0].graveyard.append(catalog["Battering Ram"])
+    assert perm.effective_card.name == "Battering Ram"
+    assert "{1}: Draw a card." in perm.effective_card.oracle_text
