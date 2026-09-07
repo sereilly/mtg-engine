@@ -440,6 +440,27 @@ def _lower_create_delayed_trigger(
         if binds_block_pair(creating_event, creating_event_subject):
             payload["binds_target"] = False
             payload["binds_block_pair"] = True
+        # "When enchanted creature attacks, return **it** and this Aura to
+        # their owners' hands at end of combat." (Contempt.) The fifth place,
+        # and the one none of the four above can reach: the creating trigger is
+        # an *Aura's*, so the object the words name is whatever it is attached
+        # to — which no fire site stamps and which is not the stack item's
+        # target either. That item's target is None for every attached trigger
+        # (`phases/declare_attackers_step`), so ``binds_target`` would arm
+        # nothing at all and the printed sentence would silently not happen.
+        #
+        # Resolved at *arming* rather than carried as a description, which is
+        # CR 603.7c itself: the ability is about the creature the Aura was on
+        # when the trigger resolved, so an Aura destroyed before the end of
+        # combat step still returns it.
+        #
+        # Below the block pair and not beside it: an Aura watching a block
+        # prints both narrowings at once ("whenever enchanted creature blocks
+        # or becomes blocked by a creature, … that creature"), and there the
+        # noun phrase names the *other* half of the pair, not the host.
+        elif getattr(creating_event_subject, "is_enchanted", False):
+            payload["binds_target"] = False
+            payload["binds_attached_host"] = True
     if node.watches is not None:
         payload["watches"] = node.watches
     elif node.binds_target and _delay_is_about_a_created_token(node.effect, produced):

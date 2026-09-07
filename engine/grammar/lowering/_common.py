@@ -135,6 +135,57 @@ def _is_enchanted(subject: ast.Recipient) -> bool:
     return isinstance(subject, ast.TargetSpec) and subject.filter.is_enchanted
 
 
+def _is_attached_host_pronoun(subject: ast.Recipient) -> bool:
+    """Whether *subject* is "**it**" standing for the attachment's host.
+
+    "When enchanted creature attacks, return **it** and this Aura to their
+    owners' hands at end of combat." (Contempt.) ``rebinding`` copies the
+    trigger's own subject onto the pronoun, so the "it" of an attached trigger
+    arrives carrying ``is_enchanted`` — the same filter "enchanted creature"
+    spells in full, which is what makes the two phrases one reading.
+
+    Its own predicate rather than :func:`_is_enchanted` alone because the
+    quantifier is what the *bound-object* readers have to see: they claim every
+    bare "it" first and then refuse, so a pronoun that names the host has to be
+    recognised in front of them, exactly as ``_returns_itself_to_the_battlefield``
+    recognises the one that names the source.
+    """
+    return (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "it"
+        and subject.filter.is_enchanted
+    )
+
+
+
+
+def _source_return_reach(event: str | None) -> dict[str, object]:
+    """The zone payload for "return **this <noun>** to its owner's hand".
+
+    Two sentences, one printed the same way. Puppet Master's is the rider on an
+    *immediate* trigger: CR 704.5m has usually swept the Aura into a graveyard
+    by the time it resolves, so the handler has to reach that pile — the card
+    there is the object the ability is still resolving about.
+
+    Contempt's is the effect of a **delayed** ability a whole combat step later.
+    CR 400.7 makes the card in the graveyard a different object from the
+    permanent the ability was created about, so reaching it there returns
+    something the card does not name: an Aura destroyed in response would come
+    back to its owner's hand anyway, which is a strictly better card.
+
+    So the delayed reading says outright which zone it reaches, and the
+    immediate one keeps the payload it had — a differential over the pool is
+    what says the two sets of cards are the ones this describes.
+
+    The three event names that are *both* a delayed event and a trigger
+    condition (``creature_blocks``, ``land_tapped_for_mana``,
+    ``you_cast_spell``) are harmless here: under each of them as an immediate
+    trigger the source is a permanent on the battlefield, which is the zone
+    this payload names.
+    """
+    from ...delayed_triggers import DELAYED_EVENTS
+
+    return {"from": "battlefield"} if event in DELAYED_EVENTS else {}
 
 
 def _is_you(recipient: ast.Recipient) -> bool:
