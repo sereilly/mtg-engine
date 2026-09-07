@@ -603,12 +603,35 @@ while the true number was 299), and `SET_PROGRESS.md` now reports a
 `measured`-role set as "Measured (N/M supported, not shipped)" rather than a
 bare "Partial".
 
-**Added at VIS's Phase 6: a bare stack-drain loop in a test is a latent hang.**
-`while game.stack: resolve_top_of_stack()` spins forever once an interactive
-seat is owed a prompt, because the game correctly waits (CR 608.2, CR 117.3b).
-One helper hung the whole suite the moment a card started announcing a trigger
-target. Drain the registry's default instead. Worth a sweep by whoever next
-writes one.
+**Added at VIS's Phase 6, swept 2026-09-07: a bare stack-drain loop in a test is
+a latent hang.** `while game.stack: resolve_top_of_stack()` spins forever once
+an interactive seat is owed a prompt, because the game correctly waits
+(CR 608.2, CR 117.3b). One helper hung the whole suite the moment a card started
+announcing a trigger target.
+
+`tests.helpers.resolve_stack` is the drain, and **207 of the 252 loops were
+swapped mechanically**. The 45 that stay are counted per file in
+`tests/engine/bare_stack_drain_baseline.json` and held there as a **ceiling**:
+40 read the prompt queue a few lines later, so converting one means deciding
+what that test actually asserts, and 5 have a second statement in the loop body.
+The fix for a new test is the helper, never a re-snapshot.
+
+**The part worth keeping is what the sweep cost to make safe.** The helper's
+first draft settled the prompt queue whenever it was non-empty — the contract
+that reads as obviously more useful — and **broke 41 tests**, because a test that
+resolves a spell and then *inspects* what the resolution asked was reading a
+prompt the helper had defaulted out from under it. It now answers a decision only
+while that decision is **blocking the stack**, which is the hazard's real shape:
+the resolution is held, not the queue is dirty. A cleanup that changes what tests
+can observe is not a cleanup, and the difference between those two contracts is
+invisible until the suite runs.
+
+**Two mechanical-edit hazards came with it**, for whoever runs the next sweep.
+Rebuilding an import statement from its names **drops any `as` alias** — silent
+at import, surfacing much later as a NameError inside one test — so compare the
+set of names each module binds before and after and refuse the file if any
+vanished. And a `while` whose body holds a *second* statement is not a two-line
+substitution: the extra line is left orphaned at the loop's own indentation.
 
 **Drained 2026-09-05, at WTH's wave 1: the cast-side "target opponent" offered
 the caster's own face.** W1G5 took it and the activation side with it, and fixed
