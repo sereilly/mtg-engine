@@ -23,6 +23,16 @@ one of those branches. What it reads is a *shape* — an offer step and the step
 that repeat under it — and the destroy inside is one leaf of that shape. Its one
 piece of destroy-specific data travelled with it, because nothing else read it:
 that is what made this a move rather than a cut.
+
+``_fused_tap_any_number_then_pump`` and ``_fused_two_target_pump`` came here at
+Stronghold's second wave, when ``characteristics`` crossed the guard, and they
+are that rule applied a third time — this time to a module whose *twins were
+already here*. ``_fused_tap_enchanted_then_counters`` opens on the same
+"tap, then pay off what was tapped" shape as the first, and
+``_fused_two_target_keyword_move`` is what the dispatch loop calls "the keyword
+twin of the pump above": two pairs of fusers reading one shape each, split
+across two modules by the verb in the payoff. What decides a fuser's home is the
+sentence it folds, so both pairs are reunited.
 """
 
 from __future__ import annotations
@@ -34,9 +44,9 @@ from ..errors import LoweringError
 from ..phrases import is_pt_counter
 from ._common import (
     _optional_slot_key,
-    _describe_several_targets, _filter_payload, _is_enchanted, _is_target,
-    _names_several_targets, _restrictions_beyond, SEVERAL_DESTROY_NARROWINGS,
-    testable_filter_payload
+    _describe_several_targets, _filter_payload, _is_enchanted, _is_source,
+    _is_target, _names_several_targets, _restrictions_beyond,
+    SEVERAL_DESTROY_NARROWINGS, _signed, testable_filter_payload
 )
 from ._records import optional_cost_key, primary_produced, produced_keys
 
@@ -739,6 +749,171 @@ def _fused_two_target_keyword_move(
                 # The printed "another" (CR 601.2c), carried rather than folded
                 # into a filter: it is a relation between two slots, not a
                 # property of one permanent.
+                "distinct": True,
+            },
+        }),
+    )
+
+
+def _fused_tap_any_number_then_pump(
+    steps: tuple[ast.Statement, ...]
+) -> tuple[OracleInstruction, ...] | None:
+    """"You may tap any number of untapped creatures you control. This creature
+    gets +1/+1 until end of turn for each creature tapped this way." (Siege
+    Striker.)
+
+    **One instruction, because the count crosses the sentence boundary.** The
+    second sentence is sized by what the first one tapped, and the first one is a
+    choice made at resolution — so lowered as two steps the pump would run before
+    the seat had answered, and there would be nothing for "this way" to count.
+    Rewind's ``untap_up_to`` says in its own registration that it deliberately
+    does not suspend the resolution "because the untap is the last step of the
+    effect that armed it"; here it is not, and fusing is the cheaper of the two
+    answers — the choice's resolver taps *and* pumps, so no value has to survive
+    a suspension.
+
+    The printed "untapped" is carried explicitly rather than through the filter
+    payload: ``ObjectFilter.to_payload`` emits ``tapped_only`` when ``tapped`` is
+    True and **nothing** when it is False, so passing the payload alone would
+    reduce "untapped creatures you control" to "creatures you control". For the
+    tap that is nearly harmless — tapping a tapped creature does nothing — but
+    the *count* is the card, and it would count creatures that were already
+    tapped.
+    """
+    if len(steps) != 2:
+        return None
+    optional, payoff = steps
+    if not isinstance(payoff, ast.Pump) or not payoff.per_each_tapped_this_way:
+        return None
+    if not isinstance(optional, ast.May) or optional.cost is not None:
+        raise LoweringError(
+            '"for each creature tapped this way" needs a tap in front of it',
+            node=payoff,
+        )
+    tap = optional.action
+    if not isinstance(tap, ast.Tap) or not isinstance(tap.subject, ast.TargetSpec):
+        raise LoweringError(
+            '"for each creature tapped this way" counts a tap, and the sentence '
+            "in front of it is not one",
+            node=payoff,
+        )
+    spec = tap.subject
+    if spec.quantifier != "any_number":
+        raise LoweringError(
+            "the tapped-this-way count reads a resolution-time pick", node=payoff
+        )
+    if not _is_source(payoff.subject):
+        raise LoweringError(
+            "the tapped-this-way pump applies to the ability's own source",
+            node=payoff,
+        )
+    if payoff.duration.kind != "until_end_of_turn":
+        raise LoweringError(
+            "a tapped-this-way pump needs an end-of-turn duration", node=payoff
+        )
+    if payoff.x_definition is not None:
+        raise LoweringError(
+            "a tapped-this-way pump is sized by the tap, not by a where-clause",
+            node=payoff,
+        )
+    leftover = _restrictions_beyond(
+        spec.filter, frozenset({"card_types", "controller", "tapped", "type_match"})
+    )
+    if leftover:
+        raise LoweringError(
+            "the any-number tap cannot narrow by: " + ", ".join(leftover), node=payoff
+        )
+    return (
+        OracleInstruction("tap_any_number_then_pump_self", "", {
+            "filter": _filter_payload(spec.filter),
+            # See the docstring: the payload cannot carry "untapped".
+            "untapped_only": spec.filter.tapped is False,
+            "power": _signed(payoff.power, payoff.power_negative),
+            "toughness": _signed(payoff.toughness, payoff.toughness_negative),
+        }),
+    )
+
+
+def _fused_two_target_pump(
+    steps: tuple[ast.Statement, ...]
+) -> tuple[OracleInstruction, ...] | None:
+    """"<target A> gets +P/+T and **another target** B gets +P/+T", one sentence,
+    two chosen creatures. (Rookie Mistake.)
+
+    One instruction, because the second clause names a *second* target: lowered
+    as two steps, both pumps resolve through `_one_choice`, which takes the first
+    entry of the target list — so the card would compile supported and put both
+    boosts on one creature.
+
+    The distinctness is the trigger for fusing rather than a detail of it. Two
+    targeted pumps in one sentence *without* the printed "another" are refused
+    outright: CR 601.2c lets two instances of the word "target" name the same
+    object, so that shape needs a picker told about two slots, and falling
+    through to the ordinary step lowering is the silent double pump above. No
+    card in the pool prints it, so the refusal costs nothing and closes the near
+    miss.
+    """
+    if len(steps) != 2:
+        return None
+    first, second = steps
+    if not isinstance(first, ast.Pump) or not isinstance(second, ast.Pump):
+        return None
+    if not _is_target(first.subject) or not _is_target(second.subject):
+        return None
+    assert isinstance(first.subject, ast.TargetSpec)
+    assert isinstance(second.subject, ast.TargetSpec)
+    if first.subject.distinct_from_prior:
+        # "Another target creature … and target creature …" — the first clause
+        # of a sentence has no prior choice to differ from.
+        raise LoweringError(
+            'the first clause of a sentence cannot name "another" target',
+            node=first,
+        )
+    if not second.subject.distinct_from_prior:
+        raise LoweringError(
+            "two targeted pumps in one sentence name two targets only when the "
+            'second prints "another"',
+            node=second,
+        )
+    if first.duration.kind != "until_end_of_turn" or second.duration.kind != "until_end_of_turn":
+        # A durationless half is a continuous effect (`_durationless_reason`);
+        # a mismatched pair is two different effects sharing a sentence.
+        raise LoweringError(
+            "a two-target pump needs an until-end-of-turn duration on both clauses",
+            node=second,
+        )
+    if first.x_definition is not None or second.x_definition is not None:
+        raise LoweringError(
+            "a where-clause defines one X, which two pumped targets would share",
+            node=second,
+        )
+    slots = tuple(
+        {
+            "power": _signed(node.power, node.power_negative),
+            "toughness": _signed(node.toughness, node.toughness_negative),
+        }
+        for node in (first, second)
+    )
+    return (
+        OracleInstruction("pump_targets_until_eot", "", {
+            "slots": slots,
+            "targets": {
+                "quantifier": "target",
+                "kind": "object",
+                # `filter` is the shape every one-slot reader expects; `filters`
+                # is what the picker and the handler read per slot. Both are
+                # emitted for the same reason `target_bites_target` emits both.
+                "filter": _filter_payload(first.subject.filter),
+                "filters": [
+                    _filter_payload(first.subject.filter),
+                    _filter_payload(second.subject.filter),
+                ],
+                "count": 2,
+                **_optional_slot_key((first.subject, second.subject)),
+                # The printed "another" (CR 601.2c), carried rather than folded
+                # into a filter: it is a relation between two slots, not a
+                # property of one permanent, so `permanent_matches_filter` could
+                # never test it.
                 "distinct": True,
             },
         }),

@@ -1,10 +1,20 @@
-"""Lowering what a permanent is: P/T, keywords, colour, printed text.
+"""Lowering what a permanent is: P/T modifications, a doubling, printed text.
 
-Pump and base-P/T setting (CR 613 layer 7), keyword grants and removals
-(layer 6), colour and type changes (layers 4 and 5) and text changes (layer 3).
-Counters — CR 122, a different thing from a characteristic, however often a
-counter is what carries one — lower in `counters.py`; this module crossed the
-thousand-line cap when they shared it.
+**The list this docstring used to open with is four splits out of date**, and
+reading it as the module's seam is how Stronghold's second wave nearly cut in
+the wrong place. Counters went to `counters.py` (CR 122 is not a characteristic
+at all), keyword grants and removals to `keywords.py`/`keyword_removal.py`
+(layer 6), colour and type changes to `types.py` (layers 4 and 5), and base-P/T
+*setting* to `base_pt.py` (CR 613.4b, replacing a value rather than modifying
+one). Every one of those cuts left the sentence describing it behind, so the
+prose kept naming a module that had already gone.
+
+What is actually here is the CR 613 layer-7 **modification**: a pump (7c) in
+every printed spelling the pool has, a switch (7d), a power doubling — and
+`mark_text_modified`, CR 612's layer-3 rewrite, which is the one thing left that
+is not P/T. The fusers that fold a two-clause sentence whose *payoff* is a pump
+are not here: a fuser lives with the sequence it folds, which is
+`sequences.py`'s own rule and where its twins already were.
 
 A continuous effect with no duration is refused here rather than lowered, and
 `_durationless_reason` in `_common` says why per subject: the refusal names
@@ -14,7 +24,8 @@ what is missing instead of producing an effect that never ends.
 import dataclasses
 
 from ...oracle_types import OracleInstruction
-from ...subject_filters import (unimplemented_filter_keywords,
+from ...subject_filters import (object_only_filter,
+                                unimplemented_filter_keywords,
                                 untestable_filter_keys)
 from .. import ast
 from ..errors import LoweringError
@@ -26,9 +37,8 @@ from ._amounts import (
     _x_definition_spec,
 )
 from ...oracle_types import MILLED_THIS_WAY
-from ._events import binds_block_pair
+from ._events import binds_block_pair, _EVENT_SUBJECT_OBJECTS
 from ._common import (
-    _optional_slot_key,
     chargeable_card_filter,
     _describe_targets,
     _durationless_reason,
@@ -263,6 +273,72 @@ def _lower_pump(
                     OracleInstruction(
                         "pump_target_creature_until_eot", "", payload
                     ),
+                )
+            # "Whenever a Sliver becomes blocked, **that Sliver** gets +1/+1
+            # until end of turn **for each creature blocking it**." (Spined
+            # Sliver.) A fifth reading, and the second whose subject is neither
+            # the source nor a class. The branch above and this one print the
+            # same two pronouns and mean the same relation by them; what differs
+            # is who chose the object. Barreling Attack's was *targeted*, so the
+            # count waits for a picker; this one was chosen by nobody — the
+            # trigger fired about it (CR 603.10), and the fire site froze its id
+            # before the effect existed.
+            #
+            # Gated on `_EVENT_SUBJECT_OBJECTS` rather than on the printed word,
+            # exactly as the keyword removal and the copy one family over are:
+            # under any other trigger "that Sliver" names an object no fire site
+            # recorded, and the pump would land on nothing while the card
+            # compiled clean.
+            #
+            # The noun phrase is carried and re-checked at resolution rather
+            # than dropped, for that removal's reason: it restates the trigger's
+            # own narrowing, and a word consumed and never read is a word that
+            # could be deleted with no change to what the card does.
+            if (
+                isinstance(node.subject, ast.TargetSpec)
+                and node.subject.quantifier == "that"
+                and not node.subject.targeted
+                and node.per_each.blocking_bound_target
+                and node.duration.kind is not None
+                and event in _EVENT_SUBJECT_OBJECTS
+            ):
+                duration = _TARGET_PUMP_DURATIONS.get(node.duration.kind)
+                if duration is None:
+                    raise LoweringError(
+                        "no pump handler ends at this duration", node=node
+                    )
+                described = _filter_payload(node.subject.filter)
+                if object_only_filter(described) is None:
+                    raise LoweringError(
+                        "the event subject's pump carries a restriction the "
+                        "resolution cannot test", node=node,
+                    )
+                # The same rewrite the two branches around this one make,
+                # pointed at the third referent: "blocking it" is a relation to
+                # one named permanent, and `count_from_payload` resolves
+                # `blocking_source` against whichever permanent the handler
+                # hands it — here the event's subject, which is what the kind
+                # says and why no `relative_to` marker is needed.
+                counted = dataclasses.replace(
+                    node.per_each,
+                    blocking_bound_target=False, blocking_source=True,
+                )
+                subject_payload: dict[str, object] = {
+                    "power": _per_each_amount(
+                        node.power, node.power_negative, node
+                    ),
+                    "toughness": _per_each_amount(
+                        node.toughness, node.toughness_negative, node
+                    ),
+                    "x_from_count": count_spec(
+                        counted, node, offset=_per_each_offset(node)
+                    ),
+                    "duration": duration,
+                }
+                if described:
+                    subject_payload["filter"] = described
+                return (
+                    OracleInstruction("pump_event_subject", "", subject_payload),
                 )
             # "**Enchanted creature** gets +1/+1 for each other creature you
             # control." (Vampirism.) The same CR 613 layer-7c contribution the
@@ -729,177 +805,6 @@ def _lower_pump(
         return (OracleInstruction("buff_creatures_global", "", payload),)
 
     raise LoweringError("unsupported pump subject", node=node)
-
-
-def _fused_tap_any_number_then_pump(
-    steps: tuple[ast.Statement, ...]
-) -> tuple[OracleInstruction, ...] | None:
-    """"You may tap any number of untapped creatures you control. This creature
-    gets +1/+1 until end of turn for each creature tapped this way." (Siege
-    Striker.)
-
-    **One instruction, because the count crosses the sentence boundary.** The
-    second sentence is sized by what the first one tapped, and the first one is a
-    choice made at resolution — so lowered as two steps the pump would run before
-    the seat had answered, and there would be nothing for "this way" to count.
-    Rewind's ``untap_up_to`` says in its own registration that it deliberately
-    does not suspend the resolution "because the untap is the last step of the
-    effect that armed it"; here it is not, and fusing is the cheaper of the two
-    answers — the choice's resolver taps *and* pumps, so no value has to survive
-    a suspension.
-
-    The printed "untapped" is carried explicitly rather than through the filter
-    payload: ``ObjectFilter.to_payload`` emits ``tapped_only`` when ``tapped`` is
-    True and **nothing** when it is False, so passing the payload alone would
-    reduce "untapped creatures you control" to "creatures you control". For the
-    tap that is nearly harmless — tapping a tapped creature does nothing — but
-    the *count* is the card, and it would count creatures that were already
-    tapped.
-    """
-    if len(steps) != 2:
-        return None
-    optional, payoff = steps
-    if not isinstance(payoff, ast.Pump) or not payoff.per_each_tapped_this_way:
-        return None
-    if not isinstance(optional, ast.May) or optional.cost is not None:
-        raise LoweringError(
-            '"for each creature tapped this way" needs a tap in front of it',
-            node=payoff,
-        )
-    tap = optional.action
-    if not isinstance(tap, ast.Tap) or not isinstance(tap.subject, ast.TargetSpec):
-        raise LoweringError(
-            '"for each creature tapped this way" counts a tap, and the sentence '
-            "in front of it is not one",
-            node=payoff,
-        )
-    spec = tap.subject
-    if spec.quantifier != "any_number":
-        raise LoweringError(
-            "the tapped-this-way count reads a resolution-time pick", node=payoff
-        )
-    if not _is_source(payoff.subject):
-        raise LoweringError(
-            "the tapped-this-way pump applies to the ability's own source",
-            node=payoff,
-        )
-    if payoff.duration.kind != "until_end_of_turn":
-        raise LoweringError(
-            "a tapped-this-way pump needs an end-of-turn duration", node=payoff
-        )
-    if payoff.x_definition is not None:
-        raise LoweringError(
-            "a tapped-this-way pump is sized by the tap, not by a where-clause",
-            node=payoff,
-        )
-    leftover = _restrictions_beyond(
-        spec.filter, frozenset({"card_types", "controller", "tapped", "type_match"})
-    )
-    if leftover:
-        raise LoweringError(
-            "the any-number tap cannot narrow by: " + ", ".join(leftover), node=payoff
-        )
-    return (
-        OracleInstruction("tap_any_number_then_pump_self", "", {
-            "filter": _filter_payload(spec.filter),
-            # See the docstring: the payload cannot carry "untapped".
-            "untapped_only": spec.filter.tapped is False,
-            "power": _signed(payoff.power, payoff.power_negative),
-            "toughness": _signed(payoff.toughness, payoff.toughness_negative),
-        }),
-    )
-
-
-def _fused_two_target_pump(
-    steps: tuple[ast.Statement, ...]
-) -> tuple[OracleInstruction, ...] | None:
-    """"<target A> gets +P/+T and **another target** B gets +P/+T", one sentence,
-    two chosen creatures. (Rookie Mistake.)
-
-    One instruction, because the second clause names a *second* target: lowered
-    as two steps, both pumps resolve through `_one_choice`, which takes the first
-    entry of the target list — so the card would compile supported and put both
-    boosts on one creature.
-
-    The distinctness is the trigger for fusing rather than a detail of it. Two
-    targeted pumps in one sentence *without* the printed "another" are refused
-    outright: CR 601.2c lets two instances of the word "target" name the same
-    object, so that shape needs a picker told about two slots, and falling
-    through to the ordinary step lowering is the silent double pump above. No
-    card in the pool prints it, so the refusal costs nothing and closes the near
-    miss.
-    """
-    if len(steps) != 2:
-        return None
-    first, second = steps
-    if not isinstance(first, ast.Pump) or not isinstance(second, ast.Pump):
-        return None
-    if not _is_target(first.subject) or not _is_target(second.subject):
-        return None
-    assert isinstance(first.subject, ast.TargetSpec)
-    assert isinstance(second.subject, ast.TargetSpec)
-    if first.subject.distinct_from_prior:
-        # "Another target creature … and target creature …" — the first clause
-        # of a sentence has no prior choice to differ from.
-        raise LoweringError(
-            'the first clause of a sentence cannot name "another" target',
-            node=first,
-        )
-    if not second.subject.distinct_from_prior:
-        raise LoweringError(
-            "two targeted pumps in one sentence name two targets only when the "
-            'second prints "another"',
-            node=second,
-        )
-    if first.duration.kind != "until_end_of_turn" or second.duration.kind != "until_end_of_turn":
-        # A durationless half is a continuous effect (`_durationless_reason`);
-        # a mismatched pair is two different effects sharing a sentence.
-        raise LoweringError(
-            "a two-target pump needs an until-end-of-turn duration on both clauses",
-            node=second,
-        )
-    if first.x_definition is not None or second.x_definition is not None:
-        raise LoweringError(
-            "a where-clause defines one X, which two pumped targets would share",
-            node=second,
-        )
-    slots = tuple(
-        {
-            "power": _signed(node.power, node.power_negative),
-            "toughness": _signed(node.toughness, node.toughness_negative),
-        }
-        for node in (first, second)
-    )
-    return (
-        OracleInstruction("pump_targets_until_eot", "", {
-            "slots": slots,
-            "targets": {
-                "quantifier": "target",
-                "kind": "object",
-                # `filter` is the shape every one-slot reader expects; `filters`
-                # is what the picker and the handler read per slot. Both are
-                # emitted for the same reason `target_bites_target` emits both.
-                "filter": _filter_payload(first.subject.filter),
-                "filters": [
-                    _filter_payload(first.subject.filter),
-                    _filter_payload(second.subject.filter),
-                ],
-                "count": 2,
-                **_optional_slot_key((first.subject, second.subject)),
-                # The printed "another" (CR 601.2c), carried rather than folded
-                # into a filter: it is a relation between two slots, not a
-                # property of one permanent, so `permanent_matches_filter` could
-                # never test it.
-                "distinct": True,
-            },
-        }),
-    )
-
-
-
-
-
-
 
 
 def _lower_double_power(node: ast.DoublePower) -> tuple[OracleInstruction, ...]:

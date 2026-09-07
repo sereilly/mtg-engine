@@ -790,6 +790,10 @@ TRIGGERED_LABELS: dict[str, str] = {
     # above already have.
     "grant_target_keyword_until_eot": "triggered_pump",
     "remove_event_subject_keyword": "triggered_pump",
+    # The P/T twin of the row above (Spined Sliver). Only a trigger can produce
+    # it — the object it acts on is the one the firing event froze — so it has
+    # no `activated_` sibling in the table above.
+    "pump_event_subject": "triggered_pump",
     "pump_self": "triggered_pump",
     "pump_target_creature_until_eot": "triggered_pump",
     "tap_any_number_then_pump_self": "triggered_pump",

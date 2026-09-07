@@ -209,6 +209,12 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # turn", Barbed Foliage). One family, because what differs is which
     # object the words name and that is the payload.
     "remove_event_subject_keyword": "pump",
+    # The P/T twin of the row above, aimed at the same object ("Whenever a
+    # Sliver becomes blocked, that Sliver gets +1/+1 until end of turn for each
+    # creature blocking it", Spined Sliver). Same category, so
+    # GRAMMAR_CATEGORIES is unchanged — what is new is which object the words
+    # name, and that is the payload.
+    "pump_event_subject": "pump",
     # The board-wide negative twin ("All creatures lose flying until end of
     # turn", Whiteout), beside `grant_team_keyword_until_eot`.
     "remove_team_keyword_until_eot": "pump",
