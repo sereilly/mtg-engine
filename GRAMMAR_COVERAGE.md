@@ -35,7 +35,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | WTH | 167 | 249 | 88.0% | 88.0% | 64.7% | 140 |
 | TMP | 335 | 478 | 92.1% | 91.8% | 65.5% | 271 |
 | M21 | 285 | 503 | 87.3% | 87.1% | 61.0% | 237 |
-| STH *(measured)* | 143 | 215 | 72.6% | 67.4% | 45.1% | 90 |
+| STH *(measured)* | 143 | 215 | 74.4% | 72.1% | 49.8% | 99 |
 | **All (shipped)** | **4587** | **6817** | **90.2%** | **89.5%** | **59.6%** | **3381** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -48,11 +48,11 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 382 | 172 | expected a subject |  |
+| 379 | 169 | expected a subject |  |
 | 109 | 54 | unrecognized effect verb |  |
 | 92 | 44 | unconsumed text |  |
 | 38 | 23 | granted ability in quotes | phase 3 (quoted abilities) |
-| 34 | 34 | unrecognized activation cost |  |
+| 33 | 33 | unrecognized activation cost |  |
 | 13 | 8 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
 | 13 | 12 | expected 'unless defending player controls' |  |
 | 7 | 1 | no lowering for RawEffect |  |
@@ -62,7 +62,6 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 6 | 1 | no handler for this battlefield entry |  |
 | 6 | 3 | expected a keyword ability |  |
 | 5 | 5 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
-| 5 | 1 | a counted redirect off the source moves the damage onto one chosen target |  |
 | 4 | 1 | the sacrifice prompt cannot test this restriction |  |
 | 4 | 1 | expected 'that' |  |
 | 4 | 1 | attach needs one chosen permanent to attach to |  |
@@ -73,6 +72,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 2 | expected 'counter or counters' |  |
 | 2 | 1 | expected 'the number of' in a where-clause |  |
+| 2 | 2 | a counter-removal cost only reads the ability's own source |  |
 
 ## Cards executing through the grammar
 
@@ -2649,6 +2649,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this creature enters, sacrifice it unless you discard a creature card.`
 - **Hidden Path**
   - `Green creatures have forestwalk. (They can't be blocked as long as defending player controls a Forest.)`
+- **Hidden Retreat**
+  - `Put a card from your hand on top of your library: Prevent all damage that would be dealt by target instant or sorcery spell this turn.`
 - **High Tide**
   - `Until end of turn, whenever a player taps an Island for mana, that player adds an additional {U}.`
 - **Historian of Zhalfir**
@@ -3235,6 +3237,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Lake of the Dead**
   - `{T}: Add {B}.`
   - `{T}, Sacrifice a Swamp: Add {B}{B}{B}{B}.`
+- **Lancers en-Kor**
+  - `{0}: The next 1 damage that would be dealt to this creature this turn is dealt to target creature you control instead.`
 - **Land Cap**
   - `At the beginning of your upkeep, remove a depletion counter from this land.`
   - `{T}: Add {W} or {U}. Put a depletion counter on this land.`
@@ -3937,6 +3941,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}{W}: Target creature gains first strike until end of turn.`
 - **Nocturnal Raid**
   - `Black creatures get +2/+0 until end of turn.`
+- **Nomads en-Kor**
+  - `{0}: The next 1 damage that would be dealt to this creature this turn is dealt to target creature you control instead.`
 - **Norritt**
   - `{T}: Untap target blue creature.`
   - `{T}: Choose target non-Wall creature the active player has controlled continuously since the beginning of the turn. That creature attacks this turn if able. Destroy it at the beginning of the next end step if it didn't attack this turn. Activate only before attackers are declared.`
@@ -5046,6 +5052,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Shadowstorm deals 2 damage to each creature with shadow.`
 - **Shallow Grave**
   - `Return the top creature card of your graveyard to the battlefield. That creature gains haste until end of turn. Exile it at the beginning of the next end step.`
+- **Shaman en-Kor**
+  - `{0}: The next 1 damage that would be dealt to this creature this turn is dealt to target creature you control instead.`
+  - `{1}{W}: The next time a source of your choice would deal damage to target creature this turn, that damage is dealt to this creature instead.`
 - **Shambling Strider**
   - `{R}{G}: This creature gets +1/-1 until end of turn.`
 - **Shaper Guildmage**
@@ -5369,6 +5378,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever enchanted creature becomes tapped, put a -0/-2 counter on it.`
 - **Spirit Shield**
   - `{2}, {T}: Target creature gets +0/+2 for as long as this artifact remains tapped.`
+- **Spirit en-Kor**
+  - `{0}: The next 1 damage that would be dealt to this creature this turn is dealt to target creature you control instead.`
 - **Spirit of Malevolence**
   - `When this creature dies, each opponent loses 1 life and you gain 1 life.`
 - **Spiritual Sanctuary**
@@ -5656,6 +5667,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Telim'Tor's Edict**
   - `Exile target permanent you own or control.`
   - `Draw a card at the beginning of the next turn's upkeep.`
+- **Temper**
+  - `Prevent the next X damage that would be dealt to target creature this turn. For each 1 damage prevented this way, put a +1/+1 counter on that creature.`
 - **Tempered Veteran**
   - `{W}, {T}: Put a +1/+1 counter on target creature with a +1/+1 counter on it.`
   - `{4}{W}{W}, {T}: Put a +1/+1 counter on target creature.`
@@ -6287,6 +6300,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Wall of Dust**
   - `Whenever this creature blocks a creature, that creature can't attack during its controller's next turn.`
   - `Whenever this creature blocks a creature, that creature can't attack during its controller's next turn.`
+- **Wall of Essence**
+  - `Whenever this creature is dealt combat damage, you gain that much life.`
 - **Wall of Fire**
   - `{R}: This creature gets +1/+0 until end of turn.`
   - `{R}: This creature gets +1/+0 until end of turn.`
@@ -6308,6 +6323,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Put a -0/-1 counter on this creature: Add {G}. Activate only once each turn.`
 - **Wall of Runes**
   - `When this creature enters, scry 1. (Look at the top card of your library. You may put that card on the bottom.)`
+- **Wall of Souls**
+  - `Whenever this creature is dealt combat damage, it deals that much damage to target opponent or planeswalker.`
 - **Wall of Tombstones**
   - `At the beginning of your upkeep, change this creature's base toughness to 1 plus the number of creature cards in your graveyard. (This effect lasts indefinitely.)`
 - **Wall of Water**
@@ -6357,6 +6374,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature phases in, put a +1/+1 counter on it.`
 - **Warrior Angel**
   - `Whenever this creature deals damage, you gain that much life.`
+- **Warrior en-Kor**
+  - `{0}: The next 1 damage that would be dealt to this creature this turn is dealt to target creature you control instead.`
 - **Warrior's Honor**
   - `Creatures you control get +1/+1 until end of turn.`
 - **Wasteland**

@@ -74,7 +74,16 @@ from .targeting import (
 # a leading symbol, or a leading verb from the closed list of cost actions the
 # pool prints. A bare prose prefix is deliberately *not* admitted, because
 # "Enchant creature" and a reminder line would join it.
-_COST_VERBS = r"sacrifice|tap|discard|exile|pay|remove|return|reveal|untap"
+# "**Put** a -0/-1 counter on this creature:" (Wall of Roots) and "**Put** a
+# card from your hand on top of your library:" (Hidden Retreat). The word was
+# missing, so both lines read as *cast-time* effects — which is the failure this
+# comment describes one paragraph up, found from the other end: Hidden Retreat's
+# "target instant or sorcery spell" was read as the enchantment's own cast
+# target, so the picker sweep reported a spell with no picker and the cast gate
+# would have asked for a target the card does not choose.
+_COST_VERBS = (
+    r"sacrifice|tap|discard|exile|pay|put|remove|return|reveal|untap"
+)
 _ACTIVATED_LINE_RE = re.compile(
     r"^\s*(?:\{[^}]+\}|(?:" + _COST_VERBS + r")\b)[^:.]*:", re.I
 )
