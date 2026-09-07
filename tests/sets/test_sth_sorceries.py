@@ -113,3 +113,70 @@ def test_g4_ransack_scries_five_on_the_targeted_player_s_library(set_pool):
         "Black Lotus",
     ]
     assert caster.library == [], "nothing was done to the caster's own deck"
+
+
+@pytest.mark.cr("601.2c", "701.13a")
+def test_g4_cannibalize_exiles_one_of_two_and_grows_the_other(set_pool):
+    """"Choose two target creatures controlled by the same player. Exile one of
+    those creatures and put two +1/+1 counters on the other."
+
+    Retribution's decomposition one verb over: the pick among the chosen set is
+    an ordinary ``choose_permanent`` prompt and the exile acts on the recorded
+    id. Two differences, and both are printed. "The same **player**" narrows no
+    controller at all, so the caster may aim it at their own board — the
+    relation is between the targets, not a restriction on either. And nothing
+    names a chooser, so CR 608.2c makes it the spell's controller rather than
+    Retribution's "that player".
+    """
+    from engine.models import Permanent
+    from engine.named_counters import counters_on
+
+    game, caster, victim = _g4_duel([set_pool("STH")["Cannibalize"]])
+    first = Permanent(card=_G4_LEA["Hurloon Minotaur"])
+    second = Permanent(card=_G4_LEA["Grizzly Bears"])
+    game._put_permanent_onto_battlefield(1, first, None)
+    game._put_permanent_onto_battlefield(1, second, None)
+
+    result = game.cast_from_hand(
+        0, "Cannibalize", target_player_index=1,
+        target_permanent_ids=[first.permanent_id, second.permanent_id],
+    )
+    assert result.supported, result.details
+    game.resolve_top_of_stack()
+
+    assert [c.name for c in victim.exile] == ["Hurloon Minotaur"]
+    survivors = [(p.card.name, counters_on(p, "+1/+1")) for p in victim.battlefield]
+    assert survivors == [("Grizzly Bears", 2)]
+
+
+@pytest.mark.cr("601.2c")
+def test_g4_cannibalize_needs_both_targets_under_one_seat(set_pool):
+    """"…**the same** player". The relation is what the word buys, so an
+    announcement naming one creature on each side is illegal (CR 601.2c) — and
+    the caster's *own* pair is legal, which is the half a reading borrowed from
+    Retribution's "the same opponent" would have got wrong."""
+    from engine.models import Permanent
+
+    def _board():
+        game, caster, victim = _g4_duel([set_pool("STH")["Cannibalize"]])
+        mine = Permanent(card=_G4_LEA["Mons's Goblin Raiders"])
+        also_mine = Permanent(card=_G4_LEA["Grizzly Bears"])
+        theirs = Permanent(card=_G4_LEA["Hurloon Minotaur"])
+        game._put_permanent_onto_battlefield(0, mine, None)
+        game._put_permanent_onto_battlefield(0, also_mine, None)
+        game._put_permanent_onto_battlefield(1, theirs, None)
+        return game, caster, mine, also_mine, theirs
+
+    game, _caster, mine, _also, theirs = _board()
+    assert not game.cast_from_hand(
+        0, "Cannibalize", target_player_index=1,
+        target_permanent_ids=[theirs.permanent_id, mine.permanent_id],
+    ).supported, "one from each seat is not 'the same player'"
+
+    game, caster, mine, also_mine, _theirs = _board()
+    assert game.cast_from_hand(
+        0, "Cannibalize", target_player_index=0,
+        target_permanent_ids=[mine.permanent_id, also_mine.permanent_id],
+    ).supported, "'the same player' includes the caster"
+    game.resolve_top_of_stack()
+    assert len(caster.exile) == 1

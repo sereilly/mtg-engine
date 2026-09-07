@@ -17,12 +17,14 @@ here is choosing among handlers and refusing the shapes none of them implement.
 from __future__ import annotations
 
 import dataclasses
-from ...oracle_types import OracleInstruction
-from ...subject_filters import OBJECT_ONLY_FILTER_KEYS, card_only_filter
+from ...oracle_types import CHOSEN_TARGET_PERMANENTS, OracleInstruction
+from ...subject_filters import (OBJECT_ONLY_FILTER_KEYS, card_only_filter,
+                                untestable_filter_keys)
 from .. import ast
 from ..errors import LoweringError
-from ._events import (_RECORDED_PERMANENTS, CREATED_TOKEN, EXILED_THIS_WAY,
-                      EXILED_THIS_WAY_OBJECTS)
+from ._events import (_RECORDED_PERMANENTS, CHOSEN_PERMANENT, CREATED_TOKEN,
+                      EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS,
+                      OTHER_CHOSEN_PERMANENT)
 from ._delays import _BOUND_OBJECT_DELAYED_EVENTS
 from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS, _describe_several_targets,
@@ -229,6 +231,69 @@ def _is_graveyard_pile_exile(subject) -> bool:
         and not subject.targeted
         and subject.filter.is_card
         and subject.filter.zone == "graveyard"
+    )
+
+
+def _lower_exile_one_of_those(
+    node: ast.Exile, subject, produced: frozenset[str]
+) -> tuple[OracleInstruction, ...] | None:
+    """"Exile **one of those creatures** and put two +1/+1 counters on the
+    other." (Cannibalize.)
+
+    ``board._lower_sacrifice_one_of_those`` one verb over, and the same
+    decomposition: the pick is an ordinary ``choose_permanent`` prompt whose
+    candidates are the set an *earlier sentence* chose, and the exile behind it
+    acts on the recorded id. Offered over the board instead, the caster could
+    exile any creature at all, which is a strictly better card than the printed
+    one.
+
+    **The chooser is the ability's controller** (CR 608.2c), which is the whole
+    difference from Retribution: that card says "*that player* chooses" and
+    names a seat, and this one says nothing — so no ``chooser`` rides the
+    payload and the prompt is armed on the caster, which is what an unassigned
+    choice means.
+
+    Returns None without claiming the sentence unless the subject really is one
+    member of a chosen set, so every ordinary "exile target creature" keeps its
+    own reading. With the quantifier present and no set recorded the line
+    *refuses*: "those creatures" would name nothing and the prompt would be
+    offered an empty list, which is an exile that quietly happens to nobody.
+    """
+    if not (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "one_of_those"
+    ):
+        return None
+    if CHOSEN_TARGET_PERMANENTS not in produced:
+        raise LoweringError(
+            "\"one of those\" needs an earlier step of this effect that chose "
+            "a set",
+            node=node,
+        )
+    described = _filter_payload(subject.filter)
+    if untestable_filter_keys(described):
+        raise LoweringError(
+            "the exile prompt cannot test this restriction", node=node
+        )
+    return (
+        OracleInstruction(
+            "choose_permanent", "",
+            {
+                "result_key": CHOSEN_PERMANENT,
+                # Named as a record rather than copied into a filter, because
+                # "those creatures" is an identity and no filter describes it.
+                "among_record": CHOSEN_TARGET_PERMANENTS,
+                # "…and put two +1/+1 counters on **the other**" is the step
+                # behind this one, and this is where the answer to it exists.
+                "remainder_key": OTHER_CHOSEN_PERMANENT,
+                "filter": described,
+                "prompt": "Choose a creature to exile.",
+            },
+        ),
+        OracleInstruction(
+            "exile_recorded_permanent", "",
+            {"permanents_from": CHOSEN_PERMANENT},
+        ),
     )
 
 
@@ -801,6 +866,12 @@ def _lower_exile(
     # battlefield permanents and graveyard cards and would refuse this outright.
     if _is_hand_card_exile(subject):
         return (_lower_exile_card_from_hand(node, subject),)
+    # "Exile **one of those creatures** and put two +1/+1 counters on the
+    # other." (Cannibalize.) Read before the single-target gate below, which
+    # asks for a ``target`` quantifier and would refuse this outright.
+    one_of_those = _lower_exile_one_of_those(node, subject, produced)
+    if one_of_those is not None:
+        return one_of_those
     if (
         not isinstance(subject, ast.TargetSpec)
         or subject.quantifier != "target"

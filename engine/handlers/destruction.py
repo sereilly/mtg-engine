@@ -1595,6 +1595,40 @@ def sacrifice_recorded_permanent(game: Game, instruction: OracleInstruction, con
     return True, "resolved"
 
 
+@effect_handler("exile_recorded_permanent")
+def exile_recorded_permanent(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Exile one of those creatures and put two +1/+1 counters on the other."
+    (Cannibalize.)
+
+    :func:`sacrifice_recorded_permanent` above with the other fate, and beside
+    it for that reason: both read the id a ``choose_permanent`` step ahead of
+    them recorded, and they differ only in where the permanent goes. Its own
+    kind rather than a flag on that one, because CR 701.21a's sacrifice and
+    CR 701.13a's exile are different events — a sacrifice is a death and this
+    is not, so no dies-trigger fires and no regeneration is offered.
+
+    Nothing recorded, or a permanent that has left since, exiles nothing —
+    CR 608.2b doing as much as it can rather than a failure.
+    """
+    recorded = one_recorded_permanent_id(
+        context, instruction.payload.get("permanents_from")
+    )
+    victim = game.permanent_by_id(recorded) if recorded is not None else None
+    if victim is None or not game.is_on_battlefield(victim):
+        game.log.append(f"{context.card.name}: nothing was chosen to exile")
+        return True, "resolved"
+    # CR 400.3: a card put into exile is still owned by whoever owns it, and the
+    # departure is the one transition every leaves-the-battlefield rule rides.
+    owner_index = game.owner_index_of(victim)
+    exiled = victim.card
+    game.remove_from_battlefield(victim)
+    game.players[
+        owner_index if owner_index is not None else game.players.index(context.caster)
+    ].exile.append(exiled)
+    game.log.append(f"{context.card.name}: {exiled.name} was exiled")
+    return True, "resolved"
+
+
 @effect_handler("each_player_pays_or_sacrifices_greatest")
 def each_player_pays_or_sacrifices_greatest(
     game: "Game", instruction: "OracleInstruction", context: "OracleExecutionContext"

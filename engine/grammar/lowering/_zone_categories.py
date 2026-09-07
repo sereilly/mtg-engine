@@ -295,6 +295,9 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     # GRAMMAR_CATEGORIES is unchanged — exile is a zone change either way, and
     # a second switch would let one of the two be gated off without the other.
     "exile_target_permanent": "zones",
+    # Cannibalize's exile of one of two chosen creatures, beside the exile
+    # above: what it touches is the battlefield and the exile zone.
+    "exile_recorded_permanent": "zones",
     "exile_self": "zones",
     # "Target spell's controller exiles it with X delay counters on it."
     # (Ertai's Meddling.) A zone change by this module's own line — the object
