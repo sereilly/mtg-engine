@@ -341,6 +341,10 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     # switch cannot gate half of "zones" off.
     "return_self_from_graveyard": "zones",
     "return_bound_card_to_owners_hand": "zones",
+    # "…return **that creature** to its owner's hand at end of combat" (Wall of
+    # Tears). The bound-*permanent* twin of the row above: same category, same
+    # move, a different object.
+    "return_bound_permanent_to_hand": "zones",
     "return_source_card_to_owners_hand": "zones",
     "return_source_card_to_battlefield": "zones",
     "bounce_target_creature": "zones",

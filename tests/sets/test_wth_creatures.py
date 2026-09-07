@@ -1245,7 +1245,12 @@ def test_tolarian_entrancer_delays_the_steal_to_end_of_combat(set_pool):
     payload = trig.instruction.payload
     assert payload["event"] == "next_end_of_combat"
     assert payload["instruction"].kind == "gain_control_of_bound_permanent"
-    assert payload["binds_target"] is True
+    # ``binds_block_pair`` rather than ``binds_target``, for the reason MIR's
+    # Basalt Golem test records: a delay created by *either* half of a block now
+    # binds through ``block_pair_permanents``, because on the blocks half the
+    # stack item's target is the ability's own creature. Same permanent here.
+    assert payload["binds_target"] is False
+    assert payload["binds_block_pair"] is True
 
 
 def test_tolarian_entrancer_takes_the_blocker_after_damage(set_pool):

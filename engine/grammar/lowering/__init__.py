@@ -152,6 +152,7 @@ from .loops import (
     _PER_DEATH_SUBJECT,
     _ANY_CREATURE_DIED,
     _lower_for_each,
+    _lower_for_each_destroyed,
 )
 from .ownership import (
     _lower_ownership_exchange_unless_paid,
@@ -235,7 +236,6 @@ from .destruction import (
     _DESTROY_ALL_KINDS,
     _BASIC_LAND_TYPES,
     _lower_destroy,
-    _lower_for_each_destroyed,
     _lower_delayed_destroy,
 )
 from .control_changes import (

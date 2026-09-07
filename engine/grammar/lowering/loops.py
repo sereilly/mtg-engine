@@ -33,7 +33,7 @@ named for the loop is the one that owns every reading of the loop.
 from __future__ import annotations
 
 from ...oracle_types import OracleInstruction
-from ...subject_filters import untestable_filter_keys
+from ...subject_filters import OBJECT_ONLY_FILTER_KEYS, untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
 from ._common import _filter_payload
@@ -289,3 +289,80 @@ def _lower_for_each(node: ast.ForEach) -> tuple[OracleInstruction, ...]:
         )
     kind, payload = found
     return (OracleInstruction(kind, "", dict(payload)),)
+
+
+# ---------------------------------------------------------------------------
+# A set an earlier step of the same effect recorded
+# ---------------------------------------------------------------------------
+
+
+def _lower_for_each_destroyed(
+    node: ast.ForEach,
+    inner: tuple[OracleInstruction, ...],
+    produced: frozenset[str],
+) -> tuple[OracleInstruction, ...]:
+    """"**For each creature that died this way,** <effect>." (Glyph of
+    Reincarnation.)
+
+    A loop over the objects an earlier step of *this same effect* destroyed —
+    the set behind ``destroyed_this_way``, which the sweep handlers record
+    because by the time this runs the board no longer holds it. Here rather
+    than beside ``_lower_for_each`` in ``lowering/counters``: that one repeats a
+    counter placement a fixed number of times and never looks at what died,
+    while this is about the destroy family's own record.
+
+    Refused without a producer, as every back-reference in this grammar is:
+    "this way" with no earlier step names nothing at all, and an empty loop is a
+    sentence that reports supported and does not run.
+
+    The inner statement arrives already lowered, the way ``lower_where_x``'s
+    does and for its reason — nothing here cares how it was lowered, only that
+    it is repeated once per object.
+    """
+    if "destroyed_this_way" not in produced:
+        raise LoweringError(
+            "'died this way' with no earlier step in this effect that "
+            "destroyed anything", node=node,
+        )
+    filt = node.iterator.filter
+    narrowing = filt.to_payload()
+    # The narrowing is held to what the *pure* matcher can answer, because that
+    # is what the loop uses: the objects are in graveyards by the time this runs,
+    # so there is no observer and no board to ask a layer question of, and every
+    # key it does answer it answers off last-known information (CR 608.2h).
+    #
+    # It read the card type alone until Mirage printed "If **a white creature**
+    # dies this way" (Cinder Cloud) — a colour is exactly as answerable, and the
+    # refusal was a list of one key rather than a statement about the matcher.
+    if untestable_filter_keys(narrowing, allowed=OBJECT_ONLY_FILTER_KEYS) or (
+        filt.zone != "battlefield"
+    ):
+        raise LoweringError(
+            "'died this way' iterates what the earlier step destroyed and is "
+            "narrowed only by what the matcher can ask of an object that has "
+            "left", node=node,
+        )
+    if not inner:
+        raise LoweringError("a per-object loop with no effect in it", node=node)
+    return (
+        OracleInstruction(
+            "for_each", "",
+            {
+                # Named rather than implied: the loop reads the objects an
+                # earlier step recorded under this key, and the key is what
+                # ties the two halves of the sentence together.
+                #
+                # The printed card type rides beside it. It is normally a
+                # restatement of what the sweep destroyed — "for each
+                # **creature** that died this way" after a creature sweep, "for
+                # each **land** destroyed this way" after a land sweep — but a
+                # restatement is only ever as reliable as the reader that checks
+                # it, and the loop applies it to the record rather than
+                # assuming the two agree.
+                "iterator": {
+                    "produced_by": "destroyed_this_way_objects", **narrowing,
+                },
+                "effect": inner,
+            },
+        ),
+    )

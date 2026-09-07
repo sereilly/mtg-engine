@@ -213,6 +213,28 @@ def create_delayed_trigger(game: Game, instruction: OracleInstruction, context: 
             game.log.append(f"{context.card.name} had no permanent to be about")
             return True, "no object"
         bound_id = recorded
+    elif payload.get("binds_block_pair"):
+        # "Whenever this creature blocks a creature, return **that creature**
+        # to its owner's hand at end of combat." (Wall of Tears.) CR 603.7c's
+        # object once more, and the fourth place a creating ability can have
+        # put it: a block announcement records the pair under
+        # ``blocked_permanent_ids`` and makes the stack item's target the
+        # ability's *own* creature, so ``binds_target`` beside this would bind
+        # the blocker — the card bouncing itself.
+        #
+        # ``block_pair_permanents`` is the one reader of that difference, the
+        # same one every immediate block-pair effect goes through. Exactly one,
+        # because an entry names one object: the lowering's ``binds_block_pair``
+        # gate already requires a narrowed condition (CR 509.3c/509.3d), which
+        # is what makes the pair a single creature, and a firing that somehow
+        # named several arms nothing rather than picking one arbitrarily.
+        pair = block_pair_permanents(game, context)
+        if len(pair) != 1:
+            game.log.append(
+                f"{context.card.name} had no single creature to be about"
+            )
+            return True, "no object"
+        bound_id = pair[0].permanent_id
     elif payload.get("binds_target"):
         # The **innermost** binding, not the resolution's target list: inside
         # "for each of those creatures, … destroy that creature at end of
