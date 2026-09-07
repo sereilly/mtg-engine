@@ -35,7 +35,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | WTH | 167 | 249 | 88.0% | 88.0% | 64.7% | 140 |
 | TMP | 335 | 478 | 92.1% | 91.8% | 65.5% | 271 |
 | M21 | 285 | 503 | 87.3% | 87.1% | 61.0% | 237 |
-| STH *(measured)* | 143 | 215 | 73.5% | 68.8% | 46.5% | 93 |
+| STH *(measured)* | 143 | 215 | 74.9% | 69.8% | 47.4% | 95 |
 | **All (shipped)** | **4587** | **6817** | **90.2%** | **89.5%** | **59.7%** | **3386** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -48,7 +48,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 382 | 172 | expected a subject |  |
+| 380 | 170 | expected a subject |  |
 | 109 | 54 | unrecognized effect verb |  |
 | 86 | 42 | unconsumed text |  |
 | 38 | 23 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -2607,6 +2607,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At end of combat, destroy each creature that blocked or was blocked this turn.`
 - **Heat Wave**
   - `Blue creatures can't block creatures you control.`
+- **Heat of Battle**
+  - `Whenever a creature blocks, this enchantment deals 1 damage to that creature's controller.`
 - **Heaven's Gate**
   - `One or more target creatures become white until end of turn.`
 - **Heavy Ballista**
@@ -4506,6 +4508,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Rebirth**
   - `Each player may ante the top card of their library. If a player does, that player's life total becomes 20.`
   - `Each player may ante the top card of their library. If a player does, that player's life total becomes 20.`
+- **Rebound**
+  - `Change the target of target spell that targets only a player. The new target must be a player.`
 - **Recall**
   - `Discard X cards, then return a card from your graveyard to your hand for each card discarded this way. Exile Recall.`
   - `Discard X cards, then return a card from your graveyard to your hand for each card discarded this way. Exile Recall.`

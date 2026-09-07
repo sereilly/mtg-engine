@@ -99,3 +99,32 @@ def test_heat_of_battle_fires_once_per_blocker_not_once_per_attacker(set_pool):
     game = _w1g3_block([attacker], [blocker], blocks={0: 0}, watchers=[heat])
 
     assert game.players[1].life == 19, game.log
+
+
+def test_heat_of_battle_fires_once_for_each_of_two_creatures_blocking_one(set_pool):
+    """CR 509.3d against CR 509.3c, on the one board that tells them apart.
+
+    Two creatures block a single attacker. "Whenever a creature blocks" is about
+    each *blocker*, so it fires twice; the per-pair announcement the narrowed
+    spellings (No Quarter) answer to would fire twice here as well — what would
+    fire twice *wrongly* is the becomes-blocked side, which is one creature
+    becoming blocked and is announced once. Both readings share one fire site,
+    so this is the board that would show the pair announcement leaking into the
+    bare condition.
+    """
+    heat = Permanent(card=set_pool("STH")["Heat of Battle"])
+    attacker = Permanent(card=_w1g3_creature("Bear", 2, 2))
+    blockers = [Permanent(card=_w1g3_creature(f"Wall {i}", 0, 4)) for i in range(2)]
+    game = _w1g3_block([attacker], blockers, blocks={0: 0, 1: 0}, watchers=[heat])
+
+    assert game.players[1].life == 18, game.log
+
+
+def test_heat_of_battle_says_nothing_about_an_unblocked_attack(set_pool):
+    """The condition is about blocking, not about combat: an attack nobody
+    blocks announces no firing at all."""
+    heat = Permanent(card=set_pool("STH")["Heat of Battle"])
+    attacker = Permanent(card=_w1g3_creature("Bear", 2, 2))
+    game = _w1g3_block([attacker], [], blocks={}, watchers=[heat])
+
+    assert game.players[1].life == 20, game.log
