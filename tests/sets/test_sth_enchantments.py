@@ -148,3 +148,28 @@ def test_g4_without_dream_halls_no_spell_carries_the_offer(set_pool):
     assert not game.cast_from_hand(
         0, "Ancestral Recall", target_player_index=0, alternative_cost=True,
     ).supported
+
+
+@pytest.mark.cr("118.9b")
+def test_g4_an_ai_seat_sees_the_granted_cost_too(set_pool):
+    """The AI's affordability question asks the engine's own gate rather than
+    re-deriving one — so it has to ask the *same* reader. A policy that saw
+    only the printed half would sit on a castable spell all game, which is the
+    shape ``_alternative_cost_is_payable`` was written for."""
+    from engine.ai_policy import _alternative_cost_is_payable
+
+    game, _caster, _ = _g4_halls(
+        [_G4_LEA["Ancestral Recall"], _G4_LEA["Counterspell"]],
+        set_pool("STH")["Dream Halls"],
+    )
+    assert _alternative_cost_is_payable(
+        game, 0, _G4_LEA["Ancestral Recall"], 0,
+    )
+
+    game, _caster, _ = _g4_halls(
+        [_G4_LEA["Ancestral Recall"], _G4_LEA["Lightning Bolt"]],
+        set_pool("STH")["Dream Halls"],
+    )
+    assert not _alternative_cost_is_payable(
+        game, 0, _G4_LEA["Ancestral Recall"], 0,
+    ), "no colour-sharing card is no payable offer"

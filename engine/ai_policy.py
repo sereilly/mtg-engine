@@ -337,9 +337,12 @@ def _alternative_cost_is_payable(
     nothing — so asking it here costs a lookup and cannot leave a half-paid
     cost behind.
     """
-    from .alternative_costs import alternative_costs
-
-    printed = alternative_costs(card)
+    # Printed **and** granted (Dream Halls' board-wide offer), through the one
+    # reader the cast path itself asks. A policy reading only the printed half
+    # would be a second answer to "what may this be paid with", and the
+    # direction it fails in is a seat that holds a castable spell all game --
+    # which is the shape this function was written for in the first place.
+    printed = game.applicable_alternative_costs(player_index, card)
     if len(printed) != 1:
         # None to take, or more than one and CR 118.9a lets only one be
         # applied — a choice this policy has no card to make and the cast path
