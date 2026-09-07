@@ -1141,7 +1141,7 @@ def test_layers_only_import_downward(layers):
     "package,shared,roof",
     [
         ("effects", (), ()),
-        ("lowering", ("_common", "_filters", "_events", "_deaths", "_delays", "_amounts", "_counted_damage", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_conjuncts", "_bound_returns", "_piles", "_counter_stores", "_blankets", "_zone_categories", "_record_keys", "categories", "conditions"), ()),
+        ("lowering", ("_common", "_filters", "_events", "_deaths", "_delays", "_amounts", "_counted_damage", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_conjuncts", "_bound_returns", "_described_returns", "_piles", "_counter_stores", "_blankets", "_zone_categories", "_record_keys", "categories", "conditions"), ()),
         # `costs` is shared beside `_core` rather than a family: a cost is
         # charged on the way to the stack and never lowered, so it has no
         # `effects/` or `lowering/` twin to be a family of — and both
@@ -1532,6 +1532,27 @@ FAMILY_SHARED = {
     # halves of the split ask them, which is what makes this a floor rather
     # than a file that happened to be cut in half.
     "_bound_returns",
+    # `_described_returns` split out of `_bound_returns` at Exodus' Phase 0,
+    # eleven lines under the guard with two of wave 1's groups due to land in
+    # it and no single group able to cross it alone — a floor every lowering
+    # family may read is the case the playbook says is pre-split rather than
+    # briefed. The line is the comma its own docstring already wrote: a
+    # sentence names the object it returns either by **reference** (the firing
+    # event recorded it, or it is the ability's own source) or by
+    # **description**, and the two are different work. A reference is resolved
+    # by following it, so the only question is where the object is now and
+    # every printed adjective is a restatement that refuses the moment it is
+    # anything more; a description is resolved by looking at the board, so the
+    # noun phrase *is* the instruction and the question is whether its
+    # narrowing survives to a reader that can test it. The call graph agrees
+    # exactly: `_deaths`, `_delays` and `CHOSEN_PERMANENT` are read only by the
+    # referencing half, and every filter-payload helper — `_filter_payload`,
+    # `chargeable_card_filter`, `untestable_filter_keys`, both moved predicates
+    # — only by the describing one. A floor for `_bound_returns`' reason
+    # exactly: `_bound_returns` reads it (its last act is the tail call that
+    # keeps one printed-specificity order across two files), `returns` reads
+    # the two predicates, and it reads neither back.
+    "_described_returns",
     # `_piles` split out of `lowering/exile.py` at Alliances' third wave, when
     # that module crossed the guard on Gustha's Scepter's face-down exile and
     # shed its permission half to `permissions`. It holds the two leaves both

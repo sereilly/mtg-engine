@@ -428,8 +428,9 @@ def _lower_exile(
             # Who empties the pile and whose pile it is are **one claim said
             # twice** ("each player … from *their* graveyard"), so they are
             # checked against each other rather than either being read alone —
-            # the pairing `_bound_returns`' sweep reanimation already makes of
-            # the same two words. A pairing this cannot resolve refuses instead
+            # the pairing `_described_returns`' sweep reanimation already makes
+            # of the same two words. A pairing this cannot resolve refuses
+            # instead
             # of picking a half: "each player exiles all creature cards from
             # your graveyard" is one graveyard and every player, and there is
             # no such card.
