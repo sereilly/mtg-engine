@@ -606,49 +606,114 @@ def test_the_rebinding_reaches_a_pronoun_inside_a_wrapper():
 # ---------------------------------------------------------------------------
 
 
+#: The draft fields that are deliberately not a filter field of the same name.
+#: Named so a new one is a decision rather than an omission: ``saw_head`` is the
+#: draft's own bookkeeping and never leaves it, and ``owned_by`` is the draft's
+#: spelling of the filter's ``owner``.
+_DRAFT_BOOKKEEPING = frozenset({"saw_head"})
+_DRAFT_RENAMED = {"owned_by": "owner"}
+
+
 def test_every_filter_draft_field_is_carried_into_the_object_filter():
     """``nouns._FilterDraft`` is a hand-written mirror of ``ast.ObjectFilter``,
-    and the postmodifier parsers write onto the draft.
+    and five modules write onto the draft.
 
-    A draft is an ordinary dataclass, so a field the parser sets that the draft
-    does not declare is created on the instance and then **silently dropped** —
-    the phrase parses, the restriction vanishes, and the effect reaches a
-    strictly larger set than the card prints. That is this codebase's worst bug
-    class and it is invisible: nothing raises, nothing fails, the card compiles.
-    It happened while adding "target creature it's blocking" and was found only
-    because the payload was printed by hand.
+    A field the parser sets that ``_build_object_filter`` does not copy is
+    **silently dropped** — the phrase parses, the restriction vanishes, and the
+    effect reaches a strictly larger set than the card prints. That is this
+    codebase's worst bug class and it is invisible: nothing raises, nothing
+    fails, the card compiles. It happened while adding "target creature it's
+    blocking" and was found only because the payload was printed by hand.
 
     Two halves, and both are needed. The draft may declare nothing the filter
     cannot hold, and — the half that actually bites — every field the parsers
-    write must reach ``ObjectFilter``, which is checked by setting a marker on a
-    fresh draft and reading it back off the built filter.
+    write must reach ``ObjectFilter``.
+
+    **The second half is checked by setting a marker and reading it back**, and
+    that is not a detail. This test used to spell it ``getattr(built, name, "?")
+    != "?"``, which asks whether the *filter* declares a field of that name —
+    and the assertion above has just proved that it does, for every draft field
+    there is. So the check could not fail: deleting ``nontoken=d.nontoken`` from
+    the builder left it green. A guard whose docstring claims the marker and
+    whose body asks a tautology is worse than no guard, because it is read as
+    cover. Exodus' second wave replaced it, and confirmed the replacement fails
+    under exactly that deletion.
     """
     import dataclasses
 
     from engine.grammar import ast
     from engine.grammar.nouns import _FilterDraft, _build_object_filter
 
-    draft_fields = {f.name for f in dataclasses.fields(_FilterDraft)}
+    draft_fields = [f.name for f in dataclasses.fields(_FilterDraft)]
     filter_fields = {f.name for f in dataclasses.fields(ast.ObjectFilter)}
-    # `saw_head` and the two `*_by` spellings are the draft's own bookkeeping —
-    # named here so a new one is a deliberate decision rather than an omission.
-    draft_only = draft_fields - filter_fields - {"saw_head", "owned_by"}
+    # The two exemptions above are a hand-maintained list, so they get the
+    # assertion SET_PLAYBOOK.md asks of one: an entry naming a field the draft
+    # no longer has would quietly excuse nothing, and the next field to be
+    # dropped would land in the gap it left.
+    stale = sorted((_DRAFT_BOOKKEEPING | set(_DRAFT_RENAMED)) - set(draft_fields))
+    assert not stale, f"exemptions naming fields the draft no longer declares: {stale}"
+    draft_only = (
+        set(draft_fields) - filter_fields - _DRAFT_BOOKKEEPING - set(_DRAFT_RENAMED)
+    )
     assert not draft_only, (
         f"draft fields with nowhere to go in ObjectFilter: {sorted(draft_only)}"
     )
 
-    carried = {
-        name
-        for name in draft_fields
-        if getattr(_build_object_filter(_FilterDraft()), name, "?") != "?"
-    }
-    missing = sorted(
-        name for name in draft_fields - {"saw_head", "owned_by"} if name not in carried
-    )
+    class _Marker:
+        """A value no default can be equal to, whatever the field's type."""
+
+        def __init__(self, name: str) -> None:
+            self.name = name
+
+        def __repr__(self) -> str:  # pragma: no cover - failure message only
+            return f"<marker {self.name}>"
+
+    missing = []
+    for name in draft_fields:
+        if name in _DRAFT_BOOKKEEPING:
+            continue
+        draft = _FilterDraft()
+        default = getattr(draft, name)
+        # The builder massages the two collection shapes on the way out
+        # (``tuple(d.card_types)``), so the marker has to survive that rather
+        # than be one opaque object for every field.
+        if isinstance(default, list):
+            written, expected = [f"marker_{name}"], (f"marker_{name}",)
+        elif isinstance(default, tuple):
+            written = expected = (f"marker_{name}",)
+        else:
+            written = expected = _Marker(name)
+        setattr(draft, name, written)
+        got = getattr(_build_object_filter(draft), _DRAFT_RENAMED.get(name, name))
+        if got != expected:
+            missing.append(name)
     assert not missing, (
         "these draft fields are never copied into ObjectFilter, so a parser "
         f"setting one drops the restriction silently: {missing}"
     )
+
+
+def test_the_filter_draft_refuses_a_field_it_does_not_declare():
+    """The other half of the same bug, and the half the mirror check cannot see.
+
+    ``_build_object_filter`` copies what the draft *declares*, so the test above
+    is blind to a parser that writes a field nobody declared: on a plain
+    dataclass that assignment succeeds, the attribute exists on the instance,
+    and the builder never looks for it. ``d.enchanted_only = True`` was written
+    that way and ``subject_filter_payload("creatures that are enchanted")`` came
+    back ``{'type_filter': 'creature'}`` — the phrase read as unnarrowed, with
+    no error anywhere and no instrument in the repo able to see it.
+
+    ``slots=True`` on the draft turns that write into an ``AttributeError`` at
+    the line that made the mistake. This is the assertion that keeps it there,
+    because removing the keyword would restore the silence without failing
+    anything else.
+    """
+    from engine.grammar.nouns import _FilterDraft
+
+    draft = _FilterDraft()
+    with pytest.raises(AttributeError):
+        draft.a_narrowing_nobody_declared = True
 
 
 # ---------------------------------------------------------------------------
