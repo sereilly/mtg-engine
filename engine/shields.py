@@ -213,6 +213,22 @@ class Shield:
     #: control", CR 109.5); the two narrowings a shield can carry never both
     #: appear in the pool, and the seat means the same thing for either.
     recipients: dict | None = None
+    #: "The next time a black or red source of your choice would deal damage
+    #: this turn, prevent that damage." (Penance.) CR 615.8's shield printed
+    #: with **no recipient at all** — it is keyed on the source and stops that
+    #: source's next damage to whoever it was headed for.
+    #:
+    #: Its own flag rather than a very wide ``recipients`` phrase, because those
+    #: are two different facts: a phrase describes permanents and is asked about
+    #: each damaged one, and this says the question is not asked. A phrase can
+    #: also never name a *player*, which this shield covers as readily as it
+    #: covers a creature.
+    #:
+    #: The shield still lives on the seat that armed it — a lifetime has to hang
+    #: off something the cleanup sweep walks — and ``prevention._table_shields``
+    #: is what makes every recipient find it, exactly as ``_class_shields``
+    #: makes a described permanent find Shadowbane's.
+    any_recipient: bool = False
     #: "**If damage from a black source** is prevented this way, you gain that
     #: much life." (Shadowbane.) The colours of the *source* that make the
     #: shield's CR 615.5 rider fire — deliberately not ``colors`` beside it:
@@ -717,7 +733,9 @@ def make_half_charge(rounding: str, source_name: str | None = None) -> Shield:
     )
 
 
-def make_color_shield(colors, source_name: str | None = None) -> Shield:
+def make_color_shield(
+    colors, source_name: str | None = None, *, any_recipient: bool = False
+) -> Shield:
     """A Circle of Protection's shield, against one colour or several.
 
     *colors* is a colour symbol or an iterable of them. "a black **or red**
@@ -725,11 +743,17 @@ def make_color_shield(colors, source_name: str | None = None) -> Shield:
     with two admissible values, so it is one shield spent by one damage event —
     two shields would let a red source and a black source each be prevented off
     a single activation.
+
+    *any_recipient* is Penance's printing of the same sentence with the "to you"
+    left off (CR 615.8): the same colour recheck, reached from every recipient
+    rather than from the seat it hangs on. Defaulted off, so every Circle in the
+    pool arms exactly the shield it always did.
     """
     if isinstance(colors, str):
         colors = (colors,)
     return Shield(
-        kind=PREVENT_FROM_COLOR, uses=1, colors=tuple(colors), source_name=source_name
+        kind=PREVENT_FROM_COLOR, uses=1, colors=tuple(colors),
+        source_name=source_name, any_recipient=any_recipient,
     )
 
 

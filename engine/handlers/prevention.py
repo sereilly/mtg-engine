@@ -274,8 +274,20 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
         # can never match anything. The legacy parse rule can still produce one
         # from a card whose text has no colour word, and arming nothing is what
         # the old list-of-None amounted to.
+        # "The next time a black or red source of your choice would deal damage
+        # this turn, prevent that damage." (Penance.) The same shield with no
+        # recipient printed — CR 615.8 keys it on the source, so it protects
+        # whoever that source was about to damage. It still hangs on the seat
+        # that armed it, which is what the cleanup sweep walks; what makes every
+        # recipient find it is ``prevention._table_shields``.
+        any_recipient = bool(instruction.payload.get("prevention_any_recipient"))
         for _ in range(max(1, amount) if prevention_colors else 0):
-            add_shield(caster, make_color_shield(prevention_colors, source_name))
+            add_shield(
+                caster,
+                make_color_shield(
+                    prevention_colors, source_name, any_recipient=any_recipient
+                ),
+            )
         # The chosen source (if the controller picked a specific permanent) is
         # recorded only for the log; matching is by color.
         chosen_perm = resolve_target_permanent(game, context, predicate=lambda p: True, fallback_players=())

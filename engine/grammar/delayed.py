@@ -373,7 +373,7 @@ def _parse_create_delayed_trigger(stream: TokenStream, parse_statement) -> "ast.
     )
 
 
-def _contains_flip(node) -> bool:
+def contains_flip(node) -> bool:
     """Whether *node* flips a coin somewhere inside it (CR 705.1).
 
     Written as a walk over the dataclass rather than a check on the top-level
@@ -385,11 +385,11 @@ def _contains_flip(node) -> bool:
         return True
     if dataclasses.is_dataclass(node) and not isinstance(node, type):
         return any(
-            _contains_flip(getattr(node, field.name))
+            contains_flip(getattr(node, field.name))
             for field in dataclasses.fields(node)
         )
     if isinstance(node, (tuple, list)):
-        return any(_contains_flip(item) for item in node)
+        return any(contains_flip(item) for item in node)
     return False
 
 
@@ -419,25 +419,56 @@ def fold_flip_stakes(stream: TokenStream, effect, parse_statement):
     anything else — a second delay, an ordinary step, a conditional on a board
     state — so every other card keeps the reading it has.
     """
-    if not _contains_flip(effect):
+    if not contains_flip(effect):
         return effect
+    stakes = parse_flip_stakes_sentence(stream, parse_statement, leading_period=True)
+    if stakes is None:
+        return effect
+    return ast.Sequence((effect, stakes))
+
+
+def parse_flip_stakes_sentence(
+    stream: TokenStream, parse_statement, *, leading_period: bool
+) -> "ast.Conditional | None":
+    """``If you {win,lose} the flip, <effect>.`` as a whole sentence, or None.
+
+    The one reader of the printed stakes, because there are now two places a
+    flip's consequence has to be folded *into* the sentence in front of it
+    rather than left beside it — a delayed trigger (:func:`fold_flip_stakes`,
+    Goblin Kites) and a loop (``riders._attach_flip_stakes_to_loop``, Fighting
+    Chance). Two readers would be two answers to "is this sentence the stakes",
+    and a card would then get one fold or the other depending on which sentence
+    it printed the flip in, which is the fork in a fragment production
+    SET_PLAYBOOK.md tells the extending round to go looking for.
+
+    *leading_period* is whether the caller has yet to consume the full stop in
+    front of the sentence: the delayed fold is called mid-sentence and has not,
+    the rider is called from the sentence loop and has.
+
+    The cursor is restored on every refusal, so a sentence that is anything
+    else — a second delay, an ordinary step, a conditional on a board state —
+    keeps the reading it has.
+    """
     mark = stream.mark()
-    if not (stream.accept_punct(".") and stream.accept_word("if")):
+    if leading_period and not stream.accept_punct("."):
         stream.reset(mark)
-        return effect
+        return None
+    if not stream.accept_word("if"):
+        stream.reset(mark)
+        return None
     try:
         condition = _parse_condition(stream)
     except GrammarError:
         stream.reset(mark)
-        return effect
+        return None
     if not isinstance(condition, ast.CoinFlipResult) or not stream.accept_punct(","):
         stream.reset(mark)
-        return effect
+        return None
     try:
         consequence = parse_statement(stream, top_level=False)
     except GrammarError:
         stream.reset(mark)
-        return effect
+        return None
     # The stakes govern their whole sentence, so the consequence has to run to
     # the end of one — the same guard `_parse_create_delayed_trigger` states
     # about its own body, and for the same reason: a prefix accepted here would
@@ -445,15 +476,15 @@ def fold_flip_stakes(stream: TokenStream, effect, parse_statement):
     # that says nothing about what happened.
     if not stream.exhausted and not stream.at_punct(".", ";"):
         stream.reset(mark)
-        return effect
-    return ast.Sequence((effect, ast.Conditional(condition, consequence)))
+        return None
+    return ast.Conditional(condition, consequence)
 
 
 def _counters_taken_off_the_source(node) -> frozenset[str]:
     """Every counter word a step of *node* takes off the ability's own source.
 
     A walk over the dataclass rather than a check on the top-level node, for
-    :func:`_contains_flip`'s reason exactly: the removal may be one step of a
+    :func:`contains_flip`'s reason exactly: the removal may be one step of a
     sequence or the body of a conditional, and a shape added later is covered by
     default instead of silently answering "none".
     """

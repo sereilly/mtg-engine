@@ -585,6 +585,19 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
                 f"{' or '.join(card_types)}, cannot counter"
             )
             return True, "resolved"
+        # "counter target **noncreature** spell" (Null Brooch). The complement
+        # of the union above, tested through the same reader (CR 205.2: a card
+        # has *every* type its line names, so an artifact creature is excluded
+        # by "noncreature") and negated here rather than in the payload — a
+        # "noncreature" word inside `card_types` would have countered exactly
+        # the spells the card refuses.
+        excluded_types = instruction.payload.get("excluded_types")
+        if excluded_types and _spell_is_one_of(target.card, excluded_types):
+            game.log.append(
+                f"{card.name}: {target.card.name} is "
+                f"{' or '.join(excluded_types)}, cannot counter"
+            )
+            return True, "resolved"
         # "counter target **instant or Aura** spell" (Avoid Fate, Ring of
         # Immortals): the cross-axis union, tested whole. Beside `card_types`
         # rather than folded into it — the two payload keys mean different

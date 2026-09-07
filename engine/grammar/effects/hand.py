@@ -148,7 +148,14 @@ def _parse_put_hand_cards_on_library(
     """
     mark = stream.mark()
     possessive = "your" if player is None else "their"
-    if not stream.accept_word("put"):
+    # "…unless they **put** a card…" (Tainted Specter) and "Target player
+    # **puts** a card…" (Volrath's Dungeon) are the same sentence in two
+    # inflections, so the verb agrees with the subject exactly as the possessive
+    # below already does. The third-person singular is admitted only where a
+    # subject was handed in: the bare imperative has none, and CR 608.2 makes it
+    # an instruction to the controller — "puts" there would be a sentence
+    # nobody prints.
+    if not stream.accept_word(*(("put",) if player is None else ("put", "puts"))):
         return None
     count = _accept_hand_card_count(stream)
     if count is None or not stream.accept_phrase("from", possessive, "hand"):

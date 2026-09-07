@@ -501,7 +501,24 @@ def _lower_prevent_damage(
         # Preservation), which is one shield a source of either colour spends.
         if len(card_types) > 1 or bool(colours) == bool(card_types):
             raise LoweringError("no handler for this source-scoped shield", node=node)
-        if not _is_you(recipient):
+        # "The next time a black or red source of your choice would deal damage
+        # this turn, prevent that damage." (Penance.) CR 615.8's shield printed
+        # with **no recipient**: it is keyed on the source alone and stops that
+        # source's next damage to whoever it was headed for. Its own scope key
+        # rather than a third value of ``to_self``, because the two are
+        # different questions — one names a seat, this names *nobody*, and a
+        # reader that had learned only "you or not you" would take the absence
+        # for the opponent.
+        #
+        # Only the colour axis, deliberately. A card type or a keyword shield
+        # with no recipient is a printing that does not exist, and admitting one
+        # would arm a table-wide shield off a sentence nobody has written.
+        any_recipient = recipient is None
+        if any_recipient and not colours:
+            raise LoweringError(
+                "a shield with no recipient records a colour", node=node
+            )
+        if not any_recipient and not _is_you(recipient):
             raise LoweringError("colour-scoped shields only protect their controller", node=node)
         if card_types and node.from_filter.with_keywords:
             # Circle of Protection: Shadow — "The next time **a creature of
@@ -565,6 +582,8 @@ def _lower_prevent_damage(
                 ),
             )
         payload: dict[str, object] = {"amount": 1, "protection_kind": "color"}
+        if any_recipient:
+            payload["prevention_any_recipient"] = True
         if len(colours) == 1:
             payload["prevention_color"] = colours[0]
         else:

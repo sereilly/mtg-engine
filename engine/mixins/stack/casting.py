@@ -15,13 +15,15 @@ compiled program and the two share a vocabulary deliberately — see its
 
 from __future__ import annotations
 
+import random
 import re
 
 from .._constants import _MANA_SYMBOLS as _POOL_SYMBOLS
 from ...cast_permissions import consume as consume_permission, permission_for
 from ...auras import aura_enchant_clause
 from ...alternative_costs import AlternativeCost, alternative_costs
-from ...cast_costs import AdditionalCost, OptionalManaCost, additional_costs
+from ...cast_costs import (AdditionalCost, OptionalManaCost, additional_costs,
+                           buyback_cost)
 from ...auras import controller_cast_ban
 # `own_cast_ban` beside `auras.controller_cast_ban` above, and named apart from
 # it deliberately: both answer "which permanent forbids this seat this spell",
@@ -46,8 +48,9 @@ from ...divided_damage import (
 from ...hand_locks import hand_lock_reason, playable_hand_index
 from ...classifier import classify_card
 from ...cost_modifiers import (
-    CostReduction, cost_reduction_for_cast, reduce_cost, sacrifice_taxes,
-    self_per_target_tax, spell_cost_tax, spell_life_tax, spell_symbol_tax,
+    CostReduction, buyback_cost_reduction, cost_reduction_for_cast, reduce_cost,
+    sacrifice_taxes, self_per_target_tax, spell_cost_tax, spell_life_tax,
+    spell_symbol_tax,
 )
 from ...game_types import SimulationResult, StackItem
 from ...handlers._common import graveyard_card_matches
@@ -1180,8 +1183,35 @@ class SpellCastingMixin:
             return SimulationResult(
                 card.name, False, classification.effect_kind, optional_denial,
             )
+        # "Buyback costs cost {2} less." (Memory Crystal.) CR 601.2f applied to
+        # CR 702.27a's offer, so it is read here — where the offer's symbols
+        # become mana this cast owes — and nowhere near the spell's own mana
+        # cost, which this modifier says nothing about.
+        #
+        # Only the buyback offer is reduced, never every optional cost this
+        # spell prints: Primitive Justice's "you may pay {1}{R} and/or {1}{G}"
+        # is CR 601.2b's repeated offer and no keyword at all, and reducing it
+        # would be a card Memory Crystal does not print. The offer is picked out
+        # by asking ``cast_costs.buyback_cost`` for this card's key — the same
+        # reader ``buyback_paid`` uses at resolution, so the offer this
+        # discounts is exactly the offer that buys the card back.
+        buyback_key = buyback_cost(card.oracle_text or "")
+        buyback_off, buyback_by = (
+            buyback_cost_reduction(self) if buyback_key is not None else (0, [])
+        )
         for offer, times in _optional_cost_totals(cast_costs, optional_paid):
-            for symbol, count in offer.cost.items():
+            charged = offer.cost
+            if buyback_off and offer.symbols == buyback_key:
+                # Through ``reduce_cost``, the one place CR 118.7's arithmetic
+                # lives: a generic reduction touches only the generic component
+                # and clamps at zero, so a buyback of {1} under two Crystals is
+                # free rather than negative.
+                charged = reduce_cost(charged, CostReduction(generic=buyback_off))
+                self.log.append(
+                    f"{card.name}'s buyback costs {{{buyback_off}}} less "
+                    f"({', '.join(sorted(set(buyback_by)))})"
+                )
+            for symbol, count in charged.items():
                 if symbol == "generic":
                     extra_generic_tax += count * times
                 else:
@@ -2814,6 +2844,26 @@ class SpellCastingMixin:
                     )
                     if index is None:
                         break  # gated above; a hand that changed since is a no-op
+                    if cost.discard_at_random:
+                        # "…, discard a card **at random**." (Sonic Burst,
+                        # Flowstone Flood's buyback.) The payer names nothing —
+                        # a cost the payer picks is a strictly better cost than
+                        # one chance picks, which is the whole difference
+                        # between these cards and one printing "discard a card".
+                        # Any card a caller named is ignored rather than
+                        # honoured, because honouring it hands the choice back;
+                        # the activation path answers the identical clause the
+                        # same way.
+                        #
+                        # Through the module RNG, like every other randomiser in
+                        # this engine, so a seeded run reproduces the discard.
+                        index = random.choice(
+                            [
+                                i for i, held in enumerate(caster.hand)
+                                if card_matches_any(held, cost.discard_filters)
+                            ]
+                        )
+                        cost_hand_card = None
                     if cost_hand_card is not None:
                         index = next(
                             (
