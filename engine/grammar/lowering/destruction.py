@@ -17,7 +17,7 @@ import dataclasses
 from ...oracle_types import (CHOSEN_THIS_WAY_OBJECTS, CHOSEN_TARGET_PERMANENTS,
                              OracleInstruction)
 from ...subject_filters import (
-    OBJECT_ONLY_FILTER_KEYS, object_only_filter, untestable_filter_keys
+    object_only_filter, untestable_filter_keys
 )
 from .. import ast
 from ..errors import LoweringError
@@ -27,7 +27,7 @@ from ._common import (
     _restrictions_beyond, is_mana_value_x, SEVERAL_DESTROY_NARROWINGS,
     split_creature_type_choice, testable_filter_payload
 )
-from ._events import (ATTACHED_PERMANENT_CONTROLLER, _RECORDED_PERMANENTS, _EVENT_SUBJECT_OBJECTS, _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER, ROLE_NAMES_BLOCK_PARTNER, binds_block_pair, names_attached_permanent, CHOSEN_PERMANENT)
+from ._events import (ATTACHED_PERMANENT_CONTROLLER, _RECORDED_PERMANENTS, _EVENT_SUBJECT_OBJECTS, _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER, ROLE_NAMES_BLOCK_PARTNER, binds_block_pair, damage_trigger_names_damaged_end, names_attached_permanent, CHOSEN_PERMANENT)
 from ._delays import (_DELAYED_AGENT_EVENTS, _BOUND_OBJECT_DELAYED_EVENTS)
 
 
@@ -738,6 +738,9 @@ def _lower_delayed_destroy(
     delayed = _lower_activated_delayed_destroy(node, produced, event, event_subject)
     if delayed is not None:
         return delayed
+    damaged = _lower_delayed_destroy_of_damaged(node, event, event_subject)
+    if damaged is not None:
+        return damaged
     if not binds_block_pair(event, event_subject):
         raise LoweringError(
             "a delayed destroy at end of combat only has a handler on a "
@@ -771,6 +774,45 @@ def _lower_delayed_destroy(
     if filt.subtypes:
         payload["subtype_filter"] = filt.subtypes[0]
     return (OracleInstruction("delayed_destroy_blocked_or_blocker", "", payload),)
+
+
+def _lower_delayed_destroy_of_damaged(
+    node: ast.Destroy, event: str | None, event_subject: object | None,
+) -> tuple[OracleInstruction, ...] | None:
+    """"Whenever this creature deals damage to a creature, destroy **that
+    creature** at end of combat." (Lowland Basilisk.)
+
+    None when the sentence is not this one, so the caller falls through to the
+    block-pair reading — which is the better refusal for the cards that really
+    are about a pair.
+
+    The immediate spelling of the same sentence is already read one screen up
+    (``_EVENT_SUBJECT_DESTROY_EVENTS``): "that creature" under a damage trigger
+    is the *damaged* permanent, whose id ``damage_events._announce`` stamps onto
+    the stack item. The delay is CR 603.7 wrapped around that same object, so
+    ``binds_target`` — the stack item's target, which is that id — binds exactly
+    what the immediate destroy would have hit.
+
+    Gated on :func:`damage_trigger_names_damaged_end` rather than on the kind,
+    and that is the whole of its correctness: a ``damage_dealt`` event has two
+    objects in it, and where the damager is *described* rather than the source
+    (Mangara's Equity) the words name the damager while the stamped id is the
+    creature it hit. Read off the kind alone this would arm a destruction of the
+    wrong end of the event.
+    """
+    if not damage_trigger_names_damaged_end(event, event_subject):
+        return None
+    spec = node.subject
+    if not isinstance(spec, ast.TargetSpec) or spec.quantifier != "that":
+        return None
+    if _restrictions_beyond(spec.filter, frozenset({"card_types"})):
+        raise LoweringError(
+            "a creature named by a damage trigger carries no narrowing the "
+            "delayed destroy could honour", node=node,
+        )
+    return _delayed_destroy_trigger(
+        node, OracleInstruction("destroy_bound_permanent", "", {})
+    )
 
 
 def _lower_activated_delayed_destroy(
@@ -901,76 +943,4 @@ def _delayed_destroy_trigger(
             "duration": "end_of_turn",
             **({"binds_target": True} if inner.kind == "destroy_bound_permanent" else {}),
         }),
-    )
-
-
-def _lower_for_each_destroyed(
-    node: ast.ForEach,
-    inner: tuple[OracleInstruction, ...],
-    produced: frozenset[str],
-) -> tuple[OracleInstruction, ...]:
-    """"**For each creature that died this way,** <effect>." (Glyph of
-    Reincarnation.)
-
-    A loop over the objects an earlier step of *this same effect* destroyed —
-    the set behind ``destroyed_this_way``, which the sweep handlers record
-    because by the time this runs the board no longer holds it. Here rather
-    than beside ``_lower_for_each`` in ``lowering/counters``: that one repeats a
-    counter placement a fixed number of times and never looks at what died,
-    while this is about the destroy family's own record.
-
-    Refused without a producer, as every back-reference in this grammar is:
-    "this way" with no earlier step names nothing at all, and an empty loop is a
-    sentence that reports supported and does not run.
-
-    The inner statement arrives already lowered, the way ``lower_where_x``'s
-    does and for its reason — nothing here cares how it was lowered, only that
-    it is repeated once per object.
-    """
-    if "destroyed_this_way" not in produced:
-        raise LoweringError(
-            "'died this way' with no earlier step in this effect that "
-            "destroyed anything", node=node,
-        )
-    filt = node.iterator.filter
-    narrowing = filt.to_payload()
-    # The narrowing is held to what the *pure* matcher can answer, because that
-    # is what the loop uses: the objects are in graveyards by the time this runs,
-    # so there is no observer and no board to ask a layer question of, and every
-    # key it does answer it answers off last-known information (CR 608.2h).
-    #
-    # It read the card type alone until Mirage printed "If **a white creature**
-    # dies this way" (Cinder Cloud) — a colour is exactly as answerable, and the
-    # refusal was a list of one key rather than a statement about the matcher.
-    if untestable_filter_keys(narrowing, allowed=OBJECT_ONLY_FILTER_KEYS) or (
-        filt.zone != "battlefield"
-    ):
-        raise LoweringError(
-            "'died this way' iterates what the earlier step destroyed and is "
-            "narrowed only by what the matcher can ask of an object that has "
-            "left", node=node,
-        )
-    if not inner:
-        raise LoweringError("a per-object loop with no effect in it", node=node)
-    return (
-        OracleInstruction(
-            "for_each", "",
-            {
-                # Named rather than implied: the loop reads the objects an
-                # earlier step recorded under this key, and the key is what
-                # ties the two halves of the sentence together.
-                #
-                # The printed card type rides beside it. It is normally a
-                # restatement of what the sweep destroyed — "for each
-                # **creature** that died this way" after a creature sweep, "for
-                # each **land** destroyed this way" after a land sweep — but a
-                # restatement is only ever as reliable as the reader that checks
-                # it, and the loop applies it to the record rather than
-                # assuming the two agree.
-                "iterator": {
-                    "produced_by": "destroyed_this_way_objects", **narrowing,
-                },
-                "effect": inner,
-            },
-        ),
     )

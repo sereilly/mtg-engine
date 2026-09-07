@@ -34,7 +34,7 @@ from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
 from ._events import (_EVENT_SUBJECT_PLAYERS, CHOSEN_PLAYER,
-                      CREATED_TOKEN)
+                      CREATED_TOKEN, binds_block_pair)
 from ._common import (
     _REST_OF_TURN, _describe_several_targets, _describe_targets,
     _names_several_targets, testable_filter_payload
@@ -187,6 +187,11 @@ _BOUND_TO_THE_DELAYS_OBJECT = frozenset({
     # with a different verb — which is the whole reason this is a set and not an
     # equality test.
     "phase_out_bound_permanent", "gain_control_of_bound_permanent",
+    # "…return **that creature** to its owner's hand at end of combat" (Wall of
+    # Tears). The bounce, beside the two destroys and the phase-out — one more
+    # verb over one object, which is what this being a set rather than an
+    # equality test is for.
+    "return_bound_permanent_to_hand",
 })
 
 
@@ -210,6 +215,7 @@ def _lower_create_delayed_trigger(
     effect: tuple[OracleInstruction, ...],
     produced: frozenset[str] = frozenset(),
     creating_event: str | None = None,
+    creating_event_subject: object | None = None,
 ) -> tuple[OracleInstruction, ...]:
     """The ``create_delayed_trigger`` instruction for one printed delay.
 
@@ -416,6 +422,24 @@ def _lower_create_delayed_trigger(
                 payload["binds_event_subject"] = True
             else:
                 payload["binds_target"] = True
+        # "Whenever this creature blocks a creature, return **that creature**
+        # to its owner's hand at end of combat." (Wall of Tears.) The third
+        # place a creating *trigger* can have put the object, and the one the
+        # two readings above cannot reach: a block announcement records the
+        # pair under ``blocked_permanent_ids`` and stamps no
+        # ``event_subject_permanent_id``, while its stack item's target is the
+        # ability's **own** creature — the blocker, so that a self-affecting
+        # trigger can find itself.
+        #
+        # So ``binds_target`` here does not merely find nothing, it finds the
+        # *wrong* permanent: Wall of Tears would bounce itself. Asked last and
+        # allowed to override, because the block pair is a stricter answer than
+        # the stack item's target under exactly the events it holds for —
+        # ``binds_block_pair`` is False for every other one, delayed events
+        # included.
+        if binds_block_pair(creating_event, creating_event_subject):
+            payload["binds_target"] = False
+            payload["binds_block_pair"] = True
     if node.watches is not None:
         payload["watches"] = node.watches
     elif node.binds_target and _delay_is_about_a_created_token(node.effect, produced):

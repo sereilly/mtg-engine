@@ -29,6 +29,7 @@ from ...subject_filters import untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
 from ._deaths import BOUND_CARD_EVENTS
+from ._delays import _BOUND_OBJECT_DELAYED_EVENTS
 from ._events import (CHOSEN_PERMANENT as _ATTACH_HOST_KEY,
                       EVENT_SUBJECT_OWNER, _EVENT_SUBJECT_OWNERS)
 from ._common import (
@@ -302,6 +303,59 @@ def lower_untargeted_return(
         return (
             OracleInstruction("return_bound_card_to_owners_hand", "", payload),
         )
+    # "Whenever this creature blocks a creature, return **that creature** to
+    # its owner's hand at end of combat." (Wall of Tears.) The bound
+    # **permanent**, which is a different object from the bound *card* above
+    # and needs a different handler: this one is still on a battlefield when
+    # the delayed ability fires, so what happens is CR 400.7's zone change off
+    # the board rather than a search through graveyards.
+    #
+    # Told apart from that reading by ``is_card`` alone, which is the noun
+    # phrase the trigger's own condition wrote — "that creature" under a block
+    # or a damage trigger is a permanent, and "that card" under a dies trigger
+    # is not.
+    #
+    # Admitted only under a delayed event that names an object (CR 603.7c), the
+    # same gate ``destroy_bound_permanent`` is held to one family over: under
+    # any other event the words name a permanent nobody recorded, and the
+    # handler would bounce nothing while the card compiled supported.
+    if (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "that"
+        and not subject.filter.is_card
+        and event in _BOUND_OBJECT_DELAYED_EVENTS
+    ):
+        if (
+            node.to.name != "hand"
+            or node.to.owner is None
+            or node.to.owner.kind != "owner"
+        ):
+            raise LoweringError(
+                "the bound permanent goes to its owner's hand alone", node=node
+            )
+        unread = [
+            name for name in (
+                "entering_tapped", "entering_counters", "exile_on_leave",
+                "under_control_of", "repetitions", "actor", "attached_to",
+                "losing_subtypes", "losing_abilities", "gaining_abilities",
+                "also_stack",
+            )
+            if getattr(node, name, None)
+        ]
+        if unread or node.from_zone is not None:
+            # A rider lowered into a payload the handler ignores is a card that
+            # reports supported and does half of what it prints.
+            raise LoweringError(
+                "the bound-permanent bounce honours no further rider", node=node
+            )
+        # The noun restates what the trigger's own condition already required,
+        # so the card type is not a narrowing to honour; every other field is.
+        if _restrictions_beyond(subject.filter, frozenset({"card_types"})):
+            raise LoweringError(
+                "the bound-permanent bounce honours no further narrowing",
+                node=node,
+            )
+        return (OracleInstruction("return_bound_permanent_to_hand", "", {}),)
     # "Return **this card** to **your** hand." (Death Spark, Krovikan Horror.)
     #
     # The ability's own source with no printed source zone, like the two

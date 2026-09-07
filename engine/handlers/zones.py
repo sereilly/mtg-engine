@@ -7956,6 +7956,39 @@ def return_recorded_permanents_to_hand(game: Game, instruction: OracleInstructio
     return True, "resolved"
 
 
+@effect_handler("return_bound_permanent_to_hand")
+def return_bound_permanent_to_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Whenever this creature blocks a creature, return **that creature** to
+    its owner's hand at end of combat." (Wall of Tears, CR 511.1 / CR 603.7.)
+
+    The bounce twin of ``destroy_bound_permanent`` and ``phase_out_bound_permanent``,
+    and read exactly as they are: the object is the one the ability that created
+    this delay bound (CR 603.7c), carried by id in the trigger's context. By end
+    of combat it may have been destroyed, removed from combat, or renumbered by
+    something else leaving (CR 400.7) — so it is an id, never an index and never
+    a board search.
+
+    **No re-check of the printed noun**, for ``phase_out_bound_permanent``'s
+    stated reason: the pronoun restates the trigger's own noun phrase, the
+    condition already decided this creature is what the ability is about, and
+    asking again at end of combat would let a creature whose type changed
+    mid-combat escape a bounce CR 603.7c has already aimed at it.
+
+    A permanent already gone is returned by nothing, which is CR 608.2b doing as
+    much as it can rather than a failure.
+    """
+    victim = game.permanent_by_id(
+        (context.trigger_context or {}).get("bound_permanent_id")
+    )
+    if victim is None or not game.is_on_battlefield(victim):
+        game.log.append(f"{context.card.name}: the permanent it named is gone")
+        return True, "resolved"
+    name = victim.card.name
+    owner = return_permanent_to_owners_hand(game, victim, context.caster)
+    game.log.append(f"{name} returned to {owner.name}'s hand")
+    return True, "resolved"
+
+
 @effect_handler("return_attached_permanent_to_hand")
 def return_attached_permanent_to_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"{W}: Return **enchanted creature** to its owner's hand." (Sun Clasp.)

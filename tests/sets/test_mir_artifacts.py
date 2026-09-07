@@ -801,7 +801,13 @@ def test_basalt_golem_arms_a_delayed_sacrifice_of_what_blocked_it(set_pool):
     (trig,) = program.triggered_abilities
     payload = trig.instruction.payload
     assert payload["event"] == "next_end_of_combat"
-    assert payload["binds_target"] is True
+    # ``binds_block_pair``, not ``binds_target``: STH's Wall of Tears prints the
+    # same delay on the *blocks* half of the pair, where the stack item's target
+    # is the ability's own creature -- so both halves now bind through
+    # ``block_pair_permanents``, the one reader of that difference. On this half
+    # the two answer alike, which is why the behaviour tests below did not move.
+    assert payload["binds_target"] is False
+    assert payload["binds_block_pair"] is True
     assert [step.kind for step in payload["instruction"].payload["steps"]] == [
         "sacrifice_bound_permanent", "if_then"
     ]

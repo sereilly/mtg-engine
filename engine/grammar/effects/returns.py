@@ -23,6 +23,7 @@ from .. import ast
 from ..errors import GrammarError
 from ..readers import _parse_entering_counters, accept_source_reference
 from ..records import _parse_for_each_this_way
+from ..back_references import _parse_that_object
 from ..references import parse_player_ref, parse_recipient
 from ..sacrifices import parse_counted_subject
 from ..stream import TokenStream
@@ -150,7 +151,20 @@ def _parse_return(
         subject = ast.TargetSpec("that", ast.ObjectFilter(is_card=True))
     else:
         stream.reset(bound)
-        subject = parse_recipient(stream)
+        # "Whenever this creature blocks a creature, return **that creature**
+        # to its owner's hand at end of combat." (Wall of Tears.) The object a
+        # trigger already bound, read through the same local production the
+        # destroy uses and for the same stated reason: the shared noun parser
+        # must not learn the phrase, or every line printing those words would
+        # lower through a filter naming a card type nobody bound.
+        #
+        # Ahead of `parse_recipient`, which has no reading for it at all — the
+        # line refused at "expected something to return" — and behind "that
+        # card" above, so a bound *card* in a graveyard keeps the reading that
+        # names it.
+        subject = _parse_that_object(stream)
+        if subject is None:
+            subject = parse_recipient(stream)
     if subject is None:
         # "Return **two Islands** you control to their owner's hand." (Flooded
         # Shoreline's cost, Bull Elephant's price.) A bare printed count in

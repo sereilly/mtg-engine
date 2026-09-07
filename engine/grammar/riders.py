@@ -646,7 +646,12 @@ def _attach_riders(statement: ast.Statement, riders: ast.DamageRiders) -> ast.St
 # not decoration, it is the *only* thing narrowing a choice made at resolution,
 # and a noun nothing offers would be consumed here and then ignored there —
 # a retarget free to aim at anything the spell could originally have chosen.
-_NEW_TARGET_NOUNS = frozenset({"player"})
+#: "creature" joined it with Silver Wyvern. Both halves behind the word were
+#: already there — ``_CHANGE_TARGET_NEW_TARGETS`` has admitted it since Meddle
+#: and ``_legal_new_targets`` forces the enumeration to creatures for it — so
+#: what the frozenset was withholding was the printed sentence, not the
+#: behaviour behind it.
+_NEW_TARGET_NOUNS = frozenset({"player", "creature"})
 
 
 def _attach_new_target_bound(

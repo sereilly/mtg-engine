@@ -2215,9 +2215,8 @@ class DeclareBlockersStepMixin:
         """
         from ..events import emit
 
-        for _blocker_idx, blocker, blocked in self._resolved_block_pairs(
-            controller_index, assignments
-        ):
+        pairs = list(self._resolved_block_pairs(controller_index, assignments))
+        for _blocker_idx, blocker, blocked in pairs:
             for _attacker_idx, attacker in blocked:
                 emit(
                     self, "matching_creature_becomes_blocked",
@@ -2226,6 +2225,9 @@ class DeclareBlockersStepMixin:
                     partner_permanent_id=blocker.permanent_id,
                     blocked_permanent_ids=[blocker.permanent_id],
                     target_permanent_id=blocker.permanent_id,
+                    event_subject_permanent_id=attacker.permanent_id,
+                    event_subject_controller=self.controller_index_of(attacker),
+                    pair_announcement=True,
                 )
                 emit(
                     self, "matching_creature_blocks",
@@ -2234,7 +2236,63 @@ class DeclareBlockersStepMixin:
                     partner_permanent_id=attacker.permanent_id,
                     blocked_permanent_ids=[attacker.permanent_id],
                     target_permanent_id=attacker.permanent_id,
+                    event_subject_permanent_id=blocker.permanent_id,
+                    event_subject_controller=self.controller_index_of(blocker),
+                    pair_announcement=True,
                 )
+        self._announce_bare_board_wide_blocks(pairs)
+
+    def _announce_bare_board_wide_blocks(self, pairs) -> None:
+        """CR 509.3c/509.3d's other reading of the two announcements above.
+
+        "Whenever **a creature** blocks" (Heat of Battle) fires once for each
+        creature that blocks, and "Whenever **a Sliver** becomes blocked"
+        (Spined Sliver) once for each creature that becomes blocked - however
+        many creatures are on the other side of that block. The per-pair
+        announcements above are the *narrowed* reading: "...blocks a creature
+        with lesser power" (No Quarter) fires once per creature its phrase
+        admits.
+
+        Two announcements rather than one counted differently, because the count
+        is what the ``emit`` makes: a trigger sees as many firings as there are
+        events. ``events._board_wide_block_filter`` is what keeps each condition
+        on exactly one of the two, off the presence of its own partner phrase -
+        so no card takes both, and a bare condition about an attacker blocked by
+        three cannot fire three times.
+
+        The same shape the two source-scoped scans one screen up already have,
+        where the choice between "once" and "once per admitted creature" is read
+        off ``trig.condition.payload``. Here it cannot be, because ``emit``
+        collects the watchers instead of the fire site scanning for them.
+        """
+        from ..events import emit
+
+        blocked_by: dict[int, tuple] = {}
+        for _blocker_idx, blocker, blocked in pairs:
+            emit(
+                self, "matching_creature_blocks",
+                subject=blocker,
+                combatant_permanent_id=blocker.permanent_id,
+                blocked_permanent_ids=[perm.permanent_id for _, perm in blocked],
+                event_subject_permanent_id=blocker.permanent_id,
+                event_subject_controller=self.controller_index_of(blocker),
+                pair_announcement=False,
+            )
+            for _attacker_idx, attacker in blocked:
+                found = blocked_by.setdefault(
+                    attacker.permanent_id, (attacker, [])
+                )
+                found[1].append(blocker)
+        for attacker, blockers in blocked_by.values():
+            emit(
+                self, "matching_creature_becomes_blocked",
+                subject=attacker,
+                combatant_permanent_id=attacker.permanent_id,
+                blocked_permanent_ids=[perm.permanent_id for perm in blockers],
+                event_subject_permanent_id=attacker.permanent_id,
+                event_subject_controller=self.controller_index_of(attacker),
+                pair_announcement=False,
+            )
 
     def _fire_delayed_becomes_blocked_triggers(
         self, controller_index: int, assignments: dict[int, list[int]]

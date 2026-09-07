@@ -2597,12 +2597,10 @@ class LegalityMixin:
                 # a spell is aimed at is a creature here exactly as it is
                 # everywhere else. A permanent that has left is not one.
                 wanted_type = spec.get("stack_single_target_type")
-                if wanted_type is not None:
-                    if chosen.get("kind") != "permanent":
-                        continue
-                    aimed = self.permanent_by_id(chosen.get("permanent_id"))
-                    if aimed is None or not aimed.is_creature:
-                        continue
+                if wanted_type is not None and not _single_target_is(
+                    self, chosen, wanted_type
+                ):
+                    continue
             if color_filter and color_filter not in self._stack_item_colors(item):
                 continue
             stack_any_colors = spec.get("stack_any_colors")
@@ -2663,6 +2661,35 @@ class LegalityMixin:
                 "name": f"{name}'s {kind} ability",
             })
         return targets
+
+
+def _single_target_is(game, chosen: dict, wanted: str) -> bool:
+    """Whether the one thing a stack object is aimed at is a *wanted*.
+
+    "…and **that target is a creature**" (Meddle), "…that targets only **a
+    player**" (Rebound). One reader because both ends of the question ask it —
+    the picker, before the ability is activated, and ``_retarget_subject`` at
+    resolution, where CR 608.2b asks it again about an object that may have been
+    re-aimed in between. It was the picker's alone, so Meddle's restriction was
+    checked when the spell was cast and never afterwards.
+
+    ``creature`` is CR 613's answer rather than the printed type line, so an
+    animated land a spell is aimed at is a creature here exactly as it is
+    everywhere else; a permanent that has left is not one. ``player`` is the
+    face half of the same question, and a seat that has lost is still the seat
+    the spell named — CR 115.7a's legality is asked of the *new* target.
+
+    A word this cannot answer is False, never True: an unrecognised bound must
+    narrow to nothing rather than to everything.
+    """
+    if wanted == "player":
+        return chosen.get("kind") == "player"
+    if wanted == "creature":
+        if chosen.get("kind") != "permanent":
+            return False
+        aimed = game.permanent_by_id(chosen.get("permanent_id"))
+        return aimed is not None and aimed.is_creature
+    return False
 
 
 #: The payload keys a composed instruction nests its steps under, in the order

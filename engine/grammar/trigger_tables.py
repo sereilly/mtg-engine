@@ -285,6 +285,26 @@ _BOARD_WIDE_BLOCK_EVENTS: tuple[tuple[tuple[str, ...], str], ...] = (
 )
 
 
+#: The same two events with **no partner phrase** — "Whenever a creature blocks,
+#: …" (Heat of Battle), "Whenever a Sliver becomes blocked, …" (Spined Sliver).
+#:
+#: Its own table rather than a third column on the one above, because a row here
+#: means a different *announcement* rather than a different word: CR 509.3c/
+#: 509.3d fire a bare condition once for the creature the event is about however
+#: many creatures are on the other side, where a narrowed one fires once per
+#: creature its phrase admits. The fire site makes both announcements and
+#: ``events._board_wide_block_filter`` keeps a trigger on exactly one.
+#:
+#: Read **after** the table above, because each phrase here is a strict prefix
+#: of the matching row there — the same specific-before-generic order
+#: ``engine/oracle.py``'s rows keep, and for the same reason: read first, the
+#: partner phrase is left on the stream and the line fails full consumption.
+_BARE_BOARD_WIDE_BLOCK_EVENTS: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("becomes", "blocked"), "matching_creature_becomes_blocked"),
+    (("blocks",), "matching_creature_blocks"),
+)
+
+
 _SUBJECT_LED_EVENTS: tuple[tuple[tuple[str, ...], str], ...] = (
     (("attacks",), "matching_creature_attacks"),
     (("enters", "the", "battlefield"), "matching_permanent_enters"),

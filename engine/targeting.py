@@ -1592,7 +1592,34 @@ def _sweep_controller_spec(payload: dict) -> dict | None:
     resolution asked to guess it can only be right where there is exactly one
     opponent.
     """
-    return player_pronoun_spec((payload.get("filter") or {}).get("controller"))
+    # Two payload shapes, one noun phrase. The damage sweep nests its filter
+    # under ``filter`` and the destroy sweep spreads it across the payload
+    # itself, so the ``controller`` key is looked for in both — reading only the
+    # nested one answered None for every card written the other way, which is
+    # the silent half of the Roots class rather than a refusal.
+    described = payload.get("filter")
+    if not isinstance(described, dict):
+        described = payload
+    return player_pronoun_spec(described.get("controller"))
+
+
+def _matching_sweep_spec(payload: dict) -> dict | None:
+    """:func:`_sweep_controller_spec` for the two sweeps that may *also* carry
+    an ordinary target description.
+
+    "Destroy all creatures **target player** controls" (Mogg Infestation)
+    announces a seat inside its noun phrase; "Destroy all creatures that were
+    blocked by **target Wall** this turn" (Glyph of Reincarnation) announces an
+    object under the same kind, through the ``targets`` key every other
+    instruction uses. A row in :data:`_KIND_TO_SPEC_FROM_PAYLOAD` is read
+    *instead of* the generic description, so a reader that answered only the
+    first would have taken the second card's prompt away — which is why the
+    fall-through is here rather than a second row somewhere.
+    """
+    seat = _sweep_controller_spec(payload)
+    if seat is not None:
+        return seat
+    return _from_targets_payload(payload.get("targets"))
 
 
 def _control_gift_spec(payload: dict) -> dict | None:
@@ -1735,6 +1762,15 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     "shuffle_graveyard_into_library": _chosen_graveyard_shuffle_spec,
     "sacrifice_matching_permanent": _forced_sacrifice_spec,
     "deal_damage_each_matching": _sweep_controller_spec,
+    # "Destroy all creatures **target player** controls." (Mogg Infestation.)
+    # "Tap all lands **target player** controls …" (Mana Short.) The same
+    # sentence two verbs over, and the same two halves of one payload: the noun
+    # phrase says which permanents, the ``controller`` key inside it says whose,
+    # and only the second is a choice. Without the rows the sweeps announced
+    # nothing, the client sent a bare cast and the engine refused it — the Roots
+    # class again, on kinds most of whose cards choose nobody.
+    "destroy_all_matching": _matching_sweep_spec,
+    "tap_all_matching": _matching_sweep_spec,
     # Corrosion's rust counters: the same printed noun phrase as Simoon's, so
     # the same reader — what is being *chosen* is a seat, whatever the sweep
     # then does to that seat's permanents.

@@ -308,11 +308,23 @@ def _tap_or_untap_all_matching(
             return False, "no seat was frozen for 'that player'"
         observer = frozen
         described["controller"] = "you"
+    # "Tap all lands **target player** controls …" (Mana Short.) A seat this
+    # resolution chose (CR 115.4), which no read of a permanent can supply — so
+    # it goes to the matcher, which refuses the word without one. The same hand
+    # the damage sweep and the destroy sweep already make; absent it the phrase
+    # fell through the matcher's seat comparisons and the sweep took every land
+    # on the table.
+    targeted_seat = (
+        game.players.index(context.target)
+        if context.target is not None and context.target in game.players
+        else None
+    )
     matched = [
         perm for perm in game.all_permanents()
         if subject_matches(
             game, perm, described,
             observer=observer, source=context.source_permanent,
+            targeted_player=targeted_seat,
         )
     ]
     changed = []

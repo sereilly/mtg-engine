@@ -539,7 +539,7 @@ def lower_statement(
             # its ``agent`` where the phrase names the pair's *other* half.
             statement.effect, produced, event=statement.event, whole_effect=True,
             event_subject=statement.subject or statement.agent,
-        ), produced, creating_event=event)
+        ), produced, creating_event=event, creating_event_subject=event_subject)
 
     if isinstance(statement, ast.NextDrawReplacement):
         # The inner sentence is lowered under *this* line's event, not the
