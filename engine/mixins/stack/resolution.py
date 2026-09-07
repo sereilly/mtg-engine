@@ -904,6 +904,16 @@ class StackResolutionMixin:
         # The gate is `legality.illegal_targets_refusal` — the sibling of the
         # announcement gate, so the same identities decide both ends.
         illegal = self.illegal_targets_refusal(item)
+        if illegal is None:
+            # ...and the same rule for the one restriction that is not about a
+            # target still *existing* but about it still *answering what the
+            # card printed*: "target opponent who has more life than you do".
+            # A second call rather than a branch inside the gate above, because
+            # that gate is CR 608.2b for spells and this is CR 608.2b for one
+            # printed clause — folding them would advertise a cover over
+            # abilities that does not exist. `legality.stale_comparison_refusal`
+            # states its own bounds.
+            illegal = self.stale_comparison_refusal(item)
         if illegal is not None:
             self.log.append(illegal)
             if item.ability_instruction is None and not item.is_copy:

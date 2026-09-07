@@ -78,3 +78,46 @@ def player_comparison_holds(
     margin = max(1, int(described.get("margin", 1) or 1))
     difference = mine - theirs if described.get("more") else theirs - mine
     return difference >= margin
+
+
+def seat_answers_comparison(
+    game: "Game",
+    seat: int,
+    described: dict,
+    *,
+    caster_index: int,
+    that_player_seat: "int | None",
+) -> bool:
+    """Whether *seat* is a legal answer to the whole printed clause.
+
+    The two questions above plus the conjoined one the Oaths print, asked
+    together because they are one sentence: which seat this is measured
+    against, whether that seat is excluded by "…**and is their opponent**"
+    (CR 102.2), and whether the count comes out. A caller that asked two of the
+    three would be enforcing two thirds of a printed restriction.
+
+    **One function because there are now two moments.** CR 601.2c asks it while
+    the target is being chosen (``legality``'s seat loop, the list the picker
+    and the announcement gate share) and CR 608.2b asks it again as the object
+    resolves (``legality.stale_comparison_refusal``). A restriction whose
+    picker and whose re-check were separate readings is this repo's recurring
+    defect; here the *only* way to change what the clause means is to change it
+    where both look.
+
+    False where the reference was never frozen or is out of range, which admits
+    **nobody**: a comparison against a seat that does not exist has no answer,
+    and offering every player instead is the silent widening this module exists
+    to prevent.
+    """
+    reference = comparison_reference_seat(
+        described, caster_index=caster_index, that_player_seat=that_player_seat,
+    )
+    if reference is None or not 0 <= reference < len(game.players):
+        return False
+    # "…**and is their opponent**" (CR 102.2), relative to the seat the
+    # comparison is against and not to the caster — under the Oaths' trigger
+    # those are two different players, and reading it as `opponents_only` would
+    # have offered the upkeep player their own face.
+    if described.get("is_opponent") and seat == reference:
+        return False
+    return player_comparison_holds(game, seat, reference, described)

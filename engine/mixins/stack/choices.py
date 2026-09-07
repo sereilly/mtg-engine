@@ -6899,6 +6899,18 @@ class PendingChoicesMixin:
         with that same seat is what makes announcing the target a change to what
         a *player* is asked and to nothing else: headless play, AI play and
         every two-player game resolve exactly where they resolved before.
+
+        **Whose first living opponent** is ``choice.player_index``, the seat the
+        prompt was armed for, and never the ability's controller. On every
+        ordinary trigger those are one seat, which is why reading either looked
+        the same; the Exodus Oaths print "**that player** chooses target
+        player…" and separate them, and the answer had gone on being computed
+        from the controller. At two seats that is invisible — there is one
+        opponent and every rule agrees — and at three it made the *owner of the
+        enchantment* decide which player a third party's default named: the same
+        board, the same enumerated candidates, and Oath of Mages burning P1 when
+        seat 0 controlled it and P0 when seat 1 did. The seat that is asked a
+        question is the seat its default is computed from.
         """
         targets = choice.data.get("targets") or ()
         if not targets:
@@ -6906,7 +6918,7 @@ class PendingChoicesMixin:
             return True
         item = choice.data.get("_trigger_item")
         if item is not None:
-            standing = self._default_opposing_seat(item.caster_index)
+            standing = self._default_opposing_seat(choice.player_index)
             for target in targets:
                 if target.get("kind") == "player" and target.get("seat") == standing:
                     return self._resolve_trigger_target(choice, seat=standing)

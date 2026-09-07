@@ -907,3 +907,165 @@ def test_w1g4_paroxysm_reads_the_enchanted_players_library(set_pool, top_card, s
     assert game.is_on_battlefield(bear) is survives
     if survives:
         assert (bear.effective_power, bear.effective_toughness) == (5, 5)
+
+
+# --- W2G5: the seat a default answer is computed from ---
+#
+# The Oaths move CR 601.2c's announcement to a seat that is not the ability's
+# controller, and the prompt already goes there. What did not move with it is
+# the answer a **non-interactive** seat gives: it was computed from the Oath's
+# controller, so who owns the enchantment decided which player a third party's
+# default named. Invisible at two seats, where there is one opponent and every
+# rule agrees; this block is three-handed for that reason.
+
+import pytest as _g5e_pytest
+
+from engine import Game as _G5eGame, PlayerState as _G5ePlayerState
+from engine.models import CardDefinition as _G5eCard, Permanent as _G5ePermanent
+from tests.helpers import resolve_stack as _g5e_resolve_stack
+
+
+def _g5e_filler(name):
+    return _G5eCard(
+        name=name, mana_cost="{1}", cmc=1.0, type_line="Creature — Bear",
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature — Bear", "power": "1",
+             "toughness": "1"},
+    )
+
+
+def _g5e_three_handed(set_pool, oath, *, oath_seat, lives, interactive=()):
+    """*oath* under *oath_seat*'s control at a three-seat table.
+
+    Lives are the whole board state these tests need: every Oath in the pair
+    below is Oath of Mages, whose comparison is a life total and whose payoff
+    is one damage — so which seat the announcement named is readable straight
+    off the score.
+    """
+    enchantment = _G5ePermanent(card=set_pool("EXO")[oath])
+    players = []
+    for seat, life in enumerate(lives):
+        players.append(_G5ePlayerState(
+            name="P%d" % seat, life=life,
+            battlefield=[enchantment] if seat == oath_seat else [],
+            library=[_g5e_filler("S%d-%d" % (seat, i)) for i in range(5)],
+        ))
+    game = _G5eGame(players=players)
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game._settle()
+    return game
+
+
+def _g5e_run_upkeep(game, seat):
+    """Take *seat*'s upkeep with every prompt answered by its default."""
+    game.start_turn(seat)
+    for _ in range(6):
+        game.auto_resolve_pending_choices()
+        if not _g5e_resolve_stack(game):
+            break
+    game.auto_resolve_pending_choices()
+    return [player.life for player in game.players]
+
+
+@_g5e_pytest.mark.parametrize("oath_seat", [0, 1])
+def test_w2g5_the_default_target_does_not_depend_on_who_controls_the_oath(
+    set_pool, oath_seat,
+):
+    """"**That player** chooses target player…" — so the seat that answers is
+    the upkeep player, and the answer a non-interactive seat gives has to be
+    computed from *that* seat.
+
+    The two runs differ in one thing only: which of the two eligible opponents
+    owns the enchantment. Neither owner is the chooser, both are legal targets
+    in both runs, and the enumerated candidate list is identical — so a default
+    that reads the Oath's controller makes the same board answer two different
+    ways, and the player who gets hit is decided by whose card it is.
+    """
+    game = _g5e_three_handed(
+        set_pool, "Oath of Mages", oath_seat=oath_seat, lives=(30, 25, 10),
+    )
+
+    lives = _g5e_run_upkeep(game, 2)
+
+    assert lives == [29, 25, 10], (
+        "the upkeep player's first living opponent takes the damage whoever "
+        "owns the Oath; got %r" % (lives,)
+    )
+
+
+def test_w2g5_the_default_answers_with_an_opponent_of_the_seat_that_was_asked(
+    set_pool,
+):
+    """The policy stated in ``_default_trigger_target`` — "the first living
+    opponent" — is a fact about the seat being *asked*, and this pins it to
+    that seat rather than to the ability's controller.
+    """
+    game = _g5e_three_handed(
+        set_pool, "Oath of Mages", oath_seat=0, lives=(30, 25, 10),
+    )
+    chooser = 2
+
+    _g5e_run_upkeep(game, chooser)
+
+    hit = [
+        line for line in game.log if line.startswith("Oath of Mages: targets ")
+    ]
+    assert hit == ["Oath of Mages: targets P%d" % game._default_opposing_seat(chooser)], (
+        game.log
+    )
+
+
+def test_w2g5_an_oath_is_countered_when_its_comparison_stops_holding(set_pool):
+    """CR 608.2b over the Oaths' half of the clause, where the comparison is
+    against "…than **they** do" — the upkeep player, frozen by the firing event
+    (CR 603.10) rather than read off the ability's controller.
+
+    The Oath's controller was ahead on life when the target was announced and is
+    behind by the time the trigger would resolve, so its only target is illegal
+    and the ability leaves the stack. The re-check resolves the reference seat
+    through the same accessor the announcement used, which is the half a gate
+    with its own reading would get wrong: measured against the *controller*
+    instead, the comparison would still hold and the damage would land.
+    """
+    game = _g5e_three_handed(
+        set_pool, "Oath of Mages", oath_seat=0, lives=(30, 25, 10),
+        interactive=(0, 1, 2),
+    )
+
+    game.start_turn(2)
+    game.auto_resolve_pending_choices()
+    assert [item.target_player_index for item in game.stack] == [0], game.log
+
+    game.players[0].life = 5
+    _g5e_resolve_stack(game)
+
+    assert [player.life for player in game.players] == [5, 25, 10]
+    assert game.stack == []
+    assert any("608.2b" in line for line in game.log), game.log
+
+
+def test_w2g5_an_oath_still_resolves_while_its_comparison_holds(set_pool):
+    """The paired direction. The lead shrinks and survives, so nothing is
+    countered — a gate that fired on any change to the board would pass the
+    test above and break every Oath in the cycle.
+    """
+    game = _g5e_three_handed(
+        set_pool, "Oath of Mages", oath_seat=0, lives=(30, 25, 10),
+        interactive=(0, 1, 2),
+    )
+
+    game.start_turn(2)
+    game.auto_resolve_pending_choices()
+    game.players[0].life = 11
+    for _ in range(6):
+        game.auto_resolve_pending_choices()
+        if not _g5e_resolve_stack(game):
+            break
+    game.auto_resolve_pending_choices()
+
+    assert [player.life for player in game.players] == [10, 25, 10], (
+        "the chosen player — 'the second player' — takes the Oath's damage"
+    )
+    assert not any("608.2b" in line for line in game.log), game.log

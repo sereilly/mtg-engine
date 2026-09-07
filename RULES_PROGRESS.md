@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**366 / 614 tracked rules covered (59%)** — 2194 tests, 0 unannotated.
+**366 / 614 tracked rules covered (59%)** — 2196 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -120,7 +120,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 102. Players
 
-- [x] **102.1** A player is one of the people in the game. The active player is the player whose turn it is. The ... *(1 tests)*
+- [x] **102.1** A player is one of the people in the game. The active player is the player whose turn it is. The ... *(2 tests)*
 - [x] **102.2** In a two-player game, a player’s opponent is the other player. *(3 tests)*
 - [x] **102.3** In a multiplayer game between teams, a player’s teammates are the other players on their team, an... *(1 tests)*
 - [ ] **102.4** A spell or ability may use the term “your team” as shorthand for “you and/or your teammates.” In ...
@@ -662,7 +662,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(224 tests, subrules abcdefghi)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(226 tests, subrules abcdefghi)*
 - [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(23 tests, subrules a)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [x] **601.5** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*
@@ -948,7 +948,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **800.1** A multiplayer game is a game that begins with more than two players. This section contains additi...
 - [ ] **800.2** These rules consist of a series of options that can be added to a multiplayer game and a number o...
 - [ ] **800.3** Many multiplayer Magic tournaments have additional rules not included here, including rules for d...
-- [x] **800.4** Unlike two-player games, multiplayer games can continue after one or more players have left the g... *(9 tests, subrules amn)*
+- [x] **800.4** Unlike two-player games, multiplayer games can continue after one or more players have left the g... *(11 tests, subrules amn)*
 - [ ] **800.5** Unless a chosen variant or option prescribes otherwise, seating order is determined by any mutual...
 - [x] **800.6** In a multiplayer game, the first mulligan a player takes doesn’t count toward the number of cards... *(3 tests)*
 - [ ] **800.7** In a multiplayer game other than a Two-Headed Giant game, the starting player doesn’t skip the dr...

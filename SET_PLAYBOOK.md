@@ -769,6 +769,30 @@ answer at picker time, so the card has per-slot enumeration and still no
 narrowing on the slot that needed one. It wants the keyword choice to reach the
 enumerator, which is its own piece.
 
+*A seat cannot be a role*, measured at EXO wave 2 and the reason a third
+leftover is recorded rather than closed. Keeper of the Dead is the card
+("Choose target opponent … Destroy target nonblack creature **that player**
+controls"): two slots, the first a **player**, the second an object on that
+player's board. Every part of the roles pipeline is permanent-only —
+`role_target_options` resolves each candidate through `permanent_at` and drops
+what is not a `Permanent`, distinctness is `id(perm)`, `ROLE_RELATION_TESTS`
+takes `(earlier, candidate, game)` over two permanents, and the announcement
+arrives as `target_permanent_ids`. So a seat cannot be role 0, and the brief's
+"`_slot_roles_spec` only splits `filters` within one description" understates it:
+splitting across two *instructions* of a sequence is the smaller half.
+
+What **was** closed is the announcement's yes/no half. `_activation_spec`
+attaches `dependent_slots` — the specs of later mandatory slots narrowed by
+`that_player_only` — and `_enumerate_targets`' seat loop drops a candidate seat
+whose board cannot fill them, so the picker and the gate refuse the same seats
+and CR 602.2b is enforced before any cost is paid. What is left is *which*
+object fills the slot: the activator still does not choose it, the handler picks
+at resolution. Closing that wants (1) a player role in `roles_spec` /
+`role_target_options` / `_role_targets_legal`, (2) an announcement field that can
+carry a seat beside permanent ids, (3) a relation entry for "controlled by the
+seat an earlier role chose", and (4) the client walking a role list whose first
+entry is a seat picker.
+
 **The picker sweep's question stops one level above all of this**, and its
 docstring now says so.
 

@@ -55,6 +55,7 @@ from .targeting import (
     ROLES_TARGET_KIND,
     derive_activation_spec,
     derive_cast_spec,
+    derive_instruction_spec,
     role_relation_holds,
     spec_roles,
     usable_activated_abilities,
@@ -299,10 +300,66 @@ def _activation_spec(abilities) -> tuple[dict, object | None]:
             if nothing_to_point_at is None:
                 nothing_to_point_at = (spec, ability)
             continue
-        return spec, ability
+        return _with_dependent_seat_slots(spec, ability), ability
     if nothing_to_point_at is not None:
         return nothing_to_point_at
     return {"kind": "none"}, None
+
+
+#: Spec kinds whose answer is a **seat**, and so the kinds a later slot can be
+#: narrowed *against*. "Any target" and a divided one are deliberately absent:
+#: their answer may be an object instead, and a slot narrowed against a seat
+#: nobody chose is a restriction with nothing behind it.
+_SEAT_ANSWER_SPEC_KINDS = frozenset({"player", "player_or_planeswalker"})
+
+
+def _with_dependent_seat_slots(spec: dict, ability) -> dict:
+    """*spec* plus the later slots narrowed by the seat it chooses.
+
+    "{B}, {T}: Choose target opponent … **Destroy target nonblack creature that
+    player controls**" (Keeper of the Dead). CR 602.2b announces both targets as
+    the ability is activated, and the derivation answers with the **first**
+    description it finds — so the second slot's board was narrowed by nothing,
+    the ability was activatable against an opponent with no nonblack creature,
+    and the tap and the mana bought "no valid target permanent found".
+
+    Attached here, in the one funnel the picker (``activation_target_spec``) and
+    the announcement gate (``activation_target_refusal``) both read, so the two
+    cannot come to disagree about which seats are offered — the failure this
+    file exists to prevent, and the one a check bolted onto the gate alone would
+    have introduced.
+
+    What it carries is each dependent slot's own spec. The seat loop in
+    ``_enumerate_targets`` re-asks it per candidate seat, which is the only
+    place that can: whether a seat can fill the second slot is a question about
+    a board, and no flag on the first slot could hold the answer.
+
+    Only for a spec whose answer **is** a seat, and only for a slot the
+    enumerator can actually narrow to one (``that_player_only``). A slot it
+    could not narrow would be enumerated as "every permanent in the game", which
+    would make every seat pass and the restriction mean nothing — the silent
+    widening, arriving through the check meant to remove one.
+
+    *Which* object then fills that slot is still the handler's pick at
+    resolution rather than the activator's choice: the roles walk that would
+    need is permanent-only, and a seat cannot be a role in it. That remainder is
+    SET_PLAYBOOK's Known gaps, not something this quietly covers.
+    """
+    if not spec or spec.get("kind") not in _SEAT_ANSWER_SPEC_KINDS:
+        return spec
+    instruction = getattr(ability, "instruction", None)
+    if instruction is None:
+        return spec
+    slots = []
+    for step, quantifier in _announced_target_slots(instruction):
+        if quantifier != "target":
+            continue
+        step_spec = derive_instruction_spec([step])
+        if step_spec and step_spec.get("that_player_only"):
+            slots.append(step_spec)
+    if not slots:
+        return spec
+    return {**spec, "dependent_slots": slots}
 
 
 _TARGET_STEP_KEYS = ("steps", "then", "else", "action", "otherwise", "effect")
@@ -367,6 +424,11 @@ _UNCHECKED_CAST_TARGET_KINDS = frozenset({
 def _ability_target_quantifiers(instruction) -> list[str]:
     """Every *mandatory-context* ``targets`` quantifier this ability carries.
 
+    The quantifiers alone, for the callers that only need to count the printed
+    instances of the word. :func:`_announced_target_slots` is the same walk
+    keeping the *instruction* beside each one, for the caller that has to ask a
+    later slot a question of its own.
+
     Walks only the unconditional ``sequence`` steps, never a conditional branch
     (``then``/``else``/``action``): a target inside "if you lose the flip,
     counter target artifact spell" (Goblin Artisans) is not chosen at
@@ -384,7 +446,23 @@ def _ability_target_quantifiers(instruction) -> list[str]:
     was blocking. A count read off X ("X target lands", Candelabra of Tawnos) is
     deliberately *not* mandatory: X may legally be announced as zero, and there
     is then nothing to target."""
-    quantifiers: list[str] = []
+    return [quantifier for _instr, quantifier in _announced_target_slots(instruction)]
+
+
+def _announced_target_slots(instruction) -> list[tuple]:
+    """``(instruction, quantifier)`` for every slot CR 601.2c announces.
+
+    One walk, two readers, and the docstring above is its specification —
+    :func:`_ability_target_quantifiers` is this function with the instructions
+    dropped. Split when a caller needed the slot itself: "Choose target
+    opponent … Destroy target nonblack creature **that player** controls"
+    (Keeper of the Dead) announces two targets, the second narrowed by the
+    first's answer, and asking whether that second slot can be filled means
+    deriving a spec from the very instruction that carries it. Counting
+    quantifiers cannot say which instruction each came from, and a second walk
+    beside this one would be the copy that drifts.
+    """
+    slots: list[tuple] = []
 
     def walk(instr) -> None:
         if instr is None:
@@ -396,7 +474,7 @@ def _ability_target_quantifiers(instruction) -> list[str]:
             count = targets.get("count")
             if quantifier == "exactly" and isinstance(count, int) and count >= 1:
                 quantifier = "target"
-            quantifiers.append(quantifier)
+            slots.append((instr, quantifier))
         elif getattr(instr, "kind", None) in _QUANTIFIERLESS_TARGET_KINDS:
             # A kind whose target rides somewhere other than a ``targets``
             # description — and only where the description is genuinely absent,
@@ -411,7 +489,7 @@ def _ability_target_quantifiers(instruction) -> list[str]:
             # first step of a printed two-sentence ``sequence`` — answered
             # "chooses nothing" while their single-sentence siblings answered
             # correctly.
-            quantifiers.append("target")
+            slots.append((instr, "target"))
         for step in payload.get("steps") or ():
             walk(step)
         # …and a **toll's** default half. "Exile this card and target creature
@@ -433,7 +511,7 @@ def _ability_target_quantifiers(instruction) -> list[str]:
             walk(step)
 
     walk(instruction)
-    return quantifiers
+    return slots
 
 
 class LegalityMixin:
@@ -1799,6 +1877,78 @@ class LegalityMixin:
             return None
         return f"{card.name} was removed from the stack: every target is illegal (608.2b)"
 
+    def stale_comparison_refusal(self, item) -> str | None:
+        """CR 608.2b for **a printed comparison between two seats**, and for
+        nothing else.
+
+        "Choose target opponent **who has more life than you do** as you
+        activate this ability" (the Exodus Keepers); "that player chooses target
+        player **who controls more creatures than they do and is their
+        opponent**" (the Oaths). ``legality``'s seat loop enforces the clause at
+        announcement, which is where a restriction on who may be chosen has to
+        be enforced or it does nothing — and until this, that was the *only*
+        moment it was asked. A Keeper of the Light activated while an opponent
+        was ahead on life gained its 3 life anyway if that life total dropped in
+        response, and the ability the rules would have countered instead
+        resolved in full.
+
+        **This is deliberately not "608.2b widened to abilities."** That is its
+        own round, blocked on a different bug, and ``ROADMAP.md`` records the
+        three shapes it would still not answer — a triggered ability's targets
+        (mis-stamped at the fire site), a target that may be a player face, an
+        Aura's and a graveyard's. A partial version of it that *looked* general
+        would be worse than nothing, because the next reader would take the
+        cover for granted. So this gate says what it covers in its name: one
+        printed clause, re-asked through :func:`player_comparisons.
+        seat_answers_comparison` — the same function the picker was built from,
+        so the two moments cannot come to disagree about what the words mean.
+
+        Two conditions bound it, and both are the rule rather than caution:
+
+        * the announced target is a **seat**, and the clause is the one this
+          object printed about it. A comparison the derivation does not carry is
+          a comparison nothing announced;
+        * that seat is the object's **only** target. CR 608.2b is all-or-nothing
+          — an object with a second, still-legal target resolves, and its
+          illegal target is merely not affected — so an object printing two
+          instances of the word cannot be countered on the strength of one of
+          them. Keeper of the Dead is exactly that card ("…Destroy target
+          nonblack creature that player controls"), and it is left alone;
+          the other nine cards printing the clause name one target each.
+        """
+        instruction = getattr(item, "ability_instruction", None)
+        seat = getattr(item, "target_player_index", None)
+        if instruction is None or not isinstance(seat, int):
+            # A spell reaches ``illegal_targets_refusal`` above; nothing in the
+            # pool prints this clause on one, and an object that announced no
+            # seat has no comparison to have gone stale.
+            return None
+        if not 0 <= seat < len(self.players):
+            return None
+        spec = derive_instruction_spec([instruction])
+        compared = (spec or {}).get("compared")
+        if not compared:
+            return None
+        if len(_ability_target_quantifiers(instruction)) != 1:
+            return None
+        from .player_comparisons import seat_answers_comparison
+
+        if seat_answers_comparison(
+            self, seat, compared,
+            caster_index=item.caster_index,
+            # "…than **they** do" is the seat the firing event froze, read
+            # through the one accessor the picker read it through — a second
+            # reading here would be a gate answering about a different player
+            # from the one the announcement was made about.
+            that_player_seat=self._that_player_seat(item),
+        ):
+            return None
+        return (
+            f"{item.card.name} was removed from the stack: "
+            f"{self.players[seat].name} no longer answers the printed "
+            "comparison, so its only target is illegal (608.2b)"
+        )
+
     # -- Target enumeration ------------------------------------------------
     def _enumerate_targets(
         self, caster_index: int, card: CardDefinition, spec: dict, *, for_cast: bool,
@@ -1897,6 +2047,19 @@ class LegalityMixin:
             and not spec.get("creatures_only")
         ):
             for seat in range(len(self.players)):
+                # **A player who has left the game is not a target.** CR 800.4a
+                # takes them out of the game and CR 102.2 out of everybody's
+                # opponents, so "target player" and "target opponent" alike stop
+                # reaching them. ``opponents_of`` has said so since free-for-all
+                # arrived and this loop never asked it — a second opinion about
+                # who is still playing, and the one the picker hands the client.
+                # Silent at two seats, where the game is over the moment a seat
+                # is lost; at three it offered a departed player as a legal
+                # answer, and Oath of Ghouls' "…whose graveyard has fewer
+                # creature cards" *preferred* them, because a graveyard that has
+                # left the game is empty.
+                if self.players[seat].lost:
+                    continue
                 # "target opponent" (Word of Command) can't be the caster's own seat.
                 if spec.get("opponents_only") and seat == caster_index:
                     continue
@@ -1937,27 +2100,34 @@ class LegalityMixin:
                 # the silent direction.
                 compared = spec.get("compared")
                 if compared:
-                    from .player_comparisons import (comparison_reference_seat,
-                                                     player_comparison_holds)
+                    from .player_comparisons import seat_answers_comparison
 
-                    reference = comparison_reference_seat(
-                        compared,
+                    if not seat_answers_comparison(
+                        self, seat, compared,
                         caster_index=caster_index,
                         that_player_seat=that_player_seat,
-                    )
-                    if reference is None or not 0 <= reference < len(self.players):
-                        continue
-                    # "…**and is their opponent**" (CR 102.2), relative to the
-                    # seat the comparison is against and not to the caster —
-                    # under the Oaths' trigger those are two different players,
-                    # and reading it as `opponents_only` would have offered the
-                    # upkeep player their own face.
-                    if compared.get("is_opponent") and seat == reference:
-                        continue
-                    if not player_comparison_holds(
-                        self, seat, reference, compared
                     ):
                         continue
+                # "…Destroy target nonblack creature **that player** controls"
+                # (Keeper of the Dead). The *fourth* seat narrowing, and the
+                # only one that is not a property of the seat at all: it asks
+                # whether the board behind this candidate can fill a **later
+                # slot** of the same announcement (CR 601.2c — every target is
+                # chosen, or the announcement is illegal). ``_activation_spec``
+                # attaches the slots; this is where a board can be read, so a
+                # seat with nothing to destroy is simply not offered, and the
+                # picker and the gate refuse it together rather than one of them
+                # offering what the other declines.
+                if not all(
+                    self._enumerate_targets(
+                        caster_index, card, {**slot, "that_player_index": seat},
+                        for_cast=False,
+                        source_permanent=source_permanent,
+                        ability_source=ability_source,
+                    )
+                    for slot in spec.get("dependent_slots") or ()
+                ):
+                    continue
                 targets.append({"kind": "player", "seat": seat})
             if kind == "player":
                 return targets
