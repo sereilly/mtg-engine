@@ -98,6 +98,8 @@ class CombatRestriction:
 #                                   (the declaration, not the creature)
 #   attacks_as_though_hasty_unless_it_entered
 #                                   phases/declare_attackers_step.can_attack
+#   cant_be_blocked_while_attacking_alone
+#                                   phases/declare_blockers_step
 #   cant_be_blocked_by              phases/declare_blockers_step
 #   cant_be_blocked_except_by       phases/declare_blockers_step
 #   cant_block_subject              phases/declare_blockers_step
@@ -544,6 +546,26 @@ _PATTERNS: tuple[tuple[re.Pattern[str], "str | tuple[str, ...]"], ...] = (
         # but which is where a widened pattern here would collide.
         re.compile(r"^this creature can't be blocked$"),
         "cant_be_blocked",
+    ),
+    (
+        # "This creature can't be blocked **as long as it's attacking alone**."
+        # (Dream Prowler.) The row above under CR 506.5's condition, and a row
+        # of its own rather than a qualifier on it: the two qualifiers this
+        # file composes (`_AS_LONG_AS`, `_IF_ON_BATTLEFIELD`) both describe a
+        # *board*, and this describes the declaration the creature is in —
+        # a different question with a different reader, and one no noun phrase
+        # parameterizes. Nothing here is payload because nothing here is
+        # printed as a parameter: no noun, no count, no colour.
+        #
+        # ``CONDITIONAL_RESTRICTION_KINDS`` is deliberately not widened for it.
+        # That set says which kinds have an enforcement site that *asks about a
+        # condition payload*; this kind's condition is inside its own name, so
+        # a card printing "…as long as you control an Island" on top of it must
+        # keep refusing rather than have the board clause dropped.
+        re.compile(
+            r"^this creature can't be blocked as long as it's attacking alone$"
+        ),
+        "cant_be_blocked_while_attacking_alone",
     ),
     # "…can't be blocked by **Walls**" (Invisibility's mirror, Ali Baba's
     # targets) and "…can't be blocked by **artifact creatures**" (Argothian

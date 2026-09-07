@@ -917,6 +917,19 @@ class DeclareBlockersStepMixin:
         if "cant_be_blocked" in attacker_kinds:
             return False
 
+        # "This creature can't be blocked **as long as it's attacking alone**."
+        # (Dream Prowler.) CR 506.5's condition, asked at the declaration
+        # rather than materialized on a recompute — for the reason the
+        # conditional static below is: the answer changes the moment another
+        # attacker joins or leaves, and blocking is the read that matters.
+        # ``creature_attacking_alone`` is the one reader of the rule, shared
+        # with Errantry's attack-side restriction.
+        if (
+            "cant_be_blocked_while_attacking_alone" in attacker_kinds
+            and self.creature_attacking_alone(attacker)
+        ):
+            return False
+
         # "This creature can't be blocked as long as …" (Tome Anima). Asked
         # now rather than materialized on a recompute, because the condition
         # can change between recomputes and blocking is the read that matters.
