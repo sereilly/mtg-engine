@@ -5104,8 +5104,27 @@ def exile_all_matching(game: Game, instruction: OracleInstruction, context: Orac
         if key not in ("mana_value", "colored_only")
     }
 
+    # "Exile all creatures **blocked by this creature**." (Wall of Nets.) A
+    # relation to the ability's own source, which the pure matcher cannot
+    # answer and silently drops — on a sweep that is every creature on the
+    # table. ``subject_matches`` is the one reader that can, and it takes the
+    # source and the observer this resolution already holds, so the whole
+    # payload goes through it rather than one key being special-cased. A spell
+    # has no source permanent, which is the direction that refuses rather than
+    # widens: ``blocked_by_source`` with nothing to compare against matches
+    # nobody.
+    from ..subject_filters import subject_matches
+
+    observer = (
+        game.players.index(context.caster)
+        if context.caster in game.players else None
+    )
+    source_permanent = context.source_permanent
+
     def matches(perm: Permanent) -> bool:
-        if narrowings and not permanent_matches_filter(perm, narrowings):
+        if narrowings and not subject_matches(
+            game, perm, narrowings, observer=observer, source=source_permanent
+        ):
             return False
         if payload.get("colored_only") and not perm.effective_colors:
             return False
@@ -5139,6 +5158,17 @@ def exile_all_matching(game: Game, instruction: OracleInstruction, context: Orac
         owner = game.players[owner_idx] if owner_idx is not None else context.caster
         if not perm.metadata.get("is_token", False):
             owner.exile.append(perm.card)
+            # Recorded as exiled **with** the ability's source when there is one
+            # (CR 610.3), exactly as ``exile_top_of_library`` records its pile
+            # and for that handler's stated reason: nothing ends the link on its
+            # own — the entries carry no ``ends_on`` — so it is inert for Ugin
+            # and it is everything for Wall of Nets, whose leaves-the-
+            # battlefield ability ("return all cards exiled with it") is the
+            # only thing that ever moves the pile. A token is not recorded
+            # because it simply ceases to exist (CR 111.7) and there is no card
+            # to give back.
+            if source_permanent is not None and owner_idx is not None:
+                link_exiled_card(source_permanent, perm.card, owner_idx)
         game._remove_aura_effects(perm)
     game.remove_all_from_battlefield(victims)
     context.results[EXILED_THIS_WAY_OBJECTS] = victims

@@ -154,6 +154,43 @@ _PATTERNS: tuple[tuple[re.Pattern[str], "str | tuple[str, ...]"], ...] = (
         ),
         "cant_attack_unless_defender_controls",
     ),
+    (
+        # "This creature can't attack unless you control **more lands than
+        # defending player**." (Monstrous Hound.) The row above asks whether one
+        # board holds a described permanent; this asks whether one board holds
+        # *more* of them than another, which is a different question and so a
+        # different kind — the comparison needs both seats, and the row above's
+        # enforcement scans one.
+        #
+        # The counted noun is payload (`.+` read by `_printed_noun` below and
+        # refused when it is a phrase `subject_matches` cannot test), so a card
+        # printing "more creatures than" is this rule over a different set. The
+        # two *seats* are not payload: CR 508.1a makes "you" the attacking
+        # player and CR 506.2 makes the other one the defending player, so the
+        # printed words are what the enforcement step already knows — they stay
+        # in the pattern because a regex has to name what it matches, and a
+        # sentence naming the other seat would be a different card that has to
+        # earn its own row rather than borrow this one's enforcement.
+        re.compile(
+            r"^this creature can't attack unless you control more "
+            r"(?P<outnumbered_board>.+) than defending player$"
+        ),
+        "cant_attack_unless_you_control_more",
+    ),
+    (
+        # Monstrous Hound's second line, and the mirror of the row above in
+        # both directions: the seat compared against is the *attacking* player
+        # (CR 508.1a: the active player, the only seat that declares attackers)
+        # and the step that enforces it is the declare-blockers one. Its own
+        # kind for the reason `creatures_cant_attack` and `creatures_cant_block`
+        # are two: one kind answered at two steps is a kind one of them would
+        # forget.
+        re.compile(
+            r"^this creature can't block unless you control more "
+            r"(?P<outnumbered_board>.+) than attacking player$"
+        ),
+        "cant_block_unless_you_control_more",
+    ),
     # "Enchanted creature can't attack unless its controller pays {3}."
     # (Brainwash.) CR 508.1g: an additional *cost* to attack, paid as attackers
     # are declared — the mana twin of Leviathan's "unless you sacrifice two
@@ -345,6 +382,28 @@ _PATTERNS: tuple[tuple[re.Pattern[str], "str | tuple[str, ...]"], ...] = (
         # clause no self-reference prints.
         re.compile(
             r"^(?P<board_attack_subject>(?:[a-z'-]+ )*creatures) "
+            r"can't attack or block$"
+        ),
+        ("creatures_cant_attack", "creatures_cant_block"),
+    ),
+    (
+        # "**Creatures that are enchanted** can't attack or block." (Song of
+        # Serenity.) The row above with the narrowing printed as a relative
+        # clause *behind* the head noun instead of as adjectives in front of
+        # it, so the plural anchor cannot reach it — the same split the
+        # "creatures with …" row below makes for exactly this reason.
+        #
+        # Anchored on "creatures that are" rather than left as a `.+` subject,
+        # which is the discipline that row states: `_printed_noun` answers
+        # ``{"type_filter": "creature"}`` for "this creature" and for
+        # "enchanted creature" alike, so a bare `.+` here would read a
+        # self-reference as a ban on every creature in the game. The tail is
+        # payload — the noun parser reads it and refuses a key
+        # ``subject_matches`` cannot test — so a card printing "creatures that
+        # are tapped" would arrive here as the same rule over a different set,
+        # or be refused rather than swept wider than it prints.
+        re.compile(
+            r"^(?P<board_attack_subject>creatures that are .+) "
             r"can't attack or block$"
         ),
         ("creatures_cant_attack", "creatures_cant_block"),
@@ -1362,6 +1421,19 @@ def combat_restriction_for(
         # page is read here: the regex ends in `.+`, and a phrase admitted
         # unread would be a requirement conditional on nothing, which fires on
         # every declaration.
+        # "…unless you control more **lands** than defending player."
+        # (Monstrous Hound.) The counted noun, read here for the reason every
+        # other noun on this page is read here: the regex ends in `.+`, and a
+        # phrase admitted unread would be a comparison over *every* permanent
+        # both players control — a restriction that answers a question the card
+        # never asked, and one that would let the creature attack on boards
+        # where its own clause forbids it.
+        outnumbered = payload.pop("outnumbered_board", None)
+        if outnumbered is not None:
+            described = _printed_noun(outnumbered)
+            if described is None:
+                return None
+            payload["subject"] = described
         attack_partner = payload.pop("attack_partner", None)
         if attack_partner is not None:
             described = _printed_noun(attack_partner)

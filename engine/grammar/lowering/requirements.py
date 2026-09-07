@@ -38,7 +38,7 @@ from ._common import (
     _describe_targets, _is_source, _names_several_targets, _restrictions_beyond,
     testable_filter_payload,
 )
-from ._record_keys import (CHOSEN_PLAYER, DAMAGE_RECIPIENT,
+from ._record_keys import (CHOSEN_PERMANENT, CHOSEN_PLAYER, DAMAGE_RECIPIENT,
                            _UNTAPPED_PERMANENTS)
 
 
@@ -477,6 +477,45 @@ def _lower_blocks_this_turn_if_able(
             OracleInstruction(
                 "force_subject_to_block_until_eot", "",
                 {"attacker": attacker, "subject": described},
+            ),
+        )
+    # "Defending player chooses an untapped creature they control. **That
+    # creature blocks this creature this turn if able.**" (Crashing Boars.) The
+    # creature the step in front of this one *chose* — not one this sentence
+    # targets, and not one the trigger's event named: CR 601.2c does not reach a
+    # choice made on resolution, so there is no announcement and no picker, and
+    # the pronoun's only referent is the record that choice wrote.
+    #
+    # Gated on that record's presence, like every other back-reference in this
+    # package: with no chooser in front of it the words name nobody, and a
+    # requirement resolved against whatever the resolution happened to hold
+    # would compel a creature the card never mentions.
+    if (
+        isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier == "that"
+        and not node.subject.targeted
+        and CHOSEN_PERMANENT in produced
+    ):
+        if _restrictions_beyond(node.subject.filter, frozenset({"card_types"})):
+            raise LoweringError(
+                "a bound block requirement reads the permanent an earlier "
+                "step of this effect chose and nothing narrower",
+                node=node,
+            )
+        if node.subject.filter.card_types not in ((), ("creature",)):
+            raise LoweringError(
+                "a block requirement names a creature", node=node
+            )
+        if attacker != "source":
+            raise LoweringError(
+                "a chosen creature is compelled to block the ability's own "
+                "source",
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "force_target_to_block_until_eot", "",
+                {"attacker": attacker, "permanents_from": CHOSEN_PERMANENT},
             ),
         )
     if not (

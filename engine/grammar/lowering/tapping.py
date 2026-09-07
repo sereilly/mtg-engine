@@ -29,6 +29,7 @@ from ._common import (
     _is_target, _names_several_targets, _restrictions_beyond,
     refuse_untestable, testable_filter_payload
 )
+from ._record_keys import REMOVED_FROM_COMBAT_PERMANENTS
 from ._events import (_EVENT_SUBJECT_PLAYERS, _RECORDED_PERMANENTS,
                       CHOSEN_PERMANENT, EVENT_SUBJECT_PLAYER,
                       names_attached_permanent)
@@ -240,6 +241,35 @@ def _lower_tap(
     # "Tap this creature" (Seasoned Hallowblade) name their subject without a
     # target being chosen — the source and the enchanted permanent are known —
     # so each has its own handler.
+    # "Remove target attacking creature you control from combat **and untap
+    # it**." (Reconnaissance.) The pronoun names the permanent the step in
+    # front of it took out of combat, and nothing else in the sentence: a
+    # removal is neither a tap nor an untap, so none of the records the
+    # neighbouring lowerings read holds the object, and the board cannot tell
+    # the creature the ability targeted from any other creature that has
+    # stopped attacking.
+    #
+    # Gated on **that one record** rather than on ``_RECORDED_PERMANENTS``,
+    # which every step that touches a permanent writes into: a counter placed
+    # on the source (Sabertooth Mauler's "put a +1/+1 counter on this creature
+    # and untap it") writes one of those, and the wider gate would take that
+    # card's "it" away from ``untap_self`` — the same object, reached the long
+    # way round, with the program moved for nothing.
+    #
+    # Read before ``_is_source`` below, whose reading `parse_recipient` gives
+    # every bare "it": with the removal in front of it, "untap it" is the
+    # creature and never the enchantment the ability is printed on.
+    if (
+        isinstance(node, ast.Untap)
+        and spec.quantifier == "it"
+        and REMOVED_FROM_COMBAT_PERMANENTS in produced
+    ):
+        return (
+            OracleInstruction(
+                "untap_recorded_permanents", "",
+                {"permanents_from": REMOVED_FROM_COMBAT_PERMANENTS},
+            ),
+        )
     if isinstance(node, ast.Untap):
         if _is_source(spec):
             return (OracleInstruction("untap_self", "", {}),)

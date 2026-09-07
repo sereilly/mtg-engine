@@ -99,6 +99,34 @@ _TEMPLATES: tuple[tuple[re.Pattern[str], GlobalStatic], ...] = (
         ),
     ),
     (
+        # "Each creature you control can block an additional creature each
+        # combat." (High Ground.) CR 509.1b's ceiling, granted board-wide, and
+        # the same shape as the requirement above it: the sentence is appended
+        # to each affected permanent's effective card, so `_max_blocks_for` —
+        # which already counts the printed grant over the compiled program's
+        # **static** lines — reads it as though the creature printed it, and
+        # the declare-blockers step needs no new question.
+        #
+        # That reading is why it is a static line and not a mark. CR 509.1b's
+        # ceilings add, and `_max_blocks_for` sums the printed grants: two High
+        # Grounds are two extra blocks, and a Two-Headed Giant of Foriys under
+        # one is three, which is what the counting reader already gives for
+        # free. A flag on the permanent would have to be added, removed and
+        # counted by hand, and would end the moment somebody forgot the
+        # removal.
+        re.compile(
+            r"^each creature you control can block an additional creature "
+            r"each combat$"
+        ),
+        GlobalStatic(
+            name="team_blocks_additional",
+            applies_to="creature_you_control",
+            grants_ability=(
+                "This creature can block an additional creature each combat."
+            ),
+        ),
+    ),
+    (
         # Energy Flux. The granted ability is a whole printed sentence, so it is
         # captured and re-emitted rather than described: anything else would be
         # this module deciding what "sacrifice unless you pay" means, which the

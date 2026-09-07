@@ -385,6 +385,12 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "choose_permanents": "attachments",
     "tap_self": "tapping",
     "untap_target_permanent": "tapping",
+    # "…**and untap it**" behind a removal from combat (Reconnaissance). The
+    # untap of a permanent an earlier step of the same effect recorded, rather
+    # than of one this step chooses — the tapping family either way, because
+    # what the instruction *does* is untap. Same category, so
+    # GRAMMAR_CATEGORIES is unchanged.
+    "untap_recorded_permanents": "tapping",
     "untap_target_land": "tapping",
     # "Untap up to four lands." (Rewind) — the controller picks the lands on
     # resolution through the pending-choice queue; no "target" is printed.

@@ -90,9 +90,23 @@ class EndOfCombatStepMixin:
             for permanent in self.controlled_by(player):
                 clear_shields(permanent, END_OF_COMBAT)
                 clear_redirects(permanent, END_OF_COMBAT)
-        self._reset_combat_state(clear_damage_marked=False)
         if self._receives_priority(step):
             self._resolve_priority_window()
+        # CR 511.3: creatures are removed from combat **as the end of combat
+        # step ends** — after CR 511.2's priority window, which is where the
+        # triggers CR 511.1 put on the stack actually resolve.
+        #
+        # This used to run before that window, and the comment at the top of
+        # this method says why it looked right: the triggers *fire* before the
+        # state is cleared. Firing only puts an ability on the stack, though,
+        # and an ability determines what it affects when it **resolves**
+        # (CR 608.2) — so "At end of combat, exile all creatures blocked by this
+        # creature" (Wall of Nets) resolved against a board where nothing was
+        # blocking anything, logged "exiled 0 permanent(s)", and reported the
+        # card supported. Every end-of-combat trigger that reads a combat
+        # relation had the same hole; nothing failed, because no card in the
+        # pool had asked one until now.
+        self._reset_combat_state(clear_damage_marked=False)
         self._on_step_or_phase_end(phase, step)
 
     def _fire_end_of_combat_triggers(self) -> None:

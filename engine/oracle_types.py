@@ -917,6 +917,21 @@ BASE_PT_SET_PERMANENTS = "base_pt_set_permanents"
 #: prints the other.
 CHOSEN_THIS_WAY_OBJECTS = "chosen_this_way_objects"
 
+#: "Remove target attacking creature you control from combat **and untap it**."
+#: (Reconnaissance.) The permanent the removal took out of combat, recorded
+#: because the step behind it names it with a bare pronoun and nothing else in
+#: the sentence holds the object: a removal is neither a tap nor an untap, so
+#: none of the neighbouring records has it, and the board cannot tell the
+#: creature the ability targeted from any other creature that has stopped
+#: attacking.
+#:
+#: Here rather than beside either reader, for ``COUNTERS_PLACED_THIS_WAY``'s
+#: stated reason: ``handlers/combat.py`` writes it and
+#: ``grammar/lowering/tapping.py`` gates on it, and the two are opposite ends of
+#: the pipeline — a handler importing the grammar package closes an import
+#: cycle, which is how this key found its way here.
+REMOVED_FROM_COMBAT_PERMANENTS = "removed_from_combat_permanents"
+
 #: What "**the creature type of your choice**" names (Extinction). One word,
 #: chosen by the controller of the resolving spell (CR 608.2d) and read back by
 #: the sweep in the same sentence through a ``subtype_filter_from`` key.

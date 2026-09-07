@@ -765,6 +765,42 @@ class DeclareAttackersStepMixin:
             if held < wanted:
                 return False
 
+        # "…unless you control **more lands than defending player**."
+        # (Monstrous Hound.) The two clauses above each scan *one* board — the
+        # defender's, or the attacker's controller's — and this one compares
+        # them, which is why it is its own kind rather than a payload on either.
+        # CR 508.1c keeps it cumulative like both of them: satisfying this
+        # restriction answers only this one.
+        #
+        # Counted through `subject_matches`, so "lands" here means what it means
+        # on every other printed noun phrase — an animated land is still a land
+        # (CR 305.7), and a card printing "more creatures than" would be counted
+        # through layer 4 without this site knowing the noun changed. The
+        # observer is the attacker's controller on *both* scans, because the
+        # phrase is the card's and CR 109.5 makes "you" its controller; only the
+        # board being scanned differs.
+        outnumber = next(
+            (
+                i for i in program.instructions
+                if i.kind == "cant_attack_unless_you_control_more"
+            ),
+            None,
+        )
+        if outnumber is not None:
+            described = dict(outnumber.payload.get("subject") or {})
+            mine_seat = self.controller_index_of(attacker)
+
+            def _counted(seat: int | None) -> int:
+                return sum(
+                    1 for perm in self.controlled_by(seat)
+                    if subject_matches(
+                        self, perm, described, observer=mine_seat, source=attacker
+                    )
+                )
+
+            if _counted(mine_seat) <= _counted(defending_player_index):
+                return False
+
         # "…unless you've cast a creature spell this turn." (Mogg Conscripts.)
         # CR 506.1 asked of a *window* rather than of a board, so it reads the
         # per-turn cast record instead of scanning permanents — and it reads the
@@ -1336,6 +1372,17 @@ class DeclareAttackersStepMixin:
                 # exist — deferred to _fire_unblocked_attack_triggers at the
                 # combat damage step.
                 if "isn't blocked" in (trig.source_line or "").lower():
+                    continue
+                # "Whenever this creature attacks **alone**" (Reckless Ogre).
+                # CR 506.5: the only creature declared as an attacker during
+                # this declare-attackers step. The narrowing rides the
+                # condition's payload, so this reads a marker rather than the
+                # printed words — and it is asked against the declaration this
+                # firing was handed, not against the board, because a creature
+                # that attacked alone stays "attacking alone" only until
+                # somebody else is declared and this announcement is CR 508.1's
+                # one moment.
+                if "attacks_alone" in trig.condition.payload and len(attacker_indices) != 1:
                     continue
                 self._stack_push(
                     StackItem(

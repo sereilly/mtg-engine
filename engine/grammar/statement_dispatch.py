@@ -719,7 +719,7 @@ def lower_statement(
         chosen = _lower_exile_one_of_chosen(statement, statement.subject, produced)
         if chosen is not None:
             return chosen
-        return _lower_exile(statement, produced, event)
+        return _lower_exile(statement, produced, event, event_subject)
 
     if isinstance(statement, ast.Sequence):
         for fuse in (

@@ -191,6 +191,35 @@ def untap_target_permanent(game: Game, instruction: OracleInstruction, context: 
     return True, "resolved"
 
 
+@effect_handler("untap_recorded_permanents")
+def untap_recorded_permanents(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Remove target attacking creature you control from combat **and untap
+    it**." (Reconnaissance.)
+
+    The permanents an earlier step of this same resolution recorded, read out of
+    the scratchpad by id — CR 611.2c fixed the set when the effect began, and an
+    index is not an identity (CR 400.7). Nothing is chosen here: the step in
+    front of it did the choosing, which is exactly why the pronoun has a
+    referent at all.
+
+    An empty record is a legal outcome, not an error — the removal's target may
+    have left before this ran, and CR 608.2b says the rest of the effect still
+    happens.
+    """
+    key = instruction.payload.get("permanents_from")
+    untapped = 0
+    for permanent_id in recorded_permanent_ids(context, key):
+        perm = game.permanent_by_id(permanent_id)
+        if perm is None:
+            continue
+        game.become_untapped(perm)
+        untapped += 1
+    game.log.append(
+        f"{context.card.name} untapped {untapped} permanent(s)"
+    )
+    return True, "resolved"
+
+
 @effect_handler("untap_enchanted_creature")
 def untap_enchanted_creature(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     card = context.card

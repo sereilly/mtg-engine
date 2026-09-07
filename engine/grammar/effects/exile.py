@@ -357,6 +357,15 @@ def _parse_put_exiled_with_source(stream: TokenStream) -> ast.Statement | None:
         owned_by_you = True
     elif stream.accept_phrase("return", "each", "card", "exiled", "with"):
         preposition = "to"
+    elif stream.accept_phrase("return", "all", "cards", "exiled", "with"):
+        # "Return **all cards** exiled with it to the battlefield under their
+        # owners' control." (Wall of Nets.) Safe Haven's sweep with the plural
+        # quantifier English wants in front of a plural noun — "each card" and
+        # "all cards" name the same pile (CR 610.3 gives the linked ability
+        # exactly the objects its twin moved, and there is no subset for a
+        # quantifier to pick out) — so it is a spelling of that branch rather
+        # than a shape of its own, and it lowers through the same sweep.
+        preposition = "to"
     elif stream.accept_phrase("return", "each"):
         # "Return **each creature card** exiled with this artifact to the
         # battlefield under your control." (Cold Storage.) The sweep above with
@@ -424,6 +433,13 @@ def _parse_put_exiled_with_source(stream: TokenStream) -> ast.Statement | None:
     if zone.owner is None and zone.name == "battlefield" and (
         stream.accept_phrase("under", "its", "owner", "'s", "control")
         or stream.accept_phrase("under", "their", "owner", "'s", "control")
+        # "…under **their owners'** control" (Wall of Nets). The plural
+        # possessive, which the lexer keeps as one word because the apostrophe
+        # trails the noun rather than separating it from an "s" — so it is a
+        # third spelling here rather than a fifth token in the branch above.
+        # The same clause and the same seat: CR 400.3 sends each card to its
+        # own owner however many owners the pile has.
+        or stream.accept_phrase("under", "their", "owners'", "control")
     ):
         zone = ast.Zone(zone.name, ast.PlayerRef("owner"))
     # "…to the battlefield **under your control**" (Cold Storage). CR 110.2a's

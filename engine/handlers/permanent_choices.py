@@ -269,6 +269,22 @@ def _chooser_seat(game, payload: dict, context) -> int | None:
         if isinstance(seat, int) and 0 <= seat < len(game.players):
             return seat
         return None
+    if chooser == "trigger_defending_player":
+        # "**Defending player** chooses an untapped creature they control."
+        # (Crashing Boars.) CR 506.2's seat, frozen by the declare-attackers
+        # fire site (CR 603.10) under the key every combat trigger already
+        # carries: the ability resolves after the step, and a combat with
+        # several defenders (CR 802) has one defending player per attacking
+        # creature, so no read of the board at resolution can answer it. None
+        # when no event named one, which the caller reports as a choice nobody
+        # could make rather than handing the pick to the ability's controller —
+        # the attacking seat, and exactly the one the card says must not choose.
+        seat = (context.trigger_context or {}).get(
+            "trigger_defending_player_index"
+        )
+        if isinstance(seat, int) and 0 <= seat < len(game.players):
+            return seat
+        return None
     if chooser == "chosen_player":
         # "Choose two target creatures controlled by the same opponent.
         # **That player** chooses and sacrifices one of those creatures."

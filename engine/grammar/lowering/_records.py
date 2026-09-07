@@ -60,6 +60,7 @@ from ._record_keys import (CHOSEN_CAST_DAMAGE, CHOSEN_DAMAGE_SOURCE,
                            CHOSEN_PERMANENT, CHOSEN_PLAYER, COUNTED_NUMBER,
                            CREATED_TOKEN, DAMAGE_RECIPIENT, EXTRA_TURN_GRANTED,
                            OTHER_CHOSEN_PERMANENT, PUT_FROM_HAND_PERMANENTS,
+                           REMOVED_FROM_COMBAT_PERMANENTS,
                            _BASE_PT_SET_PERMANENTS, _COUNTERS_PLACED_THIS_WAY,
                            _PERMANENTS_GIVEN_COUNTERS, _REANIMATED_PERMANENTS)
 
@@ -591,6 +592,14 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # records what it resolved — affected, not merely flipped: a vigilance
     # attacker that was never tapped is still "it" (CR 611.2c fixes the set
     # when the effect begins) — and both later sentences read the record.
+    # "Remove target attacking creature you control from combat **and untap
+    # it**." (Reconnaissance.) The removal records what it took out of combat,
+    # for the untap behind it to name — the same shape the untap below is in
+    # for Disharmony, with the two steps in the other order. Harmless for the
+    # printings that read a record rather than write one (Disharmony, Imprison,
+    # Melee): nothing is printed behind their removal, so the key is written and
+    # never read.
+    "remove_from_combat": REMOVED_FROM_COMBAT_PERMANENTS,
     "untap_target_permanent": "untapped_permanents",
     # "…untap enchanted land. **You gain control of that land** until end of
     # turn." (Wellspring.) The Aura's own untap, recorded under the same key

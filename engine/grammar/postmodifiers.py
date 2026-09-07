@@ -676,6 +676,23 @@ def _parse_postmodifiers(
             ):
                 d.not_enchanted = True
                 continue
+            # "…**that are enchanted**" (Song of Serenity). The exact positive
+            # of the clause above, and it sets ``enchanted_only`` rather than
+            # ``is_enchanted``: this is a *restriction* on any candidate — every
+            # creature with an Aura on it — where ``is_enchanted`` is the
+            # referent an Aura's own line uses to name the one permanent it is
+            # attached to. ``_references.py`` spells out that the two are
+            # different questions, and a phrase read as the referent on an
+            # enchantment that is not an Aura names nothing at all.
+            #
+            # Both verb numbers for the negative branch's reason: the agreement
+            # is with the head noun and says nothing about the restriction, so
+            # splitting them would leave one spelling silently unread.
+            elif stream.accept_phrase("is", "enchanted") or stream.accept_phrase(
+                "are", "enchanted"
+            ):
+                d.enchanted_only = True
+                continue
             # "…**that doesn't have cumulative upkeep**" (Balduvian Shaman).
             # The relative-clause spelling of "without <keyword>" a few lines
             # up — the same restriction and the same field, because the

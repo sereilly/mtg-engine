@@ -2062,7 +2062,16 @@ _RESTRICTIONS: tuple[tuple[re.Pattern[str], str], ...] = (
         # the row the line was unclaimed, the Licid reported unsupported, and
         # `declare_blockers_step` — which has read this very name since
         # Pacifism's cousins arrived — had nothing to read.
-        re.compile(rf"^enchanted {_NOUN} can't block$"),
+        #
+        # The optional P/T prefix is the same split the attack-alone and
+        # "doesn't untap" rows above make, and Maniacal Rage is the card that
+        # prints it: "Enchanted creature gets +2/+2 **and** can't block" is one
+        # line carrying two effects in two channels, the numbers read by
+        # `aura_static_pt_grant` (which searches rather than anchors) and the
+        # restriction read here. Without the prefix the line matched nothing —
+        # the Aura lost the restriction *and* reported the line unclaimed,
+        # which is the failure Dance of the Dead's row records one screen up.
+        re.compile(rf"^enchanted {_NOUN}(?: gets [+-]\d+/[+-]\d+ and)? can't block$"),
         "cant_block",
     ),
     (

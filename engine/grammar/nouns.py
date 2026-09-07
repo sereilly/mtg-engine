@@ -233,6 +233,13 @@ class _FilterDraft:
     is_source: bool = False
     is_enchanted: bool = False
     not_enchanted: bool = False
+    #: "…**that are enchanted**" (Song of Serenity) — see
+    #: ``ast.ObjectFilter.enchanted_only``. Set by the postmodifier reader, and
+    #: it has to be declared here *and* copied out below: this draft is an
+    #: ordinary dataclass, so writing a field it does not declare succeeds and
+    #: is then dropped on the floor when the filter is built — the phrase reads
+    #: as unnarrowed and the card sweeps every creature on the board.
+    enchanted_only: bool = False
     is_card: bool = False
     with_plus1_counter: bool = False
     # "with a <kind> counter on it" (Bounty Hunter) — see
@@ -959,6 +966,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         is_source=d.is_source,
         is_enchanted=d.is_enchanted,
         not_enchanted=d.not_enchanted,
+        enchanted_only=d.enchanted_only,
         attached_to=d.attached_to,
         attached_to_filter=d.attached_to_filter,
         attached_to_target=d.attached_to_target,
