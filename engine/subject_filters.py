@@ -102,6 +102,15 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # caller with no source answers no. That direction is what stops a gain of
     # control admitting a creature the printed clause excludes.
     "power_at_most_source_counters",
+    # "creatures with power **greater than the number of cards in your
+    # hand**" (Ensnaring Bridge). The bound is a *hidden zone*'s size, which
+    # neither the pure matcher nor a source-relative read can reach — only the
+    # observer's hand answers it, so it is testable here and nowhere else, and
+    # a caller with no observer answers no. On a *restriction* that is the
+    # direction that lets a creature attack rather than grounding it on a
+    # clause nobody could read, and the lowering refuses the line before it
+    # can happen on a board sweep.
+    "power_greater_than_cards_in_hand",
     "nontoken", "named", "supertypes",
     # "…a creature with flying **not named Escaped Shapeshifter**". Two keys
     # for one printed phrase, because the two front ends leave the name in two
@@ -779,6 +788,26 @@ def subject_matches(
         if source is None:
             return False
         if int(obj.effective_power) > counters_on(source, str(at_most_source)):
+            return False
+    # "…with power **greater than the number of cards in your hand**"
+    # (Ensnaring Bridge). The bound is the size of a hidden zone, so it is
+    # answered here — where the observer is in hand — and stripped before the
+    # pure matcher runs. "Your" is the seat whose ability this is (CR 109.5),
+    # which for a board-reaching static is the permanent's controller and not
+    # the creature's.
+    #
+    # The power is the *computed* one (CR 613 layer 7): an anthem that pushes a
+    # creature over the threshold grounds it, and the count is re-read at every
+    # declaration because a card played or discarded moves the line.
+    hand_bound = described.get("power_greater_than_cards_in_hand")
+    if hand_bound is not None:
+        described = {
+            k: v for k, v in described.items()
+            if k != "power_greater_than_cards_in_hand"
+        }
+        if observer is None or not (0 <= observer < len(game.players)):
+            return False
+        if int(obj.effective_power) <= len(game.players[observer].hand):
             return False
     relative = described.get("characteristic_vs_source")
     if relative:

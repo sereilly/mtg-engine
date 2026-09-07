@@ -363,6 +363,25 @@ _PATTERNS: tuple[tuple[re.Pattern[str], "str | tuple[str, ...]"], ...] = (
         "creatures_cant_attack",
     ),
     (
+        # "Creatures **with power greater than the number of cards in your
+        # hand** can't attack." (Ensnaring Bridge.) The same restriction with
+        # the narrowing printed *after* the head noun — the shape the comment
+        # on the bare row below says each such tail has to earn its own anchor
+        # for, and this is that anchor: the phrase must **open** on "creatures
+        # with", which is what a `.+` subject could not require and what keeps
+        # the two self-references ("this creature", "enchanted creature") out.
+        #
+        # `_printed_noun` reads the whole tail and refuses a key
+        # `subject_matches` cannot test, so this row buys "creatures with
+        # flying", "creatures with power 3 or greater" and every other printed
+        # postmodifier at the same time — and refuses, rather than dropping, one
+        # the matcher would ignore.
+        re.compile(
+            r"^(?P<board_attack_subject>creatures with .+) can't attack$"
+        ),
+        "creatures_cant_attack",
+    ),
+    (
         # "Creatures can't attack." (Peacekeeper.) The unnarrowed member of the
         # family — Moat's sentence with the exclusion deleted — and the one
         # printing that a bare `creatures_cant_attack` row could not previously
