@@ -448,6 +448,19 @@ def self_untap_line(line: str, card_name: str | None = None) -> str | None:
     """
     normalized = _collapse_self_name(line.strip().lower(), card_name).rstrip(".")
     for pattern, name in _SELF_UNTAP_LINE_PATTERNS:
-        if pattern.match(normalized):
-            return name
+        if not pattern.match(normalized):
+            continue
+        # The opponent-board row ends in a catch-all noun phrase, so matching
+        # its *pattern* is not implementing its sentence: a phrase
+        # `_blocked_subject` cannot read — or one carrying a key
+        # `subject_matches` cannot test — leaves the untap step with no
+        # condition, and its fall-through is the **unconditional** reading. So
+        # the card would be admitted here and then frozen for the rest of the
+        # game. The claim is asked of the reader that answers it, which is the
+        # rule the counter row above follows by having no tail to drop.
+        if name == "doesnt_untap_if_opponent_board" and (
+            self_untap_opponent_board_condition(line, card_name) is None
+        ):
+            return None
+        return name
     return None

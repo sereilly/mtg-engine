@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**364 / 614 tracked rules covered (59%)** — 2162 tests, 0 unannotated.
+**364 / 614 tracked rules covered (59%)** — 2171 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -576,7 +576,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **502.1** First, all phased-in permanents with phasing that the active player controls phase out, and all p... *(1 tests)*
 - [ ] **502.2** Second, if it’s day and the previous turn’s active player didn’t cast any spells during that turn...
-- [x] **502.3** Third, the active player determines which permanents they control will untap. Then they untap the... *(26 tests)*
+- [x] **502.3** Third, the active player determines which permanents they control will untap. Then they untap the... *(29 tests)*
 - [x] **502.4** No player receives priority during the untap step, so no spells can be cast or resolve and no abi... *(2 tests)*
 
 ### 503. Upkeep Step
@@ -604,7 +604,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **506.2** During the combat phase, the active player is the attacking player; creatures that player control... *(5 tests)*
 - [x] **506.3** Only a creature can attack or block. Only a player, a planeswalker, or a battle can be attacked. *(13 tests, subrules ab)*
 - [x] **506.4** A permanent is removed from combat if it leaves the battlefield, if its controller changes, if it... *(10 tests, subrules bc)*
-- [x] **506.5** A creature attacks alone if it’s the only creature declared as an attacker during the declare att... *(5 tests)*
+- [x] **506.5** A creature attacks alone if it’s the only creature declared as an attacker during the declare att... *(8 tests)*
 - [x] **506.6** Some abilities check to see whether or not a creature “had to attack” during a particular combat ... *(2 tests)*
 - [x] **506.7** Some spells state that they may be cast “only [before/after] [a particular point in the combat ph... *(8 tests)*
 
@@ -615,7 +615,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 508. Declare Attackers Step
 
-- [x] **508.1** First, the active player declares attackers. This turn-based action doesn’t use the stack. To dec... *(38 tests, subrules abcdfgk)*
+- [x] **508.1** First, the active player declares attackers. This turn-based action doesn’t use the stack. To dec... *(39 tests, subrules abcdfgk)*
 - [x] **508.2** Second, the active player gets priority. (See rule 117, “Timing and Priority.”) *(2 tests)*
 - [ ] **508.3** Triggered abilities that trigger on attackers being declared may have different trigger conditions.
 - [ ] **508.4** If a creature is put onto the battlefield attacking, its controller chooses which defending playe...
@@ -626,7 +626,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 509. Declare Blockers Step
 
-- [x] **509.1** First, the defending player declares blockers. This turn-based action doesn’t use the stack. To d... *(70 tests, subrules abcdfghi)*
+- [x] **509.1** First, the defending player declares blockers. This turn-based action doesn’t use the stack. To d... *(74 tests, subrules abcdfghi)*
 - [x] **509.2** Second, the active player gets priority. (See rule 117, “Timing and Priority.”) *(4 tests, subrules a)*
 - [x] **509.3** Triggered abilities that trigger on blockers being declared may have different trigger conditions. *(11 tests, subrules acdg)*
 - [x] **509.4** If a creature is put onto the battlefield blocking, its controller chooses which attacking creatu... *(1 tests)*
@@ -738,7 +738,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **609.1** An effect is something that happens in the game as a result of a spell or ability. When a spell, ... *(3 tests)*
 - [x] **609.2** Effects apply only to permanents unless the instruction’s text states otherwise or they clearly c... *(3 tests)*
 - [x] **609.3** If an effect attempts to do something impossible, it does only as much as possible. *(4 tests)*
-- [x] **609.4** Some effects state that a player may do something “as though” some condition were true or a creat... *(20 tests, subrules b)*
+- [x] **609.4** Some effects state that a player may do something “as though” some condition were true or a creat... *(21 tests, subrules b)*
 - [ ] **609.5** If an effect could result in a tie, the text of the spell or ability that created the effect will...
 - [ ] **609.6** Some continuous effects are replacement effects or prevention effects. See rules 614 and 615.
 - [x] **609.7** Some effects apply to damage from a source—for example, “The next time a red source of your choic... *(5 tests, subrules abc)*

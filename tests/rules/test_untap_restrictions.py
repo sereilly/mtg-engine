@@ -466,3 +466,112 @@ def test_614_1a_the_replaced_untap_marker_names_one_players_step():
     assert [permanent.card.name for permanent in bob.battlefield] == ["Island"]
     assert theirs.tapped is False
     assert bob.hand == []
+
+
+# --- STH W1G2: an untap condition read off somebody else's board ---
+
+
+@pytest.mark.cr("502.3")
+def test_502_3_an_opponent_board_condition_is_re_asked_every_untap_step():
+    """"This creature doesn't untap during your untap step **if an opponent
+    controls two or more creatures**."
+
+    The third condition in this family and the first about a board rather than
+    about the permanent itself. The reason it needs a row at all is the untap
+    step's loose substring probe: that fires on any line carrying the phrase,
+    so without one the permanent would stay tapped for the rest of the game
+    whatever the opponent controlled — which is the failure the counter and
+    attack conditions beside it already record.
+
+    Invented card, invented threshold and an invented noun, because the point
+    is that the threshold and the phrase are payload: a card printing "three or
+    more artifacts" must need no second row.
+    """
+    from engine.untap_restrictions import (
+        self_untap_line, self_untap_opponent_board_condition,
+    )
+
+    line = (
+        "This creature doesn't untap during your untap step if an opponent "
+        "controls three or more artifacts."
+    )
+    assert self_untap_line(line) == "doesnt_untap_if_opponent_board"
+    assert self_untap_opponent_board_condition(line) == (
+        3, {"type_filter": "artifact"}
+    )
+    # The unconditional printing keeps its own name, so a reader that knew only
+    # one of them cannot answer for both.
+    assert self_untap_line(
+        "This artifact doesn't untap during your untap step."
+    ) == "doesnt_untap"
+
+
+@pytest.mark.cr("502.3")
+def test_502_3_an_untap_condition_refuses_a_phrase_the_matcher_cannot_test():
+    """The row ends in a catch-all, so the negative case is the one that finds
+    the bug.
+
+    A noun phrase admitted unread would leave the condition testing an empty
+    filter, which matches every permanent — so the creature would freeze on a
+    board the card never describes. Refusing takes the card's support instead,
+    which is the direction this file exists to prefer.
+    """
+    from engine.untap_restrictions import (
+        self_untap_line, self_untap_opponent_board_condition,
+    )
+
+    line = (
+        "This creature doesn't untap during your untap step if an opponent "
+        "controls two or more creatures with three heads."
+    )
+    assert self_untap_opponent_board_condition(line) is None
+    assert self_untap_line(line) is None
+
+
+@pytest.mark.cr("502.3")
+def test_502_3_an_opponent_board_condition_holds_it_down_in_a_game():
+    """The Rock Hydra test: a claimed line is not an enforced one.
+
+    "An opponent" is *any one* of them (CR 102.1), so each seat's board is
+    counted on its own — a sum across seats would freeze the permanent on a
+    table where two opponents hold one creature each, which is a board no
+    opponent controls.
+    """
+    from engine import Game, PlayerState
+    from engine.models import CardDefinition, Permanent
+
+    def _body(name, text=""):
+        return CardDefinition(
+            name=name, mana_cost="", cmc=0.0, type_line="Creature — Test",
+            oracle_text=text, colors=(), color_identity=(), keywords=(),
+            produced_mana=(),
+            raw={"name": name, "type_line": "Creature — Test",
+                 "power": "2", "toughness": "2"},
+        )
+
+    sleeper = Permanent(card=_body(
+        "Restless Sleeper",
+        "This creature doesn't untap during your untap step if an opponent "
+        "controls two or more creatures.",
+    ))
+    theirs = [Permanent(card=_body("Guard"))]
+    third = [Permanent(card=_body("Scout"))]
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[sleeper]),
+        PlayerState(name="P2", battlefield=theirs),
+        PlayerState(name="P3", battlefield=third),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+
+    sleeper.tapped = True
+    game.start_turn(0)
+    assert not sleeper.tapped, (
+        "one creature each is two creatures on the table and none on any one "
+        "opponent's board"
+    )
+
+    theirs.append(Permanent(card=_body("Rider")))
+    sleeper.tapped = True
+    game.start_turn(0)
+    assert sleeper.tapped
