@@ -748,11 +748,12 @@ class OracleInstructionsMixin:
             # Attach metadata links
             attach_aura(aura_permanent, target_artifact)
 
-            # Control effect: a CR 613 layer-2 contribution from this Aura
-            # (e.g. Steal Artifact). Same shape as Control Magic's above.
-            if "you control enchanted artifact" in text:
-                if self.take_control(target_artifact, caster_index, source=aura_permanent):
-                    self.log.append(f"{aura_permanent.card.name} took control of {target_artifact.card.name}")
+            # The control effect is no longer read here either. Steal Artifact
+            # is Control Magic's sentence one noun over, and it goes through the
+            # same derived sweep (`auras.aura_grants_control`, swept in
+            # `mixins/game_ending.py`) — see the note where the creature branch
+            # used to make this call. Two substring tests recording one
+            # contribution is what a sweep replaces, not what it sits beside.
 
             # Animation is NOT applied here. Animate Artifact adds the
             # creature type at CR 613 layer 4 and sets P/T at layer 7b, both

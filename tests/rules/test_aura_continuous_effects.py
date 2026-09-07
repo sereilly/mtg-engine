@@ -647,3 +647,79 @@ def test_611_3_a_quoted_ability_granted_beside_a_pt_bonus_is_granted(catalog):
     game._settle()
     assert not compile_card_oracle(bear.effective_card).triggered_abilities
 # --- end W2G4 ---
+
+
+# --- W1G4 (EXO wave 1): the control change an attachment derives ------------
+
+from engine.auras import attach_aura as _g4c_attach
+from engine.auras import detach_aura as _g4c_detach
+from engine.models import Permanent as _G4cPerm
+
+
+def _g4c_perm(card):
+    """A permanent already on the battlefield, past its summoning sickness."""
+    permanent = _G4cPerm(card=card)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    return permanent
+
+
+def _g4c_attached(catalog, aura_name: str, host_name: str):
+    """*aura_name*, controlled by seat 0, attached to seat 1's *host_name*."""
+    aura, host = _g4c_perm(catalog[aura_name]), _g4c_perm(catalog[host_name])
+    p0 = PlayerState(name="G4c-P0", battlefield=[aura], life=20)
+    p1 = PlayerState(name="G4c-P1", battlefield=[host], life=20)
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    _g4c_attach(aura, host)
+    # The sweep runs here, and this pair closes the helper (W1G4).
+    game.check_state_based_actions()
+    return game, aura, host
+
+
+@pytest.mark.cr("613.1b", "611.3a")
+@pytest.mark.parametrize("aura,host", [
+    ("Control Magic", "Grizzly Bears"),
+    ("Steal Artifact", "Black Lotus"),
+    # The two the substring chain never had a branch for. Both were admitted by
+    # the support gate (`auras._TEMPLATES` lists the sentence for any noun) and
+    # both took control of nothing: `_apply_aura_effect` tested for the literal
+    # "you control enchanted creature" and "…enchanted artifact" and nothing
+    # else, so an Aura printing the same sentence about a land or an
+    # enchantment resolved, attached, and did the one thing it says.
+    ("Conquer", "Mountain"),
+    ("Steal Enchantment", "Crusade"),
+])
+def test_613_1b_an_attachment_that_says_you_control_it_derives_the_change(
+    catalog, aura, host
+):
+    """"You control enchanted <noun>." (CR 613.1b, layer 2.)
+
+    Derived from the attachment on every state-based pass rather than performed
+    once when an Aura *spell* resolves — CR 611.3a's "applies at any given
+    moment to whatever its text indicates". That is what a Licid forces (it
+    becomes an Aura through an activated ability, so no spell resolves) and
+    what these four get for free: the sentence is read off the attachment, so
+    the noun it names costs no code.
+    """
+    game, _aura, host_perm = _g4c_attached(catalog, aura, host)
+
+    assert game.controller_index_of(host_perm) == 0
+
+
+@pytest.mark.cr("611.3", "613.1b")
+def test_611_3_the_derived_control_change_ends_with_the_attachment(catalog):
+    """Dropping the attachment is the whole removal.
+
+    The contribution is re-derived on every pass, so there is no remembered
+    seat to restore and no list of detach sites to keep in step — CR 704.5m's
+    fallen Aura, a Licid's "pay {U} to end this effect" and an Equipment moved
+    to a new host are all "not attached any more" on the next sweep.
+    """
+    game, aura, host = _g4c_attached(catalog, "Conquer", "Mountain")
+    assert game.controller_index_of(host) == 0
+
+    _g4c_detach(aura, host)
+    game.check_state_based_actions()
+
+    assert game.controller_index_of(host) == 1
