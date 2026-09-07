@@ -798,6 +798,11 @@ class LegalityMixin:
             spec["valid_targets"] = self._role_target_walk(
                 caster_index, card, spec, (), for_cast=True
             )
+            # …and CR 609.7a's source, for the one roles spell that also asks
+            # for one (Kor Chant). This return is early by design — the walk
+            # replaces `_enumerate_targets` — so the shared tail below is out of
+            # reach and the source list has to be attached here too.
+            self._attach_chosen_source_targets(caster_index, card, spec)
             return spec
         spec["valid_targets"] = self._enumerate_targets(caster_index, card, spec, for_cast=True)
         # Demonic Embrace, Goblin Grenade, Soul Exchange: a spell with a target
@@ -818,6 +823,11 @@ class LegalityMixin:
         # every reader downstream sees the shape it already handles.
         if spec.pop("unbounded_targets", False):
             spec["max_targets"] = len(spec["valid_targets"])
+        # "The next time **a source of your choice** would deal damage to any
+        # target this turn…" (Honorable Passage). A cast that announces a
+        # source as well as a target, which is the activation path's Jade
+        # Monolith shape one announcement step over.
+        self._attach_chosen_source_targets(caster_index, card, spec)
         return spec
 
     def cast_cost_offers(
@@ -1319,14 +1329,40 @@ class LegalityMixin:
                 source_permanent=source_permanent,
             )
             spec["cost_spec"] = cost_spec
-        # Jade Monolith's second choice — the damage source: any permanent on
-        # either battlefield or any spell on the stack.
-        if spec.get("requires_source"):
-            spec["source_targets"] = self._enumerate_targets(
-                controller_index, card, {"kind": "permanent", "also_stack": True},
-                for_cast=False,
-            )
+        self._attach_chosen_source_targets(controller_index, card, spec)
         return spec
+
+    def _attach_chosen_source_targets(
+        self, controller_index: int, card: CardDefinition, spec: dict
+    ) -> None:
+        """Fill in ``source_targets`` for a spec that asks for CR 609.7a's
+        "a source of your choice" — any permanent on either battlefield, or any
+        spell on the stack. A no-op for every spec that does not.
+
+        Called from **three** places and written once, which is the whole point
+        of it: Jade Monolith announces its source with an activation, and Kor
+        Chant and Honorable Passage announce theirs with a *cast* — one of them
+        after a roles walk that returns early. This lived inline on the
+        activation path alone, so every cast carrying ``requires_source`` was
+        handed a spec with no source list, and the browser's source stage (which
+        refuses when the list is empty) could not run at all. Honorable Passage
+        has been castable-but-sourceless since it shipped for exactly that
+        reason; it is bounded at one instance either way, which is why nobody
+        saw it.
+
+        Enumerated with ``for_cast=False`` on every path, including the cast
+        one, and that is deliberate rather than an oversight carried across: a
+        chosen source is **not a target** (CR 115.1), so shroud, protection and
+        the rest of the targeting gate have no bearing on whether it may be
+        chosen — CR 609.7a adds only that it "doesn't need to be capable of
+        dealing damage".
+        """
+        if not spec.get("requires_source"):
+            return
+        spec["source_targets"] = self._enumerate_targets(
+            controller_index, card, {"kind": "permanent", "also_stack": True},
+            for_cast=False,
+        )
 
     def trigger_mode_options(
         self, controller_index: int, card: CardDefinition, instruction, source_permanent=None,

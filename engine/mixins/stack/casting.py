@@ -52,7 +52,7 @@ from ...cost_modifiers import (
     sacrifice_taxes, self_per_target_tax, spell_cost_tax, spell_life_tax,
     spell_symbol_tax,
 )
-from ...game_types import SimulationResult, StackItem
+from ...game_types import SimulationResult, StackItem, chosen_damage_source
 from ...handlers._common import graveyard_card_matches
 from ...models import CardDefinition, Permanent, PlayerState
 from ...oracle import _COLOR_WORD_TO_SYMBOL, compile_card_oracle
@@ -492,6 +492,20 @@ class SpellCastingMixin:
         # known. Absent means the offers were declined, which is what an
         # *optional* cost means and the only default that cannot overcharge.
         optional_cost_payments: dict[str, int] | None = None,
+        # CR 609.7a's "a source of your choice", announced with the cast. Not a
+        # target (CR 115.1) and not a cost, so it is its own trio of fields: a
+        # battlefield permanent by seat and slot, or a spell on the stack by a
+        # bottom-first index, exactly as `activate_permanent_ability` has taken
+        # them since Jade Monolith.
+        #
+        # Prefixed `chosen_` where the activation path says plain `source_`,
+        # because `source_seat` is already a local here — it is the seat whose
+        # zone the spell is *leaving* (Grinning Totem's exile is not the
+        # caster's), and a parameter of that name would be silently clobbered
+        # by the zone lookup a hundred lines down.
+        chosen_source_seat: int | None = None,
+        chosen_source_permanent_index: int | None = None,
+        chosen_source_stack_index: int | None = None,
     ) -> SimulationResult:
         queued = self.queue_from_hand(
             caster_index,
@@ -514,6 +528,9 @@ class SpellCastingMixin:
             alternative_cost=alternative_cost,
             alternative_cost_hand_index=alternative_cost_hand_index,
             optional_cost_payments=optional_cost_payments,
+            chosen_source_seat=chosen_source_seat,
+            chosen_source_permanent_index=chosen_source_permanent_index,
+            chosen_source_stack_index=chosen_source_stack_index,
         )
         if not queued.supported:
             return queued
@@ -774,6 +791,20 @@ class SpellCastingMixin:
         # known. Absent means the offers were declined, which is what an
         # *optional* cost means and the only default that cannot overcharge.
         optional_cost_payments: dict[str, int] | None = None,
+        # CR 609.7a's "a source of your choice", announced with the cast. Not a
+        # target (CR 115.1) and not a cost, so it is its own trio of fields: a
+        # battlefield permanent by seat and slot, or a spell on the stack by a
+        # bottom-first index, exactly as `activate_permanent_ability` has taken
+        # them since Jade Monolith.
+        #
+        # Prefixed `chosen_` where the activation path says plain `source_`,
+        # because `source_seat` is already a local here — it is the seat whose
+        # zone the spell is *leaving* (Grinning Totem's exile is not the
+        # caster's), and a parameter of that name would be silently clobbered
+        # by the zone lookup a hundred lines down.
+        chosen_source_seat: int | None = None,
+        chosen_source_permanent_index: int | None = None,
+        chosen_source_stack_index: int | None = None,
     ) -> SimulationResult:
         caster = self.players[caster_index]
         # Casting from the hand is a rule; casting from anywhere else is an
@@ -1786,6 +1817,21 @@ class SpellCastingMixin:
                         # survives, beside the other costs' spoils and for the
                         # same reason.
                         "additional_costs_paid": optional_paid,
+                        # CR 609.7a's chosen damage source, resolved to the
+                        # object it names. On the same channel the activation
+                        # path writes, because the handler behind it is the same
+                        # handler: `handlers/prevention.chosen_shield_source`
+                        # reads this key first, ahead of every fallback that
+                        # reads a target slot instead. Without it a *spell* that
+                        # names a source could only be given one by spending one
+                        # of its own target slots, which is what kept Honorable
+                        # Passage sourceless and Kor Chant unsupported.
+                        "chosen_source": chosen_damage_source(
+                            self,
+                            seat=chosen_source_seat,
+                            permanent_index=chosen_source_permanent_index,
+                            stack_index=chosen_source_stack_index,
+                        ),
                         "sacrificed_for_cost": sacrificed_for_cost,
                         # …and what an *exile* cost ate, on the channel the
                         # activation path already records it on. Last-known

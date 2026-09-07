@@ -1864,7 +1864,8 @@ def _retarget_spec(payload: dict) -> dict:
 
 def _off_target_chosen_source_redirect_spec(payload: dict) -> dict | None:
     """Shaman en-Kor's second ability: "The next time **a source of your
-    choice** would deal damage to **target creature** this turn…"
+    choice** would deal damage to **target creature** this turn…" — and Kor
+    Chant, which announces a second target as well.
 
     Two announcements in one activation, which is Jade Monolith's shape: the
     creature is a target (CR 601.2c) and the source is CR 615.8's choice, which
@@ -1874,6 +1875,14 @@ def _off_target_chosen_source_redirect_spec(payload: dict) -> dict | None:
     ``source_of_choice`` cannot carry it, as it does for Nova Pentacle and the
     Circles: that flag makes the *only* prompt a source picker, and this ability
     has a real target to announce.
+
+    One function for both kinds because the *targets* half is what differs and
+    ``_from_targets_payload`` already tells the two apart: Shaman en-Kor's
+    description carries one filter and comes back a creature picker, while Kor
+    Chant's carries one per slot and comes back ordered **roles** (its two slots
+    are narrowed differently, so a shared candidate list would drop the printed
+    "you control"). ``requires_source`` rides on top of whichever it is, which
+    is what makes this row the whole difference between the two kinds' specs.
     """
     described = _from_targets_payload(payload.get("targets"))
     if described is None:
@@ -1883,6 +1892,9 @@ def _off_target_chosen_source_redirect_spec(payload: dict) -> dict | None:
 
 _KIND_TO_SPEC_FROM_PAYLOAD = {
     "redirect_chosen_source_damage_off_target_until_eot": (
+        _off_target_chosen_source_redirect_spec
+    ),
+    "redirect_chosen_source_damage_between_targets_until_eot": (
         _off_target_chosen_source_redirect_spec
     ),
     "choose_new_spell_target": _retarget_spec,

@@ -32,7 +32,8 @@ from .. import ast
 from ..errors import LoweringError
 from ._common import (_REST_OF_TURN, _amount_payload, _describe_targets,
                       _filter_payload, _is_source, _is_target, _is_you,
-                      _names_several_targets, _restrictions_beyond)
+                      _names_several_targets, _optional_slot_key,
+                      _restrictions_beyond, testable_filter_payload)
 
 
 #: The key a Nova Pentacle-shaped redirect writes its opponent's pick under, and
@@ -104,34 +105,10 @@ def _lower_redirect_damage(node: ast.RedirectDamage) -> tuple[OracleInstruction,
             # "All damage that would be dealt this turn to **target creature you
             # control** by a source of your choice is dealt to **another target
             # creature** instead." (Kor Chant.) The branch below's sentence with
-            # its taker announced too, so the announcement carries three answers
-            # — two targets (CR 601.2c) and CR 615.8's chosen source, which is
-            # not a target at all.
-            #
-            # Refused on the **third** answer, and the refusal is about the
-            # announcement rather than about this effect. A chosen source
-            # reaches a resolution on ``choices["chosen_source"]``, which only
-            # ``mixins/stack/activation.py`` writes: a *cast* has no channel for
-            # one. Every spell in the pool that prints the phrase gets away with
-            # that because it names nothing else, so the source rides the
-            # ability's own target slot (``handlers/prevention.chosen_shield_source``
-            # reads it there) — and this card's two slots are already spoken for.
-            #
-            # It is refused rather than lowered onto the documented "no source
-            # recorded, so the record answers to any source" fallback, because
-            # that fallback is safe only for the shields and redirects that
-            # carry ``uses=1``: spent on one instance either way. This one is
-            # blanket for the turn, so any-source would move **every** point of
-            # damage all turn onto the second creature — an effect enormously
-            # wider than the card, in the silent direction.
-            #
-            # Honorable Passage is the same gap in a shipped card; see
-            # SET_PLAYBOOK's Known gaps for the four parts that close both.
-            raise LoweringError(
-                "a cast cannot announce CR 615.8's chosen source beside its "
-                "own targets",
-                node=node,
-            )
+            # its taker announced too, so the announcement carries three
+            # answers — two targets (CR 601.2c) and CR 615.8's chosen source,
+            # which is not a target at all.
+            return _lower_chosen_source_redirect_between_targets(node)
         # "The next time a source of your choice would deal damage to **target
         # creature** this turn, that damage is dealt to this creature instead."
         # (Shaman en-Kor.) CR 615.8's chosen source over a protected recipient
@@ -332,6 +309,103 @@ def _lower_chosen_source_redirect_off_target(
     return (
         OracleInstruction(
             "redirect_chosen_source_damage_off_target_until_eot", "", payload
+        ),
+    )
+
+
+def _lower_chosen_source_redirect_between_targets(
+    node: ast.RedirectDamage,
+) -> tuple[OracleInstruction, ...]:
+    """Kor Chant: "All damage that would be dealt this turn to **target creature
+    you control** by a source of your choice is dealt to **another target
+    creature** instead."
+
+    The function above's sentence with its *taker* announced too, so the
+    announcement carries three answers: two targets (CR 601.2c) and CR 615.8's
+    chosen source, which is not a target at all (CR 609.7a). Its own kind and
+    not a flag on that one, for the reason every kind in this module is its own
+    — ``engine/targeting.py`` keys the picker on the kind, and this one raises a
+    **two-role** walk where that one raises a single creature picker.
+
+    The two roles are what make the sentence safe to lower at all. The slots are
+    differently narrowed — "you control" against a bare "another" — so
+    ``targeting._slot_roles_spec`` turns the description into ordered roles, and
+    a shared candidate list would have let the caster move their own creature's
+    damage onto a second creature of their own while the printed "you control"
+    was enforced by nothing. CR 601.2c's distinctness comes out of the same
+    walk: a permanent taken by role 0 is not offered to role 1, which is what
+    "another" prints.
+
+    **This is the only blanket chosen-source record in the pool**, and that is
+    what its refusals are about. Every other card printing "a source of your
+    choice" is a "next time" — ``uses=1``, spent on one instance — so an
+    announcement that named no source can safely fall back to a record
+    answering to any source. This one lasts the turn, so the same fallback would
+    move *every* point of damage dealt all turn onto the second creature. The
+    handler therefore arms nothing when no source was announced (see
+    ``handlers/damage.py``), and ``one_shot`` is carried through as ``uses``
+    rather than assumed absent, so a "next time" printing of this same shape
+    would get the bounded record its sentence describes.
+
+    Five refusals, each a way the sentence could otherwise mean more than it
+    says:
+
+    * the source is named once. A chosen source beside a targeted one is two
+      answers to one question.
+    * the duration must be this turn, because that is what the sweeps give it.
+    * neither slot may name several targets: the handler reads slot 0 and slot 1
+      positionally, and a third answer would be collected and dropped.
+    * a combat scope and an opponent's pick have readings on the redirects above
+      and none here.
+    * every key of both printed noun phrases must be one ``subject_matches`` can
+      test — both are re-checked at resolution (CR 608.2b), and a narrowing the
+      matcher would drop is a redirect covering strictly more creatures than the
+      card prints.
+    """
+    if node.dealt_by is not None:
+        raise LoweringError(
+            "a redirect names its source once: either a chosen source or a "
+            "target",
+            node=node,
+        )
+    if node.duration.kind not in _REST_OF_TURN:
+        raise LoweringError("a recorded redirect lasts exactly this turn", node=node)
+    if node.combat_only or node.chooser is not None:
+        raise LoweringError(
+            "a chosen-source redirect between two targets names no combat "
+            "scope and no other chooser",
+            node=node,
+        )
+    protected, taker = node.to, node.new_recipient
+    if _names_several_targets(protected) or _names_several_targets(taker):
+        raise LoweringError(
+            "a chosen-source redirect between two targets announces one "
+            "creature per slot",
+            node=node,
+        )
+    refusal = "a redirect cannot test"
+    first = testable_filter_payload(protected.filter, refusal=refusal, node=node)
+    second = testable_filter_payload(taker.filter, refusal=refusal, node=node)
+    payload: dict[str, object] = {
+        "targets": {
+            "quantifier": "target",
+            "kind": "object",
+            # ``filter`` stays the shape every one-slot reader expects and
+            # ``filters`` is what makes the picker ordered roles — the pair
+            # ``lowering/control_changes.py`` writes for the same reason.
+            "filter": first,
+            "filters": [first, second],
+            "count": 2,
+            **_optional_slot_key((protected, taker)),
+        },
+    }
+    if node.one_shot:
+        # "**The next time** …" — one instance rather than every instance for
+        # the duration, which is what ``uses=None`` already means on the record.
+        payload["uses"] = 1
+    return (
+        OracleInstruction(
+            "redirect_chosen_source_damage_between_targets_until_eot", "", payload
         ),
     )
 

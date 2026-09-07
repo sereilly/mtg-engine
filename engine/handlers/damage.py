@@ -17,7 +17,8 @@ from ._common import (divided_target_permanent, recorded_permanent_ids,
     flip_coin,
     frozen_that_player_seat, per_recipient_amount, permanent_matches_filter,
     resolve_amount,
-    resolve_target_permanent, resolve_target_permanents, seats_matching_deed,
+    resolve_target_permanent, resolve_target_permanents, resolve_target_slots,
+    seats_matching_deed,
 )
 from ..oracle_types import single_chosen_id
 from ..oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
@@ -2069,6 +2070,96 @@ def redirect_chosen_source_damage_off_target_until_eot(
     )
     game.log.append(
         f"{card_name}: the next damage {source_name} would deal to "
+        f"{protected.card.name} this turn is dealt to {taker.card.name} instead"
+    )
+    return True, "resolved"
+
+
+@effect_handler("redirect_chosen_source_damage_between_targets_until_eot")
+def redirect_chosen_source_damage_between_targets_until_eot(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """Kor Chant: "All damage that would be dealt this turn to target creature
+    you control by a source of your choice is dealt to another target creature
+    instead."
+
+    The handler above with the *taker* announced as well, so three answers
+    arrive on two channels: both creatures are targets (CR 601.2c) and come in
+    role order through ``resolve_target_slots`` — positionally, never compacted,
+    because slot 1 sliding into slot 0 would hand the redirect's damage to the
+    creature it was meant to protect — while the **source** is CR 609.7a's
+    choice, which is not a target and rides ``choices["chosen_source"]``.
+
+    Read off that channel alone (``from_target_channel=False``): the fallback
+    inside :func:`chosen_shield_source` reads the spell's *target* as the
+    source, and here that target is the creature being guarded, so the record
+    would answer only to damage that creature itself dealt.
+
+    Both noun phrases are re-checked here (CR 608.2b) rather than trusted from
+    the announcement — "you control" in particular, which the picker enforces at
+    cast and which a control change between announcement and resolution can
+    undo.
+
+    **With no source announced, nothing is armed.** Every other card printing
+    the phrase carries ``uses=1`` and may safely fall back to a record answering
+    to any source — spent on one instance either way — but this one is blanket
+    for the turn, so the same fallback would move every point of damage dealt
+    all turn onto the second creature. CR 609.7a requires a source to be chosen;
+    an announcement that named none has not made the choice, and the narrow
+    reading is the only one that cannot be wrong in the player's favour.
+    """
+    from ..subject_filters import subject_matches
+
+    card_name = getattr(context.card, "name", "")
+    payload = instruction.payload
+    targets = payload.get("targets") or {}
+    slot_filters = list(
+        targets.get("filters") or [targets.get("filter") or {}] * 2
+    )
+    protected, taker = resolve_target_slots(game, context, 2)
+    caster = context.caster
+    observer = game.players.index(caster) if caster in game.players else None
+    for slot, permanent in enumerate((protected, taker)):
+        described = slot_filters[slot] if slot < len(slot_filters) else {}
+        if (
+            permanent is None
+            or not game.is_on_battlefield(permanent)
+            or not subject_matches(game, permanent, described, observer=observer)
+        ):
+            game.log.append(
+                f"{card_name}: one of its targets is gone, nothing is redirected"
+            )
+            return True, "resolved"
+    if protected is taker:
+        # "**another** target creature" — CR 601.2c's distinctness, which the
+        # roles walk gives the picker for free and which is asserted again here
+        # for the caller that names its targets directly.
+        game.log.append(
+            f"{card_name}: its two targets must be different creatures"
+        )
+        return True, "resolved"
+
+    moved_source = chosen_shield_source(game, context, from_target_channel=False)
+    if moved_source is None:
+        game.log.append(
+            f"{card_name}: no damage source was chosen, so no damage is moved"
+        )
+        return True, "resolved"
+
+    add_redirect(
+        protected,
+        DamageRedirect(
+            new_recipient=taker,
+            source=moved_source,
+            uses=payload.get("uses"),
+            source_name=card_name or None,
+        ),
+    )
+    source_name = getattr(
+        getattr(moved_source, "card", moved_source), "name", "the chosen source"
+    )
+    game.log.append(
+        f"{card_name}: damage {source_name} would deal to "
         f"{protected.card.name} this turn is dealt to {taker.card.name} instead"
     )
     return True, "resolved"

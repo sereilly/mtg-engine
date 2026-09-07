@@ -395,3 +395,186 @@ def test_w1g4_resuscitate_announces_no_target(set_pool):
     resuscitate = set_pool("EXO")["Resuscitate"]
 
     assert _g4r_cast_spec(resuscitate, _g4r_compile(resuscitate)) is None
+
+
+
+# --- W3: Kor Chant, and the announcement channel a cast never had ---
+#
+# "All damage that would be dealt this turn to target creature you control by a
+# source of your choice is dealt to another target creature instead."
+#
+# Three answers in one announcement: two targets (CR 601.2c) and CR 609.7a's
+# chosen source, which is not a target at all. The third had no channel on the
+# casting path — only ``mixins/stack/activation.py`` wrote
+# ``choices["chosen_source"]`` — and the card refused rather than lower onto the
+# "no source recorded, so the record answers to any source" fallback every
+# bounded printing takes. This one is blanket for the turn, so that fallback
+# would have moved every point of damage dealt all turn onto the second
+# creature.
+
+from engine import Game as _W3Game, PlayerState as _W3Player
+from engine.models import CardDefinition as _W3Card, Permanent as _W3Permanent
+from engine.oracle import compile_card_oracle as _w3_compile
+from engine.targeting import derive_cast_spec as _w3_cast_spec
+from tests.helpers import resolve_stack as _w3_resolve
+
+
+def _w3_bear(name, power=2, toughness=6):
+    return _W3Card(
+        name=name, mana_cost="{1}", cmc=1.0, type_line="Creature — Bear",
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature — Bear",
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def _w3_board(set_pool):
+    """A duel with one creature the caster controls, two an opponent does, and
+    Kor Chant in hand. Returns (game, mine, taker, other)."""
+    game = _W3Game(players=[_W3Player(name="A"), _W3Player(name="B")])
+    game.enforce_mana_costs = False
+    mine = _W3Permanent(card=_w3_bear("Mine"))
+    taker = _W3Permanent(card=_w3_bear("Taker"))
+    other = _W3Permanent(card=_w3_bear("Other"))
+    for permanent in (mine, taker, other):
+        permanent.metadata["summoning_sickness_turn"] = -99
+    game.players[0].battlefield.append(mine)
+    game.players[1].battlefield.extend([taker, other])
+    game.players[0].hand.append(set_pool("EXO")["Kor Chant"])
+    return game, mine, taker, other
+
+
+def test_kor_chant_names_its_two_slots_as_ordered_roles(set_pool):
+    """The printed slots are narrowed differently — "target creature **you
+    control**" against a bare "**another** target creature" — so the picker has
+    to be ordered roles rather than one shared candidate list.
+
+    A shared list may only carry a narrowing **every** slot has, so "you
+    control" would simply be dropped: the caster could move an opponent's
+    creature's damage, and CR 601.2c's distinctness would go with it. Roles give
+    both back — each slot gets its own filter, and a permanent taken by role 0
+    is not offered to role 1, which is what "another" prints.
+    """
+    kor_chant = set_pool("EXO")["Kor Chant"]
+    program = _w3_compile(kor_chant)
+    assert program.supported
+
+    instruction, = program.instructions
+    assert (
+        instruction.kind
+        == "redirect_chosen_source_damage_between_targets_until_eot"
+    )
+    assert instruction.payload["targets"]["filters"] == [
+        {"type_filter": "creature", "controller": "you"},
+        {"type_filter": "creature"},
+    ]
+    # No ``uses``: this is the pool's only blanket chosen-source record, and a 1
+    # here would spend it on the first instance of the turn.
+    assert "uses" not in instruction.payload
+
+    spec = _w3_cast_spec(kor_chant, program)
+    assert spec["kind"] == "roles"
+    assert [role.get("own_only") for role in spec["roles"]] == [True, None]
+    assert spec["requires_source"] is True
+
+
+def test_kor_chant_moves_only_the_chosen_sources_damage_and_moves_all_of_it(set_pool):
+    """The whole card, driven: the announcement carries both targets and the
+    source, and the record then moves every instance that source deals.
+
+    The second and third assertions are the ones that matter. Another source's
+    damage staying put is what says the source was recorded at all — with none
+    recorded the record answers to everything. And the *second* hit from the
+    chosen source moving too is what says the record is blanket: "all damage …
+    this turn", not "the next time", so a ``uses`` of 1 would have let the rest
+    of the turn through.
+    """
+    game, mine, taker, other = _w3_board(set_pool)
+
+    result = game.cast_from_hand(
+        0, "Kor Chant",
+        target_permanent_ids=[mine.permanent_id, taker.permanent_id],
+        chosen_source_seat=1, chosen_source_permanent_index=1,
+    )
+    assert result.supported, result.details
+    _w3_resolve(game)
+
+    game._mark_damage_on_permanent(mine, 3, source=other)
+    assert mine.damage_marked == 0, "the chosen source's damage moves"
+    assert taker.damage_marked == 3
+
+    game._mark_damage_on_permanent(mine, 2, source=taker)
+    assert mine.damage_marked == 2, "another source's damage is not the card's"
+
+    game._mark_damage_on_permanent(mine, 1, source=other)
+    assert taker.damage_marked == 4, "blanket for the turn, not one instance"
+
+
+def test_kor_chant_refuses_a_first_slot_the_caster_does_not_control(set_pool):
+    """"target creature **you control**" is CR 601.2c legality, so naming an
+    opponent's creature for slot 0 is an illegal announcement — refused with
+    nothing spent, rather than resolved into a redirect the card cannot make.
+
+    This is the narrowing a shared candidate list would have dropped; it is
+    enforced by the roles walk the picker and the cast gate share.
+    """
+    game, mine, taker, other = _w3_board(set_pool)
+
+    result = game.cast_from_hand(
+        0, "Kor Chant",
+        target_permanent_ids=[other.permanent_id, mine.permanent_id],
+        chosen_source_seat=1, chosen_source_permanent_index=0,
+    )
+
+    assert not result.supported
+    assert "no valid target" in result.details
+
+
+def test_kor_chant_arms_nothing_when_no_source_was_announced(set_pool):
+    """The refusal that keeps the card from being enormously wider than it
+    prints, and the reason it is this card and not the others.
+
+    Every other printing of "a source of your choice" carries ``uses=1`` and may
+    safely fall back to a record answering to any source — spent on one instance
+    either way. This one lasts the turn, so the same fallback would move *every*
+    point of damage dealt to the protected creature all turn. CR 609.7a requires
+    a source to be chosen; an announcement that named none has not chosen one,
+    and arming nothing is the only reading that cannot be wrong in the caster's
+    favour.
+    """
+    game, mine, taker, other = _w3_board(set_pool)
+
+    result = game.cast_from_hand(
+        0, "Kor Chant",
+        target_permanent_ids=[mine.permanent_id, taker.permanent_id],
+    )
+    assert result.supported, result.details
+    _w3_resolve(game)
+
+    game._mark_damage_on_permanent(mine, 3, source=other)
+    assert mine.damage_marked == 3
+    assert taker.damage_marked == 0
+    assert any("no damage source was chosen" in line for line in game.log), game.log
+
+
+def test_kor_chant_offers_a_source_list_beside_its_roles(set_pool):
+    """``cast_target_spec`` has to answer both questions or the browser cannot
+    ask the second: the roles walk **and** CR 609.7a's source candidates.
+
+    The roles branch returns early — the walk replaces ``_enumerate_targets`` —
+    so a source list attached only at the function's tail would never reach a
+    roles spell. The client refuses its source stage on an empty list, so the
+    omission would read as "no damage source available" rather than as a missing
+    feature.
+    """
+    game, mine, taker, other = _w3_board(set_pool)
+
+    spec = game.cast_target_spec(0, set_pool("EXO")["Kor Chant"])
+
+    assert [entry["name"] for entry in spec["valid_targets"]] == ["Mine"]
+    # A source is not a target (CR 115.1), so both battlefields are offered and
+    # the creature the spell is guarding is among them.
+    assert {entry["name"] for entry in spec["source_targets"]} == {
+        "Mine", "Taker", "Other",
+    }

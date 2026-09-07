@@ -512,6 +512,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # creature. Same family: what moves is still the recipient of one damage
     # event, and which end of it the sentence announces is payload.
     "redirect_chosen_source_damage_off_target_until_eot": "damage",
+    # Kor Chant: the same chosen source with the *taker* announced as a second
+    # target too. Same family for the same reason — what moves is still the
+    # recipient of a damage event, and how many of the sentence's ends are
+    # announced is payload — so GRAMMAR_CATEGORIES is unchanged.
+    "redirect_chosen_source_damage_between_targets_until_eot": "damage",
     "recolor_target_from_text": "recolor",
     # The same layer-5 colour change with a duration and several targets
     # (Dwarven Song and its four siblings). Same category: what differs is how

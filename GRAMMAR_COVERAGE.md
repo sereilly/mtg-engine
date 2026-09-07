@@ -36,7 +36,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | TMP | 335 | 478 | 92.5% | 92.3% | 65.7% | 271 |
 | STH | 143 | 215 | 88.4% | 88.4% | 62.8% | 124 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| EXO *(measured)* | 143 | 207 | 90.3% | 89.9% | 65.7% | 126 |
+| EXO *(measured)* | 143 | 207 | 90.3% | 90.3% | 66.2% | 127 |
 | **All (shipped)** | **4730** | **7032** | **90.5%** | **89.8%** | **59.8%** | **3510** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -3296,6 +3296,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Kookus**
   - `At the beginning of your upkeep, if you don't control a creature named Keeper of Kookus, this creature deals 3 damage to you and attacks this turn if able.`
   - `{R}: This creature gets +1/+0 until end of turn.`
+- **Kor Chant**
+  - `All damage that would be dealt this turn to target creature you control by a source of your choice is dealt to another target creature instead.`
 - **Kormus Bell**
   - `All Swamps are 1/1 black creatures that are still lands.`
   - `All Swamps are 1/1 black creatures that are still lands.`

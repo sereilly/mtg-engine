@@ -321,7 +321,12 @@ POSITIONAL_BASELINE: dict[str, int] = {
     "engine/legality.py": 2,
     "engine/mixins/effects.py": 2,
     "engine/mixins/permanent_state.py": 1,
-    "engine/mixins/stack/activation.py": 2,
+    # Down one at Exodus: the chosen-source resolution ("a source of your
+    # choice", CR 609.7a) subscripted a battlefield list, and moved to
+    # `game_types.chosen_damage_source` — one resolver shared with the casting
+    # path, reading through `permanent_at` — when Kor Chant gave a *spell* the
+    # same announcement.
+    "engine/mixins/stack/activation.py": 1,
     "engine/mixins/stack/casting.py": 4,
     "engine/mixins/stack/choices.py": 4,
     # One read moved between these two in LEG round 32, and nothing else about
