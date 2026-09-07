@@ -10385,6 +10385,14 @@ const LOYALTY_COST_RE = /^([+\-−]?\s*(?:\d+|[xX]))\s*:\s*(.+)$/;
 // comment may spell either slice's marker verbatim: the driver takes the
 // *first* occurrence, so a mention above the real declaration truncates the
 // slice at the comment and node parses half a function.
+// "Pay {1} for each +1/+1 counter on this creature" (Skeleton Scavengers) — a
+// *rate*, not a flat cost. The engine compiles it to `mana_per_counter` and
+// charges the symbol once per counter at activation; the client cannot know the
+// count from the card text, and it must not read the printed symbol as the
+// whole price. Left whole it is the "Pay 2 life or {2}" defect exactly: the
+// menu asks for one mana to pay a cost that is {N}.
+const MANA_RATE_RE = /\bpay\s+((?:\{(?:\d+|[WUBRGCwubrgc])\})+)\s+for each\b/i;
+
 const MANA_ALTERNATIVE_RE = /\bpay \w+ life\b[^,:]*?\s+or\s+((?:\{(?:\d+|[WUBRGCwubrgc])\})+)\s*$/i;
 
 function isPlaneswalkerCard(card) {
@@ -10501,6 +10509,18 @@ function getActivatedAbilityOptions(card) {
     // flow pays and what parseManaCostSymbols scans — left whole, the {2} reads
     // as mana this ability requires, and the menu asked for two mana to pay a
     // cost the engine settles in life.
+    // A rate is not a flat cost. Split before anything reads `cost`, for the
+    // reason the alternative below is split: `cost` is what the auto-tap flow
+    // pays and what `parseManaCostSymbols` scans, so a printed `{1}` that means
+    // "{1} per counter" left inside it makes the menu collect one mana for a
+    // price the engine computes as {N}. `rateCost` keeps the symbol so the
+    // label can still say what the card says; nothing prices it.
+    let rateCost = "";
+    const rate = costHalf.match(MANA_RATE_RE);
+    if (rate) {
+      rateCost = rate[1];
+      costHalf = costHalf.replace(MANA_RATE_RE, "pay for each");
+    }
     let orCost = "";
     const alternative = costHalf.match(MANA_ALTERNATIVE_RE);
     if (alternative) {
@@ -10529,7 +10549,10 @@ function getActivatedAbilityOptions(card) {
         continue;
       }
     }
-    options.push({ index, cost: m[1].trim(), orCost, text: m[2].trim(), line: line.trim() });
+    options.push({
+      index, cost: m[1].trim(), orCost, rateCost,
+      text: m[2].trim(), line: line.trim(),
+    });
     index += 1;
   }
   return options;

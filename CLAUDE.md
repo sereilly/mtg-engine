@@ -12,9 +12,9 @@ for which sets ship): Limited Edition Alpha (290 cards), Limited Edition Beta
 Antiquities (85), Revised Edition (296), Legends (310), The Dark (119),
 Fallen Empires (102), Fourth Edition (368), Ice Age (373), Homelands (115),
 Alliances (144), Mirage (335), Visions (167), Fifth Edition (434),
-Weatherlight (167), Tempest (335) and Core Set 2021 (285), 2,824 unique cards,
-all classified as supported.
-**Nineteen sets, and their sizes are the whole spread**: 4ED and 5ED are pure
+Weatherlight (167), Tempest (335), Stronghold (143) and Core Set 2021 (285),
+2,966 unique cards, all classified as supported.
+**Twenty sets, and their sizes are the whole spread**: 4ED and 5ED are pure
 reprint sets, every one of their cards already in the pool, so they are the two
 sets that ship without implementing a card; Ice Age is the largest ever ingested and brought
 **346 new cards**, more than any set since Alpha; and Fallen Empires is the
@@ -32,16 +32,29 @@ sits between the two shapes and is the one to reason from**: 309 of its 335 are
 new and the 26 that were not are almost all furniture — twenty basic lands plus
 Counterspell, Dark Ritual, Pacifism and a few more — so its insert position
 moves **no card's origin at all**, and the printing-order guard is the only
-thing that can catch a wrong one. Which is why
-the per-set totals sum to far more than 2,824 — they are printings (4,587 of
+thing that can catch a wrong one.
+
+**Stronghold is the shape that looks like Tempest's and is not, and the
+difference is one card.** 142 of its 143 are new, so it reads as an all-new set
+and the prefix guard is blind to its position for the seventh consecutive set.
+But its single reprint is **Shock**, whose only other printing is **M21** — not
+Tempest — so STH's insert position decides Shock's *origin*: at index 18 it
+reads `sth`, and appended after M21 it reads `m21`, with every guard green
+either way. That is Mirage's Volcanic Geyser exactly, in a set whose one shared
+card makes it look impossible. **Count the reprints against the sets that
+actually print them, not against the set you expect.** Which is why
+the per-set totals sum to far more than 2,966 — they are printings (4,730 of
 them). Alliances was the
 first set to reach 100% with **zero name-keyed hooks**, across all 144, Visions
 is the second across all 167, **Weatherlight is the third** across all 167
-again, and **Tempest is the fourth and by far the largest** — 335 cards over
+again, **Tempest is the fourth and by far the largest** — 335 cards over
 eighteen parallel groups in four waves, every one told a hook was the last
 resort, and the set ships carrying exactly **one** hooked card, which is
-Alpha's Power Sink arriving as a reprint. Reliance is **2.1% of supported
-cards**, 60 of 2,824. `scripts/support_report.py` reports on the whole manifest pool, not one set. Card files hold only the fields
+Alpha's Power Sink arriving as a reprint — and **Stronghold is the fifth**,
+143 of 143 across ten parallel groups in two waves, adding no hook and
+*retiring* one (Mana Short's, as a side effect of a noun phrase). Reliance is
+**2.0% of supported cards**, 58 of 2,966, and it has now fallen in each of the
+last two sets while the pool grew. `scripts/support_report.py` reports on the whole manifest pool, not one set. Card files hold only the fields
 the engine and web layer read; `scripts/ingest_set.py` produces them. The
 engine is **registry-based**: card support grows by adding small isolated
 entries, never by editing core control flow.
@@ -56,9 +69,9 @@ and no player can put one of its cards in a deck. **It is empty today** — M21
 went in under it at 58% supported, Antiquities at 56.5%, Legends at 32.9%, The
 Dark at 47.9%, Fourth Edition at 100%, Ice Age at 49.3%, Fallen Empires at
 67.6%, Homelands at 66.1%, Fifth Edition at 100%, Alliances at 43.1%, Mirage
-at 54.9%, Visions at 59.3%, Weatherlight at 59.9% and Tempest at 67.8%, and all
-fourteen were promoted to `sets` once every card was, which is the role working
-as designed rather than a role nobody uses. 4ED is the degenerate case that shows what the role is
+at 54.9%, Visions at 59.3%, Weatherlight at 59.9%, Tempest at 67.8% and
+Stronghold at 67.8% again, and all fifteen were promoted to `sets` once every
+card was, which is the role working as designed rather than a role nobody uses. 4ED is the degenerate case that shows what the role is
 *for* rather than an exception to it: it entered `measured` fully supported and
 left the same day, and the ingest still paid — a guard proved itself unable to
 tell the roles apart for an all-reprint set, which is a finding only the

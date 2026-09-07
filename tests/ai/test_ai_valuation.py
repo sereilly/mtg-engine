@@ -402,6 +402,18 @@ def test_every_divided_card_in_the_pool_is_described(catalog):
         # printed two sets later with no edit, which is what "derived from the
         # compiled program, never a list of names" buys.
         "Rolling Thunder",
+        # Reviewed at Stronghold's promotion, and it adds nothing for the
+        # reason Rolling Thunder added nothing one set earlier -- which is the
+        # reviewable result rather than the absence of one. Elven Rite
+        # distributes **+1/+1** counters, so ``divided_shape`` reads the sign
+        # (CR 122.1a) and answers "you", exactly as it does for Bounty of the
+        # Hunt: same kind, same category, same side, and the opposite answer to
+        # Contagion's -2/-1 from the same derivation. No weight and no side list
+        # moved. The one thing it is first at is the *count* -- "one or two"
+        # target creatures, an optional second slot rather than a total to
+        # split -- and that is carried by ``max_targets`` on the description,
+        # which the side derivation does not read and should not.
+        "Elven Rite",
     }
     assert set(described) <= reviewed, sorted(set(described) - reviewed)
 

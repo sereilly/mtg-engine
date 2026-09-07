@@ -56,6 +56,11 @@ ACTIVATED_LABELS: dict[str, str] = {
     # dead for one wave: W1G5 built the tuck while the card was still
     # unsupported on its *shadow* line, which W1G1 landed in the same wave.
     "put_source_card_on_library_top": "activated_library",
+    # Volrath's Stronghold, the third of that group and the one that reaches a
+    # *graveyard* for what it tucks. Same bucket for the two rows above's
+    # reason: which zone the card comes from is not what the ability does, and
+    # the library is still the object it acts on.
+    "put_graveyard_cards_on_library_top": "activated_library",
     # Ersatz Gnomes and Raging Spirit change a colour, which Alchor's Tomb
     # settled as `activated_pump`: the report's word for a permanent changing
     # what it *is*.
@@ -328,6 +333,12 @@ ACTIVATED_LABELS: dict[str, str] = {
     # unclaimed marker carried across the deletion, not a bucket to copy.
     "discard_x_target_cards": "activated_discard",
     "name_and_random_reveal": "activated_discard",
+    # Volrath's Shapeshifter's own `{2}: Discard a card.`, and the CR 707.9a
+    # copy of it the card grants itself. Beside the row above: the discarding
+    # seat is the difference between them and not what the ability does, which
+    # is the same reading `draw_target_cards` takes from `draw_controller_cards`
+    # two rows down.
+    "discard_controller_cards": "activated_discard",
     # Xira Arien, beside `draw_controller_cards`: a draw is a draw whoever does
     # it.
     "draw_target_cards": "activated_draw",
@@ -634,6 +645,13 @@ TRIGGERED_LABELS: dict[str, str] = {
     "exile_graveyard_cards": "triggered_exile",
     "exile_bound_card": "triggered_exile",
     "look_at_library_top_then_bottom": "triggered_library",
+    # Mortuary's "whenever a creature is put into your graveyard from the
+    # battlefield, put that card on top of your library". `triggered_library`
+    # rather than `triggered_recursion`, for the reason the three
+    # `put_*_on_library_top` rows take `activated_library` on the other side:
+    # the library is the object the ability acts on, and which zone the card
+    # came from is payload.
+    "put_iterated_card_on_library": "triggered_library",
     # Phasing is a permanent leaving and coming back, which is the word the
     # activated side settled on for the same pair of kinds.
     "phase_out_self": "triggered_recursion",
@@ -641,6 +659,12 @@ TRIGGERED_LABELS: dict[str, str] = {
     "add_counter_to_each_matching": "triggered_counter",
     "tap_target_permanent": "triggered_tap",
     "discard_controller_cards": "triggered_discard",
+    # --- Stronghold, at its promotion ------------------------------------
+    # Bottomless Pit's "at the beginning of each player's upkeep, that player
+    # discards a card at random". Beside the row above, whose sentence is the
+    # same act with a different seat asked — who discards is payload, and the
+    # label is what the ability does.
+    "discard_x_target_cards": "triggered_discard",
     "gain_control_until_eot": "triggered_control",
     # --- Homelands ------------------------------------------------------
     # Two untap denials whose trigger is a combat moment rather than an
@@ -764,6 +788,11 @@ TRIGGERED_LABELS: dict[str, str] = {
     "destroy_target_permanent": "triggered_destruction",
     "discard_then_draw_that_many": "triggered_draw",
     "draw_controller_cards": "triggered_draw",
+    # Horn of Greed's "whenever a player plays a land, **that player** draws a
+    # card" — the row above with the drawing seat named rather than assumed,
+    # which is the same distinction `draw_target_cards` takes from it on the
+    # activated side. A draw is a draw whoever does it.
+    "draw_target_cards": "triggered_draw",
     "draw_then_discard_self": "triggered_draw",
     "exile_graveyard_until_leaves": "triggered_exile",
     "exile_self": "triggered_exile",
@@ -1031,6 +1060,14 @@ TRIGGERED_LABELS_BY_CONDITION: dict[tuple[str, str], str] = {
     # condition is what says when; the wrapper still says nothing about
     # the optional clause behind it.
     ("you_cast_spell", "may"): "triggered_cast",
+    # Burgeoning's "whenever an opponent plays a land, you may put a land card
+    # from your hand onto the battlefield". Added at Stronghold's promotion,
+    # not because Burgeoning changed but because Horn of Greed gave
+    # `land_played` a third value on its seat axis and the pair reached this
+    # table for the first time. `may` says nothing about what follows, so the
+    # row names the moment — CR 305.1's land drop, which is neither a cast nor
+    # a step.
+    ("land_played", "may"): "triggered_land_played",
     # Antiquities' two optional death triggers (Tablet of Epityr, Urza's
     # Miter), added at its promotion. `permanent_dies` is the wider condition
     # `dies` above narrows to a creature, and it names the same moment.

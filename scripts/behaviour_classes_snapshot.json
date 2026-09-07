@@ -45,6 +45,7 @@
     "Scathe Zombies",
     "Sir Shandlar of Eberyn",
     "Sivitri Scarzam",
+    "Spined Wurm",
     "Squire",
     "Staunch Shieldmate",
     "The Lady of the Mountain",
@@ -102,6 +103,15 @@
     "Wall of Wood"
   ],
   [
+    "Elvish Archers",
+    "Hornet Cobra",
+    "Land Leeches",
+    "Ramirez DePietro",
+    "Sabretooth Tiger",
+    "Stone-Throwing Devils",
+    "Youthful Knight"
+  ],
+  [
     "Bog Wraith",
     "Lost Soul",
     "Marsh Goblins",
@@ -118,14 +128,6 @@
     "Unholy Strength"
   ],
   [
-    "Elvish Archers",
-    "Hornet Cobra",
-    "Land Leeches",
-    "Ramirez DePietro",
-    "Sabretooth Tiger",
-    "Stone-Throwing Devils"
-  ],
-  [
     "Adventurers' Guildhouse",
     "Cathedral of Serra",
     "Mountain Stronghold",
@@ -138,6 +140,13 @@
     "Hunding Gjornersen",
     "Marhault Elsdragon",
     "Wolverine Pack"
+  ],
+  [
+    "Archangel",
+    "Bay Falcon",
+    "Skyshroud Falcon",
+    "Tempest Drake",
+    "Zephyr Falcon"
   ],
   [
     "Black Scarab",
@@ -210,12 +219,6 @@
     "Winter's Grasp"
   ],
   [
-    "Archangel",
-    "Bay Falcon",
-    "Tempest Drake",
-    "Zephyr Falcon"
-  ],
-  [
     "Benthic Behemoth",
     "Devouring Deep",
     "Pale Bears",
@@ -271,6 +274,11 @@
     "Shanodin Dryads"
   ],
   [
+    "Cloud Djinn",
+    "Cloud Elemental",
+    "Cloud Spirit"
+  ],
+  [
     "Colossal Dreadmaw",
     "Rootbreaker Wurm",
     "Wildwood Patrol"
@@ -299,6 +307,11 @@
     "Fetid Horror",
     "Frozen Shade",
     "Hoar Shade"
+  ],
+  [
+    "Fyndhorn Elves",
+    "Llanowar Elves",
+    "Skyshroud Troopers"
   ],
   [
     "Prodigal Sorcerer",
@@ -379,8 +392,8 @@
     "Diabolic Machine"
   ],
   [
-    "Cloud Djinn",
-    "Cloud Elemental"
+    "Craven Giant",
+    "Hulking Cyclops"
   ],
   [
     "D'Avenant Archer",
@@ -431,12 +444,16 @@
     "Reclamation"
   ],
   [
-    "Forest",
-    "Snow-Covered Forest"
+    "Flowstone Giant",
+    "Flowstone Shambler"
   ],
   [
-    "Fyndhorn Elves",
-    "Llanowar Elves"
+    "Force Spike",
+    "Mana Leak"
+  ],
+  [
+    "Forest",
+    "Snow-Covered Forest"
   ],
   [
     "Giant Growth",
@@ -453,6 +470,10 @@
   [
     "Grasp of Darkness",
     "Shrink"
+  ],
+  [
+    "Hammerhead Shark",
+    "Sea Monster"
   ],
   [
     "Hell Swarm",
@@ -523,6 +544,10 @@
     "War Elephant"
   ],
   [
+    "Nomads en-Kor",
+    "Warrior en-Kor"
+  ],
+  [
     "Northern Paladin",
     "Southern Paladin"
   ],
@@ -537,6 +562,10 @@
   [
     "Order of the Sacred Torch",
     "Stromgald Cabal"
+  ],
+  [
+    "Phantasmal Forces",
+    "Spindrift Drake"
   ],
   [
     "Piety",
@@ -569,6 +598,14 @@
   [
     "Soltari Monk",
     "Soltari Priest"
+  ],
+  [
+    "Staunch Defenders",
+    "Venerable Monk"
+  ],
+  [
+    "Torment",
+    "Weakness"
   ],
   [
     "Wall of Fire",

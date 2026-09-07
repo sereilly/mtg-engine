@@ -4,23 +4,24 @@ Cards the engine resolves through the same code paths, differing only in values 
 
 A card whose class contains a **verified** card needs no separate manual pass: it exercises no engine path that card didn't. This is weaker than checking the card — it inherits its peer's correctness, and cannot catch a card whose data breaks a generic path.
 
-- Cards in the catalog: **2824**
-- Distinct behaviours: **2564**
-- Cards sharing a behaviour with another: **365** in **105** classes
-- Unverified cards covered by a verified peer: **130**
+- Cards in the catalog: **2966**
+- Distinct behaviours: **2693**
+- Cards sharing a behaviour with another: **386** in **113** classes
+- Unverified cards covered by a verified peer: **135**
 
 | Size | Cards |
 | --- | --- |
-| 57 | Balduvian Barbarians, Balduvian Bears, Barbary Apes, Barktooth Warbeard, **Craw Wurm**, Crimson Kobolds, Crookshank Kobolds, Durkwood Boars, Dwarven Trader, **Earth Elemental**, Elvish Ranger, Femeref Scouts, **Fire Elemental**, Garruk's Gorehorn, Goblin Hero, **Gray Ogre**, **Grizzly Bears**, Headless Horseman, **Hill Giant**, Horned Turtle, **Hurloon Minotaur**, **Ironroot Treefolk**, Jasmine Boreal, Jedit Ojanen, Jerrard of the Closed Fist, Kasimir the Lone Wolf, Keepers of the Faith, Kobolds of Kher Keep, Lady Orca, Lowland Giant, **Merfolk of the Pearl Trident**, **Mons's Goblin Raiders**, Moss Monster, Onakke Ogre, Panther Warriors, **Pearled Unicorn**, Python, Raging Bull, Redwood Treefolk, **Savannah Lions**, Scaled Wurm, Scarwood Goblins, **Scathe Zombies**, Sir Shandlar of Eberyn, Sivitri Scarzam, Squire, Staunch Shieldmate, The Lady of the Mountain, Tobias Andrion, Tor Giant, Torsten Von Ursus, Trained Armodon, Viashino Warrior, Vodalian Soldiers, Walking Corpse, **Water Elemental**, Wishcoin Crab |
+| 58 | Balduvian Barbarians, Balduvian Bears, Barbary Apes, Barktooth Warbeard, **Craw Wurm**, Crimson Kobolds, Crookshank Kobolds, Durkwood Boars, Dwarven Trader, **Earth Elemental**, Elvish Ranger, Femeref Scouts, **Fire Elemental**, Garruk's Gorehorn, Goblin Hero, **Gray Ogre**, **Grizzly Bears**, Headless Horseman, **Hill Giant**, Horned Turtle, **Hurloon Minotaur**, **Ironroot Treefolk**, Jasmine Boreal, Jedit Ojanen, Jerrard of the Closed Fist, Kasimir the Lone Wolf, Keepers of the Faith, Kobolds of Kher Keep, Lady Orca, Lowland Giant, **Merfolk of the Pearl Trident**, **Mons's Goblin Raiders**, Moss Monster, Onakke Ogre, Panther Warriors, **Pearled Unicorn**, Python, Raging Bull, Redwood Treefolk, **Savannah Lions**, Scaled Wurm, Scarwood Goblins, **Scathe Zombies**, Sir Shandlar of Eberyn, Sivitri Scarzam, Spined Wurm, Squire, Staunch Shieldmate, The Lady of the Mountain, Tobias Andrion, Tor Giant, Torsten Von Ursus, Trained Armodon, Viashino Warrior, Vodalian Soldiers, Walking Corpse, **Water Elemental**, Wishcoin Crab |
 | 13 | **Air Elemental**, Armored Pegasus, Azure Drake, **Bird Maiden**, Concordia Pegasus, Feral Shadow, Fighting Drake, **Flying Men**, **Phantom Monster**, **Roc of Kher Ridges**, **Scryb Sprites**, Willow Faerie, Wind Drake |
 | 8 | Abbey Gargoyles, Cerulean Wyvern, Duskrider Falcon, Freewind Falcon, Hazerider Drake, Melesse Spirit, Sea Sprite, Windreaper Falcon |
 | 7 | **Benalish Hero**, Benalish Infantry, Icatian Phalanx, Kjeldoran Escort, Kjeldoran Warrior, Shield Bearer, **Timber Wolves** |
 | 7 | Blistering Barrier, Glacial Wall, Wall of Earth, Wall of Heat, **Wall of Ice**, **Wall of Stone**, **Wall of Wood** |
+| 7 | **Elvish Archers**, Hornet Cobra, Land Leeches, Ramirez DePietro, Sabretooth Tiger, **Stone-Throwing Devils**, Youthful Knight |
 | 6 | **Bog Wraith**, Lost Soul, Marsh Goblins, Moor Fiend, Pygmy Allosaurus, Warthog |
 | 6 | Divine Transformation, Feast of the Unicorn, Giant Strength, Hero's Resolve, **Holy Strength**, **Unholy Strength** |
-| 6 | **Elvish Archers**, Hornet Cobra, Land Leeches, Ramirez DePietro, Sabretooth Tiger, **Stone-Throwing Devils** |
 | 5 | Adventurers' Guildhouse, Cathedral of Serra, Mountain Stronghold, Seafarer's Quay, Unholy Citadel |
 | 5 | Aerathi Berserker, Frost Giant, Hunding Gjornersen, Marhault Elsdragon, Wolverine Pack |
+| 5 | Archangel, Bay Falcon, Skyshroud Falcon, Tempest Drake, Zephyr Falcon |
 | 5 | Black Scarab, Blue Scarab, Green Scarab, Red Scarab, White Scarab |
 | 5 | **Black Ward**, **Blue Ward**, **Green Ward**, **Red Ward**, **White Ward** |
 | 5 | **Circle of Protection: Black**, **Circle of Protection: Blue**, **Circle of Protection: Green**, **Circle of Protection: Red**, **Circle of Protection: White** |
@@ -31,7 +32,6 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 5 | Emerald Medallion, Jet Medallion, Pearl Medallion, Ruby Medallion, Sapphire Medallion |
 | 5 | Hematite Talisman, Lapis Lazuli Talisman, Malachite Talisman, Nacre Talisman, Onyx Talisman |
 | 5 | **Ice Storm**, Rain of Tears, **Sinkhole**, **Stone Rain**, Winter's Grasp |
-| 4 | Archangel, Bay Falcon, Tempest Drake, Zephyr Falcon |
 | 4 | Benthic Behemoth, Devouring Deep, Pale Bears, Segovian Leviathan |
 | 4 | Clergy en-Vec, Femeref Healer, Orim, Samite Healer, **Samite Healer** |
 | 4 | **Deathlace**, **Lifelace**, **Purelace**, **Thoughtlace** |
@@ -42,12 +42,14 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 3 | Burn Bright, Shield Wall, Warrior's Honor |
 | 3 | Canopy Spider, Giant Mantis, **Giant Spider** |
 | 3 | Cat Warriors, Heartwood Treefolk, **Shanodin Dryads** |
+| 3 | Cloud Djinn, Cloud Elemental, Cloud Spirit |
 | 3 | Colossal Dreadmaw, Rootbreaker Wurm, Wildwood Patrol |
 | 3 | Darkness, **Fog**, Holy Day |
 | 3 | Dauthi Marauder, Soltari Foot Soldier, Thalakos Sentry |
 | 3 | Drowned, Restless Dead, Walking Dead |
 | 3 | Ekundu Griffin, Sky Spirit, Thunder Spirit |
 | 3 | Fetid Horror, **Frozen Shade**, Hoar Shade |
+| 3 | Fyndhorn Elves, **Llanowar Elves**, Skyshroud Troopers |
 | 3 | **Prodigal Sorcerer**, Rootwater Hunter, Zuran Spellcaster |
 | 3 | Spirit Shield, Tawnos's Weaponry, Zelyon Sword |
 | 2 | Adarkar Sentinel, Dragon Engine |
@@ -67,7 +69,7 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 2 | Cemetery Gate, Wall of Light |
 | 2 | Charging Rhino, Stalking Tiger |
 | 2 | Clay Statue, Diabolic Machine |
-| 2 | Cloud Djinn, Cloud Elemental |
+| 2 | Craven Giant, Hulking Cyclops |
 | 2 | D'Avenant Archer, Heavy Ballista |
 | 2 | **Dandân**, **Sea Serpent** |
 | 2 | Deadly Insect, Pincher Beetles |
@@ -80,12 +82,14 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 2 | Flame Spirit, Storm Shaman |
 | 2 | Fledgling Djinn, **Serendib Efreet** |
 | 2 | Flooded Woodlands, Reclamation |
+| 2 | Flowstone Giant, Flowstone Shambler |
+| 2 | Force Spike, Mana Leak |
 | 2 | **Forest**, Snow-Covered Forest |
-| 2 | Fyndhorn Elves, **Llanowar Elves** |
 | 2 | **Giant Growth**, Titanic Growth |
 | 2 | Goblin Mutant, Orgg |
 | 2 | Gorilla Chieftain, Skyshroud Troll |
 | 2 | Grasp of Darkness, Shrink |
+| 2 | Hammerhead Shark, Sea Monster |
 | 2 | Hell Swarm, Marsh Gas |
 | 2 | Hydroblast, Pyroblast |
 | 2 | **Island**, Snow-Covered Island |
@@ -103,10 +107,12 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 2 | **Mountain**, Snow-Covered Mountain |
 | 2 | Mtenda Herder, Shadow Rider |
 | 2 | Noble Elephant, **War Elephant** |
+| 2 | Nomads en-Kor, Warrior en-Kor |
 | 2 | **Northern Paladin**, Southern Paladin |
 | 2 | **Orcish Artillery**, Orcish Cannoneers |
 | 2 | Order of Leitbur, Order of the White Shield |
 | 2 | Order of the Sacred Torch, Stromgald Cabal |
+| 2 | **Phantasmal Forces**, Spindrift Drake |
 | 2 | **Piety**, Rally |
 | 2 | **Plains**, Snow-Covered Plains |
 | 2 | **Resurrection**, Rise Again |
@@ -115,6 +121,8 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 2 | Sisay's Ring, **Sol Ring** |
 | 2 | Snow-Covered Swamp, **Swamp** |
 | 2 | Soltari Monk, Soltari Priest |
+| 2 | Staunch Defenders, Venerable Monk |
+| 2 | Torment, **Weakness** |
 | 2 | **Wall of Fire**, Wall of Lava |
 
 Bold = manually verified; the rest of that row is covered by it.

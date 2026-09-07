@@ -128,6 +128,13 @@
   ]
  },
  {
+  "card": "Awakening",
+  "clause": "untap all creatures and lands",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Backdraft",
   "clause": "choose a player who cast one or more sorcery spells this turn. backdraft deals damage to that player equal to half the damage dealt by one of those sorcery spells this turn, rounded down",
   "ignored": [
@@ -482,6 +489,13 @@
   ]
  },
  {
+  "card": "Elven Rite",
+  "clause": "distribute two +1/+1 counters among one or two target creatures",
+  "ignored": [
+   "target"
+  ]
+ },
+ {
   "card": "Energy Vortex",
   "clause": "this enchantment deals 3 damage to that player unless they pay {1} for each vortex counter on this enchantment",
   "ignored": [
@@ -514,6 +528,13 @@
   "clause": "starting with you, each player may put a permanent card from their hand onto the battlefield. repeat this process until no one puts a card onto the battlefield",
   "ignored": [
    "permanent"
+  ]
+ },
+ {
+  "card": "Evacuation",
+  "clause": "return all creatures to their owners' hands",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -880,6 +901,13 @@
   ]
  },
  {
+  "card": "Intruder Alarm",
+  "clause": "untap all creatures",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Ivory Charm",
   "clause": "all creatures get -2/-0 until end of turn",
   "ignored": [
@@ -1068,6 +1096,13 @@
   ]
  },
  {
+  "card": "Mind Games",
+  "clause": "tap target artifact, creature, or land",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
   "card": "Minion of Leshrac",
   "clause": "this creature deals 5 damage to you unless you sacrifice a creature other than this creature. if this creature deals damage to you this way, tap it",
   "ignored": [
@@ -1102,6 +1137,13 @@
   "clause": "this creature deals 3 damage to you unless you discard a card. if it deals damage to you this way, tap it",
   "ignored": [
    "creature"
+  ]
+ },
+ {
+  "card": "Mogg Infestation",
+  "clause": "destroy all creatures target player controls. for each creature that died this way, that player creates two 1/1 red goblin creature tokens",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -1245,6 +1287,15 @@
   ]
  },
  {
+  "card": "Reins of Power",
+  "clause": "untap all creatures you control and all creatures target opponent controls. you and that opponent each gain control of all creatures the other controls until end of turn. those creatures gain haste until end of turn",
+  "ignored": [
+   "all",
+   "all",
+   "all"
+  ]
+ },
+ {
   "card": "Relearn",
   "clause": "return target instant or sorcery card from your graveyard to your hand",
   "ignored": [
@@ -1317,6 +1368,13 @@
   "clause": "put a wage counter on this creature. you may pay {2} for each wage counter on it. if you don't, remove all wage counters from this creature and an opponent gains control of it",
   "ignored": [
    "creature"
+  ]
+ },
+ {
+  "card": "Ruination",
+  "clause": "destroy all nonbasic lands",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -1420,6 +1478,13 @@
  {
   "card": "Shadowstorm",
   "clause": "shadowstorm deals 2 damage to each creature with shadow",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
+  "card": "Shard Phoenix",
+  "clause": "it deals 2 damage to each creature without flying",
   "ignored": [
    "each"
   ]
@@ -1631,6 +1696,13 @@
   "clause": "all attacking creatures with flanking get +1/+1 until end of turn",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Temper",
+  "clause": "prevent the next x damage that would be dealt to target creature this turn. for each 1 damage prevented this way, put a +1/+1 counter on that creature",
+  "ignored": [
+   "1"
   ]
  },
  {
