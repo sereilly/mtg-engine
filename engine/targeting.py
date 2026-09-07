@@ -962,6 +962,21 @@ def _cost_picker_spec(cost, *, announced: dict | None = None) -> dict | None:
     if offer_key is not None and not (announced or {}).get(offer_key):
         return None
     if getattr(cost, "discard_cards", 0):
+        # "Discard a card **at random**" (Coral Helm, Stormbind, Amok,
+        # Draconian Cylix, Canyon Drake; Sonic Burst and Flowstone Flood on the
+        # cast side). The payer names **nothing**, so there is no choice for a
+        # picker to collect — and both payment paths already ignore a named
+        # card here, deliberately, because honouring one would hand the choice
+        # back and make the cost strictly better than the card prints.
+        #
+        # So a picker was a prompt whose answer was discarded: the client asked
+        # which card to bin, the player chose, and the RNG binned a different
+        # one. Nothing crashed, nothing was missing, and the card was **wrong in
+        # the player's favour** right up to the moment the answer was thrown
+        # away. It is refused here rather than in each caller for this
+        # function's own stated reason: all three of them must give one answer.
+        if getattr(cost, "discard_at_random", False):
+            return None
         spec = {
             "kind": "hand_card",
             "own_only": True,
@@ -1206,6 +1221,15 @@ def _counter_spec(payload: dict) -> dict:
         # handler tests at resolution, so the picker offers exactly what the
         # counter would counter.
         spec["stack_card_types"] = list(card_types)
+    excluded_types = payload.get("excluded_types")
+    if excluded_types:
+        # Null Brooch: "target **noncreature** spell" — the complement of the
+        # union above, handed to the picker under its own key so the offer and
+        # the counter name the same set. Without it the ability is activatable
+        # against a creature spell, the {2} and the whole hand are paid, and the
+        # handler then declines: a cost spent for nothing, which is the shape
+        # ``activation_target_refusal`` exists to prevent.
+        spec["stack_excluded_types"] = list(excluded_types)
     any_classes = payload.get("any_classes")
     if any_classes:
         # "target instant or Aura spell" (Avoid Fate, Ring of Immortals) — the

@@ -2598,6 +2598,21 @@ class LegalityMixin:
             stack_card_types = spec.get("stack_card_types")
             if stack_card_types and item_card.primary_type not in stack_card_types:
                 continue
+            # Null Brooch: "target **noncreature** spell" — the complement,
+            # asked through ``_spell_is_one_of`` rather than through
+            # ``primary_type`` above it. That is the handler's own reader, and
+            # the difference is load-bearing here in a way it is not for the
+            # union: CR 205.2 gives an artifact creature spell *both* types, so
+            # a ``primary_type`` test would offer it ("artifact" is not
+            # "creature") and the handler would then decline — the whole hand
+            # discarded for nothing. See the note in the report: the union above
+            # still makes the reading the handler stopped making.
+            stack_excluded_types = spec.get("stack_excluded_types")
+            if stack_excluded_types:
+                from .handlers.stack import _spell_is_one_of
+
+                if _spell_is_one_of(item_card, stack_excluded_types):
+                    continue
             # "target instant or **Aura** spell" (Avoid Fate, Ring of
             # Immortals): the same cross-axis union the handler tests, asked
             # through the same reader, so the picker offers exactly what the

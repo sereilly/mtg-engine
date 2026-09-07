@@ -672,6 +672,11 @@ def _live(game, event: dict, kind: str, *, chosen: bool | None = None):
         # the same one shield, which is what "prevent **all** damage that would
         # be dealt by that spell" means.
         + _resolving_object_shields(game)
+        # …and the shields that watch no recipient and outlive their resolution
+        # (Penance). The third and last way a shield can be reached from an
+        # event, beside "it hangs on the recipient" and "its phrase names the
+        # recipient".
+        + _table_shields(game)
     ):
         if shield.kind != kind or shield.spent:
             continue
@@ -690,6 +695,32 @@ def _live(game, event: dict, kind: str, *, chosen: bool | None = None):
         yield shield
 
 
+def _table_shields(game) -> list[Shield]:
+    """The shields that watch **no recipient at all** and outlive the resolution
+    that armed them, oldest seat first.
+
+    "The next time a black or red source of your choice would deal damage this
+    turn, prevent that damage." (Penance.) CR 615.8 defines this shield by the
+    source alone — the rule's own words have no recipient in them — so it stops
+    that source's next damage whoever it was headed for, a player or a
+    permanent alike.
+
+    The shield still *lives* on the seat that armed it, which is where the
+    cleanup sweep can find it to expire; what this function supplies is the
+    other half, the reach. That is the same split ``_class_shields`` above makes
+    for Shadowbane and ``_resolving_object_shields`` below makes for Hidden
+    Retreat — the difference between them is only what a shield with no
+    recipient of its own hangs off, and Penance's has to be a seat because it
+    outlives the stack object.
+    """
+    found: list[Shield] = []
+    for player in game.players:
+        found.extend(
+            shield for shield in shields_on(player) if shield.any_recipient
+        )
+    return found
+
+
 def _arms(kind: str, *, chosen: bool | None = None, player_only: bool = False) -> Applicability:
     """The applicability predicate for a shield of *kind*: is one armed that
     would remove at least a point from this event?
@@ -697,11 +728,22 @@ def _arms(kind: str, *, chosen: bool | None = None, player_only: bool = False) -
     "Would remove a point" rather than merely "is armed" is the deliberate
     reading, and it is the one place this differs from Aladdin's Lamp — see
     ``_forcefield_chosen_attacker``, which is the shield it could bite.
+
+    *player_only* is a fact about the shields a kind's pool holds, not about the
+    kind: every Circle of Protection prints "to you", so a colour shield reached
+    from a permanent was a shield that could not exist. Penance is that kind's
+    first printing with no recipient (CR 615.8), and it is reached from a
+    damaged *creature* as readily as from a player — so the gate asks the
+    shields rather than refusing outright, and every recipient-bound shield of
+    the kind stays exactly as restricted as it was.
     """
 
     def applies(game, event: dict) -> bool:
         if player_only and not isinstance(event["recipient"], PlayerState):
-            return False
+            return any(
+                shield.any_recipient
+                for shield in _live(game, event, kind, chosen=chosen)
+            )
         return next(_live(game, event, kind, chosen=chosen), None) is not None
 
     return applies
@@ -1152,9 +1194,16 @@ def _whole_prevention_generic(game, event: dict) -> PreventionOutcome | None:
 
 
 def _log_color_prevention(game, event: dict, used: list[Shield], prevented: int) -> None:
+    # Through ``recipient_label``, which exists for exactly the reason this line
+    # needed it: every Circle prints "to you", so this read ``.name`` off a
+    # PlayerState and could not have been wrong until Penance armed the same
+    # kind with no recipient at all and a **creature** was the one damaged. That
+    # is the widened-gate class — a reader keyed on the classification the gate
+    # used to guarantee — and here it raised rather than lying, which is the
+    # good half of it.
     game.log.append(
         f"Circle of Protection prevented {prevented} damage to "
-        f"{event['recipient'].name} from a "
+        f"{recipient_label(event['recipient'])} from a "
         + ("/".join(used[0].colors) or str(used[0].source_type or "chosen"))
         + " source"
     )

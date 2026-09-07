@@ -310,12 +310,21 @@ def _parse_source_of_choice_effect(
             one_shot=True,
             chooser=chooser,
         )
-    if recipient is None:
-        # Every branch below is a *shield*, and CR 615.1 puts one around
-        # something — with no recipient printed there is nothing for it to go
-        # around. Only the redirect above can read the sentence without one,
-        # because it names where the damage goes instead. Rewound rather than
-        # raised, so the line keeps whatever refusal it had.
+    if recipient is None and not (colours or card_type or chosen_color):
+        # A shield naming **neither** a recipient nor a property of the source
+        # would answer to the next damage anything deals to anybody, which is a
+        # card nobody has printed and the widest reading of every sentence this
+        # production reads. Rewound rather than raised, so the line keeps
+        # whatever refusal it had.
+        #
+        # A recipient on its own is no longer required, and CR 615.8 is why: the
+        # rule defines this shield by "the next time a specific **source** would
+        # deal damage", with no recipient in it at all. "The next time a black
+        # or red source of your choice would deal damage this turn, prevent that
+        # damage." (Penance) is that sentence printed without one, and it
+        # prevents that source's next damage to whoever it was headed for.
+        # Every Circle of Protection prints "to you", which is what made the
+        # recipient look like part of the shape.
         stream.reset(mark)
         return None
     # "…, prevent **half** that damage, rounded down." (Dark Sphere.) The same

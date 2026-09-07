@@ -1538,6 +1538,30 @@ ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
         "only during your turn",
     ),
     ActivationRestriction(
+        # "Any player may activate this ability but only during **their**
+        # turn." (Volrath's Dungeon.) The same window as the row above with the
+        # possessive that goes with a *widened* permission: where "your turn"
+        # is printed on an ability only its controller may activate, "their
+        # turn" is printed beside "any player may activate this ability" and
+        # names whoever is activating it.
+        #
+        # Which is why it shares ``_during_your_turn``'s predicate rather than
+        # needing one: that function compares the **activator's** seat against
+        # the active player, because ``activation_denial``'s ``controller_index``
+        # is the seat doing the activating (``activate_permanent_ability``'s
+        # first argument) and not the permanent's controller. The two clauses
+        # ask one question; only the printed pronoun differs, and it differs
+        # because the permission beside it does.
+        #
+        # Its own row rather than a widened regex on the one above, for that
+        # row's own reason two rows up: the second card to print a clause
+        # usually prints the other half of the template, and the halves are
+        # printed with different permissions in front of them.
+        re.compile(r"^(?:activate )?only during their turn$"),
+        _during_your_turn,
+        "only during their turn",
+    ),
+    ActivationRestriction(
         # "Activate only if it's not your turn." (Ghost Town.) The row above
         # negated, and it is a row rather than a comment because the clause was
         # **unenforced**: the grammar admits an "Activate only …" sentence only

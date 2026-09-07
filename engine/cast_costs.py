@@ -203,6 +203,20 @@ class AdditionalCost:
     #: pays — never "nothing pays", which is what a refusal means and why the
     #: reader returns None for that instead.
     discard_filters: tuple[dict, ...] = ()
+    #: "Buyback—Pay 3 life, **Discard a card at random**." (Flowstone Flood.)
+    #: "As an additional cost to cast this spell, **discard a card at random**."
+    #: (Sonic Burst.) The same field name ``ActivatedAbilityCost`` carries for
+    #: the identically printed clause, and its own flag rather than an empty
+    #: ``discard_filters`` for the reason that side states: "at random" is not a
+    #: narrowing of *which* cards may pay — every card in hand may — it is the
+    #: removal of the payer's **choice**, and a cost the payer picks is a
+    #: strictly better cost than one chance picks. The two shapes look identical
+    #: in the filter list and are not.
+    #:
+    #: It never affects payability: the gate below counts cards, and how the
+    #: card is chosen out of a hand large enough cannot make the cost unpayable
+    #: (CR 601.2h).
+    discard_at_random: bool = False
     #: "…by paying **3 life** and discarding a card" (Demonic Embrace).
     #: CR 119.4 caps a life payment at the payer's life total and CR 601.2h then
     #: makes an unpayable cost an uncastable spell, checked with
@@ -360,7 +374,10 @@ class AdditionalCost:
         if self.discard_cards:
             named = filter_head_noun(self.discard_filters[0]) if self.discard_filters else "card"
             how_many = "X" if self.discard_count_x else str(self.discard_cards)
-            parts.append(f"discard {how_many} {named}(s)")
+            parts.append(
+                f"discard {how_many} {named}(s)"
+                + (" at random" if self.discard_at_random else "")
+            )
         return " and ".join(parts) or "no additional cost"
 
 
@@ -459,7 +476,22 @@ _COST_CLAUSES: tuple[tuple[re.Pattern[str], str], ...] = (
     # happens. Here the count is not printed at all -- it is announced, and the
     # payment collects exactly what was announced.
     (re.compile(r"^(?:discard|discarding) x (?P<noun>.+)$"), "discard_x"),
-    (re.compile(r"^(?:discard|discarding) (?P<noun>(?:a|an|one) .+)$"), "discard"),
+    # "…, **discard two cards**." (Forbid, through CR 702.27a's rewrite of its
+    # buyback line.) "…, **discard a card at random**." (Flowstone Flood, Sonic
+    # Burst.) One catch-all row read by :func:`read_discard_clause`, which is
+    # the arrangement the sacrifice and the return rows below already have and
+    # is here for their reason: the count and the "at random" rider are printed
+    # around the noun phrase, so splitting them off in the row's regex would put
+    # a second reading of the phrase beside ``_chargeable_discard_filters``.
+    #
+    # This row used to be the literal ``(?:a|an|one) .+``, whose note said a
+    # counted discard "is a shape nothing charges". That was true of the *cast*
+    # path when it was written and is no longer: ``_pay_additional_costs``
+    # already loops ``discarded_count(x_value)`` times, because the announced X
+    # of Firestorm needed exactly that loop — so a printed count charges through
+    # the same code an announced one does. The reader refuses whatever it cannot
+    # charge, which is what keeps the widening from admitting a free cast.
+    (re.compile(r"^(?:discard|discarding) (?P<noun>.+)$"), "discard"),
     # The **noun phrase is read, not spelled out**. This row was
     # ``sacrifice a creature`` as a literal, so Goblin Grenade's "sacrifice a
     # **Goblin**" matched nothing at all -- and a clause the table cannot read
@@ -508,6 +540,46 @@ _COST_CLAUSES: tuple[tuple[re.Pattern[str], str], ...] = (
     ),
     (re.compile(r"^(?:exile|exiling) (?P<noun>.+)$"), "exile"),
 )
+
+
+def read_discard_clause(
+    phrase: str,
+) -> tuple[tuple[dict, ...], int, bool] | None:
+    """What "discard <noun phrase>" charges — ``(filters, count, at_random)`` —
+    or None when the payment path cannot collect it.
+
+    The count splits off the front exactly as :func:`read_sacrifice_clause`
+    splits one, and the ``at random`` rider comes off the **back** before the
+    noun parser sees the phrase at all — the same order, and for the same
+    reason, that ``oracle._chargeable_activation_cost`` strips it on the
+    activation side (CR 601.2b and CR 602.2b are one announcement step). "At
+    random" is not part of what the card must *be*; it says who picks. Left in,
+    the noun parser refuses "a card at random" and the whole cost sentence goes
+    unread, which for a card whose other line compiles is a spell cast for free.
+
+    The alternatives go through ``oracle._chargeable_discard_filters``, the one
+    reader an activation cost's discard already uses, so what may pay a printed
+    discard is one answer wherever the discard is printed. An empty tuple from
+    it is the unrestricted "discard a card" and a real answer; None is the
+    refusal, and it propagates.
+
+    A count of zero or one falls through to the singular, which is where
+    "a card" has always been read: ``_NUMBER_WORDS`` maps "a", "an" and "one" to
+    1, so an article can never be mistaken for a count.
+    """
+    from .oracle import _chargeable_discard_filters
+
+    rest = phrase.strip()
+    at_random = rest.endswith(" at random")
+    if at_random:
+        rest = rest[: -len(" at random")].strip()
+    count, _, tail = rest.partition(" ")
+    number = int(count) if count.isdigit() else _NUMBER_WORDS.get(count, 0)
+    if number >= 2 and tail:
+        narrowed = _chargeable_discard_filters(tail)
+        return None if narrowed is None else (narrowed, number, at_random)
+    narrowed = _chargeable_discard_filters(rest)
+    return None if narrowed is None else (narrowed, 1, at_random)
 
 
 def read_sacrifice_clause(phrase: str) -> tuple[dict, int] | None:
@@ -712,6 +784,7 @@ def _read_cost_clauses(costs: str) -> dict | None:
     fields: dict = {
         "pay_life": 0, "pay_life_x": False, "discard_cards": 0,
         "discard_filters": (), "discard_count_x": False,
+        "discard_at_random": False,
         "sacrifice_filter": None, "sacrifice_count": 1, "exile_filter": None,
         "exile_graveyard_filter": None, "exile_graveyard_count": 1,
         "exile_graveyard_count_x": False,
@@ -769,19 +842,28 @@ def _read_cost_clauses(costs: str) -> dict | None:
                     # than the two narrowings printed. Refused whole, which is
                     # this function's rule everywhere else.
                     return None
-                narrowed = _chargeable_discard_filters(found.group("noun"))
-                if narrowed is None:
-                    return None
-                # ``discard_cards`` stays the printed *count* — 1 for the
-                # singular clause, and 1 here too, because an announced X of
-                # zero is still a cost this card prints and every "is there a
-                # discard on this cast?" reader is a truth test on this field.
-                # How many cards are actually charged is
-                # ``discarded_count(x_value)``, which is the one reader the gate
-                # and the payment share.
-                fields["discard_cards"] += 1
-                fields["discard_filters"] = narrowed
-                fields["discard_count_x"] = field == "discard_x"
+                if field == "discard_x":
+                    narrowed = _chargeable_discard_filters(found.group("noun"))
+                    if narrowed is None:
+                        return None
+                    # ``discard_cards`` stays the printed *count* — 1 here,
+                    # because an announced X of zero is still a cost this card
+                    # prints and every "is there a discard on this cast?" reader
+                    # is a truth test on this field. How many cards are actually
+                    # charged is ``discarded_count(x_value)``, the one reader
+                    # the gate and the payment share.
+                    fields["discard_cards"] += 1
+                    fields["discard_filters"] = narrowed
+                    fields["discard_count_x"] = True
+                else:
+                    read = read_discard_clause(found.group("noun"))
+                    if read is None:
+                        return None
+                    (
+                        fields["discard_filters"],
+                        fields["discard_cards"],
+                        fields["discard_at_random"],
+                    ) = read
             elif field == "return":
                 if fields["return_filter"] is not None:
                     # Two return clauses would need two filters and one field
@@ -1018,7 +1100,22 @@ _BUYBACK_LINE = re.compile(
 #: this file cannot read — a buyback whose cost is not mana, say — is reported
 #: as an unimplemented cost rather than falling through to a gate that never
 #: heard of the keyword and casting the spell for its printed mana alone.
-_BUYBACK_SHAPE = re.compile(r"^buyback\b", re.IGNORECASE)
+#:
+#: **What follows the word has to be a cost**, and the width is kept by not
+#: asking whether it is a cost this file can *charge*: CR 702.27a is
+#: "Buyback [cost]", and every printing of one opens its cost with a mana
+#: symbol or with the em dash a non-mana cost is printed behind. So a
+#: "Buyback {X}" nobody can pay still matches here and is still reported.
+#:
+#: This was a bare "^buyback" word-boundary probe until Memory Crystal, whose
+#: line -- "Buyback costs cost {2} less." -- is not a keyword line at all but a
+#: static ability *about* buyback costs, read in full by
+#: ``engine/cost_modifiers.py``. The prefix claimed it, the rewrite could not
+#: read it, and the card was reported as a cost nothing charges: a gate refusing
+#: a card another table implements, which is the one direction this gate is not
+#: for. The plural noun after the keyword is what says so, and a cost never
+#: begins with one.
+_BUYBACK_SHAPE = re.compile(r"^buyback\s*(?:[—–-]|\{)", re.IGNORECASE)
 
 #: "**Buyback—Sacrifice a land**." (Constant Mists.) CR 702.27's cost is any
 #: cost, not a run of mana symbols, and the printed form for a non-mana one puts
@@ -1043,6 +1140,26 @@ BUYBACK_RULES_TEXT = (
 BUYBACK_COST_RULES_TEXT = (
     "As an additional cost to cast this spell, you may {cost}."
 )
+
+
+#: Where one clause of a printed cost list ends, as ``_read_cost_clauses``
+#: splits it. Named once so the rewrite and the reader cannot disagree about
+#: what a clause is.
+_COST_CLAUSE_SPLIT = re.compile(r"(,\s*|\s+and\s+)")
+
+
+def _lowered_clauses(printed: str) -> str:
+    """*printed* with the first letter of each clause lowercased.
+
+    Only the first letter of each, never the whole word and never the whole
+    clause: a printed subtype ("sacrifice a **Goblin**") is read by the noun
+    parser with its case intact, and a wholesale lowercasing would eat it.
+    """
+    pieces = _COST_CLAUSE_SPLIT.split(printed)
+    return "".join(
+        piece if index % 2 else piece[:1].lower() + piece[1:]
+        for index, piece in enumerate(pieces)
+    )
 
 
 def _buyback_line_offer(line: str) -> tuple[str, str] | None:
@@ -1079,10 +1196,18 @@ def _buyback_line_offer(line: str) -> tuple[str, str] | None:
     # land"); mid-sentence it is not. Only the first letter is touched — a
     # wholesale lowercasing would eat a printed subtype ("sacrifice a Goblin"),
     # which the noun reader needs the case of.
+    #
+    # **Every clause, not only the first.** A buyback cost is a *list* — "Pay 3
+    # life, Discard a card at random" (Flowstone Flood) — and Magic capitalizes
+    # each item of it, because each opens where a sentence would. Lowering only
+    # the leading letter of the whole line left "Discard" capitalized in the
+    # middle of the rewritten sentence, where ``_COST_CLAUSES``' rows are
+    # lowercase and match nothing: the clause went unread and, by
+    # ``_read_cost_clauses``' all-or-nothing rule, took the whole cost with it.
+    # The split is the same one that reader splits on, so a clause boundary
+    # cannot mean two things.
     clause = match.group("cost").strip().rstrip(".")
-    sentence = BUYBACK_COST_RULES_TEXT.format(
-        cost=clause[:1].lower() + clause[1:]
-    )
+    sentence = BUYBACK_COST_RULES_TEXT.format(cost=_lowered_clauses(clause))
     read = _printed_additional_cost(sentence)
     if read is None or read.optional_key is None:
         return None

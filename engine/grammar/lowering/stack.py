@@ -38,6 +38,10 @@ _COUNTER_HONOURED_FILTER_FIELDS = frozenset({
     # (Avoid Fate, Ring of Immortals) — both read below and both tested by the
     # handler against the spell it chose.
     "any_classes", "targets_object",
+    # "Counter target **noncreature** spell." (Null Brooch.) The complement of
+    # ``card_types``, and honoured by the same three readers it is — the
+    # handler's test, the picker's spec and the stack enumeration behind it.
+    "excluded_types",
 })
 
 # The "unless … pays" costs the counter flow can offer: ``{X}`` (Power Sink,
@@ -375,6 +379,24 @@ def _lower_counter_spell(node: ast.CounterSpell) -> tuple[OracleInstruction, ...
                 node=node,
             )
         payload["card_types"] = list(filt.card_types)
+    if filt.excluded_types:
+        # "Counter target **noncreature** spell." (Null Brooch.) The complement
+        # of the union above and its own key, never a negated entry in it: the
+        # handler's test is an `any`, so a "noncreature" word sitting in
+        # ``card_types`` would counter every spell that *is* a creature — the
+        # card inverted, with nothing to crash.
+        #
+        # The printed "spell" is required for the reason it is above: without
+        # it the phrase reads as "target noncreature permanent" and lowers
+        # identically, which is the dropped-rider shape the deletion probe
+        # exists to report.
+        if filt.zone != "stack":
+            raise LoweringError(
+                "a type-excluding counter targets a **spell**; this phrase "
+                "names a permanent",
+                node=node,
+            )
+        payload["excluded_types"] = list(filt.excluded_types)
     if filt.any_classes:
         # "target **instant or Aura** spell" (Avoid Fate, Ring of Immortals):
         # one union across two axes, carried whole rather than split into the

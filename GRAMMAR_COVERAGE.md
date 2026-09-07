@@ -36,7 +36,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | TMP | 335 | 478 | 92.1% | 91.8% | 65.5% | 271 |
 | STH | 143 | 215 | 88.4% | 88.4% | 62.8% | 124 |
 | M21 | 285 | 503 | 87.3% | 87.1% | 61.0% | 237 |
-| EXO *(measured)* | 143 | 207 | 72.5% | 67.6% | 45.9% | 90 |
+| EXO *(measured)* | 143 | 207 | 74.4% | 70.5% | 48.3% | 94 |
 | **All (shipped)** | **4730** | **7032** | **90.2%** | **89.5%** | **59.8%** | **3510** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -49,8 +49,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 393 | 175 | expected a subject |  |
-| 115 | 60 | unrecognized effect verb |  |
+| 391 | 173 | expected a subject |  |
+| 113 | 58 | unrecognized effect verb |  |
 | 89 | 45 | unconsumed text |  |
 | 37 | 22 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
@@ -2020,6 +2020,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this creature enters, you may search your library for a creature card with mana value 6 or greater, reveal it, put it into your hand, then shuffle.`
 - **Fiery Justice**
   - `Fiery Justice deals 5 damage divided as you choose among any number of targets. Target opponent gains 5 life.`
+- **Fighting Chance**
+  - `For each blocking creature, flip a coin. If you win the flip, prevent all combat damage that would be dealt by that creature this turn.`
 - **Final Fortune**
   - `Take an extra turn after this one. At the beginning of that turn's end step, you lose the game.`
 - **Finishing Blow**
@@ -4078,6 +4080,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{W}{W}, {T}: Destroy target black permanent.`
 - **Nova Pentacle**
   - `{3}, {T}: The next time a source of your choice would deal damage to you this turn, that damage is dealt to target creature of an opponent's choice instead.`
+- **Null Brooch**
+  - `{2}, {T}, Discard your hand: Counter target noncreature spell.`
 - **Nurturing Licid**
   - `{G}, {T}: This creature loses this ability and becomes an Aura enchantment with enchant creature. Attach it to target creature. You may pay {G} to end this effect.`
   - `{G}: Regenerate enchanted creature.`
@@ -4257,6 +4261,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{2}, Discard a card: Create a 1/1 white Pegasus creature token with flying.`
 - **Pegasus Stampede**
   - `Create a 1/1 white Pegasus creature token with flying.`
+- **Penance**
+  - `Put a card from your hand on top of your library: The next time a black or red source of your choice would deal damage this turn, prevent that damage.`
 - **Pendelhaven**
   - `{T}: Add {G}.`
   - `{T}: Target 1/1 creature gets +1/+2 until end of turn.`
@@ -6485,6 +6491,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Volcanic Salvo deals 6 damage to each of up to two target creatures and/or planeswalkers.`
 - **Volrath's Curse**
   - `{1}{U}: Return this Aura to its owner's hand.`
+- **Volrath's Dungeon**
+  - `Pay 5 life: Destroy this enchantment. Any player may activate this ability but only during their turn.`
+  - `Discard a card: Target player puts a card from their hand on top of their library. Activate only as a sorcery.`
 - **Volrath's Gardens**
   - `{2}, Tap an untapped creature you control: You gain 2 life. Activate only as a sorcery.`
 - **Volrath's Laboratory**

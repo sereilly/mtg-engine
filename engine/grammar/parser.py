@@ -60,7 +60,8 @@ from .repeats import (_attach_repeat_for_types,
                       _attach_repeat_optional_process,
                       _attach_repeat_this_process,
                       _attach_repeat_while_condition)
-from .riders import (_attach_destroyed_this_way, _attach_no_regeneration,
+from .riders import (_attach_destroyed_this_way, _attach_flip_stakes_to_loop,
+    _attach_no_regeneration,
     _attach_unaffected_when_cost_paid, _attach_exchanged_this_way, _attach_tap_when_control_lost, _attach_riders, _attach_source_damage_lock, _attach_counter_cap, _attach_new_target_bound, _attach_spend_only, _attach_unpaid_penalty, _parse_conditional_instead_rider, _parse_exile_instead_rider, _parse_its_controller_creates_rider, _parse_that_controller_reveals_rider, _parse_who_cant_rider)
 from .static_lines import (_looks_static, _parse_leading_static_condition_line,
                            _parse_static_condition_line,
@@ -460,6 +461,15 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             # just did. Read here, after the three above and before the
             # `Otherwise` rider, because it opens on "if" and none of them do.
             if _attach_repeat_while_condition(stream, steps):
+                continue
+            # "For each blocking creature, flip a coin. **If you win the
+            # flip, prevent all combat damage that would be dealt by that
+            # creature this turn.**" (Fighting Chance.) The stakes of a flip
+            # the loop makes once per member, so they belong inside the loop —
+            # read before `_attach_otherwise` below only because both open on a
+            # word the other does not, and this one is the narrower question.
+            if _attach_flip_stakes_to_loop(stream, steps):
+                stream.accept_punct(".")
                 continue
             # "Otherwise, it gets +4/-X until end of turn." (Blood Lust.) The
             # second arm of the conditional sentence before it.

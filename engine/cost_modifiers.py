@@ -54,7 +54,11 @@ class CostModifier:
 
     amount     -- generic mana added to (or, when *reduces*, taken off) each
                   affected cost
-    applies_to -- "cast" for spells, "activate" for activated abilities
+    applies_to -- "cast" for spells, "activate" for activated abilities,
+                  "buyback" for CR 702.27a's optional additional cost. The
+                  third is not a narrower "cast": it reduces one *printed
+                  offer* and never the spell's own mana cost, so a reader of
+                  either of the first two must not see it and vice versa
     reduces    -- whether this takes mana off rather than adding it
     colour     -- mana symbol the affected object must have, or None for any
     card_types -- card types the affected object must have *one of*, or empty
@@ -306,6 +310,27 @@ _ABILITY_REDUCTION = re.compile(
 #: for the identical rider.
 _ABILITY_FLOOR_WORDS = {"one": 1, "two": 2, "three": 3}
 
+#: "**Buyback costs cost {2} less.**" (Memory Crystal.) The reduction this
+#: module's own scope note said would "arrive with the card that needs it", and
+#: the card has arrived.
+#:
+#: What it reduces is not a class of spells but **one keyword's optional
+#: additional cost** (CR 702.27a, CR 601.2b), so it carries no colour and no
+#: card type: every buyback cost in the game is affected, on any card, cast by
+#: anybody. That is why ``applies_to`` gets a third value rather than this
+#: riding "cast" with an empty filter — a "cast" modifier with no narrowing
+#: would reduce every spell's **mana cost**, which is the one thing Memory
+#: Crystal must not do.
+#:
+#: No floor sentence, unlike ``_ABILITY_REDUCTION`` above, because the card
+#: prints none: a buyback of {2} really does become free, and CR 118.7a's clamp
+#: at zero is the whole of the arithmetic. The absence is read off the card
+#: rather than assumed — a printing that *did* carry a floor would not match
+#: this pattern end to end and would be reported unsupported.
+_BUYBACK_REDUCTION = re.compile(
+    r"buyback costs cost \{(?P<amount>\d+)\} less"
+)
+
 
 @lru_cache(maxsize=None)
 def cost_modifiers_for(oracle_text: str) -> tuple[CostModifier, ...]:
@@ -318,6 +343,12 @@ def cost_modifiers_for(oracle_text: str) -> tuple[CostModifier, ...]:
         and "less to" not in text
         and "life to cast" not in text
         and "an additional" not in text
+        # "Buyback costs cost {2} less." (Memory Crystal.) The only template
+        # here whose sentence ends at "less" with no "to <verb>" behind it, so
+        # it needs its own word in this early exit — without one the card falls
+        # out before any pattern is tried and reports unsupported, which is a
+        # gate failing silently in the direction of doing nothing.
+        and "less" not in text
     ):
         return ()
     modifiers: list[CostModifier] = []
@@ -366,6 +397,14 @@ def cost_modifiers_for(oracle_text: str) -> tuple[CostModifier, ...]:
                 colour=_COLOR_WORD_TO_SYMBOL.get(match.group("colour") or ""),
                 card_types=_types_named(match.group("type")),
                 floor=_ABILITY_FLOOR_WORDS[match.group("floor")],
+            )
+        )
+    for match in _BUYBACK_REDUCTION.finditer(text):
+        modifiers.append(
+            CostModifier(
+                amount=int(match.group("amount")),
+                applies_to="buyback",
+                reduces=True,
             )
         )
     for match in _SACRIFICE_SYMBOL_TAX.finditer(text):
@@ -484,7 +523,7 @@ def cost_modifier_claims_line(line: str) -> bool:
         (match := pattern.match(text)) is not None and match.end() == len(text)
         for pattern in (
             _ABILITY_TAX, _ABILITY_REDUCTION, _TARGETING_LIFE_TAX,
-            _TARGETING_MANA_TAX,
+            _TARGETING_MANA_TAX, _BUYBACK_REDUCTION,
         )
     ):
         return True
@@ -1286,3 +1325,37 @@ def reduce_cost(required: dict[str, int], reduction: CostReduction) -> dict[str,
             cost["generic"] = max(0, cost.get("generic", 0) - spill)
     cost["generic"] = max(0, cost.get("generic", 0) - reduction.generic)
     return cost
+
+
+def buyback_cost_reduction(game) -> tuple[int, list[str]]:
+    """Generic mana taken off every buyback cost by the board, and by whom.
+
+    "Buyback costs cost {2} less." (Memory Crystal.) CR 601.2f applied to
+    CR 702.27a's optional additional cost rather than to a spell's mana cost —
+    which is why this is its own reader rather than a call into :func:`_tax`:
+    that one asks ``_matches`` about the *card being cast*, and this modifier
+    has no opinion about the card at all. Every buyback cost is reduced, on
+    anybody's spell.
+
+    One application per permanent printing it, over every battlefield, the same
+    arithmetic every other modifier in this file uses — two Memory Crystals take
+    {4} off. Read off ``effective_card`` for :func:`_tax`'s reason: a permanent
+    whose text an effect has changed grants what it currently says.
+
+    The reduction touches the **charge** and never the announcement's key. The
+    key is the printed cost (``cast_costs.buyback_cost``), and it is what
+    ``buyback_paid`` reads back at resolution to decide whether the spell
+    returns to its owner's hand — so a caster who paid a reduced {0} for a
+    printed {2} still bought the card back. Reducing the key instead would make
+    a Memory Crystal on the battlefield the difference between a spell that
+    comes back and one that does not.
+    """
+    total = 0
+    names: list[str] = []
+    for _seat, permanent in game.permanents_with_controller():
+        for modifier in cost_modifiers_for(permanent.effective_card.oracle_text):
+            if modifier.applies_to != "buyback" or not modifier.reduces:
+                continue
+            total += modifier.amount
+            names.append(permanent.card.name)
+    return total, names

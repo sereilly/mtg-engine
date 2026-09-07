@@ -25,6 +25,7 @@ from .errors import GrammarError
 from .lexer import PT
 from .nouns import parse_object_filter
 from .effects import _parse_create_token, parse_source_damage_lock
+from .delayed import contains_flip, parse_flip_stakes_sentence
 from .rebinding import statement_bound_target as _statement_bound_target
 from .phrases import _accept_number
 from .statements import _parse_condition, parse_statement
@@ -779,4 +780,43 @@ def _attach_unaffected_when_cost_paid(
         stream.reset(mark)
         return False
     steps[-1] = replace(last, unaffected_if_cost_paid=excluded)
+    return True
+
+
+def _attach_flip_stakes_to_loop(
+    stream: TokenStream, steps: list[ast.Statement]
+) -> bool:
+    """Fold "If you win the flip, prevent all combat damage that would be dealt
+    by that creature this turn." **into** the loop before it (Fighting Chance).
+
+    "For each blocking creature, flip a coin. If you win the flip, prevent all
+    combat damage that would be dealt by that creature this turn." The flip is
+    one *per creature* (CR 705.1) and so is what rides on it — "that creature"
+    names the member of the loop the flip was made for, and there is no other
+    creature it could name.
+
+    So the consequence goes inside the loop's body rather than beside it, which
+    is the same structural decision ``statements.py`` already makes for a delay
+    printed after a loop ("the delay is printed after the loop but modifies the
+    verb inside it"). Left outside, the conditional would ask about *the* flip
+    where the loop made one per creature, and the lowering refuses it by name
+    ("'the flip' with no coin flip before it in this effect") — so, exactly as
+    :func:`delayed.fold_flip_stakes` records for its own position, this can only
+    turn a refusal into a card and can never change a reading that already
+    worked.
+
+    Attaches only to a loop whose body really flips. A conditional on a flip
+    after anything else is a sentence the grammar cannot place, and consuming it
+    anyway is the dropped-rider bug the full-consumption invariant exists to
+    prevent — so the near-miss rewinds and the line fails loudly.
+    """
+    last = steps[-1] if steps else None
+    if not isinstance(last, ast.ForEach) or not contains_flip(last.effect):
+        return False
+    stakes = parse_flip_stakes_sentence(
+        stream, parse_statement, leading_period=False
+    )
+    if stakes is None:
+        return False
+    steps[-1] = replace(last, effect=ast.Sequence((last.effect, stakes)))
     return True

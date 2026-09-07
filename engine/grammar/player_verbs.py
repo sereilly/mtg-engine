@@ -61,6 +61,7 @@ from .effects import (
     _parse_player_exiles_target_spell,
     _parse_player_puts_hand_cards_on_library,
     _parse_player_puts_whole_hand_on_library,
+    _parse_put_hand_cards_on_library,
     _parse_put_exiled_card_on_stack_as_copy,
     _parse_put_exiled_this_way,
     _parse_repeated_graveyard_pick,
@@ -329,6 +330,22 @@ def parse_player_subject_verb(
         whole_hand = _parse_player_puts_whole_hand_on_library(stream, source_spec)
         if whole_hand is not None:
             return whole_hand
+        # "**Target player puts a card from their hand on top of their
+        # library.**" (Volrath's Dungeon.) A *counted* move with no choosing
+        # clause in front of it — Stunted Growth's "chooses three cards … and
+        # puts them" one arm up, and Jester's Mask's whole hand the arm above,
+        # are the two spellings this sat between.
+        #
+        # It is the production ``_parse_put_hand_cards_on_library`` already is:
+        # handed a player, it reads the third-person possessives, which is how
+        # Tainted Specter's toll ("…unless they put a card from their hand on
+        # top of their library") has always been read. So the gap was never the
+        # sentence, it was that no arm here dispatched to it — and the lowering
+        # has honoured ``target_player`` since it was written. Declines without
+        # consuming, like every arm around it.
+        counted = _parse_put_hand_cards_on_library(stream, source_spec)
+        if counted is not None:
+            return counted
         # "…then **puts all cards they exiled this way** onto the
         # battlefield." (Living Death.) A back-reference to a step of the
         # same sentence, so it is read here rather than by the noun parser:

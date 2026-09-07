@@ -83,10 +83,34 @@ def _cast_cost_cards() -> list[tuple[str, str]]:
     found = set()
     for name, card in _POOL.items():
         for cost in additional_costs(card):
-            if cost.sacrifice_filter is None and not cost.discard_cards:
+            if not _payer_chooses(cost):
                 continue
             found.add((name, cost.from_zone or "hand"))
     return sorted(found)
+
+
+def _payer_chooses(cost) -> bool:
+    """Whether *cost* is one the announcing player picks the payment for.
+
+    This is the question both enumerations below are asking, and it is not
+    "does the cost eat a card or a permanent" — it is CR 601.2b/602.2b's
+    *choice*. "Discard a card **at random**" (Coral Helm, Stormbind, Amok,
+    Draconian Cylix, Canyon Drake, Mage il-Vec, Ogre Shaman; Sonic Burst and
+    Flowstone Flood on the cast side) eats a card and offers no choice at all:
+    the payer names nothing and the RNG picks.
+
+    Reading it as a choosable cost is how seven shipped cards came to raise a
+    hand-card picker whose answer both payment paths then **deliberately
+    ignore** — the client asked which card to bin, the player chose, and a
+    different card was binned. That is this file's own failure shape read
+    backwards: the missing picker was a choice nobody could make, and this is a
+    choice nobody has. Neither is caught by the payment working.
+    """
+    if cost.sacrifice_filter is not None:
+        return True
+    return bool(cost.discard_cards) and not getattr(
+        cost, "discard_at_random", False
+    )
 
 
 def _activation_cost_abilities() -> list[tuple[str, int]]:
@@ -96,10 +120,40 @@ def _activation_cost_abilities() -> list[tuple[str, int]]:
         for index, ability in enumerate(program.activated_abilities):
             if not (ability.supported and ability.instruction is not None):
                 continue
-            cost = ability.cost
-            if cost.sacrifice_filter is not None or cost.discard_cards:
+            if _payer_chooses(ability.cost):
                 found.append((name, index))
     return found
+
+
+def test_a_random_discard_cost_raises_no_picker():
+    """The other half of :func:`_payer_chooses`, asserted rather than assumed.
+
+    An enumeration that merely *skips* these costs would also pass if the picker
+    came back — and a picker for a payment nobody chooses is a prompt whose
+    answer is thrown away, which is what these seven cards did. So the refusal
+    is checked directly, on both sides, over every card in the pool that prints
+    the clause.
+    """
+    from engine.targeting import _cost_picker_spec
+
+    random_discards = [
+        (name, ability.cost)
+        for name, card in sorted(_POOL.items())
+        for ability in compile_card_oracle(card).activated_abilities
+        if getattr(ability.cost, "discard_at_random", False)
+    ] + [
+        (name, cost)
+        for name, card in sorted(_POOL.items())
+        for cost in additional_costs(card)
+        if getattr(cost, "discard_at_random", False)
+    ]
+
+    assert random_discards, "no card in the pool prints a random discard cost"
+    for name, cost in random_discards:
+        assert _cost_picker_spec(cost) is None, (
+            f"{name}'s random discard derives a picker; its payment path "
+            "ignores whatever the player names, so the prompt would lie"
+        )
 
 
 def test_the_pool_has_costs_of_both_kinds_to_check():
