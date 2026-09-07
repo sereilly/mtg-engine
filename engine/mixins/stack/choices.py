@@ -2639,6 +2639,36 @@ class PendingChoicesMixin:
             player_index, 0 if take_the_damage else 1, kind="optional_damage_redirect"
         )
 
+    def confirm_entry_discard_toll(
+        self, player_index: int, hand_index: int | None = None
+    ) -> bool:
+        """Resolve the oldest pending "you may discard a card instead" entry
+        offer for *player_index* (Mox Diamond).
+
+        *hand_index* is a slot in the player's own hand; the offer lists only
+        the slots the printed phrase admits, so an index outside them declines
+        - which is the same answer ``None`` gives.
+        """
+        choice = next(
+            (
+                pending
+                for pending in pending_choices_for(self, "entry_discard_toll")
+                if pending.player_index == player_index
+            ),
+            None,
+        )
+        if choice is None:
+            return False
+        indices = list(choice.data.get("hand_indices") or [])
+        option = (
+            indices.index(hand_index)
+            if hand_index is not None and hand_index in indices
+            else len(indices)
+        )
+        return self.resolve_replacement_choice(
+            player_index, option, kind="entry_discard_toll"
+        )
+
     def confirm_draw_becomes_counter(
         self, player_index: int, take_the_counter: bool
     ) -> bool:
@@ -9438,6 +9468,24 @@ register_choice(
     # answers could run through one resolver — so nothing is waiting on the
     # answer to carry on. A non-interactive seat takes the stated policy where
     # it stands, exactly as the three offers above do.
+    default_at_arm=True,
+    spectator_visible=True,
+    hidden_for_ai=False,
+)
+
+register_choice(
+    "entry_discard_toll",
+    resolve=_resolve_replacement,
+    default=_default_replacement,
+    action="entry_discard_toll_confirm",
+    prompt_key="entry_discard_toll",
+    blocked_detail=(
+        "choose whether to discard a card to put that permanent onto the "
+        "battlefield (Mox Diamond) before other actions"
+    ),
+    # The entry that armed this was consumed so that both answers run through
+    # one resolver - the permanent is put onto the battlefield by the resolver
+    # itself - so nothing is waiting on the answer to carry on.
     default_at_arm=True,
     spectator_visible=True,
     hidden_for_ai=False,

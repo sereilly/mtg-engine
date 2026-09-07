@@ -1158,7 +1158,7 @@ function combatDamageAssignmentPending(state = currentState) {
 }
 
 function hasBlockingPromptForAutoPass(state = currentState) {
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getDiscardUnlessPayLifeInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getPayAnyAmountInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getRepeatProcessInfo(state) || getExileFromHandInfo(state) || getExileHandPileInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getOpponentPicksRevealedInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getDrawBecomesCounterInfo(state) || getEntryDiscardTollInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getDiscardUnlessPayLifeInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getPayAnyAmountInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getRepeatProcessInfo(state) || getExileFromHandInfo(state) || getExileHandPileInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getOpponentPicksRevealedInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
   return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingDiscardCost || pendingAbilityChoice || pendingChannel || pendingAttackTarget);
 }
 
@@ -2382,6 +2382,28 @@ function getOptionalDamageRedirectInfo(state = currentState) {
   return info;
 }
 
+// Pursuit of Knowledge: "you may put a study counter on this enchantment
+// instead" of drawing. One offer per replaced draw, answered by the seat that
+// would have drawn.
+function getDrawBecomesCounterInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.draw_becomes_counter;
+  if (!info) return null;
+  if (info.player_seat !== seat) return null;
+  return info;
+}
+
+// Mox Diamond: "you may discard a land card instead" of the permanent
+// entering. The offered hand slots are the ones the printed phrase admits, so
+// the picker never shows a card the answer path would refuse.
+function getEntryDiscardTollInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.entry_discard_toll;
+  if (!info) return null;
+  if (info.player_seat !== seat) return null;
+  return info;
+}
+
 function getCommanderZoneChangeInfo(state = currentState) {
   if (!state || seat === null) return null;
   const info = state.commander_zone_change;
@@ -3264,7 +3286,7 @@ function getPromptBoardTargeting(state = currentState) {
 
   if (getUpkeepPreventionInfo(state)) return null;
   if (getDiscardSelectInfo(state)) return null;
-  if (getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state)) return null;
+  if (getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getDrawBecomesCounterInfo(state) || getEntryDiscardTollInfo(state) || getCommanderZoneChangeInfo(state)) return null;
 
   // Balance: the lands/creatures to sacrifice are picked on the board (the cards
   // to discard are picked in hand — see the balanceHandSelectable hand option).
@@ -3686,7 +3708,7 @@ function isAnyPromptActive(state = currentState) {
   if (getOptionalTriggerInfo(state)) return true;
   if (getUpkeepPreventionInfo(state)) return true;
   if (getDiscardSelectInfo(state)) return true;
-  if (getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state)) return true;
+  if (getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getDrawBecomesCounterInfo(state) || getEntryDiscardTollInfo(state) || getCommanderZoneChangeInfo(state)) return true;
   if (getBalanceSelectInfo(state)) return true;
   if (getOptionalPayInfo(state)) return true;
   if (getOptionalUntapInfo(state)) return true;
@@ -3731,7 +3753,7 @@ function isAnyPromptActive(state = currentState) {
 function shouldShowPriorityPrompt(state = currentState) {
   if (!state || seat === null) return false;
   if (state.priority_player !== seat) return false;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getDiscardUnlessPayLifeInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getPayAnyAmountInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getRepeatProcessInfo(state) || getExileFromHandInfo(state) || getExileHandPileInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getOpponentPicksRevealedInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getDrawBecomesCounterInfo(state) || getEntryDiscardTollInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getDiscardUnlessPayLifeInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getPayAnyAmountInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getRepeatProcessInfo(state) || getExileFromHandInfo(state) || getExileHandPileInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getOpponentPicksRevealedInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
 
   // Combat declaration prompts own the prompt panel while declarations are pending.
   if (combatPromptNeedsConfirmation(state)) return false;
@@ -4412,6 +4434,98 @@ function applyOptionalDamageRedirectPrompt(info) {
         take
           ? `You took ${amount} damage instead of ${fromName}.`
           : `${fromName} was dealt ${amount} damage.`,
+      );
+    });
+  });
+}
+
+// Pursuit of Knowledge: take the counter, or take the draw. Two buttons, like
+// the redirect above — the answer is which of two outcomes the player wants.
+function applyDrawBecomesCounterPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const customOkBtn = q("promptCustomOkBtn");
+  if (!panel || !title || !body || !steps) return;
+  panel.classList.remove("hidden");
+  cancelBtn.classList.add("hidden");
+  customOkBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  const counter = info.counter || "study";
+  const sourceName = info.source_name || "that permanent";
+  const remaining = Number(info.remaining || 1);
+  title.textContent = "Take the counter instead?";
+  body.textContent =
+    `You would draw a card. Put a ${counter} counter on ${sourceName} instead?` +
+    (remaining > 1 ? ` (${remaining} draws to answer)` : "");
+
+  steps.innerHTML =
+    `<div class="prompt-choice-row">` +
+    `<button type="button" class="prompt-choice-btn" data-counter-instead="yes">Put a ${counter} counter on ${sourceName}</button>` +
+    `<button type="button" class="prompt-choice-btn" data-counter-instead="no">Draw the card</button>` +
+    `</div>`;
+
+  steps.querySelectorAll("[data-counter-instead]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const take = btn.dataset.counterInstead === "yes";
+      await sendAction({ seat, action: "draw_becomes_counter_confirm", take_the_counter: take });
+      updateActionHint(
+        take
+          ? `You put a ${counter} counter on ${sourceName} instead of drawing.`
+          : "You drew the card.",
+      );
+    });
+  });
+}
+
+// Mox Diamond: which card in hand pays for the entry, or none of them. A
+// button per offered slot plus the decline — the decline is a real answer here
+// and not a cancel, so it is a button rather than the panel's cancel control.
+function applyEntryDiscardTollPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const customOkBtn = q("promptCustomOkBtn");
+  if (!panel || !title || !body || !steps) return;
+  panel.classList.remove("hidden");
+  cancelBtn.classList.add("hidden");
+  customOkBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  const cardName = info.card_name || "that permanent";
+  const indices = Array.isArray(info.hand_indices) ? info.hand_indices : [];
+  const cards = Array.isArray(info.cards) ? info.cards : [];
+  title.textContent = `Discard a card for ${cardName}?`;
+  body.textContent = indices.length
+    ? `Discard a card to put ${cardName} onto the battlefield, or let it go to its owner's graveyard.`
+    : `You have nothing to discard, so ${cardName} goes to its owner's graveyard.`;
+
+  const buttons = indices.map((handIndex, slot) => {
+    const name = (cards[slot] && cards[slot].name) || `card ${handIndex + 1}`;
+    return `<button type="button" class="prompt-choice-btn" data-entry-discard="${handIndex}">Discard ${name}</button>`;
+  });
+  buttons.push(
+    `<button type="button" class="prompt-choice-btn" data-entry-discard="none">Let ${cardName} go to the graveyard</button>`,
+  );
+  steps.innerHTML = `<div class="prompt-choice-row">${buttons.join("")}</div>`;
+
+  steps.querySelectorAll("[data-entry-discard]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const raw = btn.dataset.entryDiscard;
+      const payload = { seat, action: "entry_discard_toll_confirm" };
+      if (raw !== "none") payload.hand_index = Number(raw);
+      await sendAction(payload);
+      updateActionHint(
+        raw === "none"
+          ? `${cardName} went to its owner's graveyard.`
+          : `${cardName} entered the battlefield.`,
       );
     });
   });
@@ -9019,6 +9133,18 @@ function renderActivationPrompt() {
   const optionalRedirectInfo = getOptionalDamageRedirectInfo();
   if (optionalRedirectInfo) {
     applyOptionalDamageRedirectPrompt(optionalRedirectInfo);
+    return;
+  }
+
+  const drawBecomesCounterInfo = getDrawBecomesCounterInfo();
+  if (drawBecomesCounterInfo) {
+    applyDrawBecomesCounterPrompt(drawBecomesCounterInfo);
+    return;
+  }
+
+  const entryDiscardTollInfo = getEntryDiscardTollInfo();
+  if (entryDiscardTollInfo) {
+    applyEntryDiscardTollPrompt(entryDiscardTollInfo);
     return;
   }
 

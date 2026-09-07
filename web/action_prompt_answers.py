@@ -469,6 +469,19 @@ def _action_optional_damage_redirect_confirm(session, req, seat_type):
     if not ok:
         raise HTTPException(status_code=400, detail="invalid damage redirect choice")
 
+@action_handler("entry_discard_toll_confirm")
+def _action_entry_discard_toll_confirm(session, req, seat_type):
+    # Mox Diamond: "you may discard a land card instead" of the entry.
+    if not any(
+        e["player_index"] == req.seat
+        for e in session.game.pending_entry_discard_tolls
+    ):
+        raise HTTPException(status_code=400, detail="no entry discard choice pending for you")
+    # No index is the decline, which is a real answer here rather than a missing
+    # one - the offer's last option.
+    if not session.game.confirm_entry_discard_toll(req.seat, req.hand_index):
+        raise HTTPException(status_code=400, detail="invalid entry discard choice")
+
 @action_handler("draw_becomes_counter_confirm")
 def _action_draw_becomes_counter_confirm(session, req, seat_type):
     # Pursuit of Knowledge: "you may put a study counter on this enchantment

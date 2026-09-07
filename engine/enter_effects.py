@@ -1053,6 +1053,105 @@ def entry_sacrifice_toll(line: str, card_name: str | None = None) -> dict | None
     return {"filter": described, "count": count, "unpaid": unpaid}
 
 
+#: "If this artifact would enter, you **may discard a land card** instead. If
+#: you do, put this artifact onto the battlefield. If you don't, put it into
+#: its owner's graveyard." (Mox Diamond.)
+#:
+#: :data:`ENTRY_SACRIFICE_TOLL` one zone over and one word different, and the
+#: two differences are the whole of what separates the cards: the toll is paid
+#: out of a **hand** rather than off a battlefield, and it is **optional**.
+#:
+#: The optional half is what makes this its own template rather than a wider
+#: reading of that one. "Sacrifice ... instead" is mandatory when it can be
+#: paid (CR 101.3), so its "if you don't" branch is reached only by a player
+#: who *cannot* pay; "you may discard" leaves the branch to a player who simply
+#: declines, and merging the two would make one of the cards charge a price its
+#: text does not.
+#:
+#: What is discarded is a capture read by the same card reader every discard
+#: cost in the engine goes through, so a card printing "you may discard a
+#: creature card" needs no code.
+ENTRY_DISCARD_TOLL = re.compile(
+    r"^if this (?P<self>[a-z]+) would enter, you may discard (?P<phrase>.+?) "
+    r"instead\. if you do, put this (?P=self) onto the battlefield\. "
+    r"if you don't, put it into its owner's graveyard$"
+)
+
+
+def entry_discard_toll(line: str, card_name: str | None = None) -> dict | None:
+    """What the entering permanent's controller **may** discard for it to enter.
+
+    ``{"filter": <card filter payload>}``, or None when the line is not the
+    template.
+
+    Three readers, one string, exactly as :func:`entry_sacrifice_toll` above has:
+    the support gate (through :func:`enter_effect_line`), the CR 614
+    interceptor in ``engine/replacements.py`` that offers the choice, and the
+    resolver that carries out whichever half was chosen. One phrase, so what is
+    offered and what is charged cannot describe different cards.
+
+    A phrase the noun parser refuses, or one carrying a narrowing the hand pick
+    cannot test, refuses the whole line: the offer lists one player's hand, and
+    a restriction ``_card_matches_filter`` cannot answer would be silently
+    dropped and the player offered cards the sentence does not name - which is
+    not a smaller card but a **cheaper** one.
+    """
+    from .grammar.lowering._common import dropped_narrowings
+    from .grammar.phrases import parse_subject_filter
+    from .subject_filters import card_only_filter
+
+    match = None
+    for text in (_normalized(line), _self_normalized(line, card_name)):
+        match = ENTRY_DISCARD_TOLL.match(text)
+        if match is not None:
+            break
+    if match is None:
+        return None
+    filt = parse_subject_filter(match.group("phrase"))
+    # A **card**: "discard a land card" names something in a hand, and a phrase
+    # describing a permanent on a battlefield is a sentence this rule has not
+    # read. The zone is *not* asked - `ObjectFilter.zone` defaults to
+    # "battlefield" whether or not the phrase said so, so it carries no
+    # information about a card and testing it would refuse every printing of
+    # this line. Whose hand is asked, because a phrase naming somebody else's
+    # is a discard this rule has not read either.
+    if filt is None or not filt.is_card:
+        return None
+    if filt.zone_owner not in (None, "you"):
+        return None
+    payload = filt.to_payload()
+    payload.pop("zone", None)
+    payload.pop("zone_owner", None)
+    # A narrowing with no payload form leaves no key behind, so the reader below
+    # cannot see it go missing.
+    if dropped_narrowings(filt, payload):
+        return None
+    described = card_only_filter(payload)
+    if described is None:
+        return None
+    return {"filter": described}
+
+
+def entry_discard_requirement(card) -> dict | None:
+    """The optional entry discard *card*'s own lines offer, or None.
+
+    The twin of :func:`entry_sacrifice_requirement` below, and the same reason
+    for existing: the interceptor that offers the choice and the resolver that
+    performs it need one answer about one permanent, and two readings of the
+    printed phrase would be two chances to disagree about which cards may pay.
+
+    Through :func:`engine.oracle.expand_card_lines` rather than a split of
+    ``oracle_text``, for the reason that function documents.
+    """
+    from .oracle import expand_card_lines
+
+    for line in expand_card_lines(card):
+        spec = entry_discard_toll(line, card.name)
+        if spec is not None:
+            return spec
+    return None
+
+
 def entry_sacrifice_requirement(card) -> dict | None:
     """The entry sacrifice *card*'s own lines demand, or None.
 
@@ -1327,6 +1426,12 @@ def enter_effect_line(line: str, card_name: str | None = None) -> str | None:
     # rewritten to "this <noun>". It does its own collapsing, plain text first.
     if entry_sacrifice_toll(line, card_name) is not None:
         return "sacrifices a permanent as it enters"
+    # The same three-sentence paragraph with an **optional** toll out of a hand
+    # (Mox Diamond). Claimed here for the entry above's reason: all three
+    # sentences are one CR 614.1a replacement, offered and carried out by
+    # `engine/replacements.py` off this same reader.
+    if entry_discard_toll(line, card_name) is not None:
+        return "may discard a card as it enters"
     return None
 
 
@@ -1336,6 +1441,8 @@ __all__ = [
     "chooses_opponent_on_enter",
     "chooses_opponent_and_card_name_on_enter",
     "chooses_color_on_enter",
+    "entry_discard_toll",
+    "entry_discard_requirement",
     "chooses_color_and_creature_type_on_enter",
     "choose_one_of_two_on_enter",
     "chooses_two_land_types_on_enter",

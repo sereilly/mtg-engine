@@ -1060,6 +1060,19 @@ class EffectsMixin:
         ]
 
     @property
+    def pending_entry_discard_tolls(self) -> list[dict]:
+        """Mox Diamond's outstanding CR 614.1a offers - one per permanent whose
+        entry is waiting on the choice."""
+        return [
+            {
+                "player_index": choice.player_index,
+                "card_name": choice.data["permanent"].card.name,
+                "hand_indices": list(choice.data.get("hand_indices") or []),
+            }
+            for choice in pending_choices_for(self, "entry_discard_toll")
+        ]
+
+    @property
     def pending_draw_becomes_counters(self) -> list[dict]:
         """Pursuit of Knowledge's outstanding CR 614.1 offers - one per draw a
         permanent whose text prints the substitution would replace."""

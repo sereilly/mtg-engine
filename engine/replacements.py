@@ -307,6 +307,11 @@ UNPAYABLE_ENTRY_COST = 15  # Frankenstein's Monster
 # card prints, so the slot is free rather than chosen - CR 616.1e would put the
 # choice to the affected player if one ever did.
 UNPAYABLE_ENTRY_SACRIFICE = 16  # the Alliances sac lands
+# Beside it, and the same paragraph with an **optional** toll out of a hand
+# (Mox Diamond). After the two above only because nothing prints two entry
+# tolls on one permanent, so the slot is free rather than chosen - CR 616.1e
+# would put the choice to the affected player if one ever did.
+OPTIONAL_ENTRY_DISCARD = 17  # Mox Diamond
 # After it, and it has to be: the exile replacement means the permanent never
 # enters, and a rider hung on an entry that did not happen is a sacrifice for
 # nothing.
@@ -1995,6 +2000,166 @@ def _graveyard_instead_of_entering(game, payload: dict) -> ReplacementOutcome | 
         f"entering the battlefield"
     )
     return ReplacementOutcome(replaced=True)
+
+
+#: Marks a permanent whose optional entry toll has already been answered.
+#:
+#: On the permanent rather than on the game, because the question is asked of
+#: one object: two Mox Diamonds entering in one turn each get their own offer,
+#: and a permanent that leaves takes the answer with it (CR 400.7). Its own key
+#: rather than a re-read of the battlefield, because the accepted answer
+#: **re-enters the permanent** through the one entry path - and without a mark
+#: the interceptor would offer the same choice again, forever.
+ENTRY_TOLL_ANSWERED = "entry_toll_answered"
+
+
+def _entry_discard_toll(game, payload: dict) -> dict | None:
+    """The optional entry toll the entering permanent prints, or None.
+
+    Read off the permanent's ``effective_card``, so a Clone of one has the
+    sentence (CR 707.2) and one whose text was changed does not. Pure, like
+    every applicability predicate in this file: ``effect_ordering`` counts the
+    contenders before any of them runs.
+    """
+    from .enter_effects import entry_discard_requirement
+
+    permanent = payload["permanent"]
+    if permanent.metadata.get(ENTRY_TOLL_ANSWERED):
+        return None
+    return entry_discard_requirement(permanent.effective_card)
+
+
+def _applies_optional_entry_discard(game, payload: dict) -> bool:
+    return _entry_discard_toll(game, payload) is not None
+
+
+@replacement_effect(
+    "would_enter_battlefield", OPTIONAL_ENTRY_DISCARD,
+    applies=_applies_optional_entry_discard,
+)
+def _discard_or_graveyard_instead_of_entering(
+    game, payload: dict
+) -> ReplacementOutcome | None:
+    """Mox Diamond: "If this artifact would enter, you may discard a land card
+    instead. If you do, put this artifact onto the battlefield. If you don't,
+    put it into its owner's graveyard."
+
+    A consuming replacement whichever way it is answered, and it has to be one:
+    the choice is made *before* the entry (CR 614.1a), so both halves of it are
+    this function's business. Letting the permanent enter and charging
+    afterwards would make declining put a **permanent** into a graveyard, which
+    is a death (CR 700.4) with an entry, an id, layer contributions and every
+    enters-the-battlefield trigger in front of it - a different card.
+
+    That is also what separates this from the Alliances sac lands one entry up.
+    Their toll is mandatory when it can be paid (CR 101.3), so their "if you
+    don't" branch is reached only by a player who *cannot* pay and the entry
+    state charges the rest; here the branch belongs to a player who simply
+    declines, and nothing after the entry can un-enter the permanent.
+
+    **One decision, not two.** Which card is discarded and whether to discard at
+    all are asked together, because nothing is learned between them: the offer
+    lists the hand cards the phrase admits, plus declining. Two prompts would be
+    two chances for a seat to answer half.
+    """
+    from .handlers._common import _card_matches_filter
+
+    permanent = payload["permanent"]
+    controller_index = int(payload["controller_index"])
+    player = game.players[controller_index]
+    spec = _entry_discard_toll(game, payload)
+    filters = spec["filter"]
+    payable = [
+        index
+        for index, held in enumerate(player.hand)
+        if _card_matches_filter(held, filters, game=game, owner=player)
+    ]
+    # Marked before the offer, not after: a non-interactive seat resolves inside
+    # `offer_replacement_choice`, and the resolver re-enters the permanent
+    # through the one entry path - which asks this replacement again.
+    permanent.metadata[ENTRY_TOLL_ANSWERED] = True
+    suspended, _ = offer_replacement_choice(
+        game,
+        ReplacementChoice(
+            kind="entry_discard_toll",
+            player_index=controller_index,
+            # Declining last, so index 0 is the toll being paid when there is
+            # anything to pay it with. A seat that cannot pay is offered only
+            # the decline, which is CR 101.3's outcome written as the only
+            # option rather than as a branch somewhere else.
+            options=tuple(
+                player.hand[index].name for index in payable
+            ) + ("decline",),
+            # Paying, when the hand can. The engine's rule for an unconstrained
+            # choice is the one a player would make (idiom 8), and the whole
+            # point of a card that asks this is that the permanent is worth the
+            # card - a seat that declined by default would put every Mox Diamond
+            # it ever drew straight into its graveyard.
+            default_option=0,
+            data={
+                "permanent": permanent,
+                "controller_index": controller_index,
+                "hand_indices": payable,
+                "was_cast": bool(payload.get("was_cast")),
+            },
+        ),
+    )
+    if suspended:
+        game.log.append(
+            f"{player.name} may discard a card to put "
+            f"{permanent.card.name} onto the battlefield"
+        )
+    return ReplacementOutcome(replaced=True)
+
+
+@replacement_choice("entry_discard_toll")
+def _resolve_entry_discard_toll(
+    game, choice: ReplacementChoice, option_index: int
+) -> int:
+    """Apply Mox Diamond's offer, either way.
+
+    An index into the offered hand cards pays the toll and the permanent enters;
+    the last option - and any answer outside the list - declines, and the card
+    goes to its **owner's** graveyard, which is the zone CR 400.3 gives it and
+    the one the printed sentence names.
+
+    The hand slot is resolved to its card and removed through
+    ``Game.take_card_from_hand``: a hand is a list of ``CardDefinition`` where
+    every copy of a card is one object, so an identity filter would delete all
+    of them where this removes exactly one.
+
+    Returns 0 - nothing here draws.
+    """
+    data = choice.data
+    permanent = data["permanent"]
+    controller_index = int(data["controller_index"])
+    player = game.players[controller_index]
+    indices = list(data.get("hand_indices") or [])
+    if 0 <= option_index < len(indices):
+        slot = indices[option_index]
+        if 0 <= slot < len(player.hand):
+            discarded = player.hand[slot]
+            game.take_card_from_hand(player, discarded)
+            game._discard_card(player, discarded)
+            game.log.append(
+                f"{player.name} discarded {discarded.name} to put "
+                f"{permanent.card.name} onto the battlefield"
+            )
+            game._put_permanent_onto_battlefield(
+                controller_index, permanent, None,
+                was_cast=bool(data.get("was_cast")),
+            )
+            return 0
+    owner_index = game.owner_index_of(permanent)
+    owner = game.players[
+        owner_index if owner_index is not None else controller_index
+    ]
+    game.put_card_into_graveyard(owner, permanent.card)
+    game.log.append(
+        f"{permanent.card.name} was put into {owner.name}'s graveyard instead "
+        "of entering the battlefield"
+    )
+    return 0
 
 
 def _entry_sacrifice_candidates(game, payload: dict) -> list[int]:
