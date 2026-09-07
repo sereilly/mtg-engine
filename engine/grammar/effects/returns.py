@@ -179,7 +179,16 @@ def _parse_return(
             subject = ast.TargetSpec("a", described, count=count)
     if subject is None:
         raise stream.error("expected something to return")
-    further = _parse_further_subjects(stream, subject)
+    # "Return **it and this Aura** to their owners' hands at end of combat."
+    # (Contempt.) The union's last phrase is the ability's own source and the
+    # destination clause follows it, which is a shape the union reader refuses
+    # by default: a "this <noun>" that does not end the sentence is almost
+    # always a *new* clause opening with the permanent's own name. It is not one
+    # here, and the flag is this production saying so — the word "to" it is
+    # about to consume is the destination this very verb takes.
+    further = _parse_further_subjects(
+        stream, subject, before_destination=destination_first is None
+    )
     if destination_first is not None:
         destination = destination_first
     else:

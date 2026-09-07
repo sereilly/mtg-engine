@@ -586,6 +586,22 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("attacks_unblocked",
      r"whenever enchanted (?P<combatant_attached>[a-z]+) attacks and isn't blocked"),
     ("attacks_unblocked",           r"whenever this creature attacks and isn't blocked"),
+    # "**When enchanted creature attacks**, return it and this Aura to their
+    # owners' hands at end of combat." (Contempt.) The declaration watched by
+    # an Aura rather than by the attacker, above the source's own spelling for
+    # the reason every attached row in this table sits above its unattached
+    # twin: one kind, because it is one event, and which permanent's ability is
+    # watching is the narrowing — payload, exactly as `combatant_attached` is on
+    # `creature_attacks_or_blocks` two screens up. The declare-attackers fire
+    # site reads the key and scans the attacker's attachments beside its own
+    # abilities.
+    #
+    # Below the two `attacks_unblocked` rows, whose printed words this one is a
+    # strict prefix of: matched first it would read "and isn't blocked" as the
+    # effect clause, which is a trigger firing on every attack where the card
+    # fires on an unblocked one.
+    ("creature_attacks",
+     r"whenever enchanted (?P<combatant_attached>[a-z]+) attacks"),
     ("creature_attacks",            r"whenever this creature attacks"),
     # "…blocks **a creature with flying**" (Snarespinner) narrows the source's
     # own block trigger by what it blocked. Before the bare form, which is its

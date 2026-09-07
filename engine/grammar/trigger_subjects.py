@@ -136,6 +136,13 @@ def _parse_attached_step_event(
 _ATTACHED_EVENTS: tuple[tuple[tuple[str, ...], str], ...] = (
     (("attacks", "and", "isn't", "blocked"), "attacks_unblocked"),
     (("attacks", "or", "blocks"), "creature_attacks_or_blocks"),
+    # "**When enchanted creature attacks**, …" (Contempt). The bare
+    # declaration, and a strict prefix of both rows above it — so it is listed
+    # after them, which is this table's whole ordering rule. Read first it
+    # would consume "attacks" and leave "and isn't blocked" on the stream, and
+    # the line would fail as unconsumed text rather than reading the event the
+    # card names.
+    (("attacks",), "creature_attacks"),
     # The two block halves (Gift of the Woods, Bestial Fury). Longest first, as
     # everywhere: "becomes blocked" is not a prefix of "blocks or becomes
     # blocked" — they diverge at the first word — but the joined sentence is
