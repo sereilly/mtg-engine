@@ -10,7 +10,7 @@ its phrases into the grammar; they differ only in what that code produces:
   the instruction *and* its payload — the grammar's whole job is to hand that
   over unchanged.
 
-Five entries qualify today, each of them already the single source of truth for
+Six entries qualify today, each of them already the single source of truth for
 its family:
 
 ============================  =======================================
@@ -24,6 +24,11 @@ its family:
 ``engine/enter_tapped_statics.py``
                               "Artifacts, creatures, and lands your
                               opponents control enter tapped." (Kismet)
+``engine/zone_copies.py``     "As long as the top card of your graveyard
+                              is a creature card, this creature has the
+                              full text of that card…" (Volrath's
+                              Shapeshifter) — a copy effect whose source
+                              is a zone position rather than an event
 ============================  =======================================
 
 **Consulted only where the grammar has already refused the line in full.**
@@ -64,6 +69,11 @@ from ..land_types import (
 )
 from ..lord_buffs import LORD_BUFF_KIND, lord_buff_for, lord_buff_payload
 from ..oracle_types import OracleInstruction
+from ..zone_copies import (
+    ZONE_TOP_COPY_KIND,
+    zone_top_copy_for,
+    zone_top_copy_payload,
+)
 
 
 @dataclass(frozen=True)
@@ -105,6 +115,12 @@ TABLES: tuple[DerivationTable, ...] = (
         enter_tapped_static_for,
         ENTER_TAPPED_STATIC_KIND,
         enter_tapped_static_payload,
+    ),
+    DerivationTable(
+        "zone_copies",
+        zone_top_copy_for,
+        ZONE_TOP_COPY_KIND,
+        zone_top_copy_payload,
     ),
 )
 

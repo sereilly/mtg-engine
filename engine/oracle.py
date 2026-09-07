@@ -62,6 +62,7 @@ from .enter_effects import enter_effect_line
 from .target_immunity import immunity_claims_line
 from .effect_labels import activated_label, triggered_label
 from .lord_buffs import LORD_BUFF_KIND, lord_buff_for, lord_buff_payload
+from .zone_copies import ZONE_TOP_COPY_KIND
 from .modal_triggers import (MODAL_INSTRUCTION_KIND,
                              modal_trigger_mode_is_derivable,
                              modal_trigger_targeting_refusal)
@@ -4473,6 +4474,16 @@ _GRAMMAR_STATIC_CREATURE_KINDS = frozenset(
         # count is a parsed number, so the grammar reads it here.
         "cant_attack_unless_others_attack",
         "cant_block_unless_others_block",
+        # "As long as the top card of your graveyard is a creature card, this
+        # creature has the full text of that card…" (Volrath's Shapeshifter.)
+        # A CR 613 layer 1a contribution, derived from the zone on every read
+        # by `engine/copies.py` rather than dispatched — so, like every kind
+        # above, the instruction is the *record* the consumer reads and not
+        # something a handler executes. It reaches the grammar through
+        # `engine/grammar/derived.py`, which hands over
+        # `engine/zone_copies.py`'s own payload, so the gate and the dispatch
+        # are the same table by construction.
+        ZONE_TOP_COPY_KIND,
     }
 )
 

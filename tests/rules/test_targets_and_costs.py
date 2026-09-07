@@ -1813,6 +1813,7 @@ def test_115_7a_an_ability_with_nowhere_else_to_go_keeps_its_target(set_pool):
 from engine.oracle_types import single_chosen_id as _int_single_chosen_id
 
 
+@pytest.mark.cr("400.7", "115.1")
 def test_single_chosen_id_reads_one_address_and_refuses_several():
     """The channel's arity, as a rule rather than as twelve assumptions.
 

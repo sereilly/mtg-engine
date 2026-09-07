@@ -175,6 +175,15 @@ GRAMMAR_CATEGORIES: frozenset[str] = frozenset(
         # one. Its own switch because its consumer is the entry seam
         # (_initialize_permanent_state) rather than a continuous recompute.
         "enter_statics",
+        # A continuous copy whose source is a position in a zone (CR 613.1a):
+        # "As long as the top card of your graveyard is a creature card, this
+        # creature has the full text of that card" (Volrath's Shapeshifter).
+        # Arrives through engine/grammar/derived.py like the two statics above,
+        # so the grammar hands over the table's own instruction rather than
+        # building one. Its own switch because its consumer is layer 1 —
+        # engine/copies.py's derived channel — and not a P/T recompute: one
+        # switch must not be able to gate half of layer 1 off.
+        "copy_statics",
         # Flipping a coin (CR 705). Switched on with the production, because
         # with nothing underneath the grammar a category left off is a card
         # reported unsupported rather than a card read by something else. The
