@@ -1987,3 +1987,66 @@ def test_equipoise_phases_out_the_player_it_was_pointed_at(set_pool):
         "Mountain", "Swamp",
     ], game.log
     assert game.players[1].phased_out == [], "the opponent it did not name"
+
+
+# --- EXO/W1G1: Pillar Tombs of Aku sacrifices out of the upkeep player's board ---
+#
+# The same finding as Apathy one set later (Weatherlight), and the reason it
+# is recorded on two cards rather than one: `handlers/control_flow._offer_to_seat` moved the
+# *offer* to the seat the firing event named and left the *performer* as the
+# resolution's controller, so a printed "that player may <do something>" did it
+# out of the enchantment controller's own board. Exodus' Oaths print the same
+# shape five more times.
+
+from engine import (Game as _exow1g1m_Game,  # noqa: E402
+                    PlayerState as _exow1g1m_PlayerState)
+from engine.models import (CardDefinition as _exow1g1m_CardDefinition,  # noqa: E402
+                           Permanent as _exow1g1m_Permanent)
+from tests.helpers import resolve_stack as _exow1g1m_resolve  # noqa: E402
+
+
+def _exow1g1m_blank(name: str) -> "_exow1g1m_CardDefinition":
+    """A creature with no text, so only the enchantment's sentence runs."""
+    return _exow1g1m_CardDefinition(
+        name=name, mana_cost="{1}", cmc=1.0, type_line="Creature — Bear",
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature — Bear", "power": "1",
+             "toughness": "1"},
+    )
+
+
+def test_pillar_tombs_of_aku_eats_the_upkeep_players_creature(set_pool):
+    """"At the beginning of each player's upkeep, **that player** may sacrifice
+    a creature of their choice. If that player doesn't, they lose 5 life and
+    you sacrifice this enchantment."
+
+    Seat 0 controls the enchantment and seat 1 takes the turn, so the offer and
+    the resolution's controller are different players. The creature that dies
+    is seat 1's.
+    """
+    pillar = _exow1g1m_Permanent(card=set_pool("VIS")["Pillar Tombs of Aku"])
+    seat0 = _exow1g1m_PlayerState(
+        name="P0", life=20,
+        battlefield=[pillar, _exow1g1m_Permanent(card=_exow1g1m_blank("Mine"))],
+        library=[_exow1g1m_blank("L%d" % i) for i in range(4)],
+    )
+    seat1 = _exow1g1m_PlayerState(
+        name="P1", life=20,
+        battlefield=[_exow1g1m_Permanent(card=_exow1g1m_blank("Theirs"))],
+        library=[_exow1g1m_blank("R%d" % i) for i in range(4)],
+    )
+    game = _exow1g1m_Game(players=[seat0, seat1])
+    game.enforce_mana_costs = False
+    game._settle()
+
+    game.start_turn(1)
+    game.auto_resolve_pending_choices()
+    _exow1g1m_resolve(game)
+    game.auto_resolve_pending_choices()
+
+    assert "Mine" in [p.card.name for p in seat0.battlefield], (
+        "the enchantment's controller does not pay another player's price"
+    )
+    assert [p.card.name for p in seat1.battlefield] == []
+    assert seat1.life == 20, "the sacrifice was made, so no life is lost"

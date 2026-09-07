@@ -733,6 +733,21 @@ def _lower_damage_shape(
             )
         payload["recipient"] = LAST_DAMAGER_CONTROLLER
         payload["last_damager_filter"] = described
+    elif (
+        isinstance(recipient, ast.PlayerRef)
+        and recipient.kind == "chosen_player"
+    ):
+        # "…deal 1 damage to **the second player**." (Oath of Mages.) The seat
+        # an earlier step of this same resolution announced, read out of the
+        # scratchpad by the branch ``handlers/damage`` has had since Backdraft
+        # — and not off ``context.target``, which under a rebinding offer is
+        # the player *taking* the offer rather than the one it points at.
+        #
+        # Its own recipient rather than a spelling of `target_player`, for that
+        # card's stated reason: the seat is a record, and a resolution that
+        # chose nobody damages nobody instead of whatever the target slot
+        # happened to be carrying.
+        payload["recipient"] = "chosen_player"
     elif isinstance(recipient, ast.PlayerRef):
         raise LoweringError(f"unsupported damage recipient {recipient.kind!r}", node=node)
     elif (

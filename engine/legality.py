@@ -1923,6 +1923,41 @@ class LegalityMixin:
                         continue
                     if seat not in seats_dealt_damage_by(ability_source):
                         continue
+                # "target opponent **who has more life than you do**" (the
+                # Exodus Keepers), "target player **who controls more creatures
+                # than they do and is their opponent**" (the Oaths). The third
+                # printed seat narrowing, and the first whose answer is a
+                # *count* rather than a record — which is exactly why it can be
+                # enforced here at all (CR 601.2c) where the two above needed
+                # a seat record and a source respectively.
+                #
+                # A reference the announcement never froze admits nobody rather
+                # than everybody, for the reason the source check one line up
+                # does: an unenforceable restriction offered as satisfied is
+                # the silent direction.
+                compared = spec.get("compared")
+                if compared:
+                    from .player_comparisons import (comparison_reference_seat,
+                                                     player_comparison_holds)
+
+                    reference = comparison_reference_seat(
+                        compared,
+                        caster_index=caster_index,
+                        that_player_seat=that_player_seat,
+                    )
+                    if reference is None or not 0 <= reference < len(self.players):
+                        continue
+                    # "…**and is their opponent**" (CR 102.2), relative to the
+                    # seat the comparison is against and not to the caster —
+                    # under the Oaths' trigger those are two different players,
+                    # and reading it as `opponents_only` would have offered the
+                    # upkeep player their own face.
+                    if compared.get("is_opponent") and seat == reference:
+                        continue
+                    if not player_comparison_holds(
+                        self, seat, reference, compared
+                    ):
+                        continue
                 targets.append({"kind": "player", "seat": seat})
             if kind == "player":
                 return targets

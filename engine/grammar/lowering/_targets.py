@@ -471,6 +471,87 @@ def _describe_several_card_targets(
     }
 
 
+def _player_comparison_payload(
+    comparison: "ast.PlayerComparison", node,
+) -> dict[str, object]:
+    """The description ``legality``'s seat loop reads for "…who controls more
+    creatures than they do".
+
+    The counted quantity goes through :func:`_amounts.count_spec` — the same
+    reader every printed "the number of …" goes through — so the picker counts
+    a noun phrase the way every other consumer of those words counts it, and a
+    phrase the evaluator cannot take refuses the sentence instead of being
+    counted as something smaller. That is the whole reason the clause carries a
+    filter rather than a word out of a closed list: one table, read by the gate
+    that admits the card and by the enforcement that answers it.
+
+    **Whose pile is counted is not part of the spec.** The picker asks the
+    question once per candidate seat and hands ``evaluate_count`` that seat, so
+    the possessive the card prints ("their graveyard") is the candidate by
+    construction and any *other* seat word would be a second answer to a
+    question the loop has already settled. Read and refused here rather than
+    dropped: "who has more creature cards in **an opponent's** graveyard" is a
+    different card, and lowering it onto this one would count the wrong pile.
+
+    Imported inside the function because ``_amounts`` reads ``_common``, which
+    reads this module — the same call-time import ``hand.py`` makes one family
+    over, and for the same reason.
+    """
+    from ._amounts import count_spec
+
+    quantity = comparison.quantity
+    if isinstance(quantity, str):
+        # "…who has more **life** than they do" (Oath of Mages). The one
+        # quantity no noun phrase describes, mapped onto the single computation
+        # that is exactly it — `ast.BoardCount`'s discipline, and the miss
+        # raises rather than counting nothing.
+        if quantity != "life":
+            raise LoweringError(
+                f"no count reads a player's {quantity!r}", node=node,
+            )
+        count: dict[str, object] = {"board_count": "their_life"}
+    else:
+        zone_owner = quantity.zone_owner
+        if zone_owner is not None and zone_owner.kind != "owner":
+            raise LoweringError(
+                "a seat comparison counts the candidate's own zone, not the "
+                f"{zone_owner.kind}'s",
+                node=node,
+            )
+        count = count_spec(
+            dataclasses.replace(quantity, zone_owner=None), node
+        )
+        if count.get("owner") != "you":
+            raise LoweringError(
+                "a seat comparison counts one seat's objects, and this phrase "
+                f"names the {count.get('owner')}'s",
+                node=node,
+            )
+    described: dict[str, object] = {
+        "count": count,
+        "more": comparison.more,
+        "margin": comparison.margin,
+        "than": comparison.than,
+    }
+    # Omitted at its default, so a description written for a card that prints
+    # only the comparison stays byte-identical to what it would have been.
+    if comparison.is_opponent:
+        described["is_opponent"] = True
+    return described
+
+
+def _with_player_comparison(
+    described: dict[str, object], recipient: "ast.PlayerRef",
+) -> dict[str, object]:
+    """*described* plus the comparison clause *recipient* carries, if any."""
+    if recipient.compared is None:
+        return described
+    described["compared"] = _player_comparison_payload(
+        recipient.compared, recipient
+    )
+    return described
+
+
 def _targets_payload(
     recipient: ast.Recipient,
     *,
@@ -483,6 +564,20 @@ def _targets_payload(
     rather than a misleading one.
     """
     if isinstance(recipient, ast.PlayerRef):
+        if recipient.compared is not None and recipient.kind not in (
+            "target_player", "target_opponent"
+        ):
+            # A seat narrowing nothing enumerates is a sentence that acts on
+            # every player, so the shapes this description cannot carry refuse
+            # the line rather than losing the clause. Only a *chosen* seat has
+            # a picker to enforce it: CR 115.1's announcement is where the
+            # comparison is answered, and "you" or "each player" chooses
+            # nobody.
+            raise LoweringError(
+                f"a seat comparison cannot narrow {recipient.kind!r}, which "
+                "nothing chooses",
+                node=recipient,
+            )
         if recipient.kind == "target_player":
             if recipient.attacked_this_turn:
                 # "…**who attacked this turn**" (Fire and Brimstone). Carried
@@ -491,16 +586,21 @@ def _targets_payload(
                 # restriction the enumerator never sees is a restriction nobody
                 # applies — and unenforced, the card hits any seat at all, which
                 # is wrong in the caster's favour and silent.
-                return {
+                return _with_player_comparison({
                     "quantifier": "target", "kind": "player",
                     "attacked_this_turn": True,
-                }
+                }, recipient)
             if recipient.or_planeswalker:
                 # "target player or planeswalker" — one chosen slot answered by
                 # a player face or a planeswalker permanent, the "any target"
                 # resolution shape minus the creature half.
-                return {"quantifier": "target", "kind": "player_or_planeswalker"}
-            return {"quantifier": "target", "kind": "player"}
+                return _with_player_comparison(
+                    {"quantifier": "target", "kind": "player_or_planeswalker"},
+                    recipient,
+                )
+            return _with_player_comparison(
+                {"quantifier": "target", "kind": "player"}, recipient
+            )
         if recipient.kind == "target_opponent":
             # "Target opponent" is a player target the caster's own seat cannot
             # answer (CR 115.4) — the same flag the phase-out sweep and Word of
@@ -526,7 +626,7 @@ def _targets_payload(
                 # picker enforces it, and a restriction the enumerator never
                 # sees lets the ability hit any opponent at all.
                 described["damaged_by_source"] = True
-            return described
+            return _with_player_comparison(described, recipient)
         return None
     if not isinstance(recipient, ast.TargetSpec):
         return None

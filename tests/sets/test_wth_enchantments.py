@@ -1325,3 +1325,68 @@ def test_heat_stroke_destroys_both_sides_of_every_block(set_pool):
         "Heat Stroke", "Homebody", "UnblockedAttacker",
     ]
     assert [p.card.name for p in game.players[1].battlefield] == ["Bystander"]
+
+
+# --- EXO/W1G1: Apathy's discard is the enchanted creature's controller's ---
+#
+# Found from Exodus while building the Oaths, which print the same shape: an
+# offer made to a seat the *firing event* named, carrying an action addressed
+# to whoever is performing it. `handlers/control_flow._offer_to_seat` moved the
+# offer and left the performer, so the Aura's controller discarded — the
+# opposite player from the one printed, silently, with the card reporting
+# supported and the untap happening.
+
+from engine import Game as _exow1g1_Game, PlayerState as _exow1g1_PlayerState  # noqa: E402
+from engine.auras import attach_aura as _exow1g1_attach  # noqa: E402
+from engine.models import (CardDefinition as _exow1g1_CardDefinition,  # noqa: E402
+                           Permanent as _exow1g1_Permanent)
+from tests.helpers import resolve_stack as _exow1g1_resolve  # noqa: E402
+
+
+def _exow1g1_blank(name: str) -> "_exow1g1_CardDefinition":
+    """A creature with no text, so the Aura's own sentence is all that runs."""
+    return _exow1g1_CardDefinition(
+        name=name, mana_cost="{1}", cmc=1.0, type_line="Creature — Bear",
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature — Bear", "power": "1",
+             "toughness": "1"},
+    )
+
+
+def test_apathys_discard_comes_out_of_the_enchanted_controllers_hand(set_pool):
+    """"At the beginning of the upkeep of enchanted creature's controller,
+    **that player** may discard a card at random. If the player does, untap
+    that creature."
+
+    Seat 0 owns the Aura and seat 1 owns the creature, so the two seats the
+    sentence could mean are different players. The discard is seat 1's.
+    """
+    aura = _exow1g1_Permanent(card=set_pool("WTH")["Apathy"])
+    host = _exow1g1_Permanent(card=_exow1g1_blank("Enchanted Bear"))
+    seat0 = _exow1g1_PlayerState(
+        name="P0", life=20, battlefield=[aura],
+        hand=[_exow1g1_blank("Aura Owner's Card")],
+        library=[_exow1g1_blank("L%d" % i) for i in range(4)],
+    )
+    seat1 = _exow1g1_PlayerState(
+        name="P1", life=20, battlefield=[host],
+        hand=[_exow1g1_blank("Creature Owner's Card")],
+        library=[_exow1g1_blank("R%d" % i) for i in range(4)],
+    )
+    game = _exow1g1_Game(players=[seat0, seat1])
+    game.enforce_mana_costs = False
+    _exow1g1_attach(aura, host)
+    game._settle()
+    host.tapped = True
+
+    game.start_turn(1)
+    game.auto_resolve_pending_choices()
+    _exow1g1_resolve(game)
+    game.auto_resolve_pending_choices()
+
+    assert [c.name for c in seat0.hand] == ["Aura Owner's Card"], (
+        "the Aura's controller is not the player the sentence names"
+    )
+    assert seat1.hand == []
+    assert host.tapped is False

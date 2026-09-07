@@ -2546,6 +2546,37 @@ def role_slot(spec: dict | None, role: str | None) -> int | None:
     return None
 
 
+
+def _carry_player_comparison(spec: dict, targets: dict) -> None:
+    """Carry "…who controls more creatures than they do" onto *spec*.
+
+    A whole clause rather than a flag, which is the only difference from the
+    three narrowings beside it: what is counted, in which direction, by how
+    much and against whom are four printed facts, and the seat loop needs all
+    four to answer any of them. Carried whole for that reason — a spec keeping
+    three of them would be a picker enforcing a comparison the card did not
+    print.
+
+    Written by both player kinds through one call, because "target opponent who
+    has more life than you do" and "target player or planeswalker" narrowed the
+    same way are one sentence with a wider slot, and a key honoured for one
+    kind and forgotten for the other is a restriction that depends on which
+    noun the card printed.
+    """
+    compared = targets.get("compared")
+    if compared:
+        spec["compared"] = compared
+    # "**That player** chooses target player…" — who announces, when the card
+    # names somebody other than the ability's controller (CR 601.2c). Carried
+    # beside the clause it goes with: the seat that picks and the seat the
+    # comparison is against are the same player on every card that prints
+    # either, and a spec carrying one without the other would ask the wrong
+    # player a question about the right board.
+    chooser = targets.get("chooser")
+    if chooser:
+        spec["chooser"] = chooser
+
+
 def _slot_roles_spec(targets: dict, slot_filters: list) -> dict | None:
     """A roles spec for a multi-slot description whose slots differ, or None.
 
@@ -2711,6 +2742,7 @@ def _from_targets_payload(targets) -> dict | None:
             # is the picker that enforces a printed narrowing, and an ability
             # whose restriction stops at the parser is one that hits anybody.
             spec["damaged_by_source"] = True
+        _carry_player_comparison(spec, targets)
         return spec
     if kind == "player_or_planeswalker":
         # Chandra's Magmutt: player faces plus planeswalker permanents — the
@@ -2723,6 +2755,7 @@ def _from_targets_payload(targets) -> dict | None:
             # loop already asks it for this kind; without it here the flag never
             # reaches the loop and the caster is offered as a legal target.
             spec["opponents_only"] = True
+        _carry_player_comparison(spec, targets)
         return spec
     if kind == "spell":
         # A spell on the stack, which the UI picks from a different zone than

@@ -36,7 +36,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | TMP | 335 | 478 | 92.1% | 91.8% | 65.5% | 271 |
 | STH | 143 | 215 | 88.4% | 88.4% | 62.8% | 124 |
 | M21 | 285 | 503 | 87.3% | 87.1% | 61.0% | 237 |
-| EXO *(measured)* | 143 | 207 | 74.4% | 70.5% | 48.3% | 94 |
+| EXO *(measured)* | 143 | 207 | 79.7% | 75.8% | 53.6% | 105 |
 | **All (shipped)** | **4730** | **7032** | **90.2%** | **89.5%** | **59.8%** | **3510** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -49,12 +49,11 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 391 | 173 | expected a subject |  |
+| 390 | 172 | expected a subject |  |
 | 113 | 58 | unrecognized effect verb |  |
 | 89 | 45 | unconsumed text |  |
 | 37 | 22 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
-| 14 | 14 | expected 'a' |  |
 | 13 | 8 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
 | 13 | 12 | expected 'unless defending player controls' |  |
 | 7 | 1 | no lowering for RawEffect |  |
@@ -69,6 +68,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 4 | 1 | expected 'that' |  |
 | 4 | 1 | attach needs one chosen permanent to attach to |  |
 | 4 | 1 | no whole-hand discard handler for 'each_player' |  |
+| 4 | 4 | expected 'a' |  |
 | 3 | 2 | remove-from-combat acts on the object the sentence already chose |  |
 | 3 | 1 | expected 'of' |  |
 | 3 | 3 | unrecognized "can't be" restriction |  |
@@ -407,6 +407,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this creature enters, you gain 2 life for each creature you control with flying.`
 - **Avenging Angel**
   - `When this creature dies, you may put it on top of its owner's library.`
+- **Avenging Druid**
+  - `Whenever this creature deals damage to an opponent, you may reveal cards from the top of your library until you reveal a land card. If you do, put that card onto the battlefield and put all other cards revealed this way into your graveyard.`
 - **Avizoa**
   - `{0}: This creature gets +2/+2 until end of turn. You skip your next untap step. Activate only once each turn.`
 - **Avoid Fate**
@@ -3190,6 +3192,16 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{R}: This creature gains protection from red until end of turn.`
 - **Keeper of Tresserhorn**
   - `Whenever this creature attacks and isn't blocked, it assigns no combat damage this turn and defending player loses 2 life.`
+- **Keeper of the Beasts**
+  - `{G}, {T}: Choose target opponent who controls more creatures than you do as you activate this ability. Create a 2/2 green Beast creature token.`
+- **Keeper of the Dead**
+  - `{B}, {T}: Choose target opponent who has at least two fewer creature cards in their graveyard than you do as you activate this ability. Destroy target nonblack creature that player controls.`
+- **Keeper of the Flame**
+  - `{R}, {T}: Choose target opponent who has more life than you do as you activate this ability. This creature deals 2 damage to that player.`
+- **Keeper of the Light**
+  - `{W}, {T}: Choose target opponent who has more life than you do as you activate this ability. You gain 3 life.`
+- **Keeper of the Mind**
+  - `{U}, {T}: Choose target opponent who has at least two more cards in hand than you do as you activate this ability. Draw a card.`
 - **Kei Takahashi**
   - `{T}: Prevent the next 2 damage that would be dealt to target creature this turn.`
 - **Kelsinko Ranger**
@@ -4088,9 +4100,19 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Oasis**
   - `{T}: Prevent the next 1 damage that would be dealt to target creature this turn.`
   - `{T}: Prevent the next 1 damage that would be dealt to target creature this turn.`
+- **Oath of Druids**
+  - `At the beginning of each player's upkeep, that player chooses target player who controls more creatures than they do and is their opponent. The first player may reveal cards from the top of their library until they reveal a creature card. If the first player does, that player puts that card onto the battlefield and all other cards revealed this way into their graveyard.`
+- **Oath of Ghouls**
+  - `At the beginning of each player's upkeep, that player chooses target player whose graveyard has fewer creature cards in it than their graveyard does and is their opponent. The first player may return a creature card from their graveyard to their hand.`
+- **Oath of Lieges**
+  - `At the beginning of each player's upkeep, that player chooses target player who controls more lands than they do and is their opponent. The first player may search their library for a basic land card, put that card onto the battlefield, then shuffle.`
 - **Oath of Lim-Dûl**
   - `Whenever you lose life, for each 1 life you lost, sacrifice a permanent other than this enchantment unless you discard a card. (Damage dealt to you causes you to lose life.)`
   - `{B}{B}: Draw a card.`
+- **Oath of Mages**
+  - `At the beginning of each player's upkeep, that player chooses target player who has more life than they do and is their opponent. The first player may have this enchantment deal 1 damage to the second player.`
+- **Oath of Scholars**
+  - `At the beginning of each player's upkeep, that player chooses target player who has more cards in hand than they do and is their opponent. The first player may discard their hand and draw three cards.`
 - **Obelisk of Undoing**
   - `{6}, {T}: Return target permanent you both own and control to your hand.`
   - `{6}, {T}: Return target permanent you both own and control to your hand.`

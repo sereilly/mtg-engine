@@ -38,12 +38,14 @@ import dataclasses
 
 from . import ast
 from .errors import GrammarError
+from .nouns import parse_object_filter
 from .paragraphs import _parse_name_then_reveal_top
 from .phrases import (
     _accept_life_alternative,
     _accept_mana_alternatives,
     _parse_mana_payment,
 )
+from .seat_comparisons import accept_player_comparison
 from .stream import TokenStream
 from .effects import (
     _parse_activates_each_lands_mana_ability,
@@ -280,6 +282,20 @@ def parse_player_subject_verb(
         chosen = parse_player_chooses_permanent(stream, source_spec)
         if chosen is not None:
             return chosen
+        # "At the beginning of each player's upkeep, **that player chooses
+        # target player who controls more creatures than they do and is
+        # their opponent**." (the Exodus Oaths.) CR 601.2c's announcement
+        # with a printed chooser: the seat that picks is the one the
+        # trigger fired for, not the enchantment's controller, and the
+        # narrowing behind it is relative to that same seat.
+        #
+        # Read here rather than through `choices._parse_choose_target`,
+        # which opens on the bare imperative and has no subject to hand
+        # the clause its reference. Non-consuming on refusal, like every
+        # sibling above.
+        picked = _accept_chooses_target_player(stream, source_spec)
+        if picked is not None:
+            return picked
         # "That player **chooses and sacrifices** one of those creatures."
         # (Retribution.) CR 701.21a already makes the sacrificing player the
         # one who picks, so the two printed verbs are one action — the same
@@ -548,3 +564,44 @@ def parse_player_subject_verb(
         except GrammarError:
             stream.reset(mark_may)
     return None
+
+
+def _accept_chooses_target_player(
+    stream: TokenStream, chooser: "ast.PlayerRef"
+) -> "ast.ChooseTarget | None":
+    """``chooses target player who <compares>`` — with "chooses" at the cursor.
+
+    The subject-carrying twin of ``choices._parse_choose_target``'s player arm,
+    and a reader here rather than a branch there for the reason every arm in
+    this dispatch is here: that production opens on a bare imperative, where
+    CR 601.2c's default makes the ability's controller the chooser, and this
+    sentence names somebody else.
+
+    **The comparison is required**, which is what keeps the two productions
+    apart rather than racing: a bare "that player chooses target player" gives
+    the chosen seat nothing to answer for and would be an announcement with no
+    content — the same refusal ``choices`` makes when nothing binds its choice.
+
+    Non-consuming on refusal, so the paragraph reader behind this arm still
+    sees the words it expects.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("chooses", "choose"):
+        return None
+    if not stream.accept_word("target"):
+        stream.reset(mark)
+        return None
+    if stream.accept_word("player"):
+        picked = ast.PlayerRef("target_player")
+    elif stream.accept_word("opponent"):
+        picked = ast.PlayerRef("target_opponent")
+    else:
+        stream.reset(mark)
+        return None
+    comparison = accept_player_comparison(stream, parse_object_filter)
+    if comparison is None:
+        stream.reset(mark)
+        return None
+    return ast.ChooseTarget(
+        dataclasses.replace(picked, compared=comparison), chooser=chooser,
+    )

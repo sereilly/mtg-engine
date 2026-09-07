@@ -25,7 +25,7 @@ from typing import Union
 from ._primitives import AnyNumber, Fixed
 from ._references import (Comparison, ObjectFilter, SourceRelativeComparison)
 from ._targets import TargetSpec
-from ._seats import PlayerDeed, PlayerRef
+from ._seats import PlayerComparison, PlayerDeed, PlayerRef
 
 
 

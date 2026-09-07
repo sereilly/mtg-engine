@@ -50,8 +50,18 @@ class ChooseTarget:
     same CR 601.2c announcement either way and the difference is only what the
     picker enumerates; two nodes would be two lowerings that each have to
     decline the other's noun.
+
+    *chooser* is the seat the card says makes the choice, when it is not the
+    ability's controller: "At the beginning of each player's upkeep, **that
+    player** chooses target player who controls more creatures than they do…"
+    (Oath of Druids). CR 601.2c gives the choice to the controller by default,
+    so the field is None on every card that prints no subject and the picker is
+    unchanged for all of them. It is not decoration on this shape — at more
+    than two seats the comparison can leave several legal answers, and the seat
+    the card names is the one that picks between them.
     """
     subject: "TargetSpec | PlayerRef"
+    chooser: "PlayerRef | None" = None
 
 
 @dataclass(frozen=True)

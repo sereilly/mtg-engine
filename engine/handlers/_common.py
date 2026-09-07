@@ -1960,6 +1960,25 @@ def frozen_that_player_seat(game: Game, context: OracleExecutionContext) -> int 
         seat = frozen.get(key)
         if isinstance(seat, int) and 0 <= seat < len(game.players):
             return seat
+    # …or the seat **an earlier step of this same resolution chose**. "Choose
+    # target opponent who has at least two fewer creature cards in their
+    # graveyard than you do. Destroy target nonblack creature **that player**
+    # controls." (Keeper of the Dead.) No event fired, so nothing is frozen —
+    # the seat was announced with the activation (CR 602.2b) and recorded by
+    # the step that announced it, under the one key every "the player this
+    # effect chose" is written under (``choose_target_player``,
+    # ``choose_opponent``, both permanent-choice prompts).
+    #
+    # Read **after** the trigger context, never before it: a fire site's seat
+    # is the one CR 603.10 froze and a resolution may well have chosen a
+    # different player since, so the recorded pick is an answer where there
+    # was none rather than a new winner where there already was one.
+    # The literal every handler that writes this key spells; it is declared in
+    # ``grammar/lowering/_record_keys.CHOSEN_PLAYER``, which the handler layer
+    # does not import from (``handlers/board_misc.py`` records the same).
+    chosen = (context.results or {}).get("chosen_player")
+    if isinstance(chosen, int) and 0 <= chosen < len(game.players):
+        return chosen
     # A **spell** has no firing event, so there is nothing frozen to read — and
     # the pronoun still has an antecedent: the sentence in front of it. "Cast
     # this spell only during an opponent's turn. Tap target creature **that

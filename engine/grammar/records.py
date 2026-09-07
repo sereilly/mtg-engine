@@ -576,7 +576,7 @@ def accept_plus_per_cost_paid(
     mark = stream.mark()
     if not stream.accept_phrase("plus", "an", "additional"):
         return None
-    step = _accept_printed_number(stream)
+    step = accept_printed_number(stream)
     if (
         step is None
         or not stream.accept_word(unit)
@@ -591,7 +591,7 @@ def accept_plus_per_cost_paid(
     return ast.Plus(base, ast.Times(step, ast.AdditionalCostPaidCount(symbols)))
 
 
-def _accept_printed_number(stream: "TokenStream") -> int | None:
+def accept_printed_number(stream: "TokenStream") -> int | None:
     """A printed count, as a digit token or as a word. Nothing consumed when the
     next token is neither.
 
@@ -599,6 +599,11 @@ def _accept_printed_number(stream: "TokenStream") -> int | None:
     the two readings are spelled out here rather than imported down through the
     layer order. Both are read because a card may print either and reading only
     one would refuse the sentence on its spelling.
+
+    Public because `seat_comparisons` one layer up reads the same printed
+    threshold ("at least **two** more"). A second spelling of these four lines
+    would be the fork in a fragment this package closes elsewhere — which
+    reading a card got would then depend on which clause printed its number.
     """
     digit = stream.accept_kind(NUMBER)
     if digit is not None:

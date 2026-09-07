@@ -1918,7 +1918,14 @@ def may(game: Game, instruction: OracleInstruction, context: OracleExecutionCont
     # holding, so "that player" and every bare imperative inside the offer mean
     # the seat that took it. Tariff's decline branch sacrifices out of that
     # seat's own board.
-    rebind = isinstance(actor, int) or actor in _EACH_ACTORS
+    rebind = (
+        isinstance(actor, int)
+        or actor in _EACH_ACTORS
+        # An offer the *event's* seat takes and then carries out — see
+        # `_EVENT_ACTORS`. The action is the evidence: a `may` with only a cost
+        # names a payer, and its consequence prints its own subject.
+        or (actor in _EVENT_ACTORS and bool(_steps(instruction, "action")))
+    )
 
     def offer(player_index: int) -> None:
         _offer_to_seat(game, instruction, context, player_index, rebind=rebind)
@@ -1985,6 +1992,26 @@ def each_player_pays_any_mana(
 #: imperative inside the offer ("defending player may **draw a card**",
 #: Sibilant Spirit) means that seat and not the attacker's controller.
 _EACH_ACTORS = frozenset({"each_player", "each_opponent", "defending_player"})
+
+#: …and the actors named by the **firing event** (CR 603.10), which are the same
+#: kind of seat as "defending player" above: somebody the event picked, not
+#: somebody the resolution was already holding.
+#:
+#: They rebind only when the offer carries an **action**, and that is the whole
+#: distinction the printed sentences draw. "That player may pay {4}" names a
+#: *payer*, and what happens next has its own printed subject ("you may draw a
+#: card" — Mystic Remora); "that player may **sacrifice a creature of their
+#: choice**" (Pillar Tombs of Aku) and "that player may **discard a card at
+#: random**" (Apathy) name somebody who *performs*, and CR 601.2b makes the seat
+#: that takes an offer the seat that does what it says. Both of those cards
+#: sacrificed and discarded out of the **enchantment controller's** board and
+#: hand — the opposite player from the one printed — because the offer moved and
+#: the performer did not.
+#:
+#: Conditional rather than unconditional, so the cost-only offers above are
+#: untouched: rebinding one of those would hand Mystic Remora's draw to the
+#: opponent who declined to pay for it.
+_EVENT_ACTORS = frozenset({"event_subject_player", "event_subject_controller"})
 
 
 def _offered_seats(
@@ -2135,14 +2162,17 @@ def _offer_to_seat(
     everywhere else the target is the one the spell or ability already chose,
     and overwriting it would aim the accept branch at the wrong object.
 
-    ``context.caster`` is deliberately **not** moved, and that is a known
-    limit rather than a decision: an action inside the offer that addresses the
-    effect's controller — the "you" form of a discard, say — would act on the
-    caster while ``_action_is_takeable`` above tested the *offered* player's
-    hand. No card in the pool prints that pair (Rebirth's ante and life-set both
-    read the target), and the one that would have, Mind Bomb, is collapsed into
-    a per-seat prompt before it reaches here
-    (``grammar/lowering/control_flow._each_player_optional_discard``).
+    ``context.caster`` is deliberately **not** moved without it, and the note
+    here used to call that a known limit no card in the pool printed. **Two
+    did.** "At the beginning of each player's upkeep, that player may sacrifice
+    a creature of their choice" (Pillar Tombs of Aku) and "…that player may
+    discard a card at random" (Apathy) are exactly the pair: an action inside
+    the offer addressing the effect's controller, so the *enchantment's*
+    controller sacrificed and discarded while ``_action_is_takeable`` above had
+    tested the offered player's board and hand. Both are now rebinding offers —
+    see ``_EVENT_ACTORS`` — and Mind Bomb, the card the note said would have
+    been the third, is still collapsed into a per-seat prompt before it reaches
+    here (``grammar/lowering/control_flow._each_player_optional_discard``).
     """
     player = game.players[player_index]
     # **The offer is about the board as it stands now**, and the entry outlives
