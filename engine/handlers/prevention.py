@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..shields import (
+    make_counting_pool,
     make_source_type_shield,
     make_targeting_source_shield,
     add_shield,
@@ -39,7 +40,8 @@ if TYPE_CHECKING:
 
 
 def _grant_pool(
-    recipient, amount: int, source_name: str | None, source_filter: dict | None = None
+    recipient, amount: int, source_name: str | None, source_filter: dict | None = None,
+    counter: str = "",
 ):
     """Arm one CR 615.7 numeric shield on *recipient* and return it.
 
@@ -60,6 +62,17 @@ def _grant_pool(
     """
     if amount <= 0:
         return None
+    if counter:
+        # "…**For each 1 damage prevented this way, put a +1/+1 counter on that
+        # creature.**" (Temper.) CR 615.5's additional effect, so it is the
+        # shield's own interceptor that performs it as the points are absorbed —
+        # a different `Shield.kind` and therefore a different interceptor, which
+        # is the whole reason `kind` exists. No `source_filter`: no card prints
+        # this rider on a shield that also names its source, and the lowering
+        # refuses the pair rather than arming one half of it.
+        return add_shield(
+            recipient, make_counting_pool(amount, counter, source_name)
+        )
     return add_shield(
         recipient, make_numeric_pool(amount, source_name, source_filter)
     )
@@ -73,6 +86,7 @@ def apply_prevention_shield(
     source_name: str | None = None,
     context: OracleExecutionContext | None = None,
     source_filter: dict | None = None,
+    counter: str = "",
 ) -> str:
     """Grant `amount` prevention shields to a chosen creature, or otherwise to the
     target player. Records `source_name` (the granting card) so the UI can show
@@ -87,7 +101,9 @@ def apply_prevention_shield(
         permanent = target.battlefield[target_permanent_index]
         _record_shield(
             context,
-            _grant_pool(permanent, amount, source_name, source_filter),
+            _grant_pool(
+                permanent, amount, source_name, source_filter, counter,
+            ),
             permanent,
         )
         game.log.append(f"{permanent.card.name} gains prevention shield for {amount} damage")
@@ -372,6 +388,11 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
     apply_prevention_shield(
         game, target, context.target_permanent_index, amount, source_name,
         context=context, source_filter=source_filter,
+        # Temper's CR 615.5 rider. Only the chosen-creature branch reads it —
+        # the lowering refuses the rider on every other recipient, because
+        # "that creature" has nothing to point at when the shield goes round a
+        # player.
+        counter=str(instruction.payload.get("rider_counter") or ""),
     )
     return True, "resolved"
 

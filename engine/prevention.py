@@ -73,7 +73,8 @@ from .shields import (END_OF_TURN as SHIELD_END_OF_TURN, PREVENT_ALL_BUT,
                       PREVENT_AND_DAMAGE_SOURCE, PREVENT_AND_GAIN_LIFE,
                       PREVENT_HALF, PREVENT_FROM_COLOR,
                       PREVENT_FROM_SUBJECT, PREVENT_FROM_TARGETING_SOURCE,
-                      PREVENT_NEXT_N, PREVENT_WHOLE, PREVENT_AND_EXILE,
+                      PREVENT_NEXT_N, PREVENT_NEXT_N_AND_COUNTERS,
+                      PREVENT_WHOLE, PREVENT_AND_EXILE,
                       PREVENT_TEAM, Shield, drop_spent, shields_on)
 
 # Order bands. Blanket combat shields run first: they are flags rather than
@@ -182,6 +183,13 @@ GENERIC_TEAM_SHIELD = 407  # Shadowbane with no chosen source
 GENERIC_REFLECT_SHIELD = 408  # Honorable Passage with no chosen source
 GENERIC_WHOLE = 410  # the same rider-less shield with no source recorded
 COLOR_SHIELD = 500  # Circle of Protection
+#: The same pool with CR 615.5's counters behind it (Temper). Before the plain
+#: pool, which is where every other rider-bearing shield sits relative to its
+#: rider-less twin on this list (Reverse Damage before Pentagram of the Ages):
+#: the rider is what the card was played for, and CR 616.1e lets the affected
+#: player choose any order anyway — this is only the default a non-interactive
+#: seat takes.
+POOL_WITH_COUNTERS = 599
 POOL = 600  # "Prevent the next N damage" (CR 615.7)
 # A permanent's own static prevention, which is never used up by the event —
 # only by what it *charges*. Nine Lives prevents the whole instance and puts an
@@ -1161,6 +1169,57 @@ def _log_pool_prevention(game, event: dict, used: list[Shield], prevented: int) 
     recipient = event["recipient"]
     if not isinstance(recipient, PlayerState):
         game.log.append(f"Prevented {prevented} damage to {recipient.card.name}")
+
+
+@prevention_effect(
+    POOL_WITH_COUNTERS, applies=_arms(PREVENT_NEXT_N_AND_COUNTERS)
+)
+def _prevention_pool_with_counters(game, event: dict) -> PreventionOutcome | None:
+    """Temper: "Prevent the next X damage that would be dealt to target creature
+    this turn. For each 1 damage prevented this way, put a +1/+1 counter on that
+    creature."
+
+    CR 615.7's pool with CR 615.5's additional effect: "the prevention takes
+    place at the time the original event would have happened; the rest of the
+    effect takes place immediately afterward". So the counters go on **here**,
+    inside the damage event, and not when the spell resolved — at resolution the
+    pool has absorbed nothing, and a placement read there would put down zero
+    counters for ever. That is the whole difference between this card and Sacred
+    Boon, which prints the same clause behind a delay and really is a delayed
+    ability reading the shield at the end step.
+
+    The number is each shield's own increase rather than the event's total,
+    which is why the running totals are read before ``_spend`` and again in the
+    rider. Two of these pools on one creature absorb one event between them
+    (CR 615.7's "such effects count only the amount of damage"), and each places
+    counters for what *it* absorbed — a card printing a different counter kind
+    would otherwise place the wrong one for the other's points.
+    """
+    before = {
+        id(shield): shield.prevented
+        for shield in _live(game, event, PREVENT_NEXT_N_AND_COUNTERS)
+    }
+
+    def place(game, event: dict, used: list[Shield], prevented: int) -> None:
+        recipient = event["recipient"]
+        if not hasattr(recipient, "permanent_id"):
+            # The lowering only admits this rider on a shield announced over a
+            # creature, so this is unreachable from the pool — and a counter on
+            # a player is not a counter this engine has.
+            return
+        for shield in used:
+            placed = game.place_pt_counters(
+                recipient, shield.counter,
+                shield.prevented - before.get(id(shield), 0),
+            )
+            if placed:
+                game.log.append(
+                    f"{shield.source_name or 'A shield'}: "
+                    f"{recipient.card.name} gets {placed} {shield.counter} "
+                    f"counter{'s' if placed != 1 else ''}"
+                )
+
+    return _spend(game, event, PREVENT_NEXT_N_AND_COUNTERS, rider=place)
 
 
 @prevention_effect(POOL, applies=_arms(PREVENT_NEXT_N))

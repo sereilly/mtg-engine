@@ -395,6 +395,12 @@ class PreventedRider:
 
     effect: str
     source_colors: tuple[str, ...] = ()
+    #: "For each 1 damage prevented this way, put a **+1/+1** counter on that
+    #: creature." (Temper.) Which counter the rider places — payload, because
+    #: CR 122.1 lets a counter have any name and a second card printing this
+    #: sentence with another kind needs no code. Empty for the two riders that
+    #: place none.
+    counter: str = ""
 
 
 @dataclass(frozen=True)
