@@ -612,7 +612,7 @@ class CombatDamageStepMixin:
                 # The damage-source record is written by
                 # ``_mark_damage_on_permanent`` itself now — one seam for
                 # combat and non-combat damage alike.
-                self._fire_dealt_damage_triggers(victim, amount)
+                self._fire_dealt_damage_triggers(victim, amount, combat=True)
                 add_lifelink(lifelink_seat, lifelink_life_gained(source, amount))
 
             return dealt

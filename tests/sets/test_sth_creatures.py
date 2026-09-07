@@ -23,7 +23,7 @@ from engine import Game, PlayerState
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle
 from engine.targeting import derive_activation_spec
-from tests.helpers import _nosick
+from tests.helpers import _nosick, resolve_stack
 
 
 def _w1g1_duel():
@@ -186,3 +186,93 @@ def test_shaman_en_kor_moves_a_chosen_sources_damage_onto_itself(set_pool):
     game._mark_damage_on_permanent(friend, 2, source=bystander)
     assert friend.damage_marked == 2, "another source's damage is not the card's"
     assert shaman.damage_marked == 3
+
+
+def _w1g1_block_with(game, wall, attacker_card, *, attacker_seat=1):
+    """Run one combat where *attacker_card* attacks and *wall* blocks it.
+
+    The whole point of the two Walls is what happens **in the combat damage
+    step**, so the test drives one rather than calling the fire site: a trigger
+    that fires from a hand-called seam and not from a real block is a card that
+    works only in its own test.
+    """
+    defender = game.players[1 - attacker_seat]
+    attacker_controller = game.players[attacker_seat]
+    attacker = _nosick(Permanent(card=attacker_card))
+    attacker_controller.battlefield.append(attacker)
+    game.start_turn(attacker_seat)
+    game._close_current_priority_step()
+    game.advance_combat_phase()   # beginning of combat
+    game.advance_combat_phase()   # declare attackers
+    game.declare_attackers(attacker_seat, [attacker_controller.battlefield.index(attacker)])
+    game.advance_combat_phase()   # declare blockers
+    game.declare_blockers(
+        1 - attacker_seat, {defender.battlefield.index(wall): 0},
+    )
+    game.advance_combat_phase()   # combat damage
+    return attacker
+
+
+def test_wall_of_essence_gains_life_for_the_combat_damage_it_takes(set_pool):
+    """"Whenever this creature is dealt combat damage, you gain that much life."
+
+    Driven through a real block, because "that much" is read out of the *event*
+    — the trigger's context freezes what was dealt (CR 603.10), and by the time
+    it resolves the marked damage may have been added to or wiped. A Wall that
+    gained 0 would look identical to one whose trigger never fired.
+    """
+    game = _w1g1_duel()
+    p1, _ = game.players
+    wall = _nosick(Permanent(card=set_pool("STH")["Wall of Essence"]))
+    p1.battlefield.append(wall)
+    life = p1.life
+
+    _w1g1_block_with(game, wall, _w1g1_bear("Hill Giant", power=3, toughness=3))
+    resolve_stack(game)
+
+    assert p1.life == life + 3
+    assert wall.damage_marked == 3, "a gain, not a prevention"
+
+
+def test_wall_of_essence_ignores_damage_that_was_not_combat_damage(set_pool):
+    """The printed word is only done when something enforces it, and the
+    failure is not a crash: it is a Wall that gains life off every Shock in the
+    game, silently and in its controller's favour.
+
+    The narrowing rides ``damage_combat`` on the condition — the same key the
+    *dealing* side of this event already reads — and the fire site is where it
+    is tested, because whether damage was combat damage is a fact of the event
+    and not of the permanent.
+    """
+    game = _w1g1_duel()
+    p1, _ = game.players
+    wall = _nosick(Permanent(card=set_pool("STH")["Wall of Essence"]))
+    p1.battlefield.append(wall)
+    life = p1.life
+
+    game._mark_damage_on_permanent(wall, 2)
+    resolve_stack(game)
+
+    assert p1.life == life
+    assert wall.damage_marked == 2
+
+
+def test_wall_of_souls_reflects_its_combat_damage_at_an_opponent(set_pool):
+    """"Whenever this creature is dealt combat damage, it deals that much damage
+    to target opponent or planeswalker."
+
+    The Wall deals the damage, so the assertion is on the opponent's life *and*
+    on the Wall keeping its own: a reading that moved the damage instead of
+    reflecting it would leave a 0/4 undamaged and look like a success.
+    """
+    game = _w1g1_duel()
+    p1, p2 = game.players
+    wall = _nosick(Permanent(card=set_pool("STH")["Wall of Souls"]))
+    p1.battlefield.append(wall)
+    their_life = p2.life
+
+    _w1g1_block_with(game, wall, _w1g1_bear("Hill Giant", power=3, toughness=3))
+    resolve_stack(game)
+
+    assert p2.life == their_life - 3
+    assert wall.damage_marked == 3

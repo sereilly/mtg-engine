@@ -643,6 +643,16 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # own note asks for.
     ("creature_dealt_damage",
      r"whenever enchanted (?P<damaged_attached>[a-z]+) is dealt damage"),
+    # "Whenever this creature is dealt **combat** damage" (Wall of Essence, Wall
+    # of Souls). The same event as the row below, narrowed to the half of it a
+    # combat damage step deals — payload rather than a kind, under the very key
+    # `damage_dealt` records the same printed word on
+    # (``events._damage_dealt_filter``), because one printed word read by two
+    # spellings is how the two dispatch scopes come to disagree about what it
+    # means. Above the bare row it is not a prefix of, in this table's usual
+    # order.
+    ("creature_dealt_damage",
+     r"whenever this creature is dealt (?P<damage_combat>combat) damage"),
     ("creature_dealt_damage",               r"whenever this creature is dealt damage"),
     # "Whenever **a creature** is dealt damage, destroy it." (Death Pits of
     # Rath.) The board-wide spelling of the two rows above: the observer is
