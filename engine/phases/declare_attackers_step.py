@@ -1073,7 +1073,35 @@ class DeclareAttackersStepMixin:
                 self, seat, attacker, i.payload.get("condition") or {}
             )
             for i in compile_card_oracle(attacker.effective_card).instructions
-        )
+        ) or self._board_grants_defender_permission(attacker)
+
+    def _board_grants_defender_permission(self, attacker: Permanent) -> bool:
+        """The fourth source: a permanent naming a *class* of creatures.
+
+        "Wall creatures can attack as though they didn't have defender."
+        (Rolling Stones.) Printed on an enchantment nobody is attacking with,
+        so it is found by scanning the board rather than read off the
+        attacker's own program — the permission twin of ``creatures_cant_attack``
+        one method up, over the same ``subject`` payload and through the same
+        ``subject_matches``.
+
+        The observer is the seat whose ability this is (CR 109.5), so a
+        "creatures **you** control" printing would reach that seat's Walls
+        rather than the attacker's.
+        """
+        for source_perm in self.all_permanents():
+            source_seat = self.controller_index_of(source_perm)
+            for instr in compile_card_oracle(
+                source_perm.effective_card
+            ).instructions:
+                if instr.kind != "subject_ignores_defender":
+                    continue
+                if subject_matches(
+                    self, attacker, dict(instr.payload.get("subject") or {}),
+                    observer=source_seat, source=source_perm,
+                ):
+                    return True
+        return False
 
     def _must_attack_if_able(self, attacker: Permanent) -> bool:
         if attacker.metadata.get("must_attack_until_eot"):

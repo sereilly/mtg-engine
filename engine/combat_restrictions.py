@@ -93,11 +93,15 @@ class CombatRestriction:
 #                                   phases/declare_attackers_step._must_attack_beside
 #                                   (a board scan over the declaration)
 #   must_block_each_combat          phases/declare_blockers_step.declare_blockers
+#   creatures_must_block            phases/declare_blockers_step.declare_blockers
+#                                   (a board scan)
+#   attacker_chooses_blocks         phases/combat_phase.block_chooser_index
 #                                   (the declaration, CR 509.1c)
 #   must_attack_if_partner_attacks  phases/declare_attackers_step.declare_attackers
 #                                   (the declaration, not the creature)
 #   attacks_as_though_hasty_unless_it_entered
 #                                   phases/declare_attackers_step.can_attack
+#   subject_ignores_defender        phases/declare_attackers_step._ignores_defender
 #   cant_be_blocked_while_attacking_alone
 #                                   phases/declare_blockers_step
 #   cant_be_blocked_by              phases/declare_blockers_step
@@ -528,6 +532,27 @@ _PATTERNS: tuple[tuple[re.Pattern[str], "str | tuple[str, ...]"], ...] = (
         "attacks_as_though_hasty_unless_it_entered",
     ),
     (
+        # "Wall creatures can attack as though they didn't have defender."
+        # (Rolling Stones.) CR 609.4's "as though" over a *described set*
+        # printed on somebody else's permanent — the board-reaching twin of
+        # Animate Wall's Aura permission and Wall of Wonder's one-turn flag,
+        # and read at the same one site (`_ignores_defender`) so the three
+        # spellings cannot disagree about what the word lifts.
+        #
+        # The noun phrase is payload for this file's standing reason: a card
+        # printing "Creatures you control can attack as though they didn't have
+        # defender" is this rule with nothing added. "Defender" is written into
+        # the pattern rather than captured, because it is the only keyword that
+        # stops an attack by itself — the same refusal
+        # ``lowering/combat._lower_attack_as_though`` makes by name, and a
+        # captured word would be a clause matched and then acted on by nobody.
+        re.compile(
+            r"^(?P<board_attack_subject>(?:[a-z'-]+ )*creatures) can attack "
+            r"as though they didn't have defender$"
+        ),
+        "subject_ignores_defender",
+    ),
+    (
         # "This creature can't be blocked." (Phantom Warrior.) The unnarrowed
         # member of the "can't be blocked" family below: no blocker class, no
         # count and no price, so nothing may block it at all (CR 509.1b).
@@ -759,6 +784,45 @@ _PATTERNS: tuple[tuple[re.Pattern[str], "str | tuple[str, ...]"], ...] = (
             r"^(?:all |each )?(?P<must_attack_subject>.+) attack each combat if able$"
         ),
         "creatures_must_attack",
+    ),
+    (
+        # "All creatures block each combat if able." (Invasion Plans.) The
+        # blocking twin of the row above, in the same relation to
+        # ``must_block_each_combat`` that one is in to
+        # ``must_attack_each_combat``: printed on one permanent about a *set* of
+        # others, so it is enforced by a board scan in the declare-blockers step
+        # rather than read off the blocker's own program.
+        #
+        # The plural verb keeps the two apart, exactly as it does on the attack
+        # side. "This creature **blocks** each combat if able" (Watchdog) is the
+        # per-creature row; a set **block**.
+        #
+        # And it is the *weak* requirement, not Lure's: it compels each creature
+        # the phrase names to block **something**, where "all creatures able to
+        # block this creature do so" compels a particular attacker to be
+        # blocked. Reading either as the other changes which declarations are
+        # legal.
+        re.compile(
+            r"^(?:all |each )?(?P<must_block_subject>.+) block each combat if able$"
+        ),
+        "creatures_must_block",
+    ),
+    (
+        # "The attacking player chooses how each creature blocks each combat."
+        # (Invasion Plans.) CR 509.1a's chooser substituted by a *static*
+        # ability, where Melee substitutes it with a one-shot — so the seat is
+        # not stored on the game, it is derived at the declaration from whoever
+        # is attacking. ``Game.block_chooser_index`` is the one reader, which is
+        # what keeps the engine, the AI stepper and the web layer from each
+        # answering "who is asked?" for themselves.
+        #
+        # Nothing is payload because nothing is printed as a parameter: the
+        # sentence names no noun phrase, no count and no seat but the one the
+        # turn already names.
+        re.compile(
+            r"^the attacking player chooses how each creature blocks each combat$"
+        ),
+        "attacker_chooses_blocks",
     ),
     (re.compile(r"^this creature must be blocked if able$"), "must_be_blocked"),
     (
@@ -1401,6 +1465,16 @@ def combat_restriction_for(
         board_attack_subject = payload.pop("board_attack_subject", None)
         if board_attack_subject is not None:
             described = _printed_noun(board_attack_subject)
+            if described is None:
+                return None
+            payload["subject"] = described
+        # "All **creatures** block each combat if able." The same reader and
+        # the same refusal, and the direction of a dropped narrowing is the
+        # mirror of the one above: an empty filter would compel every creature
+        # on the board to block rather than the ones the card names.
+        must_block_subject = payload.pop("must_block_subject", None)
+        if must_block_subject is not None:
+            described = _printed_noun(must_block_subject)
             if described is None:
                 return None
             payload["subject"] = described
