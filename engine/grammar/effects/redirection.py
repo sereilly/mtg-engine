@@ -14,13 +14,15 @@ so the mirror re-forms rather than forking a third vocabulary. That the parse
 halves sat in ``prevention`` while their lowering halves sat here is the
 asymmetry this split closes.
 
-What does **not** move is ``_parse_source_of_choice_effect``. It reads CR
+What did **not** move is ``_parse_source_of_choice_effect``. It reads CR
 615.8's seven opening words and returns *either* node — a shield if the clause
 after the comma prevents, a redirect if it moves the damage (Nova Pentacle) —
 so a module holding half of it would import the other half, which is the
 coupling the family rule exists to prevent. One printed sentence, one
-production, and the family it lives in is the one the pool mostly prints.
-There is no import between the two modules in either direction.
+production. It left ``prevention`` whole at Exodus' Phase 0 and lives in
+``effects/damage_instances.py`` now, with the rest of CR 615.8; that changes
+which module it is in and nothing about why it is one piece. There is no import
+between any of the three modules in either direction.
 """
 
 from .. import ast
