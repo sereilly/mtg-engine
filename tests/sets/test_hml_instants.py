@@ -187,6 +187,7 @@ def test_jinx_offers_a_land_to_target(set_pool):
 from engine import Game, PlayerState
 from engine.models import Permanent
 from engine.pt import add_pt_modifier
+from tests.helpers import resolve_stack
 
 
 def _w2g1_game(*players: PlayerState, interactive=()) -> Game:
@@ -271,8 +272,7 @@ def test_truce_pays_two_life_for_each_card_a_seat_leaves(set_pool):
     game = _w2g1_game(caster, other, interactive=(0, 1))
 
     game.cast_from_hand(0, "Truce")
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     assert game.confirm_draw_up_to(0, 1)
     assert game.confirm_draw_up_to(1, 1)
     game._settle()

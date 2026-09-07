@@ -123,7 +123,7 @@ def _damage_dealt(game, recipient, amount: int, source=None, combat: bool = Fals
 
 
 def resolve_stack(game, *, limit: int = 200) -> int:
-    """Resolve every object on *game*'s stack and settle the decisions it arms.
+    """Resolve every object on *game*'s stack, unblocking it when it stalls.
 
     **Use this instead of ``while game.stack: game.resolve_top_of_stack()``.**
     That loop is a latent hang, and the hang is the engine being correct.
@@ -136,20 +136,18 @@ def resolve_stack(game, *, limit: int = 200) -> int:
     something — which is why such a loop survives review, and why one of them
     stopped a run the day a trigger began announcing a target.
 
-    Decisions are settled through the registry's own default path
-    (``auto_resolve_pending_choices``, and the CR 614 replacement queue beside
-    it) — the same answers an AI or headless seat takes — so a test written with
-    this helper sees what a non-interactive game would have done. That happens
-    **whether or not anything is left on the stack**, because the hazard is the
-    resolution being unfinished rather than the stack being non-empty: a prompt
-    still owed means steps behind it have not run, and a test that asserts on the
-    board there is reading a half-applied effect. A test that means to *inspect*
-    a prompt should resolve by hand instead; this helper's job is to finish.
+    **A decision is answered only while it is blocking the stack**, through the
+    registry's own default path (``auto_resolve_pending_choices``, and the
+    CR 614 replacement queue beside it) — the same answers an AI or headless
+    seat takes. That narrowness is deliberate and was measured: a first draft
+    settled the queue on every iteration and broke 41 tests, because a test that
+    resolves a spell and then *inspects* what the resolution asked was reading a
+    prompt the helper had answered out from under it. Draining only what blocks
+    the stack is what makes this a safe swap for the bare loop.
 
-    ``kinds`` is deliberately not offered. Drain order is load-bearing only where
-    a default consumes randomness (a library search shuffles), and a test that
-    needs that ordering wants the engine call itself rather than a helper hiding
-    which kinds it drained.
+    So this is not "settle the game". A prompt owed with an empty stack is left
+    alone; call ``auto_resolve_pending_choices`` directly when that is what you
+    mean.
 
     Returns the number of stack objects resolved. Raises rather than looping
     forever when nothing can progress — a prompt nothing defaults is a bug in the
@@ -157,22 +155,23 @@ def resolve_stack(game, *, limit: int = 200) -> int:
     """
     resolved = 0
     for _ in range(limit):
+        if not game.stack:
+            return resolved
+        if game.resolve_top_of_stack():
+            resolved += 1
+            continue
+        # The top is held mid-resolution: something is owed before it can
+        # finish, and answering it is the only way this loop can progress.
         before = (
-            len(game.stack),
             len(game.pending_choices),
             len(game.pending_replacement_choices),
         )
-        if game.stack and game.resolve_top_of_stack():
-            resolved += 1
         game.auto_resolve_pending_choices()
         game.auto_resolve_pending_replacement_choices()
         after = (
-            len(game.stack),
             len(game.pending_choices),
             len(game.pending_replacement_choices),
         )
-        if not game.stack and not game.pending_choices:
-            return resolved
         if after == before:
             raise AssertionError(
                 f"the stack stopped moving with {len(game.stack)} object(s) on "

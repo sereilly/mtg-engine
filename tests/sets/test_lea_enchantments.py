@@ -20,12 +20,13 @@ from engine.land_types import change_land_type
 import json
 from web.app import app, store
 from tests.helpers import (
+    _get,
     _mk_card,
     _mk_creature_card,
     _pass_priority,
     _resolve_top_stack,
     client,
-    _get,
+    resolve_stack,
 )
 from tests.sets.lea_helpers import (
     _forest,
@@ -2080,8 +2081,7 @@ def test_pestilence_sacrifices_itself_on_an_empty_board(all_cards):
     game = Game(players=[p1, PlayerState(name="P2", life=20)])
 
     game.resolve_end_step(0)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert pestilence not in p1.battlefield
 
@@ -2096,8 +2096,7 @@ def test_pestilence_survives_while_any_creature_is_on_the_battlefield(all_cards)
     game = Game(players=[p1, p2])
 
     game.resolve_end_step(0)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert pestilence in p1.battlefield
 
@@ -2124,8 +2123,7 @@ def test_animate_dead_applies_its_penalty_once(set_pool):
     assert game.cast_from_hand(
         0, "Animate Dead", target_player_index=0, target_permanent_index=0
     ).supported
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game._settle()
 
     bear = next(p for p in p1.battlefield if p.card.name == "Grizzly Bears")

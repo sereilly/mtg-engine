@@ -62,12 +62,10 @@ def _g2_fly(game, kites, rider, *, win):
             target_player_index=0,
             target_permanent_index=game.battlefield_index_of(rider),
         )
-        while game.stack:
-            game.resolve_top_of_stack()
+        resolve_stack(game)
         game._settle()
         game.resolve_end_step(0)
-        while game.stack:
-            game.resolve_top_of_stack()
+        resolve_stack(game)
         game._settle()
     return result
 
@@ -116,8 +114,7 @@ def test_goblin_kites_grants_flying_before_the_end_step_arrives(set_pool):
         target_player_index=0,
         target_permanent_index=game.battlefield_index_of(small),
     )
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game._settle()
 
     assert result.supported, result.details
@@ -162,7 +159,7 @@ from engine.auras import attach_aura
 from engine.cast_restrictions import check_cast_timing
 from engine.models import Permanent, PlayerState
 from engine.named_counters import counters_on
-from tests.helpers import _nosick as _g1e_nosick
+from tests.helpers import _nosick as _g1e_nosick, resolve_stack
 
 
 def _g1e_game(life=20):

@@ -37,7 +37,7 @@ from engine.models import Permanent, PlayerState
 from engine.named_counters import counters_on
 from engine.oracle import compile_card_oracle
 from engine.pt import add_pt_modifier
-from tests.helpers import _nosick
+from tests.helpers import _nosick, resolve_stack
 
 # --- W3G1: granted abilities in quotes ---
 def _shaman_game(pool):
@@ -55,8 +55,7 @@ def _shaman_game(pool):
 def _activate_shaman(game):
     game.players[0].mana_pool["B"] = 1
     result = game.activate_permanent_ability(0, "Bone Shaman")
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game._settle()
     return result
 
@@ -132,8 +131,7 @@ def _play_musician(game, musician):
     result = game.activate_permanent_ability(
         0, "Musician", target_player_index=1, target_permanent_index=0
     )
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game._settle()
     return result
 
@@ -180,8 +178,7 @@ def test_musicians_granted_upkeep_destroys_a_creature_that_cannot_pay(set_pool):
     _play_musician(game, musician)
 
     game.start_turn(1)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game._settle()
 
     assert bear not in list(game.controlled_by(game.players[1]))
@@ -197,8 +194,7 @@ def test_musicians_granted_upkeep_scales_with_the_music_counters(set_pool):
     _play_musician(game, musician)
 
     game.start_turn(1)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game._settle()
 
     assert bear in list(game.controlled_by(game.players[1]))
@@ -227,8 +223,7 @@ def _activate_balduvian_shaman(game, *, seat: int, index: int, swap=("B", "U")):
         target_player_index=seat, target_permanent_index=index,
         old_color=swap[0], mana_color=swap[1],
     )
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game._settle()
     return result
 
@@ -385,8 +380,7 @@ def test_the_supplicant_will_not_eat_a_creature_of_the_wrong_color(set_pool):
 # --- W3G5: death triggers, control, computed characteristics ---
 def _w3g5_settle(game):
     """Resolve everything the last action put on the stack, then settle."""
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game._settle()
 
 
@@ -764,8 +758,7 @@ def _w3g2_board(set_pool, *names, opponent=()):
 
 
 def _w3g2_settle(game):
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game._settle()
 
 
@@ -1111,8 +1104,7 @@ def test_w4g1_removing_the_counter_releases_the_creature(set_pool):
 
     game.players[1].mana_pool = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 4}
     game.activate_permanent_ability(1, "Glacial Wall")
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game._settle()
     assert counters_on(blocker, "paralyzation") == 0
 

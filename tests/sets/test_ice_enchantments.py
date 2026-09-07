@@ -25,7 +25,7 @@ from engine import Game
 from engine.models import Permanent, PlayerState
 from engine.named_counters import counters_on
 from engine.oracle import compile_card_oracle
-from tests.helpers import _nosick
+from tests.helpers import _nosick, resolve_stack
 
 # --- W2G2: mana-production replacements and land-type changes ---
 def _lands_board(set_pool, permanent_name=None, lands=("Forest", "Plains", "Island", "Mountain", "Swamp"), opponents=False):
@@ -1047,8 +1047,7 @@ def test_aggression_destroys_a_creature_that_sat_out_its_controllers_end_step(se
 
     game.active_player_index = 1
     game.resolve_end_step(1)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert bear not in list(game.controlled_by(game.players[1]))
     assert [card.name for card in game.players[1].graveyard] == ["Balduvian Bears"]
@@ -1064,8 +1063,7 @@ def test_aggression_spares_a_creature_that_attacked(set_pool):
     game._set_phase_and_step("combat", "declare_attackers")
     assert game.declare_attackers(1, [0], defending_player_index=0)[0]
     game.resolve_end_step(1)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert bear in list(game.controlled_by(game.players[1]))
 
@@ -1078,8 +1076,7 @@ def test_aggression_fires_on_the_hosts_controllers_end_step_and_no_other(set_poo
 
     game.active_player_index = 0
     game.resolve_end_step(0)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert bear in list(game.controlled_by(game.players[1]))
 
@@ -1093,8 +1090,7 @@ def test_a_detached_aggression_destroys_nothing(set_pool):
 
     game.active_player_index = 1
     game.resolve_end_step(1)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert bear in list(game.controlled_by(game.players[1]))
     assert not bear.has_keyword("first strike")
@@ -1480,8 +1476,7 @@ def _dance_game(pool, corpse: str = "Balduvian Bears", swamps: int = 0):
     result = game.cast_from_hand(
         0, "Dance of the Dead", target_player_index=0, target_permanent_index=0
     )
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game._settle()
     return game, p1, result
 
@@ -1801,8 +1796,7 @@ def test_a_hybrid_symbol_counts_as_the_colour_it_contains():
 
 # --- W3G5: death triggers, control, computed characteristics ---
 def _w3g5_settle(game):
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game._settle()
 
 
@@ -2056,8 +2050,7 @@ def _w3g2_attack(game, seat, attacker, defending):
     declared = game.declare_attackers(
         seat, [index], defending_player_index=defending
     )
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game._settle()
     return declared
 
@@ -2377,8 +2370,7 @@ def test_wrath_of_marit_lage_enters_without_asking_for_a_creature(set_pool):
     }
 
     result = game.cast_from_hand(0, "Wrath of Marit Lage")
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game._settle()
 
     assert result.supported, result.details
@@ -2401,8 +2393,7 @@ def test_wrath_of_marit_lage_taps_the_red_creatures_it_never_chose(set_pool):
     game._sync_control()
 
     game.cast_from_hand(0, "Wrath of Marit Lage")
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game._settle()
 
     assert [(p.card.name, p.tapped) for p in theirs] == [

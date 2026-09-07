@@ -10,7 +10,7 @@ from engine.models import Permanent
 from engine.game_types import OracleExecutionContext
 from engine.models import CardDefinition, Permanent
 from engine.pt import add_pt_counters
-from tests.helpers import _damage_dealt, _nosick
+from tests.helpers import _damage_dealt, _nosick, resolve_stack
 from engine import Game as _W1G4Game
 from engine import PlayerState as _W1G4PlayerState
 from engine.models import CardDefinition as _W1G4CardDefinition
@@ -1309,15 +1309,13 @@ def _w3g5_hippo_board(
         game.resolve_top_of_stack()
     if not interactive:
         game.auto_resolve_pending_choices()
-        while game.stack:
-            game.resolve_top_of_stack()
+        resolve_stack(game)
     return game, p1, p2, hippo
 
 
 def _w3g5_next_main_phase(game):
     game._enter_main_phase(precombat=False)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
 
 def test_pygmy_hippo_taps_the_defender_out_and_pays_it_back_next_main_phase(
@@ -1371,8 +1369,7 @@ def test_pygmy_hippos_offer_is_a_real_prompt_and_declining_keeps_the_damage(
 
     assert [c.kind for c in game.pending_choices] == ["optional_pay"]
     assert game.resolve_pending_choice("optional_pay", 0, accept=False)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert not any(land.tapped for land in p2.battlefield)
     assert hippo.metadata.get("assigns_no_combat_damage_until_eot") is None
@@ -1389,8 +1386,7 @@ def test_pygmy_hippos_offer_taken_by_hand_does_the_whole_sentence(
     )
 
     assert game.resolve_pending_choice("optional_pay", 0, accept=True)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     _w3g5_next_main_phase(game)
 
     assert all(land.tapped for land in p2.battlefield)

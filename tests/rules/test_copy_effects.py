@@ -53,6 +53,7 @@ from engine.keywords import remove_keyword
 from engine.models import Permanent
 from engine.pt import add_pt_modifier, set_base_pt
 from engine.text_changes import change_color_word
+from tests.helpers import resolve_stack
 
 
 @pytest.fixture(scope="module")
@@ -455,8 +456,7 @@ def test_707_10a_the_copy_ceases_to_exist_instead_of_reaching_a_graveyard():
 
     game.queue_from_hand(0, "Lightning Bolt", target_player_index=1)
     game.queue_from_hand(0, "Fork", target_player_index=1, target_stack_index=0)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert p2.life == 14  # 3 from the original, 3 from the copy
     bolts = [c for player in game.players for c in player.graveyard
@@ -479,8 +479,7 @@ def test_707_10c_the_controller_may_choose_new_targets_for_the_copy():
     game.queue_from_hand(0, "Giant Growth", target_player_index=0, target_permanent_index=0)
     game.queue_from_hand(0, "Fork", target_stack_index=0,
                          target_player_index=0, target_permanent_index=1)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert bears_a.effective_power == 5
     assert bears_b.effective_power == 5
@@ -499,8 +498,7 @@ def test_707_10c_leaving_the_targets_unchanged_is_equally_legal():
 
     game.queue_from_hand(0, "Giant Growth", target_player_index=0, target_permanent_index=0)
     game.queue_from_hand(0, "Fork", target_stack_index=0)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert bears.effective_power == 8  # 2 + 3 + 3, both buffs on one creature
 

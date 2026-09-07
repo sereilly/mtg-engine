@@ -19,13 +19,13 @@ from engine.ai_valuation import TollLoss, toll_branch_loss
 from engine.auras import attach_aura
 from engine.models import Permanent
 from engine.oracle import OracleInstruction
+from tests.helpers import resolve_stack
 
 
 def _run_upkeep(game: Game, seat: int) -> None:
     game.active_player_index = seat
     game.resolve_upkeep(seat)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
 
 # --- paying is the smaller loss ----------------------------------------------

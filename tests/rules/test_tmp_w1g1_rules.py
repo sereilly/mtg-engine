@@ -29,7 +29,7 @@ import pytest
 from engine import Game, PlayerState
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle
-from tests.helpers import _nosick
+from tests.helpers import _nosick, resolve_stack
 
 
 def _bear(name: str, text: str = "", keywords=()) -> CardDefinition:
@@ -358,8 +358,7 @@ def test_w1g1_the_removal_still_reaches_a_printed_planeswalker(catalog_by_name):
 
     game.cast_from_hand(0, "Soul Sear", target_permanent_index=0,
                         target_player_index=0)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert any(
         "Ugin, the Spirit Dragon loses indestructible" in line

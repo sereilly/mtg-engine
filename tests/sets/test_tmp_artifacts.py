@@ -717,7 +717,7 @@ from engine.combat_permissions import MUST_BLOCK_ATTACKERS_UNTIL_EOT
 from engine.models import Permanent
 from engine.named_counters import add_counters
 from engine.oracle import compile_card_oracle
-from tests.helpers import _mk_creature_card, _nosick
+from tests.helpers import _mk_creature_card, _nosick, resolve_stack
 
 
 def _w2g2_web_board(web):
@@ -756,8 +756,7 @@ def test_w2g2_magnetic_web_compels_the_magnetized_creatures_to_block(set_pool):
     game.advance_combat_phase()
     game.advance_combat_phase()
     assert game.declare_attackers(0, [1], 1)[0]
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     ogre_id = p0.battlefield[1].permanent_id
     assert p1.battlefield[0].metadata[MUST_BLOCK_ATTACKERS_UNTIL_EOT] == [ogre_id]
@@ -782,8 +781,7 @@ def test_w2g2_magnetic_web_stays_quiet_for_an_unmagnetized_attacker(set_pool):
     game.advance_combat_phase()
     game.advance_combat_phase()
     assert game.declare_attackers(0, [1], 1)[0]
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     assert p1.battlefield[0].metadata.get(MUST_BLOCK_ATTACKERS_UNTIL_EOT) is None
     game.advance_combat_phase()
     assert game.declare_blockers(1, {})[0], game.log
@@ -1120,8 +1118,7 @@ def _w3g4a_activate(game, bear):
         target_permanent_index=game.battlefield_index_of(bear),
     )
     assert result.supported, result.details
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     return result
 
 
@@ -1290,8 +1287,7 @@ def test_phyrexian_splicer_moves_the_chosen_ability(set_pool):
         target_permanent_ids=[flier.permanent_id, ground.permanent_id],
     )
     assert result.supported, result.details
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert not game._has_keyword(flier, "flying")
     assert game._has_keyword(ground, "flying")
@@ -1306,8 +1302,7 @@ def test_the_removal_and_the_grant_both_end_with_the_turn(set_pool):
         0, "Phyrexian Splicer", ability_index=0, chosen_keyword="flying",
         target_permanent_ids=[flier.permanent_id, ground.permanent_id],
     )
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game.resolve_cleanup_step(0)
 
     assert game._has_keyword(flier, "flying")
@@ -1344,8 +1339,7 @@ def test_a_seat_that_names_no_ability_takes_the_stated_default(set_pool):
     )
     assert result.supported, result.details
     assert splicer.metadata[CHOSEN_ABILITY] == "flying"
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     assert game._has_keyword(ground, "flying")
 
 

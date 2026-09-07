@@ -22,6 +22,7 @@ from engine import Game, PlayerState
 from engine.auras import aura_static_pt_grant, auras_attached_to
 from engine.card_loader import load_catalog
 from engine.models import CardDefinition, Permanent
+from tests.helpers import resolve_stack
 
 
 @pytest.fixture(scope="module")
@@ -573,8 +574,7 @@ def _cast_aura(catalog, aura_name, host, *, pips):
         0, aura_name, target_player_index=1, target_permanent_index=0
     )
     assert result.supported, result.details
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game._settle()
     aura = next(
         perm for perm in game.all_permanents() if perm.card.name == aura_name

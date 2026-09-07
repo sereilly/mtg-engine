@@ -1043,8 +1043,7 @@ def test_fungus_elemental_grows_only_on_the_turn_it_arrived(
     p1.battlefield.append(_W2G1Permanent(card=catalog_by_name["Forest"]))
 
     result = game.activate_permanent_ability(0, "Fungus Elemental")
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert result.supported, result.details
     assert (elemental.effective_power, elemental.effective_toughness) == (5, 5)
@@ -1141,7 +1140,7 @@ def test_circling_vultures_upkeep_still_costs_a_creature_card(
 # --- W2G5: enforcement, entry replacement and the last statics ---
 
 from engine.oracle import compile_card_oracle as _w2g5_compile  # noqa: E402
-from tests.helpers import _mk_card as _w2g5_mk_card  # noqa: E402
+from tests.helpers import _mk_card as _w2g5_mk_card, resolve_stack
 from tests.helpers import _nosick as _w2g5_nosick  # noqa: E402
 
 

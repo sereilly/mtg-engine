@@ -143,7 +143,7 @@ def test_phyrexian_furnace_on_an_empty_pile_resolves_and_exiles_nothing(set_pool
 from engine import Game, PlayerState
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle
-from tests.helpers import _damage_dealt
+from tests.helpers import _damage_dealt, resolve_stack
 
 
 def _w1g4a_creature(name, power, toughness):
@@ -570,8 +570,7 @@ def test_bosium_strip_opens_only_the_top_of_the_graveyard(
     assert playable_from_zones(game, 0) == []
 
     result = game.activate_permanent_ability(0, "Bösium Strip")
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert result.supported, result.details
     assert [entry["name"] for entry in playable_from_zones(game, 0)] == [
@@ -601,14 +600,12 @@ def test_bosium_strip_exiles_what_was_cast_this_way(set_pool, catalog_by_name):
     p1.graveyard = [catalog_by_name["Grizzly Bears"], catalog_by_name["Lightning Bolt"]]
 
     game.activate_permanent_ability(0, "Bösium Strip")
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     result = game.cast_from_hand(
         0, "Lightning Bolt", target_player_index=1, from_zone="graveyard"
     )
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert result.supported, result.details
     assert p2.life == 17

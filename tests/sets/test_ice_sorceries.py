@@ -18,6 +18,7 @@ from __future__ import annotations
 from engine import Game
 from engine.models import Permanent, PlayerState
 from engine.oracle import compile_card_oracle
+from tests.helpers import resolve_stack
 
 
 # --- Round 3: the cantrip cycle — "at the beginning of the next turn's upkeep" ---
@@ -193,8 +194,7 @@ def test_diabolic_vision_keeps_one_and_stacks_the_rest(set_pool):
     )
 
     game.queue_from_hand(0, "Diabolic Vision")
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert game.pending_choice_of("look_top_pick", 0) is not None
     assert game.confirm_look_top_pick(0, 1) is True
@@ -1459,8 +1459,7 @@ def test_w3g2_the_gaze_watches_only_its_casters_creatures(set_pool):
     armed it. An opponent's unblocked attacker is not the event."""
     game, attacker, victim, blocker = _w3g2_gaze_board(set_pool)
     assert game.cast_from_hand(0, "Gaze of Pain").supported
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game._settle()
 
     entry = game.delayed_triggers[0]

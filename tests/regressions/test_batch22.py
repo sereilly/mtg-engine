@@ -46,7 +46,7 @@ from engine import PlayerState
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.pt import add_pt_modifier
-from tests.helpers import CARDS_BY_NAME as _C
+from tests.helpers import CARDS_BY_NAME as _C, resolve_stack
 from tests.helpers import _game, _mk_creature_card, _nosick
 from web.app import app, store, _end_turn
 
@@ -189,8 +189,7 @@ class TestBottleOfSuleiman:
         try:
             result = game.queue_permanent_ability(0, "Bottle of Suleiman", permanent_index=0)
             assert result.supported, result.details
-            while game.stack:
-                game.resolve_top_of_stack()
+            resolve_stack(game)
         finally:
             random.random = real_random
 
@@ -294,8 +293,7 @@ class TestDiamondValley:
             0, "Diamond Valley", permanent_index=0, target_permanent_index=1
         )
         assert result.supported, result.details
-        while game.stack:
-            game.resolve_top_of_stack()
+        resolve_stack(game)
         return p1
 
     def test_gains_the_untapped_tortoises_boosted_toughness(self, arn_by_name):
@@ -436,8 +434,7 @@ class TestEyeForAnEye:
             1, "Eye for an Eye", target_player_index=0, target_permanent_index=0
         )
         assert result.supported, result.details
-        while game.stack:
-            game.resolve_top_of_stack()
+        resolve_stack(game)
         game._set_phase_and_step("combat", "combat_damage")
         game.resolve_combat_damage(0)
         assert p2.life == 17, "the defender still takes the combat damage"
@@ -446,8 +443,7 @@ class TestEyeForAnEye:
     def test_the_charge_is_spent_after_one_damage_event(self, arn_by_name):
         game, p1, p2, attacker = self._attack_game(arn_by_name)
         game.cast_from_hand(1, "Eye for an Eye", target_player_index=0, target_permanent_index=0)
-        while game.stack:
-            game.resolve_top_of_stack()
+        resolve_stack(game)
         game._set_phase_and_step("combat", "combat_damage")
         game.resolve_combat_damage(0)
         assert p2.mirror_damage_sources == []
@@ -460,8 +456,7 @@ class TestEyeForAnEye:
         other = _nosick(Permanent(card=_C["Grizzly Bears"]))
         p1.battlefield.append(other)
         game.cast_from_hand(1, "Eye for an Eye", target_player_index=0, target_permanent_index=0)
-        while game.stack:
-            game.resolve_top_of_stack()
+        resolve_stack(game)
         game._deal_damage_to_player(p2, 2, source=other)
         assert p2.life == 18
         assert p1.life == 20
@@ -523,8 +518,7 @@ class TestJeweledBird:
         game = _game(p1, PlayerState(name="P2"))
         result = game.queue_permanent_ability(0, "Jeweled Bird", permanent_index=0)
         assert result.supported, result.details
-        while game.stack:
-            game.resolve_top_of_stack()
+        resolve_stack(game)
         return p1, bird
 
     def test_the_bird_moves_from_the_battlefield_into_the_ante(self, arn_by_name):
@@ -595,8 +589,7 @@ class TestOldManOfTheSea:
             target_player_index=1, target_permanent_index=0,
         )
         assert result.supported, result.details
-        while game.stack:
-            game.resolve_top_of_stack()
+        resolve_stack(game)
         assert any(p is victim for p in p1.battlefield), "the steal itself must work"
         assert old_man.tapped is True
         return game, p1, p2, old_man, victim
@@ -635,8 +628,7 @@ class TestOldManOfTheSea:
             0, "Old Man of the Sea", permanent_index=0,
             target_player_index=1, target_permanent_index=0,
         )
-        while game.stack:
-            game.resolve_top_of_stack()
+        resolve_stack(game)
         assert any(p is victim for p in p0.battlefield)
 
         # Advance to seat 0's own untap step, where the "you may choose not to
@@ -677,8 +669,7 @@ class TestRingOfMaruf:
                   "permanent_name": "Ring of Ma'rûf", "permanent_index": 0},
         )
         assert resp.status_code == 200, resp.text
-        while game.stack:
-            game.resolve_top_of_stack()
+        resolve_stack(game)
         return sid, session, game, p0
 
     def test_activating_arms_the_replacement_and_exiles_the_ring(self, arn_by_name):

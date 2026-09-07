@@ -20,7 +20,7 @@ import pytest  # LeadB: the block at the end of this file parametrizes
 from engine import Game
 from engine.models import Permanent, PlayerState
 from engine.oracle import compile_card_oracle
-from tests.helpers import _nosick
+from tests.helpers import _nosick, resolve_stack
 
 
 # --- Round 17: a keyword family named whole, and a negated supertype ---
@@ -214,8 +214,7 @@ def test_celestial_sword_sacrifices_the_creature_it_pumped(set_pool):
     result = game.activate_permanent_ability(
         0, "Celestial Sword", target_permanent_index=1, target_player_index=0
     )
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert result.supported
     assert sword.tapped
@@ -1447,8 +1446,7 @@ def test_w3g2_paying_the_whistles_price_buys_the_creature_off(set_pool):
     game, whistle, victim, _wall, _newcomer = _w3g2_whistle_board(set_pool)
 
     _w3g2_blow_the_whistle(game, whistle, victim)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game._settle()
     game.confirm_optional_pay(1, "Arcum's Whistle", accept=True)
     game._settle()
@@ -1467,8 +1465,7 @@ def test_w3g2_a_payer_with_no_mana_is_never_offered_the_choice(set_pool):
     )
 
     _w3g2_blow_the_whistle(game, whistle, victim)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game._settle()
 
     assert not game.pending_optional_pays
@@ -1790,8 +1787,7 @@ def test_whalebone_glider_only_lifts_a_creature_the_phrase_admits(set_pool):
         target_player_index=0,
         target_permanent_index=game.battlefield_index_of(light),
     )
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game._settle()
 
     assert result.supported, result.details

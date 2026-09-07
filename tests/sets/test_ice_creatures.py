@@ -37,7 +37,7 @@ from engine.models import Permanent, PlayerState
 from engine.named_counters import counters_on
 from engine.oracle import compile_card_oracle
 from engine.pt import add_pt_modifier
-from tests.helpers import _nosick
+from tests.helpers import _nosick, resolve_stack
 
 # --- W1G3: mana, additional costs, cost restrictions ---
 def _w1g3_cost(**pips):
@@ -780,8 +780,7 @@ def _w1g5_titan_board(set_pool, catalog_by_name):
 def _w1g5_cast(game, name):
     game.cast_from_hand(0, name)
     game._settle()
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
 
 def test_mountain_titan_arms_a_delayed_cast_trigger(set_pool):
@@ -811,8 +810,7 @@ def test_mountain_titan_grows_only_after_the_ability_and_only_on_black(
     assert titan.effective_power == 2, game.log
 
     assert game.activate_permanent_ability(0, "Mountain Titan").supported
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     _w1g5_cast(game, "Lightning Bolt")
     assert titan.effective_power == 2, game.log
@@ -828,8 +826,7 @@ def test_mountain_titan_stops_growing_when_the_turn_ends(
     that never stops triggering does stop existing."""
     game, titan = _w1g5_titan_board(set_pool, catalog_by_name)
     assert game.activate_permanent_ability(0, "Mountain Titan").supported
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     game.resolve_cleanup_step(0)
 
@@ -1819,15 +1816,13 @@ def _mount_up(game, mount, rider):
         permanent_index=game.battlefield_index_of(mount),
         target_permanent_index=game.battlefield_index_of(rider),
     )
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game._settle()
     return result
 
 
 def _settle_triggers(game):
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game._settle()
 
 

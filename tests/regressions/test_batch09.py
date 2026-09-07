@@ -29,7 +29,7 @@ from engine.models import Permanent
 from engine.ai_policy import choose_attackers
 from engine.oracle import compile_card_oracle
 from engine.text_changes import changed_words
-from tests.helpers import _damage_dealt, _game
+from tests.helpers import _damage_dealt, _game, resolve_stack
 
 
 
@@ -588,8 +588,7 @@ class TestForkCopiesSpell:
         game.resolve_top_of_stack()  # Fork resolves -> copy placed on the stack
         assert len(game.stack) == 2  # original Bolt + its copy
         assert game.stack[-1].is_copy and game.stack[-1].card.name == "Lightning Bolt"
-        while game.stack:
-            game.resolve_top_of_stack()
+        resolve_stack(game)
         # 3 from the Bolt + 3 from the Fork copy (same target).
         assert p2.life == 14
         # The copy is a token spell — it ceases to exist, so only the one real
@@ -617,8 +616,7 @@ class TestForkCopiesSpell:
         game.queue_from_hand(
             0, "Fork", target_stack_index=0, target_player_index=0, target_permanent_index=1
         )
-        while game.stack:
-            game.resolve_top_of_stack()
+        resolve_stack(game)
         # Both creatures got +3/+3: the original on bears_a, the copy on bears_b.
         assert bears_a.effective_power == 5
         assert bears_b.effective_power == 5
@@ -637,8 +635,7 @@ class TestPowerSinkCounters:
         game = _game(p1, p2)
         game.queue_from_hand(1, "Lightning Bolt", target_player_index=0)
         game.queue_from_hand(0, "Power Sink", target_player_index=1, target_stack_index=0, x_value=3)
-        while game.stack:
-            game.resolve_top_of_stack()
+        resolve_stack(game)
         assert any(c.name == "Lightning Bolt" for c in p2.graveyard)  # countered
 
 
@@ -786,8 +783,7 @@ class TestFireballDividedDamage:
         p2 = PlayerState(name="P2", battlefield=[b1, b2], life=20)
         game = _game(p1, p2)
         game.queue_from_hand(0, "Fireball", target_player_index=1, target_permanent_index=[0, 1], x_value=4)
-        while game.stack:
-            game.resolve_top_of_stack()
+        resolve_stack(game)
         assert b1.damage_marked == 2 and b2.damage_marked == 2  # 4 split evenly
 
 
@@ -805,8 +801,7 @@ class TestMagicalHackLand:
         p2 = PlayerState(name="P2", battlefield=[forest])
         game = _game(p1, p2)
         game.queue_from_hand(0, "Magical Hack", target_player_index=1, target_permanent_index=0, new_color="U")
-        while game.stack:
-            game.resolve_top_of_stack()
+        resolve_stack(game)
         assert forest.changed_land_types == ("island",)
         # And it now taps for blue rather than green.
         game.tap_land_for_mana(1, "Forest", chosen_color="U", permanent_index=0)

@@ -16,6 +16,7 @@ from engine import Game, PlayerState
 from engine.card_loader import load_catalog
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle
+from tests.helpers import resolve_stack
 
 
 @pytest.fixture(scope="module")
@@ -389,8 +390,7 @@ def test_mishras_war_machine_still_discards_rather_than_taking_the_damage(set_po
     game = Game(players=[p2, PlayerState(name="P3", life=20)])
 
     game.resolve_upkeep(0)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert p2.life == 17
     assert empty.tapped

@@ -853,8 +853,7 @@ def test_betrothed_of_fire_eats_the_creature_it_enchants(set_pool, catalog_by_na
     attach_aura(aura, host)
 
     result = game.activate_permanent_ability(0, "Betrothed of Fire", ability_index=1)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert result.supported, result.details
     assert [c.name for c in p1.graveyard] == ["Grizzly Bears", "Betrothed of Fire"]
@@ -902,8 +901,7 @@ def test_infernal_tribute_charges_the_nontoken_narrowing(set_pool, catalog_by_na
     result = game.activate_permanent_ability(
         0, "Infernal Tribute", cost_permanent_index=1
     )
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert result.supported, result.details
     assert [c.name for c in p1.graveyard] == ["Mons's Goblin Raiders"]
@@ -929,8 +927,7 @@ def test_infernal_tribute_will_not_eat_a_token(set_pool):
     result = game.activate_permanent_ability(
         0, "Infernal Tribute", cost_permanent_index=1
     )
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert result.supported, result.details
     assert [p.card.name for p in p1.battlefield] == ["Goblin"], (
@@ -964,8 +961,7 @@ def test_goblin_bomb_pays_both_halves_of_one_printed_clause(set_pool):
     result = game.activate_permanent_ability(
         0, "Goblin Bomb", target_player_index=1
     )
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert result.supported, result.details
     assert p2.life == 0
@@ -997,7 +993,7 @@ def test_goblin_bomb_needs_all_five_counters(set_pool):
 from engine import Game as _W2G5Game, PlayerState as _W2G5PlayerState  # noqa: E402
 from engine.models import Permanent as _W2G5Permanent  # noqa: E402
 from engine.cost_modifiers import cost_modifiers_for  # noqa: E402
-from tests.helpers import _mk_card as _w2g5_mk_card  # noqa: E402
+from tests.helpers import _mk_card as _w2g5_mk_card, resolve_stack
 
 
 def _w2g5_aura_of_silence_game(set_pool, caster_seat: int):

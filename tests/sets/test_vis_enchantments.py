@@ -10,7 +10,7 @@ from engine.auras import attach_aura
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.models import CardDefinition, Permanent
-from tests.helpers import _nosick
+from tests.helpers import _nosick, resolve_stack
 import pytest
 from engine import Game as _W2G1eGame, PlayerState as _W2G1ePlayerState
 from engine.models import Permanent as _W2G1ePermanent
@@ -443,8 +443,7 @@ def test_mortal_wound_destroys_the_creature_the_moment_it_is_dealt_damage(set_po
 
     game._mark_damage_on_permanent(victim, 1)
     game._fire_dealt_damage_triggers(victim, 1)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game.check_state_based_actions()
 
     assert not any(p is victim for p in p2.battlefield)
@@ -460,8 +459,7 @@ def test_mortal_wound_leaves_an_undamaged_creature_alone(set_pool):
     p1.battlefield.append(wound)
     attach_aura(wound, victim)
 
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game.check_state_based_actions()
 
     assert any(p is victim for p in p2.battlefield)
@@ -969,8 +967,7 @@ def _w2g3_enters(game, seat, card):
     """
     permanent = _W2G3Permanent(card=card)
     game._put_permanent_onto_battlefield(seat, permanent, None)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     return permanent
 def _w2g3_board(game):
     return {
@@ -1056,8 +1053,7 @@ def test_death_watch_reads_the_creature_as_it_last_existed(set_pool, catalog_by_
     assert (victim.effective_power, victim.effective_toughness) == (5, 7)
 
     game._destroy_swept_permanents(bob, lambda perm: perm is victim)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert bob.life == 20 - 5
     assert alice.life == 20 + 7
@@ -1072,8 +1068,7 @@ def test_death_watch_on_your_own_creature_charges_you(set_pool, catalog_by_name)
     game._recompute_continuous_effects()
 
     game._destroy_swept_permanents(alice, lambda perm: perm is victim)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert alice.life == 20 - 3 + 3
 def test_mob_mentality_fires_only_when_every_non_wall_attacks(set_pool, catalog_by_name):
@@ -1104,8 +1099,7 @@ def test_mob_mentality_fires_only_when_every_non_wall_attacks(set_pool, catalog_
         assert game.current_step == "declare_attackers"
         attacking = [i for i, perm in enumerate(alice.battlefield) if perm in bears]
         game.declare_attackers(0, attacking[:1] if hold_back else attacking)
-        while game.stack:
-            game.resolve_top_of_stack()
+        resolve_stack(game)
         game._recompute_continuous_effects()
         return bears[0]
 

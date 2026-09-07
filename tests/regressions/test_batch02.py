@@ -13,7 +13,7 @@ import pytest
 
 from engine import Game, PlayerState, load_cards
 from engine.models import Permanent
-from tests.helpers import _game, _no_summoning_sickness
+from tests.helpers import _game, _no_summoning_sickness, resolve_stack
 
 
 # ---------------------------------------------------------------------------
@@ -82,8 +82,7 @@ class TestClockworkBeast:
         game._set_phase_and_step("combat", "declare_blockers")
         game.declare_blockers(1, {})
         game.end_combat()
-        while game.stack:
-            game.resolve_top_of_stack()
+        resolve_stack(game)
 
         assert beast.metadata.get("plus_1_0_counters") == 6
         assert beast.effective_power == 6

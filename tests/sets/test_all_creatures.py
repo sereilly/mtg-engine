@@ -268,8 +268,7 @@ def _w2g1_attack_unblocked(set_pool, name):
     assert game.declare_attackers(0, [0], defending_player_index=1)[0]
     game._set_phase_and_step("combat", "declare_blockers")
     game._fire_unblocked_attack_triggers()
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     return game, subject
 
 
@@ -412,8 +411,7 @@ def test_whip_vine_holds_only_the_flier_it_is_blocking(set_pool):
         target_player_index=0, target_permanent_index=0,
         target_permanent_ids=[flier.permanent_id],
     ).supported
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert flier.tapped and vine.tapped
     game.resolve_untap_step(0)
@@ -476,8 +474,7 @@ def _w2g1_home_guard(set_pool, mode):
         game._set_phase_and_step("combat", "declare_attackers")
         game._set_phase_and_step("combat", "declare_blockers")
     game.end_combat()
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     return game, guard
 
 
@@ -1623,8 +1620,7 @@ def _w3g4_unblocked(set_pool, name: str):
     while game.stack:
         game.resolve_top_of_stack()
     game.auto_resolve_pending_choices()
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     return game, subject
 
 
@@ -1819,6 +1815,7 @@ from engine import (Game as _w3g3h_Game,  # noqa: E402
                     PlayerState as _w3g3h_PlayerState)
 from engine.card_loader import (load_cards as _w3g3h_load,  # noqa: E402
                                 manifest_set_path as _w3g3h_path)
+from tests.helpers import resolve_stack
 
 
 def _w3g3h_horde_game(set_pool, hand_size):

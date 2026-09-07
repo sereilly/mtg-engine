@@ -10,6 +10,7 @@ from engine.auras import attach_aura
 from engine.models import Permanent
 from engine.named_counters import counters_on
 from engine.models import CardDefinition, Permanent
+from tests.helpers import resolve_stack
 
 
 # --- G2: auras and land statics (The Dark) ---
@@ -177,8 +178,7 @@ def _run_upkeep(game: Game, seat: int) -> None:
     """One upkeep step for *seat*, with its triggers resolved off the stack."""
     game.active_player_index = seat
     game.resolve_upkeep(seat)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
 
 def test_fasting_accrues_a_hunger_counter_each_upkeep_and_dies_at_five(set_pool):
@@ -386,8 +386,7 @@ def test_season_of_the_witch_destroys_the_creatures_that_stayed_home(set_pool):
     assert ok
 
     game.resolve_end_step(0)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert game.is_on_battlefield(attacker)   # it attacked
     assert game.is_on_battlefield(wall)       # it couldn't attack
@@ -923,8 +922,7 @@ def test_deep_water_makes_every_land_you_control_produce_blue(set_pool):
     game._sync_control()
 
     assert game.activate_permanent_ability(0, "Deep Water").supported, game.log
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     latecomer = Permanent(card=lea["Mountain"])
     p1.battlefield.append(latecomer)
@@ -951,8 +949,7 @@ def test_deep_water_leaves_an_opponents_lands_alone(set_pool):
     game._sync_control()
 
     assert game.activate_permanent_ability(0, "Deep Water").supported, game.log
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert game.tap_land_for_mana(1, "Forest"), game.log
     assert p2.mana_pool["G"] == 1, game.log
@@ -973,8 +970,7 @@ def test_deep_water_stops_at_the_end_of_the_turn(set_pool):
     game._sync_control()
 
     assert game.activate_permanent_ability(0, "Deep Water").supported, game.log
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game.resolve_cleanup_step(0)
     forest.tapped = False
 

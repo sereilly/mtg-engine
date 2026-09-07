@@ -279,8 +279,7 @@ def _w2g1_licid_attached(set_pool, name, host="Trained Armodon"):
         0, name, ability_index=0,
         target_permanent_index=1, target_player_index=0,
     )
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game.check_state_based_actions()
     game.priority_player_index = 0
     return game, licid, bear, p0, p1
@@ -326,8 +325,7 @@ def test_w2g1_enraging_licid_grants_its_host_haste_only_while_attached(set_pool)
         0, "Enraging Licid", ability_index=0,
         target_permanent_index=1, target_player_index=0,
     )
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     assert game._has_keyword(bear, "haste")
 
     game.priority_player_index = 0
@@ -348,8 +346,7 @@ def test_w2g1_a_licid_aura_carries_its_own_activated_ability(set_pool):
         "{G}: Regenerate enchanted creature."
     ]
     result = game.activate_permanent_ability(0, "Nurturing Licid", ability_index=0)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     assert result.supported, result.details
 
 
@@ -362,8 +359,7 @@ def test_w2g1_stinging_licid_watches_the_creature_it_enchants(set_pool):
 
     before = p0.life
     game.become_tapped(bear)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert p0.life == before - 2
 
@@ -404,8 +400,7 @@ def test_w2g1_rootwater_matriarch_holds_a_creature_only_while_it_is_enchanted(se
         0, "Rootwater Matriarch", ability_index=0,
         target_permanent_index=0, target_player_index=1,
     )
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game.check_state_based_actions()
     assert game.controller_index_of(bear) == 0
 
@@ -428,8 +423,7 @@ def test_w2g1_rootwater_matriarch_never_starts_on_an_unenchanted_creature(set_po
         0, "Rootwater Matriarch", ability_index=0,
         target_permanent_index=0, target_player_index=1,
     )
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert game.controller_index_of(bear) == 1
     assert any("is not enchanted" in line for line in game.log)
@@ -596,7 +590,7 @@ def test_unstable_shapeshifter_compiles_to_one_bound_copy_instruction(set_pool):
 from engine import Game, PlayerState
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle
-from tests.helpers import _nosick
+from tests.helpers import _nosick, resolve_stack
 
 
 def _w2g4_card(name, type_line, text="", colors=(), power=None, toughness=None):
@@ -693,8 +687,7 @@ def test_shocker_redraws_what_the_discard_binned_not_the_damage_it_dealt(set_poo
 
     game._deal_damage_to_player(game.players[1], 2, source=shocker)
     game._settle()
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert len(game.players[1].hand) == 4
     assert len(game.players[1].graveyard) == 4
@@ -781,8 +774,7 @@ def _w2g2_to_blockers(game, attackers, defender=1):
     game.advance_combat_phase()
     game.advance_combat_phase()
     assert game.declare_attackers(0, attackers, defender)[0], game.log
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game.advance_combat_phase()
     assert game.current_step == "declare_blockers"
 
@@ -815,8 +807,7 @@ def test_w2g2_mounted_archers_blocks_an_extra_creature_only_once_activated(set_p
     assert game2.activate_permanent_ability(
         1, "Mounted Archers", ability_index=0
     ).supported
-    while game2.stack:
-        game2.resolve_top_of_stack()
+    resolve_stack(game2)
     assert game2._max_blocks_for(q1.battlefield[0]) == 2
     game2.advance_combat_phase()
     game2.advance_combat_phase()
@@ -894,8 +885,7 @@ def test_w2g2_trumpeting_armodon_compels_one_named_pair(set_pool):
         0, "Trumpeting Armodon", ability_index=0,
         target_player_index=1, target_permanent_index=1,
     ).supported
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     assert p1.battlefield[1].metadata[MUST_BLOCK_ATTACKERS_UNTIL_EOT] == [
         p0.battlefield[0].permanent_id
     ]
@@ -932,8 +922,7 @@ def test_w2g2_flowstone_salamander_targets_only_its_own_blocker(set_pool):
         0, "Flowstone Salamander", ability_index=0,
         target_player_index=1, target_permanent_index=0,
     ).supported
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game.check_state_based_actions()
     assert [p.card.name for p in p1.battlefield] == ["Bystander"]
 
@@ -965,8 +954,7 @@ def test_w2g2_bounty_hunter_destroys_only_a_creature_it_marked(set_pool):
         0, "Bounty Hunter", ability_index=1,
         target_player_index=1, target_permanent_index=0,
     ).supported
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game.check_state_based_actions()
     assert [p.card.name for p in p1.battlefield] == ["Bear"]
 
@@ -1051,8 +1039,7 @@ def test_w3g5_guerrillas_moves_its_combat_damage_onto_the_target(set_pool):
         target_player_index=1, target_permanent_index=0,
     )
     assert result.supported, result
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     _w3g5_attack_and_deal(game)
     assert p1.life == 20, game.log
@@ -1082,8 +1069,7 @@ def test_w3g5_guerrillas_record_is_spent_on_one_instance(set_pool):
         0, "Soltari Guerrillas", permanent_index=0, ability_index=0,
         target_player_index=1, target_permanent_index=0,
     ).supported
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     _w3g5_deal(game, p1, guerrillas, combat=True)
     assert p1.life == 20 and victim.damage_marked == 3, game.log
@@ -1102,8 +1088,7 @@ def test_w3g5_guerrillas_leaves_noncombat_damage_alone(set_pool):
         0, "Soltari Guerrillas", permanent_index=0, ability_index=0,
         target_player_index=1, target_permanent_index=0,
     ).supported
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     _w3g5_deal(game, p1, guerrillas, combat=False)
     assert p1.life == 17, game.log
@@ -1125,8 +1110,7 @@ def test_w3g5_guerrillas_does_not_catch_damage_to_a_blocking_creature(set_pool):
         0, "Soltari Guerrillas", permanent_index=0, ability_index=0,
         target_player_index=1, target_permanent_index=0,
     ).supported
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     _w3g5_deal(game, blocker, guerrillas, combat=True)
     assert blocker.damage_marked == 3, game.log
@@ -1189,8 +1173,7 @@ def _w3g1_imp_activated(set_pool, p0_cards):
     assert game.activate_permanent_ability(
         1, "Maddening Imp", ability_index=0
     ).supported, game.log
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     return game, p0, p1
 
 
@@ -1348,8 +1331,7 @@ def test_w3g1_sirens_call_kept_every_word_when_two_lines_left_its_hook():
     p0.battlefield.append(arrived)
     game._sync_control()
     assert game.cast_from_hand(1, "Siren's Call").supported
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     bear, wall, newcomer = p0.battlefield
     assert bear.metadata.get("must_attack_until_eot")
     assert wall.metadata.get("must_attack_until_eot"), "every creature attacks"
@@ -1550,8 +1532,7 @@ def test_w3g2_coffin_queen_exiles_the_creature_when_she_untaps(set_pool):
     ]
 
     game.become_untapped(queen)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game.check_state_based_actions()
 
     assert [p.card.name for p in game.players[0].battlefield] == ["Coffin Queen"]
@@ -1569,8 +1550,7 @@ def test_w3g2_coffin_queen_exiles_the_creature_when_she_leaves(set_pool):
 
     game.remove_from_battlefield(queen)
     game.players[0].graveyard.append(queen.card)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game.check_state_based_actions()
 
     assert not game.players[0].battlefield

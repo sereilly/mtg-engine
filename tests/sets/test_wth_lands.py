@@ -56,8 +56,7 @@ def test_winding_canyons_gives_creature_spells_flash_timing(
     result = game.activate_permanent_ability(
         0, "Winding Canyons", ability_index=1
     )
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     assert result.supported, result.details
 
     game.active_player_index = 1
@@ -73,8 +72,7 @@ def test_winding_canyons_covers_only_the_type_it_names(set_pool, catalog_by_name
     game, p1, _p2 = _w2g1_two_seats()
     p1.battlefield.append(Permanent(card=pool["Winding Canyons"]))
     game.activate_permanent_ability(0, "Winding Canyons", ability_index=1)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert casts_at_instant_speed(catalog_by_name["Grizzly Bears"], game, 0)
     assert not casts_at_instant_speed(catalog_by_name["Black Lotus"], game, 0)
@@ -88,8 +86,7 @@ def test_winding_canyons_grant_ends_at_cleanup(set_pool, catalog_by_name):
     game, p1, _p2 = _w2g1_two_seats()
     p1.battlefield.append(Permanent(card=pool["Winding Canyons"]))
     game.activate_permanent_ability(0, "Winding Canyons", ability_index=1)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     assert casts_at_instant_speed(catalog_by_name["Grizzly Bears"], game, 0)
 
     expire_end_of_turn(game)
@@ -133,6 +130,7 @@ def _w2g5_board(set_pool, name: str, lands: int, *, tapped: bool = False):
 
 
 import pytest  # noqa: E402
+from tests.helpers import resolve_stack
 
 
 @pytest.mark.parametrize("name", _W2G5_TOLL_LANDS)

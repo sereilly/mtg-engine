@@ -24,7 +24,7 @@ import pytest
 from engine import Game, PlayerState
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
-from tests.helpers import _nosick
+from tests.helpers import _nosick, resolve_stack
 
 
 def _w1g1_duel(p0_cards, p1_cards):
@@ -200,8 +200,7 @@ def test_w1g1_soltari_emissary_grants_itself_shadow_in_a_game(set_pool):
     assert game._can_block_attacker(blocker, emissary)
 
     game.activate_permanent_ability(0, "Soltari Emissary", ability_index=0)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert game._has_keyword(emissary, "shadow")
     assert not game._can_block_attacker(blocker, emissary)
@@ -263,16 +262,14 @@ def test_w1g1_dauthi_ghoul_grows_only_when_a_shadow_creature_dies(set_pool):
     assert (ghoul.effective_power, ghoul.effective_toughness) == (1, 1)
 
     game._permanent_to_graveyard(p1, ground)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     assert (ghoul.effective_power, ghoul.effective_toughness) == (1, 1), (
         "a creature without shadow died and the Ghoul grew anyway — the "
         "narrowing was dropped"
     )
 
     game._permanent_to_graveyard(p1, shadowy)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     assert (ghoul.effective_power, ghoul.effective_toughness) == (2, 2)
 
 
@@ -387,8 +384,7 @@ def test_w1g3_this_creature_inside_the_quotes_is_the_holder(set_pool):
     result = game.activate_permanent_ability(
         0, "Metallic Sliver", permanent_index=1, ability_index=0
     )
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     assert result.supported, result
     game._recompute_continuous_effects()
     assert (mate.effective_power, mate.effective_toughness) == (1, 2)
@@ -418,8 +414,7 @@ def test_w1g3_the_granted_sacrifice_cost_is_charged(set_pool):
     result = game.activate_permanent_ability(
         0, "Metallic Sliver", permanent_index=1, ability_index=0
     )
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     assert result.supported, result
     assert [p.card.name for p in seats[0].battlefield] == ["Mnemonic Sliver"]
     assert len(seats[0].hand) == 1
@@ -446,8 +441,7 @@ def test_w1g3_mindwhip_sorcery_restriction_is_enforced(set_pool):
         0, "Metallic Sliver", permanent_index=1, ability_index=0,
         target_player_index=1,
     )
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     assert allowed.supported, allowed
     assert seats[1].hand == []
 
@@ -479,8 +473,7 @@ def test_w1g3_pallimud_power_counts_the_chosen_players_tapped_lands(set_pool, ca
     game = Game(players=seats)
     game.enforce_mana_costs = False
     game.cast_from_hand(0, "Pallimud")
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     pallimud = seats[0].battlefield[-1]
     assert pallimud.metadata.get("chosen_player_index") == 1
     game._recompute_continuous_effects()
@@ -550,8 +543,7 @@ def test_w1g3_vhati_offers_the_choice_at_resolution(set_pool, cards, mode_index,
     )
     assert result.supported, result
     assert game.resolve_pending_choice("mode_choice", 0, mode_index=mode_index)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game._recompute_continuous_effects()
     assert (angel.effective_power, angel.effective_toughness) == expected
 
@@ -591,8 +583,7 @@ def test_w1g3_dracoplasm_is_the_total_of_what_was_given_up(set_pool, cards):
     game.enforce_mana_costs = False
     game.interactive_seats = {0}
     game.cast_from_hand(0, "Dracoplasm")
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     assert game.resolve_pending_choice("sacrifice", 0, indices=[0, 1])
     game._recompute_continuous_effects()
     dracoplasm = seats[0].battlefield[-1]
@@ -601,8 +592,7 @@ def test_w1g3_dracoplasm_is_the_total_of_what_was_given_up(set_pool, cards):
     assert (dracoplasm.effective_power, dracoplasm.effective_toughness) == (6, 6)
     # …and its own {R} pump is layer 7c, over the 7b the entry set.
     result = game.activate_permanent_ability(0, "Dracoplasm", permanent_index=0)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     assert result.supported, result
     game._recompute_continuous_effects()
     assert (dracoplasm.effective_power, dracoplasm.effective_toughness) == (7, 6)
@@ -617,8 +607,7 @@ def test_w1g3_dracoplasm_declined_enters_as_a_nothing(set_pool, cards):
     game = Game(players=seats)
     game.enforce_mana_costs = False
     game.cast_from_hand(0, "Dracoplasm")
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     dracoplasm = next(
         (p for p in seats[0].battlefield if p.card.name == "Dracoplasm"), None
     )
@@ -1207,8 +1196,7 @@ def test_w1g5_avenging_angel_may_tuck_itself_out_of_the_graveyard(set_pool):
     angel.damage_marked = 99
     game.check_state_based_actions()
     assert [card.name for card in game.players[0].graveyard] == ["Avenging Angel"]
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert game.confirm_optional_pay(0, accept=True)
     assert game.players[0].graveyard == [], game.log
@@ -1223,8 +1211,7 @@ def test_w1g5_avenging_angel_declined_stays_in_the_graveyard(set_pool):
 
     angel.damage_marked = 99
     game.check_state_based_actions()
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert game.confirm_optional_pay(0, accept=False)
     assert [card.name for card in game.players[0].graveyard] == ["Avenging Angel"]
@@ -1251,8 +1238,7 @@ def test_w1g5_elven_warhounds_tucks_the_creature_that_blocked_it(set_pool):
     assert game.declare_attackers(0, [0], defending_player_index=1)[0]
     game._set_phase_and_step("combat", "declare_blockers")
     assert game.declare_blockers(1, {0: [0]})[0]
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert list(game.controlled_by(1)) == [], game.log
     assert [card.name for card in game.players[1].library] == ["Bear"]

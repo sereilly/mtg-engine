@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from engine import Game, PlayerState
 from engine.models import Permanent
-from tests.helpers import _mk_creature_card, _nosick
+from tests.helpers import _mk_creature_card, _nosick, resolve_stack
 from engine.oracle import compile_card_oracle
 
 
@@ -63,8 +63,7 @@ def _run_upkeep(game: Game, seat: int) -> None:
     """One upkeep step for *seat*, with its triggers resolved off the stack."""
     game.active_player_index = seat
     game.resolve_upkeep(seat)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
 
 def _safe_haven_holding_a_creature(set_pool):
@@ -82,8 +81,7 @@ def _safe_haven_holding_a_creature(set_pool):
         target_permanent_ids=[bears.permanent_id],
     )
     assert result.supported, result.reason
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     return game, haven
 
 

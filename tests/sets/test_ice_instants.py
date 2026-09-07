@@ -20,7 +20,7 @@ import pytest
 from engine import Game
 from engine.models import Permanent, PlayerState
 from engine.oracle import compile_card_oracle
-from tests.helpers import _mk_creature_card, _nosick
+from tests.helpers import _mk_creature_card, _nosick, resolve_stack
 
 
 # --- Round 10: sweeps and grants over a set the sentence names ---
@@ -1075,8 +1075,7 @@ def _cast_undoing(game, host):
         target_player_index=game.controller_index_of(host),
         target_permanent_index=game.battlefield_index_of(host),
     )
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game._settle()
     return result
 
@@ -1296,8 +1295,7 @@ def _cast_vitae(game, host):
         target_player_index=game.controller_index_of(host),
         target_permanent_index=game.battlefield_index_of(host),
     )
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game._settle()
     return result
 
@@ -1318,8 +1316,7 @@ def test_touch_of_vitae_grants_haste_and_the_quoted_untap_ability(set_pool):
     assert '{0}: Untap this creature' in bear.effective_card.oracle_text
 
     result = game.activate_permanent_ability(0, "Balduvian Bears")
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     assert result.supported, result.details
     assert not bear.tapped
 
@@ -1336,8 +1333,7 @@ def test_touch_of_vitae_grants_an_ability_that_may_be_activated_only_once(set_po
     _cast_vitae(game, bear)
 
     game.activate_permanent_ability(0, "Balduvian Bears")
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     bear.tapped = True
 
     again = game.activate_permanent_ability(0, "Balduvian Bears")

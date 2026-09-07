@@ -433,8 +433,7 @@ def _w1g2_board(set_pool, name: str, library_size: int):
 
 
 def _w1g2_settle(game):
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game.check_state_based_actions()
 
 
@@ -1245,6 +1244,7 @@ import pytest as _w3g2_pytest  # noqa: E402
 from engine.grammar import parse_line as _w3g2_parse_line  # noqa: E402
 from engine.grammar import lower_ability as _w3g2_lower  # noqa: E402
 from engine.grammar.errors import GrammarError as _W3G2GrammarError  # noqa: E402
+from tests.helpers import resolve_stack
 
 
 def _w3g2_blessing_board(set_pool):

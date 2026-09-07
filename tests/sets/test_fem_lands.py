@@ -23,6 +23,7 @@ from __future__ import annotations
 # --- G5: prices offered to a player, prevention and control ---
 from engine import Game, PlayerState
 from engine.models import Permanent
+from tests.helpers import resolve_stack
 
 
 def _g5_game(*rows) -> Game:
@@ -47,14 +48,12 @@ def test_rainbow_vale_hands_itself_to_an_opponent_at_the_next_end_step(set_pool)
     game.start_turn(0)
 
     assert game.activate_permanent_ability(0, "Rainbow Vale", mana_color="U").supported
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     assert game.players[0].mana_pool["U"] == 1
     assert game.controller_index_of(vale) == 0, "it is still yours until the end step"
 
     game.resolve_end_step(0)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert game.controller_index_of(vale) == 1, game.log
     # CR 613 layer 2 is a contribution, not a move: the seat it entered under
@@ -69,8 +68,7 @@ def test_rainbow_vale_does_not_change_hands_before_the_end_step(set_pool):
     game = _g5_game([vale], [])
     game.start_turn(0)
     game.activate_permanent_ability(0, "Rainbow Vale", mana_color="G")
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     game.resolve_upkeep(0)
     assert game.controller_index_of(vale) == 0, game.log

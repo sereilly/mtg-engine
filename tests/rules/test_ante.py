@@ -26,7 +26,14 @@ from web.app import _deck_summary
 from web.deck_builder import build_random_deck
 from web.deck_legality import validate_deck
 
-from tests.helpers import CARDS_BY_NAME as _C, _game, _mk_card, _nosick, client
+from tests.helpers import (
+    CARDS_BY_NAME as _C,
+    _game,
+    _mk_card,
+    _nosick,
+    client,
+    resolve_stack,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -571,8 +578,7 @@ def test_407_4_the_owner_can_ante_their_own_permanent(arn_by_name):
     p1 = PlayerState(name="P1", battlefield=[bird], library=[_plain("Top")])
     game = _game(p1, PlayerState(name="P2"))
     assert game.queue_permanent_ability(0, "Jeweled Bird", permanent_index=0).supported
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     assert [c.name for c in p1.ante] == ["Jeweled Bird"]
     assert p1.battlefield == []
 
@@ -591,8 +597,7 @@ def test_407_4_only_the_owner_can_ante_an_object(arn_by_name):
     )
     game = _game(p1, p2)
     assert game.queue_permanent_ability(1, "Jeweled Bird", permanent_index=0).supported
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     assert any(p is bird for p in p2.battlefield)
     assert p1.ante == []
     # The rider is skipped wholesale: nothing binned, nothing drawn.

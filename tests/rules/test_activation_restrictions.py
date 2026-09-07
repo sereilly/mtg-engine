@@ -22,7 +22,7 @@ from engine.activation_restrictions import (
 from engine.card_loader import load_catalog
 from engine.named_counters import add_counters, counters_on
 from engine.models import CardDefinition, Permanent, PlayerState
-from tests.helpers import _nosick
+from tests.helpers import _nosick, resolve_stack
 
 _CATALOG = {c.name: c for c in load_catalog()}
 
@@ -682,8 +682,7 @@ def test_602_5_activate_only_if_this_permanent_entered_this_turn():
         p1.battlefield.append(Permanent(card=catalog["Forest"]))
 
         result = game.activate_permanent_ability(0, "Fungus Elemental")
-        while game.stack:
-            game.resolve_top_of_stack()
+        resolve_stack(game)
 
         assert result.supported is expected, result.details
         # Refused *before* any cost is paid: the Forest is still there.

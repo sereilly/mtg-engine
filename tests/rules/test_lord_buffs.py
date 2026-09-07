@@ -21,6 +21,7 @@ from engine import Game, PlayerState
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle
 from engine.text_changes import change_land_word
+from tests.helpers import resolve_stack
 
 
 def _card(name: str, type_line: str, oracle_text: str, *, colors=(), power="2",
@@ -433,8 +434,7 @@ def test_a_granted_ability_reaches_a_creature_that_has_one_of_its_own(cards):
         0, "Warren Ghoul", permanent_index=1,
         ability_index=lines.index("{b}: regenerate this permanent."),
     )
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     assert result.supported, result
     assert ghoul.regeneration_shield == 1
 

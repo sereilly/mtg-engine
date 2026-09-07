@@ -10,7 +10,7 @@ from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.models import CardDefinition, Permanent
 import random
-from tests.helpers import _damage_dealt, _mk_creature_card, _nosick
+from tests.helpers import _damage_dealt, _mk_creature_card, _nosick, resolve_stack
 
 
 # --- G2: auras and land statics (The Dark) ---
@@ -298,8 +298,7 @@ def test_leviathan_untaps_when_two_islands_are_sacrificed(set_pool):
     game.current_turn_phase = "beginning"
 
     game.resolve_upkeep(0)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     assert game.confirm_optional_pay(0, card_name="Leviathan", accept=True)
 
     assert not leviathan.tapped

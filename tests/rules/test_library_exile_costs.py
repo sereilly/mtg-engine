@@ -18,6 +18,7 @@ import pytest
 from engine import Game, PlayerState
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle, parse_activated_ability_cost
+from tests.helpers import resolve_stack
 
 
 def _card(
@@ -84,8 +85,7 @@ def test_the_cost_is_paid_when_the_ability_is_activated():
     assert len(me.library) == 2 and len(me.exile) == 1, (
         "paid on activation, not on resolution"
     )
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     assert me.life == 21
 
 
@@ -176,13 +176,11 @@ def test_cumulative_upkeep_charges_a_non_mana_cost_and_escalates_it():
     game.enforce_mana_costs = False
     for expected in (1, 3, 6):
         game.start_turn(0)
-        while game.stack:
-            game.resolve_top_of_stack()
+        resolve_stack(game)
         assert len(game.players[0].exile) == expected
         assert game.is_on_battlefield(perm)
         game.start_turn(1)
-        while game.stack:
-            game.resolve_top_of_stack()
+        resolve_stack(game)
 
 
 @pytest.mark.cr("702.24a", "118.3")
@@ -200,8 +198,7 @@ def test_a_library_too_short_for_the_cumulative_upkeep_sacrifices_the_permanent(
     ])
     game.enforce_mana_costs = False
     game.start_turn(0)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     assert not game.is_on_battlefield(perm)
 
 
@@ -298,8 +295,7 @@ def test_a_keyword_narrowed_tap_target_refuses_the_wrong_creature(set_pool):
     assert game.activate_permanent_ability(
         0, "Flood", target_player_index=1, target_permanent_index=1
     ).supported
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     assert ground.tapped and not flier.tapped
 
 

@@ -1579,6 +1579,7 @@ from engine.card_loader import load_cards as _w2g2_load
 from engine.card_loader import manifest_set_paths as _w2g2_paths
 from engine.models import CardDefinition as _w2g2_card
 from engine.models import Permanent as _w2g2_permanent
+from tests.helpers import resolve_stack
 
 
 def _w2g2_pool():
@@ -1726,8 +1727,7 @@ def test_601_2c_a_named_target_must_satisfy_a_printed_colour_exclusion():
     allowed = game.cast_from_hand(
         0, "Purging Light", target_player_index=1, target_permanent_index=1,
     )
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     assert allowed.supported, allowed.details
     assert [p.card.name for p in p2.battlefield] == ["Imp"]
     assert p1.life == 21
@@ -1814,8 +1814,7 @@ def test_601_2c_every_object_only_narrowing_reaches_the_announcement_gate(set_po
     allowed = game.cast_from_hand(
         0, "Vertigo", target_player_index=1, target_permanent_index=1,
     )
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     assert allowed.supported, allowed.details
 
 
@@ -1853,8 +1852,7 @@ def test_601_2c_a_type_exclusion_reaches_the_announcement_gate(set_pool):
     allowed = game.cast_from_hand(
         0, "Ashes to Ashes", target_player_index=1, target_permanent_index=[1, 2],
     )
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     assert allowed.supported, allowed.details
     assert [p.card.name for p in p2.battlefield] == ["Ornithopter"]
     assert p1.life == 15
@@ -1899,8 +1897,7 @@ def test_601_2b_an_announced_x_may_not_fall_below_a_floor_the_card_prints():
 
     allowed = game.cast_from_hand(0, "Floored Draw", x_value=1)
     assert allowed.supported, allowed.details
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     assert len(p1.hand) == 3, "one card drawn, the spell gone"
 
 

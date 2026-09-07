@@ -41,8 +41,7 @@ def _g2_game(*battlefield, library=None):
 
 
 def _g2_settle(game):
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game._settle()
 
 
@@ -237,7 +236,7 @@ def test_deep_spawn_declining_the_mill_sacrifices_it(set_pool):
 from engine import Game
 from engine.models import Permanent, PlayerState
 from engine.named_counters import counters_on
-from tests.helpers import _nosick as _g1_nosick
+from tests.helpers import _nosick as _g1_nosick, resolve_stack
 
 
 def _g1_board(set_pool, *names, life=20, hand=(), opponents=()):

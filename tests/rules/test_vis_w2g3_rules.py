@@ -16,6 +16,7 @@ from engine.card_loader import load_cards, manifest_set_path, manifest_set_paths
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle
 from engine.pt import add_pt_modifier
+from tests.helpers import resolve_stack
 
 
 def _pool():
@@ -39,8 +40,7 @@ def _game():
 def _enters(game, seat, card):
     permanent = Permanent(card=card)
     game._put_permanent_onto_battlefield(seat, permanent, None)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     return permanent
 
 
@@ -76,8 +76,7 @@ def test_603_10_an_attached_death_trigger_reads_the_numbers_the_game_had():
     game._recompute_continuous_effects()
 
     game._destroy_swept_permanents(game.players[1], lambda perm: perm is victim)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert game.players[1].life == 15, "its controller lost the power it had"
     assert game.players[0].life == 27, "the Aura's controller gained the toughness"
@@ -108,8 +107,7 @@ def test_603_10_every_death_this_site_announces_carries_the_frozen_pair():
     game._recompute_continuous_effects()
 
     game._destroy_swept_permanents(game.players[0], lambda perm: perm is victim)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert game.players[0].life == 25
 
@@ -195,8 +193,7 @@ def test_603_2_an_attack_declaration_trigger_is_announced_for_a_noncreature():
     game.advance_combat_phase()
     assert game.current_step == "declare_attackers"
     game.declare_attackers(0, [game.players[0].battlefield.index(bear)])
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game._recompute_continuous_effects()
 
     assert bear.effective_power == 3, "the Aura's trigger was announced and resolved"

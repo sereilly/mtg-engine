@@ -46,8 +46,7 @@ def _g3_cast(set_pool, spell, *battlefield, poison=0):
     game.enforce_mana_costs = False
     game._settle()
     result = game.cast_from_hand(0, spell, target_player_index=1)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game._settle()
     return game, result, p1, perms
 
@@ -421,6 +420,7 @@ def test_a_two_colour_search_phrase_means_either_colour(catalog_by_name):
 
 from engine import Game, PlayerState
 from engine.models import Permanent
+from tests.helpers import resolve_stack
 
 
 def _w2g1_game(*players: PlayerState, interactive=()) -> Game:

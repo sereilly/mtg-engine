@@ -243,8 +243,7 @@ def _g3_activate(game, name, target, *, x_value=None):
         target_permanent_ids=[game.permanent_id_of(target)],
         **({} if x_value is None else {"x_value": x_value}),
     )
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game._settle()
     return result
 
@@ -535,8 +534,7 @@ def _g1_ready(*permanents):
 
 
 def _g1_settle(game):
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game._settle()
 
 
@@ -1204,8 +1202,7 @@ def _g4_ready(*permanents):
 
 
 def _g4_settle(game):
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game._settle()
 
 
@@ -1672,6 +1669,7 @@ from engine.models import CardDefinition, Permanent  # noqa: E402
 from engine.named_counters import counters_on  # noqa: E402
 from engine.oracle import compile_card_oracle  # noqa: E402
 from engine.targeting import derive_activation_spec  # noqa: E402
+from tests.helpers import resolve_stack
 
 
 def _oyster_creature(name: str, power: int = 4, toughness: int = 4) -> CardDefinition:
@@ -1702,8 +1700,7 @@ def _oyster_board(set_pool, victim_tapped: bool = True, toughness: int = 4):
 
 
 def _oyster_settle(game):
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game._settle()
 
 

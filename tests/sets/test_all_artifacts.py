@@ -703,6 +703,7 @@ from engine.card_loader import load_cards as _w3g3_load_cards
 from engine.linked_exile import face_down_exiled_cards, linked_entries
 from engine.models import Permanent as _W3G3Permanent
 from engine.oracle import compile_card_oracle as _w3g3_compile
+from tests.helpers import resolve_stack
 
 _W3G3_LEA = {c.name: c for c in _w3g3_load_cards(_w3g3_set_path("LEA"))}
 
@@ -882,8 +883,7 @@ def test_gusthas_scepter_bins_its_pile_when_it_changes_hands(set_pool):
 
     assert game.controller_index_of(scepter) == 1
     assert game.stack, "the change of hands announced the trigger"
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert [c.name for c in game.players[0].graveyard] == ["Black Lotus"]
     assert game.players[1].graveyard == []

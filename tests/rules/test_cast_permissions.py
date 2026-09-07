@@ -369,8 +369,7 @@ def test_601_3_a_blanket_grant_opens_one_position_in_an_ordered_zone():
 
     assert _w2g1_playable(game, 0) == []
     game.activate_permanent_ability(0, "Bösium Strip")
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert [e["name"] for e in _w2g1_playable(game, 0)] == ["Lightning Bolt"]
     buried = {card.name: card for card in p1.graveyard}
@@ -397,13 +396,11 @@ def test_614_1a_a_spell_cast_from_the_top_of_a_graveyard_is_exiled_instead():
     ]
 
     game.activate_permanent_ability(0, "Bösium Strip")
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     result = game.cast_from_hand(
         0, "Lightning Bolt", target_player_index=1, from_zone="graveyard"
     )
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert result.supported, result.details
     assert p2.life == 17
@@ -435,8 +432,7 @@ def test_702_8a_a_granted_flash_widens_when_rather_than_where():
 
     game.active_player_index = 0
     game.activate_permanent_ability(0, "Winding Canyons", ability_index=1)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     game.active_player_index = 1
     assert _w2g1_instant_speed(bears, game, 0), "on the opponent's turn"
@@ -460,6 +456,7 @@ from engine.spell_prohibitions import (  # noqa: E402
     forbid_casting_this_turn,
     forbid_nonmana_activations_this_turn,
 )
+from tests.helpers import resolve_stack
 
 
 def _w2g5_spell(name: str, type_line: str) -> CardDefinition:

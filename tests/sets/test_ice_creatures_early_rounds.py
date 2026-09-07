@@ -27,7 +27,7 @@ from engine.cumulative_upkeep import cumulative_upkeep_cost
 from engine.models import Permanent, PlayerState
 from engine.named_counters import counters_on
 from engine.oracle import compile_card_oracle
-from tests.helpers import _mk_creature_card, _nosick
+from tests.helpers import _mk_creature_card, _nosick, resolve_stack
 
 # --- Round 1: cumulative upkeep (CR 702.24) ---
 def _cu_trigger(card):
@@ -956,8 +956,7 @@ def test_orcish_librarian_exiles_four_at_random_and_stacks_the_other_four(set_po
 
     random.seed(7)
     assert game.activate_permanent_ability(0, "Orcish Librarian").supported
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert len(p1.exile) == 4
     assert len(p1.library) == 5, "four exiled, four back on top, one untouched"
@@ -984,8 +983,7 @@ def test_orcish_librarian_is_deterministic_for_a_seed(set_pool):
         )
         game = Game(players=[p1, PlayerState(name="P2", life=20)])
         game.activate_permanent_ability(0, "Orcish Librarian")
-        while game.stack:
-            game.resolve_top_of_stack()
+        resolve_stack(game)
         return [c.name for c in p1.exile]
 
     random.seed(11)
@@ -1017,8 +1015,7 @@ def test_snow_hound_returns_itself_and_the_creature_it_names(set_pool):
     result = game.activate_permanent_ability(
         0, "Snow Hound", target_permanent_index=1, target_player_index=0
     )
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert result.supported
     assert p1.battlefield == []
@@ -1045,8 +1042,7 @@ def test_giant_trap_door_spider_exiles_itself_and_the_attacker(set_pool):
     result = game.activate_permanent_ability(
         0, "Giant Trap Door Spider", target_permanent_index=0, target_player_index=1
     )
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert result.supported
     assert [c.name for c in p1.exile] == ["Giant Trap Door Spider"]
@@ -1092,8 +1088,7 @@ def test_krovikan_elementalist_sacrifices_the_creature_it_gave_flying(set_pool):
         0, "Krovikan Elementalist", ability_index=1,
         target_permanent_index=1, target_player_index=0,
     )
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert bear.has_keyword("flying")
     assert bear.metadata.get("sacrifice_at_next_end_step") is True
@@ -1171,8 +1166,7 @@ def test_norritt_marks_the_creature_it_names(set_pool):
         0, "Norritt", ability_index=1,
         target_player_index=1, target_permanent_index=1,
     )
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert giant.metadata.get("must_attack_until_eot") is True
     assert bears.metadata.get("must_attack_until_eot") is None
@@ -1212,8 +1206,7 @@ def test_minion_of_leshrac_will_not_pay_with_itself(set_pool):
     game = Game(players=[p1, PlayerState(name="P2", life=20)])
 
     game.resolve_upkeep(0)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert p1.life == 15
     assert minion.tapped, "the tap rides the damage branch"

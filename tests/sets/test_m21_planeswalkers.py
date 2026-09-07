@@ -15,6 +15,7 @@ import pytest
 from engine import Game
 from engine.models import Permanent, PlayerState
 from engine.oracle import compile_card_oracle
+from tests.helpers import resolve_stack
 
 
 # --- The planeswalker round: loyalty, emblems, delayed triggers, phasing ----
@@ -250,8 +251,7 @@ def test_basri_ket_minus_two_makes_attacking_soldiers(set_pool):
     slot = game.battlefield_index_of(attacker)
     ok, msg = game.declare_attackers(0, [slot])
     assert ok, msg
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     soldiers = [p for p in game.controlled_by(0) if "Soldier" in p.card.name]
     assert len(soldiers) == 1
     assert soldiers[0].tapped and soldiers[0].attacking

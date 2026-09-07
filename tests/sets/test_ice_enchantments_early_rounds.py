@@ -25,7 +25,7 @@ from engine import Game
 from engine.models import Permanent, PlayerState
 from engine.named_counters import counters_on
 from engine.oracle import compile_card_oracle
-from tests.helpers import _nosick
+from tests.helpers import _nosick, resolve_stack
 
 # --- Round 1: cumulative upkeep (CR 702.24) ---
 def _cu_trigger(card):
@@ -834,8 +834,7 @@ def test_withering_wisps_sacrifices_itself_on_an_empty_board(set_pool):
     game, p1, wisps = _wisps_board(set_pool, swamps=1)
 
     game.resolve_end_step(0)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert wisps not in p1.battlefield
 
@@ -848,8 +847,7 @@ def test_withering_wisps_stays_while_a_creature_is_on_the_battlefield(set_pool):
     game.players[1].battlefield.append(_nosick(Permanent(card=pool["Balduvian Bears"])))
 
     game.resolve_end_step(0)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert wisps in p1.battlefield
 
@@ -1119,8 +1117,7 @@ def _w1g5_winds_board(set_pool, catalog_by_name):
 
 def _w1g5_tap(game, permanent):
     game.become_tapped(permanent)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
 
 def test_freyalises_winds_counters_every_permanent_that_taps(

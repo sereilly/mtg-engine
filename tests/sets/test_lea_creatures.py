@@ -18,12 +18,13 @@ from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle, lex_oracle_text, parse_activated_ability_cost
 import json
 from tests.helpers import (
+    _get,
     _mk_card,
     _mk_creature_card,
     _pass_priority,
     _resolve_top_stack,
     client,
-    _get,
+    resolve_stack,
 )
 from tests.sets.lea_helpers import (
     _forest,
@@ -1738,8 +1739,7 @@ def test_nettling_imp_marks_the_creature_that_was_chosen(set_pool):
     game.activate_permanent_ability(
         0, "Nettling Imp", target_player_index=1, target_permanent_index=1
     )
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert giant.metadata.get("must_attack_until_eot") is True
     assert giant.metadata.get("destroy_if_did_not_attack_eot") is True

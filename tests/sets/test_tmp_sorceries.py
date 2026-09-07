@@ -464,7 +464,7 @@ from engine import Game, PlayerState
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.targeting import derive_cast_spec
-from tests.helpers import _mk_creature_card, _nosick
+from tests.helpers import _mk_creature_card, _nosick, resolve_stack
 
 
 def _w2g2_spell_board(spell, p0_creatures, p1_creatures):
@@ -498,8 +498,7 @@ def test_w2g2_repentance_makes_a_creature_kill_itself(set_pool):
         target_player_index=0,
         target_permanent_ids=[p0.battlefield[0].permanent_id],
     ).supported
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game.check_state_based_actions()
     assert list(game.controlled_by(0)) == [], game.log
     assert any("deals 4 damage to itself" in line for line in game.log), game.log
@@ -517,8 +516,7 @@ def test_w2g2_repentance_on_a_zero_power_creature_deals_nothing(set_pool):
         target_player_index=0,
         target_permanent_ids=[p0.battlefield[0].permanent_id],
     ).supported
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game.check_state_based_actions()
     assert [p.card.name for p in p0.battlefield] == ["Wall"]
 
@@ -543,8 +541,7 @@ def test_w2g2_deadshot_taps_one_target_and_bites_with_it(set_pool):
             p0.battlefield[0].permanent_id, p1.battlefield[0].permanent_id
         ],
     ).supported
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game.check_state_based_actions()
     assert p0.battlefield[0].tapped, game.log
     assert list(game.controlled_by(1)) == [], game.log
@@ -567,8 +564,7 @@ def test_w2g2_deadshots_biter_need_not_be_yours(set_pool):
             p1.battlefield[0].permanent_id, p1.battlefield[1].permanent_id
         ],
     ).supported
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game.check_state_based_actions()
     assert [p.card.name for p in p1.battlefield] == ["Ogre"], game.log
     assert p1.battlefield[0].tapped
@@ -887,8 +883,7 @@ def _w3g4_extinction_game(set_pool, mine, theirs, interactive=()):
 def _w3g4_cast_extinction(game):
     result = game.cast_from_hand(0, "Extinction")
     assert result.supported, result.details
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     return result
 
 

@@ -13,6 +13,7 @@ from engine import Game, PlayerState
 from engine.auras import attach_aura
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle
+from tests.helpers import resolve_stack
 
 
 def _creature(name: str, power: int, toughness: int) -> CardDefinition:
@@ -101,8 +102,7 @@ def test_takklemaggot_reattached_resumes_its_upkeep_counter(set_pool):
 
     game.active_player_index = 1
     game.resolve_upkeep(1)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert spare.effective_toughness == 2
 
@@ -142,8 +142,7 @@ def test_takklemaggot_declined_pings_the_player_who_declined(set_pool):
     for seat in (0, 1):
         game.active_player_index = seat
         game.resolve_upkeep(seat)
-        while game.stack:
-            game.resolve_top_of_stack()
+        resolve_stack(game)
 
     assert [player.life for player in game.players] == [20, 19]
 

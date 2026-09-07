@@ -21,7 +21,7 @@ Cards come from `set_pool("TMP")` / `set_cards("TMP")` — never a new
 from engine import Game, PlayerState
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
-from tests.helpers import _nosick
+from tests.helpers import _nosick, resolve_stack
 
 
 def _w1g1_cast(spell, caster_board, opponent_board, *, target_index):
@@ -42,8 +42,7 @@ def _w1g1_cast(spell, caster_board, opponent_board, *, target_index):
     game.cast_from_hand(
         0, spell.name, target_permanent_index=target_index, target_player_index=0
     )
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     return game, p0, p1
 
 
@@ -161,8 +160,7 @@ def test_w1g1_reality_anchor_will_not_strip_a_noncreature(set_pool):
         game._sync_control()
         # The shape the AI produced: a player named, no permanent.
         game.cast_from_hand(0, "Reality Anchor", target_player_index=0)
-        while game.stack:
-            game.resolve_top_of_stack()
+        resolve_stack(game)
         return game, p0
 
     # No creature at all: the enchantment must not be taken as a substitute.
@@ -601,8 +599,7 @@ def test_w1g5_interdict_counters_an_ability_and_bans_its_source(set_pool):
 
     result = game.cast_from_hand(0, "Interdict", target_stack_index=0)
     assert result.supported, result.details
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert game.players[0].life == 20, "the ability was countered"
 
@@ -628,8 +625,7 @@ def test_w1g5_interdicts_ban_ends_with_the_turn(set_pool):
         1, "Pinger", ability_index=0, target_player_index=0,
     ).supported
     game.cast_from_hand(0, "Interdict", target_stack_index=0)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     clear_turn_spell_prohibitions(game)
     pinger.tapped = False
@@ -768,8 +764,7 @@ def test_w2g2_respite_gains_one_life_per_attacker_and_fogs(set_pool):
 
     before = p1.life
     assert game.cast_from_hand(1, "Respite").supported
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     assert p1.life == before + 3, game.log
     game.advance_combat_phase()
     assert p1.life == before + 3, "the fog is the other half of the same card"
@@ -795,8 +790,7 @@ def test_w2g2_aven_gagglemaster_still_counts_its_fliers(catalog_by_name):
     game._close_current_priority_step()
     before = p0.life
     assert game.cast_from_hand(0, "Aven Gagglemaster").supported
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     assert p0.life == before + 4, game.log
 
 
@@ -844,8 +838,7 @@ def test_w3g5_kindle_counts_every_graveyard_not_just_yours(set_pool):
     game, p0, p1 = _w3g5_kindle_game(set_pool, mine=1, theirs=1)
     before = p1.life
     assert game.cast_from_hand(0, "Kindle", target_player_index=1).supported
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     assert p1.life == before - 4, game.log
 
 
@@ -855,8 +848,7 @@ def test_w3g5_kindle_with_empty_graveyards_deals_its_printed_base(set_pool):
     game, p0, p1 = _w3g5_kindle_game(set_pool, mine=0, theirs=0)
     before = p1.life
     assert game.cast_from_hand(0, "Kindle", target_player_index=1).supported
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     assert p1.life == before - 2, game.log
 
 
@@ -873,8 +865,7 @@ def test_w3g5_kindle_ignores_a_graveyard_card_with_another_name(set_pool):
     game._close_current_priority_step()
     before = p1.life
     assert game.cast_from_hand(0, "Kindle", target_player_index=1).supported
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     assert p1.life == before - 3, game.log
 
 

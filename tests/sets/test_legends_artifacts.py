@@ -1348,6 +1348,7 @@ import pytest
 
 from engine.models import CardDefinition
 from engine.named_counters import counters_key, counters_on
+from tests.helpers import resolve_stack
 
 
 def _p4_game(*battlefield, **player_kwargs):
@@ -1697,8 +1698,7 @@ def test_arena_is_castable_on_a_board_with_no_legendary_creature(set_pool):
     }
 
     result = game.cast_from_hand(0, "Arena of the Ancients")
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game._settle()
 
     assert result.supported, result.details

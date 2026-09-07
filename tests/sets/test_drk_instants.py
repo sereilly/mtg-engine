@@ -9,6 +9,7 @@ from engine import Game, PlayerState
 from engine.models import Permanent
 from engine.targeting import derive_cast_spec
 from engine.oracle import compile_card_oracle
+from tests.helpers import resolve_stack
 
 
 # --- G2: auras and land statics (The Dark) ---
@@ -190,8 +191,7 @@ def test_festival_grounds_every_creature_for_the_turn(set_pool):
     game.current_step = "upkeep"
 
     assert game.cast_from_hand(1, "Festival").supported
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     latecomer = Permanent(card=set_pool("LEA")["Hill Giant"])
     game.players[0].battlefield.append(latecomer)
@@ -211,8 +211,7 @@ def test_festival_stops_at_the_end_of_the_turn(set_pool):
     game.current_turn_phase = "beginning"
     game.current_step = "upkeep"
     assert game.cast_from_hand(1, "Festival").supported
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     game.resolve_cleanup_step(0)
 

@@ -21,7 +21,7 @@ Cards come from `set_pool("TMP")` / `set_cards("TMP")` — never a new
 from engine import Game, PlayerState
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
-from tests.helpers import _nosick
+from tests.helpers import _nosick, resolve_stack
 
 
 def test_w1g1_dauthi_embrace_grants_shadow_to_a_creature_in_a_game(set_pool):
@@ -51,8 +51,7 @@ def test_w1g1_dauthi_embrace_grants_shadow_to_a_creature_in_a_game(set_pool):
         0, "Dauthi Embrace", ability_index=0,
         target_permanent_index=1, target_player_index=0,
     )
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert game._has_keyword(bear, "shadow")
     assert not game._can_block_attacker(blocker, bear)
@@ -102,8 +101,7 @@ def _w1g1_cop_rig(set_pool):
     game.activate_permanent_ability(
         0, "Circle of Protection: Shadow", ability_index=0
     )
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     return game, p0, shadowy, ground
 
 
@@ -147,8 +145,7 @@ def test_w1g1_circle_of_protection_shadow_prevents_only_a_shadow_source(set_pool
     game.activate_permanent_ability(
         0, "Circle of Protection: Shadow", ability_index=0
     )
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     assert _damage_dealt(game, p0, 3, source=ground, combat=True) == 3
 
 
@@ -762,8 +759,7 @@ def test_w2g1_spinal_graft_destroys_a_host_a_spell_points_at(set_pool):
 
     game.cast_from_hand(1, "Lightning Bolt", target_permanent_index=1,
                         target_player_index=0)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game.check_state_based_actions()
 
     assert not game.is_on_battlefield(bear)
@@ -1553,12 +1549,10 @@ def _w3g1_block(set_pool, attacker_pt, blocker_pt, watcher_seat=0):
     game.advance_combat_phase()
     game.advance_combat_phase()
     assert game.declare_attackers(0, [0], 1)[0], game.log
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game.advance_combat_phase()
     assert game.declare_blockers(1, {0: 0})[0], game.log
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game.check_state_based_actions()
     return game, p0, p1
 

@@ -457,6 +457,7 @@ def test_a_counter_placing_cost_names_its_counter_in_symbols():
 from engine.auras import attach_aura as _w2g1_attach
 from engine.card_loader import load_cards as _w2g1_load
 from engine.card_loader import manifest_set_path as _w2g1_path
+from tests.helpers import resolve_stack
 
 _W2G1_WTH = {
     c.name: c for c in _w2g1_load(_w2g1_path("WTH", include_measured=True))
@@ -496,8 +497,7 @@ def test_303_4m_a_sacrifice_cost_may_name_the_attached_permanent():
     _w2g1_attach(aura, host)
 
     result = game.activate_permanent_ability(0, "Betrothed of Fire", ability_index=1)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
 
     assert result.supported, result.details
     assert [c.name for c in p1.graveyard] == ["Grizzly Bears", "Betrothed of Fire"]

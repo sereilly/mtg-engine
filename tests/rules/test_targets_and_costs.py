@@ -1265,8 +1265,7 @@ def test_608_2h_the_last_known_information_a_destroy_records_does_not_depend_on_
             )
         else:
             game.cast_from_hand(0, "Divine Offering", target_permanent_index=0)
-        while game.stack:
-            game.resolve_top_of_stack()
+        resolve_stack(game)
         game._settle()
         return game.players[0].life
 
@@ -1642,6 +1641,7 @@ from engine.card_loader import load_cards as _w1g5_load, manifest_set_paths as _
 from engine.oracle import compile_card_oracle as _w1g5_compile
 from engine.targeting import derive_activation_spec as _w1g5_activation_spec
 from engine.targeting import derive_cast_spec as _w1g5_cast_spec
+from tests.helpers import resolve_stack
 
 
 def _w1g5_pool():

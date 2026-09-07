@@ -28,7 +28,7 @@ import pytest
 from engine import Game
 from engine.models import Permanent, PlayerState
 from engine.oracle import compile_card_oracle
-from tests.helpers import _nosick
+from tests.helpers import _nosick, resolve_stack
 
 
 # --- W4G1: a reanimation that names what it created, and cannot let it go ---
@@ -70,8 +70,7 @@ def _reanimate(game, graveyard_index=0):
     game.activate_permanent_ability(
         0, "Dreams of the Dead", target_permanent_index=graveyard_index
     )
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game._settle()
     return next(
         (

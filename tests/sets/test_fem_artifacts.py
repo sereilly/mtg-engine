@@ -46,8 +46,7 @@ def _g2_artifact_game(card, *, hand, library, opponent_hand=()):
 
 def _g2_use(game, name):
     result = game.activate_permanent_ability(0, name, permanent_index=0)
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     game._settle()
     return result
 
@@ -158,6 +157,7 @@ from engine.models import Permanent, PlayerState
 from engine.named_counters import counters_on
 from engine.oracle import compile_card_oracle
 from engine.targeting import derive_activation_spec, usable_activated_abilities
+from tests.helpers import resolve_stack
 
 
 def _g3_delif_board(set_pool, artifact_name):
