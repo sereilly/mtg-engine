@@ -1067,6 +1067,128 @@ complex", because the next wave finishes those parts for free; and run
   Cataclysm, Limited Resources, Kor Chant, Penance, Fighting Chance, Mogg
   Assassin.
 
+### Wave 1 closed: 91 → 137 of 143, zero hooks added
+
+Five worktree groups, forty-six cards, and **every group finished**. Forty-four
+of the fifty-three assigned cards landed; six remain and each is declined with
+its parts individually named, which is what makes wave 2 cheap.
+
+| group | landed | EXO after | what it cost |
+|---|---|---|---|
+| W1G5 — costs, sacrifice, prevention, coin flips | 8 of 12 | 99 | no cap crossed |
+| W1G1 — the comparative player | 10 of 10, plus one of W1G2's | 110 | no cap crossed |
+| W1G2 — triggers on what a player does | 9 of 10 | 118 | `effects/cards.py` split |
+| W1G3 — combat | 10 of 10 | 128 | `lowering/exile.py` trimmed to 996 |
+| W1G4 — counters, characteristics, Licids | 10 of 11 | 137 | `amounts.py` split |
+
+EXO's row: **87.0% parsed, 87.0% lowered, 63.3% executed**, from 72.5 / 67.6 /
+45.9 at ingest. Hollow lines **0** and unclaimed sentences **0** at every merge,
+never reached but held; `picker_sweep --set EXO` went **1 → 0** and the whole
+pool with it. **Zero hooks added across all five groups** — the fifth
+consecutive set, and the instruction is what does that work rather than the
+reviewer.
+
+#### The wave's real product is eleven shipped cards it fixed
+
+None of the eleven is in Exodus and none was found by an instrument. Every one
+was found by a group reading compiled programs line by line and then driving a
+game, which is the only thing that sees a **runtime decline**.
+
+* **Seven print "Discard a card at random"** — Amok, Canyon Drake, Coral Helm,
+  Draconian Cylix, Mage il-Vec, Ogre Shaman, Stormbind. The cost picker asked
+  the player which card to bin and `random.sample` binned a different one.
+  Nothing crashed and nothing was missing; the card was wrong in the player's
+  favour right up to the moment the answer was thrown away. `test_cost_pickers`
+  could not see it because its enumeration asked "does the cost eat a card?"
+  rather than CR 601.2b's question, **"does the payer choose?"**
+* **Conquer and Steal Enchantment** took control of nothing, for the whole life
+  of the pool. `auras._TEMPLATES` claims "you control enchanted &lt;noun&gt;" for any
+  noun and `_apply_aura_effect` implemented two nouns by substring, so the
+  support gate admitted all nine printings of a line that produced no
+  instruction by design.
+* **Pillar Tombs of Aku and Apathy** acted out of the wrong seat: a "that player
+  may …" offer moved to the event's seat and left the *performer* as the
+  resolution's controller.
+* **Bone Dancer and Duplicity** are the standing "if you do" gap, closed. An
+  accepted offer that did nothing still fired its rider — Duplicity handed the
+  whole exiled pile back for free, which is the trade that *is* the card.
+
+Two of those four groups measured the blast radius rather than guessing it, and
+in both cases the measurement was the better half. Ten pool cards carry an
+`event_subject_*` `may` with an action, of which three already name their seat
+and are inert. And of the twelve carrying an `end_of_combat` trigger, **none of
+the eleven shipped ones moves** when the step stops clearing combat early —
+because each had already routed around the bug, The Wretched with a workaround
+at the fire site whose comment ("this is the last moment the combat record can
+answer it") is now false.
+
+#### The phase step that cleared too early
+
+`end_combat` reset the combat state before CR 511.2's priority window. Its own
+comment said "End-of-combat triggered abilities fire before combat state is
+cleared", and that was true of *firing* — which only puts an ability on the
+stack. An ability determines what it affects when it **resolves** (CR 608.2),
+and CR 511.3 removes creatures from combat only as the step ends. Every
+end-of-combat trigger had been resolving against a board where nothing was
+blocking anything; Wall of Nets logged "exiled 0 permanent(s)" and reported
+supported.
+
+#### What the briefs got wrong, which is a third of them as usual
+
+The pattern across all five reports is that **the estimate and the module
+prediction were wrong far more often than the card was**.
+
+* **Three of the five modules named as a group's own were never opened.**
+  `nouns.py` (W1G1), `ast/board.py` (W1G3) and `effects/stack.py` (W1G5) each
+  took zero lines; `lowering/conditions.py` and `lowering/control_flow.py`, both
+  named to W1G2, took zero between them. The three caps actually crossed were
+  `effects/cards.py`, `amounts.py` and `lowering/exile.py`, and **not one of
+  them was predicted**. Phase 0's prediction rule works on *which modules two
+  groups share*; it does not work on which module a group's cards will land in,
+  and this wave says the second question is barely answerable from a census.
+* **Difficulty ran backwards twice.** Volrath's Dungeon was briefed as the most
+  speculative card in the wave and needed one regex row plus one dispatch arm,
+  because `engine/activation_permissions.py` already read "Any player may
+  activate this ability but only during …" for Armageddon Clock. Paroxysm was
+  expected to decline and three of its four pieces were already built.
+* **Two refusal sites were manufactured by probe order** — Crashing Boars'
+  `expected 'a'` came from Petra Sphinx's production and W1G1's ten all died in
+  a fallthrough after `_parse_choose_target` declined. Both named productions
+  that were already most of the answer. That is now four sets running.
+* **The pre-split reasons were half wrong.** `lowering/_bound_returns.py` was
+  cut "because Mana Breach reaches it": Mana Breach's reading is in
+  `_described_returns.py`, the *other* half. And it was called a floor every
+  lowering family reads when exactly one module imports it — a floor is listed
+  as shared because it cannot be a family, not because families read it.
+
+#### The duplicate idea arrived, and the conflict was not where it lives
+
+W1G1 and W1G2 both implemented **Avenging Druid** — the hazard git resolves
+silently. Here it happened to conflict, in four regions of
+`_accept_reveal_until_from_top`, and the resolution is the playbook's rule
+exactly: W1G1's production parameterises the possessive, so it reads "your/you"
+and "their/they", "put" and "puts", three did-clause spellings and three word
+orders for the rest; W1G2's added a two-row destination table hard-coding
+"your". **Take the derivation, not the list.**
+
+The part worth recording is where the *other* half was. W1G2's table had merged
+**cleanly**, outside every conflict region, and its only reader was inside a
+region being discarded — so resolving the file with `--ours` or `--theirs` would
+have left it defined and never read. Resolve the conflict, never the file, and
+then scan for the half the resolution killed.
+
+#### Two latent defects the wave found and left, both with their parts named
+
+* `lowering/counters.py` **drops `ThatMuch.source`** and emits
+  `count: "trigger_count"` for any `ThatMuch`, whatever record it names. Only
+  Tetravus reaches that branch today and its source really is `trigger_count`,
+  so nothing is broken — it is part 3 of Mind Maggots' decline.
+* `engine/grammar/nouns.py`'s noun **draft is a plain dataclass**, so a
+  postmodifier setting a field the `ObjectFilter` build does not copy out
+  *succeeds* and is then dropped. The phrase reads as unnarrowed, silently, in
+  the widening direction, and there is no guard that the draft's fields are all
+  copied — a hand-maintained list of exactly the kind this repo keeps finding.
+
 ### Phase 0's caps prediction
 
 Twelve grammar modules sat within 30 lines of the thousand-line guard, which is
