@@ -524,6 +524,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # CR 701.12b, an atomic swap of two layer-2 contributions.
     "exchange_control_of_targets": "control",
     "exchange_control_of_bound": "control",
+    # Reins of Power swaps two whole sets of creatures for a turn. The same
+    # category, so GRAMMAR_CATEGORIES is unchanged — what a control change is
+    # about does not depend on how many permanents it moves.
+    "exchange_control_of_sets_until_eot": "control",
     # A printed text change (CR 612). Its own category rather than "recolor":
     # the Lace cycle makes an object a colour, while this replaces a *word*
     # wherever the object's text uses it, and one of the two modes does not

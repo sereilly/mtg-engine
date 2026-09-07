@@ -56,6 +56,7 @@ from ._events import (ATTACHED_PERMANENT_CONTROLLER,
 # Phase 0 these fourteen were read through `_events`, which is neither, and the
 # hop was invisible only because that module re-exported them.
 from ._record_keys import (CHOSEN_CAST_DAMAGE, CHOSEN_DAMAGE_SOURCE,
+                           CONTROL_EXCHANGED_PERMANENTS,
                            CHOSEN_PERMANENT, CHOSEN_PLAYER, COUNTED_NUMBER,
                            CREATED_TOKEN, DAMAGE_RECIPIENT, EXTRA_TURN_GRANTED,
                            OTHER_CHOSEN_PERMANENT, PUT_FROM_HAND_PERMANENTS,
@@ -91,6 +92,13 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # read of the board would answer "whichever of the two is still there",
     # which is the right permanent only when nothing else went wrong.
     "choose_permanent": (CHOSEN_PERMANENT, OTHER_CHOSEN_PERMANENT),
+    # "You and that opponent each gain control of all creatures the other
+    # controls until end of turn. **Those creatures** gain haste until end of
+    # turn." (Reins of Power.) Every creature the swap moved, both directions in
+    # one record — the sentence behind it names them all, and by then the board
+    # cannot answer: the two sets have changed hands, so neither printed seat
+    # phrase names what the card means any more.
+    "exchange_control_of_sets_until_eot": CONTROL_EXCHANGED_PERMANENTS,
     # "Count the number of permanents. **If the number** is odd, …" (Chaos
     # Moon.) The count is the whole of what the sentence does, and the only
     # place the two conditions behind it can read that number from — asking the

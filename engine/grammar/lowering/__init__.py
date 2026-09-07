@@ -243,6 +243,7 @@ from .control_changes import (
     _lower_bid_life_for_control,
     _lower_exchange_control,
     _lower_gain_control,
+    _lower_mutual_control_of_sets,
 )
 from .tapping import (
     _lower_for_each_tapped,
@@ -532,6 +533,7 @@ __all__ = [
     "_lower_choose_permanents",
     "_lower_exchange_control",
     "_lower_exchange_greatest_mana_value",
+    "_lower_mutual_control_of_sets",
     "_lower_pay_or_sacrifice_greatest_mana_value",
     "_lower_regenerate",
     "_lower_destroy_unless_pay",

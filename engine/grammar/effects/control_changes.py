@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from .. import ast
 from ..lexer import NUMBER
-from ..references import parse_recipient
+from ..references import parse_player_ref, parse_recipient
 from ..stream import TokenStream
 from ..phrases import _accept_self_reference, _parse_that_object
 from ..vocabulary import NUMBER_WORDS
@@ -264,3 +264,66 @@ def _parse_exchange_control(stream: TokenStream) -> ast.Statement:
         "that", "shares", "one", "of", "those", "types", "with", "it"
     )
     return ast.ExchangeControl(first, second, shares_a_type=bool(shares))
+
+
+def parse_mutual_control_of_sets(
+    stream: TokenStream,
+) -> "ast.MutualControlOfSets | None":
+    """``You and <player> each gain control of all <noun> the other controls
+    [until end of turn].`` (Reins of Power.)
+
+    Refuses without consuming, like every production the imperative dispatcher
+    tries ahead of the subject reader — and it has to be tried there, because
+    the sentence opens on a *compound* subject: "you" parses as a player and
+    the reader then chokes on the conjunction, which is the refusal
+    ("expected a subject") this card carried.
+
+    Two things are read here rather than by the shared readers, and both are
+    the same decision:
+
+    * **"the other controls" is frame, not filter.** The noun phrase goes
+      through ``parse_recipient`` and stops in front of those words, and they
+      are then consumed literally. A ``controller: "the_other"`` key would be a
+      seat no matcher outside this sentence could answer — reciprocity is
+      relative to a pair, and a filter describes one permanent. So the pair
+      lives in the node and the phrase lives in the production.
+    * **"that opponent" is the seat the sentence before it named.** Read by
+      ``parse_player_ref``, which already reads it as ``that_player`` — the
+      referent ``readers.py`` has treated the two spellings as since it read
+      "that player controls" and "that opponent controls" through one branch.
+
+    The duration is read but **not** required: an untimed printing is a legal
+    sentence this engine has no lifetime for, and refusing it in the *lowering*
+    names the missing part where refusing it here would only say "unconsumed
+    text".
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("you", "and"):
+        stream.reset(mark)
+        return None
+    other = parse_player_ref(stream)
+    if other is None:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("each", "gain", "control", "of"):
+        stream.reset(mark)
+        return None
+    subject = parse_recipient(stream)
+    # A sweep, not a choice: "all creatures" names every one of them and nobody
+    # picks (CR 611.2c). "target" here would be one announcement made twice,
+    # once per seat, which is not a shape CR 601.2c has.
+    if (
+        not isinstance(subject, ast.TargetSpec)
+        or subject.quantifier != "all"
+    ):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("the", "other", "controls"):
+        stream.reset(mark)
+        return None
+    duration = (
+        "until_end_of_turn"
+        if stream.accept_phrase("until", "end", "of", "turn")
+        else "indefinite"
+    )
+    return ast.MutualControlOfSets(other, subject.filter, duration)
