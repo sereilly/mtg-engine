@@ -11,7 +11,8 @@ pass. Also holds the attack-legality query (``can_attack``),
 
 from ..attack_tapping import attacking_causes_tap
 from ..auras import attached_combat_restrictions, aura_restriction_active
-from ..combat_permissions import ATTACK_AS_THOUGH_NO_DEFENDER
+from ..combat_permissions import (ATTACK_AS_THOUGH_NO_DEFENDER,
+                                  CANT_ATTACK_UNTIL_EOT)
 from ..combat_restrictions import (declaration_company_required,
                                    participation_cap,
                                    restriction_condition_holds)
@@ -817,6 +818,14 @@ class DeclareAttackersStepMixin:
             ):
                 return False
         if aura_restriction_active(attacker, "cant_attack"):
+            return False
+        # And the granted half (Change of Heart): a restriction a spell put on
+        # this one creature for the turn, swept by the cleanup step. Read
+        # beside the two above because all three answer the same question about
+        # the attacker, and a reader that knew only two of them would let the
+        # third through — which is the mirror of the note the blocker gate
+        # keeps about Panic.
+        if attacker.metadata.get(CANT_ATTACK_UNTIL_EOT):
             return False
 
         # The board-reaching restrictions, asked of every permanent's compiled

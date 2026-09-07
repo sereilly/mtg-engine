@@ -28,6 +28,13 @@ ATTACK_AS_THOUGH_NO_DEFENDER = "attack_as_though_no_defender_until_eot"
 #: clause lives, cannot be imported that early.
 CANT_BLOCK_UNTIL_EOT = "cant_block_until_eot"
 
+#: "Target creature can't attack this turn." (Change of Heart.) The attacking
+#: twin of the mark above, in the same channel shape and here for the same
+#: reason. Its own key rather than a second reading of that one: the two are
+#: answered at two different steps, and one flag for both would ground a
+#: creature Panic only meant to stop blocking.
+CANT_ATTACK_UNTIL_EOT = "cant_attack_until_eot_mark"
+
 #: "That creature can block up to two additional creatures this turn." (Yare.)
 #: How many attackers *beyond the printed one* this permanent may block for the
 #: rest of the turn, read by ``_max_blocks_for`` and swept with the turn. A

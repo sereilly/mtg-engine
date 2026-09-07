@@ -22,6 +22,7 @@ from ..combat_permissions import (ADDITIONAL_BLOCKS_UNTIL_EOT,
                                   MUST_BLOCK_ALL_UNTIL_EOT,
                                   MUST_BLOCK_ATTACKERS_UNTIL_EOT,
                                   ATTACK_AS_THOUGH_NO_DEFENDER,
+                                  CANT_ATTACK_UNTIL_EOT,
                                   CANT_BLOCK_UNTIL_EOT)
 from ..pt import add_pt_modifier
 from ..rampage import rampage_bonus
@@ -1236,6 +1237,45 @@ def target_cant_block_until_eot(game: Game, instruction: OracleInstruction, cont
         return True, "resolved"
     target_creature.metadata[CANT_BLOCK_UNTIL_EOT] = True
     game.log.append(f"{target_creature.card.name} can't block this turn")
+    return True, "resolved"
+
+
+@effect_handler("target_cant_attack_until_eot")
+def target_cant_attack_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Target creature can't attack this turn." (Change of Heart.)
+
+    The attacking twin of ``target_cant_block_until_eot`` above, and the same
+    shape: a mark on the one permanent the spell chose, swept with the turn by
+    ``_EOT_METADATA_KEYS``, read by ``declare_attackers_step.can_attack``.
+
+    Not the blanket ``cant_attack_until_eot`` beside it -- that arms a
+    board-wide filter, and a targeted restriction routed through it would
+    ground every creature its noun phrase describes.
+
+    The printed noun phrase is re-asked here, not only at announcement, for the
+    reason every other targeted combat mark gives: a target that stopped being
+    a creature between the two is no longer what the card names (CR 608.2b).
+    """
+    from ..subject_filters import subject_matches
+
+    described = (instruction.payload.get("targets") or {}).get("filter") or {}
+    observer = (
+        game.players.index(context.caster) if context.caster in game.players
+        else None
+    )
+    target_creature = resolve_target_permanent(
+        game, context,
+        predicate=lambda perm: subject_matches(
+            game, perm, described,
+            observer=observer, source=context.source_permanent,
+        ),
+        fallback_on_invalid_choice=False,
+    )
+    if target_creature is None:
+        game.log.append(f"{context.card.name}: its target is gone (608.2b)")
+        return True, "resolved"
+    target_creature.metadata[CANT_ATTACK_UNTIL_EOT] = True
+    game.log.append(f"{target_creature.card.name} can't attack this turn")
     return True, "resolved"
 
 

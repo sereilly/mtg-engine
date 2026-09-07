@@ -2019,6 +2019,17 @@ _RESTRICTIONS: tuple[tuple[re.Pattern[str], str], ...] = (
         "cant_attack",
     ),
     (
+        # Convulsing Licid. The blocking half of the pair above, and the same
+        # argument for a row of its own: the compound "can't attack or block"
+        # rows say in so many words that a card printing one half is a
+        # different card, and Stronghold prints the half nobody had. Without
+        # the row the line was unclaimed, the Licid reported unsupported, and
+        # `declare_blockers_step` — which has read this very name since
+        # Pacifism's cousins arrived — had nothing to read.
+        re.compile(rf"^enchanted {_NOUN} can't block$"),
+        "cant_block",
+    ),
+    (
         # Faith's Fetters, second half. CR 605.1a's exception is part of the
         # name, because the clause without it is a strictly harsher restriction
         # — an Aura that stopped a land tapping for mana would lock its

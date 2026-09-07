@@ -5,6 +5,7 @@ from ..cost_tap_records import TAPPED_TO_PAY_FOR
 from ..combat_permissions import (ADDITIONAL_BLOCKS_UNTIL_EOT,
                                   ATTACK_AS_THOUGH_NO_DEFENDER,
                                   CAN_BLOCK_ANY_NUMBER_UNTIL_EOT,
+                                  CANT_ATTACK_UNTIL_EOT,
                                   CANT_BLOCK_UNTIL_EOT,
                                   MUST_BLOCK_ALL_UNTIL_EOT,
                                   MUST_BLOCK_ATTACKERS_UNTIL_EOT)
@@ -39,6 +40,10 @@ _EOT_METADATA_KEYS = (
     # the same combat: the two flags above are about being blocked, this one is
     # about blocking.
     CANT_BLOCK_UNTIL_EOT,
+    # "Target creature **can't attack** this turn." (Change of Heart.) The
+    # attacking twin of the flag above; the sweep is again the whole of "this
+    # turn", and a mark nothing cleared would ground the creature for good.
+    CANT_ATTACK_UNTIL_EOT,
     # "That creature can block up to two additional creatures **this turn**."
     # (Yare.) The sweep is the duration: the record is a count on the permanent
     # and nothing else ends it.

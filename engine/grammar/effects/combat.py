@@ -45,6 +45,33 @@ def _parse_cant_attack_or_block(
     stream.expect_word("can't", "cannot")
 
     if stream.accept_word("attack"):
+        # "This creature can't attack **or block alone**." (Mogg Flunkies.)
+        # CR 506.5 defines "attacking alone" as being the only creature
+        # declared as an attacker, so the word is a *count*: this is the
+        # printed-word spelling of "unless at least one other creature attacks"
+        # two branches down, and it lowers to that very kind rather than to a
+        # restriction of its own. One sentence, two prohibitions, one subject —
+        # the shape ``CombatRestriction.also_kinds`` names on the text-table
+        # side, and the lowering returns the pair.
+        #
+        # Read here, in front of the duration probe, because "alone" is a word
+        # neither that probe nor the "unless" clauses take: without it the
+        # sentence fell all the way through to "expected 'unless defending
+        # player controls'", a refusal naming a phrase the card does not print.
+        #
+        # Each half is accepted on its own as well as in the conjunction. The
+        # word means the same thing in all three spellings, and a production
+        # that read the compound but refused "can't block alone" would hand the
+        # half-sentence the same misleading refusal this branch exists to
+        # remove.
+        if stream.accept_word("alone"):
+            return ast.CombatRestriction(
+                subject, "cant_attack_alone", (("count", 1),)
+            )
+        if stream.accept_phrase("or", "block", "alone"):
+            return ast.CombatRestriction(
+                subject, "cant_attack_or_block_alone", (("count", 1),)
+            )
         # "That creature can't attack during its controller's next turn."
         # (Wall of Dust's block trigger.) A one-shot restriction with a stated
         # window rather than a static ability — the window is the whole of the
@@ -192,6 +219,13 @@ def _parse_cant_attack_or_block(
         )
 
     if stream.accept_word("block"):
+        # "…can't block **alone**." The blocking half of Mogg Flunkies' word,
+        # read here for the reason the attack half is read above its own
+        # duration probe: "alone" opens none of the readings below it.
+        if stream.accept_word("alone"):
+            return ast.CombatRestriction(
+                subject, "cant_block_alone", (("count", 1),)
+            )
         # "…**unless at least two other creatures block**." (Orcish Conscripts.)
         # The blocking twin of the attack clause above, CR 509.1b's side of the
         # same rule, and read here before the two shapes below because it opens
