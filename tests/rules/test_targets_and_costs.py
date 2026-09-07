@@ -1724,3 +1724,86 @@ def test_115_1_the_picker_offers_only_opponents_for_target_opponent():
     # "Target **player** loses 5 life" (Kaervek's Spite) names every seat, the
     # caster's own included.
     assert offered("Kaervek's Spite") == [0, 1, 2]
+
+
+# --- W2G3: changing an ability's target ---
+
+import pytest as _w2g3_pytest
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+
+
+def _w2g3_stack_game(set_pool, mine=("Silver Wyvern", "Spined Wurm")):
+    """Seat 0 holds *mine*; seat 1 holds a Rod of Ruin whose ability targets."""
+    game = Game(players=[
+        PlayerState(name="P1", life=20), PlayerState(name="P2", life=20),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    perms = []
+    for name in mine:
+        perm = Permanent(card=set_pool("STH")[name])
+        perm.metadata["summoning_sickness_turn"] = -99
+        game._put_permanent_onto_battlefield(0, perm, None)
+        perms.append(perm)
+    rod = Permanent(card=set_pool("LEA")["Rod of Ruin"])
+    rod.metadata["summoning_sickness_turn"] = -99
+    game._put_permanent_onto_battlefield(1, rod, None)
+    return game, perms, rod
+
+
+@_w2g3_pytest.mark.cr("115.7a", "113.3b")
+def test_115_7a_an_activated_ability_on_the_stack_can_have_its_target_changed(
+    set_pool,
+):
+    """CR 115.7a says "the target(s) of a spell **or ability**", and CR 113.3b
+    puts an activated ability on the stack as an object in its own right.
+
+    So a retarget is not a counterspell's question: a counterspell asks about a
+    *card* (colour, type, cost) and an ability has none, while "what did you
+    choose as your target" is a question both objects answer the same way. The
+    engine had one stack enumeration that skipped every item carrying an ability
+    instruction, which made the ability half unreachable rather than wrong.
+    """
+    game, (wyvern, wurm), _rod = _w2g3_stack_game(set_pool)
+    assert game.queue_permanent_ability(
+        1, "Rod of Ruin", target_player_index=0,
+        target_permanent_index=game.battlefield_index_of(wyvern),
+        ability_index=0,
+    ).supported
+    assert game.stack[0].is_ability
+
+    assert game.queue_permanent_ability(
+        0, "Silver Wyvern", target_stack_index=0, ability_index=0,
+    ).supported
+    game.resolve_stack()
+
+    assert wurm.damage_marked == 1, game.log
+    assert wyvern.damage_marked == 0, game.log
+
+
+@_w2g3_pytest.mark.cr("115.7a")
+def test_115_7a_an_ability_with_nowhere_else_to_go_keeps_its_target(set_pool):
+    """"If a target can't be changed to **another** legal target, the original
+    target is unchanged."
+
+    The rule's own escape clause, and the one that decides what a retarget does
+    on a board with nothing else on it: the current target is excluded from the
+    candidates, so an empty list leaves the object exactly as it was rather than
+    fizzling it or aiming it back at itself.
+    """
+    game, (wyvern,), _rod = _w2g3_stack_game(set_pool, mine=("Silver Wyvern",))
+    assert game.queue_permanent_ability(
+        1, "Rod of Ruin", target_player_index=0,
+        target_permanent_index=game.battlefield_index_of(wyvern),
+        ability_index=0,
+    ).supported
+    assert game.queue_permanent_ability(
+        0, "Silver Wyvern", target_stack_index=0, ability_index=0,
+    ).supported
+    game.resolve_stack()
+
+    assert wyvern.damage_marked == 1, game.log
+    assert any("no other legal target" in line for line in game.log), game.log

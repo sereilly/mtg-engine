@@ -1759,6 +1759,13 @@ def _retarget_spec(payload: dict) -> dict:
     # Reflecting Mirror's specs stay byte-identical.
     if payload.get("current_target_type"):
         spec["stack_single_target_type"] = payload["current_target_type"]
+    # "…target spell **or ability**" (Silver Wyvern). CR 113.7a: an ability on
+    # the stack is not a spell, so the enumeration folds a second list in rather
+    # than widening the first — every other key here is a question about a
+    # *card*, which an ability does not have. Emitted only when the card prints
+    # the union, so the four earlier retargets' specs stay byte-identical.
+    if payload.get("also_ability"):
+        spec["stack_include_abilities"] = True
     return spec
 
 
@@ -3189,10 +3196,45 @@ def spell_targets(game, item) -> tuple[tuple[int, ...], tuple[int, ...]]:
     return (int(seat),), ()
 
 
+def stack_object_target_spec(item) -> dict | None:
+    """The spec the object *item* chose its targets by, or None when this
+    engine cannot say.
+
+    One reader for the two kinds of thing that sit on a stack, because
+    :func:`single_spell_target` and ``handlers/stack._legal_new_targets`` both
+    have to ask it and neither may get a different answer. A **spell** answers
+    from the card's compiled program (CR 601.2c); an **ability** cannot —
+    ``derive_cast_spec`` would hand back the spec of whatever the *card* does
+    when cast, which for Silver Wyvern's Drake is nothing at all and for a
+    creature with both a cast target and an ability target is the wrong list.
+
+    So an ability answers from the instruction it carries, which is the target
+    half of :func:`derive_activation_spec` — that function's other half is the
+    *cost* picker (CR 602.2b), and a cost was paid before this object reached
+    the stack. Asking for it here would offer a sacrifice prompt's spec as if it
+    were the ability's target.
+
+    A hook-keyed stack object (``hook_key`` with no instruction) answers None:
+    it has no compiled program at all, and an under-offer is a narrower card
+    while an over-offer re-aims something the rule never let it touch.
+    """
+    if getattr(item, "is_ability", False):
+        instruction = getattr(item, "ability_instruction", None)
+        if instruction is None:
+            return None
+        return _from_instructions((instruction,))
+    card = getattr(item, "card", None)
+    if card is None:
+        return None
+    from .oracle import compile_card_oracle
+
+    return derive_cast_spec(card, compile_card_oracle(card))
+
+
 def single_spell_target(game, item) -> dict | None:
-    """What a spell on the stack chose as its **only** target (CR 115.9a /
-    CR 115.9c), or None when it chose several, chose something this engine
-    cannot re-aim, or the count cannot be established.
+    """What a spell **or ability** on the stack chose as its **only** target
+    (CR 115.9a / CR 115.9c), or None when it chose several, chose something this
+    engine cannot re-aim, or the count cannot be established.
 
     ``{"kind": "player", "seat": n}`` or ``{"kind": "permanent",
     "permanent_id": n}`` — a descriptor rather than a bare seat, because the two
@@ -3216,7 +3258,6 @@ def single_spell_target(game, item) -> dict | None:
     So every way of *not* being a lone player target is checked first, and only
     then is the seat believed:
 
-    * an **ability** on the stack has no card and is not a spell (CR 113.7a);
     * a **graveyard** card or another **stack object** rules the question out at
       once: neither is a target this engine's retarget can offer a replacement
       for, and an under-offer is a narrower card while an over-offer is a card
@@ -3231,8 +3272,12 @@ def single_spell_target(game, item) -> dict | None:
       item through the same ``target_player_index``, and beside a permanent
       index that field is a *battlefield* rather than a target.
     """
-    if getattr(item, "ability_instruction", None) is not None:
-        return None
+    # An ability is not a spell (CR 113.7a) and it used to stop here, which was
+    # right while the only readers were counterspells. It is not right for
+    # CR 115.7a: an ability announced its targets at CR 602.2b exactly as a
+    # spell announced them at CR 601.2c, and Silver Wyvern re-aims either. What
+    # differs is only *which program* says how many targets there are, and
+    # ``stack_object_target_spec`` is the one place that decides.
     card = getattr(item, "card", None)
     if card is None:
         return None
@@ -3257,13 +3302,11 @@ def single_spell_target(game, item) -> dict | None:
             return None
         return {"kind": "player", "seat": int(seat)} if int(seat) in seats else None
 
-    from .oracle import compile_card_oracle
-
     if item.target_permanent_index is not None or item.target_permanent_id is not None:
         permanent_id = _lone_permanent_target(game, item)
         if permanent_id is None:
             return None
-        spec = derive_cast_spec(card, compile_card_oracle(card))
+        spec = stack_object_target_spec(item)
         if spec is None or spec.get("kind") not in _PERMANENT_TARGET_SPEC_KINDS:
             return None
         if spec.get("unbounded_targets") or spec.get("max_targets") not in (None, 1):
@@ -3274,7 +3317,7 @@ def single_spell_target(game, item) -> dict | None:
     if seat is None or seat not in seats:
         return None
 
-    spec = derive_cast_spec(card, compile_card_oracle(card))
+    spec = stack_object_target_spec(item)
     if spec is None or spec.get("kind") not in _PLAYER_TARGET_SPEC_KINDS:
         return None
     if spec.get("land_filter"):

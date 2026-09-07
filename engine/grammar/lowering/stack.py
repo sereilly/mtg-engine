@@ -147,6 +147,16 @@ _CHANGE_TARGET_HONOURED_FILTER_FIELDS = frozenset({"target_count", "zone"})
 #: retarget free to aim anywhere.
 _CHANGE_TARGET_NEW_TARGETS = frozenset({"player", "creature"})
 
+#: What "…that targets only <this>" / "…and that target is a <noun>" may say the
+#: object's **current** target has to be. A separate set from the bound above,
+#: which it used to share: the two questions are asked by different readers and
+#: only one of the answers is a thing a new target could be. ``"source"`` is the
+#: card that separated them — Silver Wyvern's "that targets only this creature"
+#: is an identity (``_single_target_is`` compares ``permanent_id`` against the
+#: ability's own source), and "the new target must be **this creature**" is not
+#: a sentence, because CR 115.7a requires *another* legal target.
+_CHANGE_TARGET_CURRENT_TYPES = frozenset({"player", "creature", "source"})
+
 #: The same, for "if that target is <player>". ``None`` is again the printed
 #: reading — Deflection asks nothing about who the spell points at now — and
 #: "you" is Reflecting Mirror's question. Anything else refuses: there is no
@@ -231,7 +241,7 @@ def _lower_change_target(node: ast.ChangeTarget) -> tuple[OracleInstruction, ...
     # anywhere.
     if (
         node.current_target_type is not None
-        and node.current_target_type not in _CHANGE_TARGET_NEW_TARGETS
+        and node.current_target_type not in _CHANGE_TARGET_CURRENT_TYPES
     ):
         raise LoweringError(
             "no picker asks whether a spell's one target is a "
@@ -249,6 +259,17 @@ def _lower_change_target(node: ast.ChangeTarget) -> tuple[OracleInstruction, ...
     # whole value is that it is not noisy.
     if node.current_target_type is not None:
         payload["current_target_type"] = node.current_target_type
+    # "…target spell **or ability**" (Silver Wyvern). Emitted only when the card
+    # prints the union, for the key above's reason: a defaulted ``False`` would
+    # move Deflection, Reflecting Mirror, Rebound and Meddle in the differential
+    # for a change that says nothing about any of them.
+    #
+    # The picker turns it into ``stack_include_abilities`` and the enumeration
+    # folds the ability list in beside the spell one. Nothing else about the
+    # retarget changes: an ability chose its targets at CR 602.2b exactly as a
+    # spell chose them at CR 601.2c, and CR 115.7a moves either.
+    if node.also_ability:
+        payload["also_ability"] = True
     return (
         OracleInstruction("choose_new_spell_target", "", dict(payload)),
         # The ``targets`` description rides the step that actually names the

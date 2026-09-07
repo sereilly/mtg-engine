@@ -2578,7 +2578,9 @@ class LegalityMixin:
         # a wider one.
         ability_kinds = spec.get("stack_ability_kinds")
         if ability_kinds:
-            return self._enumerate_stack_ability_targets(spec, ability_kinds)
+            return self._enumerate_stack_ability_targets(
+                spec, ability_kinds, caster_index=caster_index, source=source
+            )
         depth = len(self.stack)
         for i, item in enumerate(self.stack):
             # Only spells are legal targets — activated/triggered abilities on the
@@ -2634,29 +2636,8 @@ class LegalityMixin:
             #
             # The count and the "is you" are **two** gates because two cards
             # print them separately: Deflection carries only the first.
-            if spec.get("stack_single_target"):
-                from .targeting import single_spell_target
-
-                chosen = single_spell_target(self, item)
-                if chosen is None:
-                    continue
-                single_target_is = spec.get("stack_single_target_is")
-                if single_target_is is not None and not (
-                    single_target_is == "you"
-                    and chosen.get("kind") == "player"
-                    and chosen.get("seat") == caster_index
-                ):
-                    continue
-                # "…and **that target is a creature**" (Meddle). The object half
-                # of the same question, asked through `is_creature` — CR 613's
-                # answer rather than the printed type line, so an animated land
-                # a spell is aimed at is a creature here exactly as it is
-                # everywhere else. A permanent that has left is not one.
-                wanted_type = spec.get("stack_single_target_type")
-                if wanted_type is not None and not _single_target_is(
-                    self, chosen, wanted_type
-                ):
-                    continue
+            if not self._stack_single_target_ok(item, spec, caster_index, source):
+                continue
             if color_filter and color_filter not in self._stack_item_colors(item):
                 continue
             stack_any_colors = spec.get("stack_any_colors")
@@ -2667,10 +2648,69 @@ class LegalityMixin:
             # The UI (and the cast/activate action) index the stack top-first, the
             # reverse of the engine's bottom-first list — emit the top-first index.
             targets.append({"kind": "stack", "stack_index": depth - 1 - i, "name": item_card.name})
+        # "Change the target of target spell **or ability** that targets only
+        # this creature." (Silver Wyvern.) CR 113.7a keeps the two apart, so the
+        # ability half is a second list folded in rather than a widening of this
+        # loop, which would have to gate every card question it asks — the same
+        # shape ``also_stack`` takes for Circle of Protection's chosen source.
+        if spec.get("stack_include_abilities"):
+            targets += self._enumerate_stack_ability_targets(
+                spec, None, caster_index=caster_index, source=source
+            )
         return targets
 
+    def _stack_single_target_ok(
+        self, item, spec: dict, caster_index: int, source
+    ) -> bool:
+        """"...**with a single target** [if that target is you]" (Deflection,
+        Reflecting Mirror -- CR 115.7a / CR 115.9a), and what the card asks
+        about that one target.
+
+        Asked through the one reader the retarget handler asks at resolution,
+        against the same seat every other narrowing is measured against
+        (CR 109.5) -- so an object the effect could not actually re-aim is never
+        offered, and the mana it would cost is never paid for nothing.
+
+        An object whose target set the engine cannot establish answers None and
+        is simply not offered: under-offering is a narrower card, over-offering
+        is a card redirecting spells it was never allowed to.
+
+        The count and the "is you" are **two** gates because two cards print
+        them separately: Deflection carries only the first. Its own method
+        because the ability list asks it too (Silver Wyvern) -- these three are
+        the only narrowings an ability can be asked, every other key in
+        ``_enumerate_stack_targets`` being a question about a *card*.
+        """
+        if not spec.get("stack_single_target"):
+            return True
+        from .targeting import single_spell_target
+
+        chosen = single_spell_target(self, item)
+        if chosen is None:
+            return False
+        single_target_is = spec.get("stack_single_target_is")
+        if single_target_is is not None and not (
+            single_target_is == "you"
+            and chosen.get("kind") == "player"
+            and chosen.get("seat") == caster_index
+        ):
+            return False
+        # "...and **that target is a creature**" (Meddle), "...that targets only
+        # **this creature**" (Silver Wyvern). The object half of the same
+        # question, asked through `is_creature` -- CR 613's answer rather than
+        # the printed type line, so an animated land a spell is aimed at is a
+        # creature here exactly as it is everywhere else. A permanent that has
+        # left is not one.
+        wanted_type = spec.get("stack_single_target_type")
+        if wanted_type is not None and not _single_target_is(
+            self, chosen, wanted_type, source=source
+        ):
+            return False
+        return True
+
     def _enumerate_stack_ability_targets(
-        self, spec: dict, ability_kinds: list[str]
+        self, spec: dict, ability_kinds: "list[str] | None",
+        *, caster_index: int = 0, source=None,
     ) -> list[dict]:
         """The **abilities** on the stack this spec may point at (CR 113.7a).
 
@@ -2689,6 +2729,12 @@ class LegalityMixin:
 
         A mana ability is never here to be excluded (CR 605.3a: it does not use
         the stack), which is what the printed reminder text says.
+
+        ``ability_kinds`` of None is "any ability", which is what "target spell
+        **or ability**" says (Silver Wyvern) -- CR 113.3a-c leaves only static
+        abilities out, and those never use the stack. It is distinct from an
+        empty list, which no caller passes and which would mean "no kind at
+        all"; the counterspells that name their kinds pass them.
         """
         from .handlers.stack import _spell_is_one_of, _stack_ability_kind
 
@@ -2699,7 +2745,9 @@ class LegalityMixin:
             if getattr(item, "ability_instruction", None) is None:
                 continue
             kind = _stack_ability_kind(item)
-            if kind is None or kind not in ability_kinds:
+            if kind is None or (
+                ability_kinds is not None and kind not in ability_kinds
+            ):
                 continue
             if source_types:
                 source = item.source_permanent
@@ -2707,6 +2755,14 @@ class LegalityMixin:
                     source.effective_card, source_types
                 ):
                     continue
+            # CR 115.9a's count and what the card asks about that one target,
+            # through the same gate the spell loop above uses. An ability
+            # announced its targets at CR 602.2b exactly as a spell announced
+            # them at CR 601.2c, so it is the same question -- and a retarget
+            # that skipped it here would offer every ability on the stack,
+            # including ones aimed at something the card never named.
+            if not self._stack_single_target_ok(item, spec, caster_index, source):
+                continue
             item_card = getattr(item, "card", None)
             name = item_card.name if item_card is not None else "ability"
             # Top-first, the convention the spell enumeration above emits and
@@ -2719,21 +2775,31 @@ class LegalityMixin:
         return targets
 
 
-def _single_target_is(game, chosen: dict, wanted: str) -> bool:
+def _single_target_is(game, chosen: dict, wanted: str, source=None) -> bool:
     """Whether the one thing a stack object is aimed at is a *wanted*.
 
     "…and **that target is a creature**" (Meddle), "…that targets only **a
-    player**" (Rebound). One reader because both ends of the question ask it —
-    the picker, before the ability is activated, and ``_retarget_subject`` at
-    resolution, where CR 608.2b asks it again about an object that may have been
-    re-aimed in between. It was the picker's alone, so Meddle's restriction was
-    checked when the spell was cast and never afterwards.
+    player**" (Rebound), "…that targets only **this creature**" (Silver
+    Wyvern). One reader because both ends of the question ask it — the picker,
+    before the ability is activated, and ``_retarget_subject`` at resolution,
+    where CR 608.2b asks it again about an object that may have been re-aimed in
+    between. It was the picker's alone, so Meddle's restriction was checked when
+    the spell was cast and never afterwards.
 
     ``creature`` is CR 613's answer rather than the printed type line, so an
     animated land a spell is aimed at is a creature here exactly as it is
     everywhere else; a permanent that has left is not one. ``player`` is the
     face half of the same question, and a seat that has lost is still the seat
     the spell named — CR 115.7a's legality is asked of the *new* target.
+
+    ``source`` is the third and it is not a *type* at all: "this creature" is an
+    identity, so the answer is ``permanent_id`` against the retargeting
+    ability's own permanent and nothing about what either of them is. *source*
+    is that permanent, handed down by whichever end is asking — the picker holds
+    it as the ability's source and the resolution holds it on the context. With
+    no source there is no identity to compare, so the answer is False: an
+    ability whose own permanent has left the battlefield re-aims nothing, which
+    is CR 608.2b's reading and not a fallback to "any creature".
 
     A word this cannot answer is False, never True: an unrecognised bound must
     narrow to nothing rather than to everything.
@@ -2745,6 +2811,11 @@ def _single_target_is(game, chosen: dict, wanted: str) -> bool:
             return False
         aimed = game.permanent_by_id(chosen.get("permanent_id"))
         return aimed is not None and aimed.is_creature
+    if wanted == "source":
+        if chosen.get("kind") != "permanent" or source is None:
+            return False
+        aimed = game.permanent_by_id(chosen.get("permanent_id"))
+        return aimed is not None and aimed is source
     return False
 
 
