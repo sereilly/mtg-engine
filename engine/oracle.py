@@ -3939,7 +3939,18 @@ def _parse_delayed_attack_trigger(
         from .grammar import subject_filter_payload
         from .subject_filters import card_only_filter
 
-        described = subject_filter_payload(cast.group("cast_subject"))
+        # ``zone`` is carried by the **event**, not by the filter: "a black
+        # **spell**" narrows to the stack and ``you_cast_spell`` fires nowhere
+        # else, so the restriction is enforced by which trigger this is. It has
+        # to be named rather than left in, because the delayed trigger's matcher
+        # answers about a *card* and has no zone to test — a key it cannot
+        # answer is one it silently ignores, which is the failure the gate below
+        # exists to prevent. Named here rather than widened into
+        # ``CARD_ONLY_FILTER_KEYS``, where for a discard or a graveyard count the
+        # same key would name a restriction nothing carries out.
+        described = subject_filter_payload(
+            cast.group("cast_subject"), carried_separately=frozenset({"zone"})
+        )
         # A spell is a card on the stack, so only what is *printed* on it is
         # testable — `card_only_filter` is the list of exactly which keys that
         # comes to, and anything wider refuses rather than arming a trigger that

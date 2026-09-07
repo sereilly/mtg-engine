@@ -25,6 +25,7 @@ Coverage is tracked in ``GRAMMAR_COVERAGE.md`` via ``scripts/grammar_coverage.py
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass, field
 
 from ..oracle_types import OracleInstruction
@@ -322,7 +323,12 @@ def behavioural_payload(payload: dict) -> dict:
     return {k: v for k, v in payload.items() if k not in GRAMMAR_ONLY_PAYLOAD_KEYS}
 
 
-def subject_filter_payload(phrase: str, *, plural: bool = False) -> dict | None:
+def subject_filter_payload(
+    phrase: str,
+    *,
+    plural: bool = False,
+    carried_separately: frozenset[str] = frozenset(),
+) -> dict | None:
     """The payload form of the set of objects a narrowed trigger names.
 
     "Whenever a creature you control **with deathtouch** attacks" (Hooded
@@ -337,6 +343,15 @@ def subject_filter_payload(phrase: str, *, plural: bool = False) -> dict | None:
     matcher cannot test. The caller (``engine/oracle.py``'s trigger table) makes
     the whole condition refuse, because the alternative is a trigger that
     announces itself on a strictly larger set than the card prints.
+
+    *carried_separately* lists fields the **condition itself** enforces, so they
+    are dropped rather than refused — the convention ``object_only_filter``
+    already states, and its warning applies here in full: each name is a claim
+    that something really does carry the restriction out, and an unnamed field is
+    a refusal. The case it exists for is ``zone``: "whenever you cast a black
+    **spell**" narrows to the stack, and ``you_cast_spell`` fires nowhere else,
+    so the event carries it and the card matcher — which has no zone to test —
+    must not be handed it.
     """
     filt = parse_subject_filter(phrase, plural=plural)
     if filt is None:
@@ -348,8 +363,21 @@ def subject_filter_payload(phrase: str, *, plural: bool = False) -> dict | None:
     # firing on every creature its controller has. Reading the dataclass rather
     # than a hand-listed tuple also refuses a restriction added to
     # ``ObjectFilter`` after this was written.
-    if _restrictions_beyond(filt, _PAYLOAD_HONOURED_FILTER_FIELDS):
+    if _restrictions_beyond(filt, _PAYLOAD_HONOURED_FILTER_FIELDS | carried_separately):
         return None
+    if carried_separately:
+        # Taken off the **filter**, not just off the payload it lowers to. A
+        # field the caller carries is one this phrase no longer claims, and
+        # ``_filter_payload`` is entitled to refuse what it cannot express —
+        # ``zone="stack"`` raises there ("no handler reads a filter scoped to
+        # the stack"), which is correct for every caller that is not carrying it
+        # and would otherwise turn "the event enforces this" into a refusal.
+        default = ast.ObjectFilter()
+        filt = dataclasses.replace(filt, **{
+            name: getattr(default, name)
+            for name in carried_separately
+            if any(f.name == name for f in dataclasses.fields(filt))
+        })
     try:
         return _filter_payload(filt)
     except LoweringError:

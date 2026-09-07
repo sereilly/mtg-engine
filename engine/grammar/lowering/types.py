@@ -510,13 +510,29 @@ def _lower_become_color(
                 ),
             )
         raise LoweringError("no handler for recolouring a non-targeted object", node=node)
-    # Deliberately *not* described for engine/targeting.py. The Lace cycle
-    # targets "spell or permanent" — a union of a stack object and a
-    # battlefield object that the `targets` vocabulary cannot express. Emitting
-    # the generic object shape would derive "permanent" and drop spells on the
-    # stack from the picker, so the description is omitted and legality.py
-    # keeps answering `spell_or_permanent` until the vocabulary grows.
-    return (OracleInstruction("recolor_target_from_text", "", {"target_color": node.color}),)
+    payload: dict[str, object] = {"target_color": node.color}
+    if node.subject.filter.zone == "stack":
+        # "{T}: Target **spell** becomes colorless." (Ersatz Gnomes.) The
+        # printed noun names an object on the stack and nothing else, so the
+        # picker is the stack one — the same description ``exile_target_spell``
+        # and the counter lowering already emit, rather than a third spelling.
+        #
+        # Described here so the spec stops coming from the instruction *kind*.
+        # ``recolor_target_from_text``'s row in ``targeting._KIND_TO_SPEC`` is
+        # ``spell_or_permanent``, which is right for the Lace cycle and wrong
+        # for this card by exactly one zone: with no description the shared kind
+        # answered for both, and Ersatz Gnomes' ability could be aimed at a
+        # permanent the card does not name — an illegal announcement under
+        # CR 601.2c that the gate could not catch, because the gate reads the
+        # same over-wide list the picker offers.
+        payload["targets"] = {"quantifier": "target", "kind": "spell"}
+    # Otherwise deliberately *not* described. The Lace cycle targets "spell or
+    # permanent" — a union of a stack object and a battlefield object that the
+    # `targets` vocabulary cannot express. Emitting the generic object shape
+    # would derive "permanent" and drop spells on the stack from the picker, so
+    # the description is omitted and legality.py keeps answering
+    # `spell_or_permanent` until the vocabulary grows.
+    return (OracleInstruction("recolor_target_from_text", "", payload),)
 
 
 def _lower_land_type_swap(node: ast.LandTypeSwap) -> tuple[OracleInstruction, ...]:

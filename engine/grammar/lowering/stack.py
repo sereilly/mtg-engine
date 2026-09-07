@@ -123,11 +123,19 @@ def _fused_conditional_counter(
 #: reason ``lowering/redirection._REDIRECT_RECIPIENT_KEY`` is named once.
 _NEW_TARGET_KEY = "retarget_new_target"
 
-#: The retarget honours exactly one narrowing of its spell: CR 115.9a's count
-#: of what that spell chose. Everything else about the noun phrase is refused
-#: by ``_restrictions_beyond``, because the handler locates the spell itself
-#: and would ignore anything it was not told to check.
-_CHANGE_TARGET_HONOURED_FILTER_FIELDS = frozenset({"target_count"})
+#: The retarget honours two narrowings of its spell: CR 115.9a's count of what
+#: that spell chose, and the zone the head noun names. Everything else about the
+#: noun phrase is refused by ``_restrictions_beyond``, because the handler
+#: locates the spell itself and would ignore anything it was not told to check.
+#:
+#: ``zone`` is honoured **structurally** rather than by a check, which is the one
+#: shape that may join this set without a matcher behind it: the handler
+#: enumerates candidates off ``game.stack`` and has no other list to read, so a
+#: phrase saying "on the stack" is asking for what it already does. It appears
+#: here at all only because the bare head noun "spell" began recording the zone
+#: — before that, "target spell" and "target permanent" produced identical
+#: filters and this set had nothing to say about the difference.
+_CHANGE_TARGET_HONOURED_FILTER_FIELDS = frozenset({"target_count", "zone"})
 
 #: The bounds on the new target the resolution can actually offer, **beside**
 #: the unbounded reading. ``None`` — the card prints no "the new target must

@@ -1438,3 +1438,59 @@ def test_w3g2_the_other_two_cards_printing_this_opener_keep_their_hooks(set_pool
         assert game.armed_draw_replacements == [], (
             f"{name} still arms its own replacement, not the general one"
         )
+
+
+# --- The bare noun "spell" is a zone, not a synonym for "permanent" ---
+
+
+def test_ersatz_gnomes_recolour_offers_the_stack_and_not_the_battlefield(set_pool):
+    """"{T}: Target spell becomes colorless."
+
+    A **shipped** card whose ability could be aimed at something the card does
+    not name. ``parse_object_filter`` recorded ``zone="stack"`` only after a
+    *type union* ("target instant or sorcery **spell**"), so the bare head noun
+    produced a filter byte-identical to "target permanent" — and with no
+    description on the instruction, ``derive_activation_spec`` fell back to the
+    kind's row in ``_KIND_TO_SPEC``, which is ``spell_or_permanent`` because the
+    Lace cycle prints "target spell **or** permanent" and shares the kind.
+
+    So the picker offered every permanent, the CR 601.2c gate read that same
+    over-wide list and admitted the announcement, and the cost was paid.
+    Nothing else in the repo could see it: the card compiles, has no hollow
+    line, claims every printed sentence, and ``picker_sweep`` asks whether a
+    picker is *derived* rather than whether it is right.
+
+    The second ability is the control: it prints "target **permanent**" and must
+    keep the battlefield picker, or the fix has simply moved the error.
+    """
+    from engine.oracle import compile_card_oracle
+    from engine.targeting import derive_activation_spec
+
+    program = compile_card_oracle(set_pool("MIR")["Ersatz Gnomes"])
+    specs = {
+        ability.instruction.kind: derive_activation_spec(ability)
+        for ability in program.activated_abilities
+        if ability.instruction is not None
+    }
+    assert specs["recolor_target_from_text"] == {"kind": "stack"}
+    assert specs["recolor_targets_until_eot"] == {"kind": "permanent"}
+
+
+def test_the_lace_cycle_keeps_the_union_the_bare_spell_noun_does_not_get(set_pool):
+    """"Target spell **or permanent** becomes <colour>." (Chaoslace.)
+
+    The other half of the same sentence, and the reason the fix is a zone on the
+    head noun rather than a new instruction kind: these five cards share
+    ``recolor_target_from_text`` with Ersatz Gnomes and legitimately mean both
+    zones, so narrowing the *kind* would have taken the stack away from them.
+    The union withdraws the narrowing the bare noun records, which is what keeps
+    one printed phrase from being read as the other.
+    """
+    from engine.oracle import compile_card_oracle
+    from engine.targeting import derive_cast_spec
+
+    pool = set_pool("LEA")
+    for name in ("Chaoslace", "Purelace", "Thoughtlace", "Deathlace"):
+        card = pool[name]
+        spec = derive_cast_spec(card, compile_card_oracle(card))
+        assert spec == {"kind": "spell_or_permanent"}, (name, spec)

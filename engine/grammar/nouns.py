@@ -801,6 +801,18 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
 
         if singular in _GENERIC_NOUNS:
             d.is_card = singular == "card"
+            # The **bare** head noun "spell" names an object on the stack
+            # (CR 111.1 / CR 608), and recording that is what keeps it from
+            # meaning the same as "permanent". Without it the two produced
+            # byte-identical filters, so `{T}: Target spell becomes colorless.`
+            # (Ersatz Gnomes) derived the same picker as "target spell **or**
+            # permanent" (Chaoslace) and could be aimed at a permanent the card
+            # does not allow — CR 601.2c makes that an illegal announcement.
+            #
+            # Set here rather than only after a type union (the "instant or
+            # sorcery **spell**" branch above), because the zone is a fact about
+            # the head noun and not about what narrows it.
+            bare_spell = singular == "spell"
             stream.advance()
             # "permanent card(s)" (Ugin, the Spirit Dragon's −10): a card whose
             # type would make it a permanent. The trailing noun is recorded the
@@ -820,7 +832,15 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
                 if following is None or _singular(following) not in _GENERIC_NOUNS:
                     stream.reset(probe)
                     break
+                # "target spell **or permanent**" is not a spell: the union
+                # widens the phrase back to either zone, so the narrowing this
+                # branch would otherwise record has to be withdrawn. Only a
+                # union with another *spell* word leaves it standing.
+                if _singular(following) != "spell":
+                    bare_spell = False
                 stream.advance()
+            if bare_spell:
+                d.zone = "stack"
             d.saw_head = True
             break
 
