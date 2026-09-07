@@ -26,7 +26,8 @@ from ...activation_restrictions import (
     reads_activation_tally,
 )
 from ...auras import attached_ability_cost_reduction, aura_restriction_active
-from ...cost_modifiers import (ability_cost_tax, ability_self_reduction_amount,
+from ...cost_modifiers import (ability_cost_reduction, ability_cost_tax,
+                               ability_self_reduction_amount,
                                 sacrifice_taxes)
 from ...cost_tap_records import record_tapped_to_pay
 from ...cost_x_definitions import cost_x_is_defined, cost_x_value
@@ -1732,7 +1733,27 @@ class AbilityActivationMixin:
         # applied after the subtraction rather than as a clamp inside it. A {2}
         # ability reduced by {2} pays {1}, not nothing; a {B} ability is
         # already at the floor and pays {B}.
-        aura_discount, floor = attached_ability_cost_reduction(permanent)
+        aura_discount, aura_floor = attached_ability_cost_reduction(permanent)
+        # "Activated abilities of creatures cost {1} less to activate. This
+        # effect can't reduce the mana in that cost to less than one mana."
+        # (Heartstone.) The identical rider from a permanent that enchants
+        # nothing, so it is read off the board rather than off what is attached
+        # -- and folded into the *same* application, because CR 601.2f applies
+        # every reduction to one cost. Two applications would each measure the
+        # floor against a cost the other had already cut.
+        board_discount, reducing_names, board_floor = ability_cost_reduction(
+            self, controller_index, permanent
+        )
+        aura_discount += board_discount
+        # The **highest** floor, for ``attached_ability_cost_reduction``'s
+        # reason: two reductions must not cancel each other's protection
+        # against a free ability.
+        floor = max(aura_floor, board_floor)
+        if reducing_names:
+            self.log.append(
+                f"{permanent.card.name}'s ability is cheapened by "
+                f"{', '.join(reducing_names)}"
+            )
         if aura_discount:
             before_total = sum(required_cost.values())
             generic = required_cost.get("generic", 0)

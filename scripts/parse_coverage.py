@@ -81,7 +81,9 @@ from engine.cast_timing import (grants_flash,  # noqa: E402
                                 static_flash_permission)
 from engine.replacements import replacement_claims_line  # noqa: E402
 from engine.life_prohibitions import life_gain_ban_line  # noqa: E402
-from engine.cost_modifiers import cost_modifier_claims_line, cost_modifiers_for  # noqa: E402
+from engine.cost_modifiers import (cost_modifier_claims_line,  # noqa: E402
+                                  cost_modifier_reduction_sentences,
+                                  cost_modifiers_for)
 from engine.draw_step_modifiers import (  # noqa: E402
     draw_step_bonus_for, draw_step_skip_line,
 )
@@ -969,6 +971,16 @@ CARD_CHANNELS: tuple[tuple[str, object], ...] = (
     (
         "auras.py (attached ability cost reduction)",
         lambda card, s: s in aura_cost_reduction_sentences(card.oracle_text or ""),
+    ),
+    (
+        # Heartstone: the identical two-sentence reduction printed by a
+        # permanent that enchants nothing. The amount and its floor mean
+        # nothing apart, so the reader matches them joined and names the pair
+        # here.
+        "cost_modifiers.py (board ability cost reduction)",
+        lambda card, s: s in cost_modifier_reduction_sentences(
+            card.oracle_text or ""
+        ),
     ),
     (
         # Snowblind, the second reader shaped that way: the penalty, the two
