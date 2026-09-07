@@ -1034,3 +1034,253 @@ def test_w2g5_the_count_is_carried_as_a_relation_not_a_board_scan(set_pool):
     assert payload["x_from_count"]["blocking_source"] is True
     assert payload["duration"] == "end_of_turn"
     assert payload["filter"] == {"subtype_filter": "sliver"}
+
+
+# --- W2G3: Silver Wyvern ---
+
+import pytest
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+from engine.grammar import parse_line
+from engine.grammar.errors import GrammarError
+from engine.oracle import compile_card_oracle
+from engine.targeting import derive_activation_spec
+
+
+def _w2g3_board(set_pool, theirs=(("LEA", "Rod of Ruin"),)):
+    """Silver Wyvern and a second creature for seat 0; *theirs* for seat 1.
+
+    Everything enters through ``_put_permanent_onto_battlefield`` so a card that
+    enters with counters (Spitting Hydra) actually has them -- built by hand it
+    is a 0/0 and CR 704.5f kills it before anything can be activated.
+    """
+    game = Game(players=[
+        PlayerState(name="P1", life=20), PlayerState(name="P2", life=20),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    mine = []
+    for name in ("Silver Wyvern", "Spined Wurm"):
+        perm = Permanent(card=set_pool("STH")[name])
+        perm.metadata["summoning_sickness_turn"] = -99
+        game._put_permanent_onto_battlefield(0, perm, None)
+        mine.append(perm)
+    others = []
+    for code, name in theirs:
+        perm = Permanent(card=set_pool(code)[name])
+        perm.metadata["summoning_sickness_turn"] = -99
+        game._put_permanent_onto_battlefield(1, perm, None)
+        others.append(perm)
+    return game, mine, others
+
+
+def _w2g3_offered(game, set_pool, wyvern):
+    """What the Wyvern's picker offers, through the one enumeration the
+    activation gate reads (CR 602.2b)."""
+    program = compile_card_oracle(set_pool("STH")["Silver Wyvern"])
+    spec = derive_activation_spec(program.activated_abilities[0])
+    return game._enumerate_targets(
+        0, set_pool("STH")["Silver Wyvern"], spec, for_cast=True,
+        source_permanent=wyvern, ability_source=wyvern,
+    )
+
+
+def test_w2g3_silver_wyvern_is_supported(set_pool):
+    """Three restrictions in one printed line, and each has to reach the
+    payload: the union across stack-object kinds, the identity its one current
+    target must have, and the bound on the new one."""
+    program = compile_card_oracle(set_pool("STH")["Silver Wyvern"])
+    assert program.supported, program.reason
+    ability = program.activated_abilities[0]
+    assert ability.supported
+    steps = ability.instruction.payload["steps"]
+    assert [step.kind for step in steps] == [
+        "choose_new_spell_target", "change_target_spell_target",
+    ]
+    assert steps[0].payload["current_target_type"] == "source"
+    assert steps[0].payload["new_target"] == "creature"
+    assert steps[0].payload["also_ability"] is True
+
+
+def test_w2g3_silver_wyvern_re_aims_an_activated_ability(set_pool):
+    """The whole card in a game: an ability on the stack aimed at the Wyvern
+    resolves at the creature beside it instead.
+
+    An ability is not a spell (CR 113.7a) and the two stack lists are the whole
+    difference between this card and Deflection -- so this drives a real
+    activated ability rather than a spell, and reads where the damage landed.
+    """
+    game, mine, _ = _w2g3_board(set_pool, (("STH", "Spitting Hydra"),))
+    wyvern, bystander = mine
+    assert game.queue_permanent_ability(
+        1, "Spitting Hydra", target_permanent_ids=[wyvern.permanent_id],
+        ability_index=0,
+    ).supported
+    assert [entry["name"] for entry in _w2g3_offered(game, set_pool, wyvern)] == [
+        "Spitting Hydra's activated ability"
+    ]
+    assert game.queue_permanent_ability(
+        0, "Silver Wyvern", target_stack_index=0, ability_index=0,
+    ).supported
+    game.resolve_stack()
+
+    assert bystander.damage_marked == 1, game.log
+    assert wyvern.damage_marked == 0, game.log
+
+
+def test_w2g3_silver_wyvern_still_re_aims_a_spell(set_pool):
+    """The other half of "spell or ability", so the test above is not passing
+    because the spell list quietly stopped being read."""
+    game, mine, _ = _w2g3_board(set_pool, ())
+    wyvern, bystander = mine
+    game.players[1].hand.append(set_pool("LEA")["Lightning Bolt"])
+    game.queue_from_hand(
+        1, "Lightning Bolt", target_permanent_ids=[wyvern.permanent_id]
+    )
+    assert [entry["name"] for entry in _w2g3_offered(game, set_pool, wyvern)] == [
+        "Lightning Bolt"
+    ]
+    assert game.queue_permanent_ability(
+        0, "Silver Wyvern", target_stack_index=0, ability_index=0,
+    ).supported
+    game.resolve_stack()
+
+    assert bystander.damage_marked == 3, game.log
+    assert wyvern.damage_marked == 0, game.log
+
+
+def test_w2g3_silver_wyvern_is_not_offered_an_ability_aimed_elsewhere(set_pool):
+    """"...that targets only **this creature**". The negative, written first: a
+    clause consumed and dropped would let the Wyvern re-aim every ability on the
+    stack, which is silent and in its controller's favour."""
+    game, mine, _ = _w2g3_board(set_pool)
+    wyvern, bystander = mine
+    assert game.queue_permanent_ability(
+        1, "Rod of Ruin", target_player_index=0,
+        target_permanent_index=game.battlefield_index_of(bystander),
+        ability_index=0,
+    ).supported
+
+    assert _w2g3_offered(game, set_pool, wyvern) == [], game.log
+    # And the activation gate declines with nothing paid (CR 602.2b).
+    refused = game.activate_permanent_ability(
+        0, "Silver Wyvern", target_stack_index=0, ability_index=0,
+    )
+    assert not refused.supported and "no valid target" in refused.details
+
+
+def test_w2g3_silver_wyvern_is_not_offered_an_ability_aimed_at_a_player(set_pool):
+    """The same clause against a face. "Only this creature" is an identity, so a
+    player is not a near miss -- it is the answer the identity check has to give
+    without ever looking at a permanent."""
+    game, mine, _ = _w2g3_board(set_pool)
+    assert game.queue_permanent_ability(
+        1, "Rod of Ruin", target_player_index=0, ability_index=0,
+    ).supported
+
+    assert _w2g3_offered(game, set_pool, mine[0]) == [], game.log
+
+
+def test_w2g3_silver_wyverns_new_target_must_be_a_creature(set_pool):
+    """"The new target must be a creature." Rod of Ruin's ability could have
+    been aimed at a face, and the bound is the only thing that stops the Wyvern
+    sending it there -- a rider read and dropped is a strictly larger card."""
+    from engine.handlers.stack import _legal_new_targets
+
+    game, mine, _ = _w2g3_board(set_pool)
+    assert game.queue_permanent_ability(
+        1, "Rod of Ruin", target_player_index=0,
+        target_permanent_index=game.battlefield_index_of(mine[0]),
+        ability_index=0,
+    ).supported
+    item = game.stack[0]
+
+    bounded = _legal_new_targets(game, item, "creature")
+    assert bounded and {entry["kind"] for entry in bounded} == {"permanent"}
+    # The control: unbounded, that same ability offers both faces, so the test
+    # above is not passing because the enumeration found nothing at all.
+    assert any(
+        entry["kind"] == "player" for entry in _legal_new_targets(game, item, None)
+    )
+
+
+def test_w2g3_silver_wyvern_asks_again_at_resolution(set_pool):
+    """CR 608.2b. The restriction is checked when the ability is activated and
+    **again** when it resolves: an ability re-aimed off the Wyvern in between is
+    one this card never named, and the retarget leaves it alone."""
+    game, mine, _ = _w2g3_board(set_pool)
+    wyvern, bystander = mine
+    assert game.queue_permanent_ability(
+        1, "Rod of Ruin", target_player_index=0,
+        target_permanent_index=game.battlefield_index_of(wyvern),
+        ability_index=0,
+    ).supported
+    assert game.queue_permanent_ability(
+        0, "Silver Wyvern", target_stack_index=0, ability_index=0,
+    ).supported
+    # Something else moves the Rod's ability before the Wyvern's resolves. All
+    # three target fields together, which is what ``change_target_spell_target``
+    # writes -- an item left with a stale id resolves against whichever
+    # permanent the other two still name.
+    moved = game.stack[0]
+    moved.target_player_index = 0
+    moved.target_permanent_id = [bystander.permanent_id]
+    moved.target_permanent_index = game.battlefield_index_of(bystander)
+    game.resolve_stack()
+
+    assert any(
+        "target is no longer Silver Wyvern" in line for line in game.log
+    ), game.log
+    assert bystander.damage_marked == 1, game.log
+
+
+def test_w2g3_an_ability_does_not_answer_from_its_cards_cast_spec(set_pool):
+    """An ability's targets are the **ability's**, not the card's (CR 602.2b vs
+    CR 601.2c).
+
+    Rod of Ruin is an artifact that targets nothing when it is cast, so asking
+    ``derive_cast_spec`` about its ability's stack item answers None -- and the
+    Wyvern would have found no candidate to move it to. Invisible from the
+    picker, which never consults that function."""
+    from engine.targeting import derive_cast_spec, stack_object_target_spec
+
+    game, mine, _ = _w2g3_board(set_pool)
+    assert game.queue_permanent_ability(
+        1, "Rod of Ruin", target_player_index=0,
+        target_permanent_index=game.battlefield_index_of(mine[0]),
+        ability_index=0,
+    ).supported
+    item = game.stack[0]
+
+    assert derive_cast_spec(item.card, compile_card_oracle(item.card)) is None
+    assert stack_object_target_spec(item) == {"kind": "any"}
+
+    # ...and a spell still answers from its card, unchanged.
+    bolt = set_pool("LEA")["Lightning Bolt"]
+    game.players[1].hand.append(bolt)
+    game.queue_from_hand(
+        1, "Lightning Bolt", target_permanent_ids=[mine[0].permanent_id]
+    )
+    assert stack_object_target_spec(game.stack[-1]) == derive_cast_spec(
+        bolt, compile_card_oracle(bolt)
+    )
+
+
+def test_w2g3_a_retarget_refuses_what_no_resolution_can_offer():
+    """The refusing gate's own refusal. A production ending in a catch-all has
+    to read its tail and decline what it cannot honour -- "the new target must
+    be a land" is a bound nothing offers, so the whole line refuses rather than
+    being admitted with the sentence dropped."""
+    with pytest.raises(GrammarError):
+        parse_line(
+            "Change the target of target spell or ability that targets only "
+            "this creature. The new target must be a land."
+        )
+    # And the pronoun spelling: "only it" has no antecedent in this sentence, so
+    # it is refused rather than read as the ability's source.
+    with pytest.raises(GrammarError):
+        parse_line(
+            "Change the target of target spell or ability that targets only it."
+        )

@@ -1056,9 +1056,20 @@ def _retarget_subject(game: Game, context: OracleExecutionContext, instruction):
     # spell re-aimed at a face in between was still retargeted by a card that
     # only ever named one pointed at a creature.
     wanted_type = instruction.payload.get("current_target_type")
-    if wanted_type is not None and not _single_target_is(game, chosen, wanted_type):
+    if wanted_type is not None and not _single_target_is(
+        game, chosen, wanted_type, source=context.source_permanent
+    ):
+        # "…that targets only **this creature**" (Silver Wyvern) is an identity
+        # rather than a type, so it is named as one: "no longer a source" is not
+        # a sentence, and the seat reading the log is being told which
+        # permanent the object stopped pointing at.
+        described = (
+            context.source_permanent.card.name
+            if wanted_type == "source" and context.source_permanent is not None
+            else f"a {wanted_type}"
+        )
         game.log.append(
-            f"{card_name}: {item.card.name}'s target is no longer a {wanted_type}"
+            f"{card_name}: {item.card.name}'s target is no longer {described}"
         )
         return None
     return item, chosen
@@ -1095,10 +1106,17 @@ def _legal_new_targets(game: Game, item: StackItem, bound) -> list[dict]:
     enumeration named it in: a prompt sits between this list and the write, and
     an index is what renumbers underneath one.
     """
-    from ..oracle import compile_card_oracle
-    from ..targeting import derive_cast_spec
+    from ..legality import targeting_instruction
+    from ..targeting import stack_object_target_spec
 
-    spec = derive_cast_spec(item.card, compile_card_oracle(item.card))
+    # The object's own spec, which for an **ability** is not the card's. Silver
+    # Wyvern re-aims "target spell or ability", and ``derive_cast_spec`` asked of
+    # an ability's stack item answers about whatever that *card* does when it is
+    # cast — for a creature's activated ability that is a different list or no
+    # list at all, so the ability would have been offered the wrong candidates
+    # or none. One reader for both kinds, in ``targeting``, so the count asked
+    # by ``single_spell_target`` and the candidates offered here cannot disagree.
+    spec = stack_object_target_spec(item)
     if spec is None:
         return []
     if bound == "player":
@@ -1111,8 +1129,22 @@ def _legal_new_targets(game: Game, item: StackItem, bound) -> list[dict]:
     # because ``_enumerate_targets`` still answers for that card.
     elif bound == "creature":
         spec = {**spec, "kind": "creature"}
+    # An ability's own restriction ("target **tapped** creature", "target
+    # non-Wall creature") and its source travel with it, for the reason the
+    # activation picker passes them: CR 115.7a's replacement must be a target
+    # the object *could legally have chosen*, and a narrowing left behind here
+    # would offer one it could not. A spell carries neither and passes None,
+    # which is exactly what it passed before.
+    ability_instruction = (
+        targeting_instruction(item.ability_instruction)
+        if item.ability_instruction is not None
+        else None
+    )
     entries = game._enumerate_targets(
-        item.caster_index, item.card, spec, for_cast=True
+        item.caster_index, item.card, spec, for_cast=True,
+        ability_instruction=ability_instruction,
+        ability_source=item.source_permanent,
+        source_permanent=item.source_permanent,
     )
     candidates: list[dict] = []
     for entry in entries:

@@ -17,6 +17,7 @@ subject and nobody else's.
 from .. import ast
 from ..errors import GrammarError
 from ..lexer import DASH, SELF, WORD
+from ..readers import accept_source_reference_spec
 from ..references import parse_player_ref, parse_target_spec
 from ..stream import TokenStream
 from ..phrases import (_accept_conjoined_life_cost, _accept_mana_alternatives,
@@ -375,12 +376,18 @@ def _expect_replaced_graveyard(stream: TokenStream) -> None:
 #: to the picker's ``current_target_type``. Closed, for
 #: ``_CHANGE_TARGET_NEW_TARGETS``' reason one module over: a noun consumed here
 #: and unknown to the gate is a retarget offered every spell on the stack.
+#:
+#: ``"source"`` is not one of them because it is not a printed noun: "that
+#: targets only **this creature**" (Silver Wyvern) names an *identity*, and the
+#: word after "this" varies with the card's own type. It is read by
+#: ``accept_source_reference_spec`` below and reaches the gate under that name.
 _TARGETS_ONLY_NOUNS: frozenset[str] = frozenset({"player", "creature"})
 
 
-def _accept_targets_only(stream: TokenStream) -> str | None:
-    """``target spell that targets only a <noun>`` — consumed whole, or None
-    with the cursor untouched.
+def _accept_targets_only(stream: TokenStream) -> "tuple[str, bool] | None":
+    """``target spell [or ability] that targets only <a noun | this creature>``
+    — consumed whole as ``(what its one target has to be, whether an ability
+    counts)``, or None with the cursor untouched.
 
     (Rebound: "…target spell that targets only a player.") CR 115.9a's count
     and the shape of the one target, printed as a single relative clause where
@@ -403,16 +410,39 @@ def _accept_targets_only(stream: TokenStream) -> str | None:
     if not stream.accept_phrase("target", "spell"):
         stream.reset(mark)
         return None
+    # "target spell **or ability**" (Silver Wyvern). CR 115.7a re-aims any
+    # object on the stack that chose targets, and CR 113.7a says an ability is
+    # not a spell — so this is a union across two kinds of stack object rather
+    # than a wider description of one. Carried as a flag for
+    # ``ReturnToZone.also_stack``'s reason: no ``ObjectFilter`` expresses it,
+    # because an ability has no card to ask any of the filter's questions of.
+    also_ability = bool(stream.accept_phrase("or", "ability"))
     if not stream.accept_phrase("that", "targets", "only"):
         stream.reset(mark)
         return None
+    # "…that targets only **this creature**" (Silver Wyvern). Not a noun in the
+    # table below: the phrase names the ability's own source, which the gate
+    # answers by comparing ``permanent_id`` rather than by asking what type the
+    # target is. Read through the grammar's one source reader so a card
+    # printing "this permanent" or its own name is the same reference.
+    #
+    # The **spec** form of that reader, not the predicate, because a bare "it"
+    # is a pronoun (``accept_source_reference_spec``'s own note) and nothing
+    # earlier in this sentence is an object it could bind to. "This <noun>" and
+    # the card's own name keep ``"this"``; the pronoun is refused rather than
+    # read as the source.
+    probe = stream.mark()
+    reference = accept_source_reference_spec(stream)
+    if reference is not None and reference.quantifier == "this":
+        return "source", also_ability
+    stream.reset(probe)
     stream.accept_word("a", "an")
     noun = stream.peek_word()
     if noun not in _TARGETS_ONLY_NOUNS:
         stream.reset(mark)
         return None
     stream.advance()
-    return noun
+    return noun, also_ability
 
 
 def _parse_change_target(stream: TokenStream) -> "ast.ChangeTarget | None":
@@ -455,13 +485,15 @@ def _parse_change_target(stream: TokenStream) -> "ast.ChangeTarget | None":
     # phrase for the shared parser to find.
     only = _accept_targets_only(stream)
     if only is not None:
+        current_type, also_ability = only
         return ast.ChangeTarget(
             ast.TargetSpec(
                 "target",
                 ast.ObjectFilter(target_count=1, zone="stack"),
                 targeted=True,
             ),
-            current_target_type=only,
+            current_target_type=current_type,
+            also_ability=also_ability,
         )
     subject = parse_target_spec(stream)
     if subject is None:

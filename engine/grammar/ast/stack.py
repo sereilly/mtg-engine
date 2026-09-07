@@ -214,6 +214,20 @@ class ChangeTarget:
     #: printing one prints neither of the other. Both being None is Deflection,
     #: which asks nothing about the target it moves.
     current_target_type: str | None = None
+    #: "Change the target of target spell **or ability** that targets only
+    #: this creature." (Silver Wyvern.) CR 115.7a re-aims any object on the
+    #: stack that has targets, and a spell and an ability are not two values of
+    #: one description: an ability has no card, no type line and no colour
+    #: (CR 113.7a), so every narrowing an ``ObjectFilter`` carries is a question
+    #: it cannot be asked. A flag on the node, exactly as
+    #: :attr:`ReturnToZone.also_stack` is one for Unsubstantiate's "target spell
+    #: or creature" — a union across two stack-object kinds that no object
+    #: filter expresses.
+    #:
+    #: False is the printed reading of every card before this one: Deflection
+    #: and Reflecting Mirror say "target spell", and an ability on the stack is
+    #: not one.
+    also_ability: bool = False
 
 
 @dataclass(frozen=True)
