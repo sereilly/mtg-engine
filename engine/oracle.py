@@ -613,6 +613,29 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("matching_creature_becomes_blocked",
      r"whenever (?P<combatant_subject>(?:a|another) [^,]+?) becomes blocked by "
      r"(?P<blocker_subject>(?:a|another) [^,]+)"),
+    # The **bare** spellings of the same two events: "Whenever a creature
+    # blocks, …" (Heat of Battle), "Whenever a Sliver becomes blocked, …"
+    # (Spined Sliver). CR 509.3c/509.3d is the whole difference between these
+    # rows and the two above — a condition with no partner phrase fires once for
+    # the creature the event is about, however many creatures are on the other
+    # side, where a narrowed one fires once per creature its phrase admits. Two
+    # announcements, and ``events._board_wide_block_filter`` is what keeps a
+    # trigger on exactly the one its own narrowing asks for.
+    #
+    # Below the narrowed rows, in this table's standing specific-before-generic
+    # order: each of these *is* a strict prefix of the row above it, so read
+    # first it would take the partner phrase and drop it — the trigger firing on
+    # every block instead of the ones the card names.
+    #
+    # The lookahead is `matching_creature_attacks`' "and isn't blocked" idiom:
+    # "blocks or becomes blocked by …" is a *different* event
+    # (`creature_blocks_or_blocked_by`), and matched here its tail would be read
+    # as nothing at all.
+    ("matching_creature_becomes_blocked",
+     r"whenever (?P<combatant_subject>(?:a|another) [^,]+?) becomes blocked(?! by)"),
+    ("matching_creature_blocks",
+     r"whenever (?P<combatant_subject>(?:a|another) [^,]+?) blocks"
+     r"(?! or becomes blocked)(?![^,])"),
     # "…becomes blocked by **a creature**" (Gloom Sower): once per blocking
     # creature that answers the filter (CR 509.1h), where the bare form below
     # fires once for the block itself. Same ordering rule.

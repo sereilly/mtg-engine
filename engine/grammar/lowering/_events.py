@@ -152,6 +152,12 @@ _EVENT_SUBJECT_CONTROLLERS: frozenset[str] = frozenset({
     # creature's controller" is still the seat that controlled the one that
     # died — which under a control-change effect is not its owner.
     "creature_dies",
+    # "Whenever **a creature** blocks, this enchantment deals 1 damage to **that
+    # creature's controller**." (Heat of Battle.) The board-wide spelling of the
+    # row below: the watcher is neither combatant, so the seat cannot be read
+    # off the source — the declare-blockers announcement freezes it, exactly as
+    # the source-scoped scan does for the creature it is about.
+    "matching_creature_blocks",
     "creature_becomes_blocked",          # Gloom Sower — the blocker's
     # Binding Agony — the **damaged** creature's, which for an Aura watching
     # its host is the host's controller. Frozen by `_fire_dealt_damage_triggers`

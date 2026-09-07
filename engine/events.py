@@ -1381,12 +1381,28 @@ def _board_wide_block_filter(
     combatant = event.subject
     partner = game.permanent_by_id(event.payload.get("partner_permanent_id"))
     observer = game.controller_index_of(permanent)
+    partner_key = _BOARD_WIDE_BLOCK_PARTNER_KEYS[event.kind]
+    # **Which of the two announcements this condition answers to.** The fire
+    # site makes both - one per pair, one per creature - because CR 509.3c and
+    # CR 509.3d count a bare condition and a narrowed one differently, and the
+    # count is what an ``emit`` makes rather than something a filter can undo.
+    # So the condition's own partner phrase decides, exactly as it does in the
+    # two source-scoped scans, and a trigger answering to both would fire twice
+    # on every block.
+    narrowed = bool(trig.condition.payload.get(partner_key + "_filter"))
+    if narrowed != bool(event.payload.get("pair_announcement")):
+        return False
     if not trigger_subject_matches(
         game, trig, "combatant", combatant, observer=observer, source=permanent,
     ):
         return False
+    if not narrowed:
+        # Nothing to ask about the other side: the only phrase the card printed
+        # was about the creature the event is *about*, and the line above has
+        # already tested it.
+        return True
     return trigger_subject_matches(
-        game, trig, _BOARD_WIDE_BLOCK_PARTNER_KEYS[event.kind], partner,
+        game, trig, partner_key, partner,
         observer=observer, source=combatant,
     )
 

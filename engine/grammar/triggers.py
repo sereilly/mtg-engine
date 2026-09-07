@@ -44,6 +44,7 @@ from .trigger_subjects import (
 from .trigger_casts import _parse_cast_event
 from .trigger_tables import (
     _WHENEVER_EVENTS,
+    _BARE_BOARD_WIDE_BLOCK_EVENTS,
     _BOARD_WIDE_BLOCK_EVENTS,
     _FILTERED_EVENTS,
     _SUBJECT_LED_EVENTS,
@@ -675,6 +676,20 @@ def _accept_board_wide_block_event(
                 kind, word, subject=partner,
                 narrowings=(("combatant", combatant),),
             )
+        stream.reset(mark)
+    # "Whenever **a creature** blocks, …" (Heat of Battle); "Whenever **a
+    # Sliver** becomes blocked, …" (Spined Sliver). The same two events with no
+    # partner phrase, which is CR 509.3c/509.3d's other half rather than a
+    # missing narrowing — see :data:`_BARE_BOARD_WIDE_BLOCK_EVENTS`.
+    #
+    # The combatant goes on ``subject`` and carries no ``combatant`` narrowing
+    # beside it, because with no second phrase there is nothing to tell apart:
+    # the table's own ``combatant_subject`` group is then the *only* filter the
+    # condition carries, so the two front ends pair it as the subject.
+    for phrase, kind in _BARE_BOARD_WIDE_BLOCK_EVENTS:
+        mark = stream.mark()
+        if stream.accept_phrase(*phrase):
+            return ast.TriggerEvent(kind, word, subject=combatant)
         stream.reset(mark)
     return None
 
