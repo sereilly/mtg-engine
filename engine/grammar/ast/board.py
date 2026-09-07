@@ -353,15 +353,38 @@ class ExchangeGreatestManaValue:
     card_types: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class MutualControlOfSets:
+    """``You and <player> each gain control of all <noun> the other controls
+    <duration>.`` (Reins of Power.)
 
+    Two seats, one printed noun phrase, and a **reciprocal** reference: "the
+    other" names whichever member of the pair this half is not. That
+    reciprocity is what the node *is*, which is why there is no
+    :class:`PlayerRef` kind for the words — a seat reference answers "which
+    seat", and "the other" has no answer until you say which half is asking.
+    One node rather than two :class:`GainControl` steps under a
+    :class:`Conjunction` for the reason :class:`SimultaneousUntapAndTap` is
+    one: CR 611.2c fixes both sets when the effect begins, where in sequence
+    the second step would read a board the first had already changed and hand
+    straight back what it had just taken.
 
+    **Not** CR 701.12's exchange (:class:`ExchangeControl`) despite swapping two
+    sets: the printed verb is "each gain control of", so these are two ordinary
+    control-changing effects at once rather than one atomic exchange. A
+    permanent that can't change controllers (CR 614.17) stays where it is while
+    the rest move, where half an exchange would have to be no exchange at all.
 
+    ``filter`` is the printed noun both halves share, so a card printed about
+    artifacts is this node with one word changed. ``duration`` is the printed
+    ending, spelled as :class:`GainControl` spells its own and required for that
+    field's reason — a word the production has to write cannot be produced by
+    dropping a clause.
+    """
 
-
-
-
-
-
+    other: PlayerRef
+    filter: ObjectFilter
+    duration: str
 
 
 @dataclass(frozen=True)

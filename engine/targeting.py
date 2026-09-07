@@ -1805,6 +1805,15 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     # class again, on kinds most of whose cards choose nobody.
     "destroy_all_matching": _matching_sweep_spec,
     "tap_all_matching": _matching_sweep_spec,
+    # "Untap all creatures **target opponent** controls." (Reins of Power.) The
+    # tap row's own twin, and it was missing: the two directions are one handler
+    # (``_tap_or_untap_all_matching``) reading one payload, so a seat the tap
+    # sweep announces is a seat the untap sweep announces too. Early Harvest hid
+    # the gap — its lowering emits an explicit ``targets`` description for the
+    # "target player untaps …" spelling, which the fall-through below answers —
+    # so the kind looked covered while every "untap all X <seat> controls"
+    # announced nothing at all.
+    "untap_all_matching": _matching_sweep_spec,
     # Corrosion's rust counters: the same printed noun phrase as Simoon's, so
     # the same reader — what is being *chosen* is a seat, whatever the sweep
     # then does to that seat's permanents.

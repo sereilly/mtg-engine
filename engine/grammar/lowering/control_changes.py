@@ -693,3 +693,61 @@ def _lower_bid_life_for_control(
     _describe_targets(described, subject)
     described["starting_bid"] = int(node.starting_bid)
     return (OracleInstruction(BID_LIFE_FOR_CONTROL_KIND, "", described),)
+
+
+#: The seat words the mutual control change can resolve at run time. Each is a
+#: seat the *announcement* settled — the spell chose it (CR 601.2c) or the
+#: sentence in front of this one did — which is what the handler's two-step
+#: reader answers. A word outside this set names a seat nothing in the
+#: resolution holds, and admitting one would swap creatures with whichever
+#: player the resolution happened to be carrying.
+_MUTUAL_CONTROL_SEATS = frozenset({
+    "that_player", "target_player", "target_opponent",
+})
+
+
+def _lower_mutual_control_of_sets(
+    node: ast.MutualControlOfSets,
+) -> tuple[OracleInstruction, ...]:
+    """``You and <player> each gain control of all <noun> the other controls
+    until end of turn.`` (Reins of Power.)
+
+    One instruction rather than two ``gain_control_until_eot`` steps, because
+    CR 611.2c fixes both sets when the effect begins: run in sequence the second
+    step would read a board the first had already changed and hand back the very
+    creatures it had just taken. This is Sands of Time's "simultaneously" one
+    effect over, and the same answer — the handler gathers both sides before it
+    records anything.
+
+    The duration is a *kind*, exactly as it is for the single steal beside this
+    one: cleanup drops a contribution stamped ``until_eot`` and leaves any other
+    alone (CR 611.2a), and a payload flag would let a lowering that forgot it
+    record a swap that quietly ends at cleanup. There is one kind here because
+    there is one lifetime implemented; the untimed printing refuses by name
+    rather than borrowing this one.
+    """
+    if node.duration != "until_end_of_turn":
+        raise LoweringError(
+            "a mutual control change is implemented only until end of turn",
+            node=node,
+        )
+    seat = node.other.kind
+    if seat not in _MUTUAL_CONTROL_SEATS:
+        raise LoweringError(
+            f"no seat the resolution holds answers to {seat!r}", node=node
+        )
+    described = _filter_payload(node.filter)
+    # The noun phrase is asked of both boards, so it must be a phrase the
+    # matcher can test about a permanent alone: the seat halves are the two the
+    # node already names, and a printed "you control" inside the phrase would be
+    # a third seat the reciprocity has no room for.
+    if object_only_filter(described) is None:
+        raise LoweringError(
+            "the mutual control change cannot test this restriction", node=node
+        )
+    return (
+        OracleInstruction(
+            "exchange_control_of_sets_until_eot", "",
+            {"filter": described, "other_seat": seat},
+        ),
+    )

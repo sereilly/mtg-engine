@@ -841,6 +841,17 @@ MILLED_THIS_WAY = "milled_this_way"
 TAPPED_THIS_WAY = "tapped_this_way"
 TAPPED_THIS_WAY_OBJECTS = "tapped_this_way_objects"
 
+#: "You and that opponent each gain control of all creatures the other controls
+#: until end of turn. **Those creatures** gain haste until end of turn."
+#: (Reins of Power.) Every permanent the mutual control change moved, both
+#: directions in one record.
+#:
+#: Here rather than in ``grammar/lowering/_record_keys.py`` for that module's
+#: own stated reason: the handler writes it and the lowering gates on it, so the
+#: string belongs to the module neither of them imports from. A second spelling
+#: is a gate that always refuses reading a record nothing ever wrote.
+CONTROL_EXCHANGED_PERMANENTS = "control_exchanged_permanents"
+
 #: What "**the mana lost this way**" (Drain Power) and "the amount of mana that
 #: player **lost this way**" (Pygmy Hippo) name: the pool one step of this
 #: effect emptied. CR 106.4 is where "lose this mana" is defined; CR 500.5 is

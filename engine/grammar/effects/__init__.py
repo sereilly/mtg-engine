@@ -119,6 +119,7 @@ from .control_changes import (
     _parse_bid_life_for_control,
     _parse_exchange_control,
     _parse_gain_control,
+    parse_mutual_control_of_sets,
 )
 from .mana import (
     _parse_add_mana,
@@ -296,6 +297,7 @@ __all__ = [
     "_parse_no_longer_supertype",
     "_parse_bid_life_for_control",
     "_parse_gain_control",
+    "parse_mutual_control_of_sets",
     "parse_excess_choice_paragraph",
     "parse_player_chooses_permanent",
     "_parse_return",

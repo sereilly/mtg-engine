@@ -92,6 +92,7 @@ from .effects import (
     _parse_extra_turn,
     _parse_flip_coin,
     _parse_gain_control,
+    parse_mutual_control_of_sets,
     _parse_game_is_a_draw,
     _parse_exchange_life_totals,
     _parse_life_total_becomes,
@@ -175,6 +176,14 @@ def parse_imperative(
     juxtaposition = _parse_exchange_greatest_mana_value(stream)
     if juxtaposition is not None:
         return juxtaposition
+    # "You and that opponent each gain control of all creatures the other
+    # controls until end of turn." (Reins of Power.) Juxtapose's opener one
+    # verb over and the same reason for being read here: the compound subject
+    # is a player and a conjunction, which the subject reader takes the first
+    # half of and then fails on. Refuses without consuming.
+    mutual_control = parse_mutual_control_of_sets(stream)
+    if mutual_control is not None:
+        return mutual_control
     # Mana Clash's whole three-sentence paragraph, which opens with the same
     # "You and target opponent …" shape and would meet the same subject parser.
     # Refuses without consuming.

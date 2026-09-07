@@ -19,7 +19,8 @@ from ..phrases import (
     parse_subject_filter_at,
 )
 from ..nouns import parse_object_filter
-from ..references import parse_player_ref, parse_recipient
+from ..references import (_parse_further_subjects, parse_player_ref,
+                          parse_recipient)
 from ..stream import TokenStream
 from ..vocabulary import NUMBER_WORDS
 
@@ -212,10 +213,36 @@ def _parse_tap_untap(stream: TokenStream) -> ast.Statement:
     subject = parse_recipient(stream) or parse_bound_subject(stream)
     if subject is None:
         raise stream.error(f"expected something to {verb}")
+    # "Untap all creatures you control **and all creatures target opponent
+    # controls**." (Reins of Power.) One verb over a union of two noun phrases,
+    # read through the shared production the destroy and return sweeps already
+    # use — no single ``ObjectFilter`` says it, because its keys are AND'd and
+    # the two phrases name two different seats. So the union lives in the
+    # *shape*: one statement per phrase under a ``Conjunction``, which lowering
+    # already turns into a sequence. Two untap sweeps over disjoint sets are the
+    # same board as one sweep over their union, and over overlapping sets too —
+    # untapping is idempotent.
+    further = _parse_further_subjects(stream, subject)
     if either_way:
+        if further:
+            # "Tap or untap A and B" is a disjunction over a *chosen* permanent
+            # (Twiddle): only one direction happens, and to one target. A union
+            # under it would have to say which direction each half took, which
+            # is not a question the sentence answers — so it fails loudly rather
+            # than picking one.
+            raise stream.error("a tap-or-untap choice is made about one permanent")
         return ast.TapOrUntap(subject)
     if verb == "tap":
-        return ast.Tap(subject, _accept_shared_produced_mana(stream))
+        shared_mana = _accept_shared_produced_mana(stream)
+        if further:
+            return ast.Conjunction(tuple(
+                ast.Tap(each, shared_mana) for each in (subject, *further)
+            ))
+        return ast.Tap(subject, shared_mana)
+    if further:
+        return ast.Conjunction(tuple(
+            ast.Untap(each) for each in (subject, *further)
+        ))
     return ast.Untap(subject)
 
 

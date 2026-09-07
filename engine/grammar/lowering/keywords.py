@@ -471,9 +471,17 @@ def _lower_gain_keyword(
     # Dreams of the Dead; the *keyword* grant refused the subject outright,
     # which is one printed pronoun with two answers. `produced` is the gate,
     # so with nothing recorded the words keep whatever reading they had.
+    # "**Those creatures** gain haste until end of turn." (Reins of Power.) The
+    # plural spelling of the identical back-reference, admitted beside the
+    # singular rather than under a branch of its own: the ``permanents_from``
+    # channel is always a sequence and the handler already iterates it, so the
+    # only thing the two words differ in is how many permanents the step in
+    # front happened to record. `lowering/tapping.py` and the untap-restriction
+    # lowering have read the plural since Frost Breath; the keyword grant
+    # refused it, which is one printed pronoun with two answers.
     if (
         isinstance(node.subject, ast.TargetSpec)
-        and node.subject.quantifier == "that"
+        and node.subject.quantifier in ("that", "those")
         and (produced & _RECORDED_PERMANENTS)
     ):
         # A bound object carries no narrowing to honour: the noun restates

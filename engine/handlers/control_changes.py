@@ -21,8 +21,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..oracle_types import LAST_TARGET_CONTROLLER
-from ._common import (recorded_permanent_ids, one_recorded_permanent_id, attached_host, permanent_matches_filter,
+from ..oracle_types import CONTROL_EXCHANGED_PERMANENTS, LAST_TARGET_CONTROLLER
+from ._common import (recorded_permanent_ids, one_recorded_permanent_id, attached_host, frozen_that_player_seat,
+                      permanent_matches_filter,
                       resolve_target_permanent,
                       resolve_target_slots)
 from .registry import effect_handler
@@ -821,4 +822,100 @@ def bid_life_for_control(
         starting_bid=int(instruction.payload.get("starting_bid", 0)),
         order=order,
     )
+    return True, "resolved"
+
+
+@effect_handler("exchange_control_of_sets_until_eot")
+def exchange_control_of_sets_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"You and that opponent each gain control of all creatures the other
+    controls until end of turn." (Reins of Power.)
+
+    Two seats, one printed noun phrase, and **both sets read before either one
+    moves** — CR 611.2c fixes what an effect acts on when the effect begins.
+    Done as two steps in order the second would read a board the first had
+    already changed and hand straight back the creatures it had just taken;
+    the card would resolve, log two control changes and leave the board exactly
+    as it found it. That is the reason this is one instruction and not two
+    ``gain_control_until_eot``s under a sequence, and it is Sands of Time's
+    printed "simultaneously" one effect over.
+
+    Each move is an ordinary layer-2 *contribution* stamped ``until_eot``
+    (``engine/control.py``) — 2N of them under one source, the spell's card,
+    which is what lets the cleanup sweep end every one of them together without
+    knowing they belonged to one sentence. Nothing is remembered and put back:
+    the permanents never moved, so dropping the contributions *is* the
+    reversion, and each keeps the ``base_controller_index`` it entered under.
+
+    **Not atomic**, unlike CR 701.12's exchange: the printed verb is "each gain
+    control of", which is two ordinary control-changing effects happening at
+    once. So a creature Guardian Beast protects (CR 614.17) simply stays where
+    it is while the rest move, where half of a real exchange would have to be
+    no exchange at all.
+
+    The seat the sentence names is the one the *announcement* settled — this
+    spell's own target, or a seat a firing event froze — read in that order,
+    the same two-step reader ``_tap_or_untap_all_matching`` makes for
+    "that player". A seat neither answers ends the effect rather than guessing:
+    with three seats a guess swaps the wrong player's board.
+    """
+    from ..control import change_control
+    from ..subject_filters import subject_matches
+
+    card = context.card
+    caster = context.caster
+    if caster not in game.players:
+        return False, "the resolving controller has left the game"
+    mine = game.players.index(caster)
+
+    theirs = None
+    if context.target is not None and context.target in game.players:
+        theirs = game.players.index(context.target)
+    if theirs is None:
+        theirs = frozen_that_player_seat(game, context)
+    if theirs is None or theirs == mine:
+        game.log.append(f"{card.name}: no other player was named, so nothing happens")
+        return True, "resolved"
+
+    described = dict(instruction.payload.get("filter") or {})
+    # CR 611.2c: both sets are read here, off the board as it stands before any
+    # contribution is recorded. ``subject_matches`` is asked with each seat as
+    # its own observer, so the printed noun phrase means the same thing on both
+    # boards — the phrase names no seat of its own (the lowering refuses one
+    # that does), and the seat is the half this handler supplies.
+    moving: list[tuple["Permanent", int]] = []
+    for owner, gainer in ((mine, theirs), (theirs, mine)):
+        for permanent in game.controlled_by(owner):
+            if not subject_matches(
+                game, permanent, described,
+                observer=owner, source=context.source_permanent,
+            ):
+                continue
+            if game.cant_gain_control(permanent, gainer):
+                game.log.append(
+                    f"{card.name}: {permanent.card.name} can't change controllers"
+                )
+                continue
+            moving.append((permanent, gainer))
+
+    for permanent, gainer in moving:
+        change_control(permanent, gainer, source=card, until_eot=True)
+    if moving:
+        game._sync_control()
+        game.log.append(
+            f"{card.name}: {caster.name} and {game.players[theirs].name} "
+            "exchanged control of "
+            + ", ".join(permanent.card.name for permanent, _ in moving)
+            + " until end of turn"
+        )
+    else:
+        game.log.append(f"{card.name}: neither player controls one, so nothing happens")
+    # "**Those creatures** gain haste until end of turn." The set this step
+    # moved, by id — the only place the sentence behind it can read it from,
+    # because by then the boards have swapped and neither printed seat phrase
+    # names what the card means. Recorded even when empty: an empty record is
+    # the honest answer for a board with no creatures on it, and the grant
+    # behind it reads it as "nothing to grant to".
+    context.results[CONTROL_EXCHANGED_PERMANENTS] = [
+        permanent.permanent_id for permanent, _ in moving
+    ]
     return True, "resolved"

@@ -128,6 +128,20 @@ def parse_player_ref(stream: TokenStream) -> ast.PlayerRef | None:
                 return ast.PlayerRef("that_player")
         stream.reset(mark_or)
         return ast.PlayerRef("that_player")
+    # "You and **that opponent** each gain control of …" (Reins of Power). The
+    # seat the sentence in front of this one chose, which is exactly what
+    # `that_player` means to every consumer downstream — so it is a spelling of
+    # that referent, not a fourth one, and `readers.py` has read the two words
+    # through a single branch (`_accept_back_referenced_controller`) since it
+    # read "that player controls". Splitting them here would be the fork this
+    # repo closes elsewhere: which reading a card got would depend on whether
+    # its seat turned up in a noun phrase or in a subject.
+    #
+    # An **opponent** rather than any player is a narrowing the announcement
+    # already made — the earlier sentence targeted one — so nothing here has to
+    # carry the word.
+    if stream.accept_phrase("that", "opponent"):
+        return ast.PlayerRef("that_player")
     # "…**they** gain 1 life" (Spiritual Sanctuary). The pronoun back-refers to
     # the player the sentence has already named, which is exactly what
     # `that_player` means to every consumer downstream — so it is an alias, not

@@ -46,7 +46,9 @@ and the module that names them cannot form a cycle.
 
 from __future__ import annotations
 
-from ...oracle_types import (BASE_PT_SET_PERMANENTS, COUNTERS_PLACED_THIS_WAY,
+from ...oracle_types import (BASE_PT_SET_PERMANENTS,
+                             CONTROL_EXCHANGED_PERMANENTS,
+                             COUNTERS_PLACED_THIS_WAY,
                              COUNTERS_REMOVED, HAND_CARDS_TO_LIBRARY,
                              PER_OBJECT_SEAT_RECORDS, SEARCHED_PERMANENTS)
 from ...tokens import CREATED_TOKEN_RESULT_KEY
@@ -302,6 +304,25 @@ EXTRA_TURN_GRANTED = "extra_turn_granted"
 #: permanent until this step made it.
 PUT_FROM_HAND_PERMANENTS = "put_from_hand_permanents"
 
+#: "You and that opponent each gain control of all creatures the other controls
+#: until end of turn. **Those creatures** gain haste until end of turn."
+#: (Reins of Power.) Every permanent the mutual control change moved, in both
+#: directions, under one key — because the sentence behind it names all of them
+#: and the board cannot be asked again: by then the two sets have swapped, so
+#: "creatures you control" is the opponent's old board and "creatures that
+#: opponent controls" is yours, and neither phrase names what the card means.
+#:
+#: **Ids, not permanents.** The channel takes either (``recorded_permanent_ids``
+#: reads an id off an object), and ids are what every reader wants here: the
+#: grant behind this looks each one up again through ``permanent_by_id``, which
+#: answers None for a permanent that has left — the CR 400.7 answer a live
+#: object would hide.
+#:
+#: Re-exported from ``oracle_types`` under this module's spelling, the way
+#: ``_BASE_PT_SET_PERMANENTS`` and ``_COUNTERS_PLACED_THIS_WAY`` are: one
+#: string, two ends of the pipeline.
+CONTROL_EXCHANGED_PERMANENTS = CONTROL_EXCHANGED_PERMANENTS
+
 
 _RECORDED_PERMANENTS: frozenset[str] = frozenset({
     _TAPPED_PERMANENTS, _UNTAPPED_PERMANENTS, _UNBLOCKABLE_PERMANENTS,
@@ -309,6 +330,7 @@ _RECORDED_PERMANENTS: frozenset[str] = frozenset({
     _PERMANENTS_GIVEN_COUNTERS, _REANIMATED_PERMANENTS,
     _BASE_PT_SET_PERMANENTS,
     PUT_FROM_HAND_PERMANENTS,
+    CONTROL_EXCHANGED_PERMANENTS,
     # What a search put onto the battlefield (Zirilan of the Claw). The
     # reanimation's twin one zone over, and a member of this set for that
     # entry's reason: "that creature" behind either step names the permanent

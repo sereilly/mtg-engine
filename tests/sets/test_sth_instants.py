@@ -503,3 +503,244 @@ def test_g4_a_name_from_a_target_that_left_finds_nothing(set_pool):
         card,
         {"restrictions": {"named_from_target": True, "named": "Serra Angel"}},
     )
+
+
+# --- W2G2: Reins of Power ---
+
+import pytest
+
+from engine import Game, PlayerState
+from engine.grammar import lower_ability, parse_line
+from engine.grammar.errors import GrammarError, LoweringError
+from engine.models import CardDefinition, Permanent
+from engine.oracle import compile_card_oracle
+from engine.oracle_types import CONTROL_EXCHANGED_PERMANENTS
+from engine.targeting import derive_cast_spec
+from tests.helpers import resolve_stack
+
+
+def _w2g2_creature(name: str, power: int = 2, toughness: int = 2) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature - Test",
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature - Test",
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def _w2g2_board(game: Game, seat: int) -> list[str]:
+    return sorted(perm.card.name for perm in game.controlled_by(seat))
+
+
+def _w2g2_game(set_pool, mine, theirs, third=None) -> Game:
+    """A board with Reins of Power in the first seat's hand.
+
+    Every creature starts **tapped**, because the card's first sentence is what
+    a test of the last three would otherwise never see: a swap that forgot to
+    untap looks identical on a board that was untapped to begin with.
+    """
+    seats = [
+        PlayerState(name="P1", battlefield=list(mine),
+                    hand=[set_pool("STH")["Reins of Power"]]),
+        PlayerState(name="P2", battlefield=list(theirs)),
+    ]
+    if third is not None:
+        seats.append(PlayerState(name="P3", battlefield=list(third)))
+    game = Game(players=seats)
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    for permanent in game.all_permanents():
+        permanent.tapped = True
+    return game
+
+
+def test_reins_of_power_compiles_all_three_printed_sentences(set_pool):
+    """The card is one line of three sentences and every one of them has to
+    produce an instruction — a card is supported when *any* of its lines is, so
+    "supported" alone would be true with two of the three dropped.
+
+    The last step's ``permanents_from`` is the assertion that matters: the
+    haste grant reads the record the swap writes, which is the only place the
+    words "those creatures" can be answered from once the boards have changed
+    hands.
+    """
+    program = compile_card_oracle(set_pool("STH")["Reins of Power"])
+    assert program.supported
+    steps = program.instructions[0].payload["steps"]
+    assert [step.kind for step in steps] == [
+        "untap_all_matching", "untap_all_matching",
+        "exchange_control_of_sets_until_eot", "grant_target_keyword_until_eot",
+    ]
+    assert steps[0].payload["controller"] == "you"
+    assert steps[1].payload["controller"] == "target_opponent"
+    assert steps[2].payload == {
+        "filter": {"type_filter": "creature"}, "other_seat": "that_player",
+    }
+    assert steps[3].payload["permanents_from"] == CONTROL_EXCHANGED_PERMANENTS
+    assert steps[3].payload["keywords"] == ("haste",)
+
+
+def test_reins_of_power_announces_the_opponent_it_names(set_pool):
+    """The spell's one target. Without it the client sends a bare cast and the
+    engine refuses it — the whole card, supported and unplayable, which is the
+    class ``scripts/picker_sweep.py`` exists to find and which no test over the
+    compiled program can see.
+    """
+    card = set_pool("STH")["Reins of Power"]
+    assert derive_cast_spec(card, compile_card_oracle(card)) == {
+        "kind": "player", "opponents_only": True,
+    }
+
+
+def test_reins_of_power_untaps_both_boards_swaps_them_and_hastes_them(set_pool):
+    """All four printed promises in one game, because three of them can hold
+    while the fourth silently does nothing.
+
+    The haste half is the one with no other witness: it reads a scratchpad
+    record rather than a target, so a swap that recorded the wrong shape would
+    grant to nobody and log itself resolved.
+    """
+    mine = [Permanent(card=_w2g2_creature("Mine A")),
+            Permanent(card=_w2g2_creature("Mine B"))]
+    theirs = [Permanent(card=_w2g2_creature("Yours A")),
+              Permanent(card=_w2g2_creature("Yours B")),
+              Permanent(card=_w2g2_creature("Yours C"))]
+    game = _w2g2_game(set_pool, mine, theirs)
+
+    assert game.cast_from_hand(0, "Reins of Power", target_player_index=1).supported
+    resolve_stack(game)
+
+    assert _w2g2_board(game, 0) == ["Yours A", "Yours B", "Yours C"]
+    assert _w2g2_board(game, 1) == ["Mine A", "Mine B"]
+    assert not any(perm.tapped for perm in game.all_permanents())
+    assert all(perm.has_keyword("haste") for perm in game.all_permanents())
+
+
+def test_reins_of_power_hands_everything_back_at_cleanup(set_pool):
+    """CR 611.2a's "until end of turn", and the failure mode that looks fine for
+    one turn: a control effect that never ends.
+
+    Each creature reverts to the seat it *entered* under rather than to
+    whichever seat last held it, which is what makes the reversion a dropped
+    contribution rather than a second move (``engine/control.py``).
+    """
+    mine = [Permanent(card=_w2g2_creature("Mine A"))]
+    theirs = [Permanent(card=_w2g2_creature("Yours A"))]
+    game = _w2g2_game(set_pool, mine, theirs)
+    game.cast_from_hand(0, "Reins of Power", target_player_index=1)
+    resolve_stack(game)
+    assert _w2g2_board(game, 0) == ["Yours A"]
+
+    game.resolve_cleanup_step(0)
+
+    assert _w2g2_board(game, 0) == ["Mine A"]
+    assert _w2g2_board(game, 1) == ["Yours A"]
+    assert not any(perm.has_keyword("haste") for perm in game.all_permanents())
+
+
+def test_reins_of_power_leaves_a_third_seat_alone(set_pool):
+    """"You and **that opponent**" names two seats, and the spell targeted one
+    of them. With three players a swap that reached "every opponent" would be
+    right in a duel by coincidence and wrong the moment a third seat exists.
+    """
+    mine = [Permanent(card=_w2g2_creature("Mine A"))]
+    theirs = [Permanent(card=_w2g2_creature("Yours A"))]
+    third = [Permanent(card=_w2g2_creature("Theirs A"))]
+    game = _w2g2_game(set_pool, mine, theirs, third)
+
+    game.cast_from_hand(0, "Reins of Power", target_player_index=1)
+    resolve_stack(game)
+
+    assert _w2g2_board(game, 0) == ["Yours A"]
+    assert _w2g2_board(game, 1) == ["Mine A"]
+    assert _w2g2_board(game, 2) == ["Theirs A"]
+    # Untapped only where the card says: the two named seats, not the table.
+    assert third[0].tapped
+
+
+def test_reins_of_power_with_an_empty_board_on_one_side(set_pool):
+    """Half a board is not half an effect: this is two ordinary control changes
+    happening at once, not CR 701.12's atomic exchange, so a player controlling
+    nothing simply gives nothing and still receives.
+    """
+    theirs = [Permanent(card=_w2g2_creature("Yours A"))]
+    game = _w2g2_game(set_pool, [], theirs)
+
+    game.cast_from_hand(0, "Reins of Power", target_player_index=1)
+    resolve_stack(game)
+
+    assert _w2g2_board(game, 0) == ["Yours A"]
+    assert _w2g2_board(game, 1) == []
+    assert theirs[0].has_keyword("haste")
+
+
+def test_the_untap_union_reads_two_noun_phrases_and_not_the_clause_after_it():
+    """"Untap all creatures you control **and** all creatures target opponent
+    controls" is one verb over two noun phrases; "Untap all creatures you
+    control **and you gain 2 life**" is two clauses.
+
+    "and" is the commonest word on a Magic card, and the union has to hand the
+    ones that join two *effects* back to the statement parser — the positive
+    case always passes, so the second assertion is the one that finds the bug.
+    """
+    union = lower_ability(parse_line(
+        "Untap all creatures you control and all creatures target opponent controls."
+    ))
+    assert [step.kind for step in union] == ["untap_all_matching"] * 2
+    assert union[0].payload["controller"] == "you"
+    assert union[1].payload["controller"] == "target_opponent"
+
+    two_clauses = lower_ability(parse_line(
+        "Untap all creatures you control and you gain 2 life."
+    ))
+    assert [step.kind for step in two_clauses] == [
+        "untap_all_matching", "target_gains_life",
+    ]
+
+
+def test_a_tap_or_untap_choice_refuses_a_union():
+    """Twiddle's disjunction is a choice made *about one permanent*: only one
+    direction happens. A union under it would have to say which direction each
+    half took, which the sentence does not answer — so it fails loudly rather
+    than picking one.
+    """
+    with pytest.raises(GrammarError):
+        parse_line("Tap or untap target creature and target land.")
+
+
+def test_a_mutual_control_change_with_no_duration_refuses_by_name():
+    """CR 611.2a makes an unstated duration "until the end of the game", which
+    is a lifetime this engine has no sweep for. The sentence *parses* — the
+    production consumes its line — and the lowering names what is missing, so a
+    card printing it is reported unsupported rather than swapped forever.
+    """
+    node = parse_line(
+        "You and target player each gain control of all creatures the other controls."
+    )
+    with pytest.raises(LoweringError, match="until end of turn"):
+        lower_ability(node)
+
+
+def test_a_mutual_control_change_refuses_a_seat_the_resolution_cannot_hold():
+    """"each opponent" is a *set* of seats, and reciprocity needs a pair: with
+    three players there is no single "the other" to hand a board to. Refused at
+    lowering rather than silently resolved against whichever seat the
+    resolution happened to be carrying.
+    """
+    node = parse_line(
+        "You and each opponent each gain control of all creatures the other "
+        "controls until end of turn."
+    )
+    with pytest.raises(LoweringError, match="each_opponent"):
+        lower_ability(node)
+
+
+def test_those_creatures_gains_a_keyword_only_behind_a_step_that_recorded_some():
+    """"Those creatures gain haste until end of turn" names a set an earlier
+    step of the same effect fixed. With nothing in front of it the words name
+    nothing at all, and a grant that silently found nothing is a card that
+    reports supported and does nothing — so the record is the gate.
+    """
+    with pytest.raises(LoweringError, match="keyword-grant subject"):
+        lower_ability(parse_line("Those creatures gain haste until end of turn."))
