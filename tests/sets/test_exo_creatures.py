@@ -1150,19 +1150,25 @@ def test_mind_maggots_reports_supported_with_both_sentences_behind_it(set_pool):
     ]
 
 
-def test_kor_chant_refuses_on_the_announcement_rather_than_the_effect(set_pool):
-    """W2G3's decline, pinned so the next wave inherits the real gap.
+def test_kor_chant_lowers_once_the_cast_can_announce_its_source(set_pool):
+    """W2G3's decline, closed in W3 — kept here as the record of what it was.
 
-    The sentence now **parses** — the blanket redirect reads "by a source of
-    your choice" in its printed position — and what refuses is the
-    announcement: CR 615.8's chosen source reaches a resolution on
-    ``choices["chosen_source"]``, which only the activation path writes, and
-    this card's two target slots are already spoken for. Lowering it onto the
-    any-source fallback would move every point of damage dealt all turn, which
-    is why it refuses instead.
+    The sentence parsed all along; what refused was the **announcement**.
+    CR 609.7a's chosen source reaches a resolution on
+    ``choices["chosen_source"]``, only the activation path wrote that key, and
+    this card's two target slots were already spoken for — so lowering it onto
+    the "no source recorded, answers to any source" fallback would have moved
+    every point of damage dealt all turn.
+
+    The casting path takes the three announcement fields now, so the line
+    lowers. The card's own behaviour is tested where its printed type says
+    (``tests/sets/test_exo_instants.py``); what this asserts is the shape of the
+    lowering: the blanket record carries **no** ``uses``, which is exactly the
+    fact that made the fallback unsafe for it and safe for every other printing
+    of the phrase.
     """
     program = compile_card_oracle(set_pool("EXO")["Kor Chant"])
-    assert not program.supported
+    assert program.supported
 
     line = compile_line(
         "All damage that would be dealt this turn to target creature you "
@@ -1170,7 +1176,23 @@ def test_kor_chant_refuses_on_the_announcement_rather_than_the_effect(set_pool):
         "creature instead"
     )
     assert line.parse_error is None
-    assert "chosen source" in (line.lowering_error or "")
+    assert line.lowering_error is None
+    instruction, = line.instructions
+    assert (
+        instruction.kind
+        == "redirect_chosen_source_damage_between_targets_until_eot"
+    )
+    assert "uses" not in instruction.payload
+
+    # …and the same sentence printed as "the next time" would be bounded, which
+    # is the branch that keeps the blanket reading from being an assumption.
+    bounded = compile_line(
+        "The next time a source of your choice would deal damage to target "
+        "creature you control this turn, that damage is dealt to another "
+        "target creature instead"
+    )
+    assert bounded.parse_error is None and bounded.lowering_error is None
+    assert bounded.instructions[0].payload.get("uses") == 1
 
 
 # --- W2G5: a comparison that stops holding while the ability is on the stack ---

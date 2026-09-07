@@ -357,6 +357,51 @@ class OracleExecutionContext:
     iteration_seats: dict = field(default_factory=dict)
 
 
+def chosen_damage_source(
+    game: Game,
+    *,
+    seat: int | None = None,
+    permanent_index: int | None = None,
+    stack_index: int | None = None,
+):
+    """The object a "source of your choice" announcement named, or None.
+
+    CR 609.7a: a chosen damage source may be a permanent or a spell on the
+    stack, and the two arrive on different fields — ``seat`` plus
+    ``permanent_index`` for the first, a bottom-first ``stack_index`` for the
+    second. A spell is recorded as its ``CardDefinition``, which is the source
+    a spell deals its damage with (CR 109.5) and the identity
+    ``damage_redirects.source_matches`` then compares.
+
+    Here rather than in either announcement path because **both** write the
+    ``chosen_source`` key declared above this file's dataclasses:
+    ``mixins/stack/activation.py`` has since Jade Monolith, and
+    ``mixins/stack/casting.py`` since Kor Chant — and a second copy of six
+    lines is how the two would come to disagree about which end of the stack an
+    index counts from. The permanent is resolved through ``permanent_at``, the
+    control seam's bounds-checked reader, rather than by subscripting a
+    battlefield list.
+
+    None is a legal outcome: an announcement that named no source (an AI, a
+    headless call) has made no choice, and each reader decides what that means
+    for its own card — a ``uses=1`` shield falls back to answering any source,
+    a record that lasts the whole turn arms nothing.
+    """
+    if seat is not None and permanent_index is not None:
+        # The seat is bounds-checked here and the slot inside ``permanent_at``.
+        # Not belt and braces: ``controlled_by`` subscripts ``game.players``
+        # directly, so a seat past the table raises and a *negative* one wraps
+        # round to the last seat — which for an out-of-range announcement would
+        # arm the record against a permanent on somebody else's board rather
+        # than against nothing.
+        if not (isinstance(seat, int) and 0 <= seat < len(game.players)):
+            return None
+        return game.permanent_at(seat, permanent_index)
+    if stack_index is not None and 0 <= stack_index < len(game.stack):
+        return game.stack[stack_index].card
+    return None
+
+
 class OracleStateMachine:
     def __init__(self, game: Game, context: OracleExecutionContext) -> None:
         self.game = game

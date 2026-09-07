@@ -1091,3 +1091,95 @@ def test_a_look_permission_is_not_granted_to_another_player(set_pool):
             "card at random from their hand. That player may look at that card "
             "for as long as it remains exiled."
         ))
+
+
+
+# --- EXO W3: Honorable Passage's source, which no cast could announce ---
+#
+# "The next time a source of your choice would deal damage to any target this
+# turn, prevent that damage. If damage from a red source is prevented this way,
+# Honorable Passage deals that much damage to the source's controller."
+#
+# Its cast spec has always carried ``requires_source``, and nothing could answer
+# it: ``mixins/stack/casting.py`` took no source fields, so every cast recorded
+# no source and armed the documented "answers to any source" fallback, and
+# ``app.js`` ran its source stage only inside
+# ``if (pending.castAction === "activate")``, so the browser never even asked.
+#
+# It is bounded — ``uses=1``, spent on one instance either way — which is why
+# nobody saw it: the shield always prevented *something*, just not necessarily
+# the something the caster meant. The other five spells printing the phrase are
+# unaffected, because they name nothing else and their source rides their own
+# target slot. Kor Chant is the printing that could not survive the fallback
+# (blanket for the turn), and closing it closed this too.
+
+from engine import Game as _w3hp_Game, PlayerState as _w3hp_Player
+from engine.models import CardDefinition as _w3hp_Card, Permanent as _w3hp_Perm
+from tests.helpers import _damage_dealt as _w3hp_damage
+from tests.helpers import resolve_stack as _w3hp_resolve
+
+
+def _w3hp_red_creature(name):
+    return _w3hp_Card(
+        name=name, mana_cost="{1}{R}", cmc=2.0, type_line="Creature — Goblin",
+        oracle_text="", colors=("R",), color_identity=("R",), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature — Goblin", "power": "3",
+             "toughness": "3", "colors": ["R"]},
+    )
+
+
+def _w3hp_board(set_pool):
+    """A duel with two red creatures an opponent controls and Honorable Passage
+    in the caster's hand. Returns (game, caster, chosen, other)."""
+    game = _w3hp_Game(players=[_w3hp_Player(name="A"), _w3hp_Player(name="B")])
+    game.enforce_mana_costs = False
+    chosen = _w3hp_Perm(card=_w3hp_red_creature("Chosen Source"))
+    other = _w3hp_Perm(card=_w3hp_red_creature("Some Other Goblin"))
+    for permanent in (chosen, other):
+        permanent.metadata["summoning_sickness_turn"] = -99
+    game.players[1].battlefield.extend([chosen, other])
+    game.players[0].hand.append(set_pool("VIS")["Honorable Passage"])
+    return game, game.players[0], chosen, other
+
+
+def test_honorable_passage_offers_the_sources_a_cast_may_choose(set_pool):
+    """The picker half. ``requires_source`` told the client to ask for a source
+    and ``source_targets`` — the list it asks *over* — was filled in only on the
+    activation path, so a cast carrying the flag got an empty list.
+
+    The browser refuses its source stage on an empty list, which is why this
+    read as "no damage source available" rather than as a missing feature.
+    """
+    game, _caster, chosen, other = _w3hp_board(set_pool)
+
+    spec = game.cast_target_spec(0, set_pool("VIS")["Honorable Passage"])
+
+    assert spec["requires_source"] is True
+    assert {entry["name"] for entry in spec["source_targets"]} == {
+        "Chosen Source", "Some Other Goblin",
+    }
+
+
+def test_honorable_passage_shields_only_the_source_the_cast_named(set_pool):
+    """The channel half, driven. With a source announced the shield answers to
+    that source and to nothing else (CR 615.8).
+
+    The second assertion is the bug: before the casting path took these fields
+    the announcement could not reach the resolution at all, so this same board
+    prevented the *other* Goblin's damage too — a shield the caster aimed at one
+    creature spent on whichever source hit first.
+    """
+    game, caster, chosen, other = _w3hp_board(set_pool)
+
+    result = game.cast_from_hand(
+        0, "Honorable Passage", target_player_index=0,
+        chosen_source_seat=1, chosen_source_permanent_index=0,
+    )
+    assert result.supported, result.details
+    _w3hp_resolve(game)
+
+    assert _w3hp_damage(game, caster, 3, source=other) == 3, (
+        "an unchosen source's damage is not this shield's"
+    )
+    assert _w3hp_damage(game, caster, 3, source=chosen) == 0

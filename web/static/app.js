@@ -12089,6 +12089,17 @@ function confirmRoleTargets() {
         target_permanent_ids: roleChosen.map((t) => t.id),
       };
   if (activating && Number.isInteger(p.abilityIndex)) body.ability_index = p.abilityIndex;
+  // Kor Chant: two targets **and** CR 609.7a's chosen source, which is the one
+  // announcement a roles walk had no stage for — the walk ends by sending, so
+  // a spell whose spec also asks for a source went without one. The stage is
+  // the same one an ordinary target walk runs; only the body differs, and it is
+  // built by now.
+  const rolesSpec = targetSpecOf(p.card);
+  if (rolesSpec?.requires_source && !p.__sourceStage) {
+    clearPendingCastTargeting();
+    startCastChosenSourceStage(p, rolesSpec, body);
+    return;
+  }
   const verb = activating ? "Activating" : "Casting";
   const done = activating ? "Activated" : "Cast";
   clearPendingCastTargeting();
@@ -12707,6 +12718,62 @@ function startCastXPrompt(card, targetSeat, targetPermanentIndex = null, castAct
   renderActivationPrompt();
 }
 
+// CR 609.7a's "a source of your choice" — a second announcement a *spell* can
+// make beside its own targets, and the stage that collects it.
+//
+// The activate cascade has run this stage since Jade Monolith, inside
+// `if (pending.castAction === "activate")`. Every cast fell straight past it:
+// Honorable Passage carries `requires_source` on its cast spec and was sent
+// without one, arming a shield that answered to any source. It is bounded
+// (`uses=1`, spent on one instance either way), which is why nobody saw it.
+// Kor Chant is the printing that made it visible — a blanket record for the
+// turn, which any-source would turn into "every point of damage this turn".
+//
+// `body` is the action this cast would otherwise have sent, complete but for
+// the source: the stage stashes it on `__sourceBody` and the two send sites
+// (`resolvePendingCastTarget` for a permanent, `selectStackSpellTarget` for a
+// spell) merge the answer into it. That is why one function serves a plain
+// target walk and a roles walk alike — what differs between them is the body,
+// which is already built by the time this runs.
+function startCastChosenSourceStage(pending, spec, body) {
+  // The source may be any permanent on either battlefield OR a spell on the
+  // stack — both come enumerated in source_targets.
+  const sourceTargets = spec?.source_targets || [];
+  if (!sourceTargets.length) {
+    clearPendingHandCast();
+    updateActionHint(`No damage source available for ${pending.cardName}.`, true);
+    return;
+  }
+  pendingCastTarget = {
+    card: pending.card,
+    cardName: pending.cardName,
+    targetKind: "permanent",
+    castAction: pending.castAction || "cast",
+    alsoStack: true,
+    __sourceStage: true,
+    __sourceBody: body,
+    ...pendingTargetFields(pending.card, sourceTargets),
+  };
+  renderActivationPrompt();
+  renderBoard(currentState);
+  renderStack(_currentStack);
+  updateActionHint(
+    `Now choose the damage source for ${pending.cardName}: click a permanent or a spell on the stack.`,
+  );
+}
+
+// Send a cast whose source stage has just been answered. One place, because the
+// hint and the error handling are the same whichever kind of source was clicked.
+function sendCastWithChosenSource(pending, extraFields) {
+  const body = { ...pending.__sourceBody, ...extraFields };
+  clearPendingCastTargeting();
+  updateActionHint(`Casting ${pending.cardName}...`);
+  sendAction(body)
+    .then(() => updateActionHint(`Cast ${pending.cardName}.`))
+    .catch((e) => updateActionHint(e.message, true))
+    .finally(() => clearPendingHandCast());
+}
+
 function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
   if (!pendingCastTarget) return;
   const pending = pendingCastTarget;
@@ -12748,6 +12815,22 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
   // Soul Exchange's exiled creature): what was clicked is a cost, not a target.
   // Record it and run the rest of the cast — `pendingCastCost` carries it onto
   // whichever body the target prompt then sends.
+  // The source stage's answer is a *source*, not a target (CR 115.1), so it
+  // rides its own fields on the body the stage stashed. Read before the cost
+  // stage below for the same reason that one is read before the targets: each
+  // of these clicks answers a different announcement, and the body it belongs
+  // on says which.
+  if (pending.__sourceStage && pending.__sourceBody) {
+    sendCastWithChosenSource(
+      pending,
+      withPermanentId(
+        { source_seat: selectedTarget, source_permanent_index: selectedPermanentIndex },
+        "source_permanent_id", selectedTarget, selectedPermanentIndex,
+      ),
+    );
+    return;
+  }
+
   if (pending.__castCostStage) {
     pendingCastCost = { cost_permanent_index: selectedPermanentIndex };
     const costPermanentId = permanentIdAt(selectedTarget, selectedPermanentIndex);
@@ -12937,6 +13020,19 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
     paysCostWithPermanent ? "cost_permanent_id" : "target_permanent_id",
     selectedTarget, selectedPermanentIndex,
   );
+
+  // Honorable Passage: the target is chosen, now the source. Before the colour
+  // prompts below rather than after, because both of those hand the body to a
+  // *different* send site and would drop the stage entirely; no card in the
+  // pool prints a chosen source and a chosen colour together, and one that did
+  // would want the two prompts chained rather than either branch widened.
+  {
+    const sourceSpec = targetSpecOf(pending.card);
+    if (sourceSpec?.requires_source && !pending.__sourceStage) {
+      startCastChosenSourceStage(pending, sourceSpec, actionBody);
+      return;
+    }
+  }
 
   // Metamorphosis: "Add X mana of any one color..." — the caster picks the
   // color after choosing the sacrificed creature; it rides mana_color. Asked
@@ -14892,6 +14988,13 @@ function selectStackSpellTarget(arrayIndex) {
   // choose new targets for the copy before the cast is sent.
   if (pending.copiesSpell && pending.castAction !== "activate") {
     startForkCopyRetarget(pending, arrayIndex, item);
+    return;
+  }
+
+  // A *cast*'s source stage answered with a spell on the stack (CR 609.7a lets
+  // a source be one). arrayIndex is the top-first index the server converts.
+  if (pending.__sourceStage && pending.__sourceBody) {
+    sendCastWithChosenSource(pending, { source_stack_index: arrayIndex });
     return;
   }
 

@@ -149,6 +149,22 @@ def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
         # quietly declined a price the caller announced, and the effect that
         # reads the count back does nothing.
         optional_cost_payments=req.optional_cost_payments,
+        # CR 609.7a's "a source of your choice", on its own trio of fields for
+        # the reason the cost fields above are on theirs: a spell may name a
+        # source *and* its own targets (Kor Chant names two), so one field could
+        # not say which answer a click was. The wire's names keep the engine's
+        # `chosen_` prefix here — `source_seat` is already a local inside
+        # `_cast_onto_stack`, meaning the zone the spell is leaving.
+        #
+        # The stack index goes through `_engine_stack_index` with the target's,
+        # and for the same reason it exists: the client counts the stack
+        # top-first and the engine bottom-first, and a second spelling of the
+        # arithmetic is a second chance to get the direction wrong. The activate
+        # branch in `actions.py` writes its own copy of it, which is the
+        # duplication this one avoids.
+        chosen_source_seat=req.source_seat,
+        chosen_source_permanent_index=req.source_permanent_index,
+        chosen_source_stack_index=_engine_stack_index(req.source_stack_index),
     )
 
 def _find_card_in_hand(player: PlayerState, card_name: str):

@@ -37,7 +37,8 @@ from ...cast_restrictions import combat_play_ban, global_play_timing
 from ...targeting import derive_activation_spec
 from ...mana_payment import is_mana_ability, mana_cost_from_symbols
 from ...events import emit
-from ...game_types import OracleExecutionContext, OracleStateMachine, SimulationResult, StackItem
+from ...game_types import (OracleExecutionContext, OracleStateMachine,
+                           SimulationResult, StackItem, chosen_damage_source)
 from ...handlers._common import (CHOSEN_ABILITY, _card_matches_filter,
                                  attached_host)
 from ...oracle import LOYALTY_ANY_TIME_STATIC, OracleInstruction, compile_card_oracle
@@ -562,14 +563,14 @@ class AbilityActivationMixin:
 
         # "A source of your choice" (Jade Monolith): a chosen battlefield
         # permanent, or a spell on the stack (its card stands in for the source).
-        chosen_source = None
-        if source_seat is not None and source_permanent_index is not None:
-            if 0 <= source_seat < len(self.players):
-                source_bf = self.players[source_seat].battlefield
-                if 0 <= source_permanent_index < len(source_bf):
-                    chosen_source = source_bf[source_permanent_index]
-        elif source_stack_index is not None and 0 <= source_stack_index < len(self.stack):
-            chosen_source = self.stack[source_stack_index].card
+        # One resolver, shared with the casting path since Kor Chant gave a
+        # *spell* the same announcement — see ``game_types.chosen_damage_source``.
+        chosen_source = chosen_damage_source(
+            self,
+            seat=source_seat,
+            permanent_index=source_permanent_index,
+            stack_index=source_stack_index,
+        )
 
 
 
