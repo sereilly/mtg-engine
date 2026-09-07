@@ -661,6 +661,32 @@ registry question rather than a branch. **Phase 3 of the next set that prints an
 "if you do" rider clears it**, and it owes a behavioural differential over every
 card in the pool that composes the two, not a compiled one.
 
+**Drained 2026-09-07, at EXO's wave 1, and it drained as the registry this
+entry asked for rather than as a branch.** The answer is
+`control_flow._action_is_takeable`, asked **before** the prompt rather than
+measuring the action afterwards: CR 601.2 offers a choice, an action nobody
+could take is not one of the things being offered, so the offer is not made, the
+rider does not fire, and the decline branch (a "…unless you pay" penalty) still
+applies. One rule serves both halves, which is why it is a table of kinds and
+not a test inside `may`. A kind is listed only where its "nothing to give" case
+is a **fact rather than a guess** — a wrongly-False answer withdraws an offer
+the card makes — and everything unlisted answers True, which is what the engine
+did for all of them before.
+
+**The two cards it was costing were both shipped and neither was in Exodus.**
+Bone Dancer (ALL) accepting over a creature-less graveyard reanimated nothing
+and still set `assigns_no_combat_damage_until_eot`; Duplicity (TMP) exiled
+nothing from an empty hand and handed the whole exiled pile back for free, which
+is the trade that *is* the card. The part worth keeping is that
+`handlers/zones.reanimate_graveyard_position`'s **own docstring asserted the
+guarantee that was missing** — it claimed to return False from the `may` it sits
+inside "which is what keeps 'If you do …' from firing", and `_run` folds a
+handler's first return into resolved/no-effect while `on_accept` never branched
+on it. The sentence had never been true. **A docstring that states an invariant
+is not a guard, and this is the second time in three sets that one has been
+read as though it were** — see the filter-draft entry below, where a guard's
+docstring described a check its body did not perform.
+
 **Drained 2026-09-07, at EXO wave 1 (W1G2) — and the registry it asked for
 already existed.** The entry wanted "a decision about what 'did anything' means
 per instruction kind, which is a registry question rather than a branch".
@@ -884,13 +910,24 @@ seam report takes when it is written from a call graph alone:
 The `records.py` objection was right and understated: `amounts.py` imports
 `records` at **module level**, so reading `amounts.accept_counter_kind` from
 inside `records` is a real import cycle, not only a docstring's warning.
-`lowering/sequences.py` is at 920 after STH's wave 2 moved two fusers into it,
-and four of its six fusers open on a `(Tap, payoff)` pair. `ast/_references.py` is at 997 and its real seam is
-measured too — `ObjectFilter.to_payload`, 307 lines, 31% of the file, whose only
-free names are `Fixed` and `TYPE_LINE_SUPERTYPES` — with a cost the next round
-must budget: `test_grammar_layering.py` hard-codes `ast`'s shared tuple, so a
-new `_payloads` module must be added there or a shared module importing a family
-breaks the layer order.
+**`ast/_references.py` drained at EXO's Phase 0 along exactly the seam
+recorded here** — 997 -> 698 + `_payloads.py` (336), `ObjectFilter.to_payload`
+moved whole with the class arriving as an argument so nothing cycles. The
+budgeted cost was real and it was **two** lines rather than one: the layering
+test hard-codes `ast`'s shared tuple **and** `FAMILY_SHARED`, so a new floor is
+invisible to one guard and a violation of the other until both are told.
+
+**`lowering/sequences.py` is what is left**, at 920 after STH's wave 2 moved two
+fusers into it, with four of its six opening on a `(Tap, payoff)` pair — still
+unowned, and the observation still unspent.
+
+**And the pattern across three sets is worth more than the list.** Every module
+named in this entry has eventually been split along the line somebody had
+already written down, but **never on the first reading of it**: STH's two groups
+measured their briefed seams and refused both, EXO's `_bound_returns` seam was
+one clause stale, and `exile.py`'s docstring named three forms of which two were
+8 and 32 lines. A recorded seam is a lead worth having and is not a fact; budget
+the measurement, not just the cut.
 
 **Added at TMP's Phase 5: `tests/engine/test_layer_reads.py` scans `engine/`
 only.** `web/serialization.py` asked "is this a creature" of
@@ -898,6 +935,14 @@ only.** `web/serialization.py` asked "is this a creature" of
 exists to catch — and no guard could see it because `web/` is outside the scan.
 Fixed at the one site found; the scope is not. Widening it means reading every
 type/colour/P/T question in `web/` against the layer accessors, which is a round.
+
+**EXO's Phase 5 found the third and fourth, and the entry should now be read as
+a round somebody owes rather than as a watch-list.** Both ask a *permanent*
+"is this a creature" through the printed card: `web/combat_prompts.py`'s blocker
+check drops an animated land blocking a band (CR 702.22k), and
+`web/prompts.py`'s Balance lists show an animated land as a land only, when it
+is both. Three consecutive promotions have each turned up one of these, which is
+the evidence the instalments cost more than the scan.
 
 **STH's Phase 5 found the second site, and it says the entry was right to stay
 open.** `is_aura` read the printed type line, so a **Licid** — "this creature
@@ -968,6 +1013,54 @@ Parts 1–3 are what makes part 4 safe; landing 4 alone is the wide-fallback
 mis-play this entry exists to refuse. Verify with **Honorable Passage**, which
 is shipped and so can be driven in the running app.
 
+**Added at EXO's Phase 5: a client-only envelope has no guard, and one had
+been wrong for four sets.** `GameActionRequest.seat` is required of every
+action and `sendAction` does not supply it, so all 125 call sites in
+`web/static/app.js` add it by hand — and `renderSpecialActions` did not. **Every
+CR 116 special action the UI has ever offered was unreachable**: Tempest's five
+Licids, Stronghold's, Exodus's two, Volrath's Curse, Circling Vultures. No log
+line, no error on screen, a 422 in a console nobody reads. The engine seam was
+right, the state payload served the offer, the button rendered.
+
+Nothing in the repo could see it, because nothing in the repo reads that
+envelope but a browser: the engine tests call the seam directly and the API
+tests post bodies they construct themselves. `tests/ui/test_special_action_wire.py`
+now reads every `sendAction` body out of `app.js` and requires the field — the
+bug **class** rather than the bug — and drives one offer end to end over HTTP.
+
+**What is left is the shape, not this instance.** That guard checks one required
+field of one schema by parsing JavaScript. Every other `web/schemas.py` required
+field is in the same position: supplied by hand at every call site, with no
+check that the hand-written bodies and the schema agree. **Phase 5 of a set
+whose cards reach a route no browser test drives is where the next one
+surfaces**, and the general fix — deriving the required fields from the schema
+and asserting the JS agrees — is its own round.
+
+**Added at EXO's Phase 5, and it is the rules half of the same click: a special
+action is not a resolution, and the SBA sweep only knew about resolutions.**
+With the button finally reaching the server, ending a Licid's effect left the
+stolen creature stolen — through a whole combat phase. CR 116.3 gives the taker
+priority back and CR 704.3 checks state-based actions before anyone gets
+priority, but `phase_steps.pass_priority` only checks after a **resolution**,
+which CR 116.1 explicitly says a special action is not. Fixed at the two entry
+points a special action has rather than at each consequence.
+
+The entry is here rather than closed because the *category* is: a special action
+is one of several things that change the game without resolving. Turn-based
+actions and cost payments are others, and nobody has audited whether the sweep
+runs after those either. **Phase 3 of the next set that adds a non-resolution
+state change owes that audit.**
+
+**Added at EXO's Phase 6: `web/`'s layer reads now have three named sites and
+still no scan.** TMP's Phase 5 opened this with `web/serialization.py` asking
+`perm.card.type_line`; STH's added `is_aura` and the Licid; EXO's Phase 5 adds
+two more, both asking a **permanent** "is this a creature" through the printed
+card — `web/combat_prompts.py`'s blocker check (CR 702.22k: an animated land
+blocking a band is dropped) and `web/prompts.py`'s Balance lists (an animated
+land is both a land and a creature and shows only as a land). Three promotions
+running have each found one, which is now enough evidence that the widened scan
+over `web/` is cheaper than the instalments. It is still a round.
+
 ## Phase 0 — Pre-flight
 
 **Entry:** a set has been chosen. **Exit:** clean tree, every gate green,
@@ -1019,6 +1112,21 @@ instruments current.
    one sentence earlier where the code agreed. A cut on the reported line would
    have bought 42 lines out of 940. **A split's seam gets the same treatment as a
    refusal site.**
+
+   **Exodus measured the rule's two halves against each other and only one
+   survives.** Three shared modules were pre-split at Phase 0 and each was
+   right — but of the set's **eight** cap crossings, **six were in modules no
+   brief named**, and three of the five modules handed to a group as "yours,
+   expect to split it" were never opened at all. Two waves, eleven groups, and
+   the per-group prediction was wrong more often than it was right.
+
+   So the rule has one half, not two. **Pre-splitting a module two groups will
+   reach works** and should keep happening. **Predicting which module a group's
+   *cards* will land in does not work**, and the honest move is to stop: name
+   the shared modules, say that everything else within 30 lines is unowned, and
+   tell every group to split what it crosses and to ask "where does this
+   already belong?" first. A group that crosses a cap in round cuts it well —
+   that has now held at Weatherlight, Stronghold and here.
 
    **Stronghold priced the other half of that rule: a shared-and-tight module
    left un-split costs a card.** Ten modules sat within 30 lines at Phase 0 and
@@ -1402,6 +1510,19 @@ measured set so per-card tests can land as the cards do. **Exit:**
 4. Between rounds: the supported count from `support_report.py --set <CODE>`
    must have risen; regenerate the trackers; run any `--accept` only after
    reading the diff it blesses.
+
+   **And know what each instrument is actually for, because Exodus measured
+   it.** Fifteen shipped cards were fixed across that set and the census found
+   **none** of them; `--hollow-lines` and `parse_coverage` were at zero on the
+   day of the ingest and stayed there all set, finding nothing. That is not an
+   argument against running them — it is the argument *for* running them every
+   round, since an instrument that costs nothing while quiet is only expensive
+   when you skip it and it was not. What did the finding was, in order:
+   **driving a game** (nine of the fifteen — the only thing that sees a runtime
+   decline), **`oracle_diff`** (two regressions caught in flight that no test
+   would have failed on), and **the deletion probe** (one card no other
+   instrument in the repo can see). The census sized the buckets and named no
+   defect, which is its job and its ceiling.
 
    **There are three ways a card reports supported and does nothing, and only
    one of them has an instrument.** Visions found all three:
@@ -2301,6 +2422,47 @@ it — the cards compile, claim every sentence and play correctly. Read what the
 slot; `unless_player_pays` labelled with a family rather than a shape, plus its
 guard's blind spot; the bare `spell` noun dropped pool-wide, with Ersatz Gnomes
 live; `test_layer_reads` scanning `engine/` only). *Nothing drained.*
+
+### EXO — 2026-09-07
+
+*The per-group caps prediction is retired; the shared-module one is kept.* Three
+shared modules were pre-split at Phase 0 and all three were right, but **six of
+the set's eight cap crossings were in modules no brief named**, and three of the
+five handed to a group as "yours, expect to split it" were never opened. Two
+waves and eleven groups is enough evidence: Phase 0's text now says to name the
+shared modules, declare everything else within 30 lines unowned, and let a group
+split what it crosses — which it does well, three sets running.
+
+*The instrument ranking is written down for the first time, because this set
+measured it.* Fifteen shipped cards were fixed and the census found **none** of
+them. `--hollow-lines` and `parse_coverage` were at zero on the day of the
+ingest and stayed there all set — the first time either has found nothing, and
+the argument *for* running them every round rather than against it. What found
+things: driving a game (nine of fifteen), `oracle_diff` (two regressions caught
+in flight that no test would have failed on), the deletion probe (one card no
+other instrument can see).
+
+*Phase 5 found the largest defect of the set and it was not a card.* Every CR
+116 special action the UI has ever offered had been unreachable for four sets,
+because one of 125 `sendAction` call sites left `seat` out of the body — no log
+line, no error on screen, a 422 in a console nobody reads. **Nothing in the repo
+reads that envelope but a browser**, which is the new Known-gaps entry: the
+guard added checks one required field of one schema by parsing JavaScript, and
+every other required field is in the same position. Fixing it then exposed the
+rules half — a special action is not a resolution (CR 116.1), and the SBA sweep
+only ran after resolutions, so an ended Licid left its stolen creature stolen.
+
+*Two entries drained, both in the shape they asked for.* The "if you do" rider
+became `control_flow._action_is_takeable`, a registry asked **before** the
+prompt rather than a measurement after it — and the two cards it was costing
+were shipped ones in other sets. `ast/_references.py` split along exactly the
+seam Stronghold recorded, at exactly the cost Stronghold budgeted plus one line
+nobody had counted.
+
+*And Phase 6's own check paid again.* Re-reading each carried entry against the
+code found the "if you do" gap already closed by this set's own wave 1 — the
+work was done and the ledger still said open, which is the mirror of the failure
+that rule was written for.
 
 ### STH — 2026-09-07
 

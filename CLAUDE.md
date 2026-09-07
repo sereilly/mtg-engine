@@ -12,9 +12,9 @@ for which sets ship): Limited Edition Alpha (290 cards), Limited Edition Beta
 Antiquities (85), Revised Edition (296), Legends (310), The Dark (119),
 Fallen Empires (102), Fourth Edition (368), Ice Age (373), Homelands (115),
 Alliances (144), Mirage (335), Visions (167), Fifth Edition (434),
-Weatherlight (167), Tempest (335), Stronghold (143) and Core Set 2021 (285),
-2,966 unique cards, all classified as supported.
-**Twenty sets, and their sizes are the whole spread**: 4ED and 5ED are pure
+Weatherlight (167), Tempest (335), Stronghold (143), Exodus (143) and
+Core Set 2021 (285), 3,109 unique cards, all classified as supported.
+**Twenty-one sets, and their sizes are the whole spread**: 4ED and 5ED are pure
 reprint sets, every one of their cards already in the pool, so they are the two
 sets that ship without implementing a card; Ice Age is the largest ever ingested and brought
 **346 new cards**, more than any set since Alpha; and Fallen Empires is the
@@ -23,9 +23,9 @@ is the second set after FEM to bring nothing but new cards — 115 of 115, with
 zero overlap with the 1,610 already here, Alliances is the **third**: 144
 of 144 new, sharing not one oracle_id with 5ED or M21, and Visions is the
 fourth — 167 of 167 new, sharing not one oracle_id with *any* set in the pool.
-**Weatherlight is the fifth and the cleanest of all of them**: 167 of 167 new,
-sharing with the seventeen sets before it not one oracle_id **and not one card
-name**. **Mirage breaks that run** — 313 of its 335 are new and 22 were
+**Weatherlight is the fifth and Exodus the sixth**, and both are clean the
+same way: 167 of 167 and 143 of 143 new, each sharing with every set before it
+not one oracle_id **and not one card name**. **Mirage breaks that run** — 313 of its 335 are new and 22 were
 already here, which makes it the
 first set since 4ED whose insert position can move a card's origin. **Tempest
 sits between the two shapes and is the one to reason from**: 309 of its 335 are
@@ -42,19 +42,31 @@ Tempest — so STH's insert position decides Shock's *origin*: at index 18 it
 reads `sth`, and appended after M21 it reads `m21`, with every guard green
 either way. That is Mirage's Volcanic Geyser exactly, in a set whose one shared
 card makes it look impossible. **Count the reprints against the sets that
-actually print them, not against the set you expect.** Which is why
-the per-set totals sum to far more than 2,966 — they are printings (4,730 of
+actually print them, not against the set you expect.**
+
+**Exodus is what that rule looks like when the answer comes back clean**, and
+it is worth keeping beside Stronghold rather than instead of it. EXO shares
+**zero oracle_ids and zero card names** with the twenty sets before it, so its
+position really cannot move any card's origin — but that was *measured at the
+promotion*, in both directions, rather than inferred from the block the way
+Stronghold's was. The rehearsal costs a minute and is the difference between
+"it looks immune" and "it is". Which is why
+the per-set totals sum to far more than 3,109 — they are printings (4,873 of
 them). Alliances was the
 first set to reach 100% with **zero name-keyed hooks**, across all 144, Visions
 is the second across all 167, **Weatherlight is the third** across all 167
 again, **Tempest is the fourth and by far the largest** — 335 cards over
 eighteen parallel groups in four waves, every one told a hook was the last
 resort, and the set ships carrying exactly **one** hooked card, which is
-Alpha's Power Sink arriving as a reprint — and **Stronghold is the fifth**,
+Alpha's Power Sink arriving as a reprint — **Stronghold is the fifth**,
 143 of 143 across ten parallel groups in two waves, adding no hook and
-*retiring* one (Mana Short's, as a side effect of a noun phrase). Reliance is
-**2.0% of supported cards**, 58 of 2,966, and it has now fallen in each of the
-last two sets while the pool grew. `scripts/support_report.py` reports on the whole manifest pool, not one set. Card files hold only the fields
+*retiring* one (Mana Short's, as a side effect of a noun phrase) — and
+**Exodus is the sixth**, 143 of 143 across eleven parallel groups in two
+waves plus a closing round, adding none. Reliance is
+**1.9% of supported cards**, 58 of 3,109, and it has now fallen in each of the
+last three sets while the pool grew. The hooked *count* has not moved for two
+sets running: what falls is the share, because 286 new cards arrived and not
+one of them needed a name. `scripts/support_report.py` reports on the whole manifest pool, not one set. Card files hold only the fields
 the engine and web layer read; `scripts/ingest_set.py` produces them. The
 engine is **registry-based**: card support grows by adding small isolated
 entries, never by editing core control flow.
@@ -69,9 +81,9 @@ and no player can put one of its cards in a deck. **It is empty today** — M21
 went in under it at 58% supported, Antiquities at 56.5%, Legends at 32.9%, The
 Dark at 47.9%, Fourth Edition at 100%, Ice Age at 49.3%, Fallen Empires at
 67.6%, Homelands at 66.1%, Fifth Edition at 100%, Alliances at 43.1%, Mirage
-at 54.9%, Visions at 59.3%, Weatherlight at 59.9%, Tempest at 67.8% and
-Stronghold at 67.8% again, and all fifteen were promoted to `sets` once every
-card was, which is the role working as designed rather than a role nobody uses. 4ED is the degenerate case that shows what the role is
+at 54.9%, Visions at 59.3%, Weatherlight at 59.9%, Tempest at 67.8%,
+Stronghold at 67.8% again and Exodus at 63.6%, and all sixteen were promoted
+to `sets` once every card was, which is the role working as designed rather than a role nobody uses. 4ED is the degenerate case that shows what the role is
 *for* rather than an exception to it: it entered `measured` fully supported and
 left the same day, and the ingest still paid — a guard proved itself unable to
 tell the roles apart for an all-reprint set, which is a finding only the
@@ -925,13 +937,19 @@ The board UI is **canvas-rendered** (`web/static/battlefield-canvas.js`).
 ## Card verification tracker
 
 `CARD_VERIFICATION.md` / `card_verification.json` track which cards have been
-manually validated in-game (534 of the 2,515 catalog cards passing — 392
-checked in-game and 142 auto-passed — with 31 more reported `equivalent`; the
+manually validated in-game (572 of the 3,109 catalog cards passing — 398
+checked in-game and 174 auto-passed — with 42 more reported `equivalent`; the
 rest — almost all of M21, Antiquities, Legends, The Dark, Ice Age, Fallen
-Empires, Homelands, Alliances, Mirage, Visions and Weatherlight, all eleven
-promoted before their in-game pass — have no recorded result yet, which
-SET_PLAYBOOK.md Phase 5 owns and deliberately does not gate promotion on; the
-summary at the top of the markdown is the current number). Fourth and Fifth
+Empires, Homelands, Alliances, Mirage, Visions, Weatherlight, Tempest,
+Stronghold and Exodus, all promoted before their in-game pass — have no
+recorded result yet, which SET_PLAYBOOK.md Phase 5 owns and deliberately does
+not gate promotion on; the summary at the top of the markdown is the current
+number).
+
+**Exodus is the first set in five whose Phase 5 moved the checked-in-game
+number**, from 392 to 398 — not because a coverage target was set, but because
+six of its cards had to be driven in the app to find the defect below, and a
+card you have just watched work is a result worth recording. Fourth and Fifth
 Edition are the two promotions that did not add to that backlog, because they
 added no card to
 verify — the tracker is keyed to the deduped catalog, so a reprint set inherits
@@ -940,11 +958,17 @@ cards, the largest single addition to the untested count since the tracker
 existed, which took it from 708 to 1,020; Fallen Empires added 99 more of its
 102 (two auto-pass and one is `equivalent`), to 1,119; Alliances added 144 new
 cards of which 4 auto-pass; Mirage, Visions and Weatherlight then added 313,
-167 and 167 more, taking the untested count to its high-water mark of 1,950.
-**The checked-in-game number has not moved since Alliances**, which is the
-decision SET_PLAYBOOK.md's Known gaps records rather than a slippage: an in-game
-pass is not a required validation step, the tracker is read as a log and never
-as a coverage target, and what gates a promotion is Phase 4.
+167 and 167 more, and Tempest, Stronghold and Exodus 309, 143 and 143 after
+them, taking the untested count to its high-water mark of 2,495.
+**The checked-in-game number moved at Exodus for the first time since
+Alliances**, 392 to 398, and the *reason* is the one that matters: nobody set a
+coverage target. Six cards were driven in the app because Phase 5 needed them
+driven, and a card you have just watched work is a result worth recording. The
+decision SET_PLAYBOOK.md's Known gaps records still stands — an in-game pass is
+not a required validation step, the tracker is read as a log and never as a
+coverage target, and what gates a promotion is Phase 4 — and this is what that
+decision looks like working rather than being abandoned: the number rises as a
+by-product of finding bugs, not as a quota.
 A card can also be recorded **failing**: that
 is an in-game bug report with a card name on it, and it stays in the tracker
 until the card is fixed **and re-checked in the app** — fixing the code does not

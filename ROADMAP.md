@@ -1,10 +1,10 @@
 # Scaling Roadmap
 
-Target: grow the card pool from **2,966** unique cards (LEA/LEB/2ED/ARN/ATQ/
-3ED/LEG/DRK/FEM/4ED/ICE/HML/ALL/MIR/VIS/5ED/WTH/TMP/STH/M21, all shipped and all
-supported)
+Target: grow the card pool from **3,109** unique cards (LEA/LEB/2ED/ARN/ATQ/
+3ED/LEG/DRK/FEM/4ED/ICE/HML/ALL/MIR/VIS/5ED/WTH/TMP/STH/EXO/M21, all shipped and
+all supported)
 to the full release line — **137 sets, 33,594 printings, 26,113 unique cards**
-per `set_progress.json`. Twenty sets, and the recent arrivals span the whole
+per `set_progress.json`. Twenty-one sets, and the recent arrivals span the whole
 range: Tempest is the largest work set yet at 335 cards and 309 of them new —
 larger than Ice Age's 346-card addition only in total size, and the first set
 here to need four waves; 4ED and 5ED are pure reprint sets that bought printings rather than
@@ -53,9 +53,12 @@ Anything that weakens these is a regression regardless of what it enables:
 
 1. **No silent wrongness.** A card may fail loudly as unsupported with a
    reason; it may never resolve as something other than what it says.
-2. **The suite stays fast.** **16,780 tests**, CI budget **940s**, CI-measured
-   baseline **571s** (`ci.yml`). Read 2026-09-07 at the Phase 0 before
-   Stronghold, from run 34081047302 on the Tempest retrospective commit:
+2. **The suite stays fast.** **17,804 tests**, CI budget **940s**, CI-measured
+   baseline **571s** (`ci.yml`). The test count is read 2026-09-07 at Exodus's
+   Phase 6 — **+6.1% over the whole set**, two waves and a closing round — and
+   the baseline is *not*: it is still the number below, and the next Phase 0
+   owes CI a reading rather than a local stopwatch. Read 2026-09-07 at the
+   Phase 0 before Stronghold, from run 34081047302 on the Tempest retrospective commit:
    `suite wall time: 571s`, **60% of budget**, creep warning not firing. That
    discharges the reading the previous entry owed — 215 commits, every
    Weatherlight wave and the whole of Tempest, had been sitting unpushed, so
@@ -984,7 +987,7 @@ engine charges an alternative or repeated cost correctly and the browser can
 only announce the default — recorded as a named four-part item in
 SET_PLAYBOOK.md's Known gaps.
 
-## Exodus (EXO) — measured (91/143, insert index 19)
+## Exodus (EXO) — shipped (143/143, manifest index 19)
 
 **Ingest census: 91/143 supported (63.6%), and 143 of 143 cards are new to the
 pool.** Registered under `measured` on 2026-09-07 at release date 1998-06-15,
@@ -1082,6 +1085,103 @@ complex", because the next wave finishes those parts for free; and run
   Flowstone Flood, Sonic Burst, Memory Crystal, Null Brooch, Volrath's Dungeon,
   Cataclysm, Limited Resources, Kor Chant, Penance, Fighting Chance, Mogg
   Assassin.
+
+### Where the set landed
+
+**143/143, manifest index 19, zero hooks, two waves and a closing round.**
+Eleven parallel groups. EXO's own row: **90.3% parsed, 90.3% lowered, 66.2%
+executed**, from 72.5 / 67.6 / 45.9 at ingest.
+
+The pool is now **21 sets, 3,109 unique cards, 4,873 printings**, all supported.
+Hook reliance fell to **1.9% of supported cards** — and the hooked *count* did
+not move at all: 58 before Exodus and 58 after, so the share fell purely because
+143 cards arrived and not one of them needed a name. Third consecutive set of
+falling reliance; sixth consecutive set at zero added.
+
+**Every grammar floor rose and every hook ceiling fell at the promotion**, which
+is the shape a set should leave behind and is not automatic — a set can raise a
+ceiling and still be worth shipping. This one did not have to.
+
+#### Fifteen shipped cards were fixed, and not one was found by an instrument
+
+The set's coverage number is the least interesting thing about it. What the
+waves actually produced was a list of cards that had been wrong for a long time,
+in a pool that reports 100% supported, with every census green:
+
+| what | cards | why nothing saw it |
+|---|---|---|
+| a picker whose answer was thrown away | 7 (Amok, Canyon Drake, Coral Helm, Draconian Cylix, Mage il-Vec, Ogre Shaman, Stormbind) | the guard asked "does the cost eat a card?", not CR 601.2b's "does the payer *choose*?" |
+| control Auras that took control of nothing | 2 (Conquer, Steal Enchantment) | the line is *claimed* and produces no instruction by design, so `--hollow-lines` cannot see it |
+| an offer acting out of the wrong seat | 2 (Pillar Tombs of Aku, Apathy) | the seat was right and the *performer* was not |
+| "if you do" firing on an empty action | 2 (Bone Dancer, Duplicity) | no compiled program moves; the defect is in the handler's composition |
+| a source of choice never offered to a human | 1 (Honorable Passage) | bounded at `uses=1`, so it was spent on one instance either way |
+| a damage source the rules put elsewhere | 1 (Dizzying Gaze) | the deletion probe, and nothing else |
+
+Plus two that are not cards but are worse: **`end_combat` cleared the combat
+state before CR 511.2's priority window**, so every end-of-combat trigger in the
+pool had been resolving against a board where nothing was blocking; and **every
+CR 116 special action the UI has ever offered was unreachable**, because one of
+`app.js`'s 125 `sendAction` call sites left `seat` out of the body.
+
+Two of those were measured rather than guessed, and the measurements are the
+better half. Eleven of the twelve `end_of_combat` cards **do not move** under the
+fix, because each had already routed around the bug — The Wretched with a
+workaround at the fire site whose comment ("this is the last moment the combat
+record can answer it") is now false. And of the pool's rebinding `may`s, eleven
+name an event's seat and **exactly one** carries a target description, which is
+what decided the fix's shape rather than a guess about blast radius.
+
+#### The instruments, ranked by what they actually caught
+
+Worth writing down because the ranking is not the one the census implies.
+
+* **Driving a game** found nine of the fifteen. It is the only thing that sees a
+  runtime decline, and every group that found one found it that way.
+* **`oracle_diff`** caught two regressions *in flight* — a bare-`chooses`
+  production claiming Forgotten Lore's whole program, and a Phase 4
+  post-condition turning Farrel's Mantle unsupported. Neither would have failed
+  a test.
+* **The deletion probe** found Dizzying Gaze, which no other instrument in the
+  repo can see: the card is supported, has no hollow line, and every sentence is
+  claimed.
+* **The census** found the two cycles, and that was its whole contribution. It
+  sized the buckets and named no defect.
+* **`--hollow-lines` and `parse_coverage`** found **nothing all set**. Both were
+  at zero on the day of the ingest and stayed there. That is the first time, and
+  it is the argument for reading them every round rather than at the gate: they
+  cost nothing when they are quiet.
+
+#### What the briefs got wrong, measured
+
+Eleven group reports, each asked what its brief got wrong. The honest tally:
+
+* **Module predictions: 3 of 5 wrong in wave 1, and 6 of the set's 8 cap
+  crossings were in modules no brief named.** The rule that works is the
+  *shared-module* one — pre-split anything two groups reach. The rule that does
+  not work is "which module will this group's cards land in", and after two
+  waves of evidence the honest move is to stop making that second prediction.
+* **Difficulty ran backwards three times.** Volrath's Dungeon was briefed as the
+  most speculative card in the wave and needed one regex row. Paroxysm was
+  expected to decline with three of its four pieces already built. Kor Chant was
+  scoped across parse, lowering and handler and its real blocker was the
+  announcement channel, a layer none of the three briefs that touched it named.
+* **Four refusal sites were manufactured by probe order** — a production that was
+  never a candidate raising before the real one declined. That is now five sets
+  running, and it is cheap to check: when a refusal names a verb the sentence
+  does not contain, suspect the probe above it.
+* **One decline had expired inside its own wave.** Pandemonium's "nothing models
+  a chooser on a target" was answered by W1G1 three merges earlier.
+
+#### The two per-set-file hazards, both hit
+
+The block convention's single failure mode fired for real: W2G2 rewrote W1G2's
+"Pandemonium is still unsupported" test because the card landed — not an append,
+so the reconstruction's base-prefix assertion refused. That assertion is right,
+and the fallback is a union at the **hunk**. And the Avenging Druid collision
+arrived exactly as predicted, with W1G1 and W1G2 both implementing it: **take the
+derivation, not the list.** The part worth keeping is that W1G2's destination
+table had merged *cleanly*, outside every conflict region, so resolving the file
+either way would have left it defined and never read.
 
 ### Wave 2 closed: 137 → 142 of 143, and two of five groups had no cards
 
