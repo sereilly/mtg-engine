@@ -63,18 +63,35 @@ def create_emblem(game: Game, instruction: OracleInstruction, context: OracleExe
 def choose_target_permanent(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Choose target creature." (Reincarnation, Glyph of Life.)
 
-    Nothing happens here, and nothing should: the target was chosen as the
-    spell was cast (CR 601.2c), and this sentence prints no effect. The
-    instruction exists so ``engine/targeting.py`` can see what the spell
-    targets in the compiled program — the sentence that *uses* the chosen
-    creature is the next one, which reads the same context.
+    Nothing is *chosen* here, and nothing should be: the target was chosen as
+    the spell was cast (CR 601.2c), and this sentence prints no effect. The
+    instruction exists so ``engine/targeting.py`` can see what the spell targets
+    in the compiled program — the sentence that *uses* the chosen creature is
+    the next one, which reads the same context.
+
+    What it does do is **record**, exactly as the plural beside it records: the
+    permanent it announced, and the seat that controls it. Both under the keys
+    every other "the objects this effect chose" and "the player this effect
+    chose" are written under, so a later sentence needs no reader of its own.
+    ``context`` is not always enough on its own — "You choose target creature an
+    opponent controls, **and that opponent chooses target creature**" (Mogg
+    Assassin) arms a second, resolution-time pick, and ``context.target`` is one
+    slot for two answers.
 
     It still refuses when the target is gone (CR 608.2b), so the log says the
     spell found nothing rather than saying nothing at all.
     """
-    if resolve_target_permanent(game, context) is None:
+    chosen = resolve_target_permanent(game, context)
+    if chosen is None:
         game.log.append(f"{context.card.name} had no legal target")
         return True, "no target"
+    context.results[CHOSEN_TARGET_PERMANENTS] = (chosen.permanent_id,)
+    seat = game.controller_index_of(chosen)
+    if seat is not None:
+        # The literal every other handler that writes this key spells; it is
+        # declared in ``grammar/lowering/_record_keys.CHOSEN_PLAYER``, which the
+        # handler layer does not import from.
+        context.results["chosen_player"] = seat
     return True, "resolved"
 
 

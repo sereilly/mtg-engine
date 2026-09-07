@@ -214,6 +214,7 @@ from .permissions import (
 )
 from .attachments import (
     _lower_attach,
+    _lower_announced_choice,
     _lower_choose_permanent,
     _lower_choose_permanents,
 )
@@ -529,6 +530,7 @@ __all__ = [
     "_lower_simultaneous_untap_and_tap",
     "_lower_tap_or_untap",
     "_lower_attach",
+    "_lower_announced_choice",
     "_lower_choose_permanent",
     "_lower_choose_permanents",
     "_lower_exchange_control",

@@ -23,6 +23,12 @@ from ...models import CardDefinition, Permanent
 from ...oracle import OracleInstruction, compile_card_oracle
 from ...modal_triggers import INLINE_TRIGGER_CONDITIONS, modal_trigger_modes
 from ...resumption import run_resumable
+# Both owned by ``engine/targeting.py``: two callers ask whether a compiled
+# program announced a target — this picker (CR 603.3d) and the ``may``
+# handler deciding whether an offer may rebind the target its own trigger
+# announced — and a second copy of the word list is how the two would come
+# to disagree about what counts as an announcement.
+from ...targeting import ANNOUNCED_PLAYER_WORDS, announces_a_target
 
 #: How a printed controller narrowing reaches the target spec. A key here is a
 #: narrowing `legality._enumerate_targets` performs; a controller word absent
@@ -80,80 +86,6 @@ def _target_filter_controller(payload) -> str | None:
     return None if inner is None else _target_filter_controller(inner)
 
 
-#: The quantifiers a lowered ``targets`` description uses for a printed
-#: "target"/"any target". Read as evidence rather than as a spec: what is
-#: wanted is only "did the printed line say *target*?", because the spec itself
-#: comes from a kind table that fills in a default where the line said nothing.
-_ANNOUNCED_QUANTIFIERS = frozenset({"target", "any_target"})
-
-#: ...and the words a lowering writes when it keeps the announcement as a plain
-#: payload value instead: ``recipient``/``who``/``actor`` naming the seat this
-#: instruction targets, ``controller`` inside a sweep's noun phrase ("each
-#: artifact **target opponent** controls", Corrosion), ``controlled_by`` and
-#: ``count_from.owner`` naming whose board a choice is made off ("choose a land
-#: **that player** controls", Equipoise, where "that player" is the target
-#: named one clause earlier).
-#:
-#: A set of *values* rather than a list of keys, because the keys are one per
-#: effect family and the words are three for the whole pool — and because a
-#: key list is the thing that goes stale when the next family picks a fourth
-#: name for the same slot.
-_ANNOUNCED_PLAYER_WORDS = frozenset({"target", "target_player", "target_opponent"})
-
-
-def _prints_a_target(payload) -> bool:
-    """Whether the printed line this payload was lowered from named a target.
-
-    ``derive_instruction_spec`` answers a different question — "what would a
-    picker offer for an instruction of this kind" — and for a **spell** that is
-    the right one everywhere: a kind that targets a player targets a player,
-    and the kind table may say so on its own. A *trigger* needs the narrower
-    question, because the same instruction kinds are also reached with the seat
-    already decided by the firing event, and announcing those would put a
-    picker in front of a phrase that names nobody:
-
-    * "…deals damage to a player, **that player** discards a card" (Abyssal
-      Specter) — the seat is the one that was damaged;
-    * "At the beginning of each player's draw step, **that player** draws…"
-      (Anvil of Bogardan) — the seat is whose step it is;
-    * "…**defending player** discards three cards" (Mindstab Thrull).
-
-    Worse than a redundant prompt, the kind table's default is *wider* than the
-    card: ``target_loses_life`` answers ``{"kind": "player"}`` with no
-    narrowing, so Vito's "target **opponent**" would have been offered its own
-    controller's face.
-
-    So the evidence is the lowering's own record of the phrase — the ``targets``
-    description, or one of the bare words a family that keeps no such
-    description writes instead (:data:`_ANNOUNCED_PLAYER_WORDS`). Walked rather
-    than read off one key for :func:`_target_filter_controller`'s reason: the
-    description sits at the payload's top level for one kind and under a
-    wrapper for the next.
-
-    Evidence, never the answer on its own: this is asked only of an instruction
-    whose *spec* already says a player is chosen, so a per-player loop that
-    spells its iterated seat "target_player" (Lim-Dûl's Hex) never reaches
-    here — ``derive_instruction_spec`` answers None for a ``for_each``.
-    """
-    if isinstance(payload, dict):
-        targets = payload.get("targets")
-        if (
-            isinstance(targets, dict)
-            and targets.get("quantifier") in _ANNOUNCED_QUANTIFIERS
-        ):
-            return True
-        for value in payload.values():
-            if isinstance(value, str) and value in _ANNOUNCED_PLAYER_WORDS:
-                return True
-            if _prints_a_target(value):
-                return True
-        return False
-    if isinstance(payload, (list, tuple)):
-        return any(_prints_a_target(entry) for entry in payload)
-    inner = getattr(payload, "payload", None)
-    return False if inner is None else _prints_a_target(inner)
-
-
 def _controller_narrowing_is_in(spec: dict, instruction) -> bool:
     """Whether *spec* carries the controller narrowing *instruction* prints."""
     controller = _target_filter_controller(getattr(instruction, "payload", None))
@@ -166,7 +98,7 @@ def _controller_narrowing_is_in(spec: dict, instruction) -> bool:
     # resolution's own work (CR 611.2c fixes the set as the ability resolves).
     # Read as a narrowing it looked for a spec flag no seat picker carries, and
     # so declined the one card the pronoun is printed on.
-    if controller in _ANNOUNCED_PLAYER_WORDS and spec.get("kind") == "player":
+    if controller in ANNOUNCED_PLAYER_WORDS and spec.get("kind") == "player":
         return True
     flag = _CONTROLLER_SPEC_FLAGS.get(controller)
     return bool(flag and spec.get(flag))
@@ -452,7 +384,7 @@ class StackResolutionMixin:
 
         A **player** is chosen here on the same rule and through the same list,
         and it is the half this method did not have. What gates it is
-        :func:`_prints_a_target` rather than the spec alone: the spec comes from
+        :func:`announces_a_target` rather than the spec alone: the spec comes from
         a kind table that answers "player" for a whole family of instructions,
         including the ones whose seat the firing event already fixed.
         """
@@ -474,12 +406,12 @@ class StackResolutionMixin:
             return
         if picks_a_player:
             # The printed line has to have said "target". See
-            # :func:`_prints_a_target`: the spec's "player" may be a kind
+            # :func:`announces_a_target`: the spec's "player" may be a kind
             # table's default over a sentence whose seat the event already
             # named, and offering that is a prompt whose answer nothing reads
             # — or, for a phrase the default does not narrow, a prompt
             # offering a seat the card excludes.
-            if not _prints_a_target(instruction):
+            if not announces_a_target(instruction):
                 return
             # ...and the fire site must not have bound the seat already, which
             # is the player half of the ``target_permanent_id`` early-out above:
@@ -539,9 +471,9 @@ class StackResolutionMixin:
         # the same safe direction the three early-outs above take.
         chooser_index = item.caster_index
         if spec.get("chooser") is not None:
-            if that_player is None:
+            chooser_index = self._trigger_chooser_seat(item, spec["chooser"])
+            if chooser_index is None:
                 return
-            chooser_index = that_player
         candidates = self._enumerate_targets(
             item.caster_index, item.card, spec, for_cast=False,
             ability_instruction=instruction,
@@ -589,6 +521,40 @@ class StackResolutionMixin:
             targets=offered,
             _trigger_item=item,
         )
+
+    def _trigger_chooser_seat(self, item: StackItem, chooser: str) -> int | None:
+        """Which seat announces *item*'s target when the card names one, or
+        None when nothing froze that seat.
+
+        Two printed words reach here and each reads its own frozen key, because
+        they are two different facts about one event:
+
+        * ``that_player`` — the seat the event *was about* (the Exodus Oaths'
+          "**that player** chooses target player who…"), through
+          :meth:`_that_player_seat` and so through the same key list the
+          resolution reads it through;
+        * ``event_subject_controller`` — the seat that controlled the *object*
+          the event was about ("**that creature's controller** may have it deal
+          damage … to any target **of their choice**", Pandemonium). One step
+          further out, and a different key: ``matching_permanent_enters``
+          freezes the entering permanent's controller and freezes no
+          ``event_subject_player`` at all, so reading one for the other would
+          announce nothing on every card that prints this.
+
+        A word with no row is declined rather than defaulted, which is the safe
+        direction every early-out in :meth:`_choose_trigger_targets` takes: the
+        ability announces no target and never reaches the stack's target field,
+        where falling back to the controller would hand the pick to precisely
+        the seat the card says must not make it.
+        """
+        if chooser == "event_subject_controller":
+            seat = (item.trigger_context or {}).get("event_subject_controller")
+            if isinstance(seat, int) and 0 <= seat < len(self.players):
+                return seat
+            return None
+        if chooser == "that_player":
+            return self._that_player_seat(item)
+        return None
 
     def _that_player_seat(self, item: StackItem) -> int | None:
         """The seat *item*'s printed "that player" names, or None if the firing

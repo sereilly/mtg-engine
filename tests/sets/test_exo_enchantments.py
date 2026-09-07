@@ -649,31 +649,42 @@ def test_w1g2_manabond_reveals_the_hand_it_discards(set_pool):
     assert [c.name for c in alice.graveyard] == ["Giant Growth"]
 
 
-def test_w1g2_pandemonium_is_still_unsupported(set_pool):
-    """A decline with its parts named, so the day they land this fails loudly.
+def test_w1g2_pandemonium_landed_at_w2g2(set_pool):
+    """W1G2's decline, kept as the record of what it cost to land.
 
     "Whenever a creature enters, that creature's controller may have it deal
-    damage equal to its power to any target of their choice." Five pieces:
+    damage equal to its power to any target of their choice." Five pieces were
+    named and **four** were real:
 
     1. a parse for "any target **of their choice**" — ``parse_target_spec``
-       returns the moment it reads "any target" and the rest is unconsumed;
-    2. a **chooser** on a target. Nothing in the engine models a target chosen
-       by a seat other than the ability's controller (CR 603.3d), and admitting
-       the line without one hands the choice to the Aura-less enchantment's
-       controller — a target the card gives to somebody else;
-    3. a bite whose **biter** is the entering permanent. ``lowering/_bites.py``
-       has four dealers (the source, the attached host, two chosen targets, a
-       recorded permanent) and none of them is the object the firing event
-       froze, so "have **it** deal damage equal to its power" refuses at
-       ``back-reference to 'its_power' with no producer in this effect``;
-    4. ``handlers/damage.source_bites_target`` reading that biter —
-       ``payload["biter"]`` has exactly one value today, ``"attached"``;
-    5. that handler biting a **player**. It resolves its victim through
-       ``resolve_target_permanent``, and "any target" (CR 115.4) includes
-       players and planeswalkers.
+       returned the moment it read "any target" and the rest was unconsumed;
+    2. a **chooser** on a target. This one had **expired**: W1G1's Oath work
+       built ``_choose_trigger_targets``' ``spec["chooser"]``, and what was
+       missing was one word in it (``event_subject_controller``) and the carry
+       of the key onto CR 115.4's ``any`` kind;
+    3. a bite whose **biter** is the entering permanent;
+    4. ``handlers/damage.source_bites_target`` reading that biter, which had
+       exactly one value, ``"attached"``;
+    5. that handler biting a **player**, which ``resolve_target_permanent``
+       cannot.
+
+    The behaviour is asserted below; this only pins the compiled shape, because
+    every one of those five is a payload key and a program that lost one would
+    still resolve.
     """
     program = compile_card_oracle(set_pool("EXO")["Pandemonium"])
-    assert not program.supported
+    assert program.supported
+    offer = program.triggered_abilities[0].instruction
+    assert offer.kind == "may"
+    assert offer.payload["actor"] == "event_subject_controller"
+    (bite,) = offer.payload["action"]
+    assert bite.kind == "source_bites_target"
+    assert bite.payload["biter"] == "event_subject"
+    assert bite.payload["targets"] == {
+        "quantifier": "any_target",
+        "kind": "any",
+        "chooser": "event_subject_controller",
+    }
 
 
 # --- W1G3: combat ---
@@ -907,3 +918,201 @@ def test_w1g4_paroxysm_reads_the_enchanted_players_library(set_pool, top_card, s
     assert game.is_on_battlefield(bear) is survives
     if survives:
         assert (bear.effective_power, bear.effective_toughness) == (5, 5)
+
+
+# --- W2G2: a choice somebody else makes ---
+
+import pytest
+
+from engine import Game as _W2G2Game, PlayerState as _W2G2PlayerState
+from engine.grammar import compile_line as _w2g2_compile_line
+from engine.models import CardDefinition as _W2G2CardDefinition
+from engine.models import Permanent as _W2G2Permanent
+from tests.helpers import resolve_stack as _w2g2_resolve_stack
+
+
+def _w2g2_creature(name, power, toughness):
+    return _W2G2CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature - Bear",
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(), raw={}, power=str(power), toughness=str(toughness),
+    )
+
+
+def _w2g2_duel(set_pool, before=()):
+    """A duel with Pandemonium on seat 0's battlefield and both seats asked.
+
+    Both seats interactive, because the whole card is about *which* seat is
+    asked: with neither of them owed a prompt the defaults answer, and a
+    default that happens to pick the right seat proves nothing about the
+    picker.
+
+    *before* is put onto the battlefield **first**, as ``(seat, permanent)``
+    pairs. Pandemonium watches every creature that enters, its controller's
+    included, so a creature placed as scenery after it arms a second prompt and
+    a test reading "the" pending choice reads whichever came first.
+    """
+    p1, p2 = _W2G2PlayerState(name="P1"), _W2G2PlayerState(name="P2")
+    game = _W2G2Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0, 1}
+    for seat, permanent in before:
+        game._put_permanent_onto_battlefield(seat, permanent, None)
+    game._put_permanent_onto_battlefield(
+        0, _W2G2Permanent(card=set_pool("EXO")["Pandemonium"]), None
+    )
+    game.log.clear()
+    return game, p1, p2
+
+
+def _w2g2_enter(game, seat, permanent):
+    game._put_permanent_onto_battlefield(seat, permanent, None)
+    return permanent
+
+
+def _w2g2_take_every_offer(game, limit=20):
+    """Resolve the stack, accepting every "may" offer on the way.
+
+    ``resolve_stack`` answers a blocking prompt with the registry's *default*,
+    and the default for a free offer is to decline ("take gifts, pay tolls,
+    make no trades") — which on this card is a resolution that does nothing and
+    an assertion passing for the wrong reason.
+    """
+    for _ in range(limit):
+        offer = next(
+            (c for c in game.pending_choices if c.kind == "optional_pay"), None
+        )
+        if offer is not None:
+            game._resolve_optional_pay(offer, True, None)
+            continue
+        if not game.stack:
+            return
+        if game.resolve_top_of_stack():
+            continue
+        game.auto_resolve_pending_choices()
+    raise AssertionError(f"the stack did not drain: {game.log}")
+
+
+def test_w2g2_pandemonium_asks_the_entering_creatures_controller(set_pool):
+    """CR 603.3d: the ability's controller announces its targets **unless the
+    effect says otherwise**, and this one says otherwise.
+
+    The trigger belongs to Pandemonium's controller whichever seat's creature
+    entered, so a picker armed on the ability's controller is the failure this
+    card exists to catch — silent, and always in that player's favour.
+    """
+    game, _p1, _p2 = _w2g2_duel(set_pool)
+    _w2g2_enter(game, 1, _W2G2Permanent(card=_w2g2_creature("Bear", 3, 3)))
+
+    (choice,) = [c for c in game.pending_choices if c.kind == "trigger_target"]
+    assert choice.player_index == 1
+    assert [t["name"] for t in choice.data["targets"] if t["kind"] == "player"] == [
+        "P1", "P2",
+    ]
+
+
+def test_w2g2_pandemonium_bites_with_the_creature_not_the_enchantment(set_pool):
+    """CR 119.3: the *creature* deals the damage, so the amount is its power.
+
+    Pandemonium is a 0-power enchantment. Routed through the bite's default
+    biter — the ability's own source — the card compiles, resolves, logs
+    nothing wrong and deals **zero**, which is the runtime decline no census in
+    this repo can see.
+    """
+    victim = _W2G2Permanent(card=_w2g2_creature("Wall", 0, 5))
+    game, _p1, _p2 = _w2g2_duel(set_pool, before=[(0, victim)])
+    entering = _w2g2_enter(
+        game, 1, _W2G2Permanent(card=_w2g2_creature("Bear", 3, 3))
+    )
+
+    (choice,) = [c for c in game.pending_choices if c.kind == "trigger_target"]
+    game._resolve_trigger_target(choice, permanent_id=victim.permanent_id)
+    _w2g2_take_every_offer(game)
+
+    assert victim.damage_marked == 3
+    assert entering.damage_marked == 0
+    assert any("Bear deals 3 damage to Wall" in line for line in game.log), game.log
+
+
+def test_w2g2_pandemonium_can_aim_at_a_players_face(set_pool):
+    """"Any target" is CR 115.4 — a creature, a player or a planeswalker.
+
+    And the seat it lands on is the one the *chooser* named. The offer is made
+    to the entering creature's controller, and ``may``'s rebind used to move
+    ``context.target`` onto the seat it was offered to — so a player who aimed
+    at their opponent shot themselves instead, in silence.
+    """
+    game, p1, p2 = _w2g2_duel(set_pool)
+    _w2g2_enter(game, 1, _W2G2Permanent(card=_w2g2_creature("Bear", 3, 3)))
+
+    (choice,) = [c for c in game.pending_choices if c.kind == "trigger_target"]
+    game._resolve_trigger_target(choice, seat=0)
+    _w2g2_take_every_offer(game)
+
+    assert (p1.life, p2.life) == (17, 20)
+    assert any("Bear deals 3 damage to P1" in line for line in game.log), game.log
+
+
+def test_w2g2_pandemonium_offer_is_declinable(set_pool):
+    """"**May**" — and a declined offer deals nothing rather than defaulting.
+
+    Asserted because the two halves are answered by different seats through
+    different prompts, and a decline that still dealt the damage would be the
+    same wrongness as a target chosen by the wrong player.
+    """
+    game, p1, p2 = _w2g2_duel(set_pool)
+    _w2g2_enter(game, 1, _W2G2Permanent(card=_w2g2_creature("Bear", 3, 3)))
+
+    (choice,) = [c for c in game.pending_choices if c.kind == "trigger_target"]
+    game._resolve_trigger_target(choice, seat=0)
+    _w2g2_resolve_stack(game)
+    offer = next(c for c in game.pending_choices if c.kind == "optional_pay")
+    game._resolve_optional_pay(offer, False, None)
+
+    assert (p1.life, p2.life) == (20, 20)
+
+
+W2G2_NO_FROZEN_SEAT = (
+    "'of their choice' names no player this target can be announced by"
+)
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        # No trigger at all: "their" names nobody, and the pick would fall to
+        # the ability's controller — the one seat "of their choice" excludes.
+        "This creature deals damage equal to its power to any target "
+        "of their choice.",
+        # A trigger whose fire site freezes no controller. Same refusal, and it
+        # is the gate rather than the sentence: the words are identical.
+        "Whenever you gain life, this creature deals damage equal to its "
+        "power to any target of their choice.",
+    ],
+)
+def test_w2g2_any_target_of_their_choice_refuses_without_a_frozen_seat(line):
+    """The catch-all's refusal, written before the gate was trusted.
+
+    "Of their choice" is parsed wherever "any target" is, so every card in the
+    pool printing the phrase reaches this lowering — and the direction it must
+    fail in is *refuse*, because a dropped chooser is not a card doing less. It
+    is the ability's controller announcing a target the card hands to somebody
+    else, with nothing red and nothing logged.
+    """
+    compiled = _w2g2_compile_line(line)
+    assert compiled.parsed
+    assert compiled.lowering_error == W2G2_NO_FROZEN_SEAT
+
+
+def test_w2g2_any_target_without_the_phrase_still_announces_normally():
+    """The positive control for the parse above: the two spellings differ by
+    the chooser key alone, so a production that swallowed "of their choice"
+    from a line that never printed it would show up here."""
+    compiled = _w2g2_compile_line(
+        "Whenever a creature enters, it deals damage equal to its power "
+        "to any target."
+    )
+    assert compiled.usable
+    (bite,) = compiled.instructions
+    assert bite.payload["targets"] == {"quantifier": "any_target", "kind": "any"}
+    assert bite.payload["biter"] == "event_subject"

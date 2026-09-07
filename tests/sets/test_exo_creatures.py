@@ -950,3 +950,201 @@ def test_w1g4_a_control_aura_that_changes_hands_takes_the_creature_with_it(set_p
     game.check_state_based_actions()
 
     assert game.controller_index_of(bear) == 1
+
+
+# --- W2G2: a choice somebody else makes ---
+
+from unittest.mock import patch as _w2g2_patch
+
+import pytest as _w2g2_pytest
+
+from engine import Game as _W2G2Game, PlayerState as _W2G2PlayerState
+from engine.grammar import compile_line as _w2g2_compile_line
+from engine.models import CardDefinition as _W2G2CardDefinition
+from engine.models import Permanent as _W2G2Permanent
+from engine.oracle import compile_card_oracle as _w2g2_compile_card
+from engine.targeting import derive_activation_spec as _w2g2_activation_spec
+
+
+def _w2g2_bear(name, power=2, toughness=2):
+    return _W2G2CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature - Bear",
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(), raw={}, power=str(power), toughness=str(toughness),
+    )
+
+
+def _w2g2_assassin_board(set_pool, *, opponent_creature=True):
+    """Mogg Assassin untapped on seat 0, one creature each side.
+
+    Both seats interactive: the whole ability is two seats making two choices,
+    and a headless seat takes the registry default for the second one — which
+    would let a test pass without ever proving the opponent was the seat asked.
+    """
+    p1, p2 = _W2G2PlayerState(name="P1"), _W2G2PlayerState(name="P2")
+    game = _W2G2Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0, 1}
+    assassin = _W2G2Permanent(card=set_pool("EXO")["Mogg Assassin"])
+    game._put_permanent_onto_battlefield(0, assassin, None)
+    assassin.metadata["summoning_sickness_turn"] = -99
+    mine = _W2G2Permanent(card=_w2g2_bear("Mine"))
+    game._put_permanent_onto_battlefield(0, mine, None)
+    theirs = None
+    if opponent_creature:
+        theirs = _W2G2Permanent(card=_w2g2_bear("Theirs", 3, 3))
+        game._put_permanent_onto_battlefield(1, theirs, None)
+    game.log.clear()
+    return game, assassin, mine, theirs
+
+
+def test_w2g2_mogg_assassin_compiles_to_two_choices_and_two_records(set_pool):
+    """The shape, pinned because every part of this card is a payload key.
+
+    Its two picks are made by two seats at two different moments, and this
+    engine spells that difference as two instruction kinds: the ability's
+    controller announces at activation (CR 602.2b), and any other seat is asked
+    at resolution. The destroys behind them read the record each of those steps
+    wrote, so a program that lost one key would resolve and destroy nothing.
+    """
+    program = _w2g2_compile_card(set_pool("EXO")["Mogg Assassin"])
+    assert program.supported
+    (ability,) = program.activated_abilities
+    steps = ability.instruction.payload["steps"]
+    assert [step.kind for step in steps] == [
+        "choose_target_permanent", "choose_permanent", "flip_coin",
+        "if_then", "if_then",
+    ]
+    assert steps[0].payload["targets"]["filter"] == {
+        "type_filter": "creature", "controller": "opponent",
+    }
+    assert steps[1].payload["chooser"] == "chosen_player"
+    won, lost = steps[3], steps[4]
+    assert won.payload["condition"] == {"kind": "coin_flip", "won": True}
+    assert lost.payload["condition"] == {"kind": "coin_flip", "won": False}
+    assert won.payload["then"][0].payload["permanents_from"] == (
+        "chosen_target_permanents"
+    )
+    assert lost.payload["then"][0].payload["permanents_from"] == "attach_host"
+
+
+def test_w2g2_mogg_assassin_announces_only_an_opponents_creature(set_pool):
+    """"You choose **target creature an opponent controls**" — the picker's
+    narrowing, which a resolution-time prompt could not have carried."""
+    program = _w2g2_compile_card(set_pool("EXO")["Mogg Assassin"])
+    (ability,) = program.activated_abilities
+    assert _w2g2_activation_spec(ability) == {
+        "kind": "creature", "opponent_only": True,
+    }
+
+
+def test_w2g2_mogg_assassin_refuses_with_the_tap_unpaid(set_pool):
+    """CR 602.2b/601.2c: targets are chosen as the ability is activated, so an
+    ability with no legal target is never activated at all.
+
+    Mogg Assassin taps as its cost, and this is the whole reason the first
+    choice is an announcement rather than a prompt: refused at resolution the
+    creature would be tapped for nothing, every turn, for as long as the
+    opponent's board is empty.
+    """
+    game, assassin, _mine, _theirs = _w2g2_assassin_board(
+        set_pool, opponent_creature=False
+    )
+
+    result = game.activate_permanent_ability(0, "Mogg Assassin")
+
+    assert not result.supported
+    assert assassin.tapped is False
+    assert not game.pending_choices
+
+
+def test_w2g2_mogg_assassin_asks_the_opponent_for_the_second_creature(set_pool):
+    """"…**and that opponent** chooses target creature."
+
+    "That opponent" is the controller of what the *first* clause announced —
+    there is no firing event to have frozen a seat, so the pronoun is answered
+    from the record that clause wrote. And the second noun phrase carries no
+    controller at all, so every creature on the table is a candidate, the
+    Assassin itself included.
+    """
+    game, assassin, mine, theirs = _w2g2_assassin_board(set_pool)
+
+    game.activate_permanent_ability(
+        0, "Mogg Assassin", target_permanent_ids=[theirs.permanent_id]
+    )
+
+    (choice,) = [c for c in game.pending_choices if c.kind == "permanent_choice"]
+    assert choice.player_index == 1
+    assert sorted(p.card.name for p in choice.data["_candidates"]) == [
+        "Mine", "Mogg Assassin", "Theirs",
+    ]
+
+
+@_w2g2_pytest.mark.parametrize(
+    "roll, destroyed, survivor",
+    [
+        # The flipper is the ability's controller, so a win destroys what *they*
+        # announced and a loss destroys what the opponent chose. Reading the two
+        # records the other way round is a card that plays exactly backwards,
+        # with nothing to fail.
+        (0.0, "Theirs", "Mine"),
+        (0.99, "Mine", "Theirs"),
+    ],
+)
+def test_w2g2_mogg_assassin_destroys_the_flip_winners_pick(
+    set_pool, roll, destroyed, survivor
+):
+    """The Rock Hydra test for this card: a game, driven to the end.
+
+    Both choices are made, the coin is rigged, and the board afterwards says
+    which record the destroy read. Nothing in this repo can see the alternative
+    — the card compiles, claims every sentence, carries no hollow line, and a
+    destroy reading an unwritten record simply destroys nothing.
+    """
+    game, assassin, mine, theirs = _w2g2_assassin_board(set_pool)
+
+    with _w2g2_patch("engine.handlers._common.random.random", return_value=roll):
+        game.activate_permanent_ability(
+            0, "Mogg Assassin", target_permanent_ids=[theirs.permanent_id]
+        )
+        answered = game.resolve_pending_choice(
+            "permanent_choice", 1, permanent_id=mine.permanent_id
+        )
+        game._settle()
+
+    assert answered
+    alive = {p.card.name for p in game.all_permanents()}
+    assert destroyed not in alive
+    assert survivor in alive
+    assert "Mogg Assassin" in alive
+
+
+def test_w2g2_a_chosen_back_reference_refuses_with_nothing_recorded():
+    """The refusal that keeps "the creature you chose" honest.
+
+    Both phrases are read wherever a bound noun phrase is, so a card printing
+    one without an earlier step that chose is refused by name — a destroy
+    reading an empty record is a card that compiles, resolves and does nothing,
+    which is the one failure no instrument here can see.
+    """
+    for line in (
+        "Destroy the creature you chose.",
+        "Destroy the creature your opponent chose.",
+    ):
+        compiled = _w2g2_compile_line(line)
+        assert compiled.parsed, line
+        assert compiled.lowering_error is not None, line
+        assert "with no producer in this effect" in compiled.lowering_error, line
+
+
+def test_w2g2_a_bare_definite_noun_phrase_keeps_its_old_reading():
+    """The positive control for the parse above.
+
+    "Destroy the creature" is the definite back-reference this engine has always
+    read as the ability's own source, and the new clause is read only as a whole
+    — so a production that swallowed the article would silently re-point every
+    card printing it.
+    """
+    compiled = _w2g2_compile_line("Destroy the creature.")
+    assert compiled.usable
+    assert [i.kind for i in compiled.instructions] == ["destroy_self"]

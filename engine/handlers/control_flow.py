@@ -2260,7 +2260,28 @@ def _offer_to_seat(
         # ability's controller sacrificing their own lands for every other
         # player's answer, and choosing, out of their own board, which
         # alternative each other player was offered.
-        context = dataclasses.replace(context, target=player, caster=player)
+        #
+        # **Except a target the announcement already chose.** "…**may** have it
+        # deal damage equal to its power to **any target** of their choice"
+        # (Pandemonium) is an offer whose action carries a target picked as the
+        # ability went on the stack (CR 603.3d), and ``target`` is where a
+        # player-shaped one is held — so rebinding it aims the damage at the
+        # seat that was *offered* rather than at the one they chose, silently
+        # and in that player's favour. The performer still moves: who has the
+        # creature deal the damage is the offered seat, which is what ``caster``
+        # says.
+        #
+        # Derived from the compiled program rather than declared as a payload
+        # key, through the same reader the trigger picker used to announce it —
+        # so "did this line print a target?" has one answer at both moments.
+        # Ten of the eleven cards in the pool that reach this rebind print no
+        # target at all and are untouched.
+        from ..targeting import announces_a_target
+
+        if announces_a_target(_steps(instruction, "action"), described_only=True):
+            context = dataclasses.replace(context, caster=player)
+        else:
+            context = dataclasses.replace(context, target=player, caster=player)
     # The whole printed cost, symbol by symbol — "you may pay {1}{B}" (Liliana's
     # Devotee) is a dict, not the number 2, because a payment that counted to a
     # number could only ever collect generic mana.

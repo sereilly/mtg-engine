@@ -38,11 +38,13 @@ from ._common import (
     _is_target,
     _restrictions_beyond,
 )
-from ._events import _DAMAGED_PERMANENTS, _RECORDED_PERMANENTS
+from ._events import (_DAMAGED_PERMANENTS, _EVENT_SUBJECT_CONTROLLERS,
+                      _EVENT_SUBJECT_OBJECTS, _RECORDED_PERMANENTS)
 
 
 def lower_bite(
-    node: ast.DealDamage, produced: frozenset[str] = frozenset()
+    node: ast.DealDamage, produced: frozenset[str] = frozenset(),
+    event: str | None = None,
 ) -> tuple[OracleInstruction, ...] | None:
     """The bite *node* describes, or None when no bite reading applies.
 
@@ -178,6 +180,73 @@ def lower_bite(
         payload: dict[str, object] = {"amount_from_source_power": True}
         _describe_targets(payload, node.recipients[0])
         return (OracleInstruction("deal_damage", "", payload),)
+    # "…**it** deals damage equal to its power to **any target of their
+    # choice**." (Pandemonium.) The bitten end is CR 115.4's union rather than a
+    # permanent, which is why it is its own branch and not a filter on the one
+    # below: that one describes a noun phrase, and "any target" has none — the
+    # handler resolves a face where no object was announced.
+    #
+    # Two biters, one branch, because only the *word* differs. Under a trigger
+    # whose fire site froze the object its event was about
+    # (``_EVENT_SUBJECT_OBJECTS``) a bare "it" is that object — the creature
+    # that just entered, whose power is the whole of the card — and everywhere
+    # else "it"/"this creature" is the ability's own source, which is the
+    # payload's absence. Gated on the table rather than on the pronoun alone:
+    # with no frozen object the words name nothing, and biting with the
+    # enchantment instead deals zero while compiling clean.
+    recipient = node.recipients[0] if len(node.recipients) == 1 else None
+    if (
+        isinstance(node.amount, ast.ThatMuch)
+        and node.amount.source == "its_power"
+        and isinstance(node.source, ast.TargetSpec)
+        and isinstance(recipient, ast.TargetSpec)
+        and recipient.quantifier == "any_target"
+        and node.riders == ast.DamageRiders()
+    ):
+        # A **bare pronoun** under an event that froze its object is that
+        # object. ``grammar/rebinding.py`` has already swapped the trigger's
+        # subject filter onto the word by the time this runs, so the pronoun is
+        # no longer ``is_source`` and only the quantifier still says it was one
+        # — which is why the test is the quantifier and the event table rather
+        # than the filter.
+        names_the_event_subject = (
+            node.source.quantifier == "it" and event in _EVENT_SUBJECT_OBJECTS
+        )
+        if not names_the_event_subject and not _is_source(node.source):
+            # "It"/"this creature" naming neither the ability's source nor a
+            # frozen event subject names nothing this handler can find. Left to
+            # the branches below, which all want a permanent recipient, and then
+            # to the generic amount lowering, whose refusal says so by name.
+            return None
+        payload: dict[str, object] = {}
+        if names_the_event_subject:
+            payload["biter"] = "event_subject"
+        described: dict[str, object] = {"quantifier": "any_target", "kind": "any"}
+        if recipient.filter.their_choice:
+            # "**of their choice**": the target is announced by a seat that is
+            # not the ability's controller, which is CR 603.3d's "unless the
+            # ability's effect states otherwise" — and this sentence states it.
+            # The only player these words can name is the one the sentence
+            # already named, "that creature's controller", so the seat is read
+            # off the same frozen key that phrase is read off
+            # (``_EVENT_SUBJECT_CONTROLLERS``).
+            #
+            # Refused where no event froze that seat, rather than dropped: a
+            # dropped chooser is not a card that does less, it is the ability's
+            # controller aiming somebody else's creature — the exact opposite of
+            # what the words print, and silent.
+            if event not in _EVENT_SUBJECT_CONTROLLERS:
+                raise LoweringError(
+                    "'of their choice' names no player this target can be "
+                    "announced by",
+                    node=node,
+                )
+            described["chooser"] = "event_subject_controller"
+        payload["targets"] = described
+        if node.amount.bonus:
+            payload["power_bonus"] = node.amount.bonus
+        return (OracleInstruction("source_bites_target", "", payload),)
+
     # "It deals damage equal to **its power** to target creature or
     # planeswalker." (Heartfire Immolator.) The source is sacrificed to pay the
     # cost, so by resolution it is in a graveyard — its power is last-known

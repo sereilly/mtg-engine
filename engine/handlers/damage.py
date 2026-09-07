@@ -1450,8 +1450,46 @@ def source_bites_target(game, instruction, context):
     # creature to bite with and must deal nothing rather than bite with itself.
     if instruction.payload.get("biter") == "attached":
         source = attached_host(game, source)
+    elif instruction.payload.get("biter") == "event_subject":
+        # ``biter: "event_subject"`` — the object the firing event was about
+        # deals the damage (Pandemonium's entering creature). CR 119.3: the
+        # damage is the *creature's*, not the enchantment's, so the dealer moves
+        # and the ability stays where it is, exactly as it does for an Aura one
+        # branch up. Read by the stable id the fire site froze (CR 400.7 — the
+        # permanent may have moved since), and a permanent that has left deals
+        # nothing rather than the enchantment biting with its own zero power.
+        bound = (context.trigger_context or {}).get("event_subject_permanent_id")
+        source = game.permanent_by_id(bound) if isinstance(bound, int) else None
     if source is None:
         game.log.append(f"{card.name}: nothing to deal the damage")
+        return True, "resolved"
+    described_targets = instruction.payload.get("targets") or {}
+    if described_targets.get("quantifier") == "any_target" and (
+        context.target_permanent_index is None
+        and context.target_permanent_id is None
+    ):
+        # CR 115.4's other half: "any target" is a creature, a player or a
+        # planeswalker, and the announcement named a **player's face**. The
+        # object branch below resolves a permanent and would find none, so the
+        # bite would silently deal nothing — the shape this engine calls a
+        # runtime decline. Addressed the way ``deal_damage`` addresses the same
+        # union: an announced object is an id or an index, and its absence under
+        # this quantifier is the face.
+        amount = source.effective_power + int(
+            instruction.payload.get("power_bonus", 0)
+        )
+        face = context.target
+        context.results["damaged_permanents"] = ()
+        game._deal_damage_to_player(
+            face, amount, source=source,
+            then=lambda dealt: (
+                context.results.__setitem__("damage_dealt", dealt),
+                dealt and game.log.append(
+                    f"{source.card.name} deals {dealt} damage to {face.name}"
+                ),
+            ),
+            asks=True,
+        )
         return True, "resolved"
     filters = instruction.payload.get("filter") or {}
     # "…to **another** target creature" (Farrel's Mantle) — re-checked here
@@ -1460,10 +1498,22 @@ def source_bites_target(game, instruction, context):
     # ability's source; and the key is only set where the word is printed, so
     # Karplusan Yeti may still aim its own ability at itself.
     excluded = source if instruction.payload.get("exclude_biter") else None
+    # "**Any target**" narrows to CR 115.4's union rather than to a printed noun
+    # phrase, and it is re-asked here for the reason the filter above is: the
+    # announcement chose a legal target and CR 608.2b lets everything change
+    # before this runs, so a creature that has since stopped being one is no
+    # longer something this damage may be dealt to.
+    any_target = described_targets.get("quantifier") == "any_target"
     victim = resolve_target_permanent(
         game, context,
         predicate=lambda perm: (
-            perm is not excluded and permanent_matches_filter(perm, filters)
+            perm is not excluded
+            and permanent_matches_filter(perm, filters)
+            and (
+                not any_target
+                or perm.is_creature
+                or perm.has_type("planeswalker")
+            )
         ),
     )
     # What the sentence after this one means by "that creature" (Tracker), by
