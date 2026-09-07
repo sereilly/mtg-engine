@@ -318,7 +318,19 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         # computing them per query without ever writing metadata.
         "cant_be_enchanted_by_auras": game._cant_be_enchanted(perm),
         "is_indestructible": game._is_indestructible(perm),
-        "is_aura": "aura" in perm.card.type_line.lower(),
+        # Asked of ``displayed_type_line`` — the same layer-aware answer the
+        # ``"type"`` field above already sends — rather than of the *printed*
+        # type line. This is the second site of the class Tempest's smoke test
+        # found in ``_effective_keywords`` and fixed at one site only, and
+        # Stronghold is the set that collects on it: a **Licid** activates
+        # "becomes an Aura enchantment with enchant creature", which is a
+        # CR 613 layer-4 type change, so nothing on the card moves and both
+        # ``perm.card.type_line`` and ``effective_card.type_line`` still read
+        # "Creature — Licid". The engine had it right at every other seam
+        # (``is_creature`` False, ``has_type("enchantment")`` True, the
+        # attachment recorded); the client alone was told the thing attached to
+        # its Grizzly Bears was not an Aura.
+        "is_aura": "aura" in displayed_type_line(perm).lower(),
         "attached_to_index": attached_to_index,
         "attached_to_id": attached_to_id,
         "attached_to_seat": attached_to_seat,
