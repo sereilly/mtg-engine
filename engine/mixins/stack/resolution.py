@@ -1163,7 +1163,18 @@ class StackResolutionMixin:
                 # where it happens — `_process_land_enters` above is the
                 # *entry*, which a land put onto the battlefield by an effect
                 # also makes and this one does not.
-                emit(self, "land_played", subject=card, seat=caster_index)
+                #
+                # ``event_subject_player`` beside ``seat``: the first is the
+                # one key every reader of a printed "**that player**" asks for
+                # (CR 603.10) and the second is what this event's own filter
+                # compares against the observer. Horn of Greed's "that player
+                # draws a card" is a different seat on every land drop, and
+                # nothing on a board records who played one — so the freeze has
+                # to happen here, where it is known.
+                emit(
+                    self, "land_played", subject=card, seat=caster_index,
+                    event_subject_player=caster_index,
+                )
                 # "When **you play a card**" (Juju Bubble). CR 701.18b's other
                 # half: a land is played rather than cast, so the cast
                 # announcement never reaches it. Beside `_process_land_enters`

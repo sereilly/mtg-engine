@@ -357,10 +357,19 @@ def aura_enchants(oracle_text: str, noun: str) -> bool:
 
 
 #: "Whenever enchanted land is tapped for mana, its controller adds an
-#: additional {G}." (Wild Growth.) The phrase compiles to no trigger — "tapped
-#: for mana" is not a condition the trigger table produces for an *attached*
-#: subject — so the mana is added by `mixins/turn_management.tap_land_for_mana`
-#: reading the Aura's text at the moment the land is tapped.
+#: additional {G}." (Wild Growth.) "…adds an additional {G}{G}." (Overgrowth.)
+#: The phrase compiles to no trigger — "tapped for mana" is not a condition the
+#: trigger table produces for an *attached* subject — so the mana is added by
+#: `mixins/turn_management.tap_land_for_mana` reading the Aura's text at the
+#: moment the land is tapped.
+#:
+#: **A run of symbols, not one.** The single-symbol group was a pattern written
+#: to the one card that printed it, and the second card printing the template
+#: doubles the symbol rather than changing the sentence — so the count is data
+#: the same way every other printed number in this engine is. Written as one
+#: group it would have refused Overgrowth outright, which is the loud direction;
+#: written as an unanchored single symbol it would have added **half** the mana
+#: the card prints, which is not.
 #:
 #: The pattern lives here, once, because two readers need the same answer: that
 #: dispatcher, and the support gate deciding whether the line is implemented.
@@ -368,26 +377,33 @@ def aura_enchants(oracle_text: str, noun: str) -> bool:
 #: to claim the line with a wildcard instead.
 _ADDITIONAL_MANA_ON_TAP = re.compile(
     r"^whenever enchanted land is tapped for mana, "
-    r"its controller adds an additional \{([wubrgc])\}$"
+    r"its controller adds an additional ((?:\{[wubrgc]\})+)$"
 )
 
 
-def aura_additional_mana_on_tap_line(normalized_line: str) -> str | None:
-    """The extra mana symbol *normalized_line* adds when its land is tapped."""
+def aura_additional_mana_on_tap_line(normalized_line: str) -> tuple[str, ...]:
+    """The extra mana symbols *normalized_line* adds when its land is tapped.
+
+    Empty for a line this does not implement, so a caller may ask it as a
+    predicate — one answer for the dispatcher and for the support gate, which
+    is why the pattern is not written out at either.
+    """
     match = _ADDITIONAL_MANA_ON_TAP.match(normalized_line.strip().rstrip("."))
-    return match.group(1).upper() if match is not None else None
+    if match is None:
+        return ()
+    return tuple(sym.upper() for sym in re.findall(r"[wubrgc]", match.group(1)))
 
 
-def aura_additional_mana_on_tap(oracle_text: str) -> str | None:
+def aura_additional_mana_on_tap(oracle_text: str) -> tuple[str, ...]:
     """The same answer for a whole card, for the dispatcher that holds the Aura
     rather than one of its lines."""
     from .oracle import normalize_creature_line
 
     for raw_line in (oracle_text or "").splitlines():
-        symbol = aura_additional_mana_on_tap_line(normalize_creature_line(raw_line))
-        if symbol is not None:
-            return symbol
-    return None
+        symbols = aura_additional_mana_on_tap_line(normalize_creature_line(raw_line))
+        if symbols:
+            return symbols
+    return ()
 
 
 # A trigger whose *condition* is about the permanent this Aura or Equipment is
@@ -466,7 +482,7 @@ def attached_trigger_claim(normalized_line: str, card_name: str = "") -> str | N
     parsed = _parse_triggered_ability(normalized_line, card_name)
     if parsed is not None and parsed.instruction is not None:
         return "attached trigger — compiled instruction"
-    if aura_additional_mana_on_tap_line(normalized_line) is not None:
+    if aura_additional_mana_on_tap_line(normalized_line):
         return "attached trigger — additional mana on tap"
     return None
 

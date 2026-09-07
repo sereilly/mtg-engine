@@ -1165,8 +1165,15 @@ def _land_played_filter(
     observer = game.controller_index_of(permanent)
     if observer is None:
         return False
-    if trig.condition.payload.get("land_player") == "an opponent":
+    land_player = trig.condition.payload.get("land_player")
+    if land_player == "an opponent":
         return seat != observer
+    if land_player == "a player":
+        # "Whenever **a player** plays a land" (Horn of Greed) — unnarrowed, so
+        # every seat's land drop fires it, the controller's included. The
+        # printed word is the whole narrowing here, exactly as it is one event
+        # over in :func:`_draws_card_filter`.
+        return True
     return seat == observer
 
 

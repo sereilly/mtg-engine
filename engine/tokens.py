@@ -90,6 +90,21 @@ def default_token_name(subtypes: Sequence[str]) -> str:
     return " ".join(words + ["Token"])
 
 
+#: Which metadata record each characteristic a token may take "**of the chosen
+#: color and type**" (Volrath's Laboratory) is written under — the same keys
+#: ``engine/enter_effects.py`` stamps as a permanent enters and
+#: ``engine/subject_filters.py`` tests, so a chosen word cannot be recorded in
+#: one place and read from another.
+#:
+#: Here rather than in the handler for :func:`default_token_name`'s reason: the
+#: token's CR 111.4 name follows from the subtype, so the record and the naming
+#: rule are one module's business.
+CHOSEN_TOKEN_RECORDS: dict[str, str] = {
+    "color": "chosen_color",
+    "creature_type": "chosen_creature_type",
+}
+
+
 def token_image_uris(source_card: CardDefinition, token_name: str) -> dict[str, str] | None:
     """Resolve a token's Scryfall image URLs from its creating card's ``all_parts``.
 

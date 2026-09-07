@@ -819,6 +819,43 @@ def _optional_damage_redirect(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("entry_discard_toll")
+def _entry_discard_toll(ctx: PromptContext, choices: list) -> dict:
+    """Mox Diamond: which card in hand pays for the entry, or none of them.
+
+    The offered slots are the hand indices the printed phrase admits, so the
+    picker cannot show a card the answer path would refuse (idiom 9), and the
+    cards themselves are serialized from the hand for the visual picker.
+    """
+    choice = choices[0]
+    player = ctx.game.players[choice.player_index]
+    indices = [i for i in (choice.data.get("hand_indices") or []) if 0 <= i < len(player.hand)]
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data["permanent"].card.name,
+        "hand_indices": indices,
+        "cards": [ctx.serialize_card(player.hand[i]) for i in indices],
+    }
+
+
+@prompt_renderer("draw_becomes_counter")
+def _draw_becomes_counter(ctx: PromptContext, choices: list) -> dict:
+    """Pursuit of Knowledge: take the counter, or take the draw.
+
+    One offer at a time - the replacement arms one per draw - with how many are
+    still queued behind it, exactly as the redirect above reports.
+    """
+    choice = choices[0]
+    source = ctx.game.permanent_by_id(int(choice.data["source_id"]))
+    return {
+        "player_seat": choice.player_index,
+        "counter": choice.data["counter"],
+        "source_name": source.card.name if source is not None else "",
+        "options": list(choice.options),
+        "remaining": sum(1 for c in choices if c.player_index == choice.player_index),
+    }
+
+
 @prompt_renderer("balance")
 def _balance(ctx: PromptContext, choices: list) -> dict:
     choice = choices[0]

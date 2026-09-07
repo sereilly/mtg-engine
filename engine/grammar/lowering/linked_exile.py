@@ -49,7 +49,8 @@ from ._common import (
     _amount_payload, _filter_payload, _restrictions_beyond,
     chargeable_card_filter,
 )
-from ._events import EVENT_SUBJECT_PLAYER, _EVENT_SUBJECT_PLAYERS
+from ._events import (EVENT_SUBJECT_PLAYER, _EVENT_SUBJECT_OBJECTS,
+                      _EVENT_SUBJECT_PLAYERS)
 from ._piles import _SEARCH_EXILE_HONOURED, _linked_exile_filter
 
 
@@ -445,3 +446,87 @@ def _lower_put_exiled_this_way(
     if described:
         payload["filter"] = described
     return (OracleInstruction("put_exiled_this_way", "", payload),)
+
+
+def _fused_exile_event_subject_until_source_leaves(
+    steps: tuple, event: str | None = None
+) -> tuple[OracleInstruction, ...] | None:
+    """"Whenever a creature enters, …, **exile that creature. Return that card
+    to the battlefield under its owner's control when this artifact leaves the
+    battlefield.**" (Portcullis.)
+
+    Two printed sentences and one CR 610.3 *linked* pair: the second refers to
+    exactly the object the first moved and to nothing else. Fused because the
+    decomposition has nowhere to go — a delayed ability would have to bind a
+    card the exile step has no channel to hand it, and this engine already owns
+    the pairing under one record (``engine/linked_exile.py``, whose entries the
+    single leaves-the-battlefield transition gives back). Two mechanisms for one
+    relation is how a return comes to fire twice, or not at all.
+
+    Here rather than in ``lowering/exile.py`` because that is what this module
+    is: the exile family moves an object *into* the zone and refuses what no
+    handler implements, and every production here is about a card that is
+    linked to a source. It is also the family boundary in the other direction —
+    ``exile`` may not import ``hand``, ``linked_exile`` or any other family, so
+    a production needing this file's subject belongs in this file.
+
+    Returning None rather than raising leaves a near-miss to the ordinary step
+    lowering, which refuses it by name.
+    """
+    if len(steps) != 2 or event not in _EVENT_SUBJECT_OBJECTS:
+        return None
+    exiled, delayed = steps
+    if not isinstance(exiled, ast.Exile) or not isinstance(
+        delayed, ast.CreateDelayedTrigger
+    ):
+        return None
+    if exiled.counters or exiled.face_down or exiled.same_zone:
+        return None
+    if exiled.duration.kind is not None or exiled.actor is not None:
+        return None
+    subject = exiled.subject
+    if not (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "that"
+        and not subject.targeted
+        and subject.count == 1
+        and subject.filter.card_types
+    ):
+        return None
+    # The delay watches the ability's **own source** and fires once, which is
+    # what ``ends_on=LEAVES`` means on the record. A delay watching anything
+    # else, or one carrying a stated duration, is a different sentence and
+    # refuses rather than being read as this one.
+    if (
+        delayed.event != "bound_permanent_leaves_battlefield"
+        or delayed.watches != "source"
+        or not delayed.once
+        or delayed.duration != "until_it_triggers"
+    ):
+        return None
+    ret = delayed.effect
+    if not isinstance(ret, ast.ReturnToZone):
+        return None
+    if ret.to is None or ret.to.name != "battlefield" or ret.to.owner is not None:
+        return None
+    # "…under **its owner's** control", which is the seat the record already
+    # returns a linked card under. Any other seat is a phrase this rule has not
+    # read, and taking it as the owner would hand the creature to the wrong
+    # player.
+    if ret.under_control_of is None or ret.under_control_of.kind != "owner":
+        return None
+    if ret.entering_tapped or ret.entering_counters or ret.repetitions:
+        return None
+    returned = ret.subject
+    if not (
+        isinstance(returned, ast.TargetSpec)
+        and returned.quantifier == "that"
+        and not returned.targeted
+        and returned.filter.is_card
+    ):
+        return None
+    return (
+        OracleInstruction(
+            "exile_event_subject", "", {"until_source_leaves": True},
+        ),
+    )

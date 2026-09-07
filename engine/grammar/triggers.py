@@ -511,6 +511,15 @@ def _parse_matched_event(
     # refuses "an" as an unknown adjective — the same split the condition
     # parser makes for "you control **a** Swamp".
     grave_mark = stream.mark()
+    # "Whenever **a spell or ability an opponent controls causes** a land to be
+    # put into your graveyard from the battlefield" (Sacred Ground). The same
+    # event with a causation clause in front of it, so the words are consumed
+    # here and the narrowing rides `engine/oracle.py`'s condition payload —
+    # exactly as "whose graveyard" does below. Consumed rather than skipped: a
+    # production must take every token of its line or refuse it.
+    caused = stream.accept_phrase(
+        "a", "spell", "or", "ability", "an", "opponent", "controls", "causes"
+    )
     stream.accept_word("a", "an")
     try:
         dying = parse_object_filter(stream)
@@ -522,7 +531,27 @@ def _parse_matched_event(
     # one supplies the effect. The word still has to be *consumed* or the
     # line fails full-token consumption and the card loses its ability.
     dying_grave = (
-        stream.accept_phrase(
+        # "…**to be** put into your graveyard…" — the infinitive the causation
+        # clause above puts the verb into. One reading of one event, so it is a
+        # spelling here rather than a production of its own.
+        (
+            caused
+            and (
+                stream.accept_phrase(
+                    "to", "be", "put", "into", "a", "graveyard", "from", "the",
+                    "battlefield",
+                )
+                or stream.accept_phrase(
+                    "to", "be", "put", "into", "your", "graveyard", "from",
+                    "the", "battlefield",
+                )
+                or stream.accept_phrase(
+                    "to", "be", "put", "into", "an", "opponent", "'s",
+                    "graveyard", "from", "the", "battlefield",
+                )
+            )
+        )
+        or stream.accept_phrase(
             "is", "put", "into", "a", "graveyard", "from", "the", "battlefield"
         )
         or stream.accept_phrase(

@@ -250,6 +250,15 @@ DRAW_LOOKING_AT_TOP = 20  # Aladdin's Lamp
 # benefit, and this one takes the draw away. Applying a Ring of Ma'rûf or an
 # Aladdin's Lamp first consumes the draw and this never applies — which is the
 # order the player would pick, and the rule permits.
+# An **optional** consuming replacement, and the only one here: "you *may* put
+# a study counter on this enchantment instead" is a decision its own controller
+# makes about their own draw (CR 109.5). Before the four mandatory consumers
+# below and after everything the player armed, which is the same CR 616.1e
+# argument they make: a draw a Lamp has already taken away never puts this
+# question, and the affected player is exactly the one who would choose that
+# order. Being optional, the number matters less than for its neighbours -
+# declining leaves the event for whatever is behind it.
+DRAW_BECOMES_COUNTER = 25  # Pursuit of Knowledge
 DRAW_DISCARD_INSTEAD = 30  # Chains of Mephistopheles
 # Beside it, and last for the same reason: this one takes the draw away too.
 # Between the two the order is arbitrary — no card in the pool prints both, and
@@ -298,6 +307,11 @@ UNPAYABLE_ENTRY_COST = 15  # Frankenstein's Monster
 # card prints, so the slot is free rather than chosen - CR 616.1e would put the
 # choice to the affected player if one ever did.
 UNPAYABLE_ENTRY_SACRIFICE = 16  # the Alliances sac lands
+# Beside it, and the same paragraph with an **optional** toll out of a hand
+# (Mox Diamond). After the two above only because nothing prints two entry
+# tolls on one permanent, so the slot is free rather than chosen - CR 616.1e
+# would put the choice to the affected player if one ever did.
+OPTIONAL_ENTRY_DISCARD = 17  # Mox Diamond
 # After it, and it has to be: the exile replacement means the permanent never
 # enters, and a rider hung on an entry that did not happen is a sacrifice for
 # nothing.
@@ -1988,6 +2002,166 @@ def _graveyard_instead_of_entering(game, payload: dict) -> ReplacementOutcome | 
     return ReplacementOutcome(replaced=True)
 
 
+#: Marks a permanent whose optional entry toll has already been answered.
+#:
+#: On the permanent rather than on the game, because the question is asked of
+#: one object: two Mox Diamonds entering in one turn each get their own offer,
+#: and a permanent that leaves takes the answer with it (CR 400.7). Its own key
+#: rather than a re-read of the battlefield, because the accepted answer
+#: **re-enters the permanent** through the one entry path - and without a mark
+#: the interceptor would offer the same choice again, forever.
+ENTRY_TOLL_ANSWERED = "entry_toll_answered"
+
+
+def _entry_discard_toll(game, payload: dict) -> dict | None:
+    """The optional entry toll the entering permanent prints, or None.
+
+    Read off the permanent's ``effective_card``, so a Clone of one has the
+    sentence (CR 707.2) and one whose text was changed does not. Pure, like
+    every applicability predicate in this file: ``effect_ordering`` counts the
+    contenders before any of them runs.
+    """
+    from .enter_effects import entry_discard_requirement
+
+    permanent = payload["permanent"]
+    if permanent.metadata.get(ENTRY_TOLL_ANSWERED):
+        return None
+    return entry_discard_requirement(permanent.effective_card)
+
+
+def _applies_optional_entry_discard(game, payload: dict) -> bool:
+    return _entry_discard_toll(game, payload) is not None
+
+
+@replacement_effect(
+    "would_enter_battlefield", OPTIONAL_ENTRY_DISCARD,
+    applies=_applies_optional_entry_discard,
+)
+def _discard_or_graveyard_instead_of_entering(
+    game, payload: dict
+) -> ReplacementOutcome | None:
+    """Mox Diamond: "If this artifact would enter, you may discard a land card
+    instead. If you do, put this artifact onto the battlefield. If you don't,
+    put it into its owner's graveyard."
+
+    A consuming replacement whichever way it is answered, and it has to be one:
+    the choice is made *before* the entry (CR 614.1a), so both halves of it are
+    this function's business. Letting the permanent enter and charging
+    afterwards would make declining put a **permanent** into a graveyard, which
+    is a death (CR 700.4) with an entry, an id, layer contributions and every
+    enters-the-battlefield trigger in front of it - a different card.
+
+    That is also what separates this from the Alliances sac lands one entry up.
+    Their toll is mandatory when it can be paid (CR 101.3), so their "if you
+    don't" branch is reached only by a player who *cannot* pay and the entry
+    state charges the rest; here the branch belongs to a player who simply
+    declines, and nothing after the entry can un-enter the permanent.
+
+    **One decision, not two.** Which card is discarded and whether to discard at
+    all are asked together, because nothing is learned between them: the offer
+    lists the hand cards the phrase admits, plus declining. Two prompts would be
+    two chances for a seat to answer half.
+    """
+    from .handlers._common import _card_matches_filter
+
+    permanent = payload["permanent"]
+    controller_index = int(payload["controller_index"])
+    player = game.players[controller_index]
+    spec = _entry_discard_toll(game, payload)
+    filters = spec["filter"]
+    payable = [
+        index
+        for index, held in enumerate(player.hand)
+        if _card_matches_filter(held, filters, game=game, owner=player)
+    ]
+    # Marked before the offer, not after: a non-interactive seat resolves inside
+    # `offer_replacement_choice`, and the resolver re-enters the permanent
+    # through the one entry path - which asks this replacement again.
+    permanent.metadata[ENTRY_TOLL_ANSWERED] = True
+    suspended, _ = offer_replacement_choice(
+        game,
+        ReplacementChoice(
+            kind="entry_discard_toll",
+            player_index=controller_index,
+            # Declining last, so index 0 is the toll being paid when there is
+            # anything to pay it with. A seat that cannot pay is offered only
+            # the decline, which is CR 101.3's outcome written as the only
+            # option rather than as a branch somewhere else.
+            options=tuple(
+                player.hand[index].name for index in payable
+            ) + ("decline",),
+            # Paying, when the hand can. The engine's rule for an unconstrained
+            # choice is the one a player would make (idiom 8), and the whole
+            # point of a card that asks this is that the permanent is worth the
+            # card - a seat that declined by default would put every Mox Diamond
+            # it ever drew straight into its graveyard.
+            default_option=0,
+            data={
+                "permanent": permanent,
+                "controller_index": controller_index,
+                "hand_indices": payable,
+                "was_cast": bool(payload.get("was_cast")),
+            },
+        ),
+    )
+    if suspended:
+        game.log.append(
+            f"{player.name} may discard a card to put "
+            f"{permanent.card.name} onto the battlefield"
+        )
+    return ReplacementOutcome(replaced=True)
+
+
+@replacement_choice("entry_discard_toll")
+def _resolve_entry_discard_toll(
+    game, choice: ReplacementChoice, option_index: int
+) -> int:
+    """Apply Mox Diamond's offer, either way.
+
+    An index into the offered hand cards pays the toll and the permanent enters;
+    the last option - and any answer outside the list - declines, and the card
+    goes to its **owner's** graveyard, which is the zone CR 400.3 gives it and
+    the one the printed sentence names.
+
+    The hand slot is resolved to its card and removed through
+    ``Game.take_card_from_hand``: a hand is a list of ``CardDefinition`` where
+    every copy of a card is one object, so an identity filter would delete all
+    of them where this removes exactly one.
+
+    Returns 0 - nothing here draws.
+    """
+    data = choice.data
+    permanent = data["permanent"]
+    controller_index = int(data["controller_index"])
+    player = game.players[controller_index]
+    indices = list(data.get("hand_indices") or [])
+    if 0 <= option_index < len(indices):
+        slot = indices[option_index]
+        if 0 <= slot < len(player.hand):
+            discarded = player.hand[slot]
+            game.take_card_from_hand(player, discarded)
+            game._discard_card(player, discarded)
+            game.log.append(
+                f"{player.name} discarded {discarded.name} to put "
+                f"{permanent.card.name} onto the battlefield"
+            )
+            game._put_permanent_onto_battlefield(
+                controller_index, permanent, None,
+                was_cast=bool(data.get("was_cast")),
+            )
+            return 0
+    owner_index = game.owner_index_of(permanent)
+    owner = game.players[
+        owner_index if owner_index is not None else controller_index
+    ]
+    game.put_card_into_graveyard(owner, permanent.card)
+    game.log.append(
+        f"{permanent.card.name} was put into {owner.name}'s graveyard instead "
+        "of entering the battlefield"
+    )
+    return 0
+
+
 def _entry_sacrifice_candidates(game, payload: dict) -> list[int]:
     """Battlefield indices of the permanents that could pay the entering
     permanent's toll.
@@ -2825,6 +2999,189 @@ def _reveal_top_instead_of_drawing(game, payload: dict) -> ReplacementOutcome | 
     return ReplacementOutcome(replaced=True)
 
 
+#: "If you would draw a card, you may put a **study** counter on this
+#: **enchantment** instead." (Pursuit of Knowledge.)
+#:
+#: Matched by shape rather than listed as a constant, because both the counter
+#: kind and the noun the card calls itself are payload: a creature printing the
+#: same sentence with a page counter is printing the same replacement, and a
+#: literal would buy exactly one card. The self-reference is already normalized
+#: to "this <noun>" before a line reaches any reader here.
+#:
+#: One reader for the interceptor and for the support gate
+#: (``replacement_claims_line`` below), which is the pairing every text-keyed
+#: table in this engine keeps.
+_DRAW_BECOMES_COUNTER_RE = re.compile(
+    r"^if you would draw a card, you may put a (?P<counter>[a-z][a-z'-]*) "
+    r"counter on this (?:creature|artifact|enchantment|land|permanent) instead$"
+)
+
+
+def draw_becomes_counter(line: str) -> str | None:
+    """The counter kind *line* offers in place of a draw, or None."""
+    match = _DRAW_BECOMES_COUNTER_RE.match(line.strip().lower().rstrip("."))
+    return match.group("counter") if match is not None else None
+
+
+def _draw_becomes_counter_sources(game, payload: dict) -> list:
+    """Every permanent offering this substitution for *this* draw.
+
+    "**You**" is the ability's controller (CR 109.5), so only the drawing seat's
+    own permanents are in contention - an opponent's copy offers its own
+    controller the choice about their own draws and says nothing about this one.
+
+    CR 614.5's exclusion is honoured through the same ``exclude_sources`` key
+    every other draw replacement here reads: the draw a declined offer leaves
+    behind goes back through the seam, and a source already asked must not ask
+    again.
+
+    Read off ``effective_card``, because a Clone of one has the sentence
+    (CR 707.2) and one whose text was changed does not.
+
+    Pure, like every applicability predicate in this file: ``effect_ordering``
+    counts the contenders before any of them runs.
+    """
+    exclude = set(payload.get("exclude_sources") or ())
+    seat = game.players.index(payload["player"])
+    return [
+        perm
+        for controller, perm in game.permanents_with_controller()
+        if controller == seat
+        and perm.permanent_id not in exclude
+        and any(
+            draw_becomes_counter(line) is not None
+            for line in (perm.effective_card.oracle_text or "").splitlines()
+        )
+    ]
+
+
+def _applies_draw_becomes_counter(game, payload: dict) -> bool:
+    return (
+        int(payload.get("count", 0)) > 0
+        and bool(_draw_becomes_counter_sources(game, payload))
+    )
+
+
+@replacement_effect(
+    "draw", DRAW_BECOMES_COUNTER, applies=_applies_draw_becomes_counter
+)
+def _counter_instead_of_drawing(game, payload: dict) -> ReplacementOutcome | None:
+    """Pursuit of Knowledge: "If you would draw a card, you may put a study
+    counter on this enchantment instead."
+
+    One draw at a time, because that is what the sentence replaces (CR 121.2
+    makes a multi-card instruction that many draws). The draws queued behind
+    this one go back through the seam so a second source gets its own offer.
+
+    **Optional**, so it is a :class:`ReplacementChoice` rather than an applied
+    effect: ``apply_replacements`` returns synchronously and the answer arrives
+    from a human on a later request. Both answers finish through the one
+    registered resolver, which is what keeps the accepted and the declined path
+    from being two implementations of one sentence.
+
+    The declining answer still *replaces* the event as far as this function is
+    concerned - the draw it leaves is remade through the seam with this source
+    excluded (CR 614.5), which is how the offer is not put twice.
+    """
+    player = payload["player"]
+    seat = game.players.index(player)
+    source = min(
+        _draw_becomes_counter_sources(game, payload),
+        key=lambda perm: perm.permanent_id,
+    )
+    kind = next(
+        counter
+        for counter in (
+            draw_becomes_counter(line)
+            for line in (source.effective_card.oracle_text or "").splitlines()
+        )
+        if counter is not None
+    )
+    excludes = tuple(payload.get("exclude_sources") or ()) + (source.permanent_id,)
+    suspended, drawn = offer_replacement_choice(
+        game,
+        ReplacementChoice(
+            kind="draw_becomes_counter",
+            player_index=seat,
+            # Declining first, and that is the default a non-interactive seat
+            # takes. CR 614.1 leaves the choice to the affected player, and the
+            # engine's rule for an unconstrained one is the choice a player
+            # would make (idiom 8) - a seat that accepted every offer would
+            # never draw another card, in exchange for counters no AI policy
+            # spends. A human seat is asked and may say yes; a headless one
+            # keeps playing.
+            options=("draw the card", f"put a {kind} counter on {source.card.name}"),
+            default_option=0,
+            data={
+                "counter": kind,
+                "source_id": source.permanent_id,
+                "remaining_draws": int(payload["count"]) - 1,
+                "exclude_sources": excludes,
+                "turn_based": bool(payload.get("turn_based")),
+            },
+        ),
+    )
+    if suspended:
+        game.log.append(
+            f"{player.name} may put a {kind} counter on {source.card.name} "
+            "instead of drawing"
+        )
+    payload["drawn"] = drawn
+    return ReplacementOutcome(replaced=True)
+
+
+@replacement_choice("draw_becomes_counter")
+def _resolve_draw_becomes_counter(
+    game, choice: ReplacementChoice, option_index: int
+) -> int:
+    """Apply Pursuit of Knowledge's offer, either way.
+
+    Option 0 declines: the draw this function was asked about is remade through
+    ``_draw_with_replacements`` with the offering permanent excluded, so every
+    *other* draw replacement still gets its turn and this one is not asked
+    twice (CR 614.5).
+
+    Option 1 accepts: the counter goes on and no card is drawn, so a "whenever
+    you draw a card" effect correctly sees one fewer draw.
+
+    The source is addressed by ``permanent_id``: it can leave the battlefield
+    while the offer is queued, and a counter placed on whatever slid into its
+    slot would be a counter on the wrong permanent.
+    """
+    player = game.players[choice.player_index]
+    data = choice.data
+    excludes = tuple(data.get("exclude_sources") or ())
+    remaining = int(data.get("remaining_draws", 0))
+    drawn = 0
+    if option_index == 0:
+        drawn += game._draw_with_replacements(
+            player, 1,
+            turn_based=bool(data.get("turn_based")),
+            exclude_sources=excludes,
+        )
+    else:
+        source = game.permanent_by_id(int(data["source_id"]))
+        if source is None:
+            # The enchantment left while the offer was queued. Nothing to put a
+            # counter on, and the draw was already replaced - CR 614.1's
+            # substitution happened, and this is the "does as much as it can"
+            # end of it.
+            game.log.append(
+                f"{player.name}: the counter had nowhere to go and no card was drawn"
+            )
+        else:
+            from .named_counters import add_counters
+
+            add_counters(source, str(data["counter"]), 1)
+            game.log.append(
+                f"{player.name} put a {data['counter']} counter on "
+                f"{source.card.name} instead of drawing"
+            )
+    if remaining > 0:
+        drawn += game._draw_with_replacements(player, remaining)
+    return drawn
+
+
 def _chains_affected_draws(payload: dict) -> int:
     """How many of this event's draws the exemption leaves.
 
@@ -3516,6 +3873,13 @@ def replacement_claims_line(line: str) -> bool:
     # controller's untap step, remove all wind counters from it instead."
     # (Freyalise's Winds), matched by shape because the counter word is payload.
     if counters_instead_of_untap(normalized) is not None:
+        return True
+    # "If you would draw a card, you may put a study counter on this enchantment
+    # instead." (Pursuit of Knowledge.) Matched by shape because the counter
+    # word and the card's own noun are payload - through the same reader the
+    # interceptor self-selects on, so a wording it cannot read leaves the line
+    # unclaimed rather than admitted with the substitution silently absent.
+    if draw_becomes_counter(normalized) is not None:
         return True
     # "If damage would be dealt to this creature, put that many -1/-1 counters
     # on it instead." (Lichenthrope), matched by shape because the counter kind

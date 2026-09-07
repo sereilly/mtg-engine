@@ -326,6 +326,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # fire site froze — no pick, so it is not the targeted destroy. Same
     # category, so GRAMMAR_CATEGORIES is unchanged.
     "destroy_event_subject": "destruction",
+    # "Whenever a creature enters, …, exile that creature." (Portcullis.) The
+    # exile family's twin of the destroy above; a `zones` category name would
+    # say where the lowering lives rather than which family the kind migrates
+    # with, which is the one way a split can move a card.
+    "exile_event_subject": "destruction",
     # "…destroy **that non-Wall creature**" (Acidic Dagger): the same
     # destroy at the other end of the event, on the creature the entry was
     # bound to having damaged rather than on the entry's own object.

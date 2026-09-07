@@ -235,6 +235,24 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("permanent_dies",
      r"whenever (?P<dying_subject>an? [^,]+) is put into a graveyard from the battlefield"
      r", if it (?P<dying_not_sacrificed>wasn't sacrificed)"),
+    # "Whenever **a spell or ability an opponent controls causes** a land to be
+    # put into your graveyard from the battlefield" (Sacred Ground). The same
+    # event with a narrowing about **what caused it** — a permanent that died
+    # to a state-based action, to its own upkeep, or to a spell its owner cast
+    # is not what this card watches, and the graveyard looks identical in every
+    # one of those cases.
+    #
+    # The cause is a payload key like every other narrowing on this row, and it
+    # is answered where the discard seam answers the identical question for
+    # Psychic Purge: `Game.resolving_seats` is CR 109.5's controller of whatever
+    # is resolving, and an empty stack means nothing caused the death at all.
+    # Before the three rows below because "to be put into" is not "is put into"
+    # and neither could match this sentence — the position is documentation.
+    ("permanent_dies",
+     r"whenever a spell or ability (?P<dying_cause>an opponent) controls causes "
+     r"(?P<dying_subject>an? [^,]+?) to be put into "
+     r"(?P<dying_graveyard_owner>your|an opponent's) "
+     r"graveyard from the battlefield"),
     # "…is put into **your** graveyard from the battlefield" (Enduring Renewal)
     # and its mirror, "…into **an opponent's** graveyard…" (Grim Feast).
     # Whose graveyard is a narrowing the *subject* cannot carry: CR 404.1 sends
@@ -252,11 +270,20 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      r"graveyard from the battlefield"),
     ("permanent_dies",
      r"whenever (?P<dying_subject>an? [^,]+) is put into a graveyard from the battlefield"),
-    # "Whenever **you** discard a card" (Necropotence). CR 701.9a's discard is
-    # an action abilities watch, and the two discard seams announce it — the
-    # random/forced one and the chosen one — so both spellings of a discard
-    # reach this condition rather than only the one the first card exercised.
-    ("you_discard_card",            r"whenever you discard a card"),
+    # "Whenever **you** discard a card" (Necropotence) beside "whenever **an
+    # opponent** discards a card" (Megrim). CR 701.9a's discard is an action
+    # abilities watch, and the two discard seams announce it — the random/forced
+    # one and the chosen one — so both spellings of a discard reach this
+    # condition rather than only the one the first card exercised.
+    #
+    # The seat is the trigger's own narrowing rather than a second kind, which
+    # is exactly what `land_played` and `draws_card` record further down: one
+    # announcement, made where the discard happens, and the printed word decides
+    # whose discard it watches. The kind is named for the *event* for that
+    # reason — it was `you_discard_card` while "you" was the only spelling the
+    # pool printed, which is a kind named after one of its own narrowings.
+    ("discards_card",
+     r"whenever (?:you discard|(?P<discarder>an opponent) discards) a card"),
     ("creature_dies",               r"whenever a creature dies"),
     # "Whenever equipped creature dies" (Malefic Scythe) / "When enchanted
     # creature dies" (Creature Bond). One kind for both words: an Equipment and
@@ -1086,8 +1113,15 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # The seat is the trigger's own narrowing rather than a second kind, which
     # is `draws_card` below read one event over: one announcement, made where
     # the land is played, and the printed word decides whose play it watches.
+    # "Whenever **a player** plays a land, that player draws a card." (Horn of
+    # Greed.) The third value of the same seat axis and not a third condition:
+    # unnarrowed, so every seat's land drop fires it for every watcher. Written
+    # as the *absence* of the group, which is what `draws_card` below means by
+    # a missing ``drawer`` — an absent optional group is not in the groupdict,
+    # so "a player" and "you" would be one payload. They are not one condition,
+    # so the word is captured and the filter compares it.
     ("land_played",
-     r"whenever (?:you play|(?P<land_player>an opponent) plays) a land"),
+     r"whenever (?:you play|(?P<land_player>an opponent|a player) plays) a land"),
     # "**When the chosen player** draws a card **with the chosen name**, …"
     # (Booby Trap.) Two narrowings on the same announcement rather than a second
     # kind, which is the same reading `land_played` above records: one event,

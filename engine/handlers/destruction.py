@@ -1209,6 +1209,60 @@ def destroy_event_subject(game: Game, instruction: OracleInstruction, context: O
     return True, "resolved"
 
 
+@effect_handler("exile_event_subject")
+def exile_event_subject(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Whenever a creature enters, if there are two or more other creatures on
+    the battlefield, **exile that creature. Return that card to the battlefield
+    under its owner's control when this artifact leaves the battlefield.**"
+    (Portcullis.)
+
+    ``destroy_event_subject``'s twin one keyword action over (CR 701.13a rather
+    than 701.7), reading the same frozen id for the same reason: the victim is
+    the object the trigger's own event was about, and by resolution an index is
+    not an identity (CR 400.7). Nothing is chosen — the card printed no target —
+    so this cannot ride the targeted exile, which would raise a picker for a
+    choice CR 603.3d says was never offered.
+
+    ``until_source_leaves`` is the card's **second** printed sentence, and it is
+    this instruction's business rather than a delayed ability of its own: the
+    two sentences are one CR 610.3 linked pair, and the record they need is the
+    one ``engine/linked_exile.py`` already keeps and the one
+    leaves-the-battlefield transition already gives back. A delayed trigger
+    beside it would be a second mechanism for one relation, which is how a
+    return comes to fire twice or not at all.
+
+    A **token** is exiled and simply ceases to exist (CR 111.7), so nothing is
+    linked: there would be no card to give back.
+    """
+    from ..linked_exile import LEAVES, link_exiled_card
+
+    victim = game.permanent_by_id(
+        (context.trigger_context or {}).get("event_subject_permanent_id")
+    )
+    if victim is None or not game.is_on_battlefield(victim):
+        game.log.append(f"{context.card.name}: the permanent it named is gone")
+        return True, "resolved"
+    owner_seat = game.owner_index_of(victim)
+    owner = game.players[owner_seat] if owner_seat is not None else context.caster
+    card = victim.card
+    is_token = bool(victim.metadata.get("is_token"))
+    game.remove_from_battlefield(victim)
+    if not is_token:
+        # CR 400.3: a card goes to its owner's exile, whoever controlled it.
+        owner.exile.append(card)
+        source = context.source_permanent
+        if source is not None and owner_seat is not None and instruction.payload.get(
+            "until_source_leaves"
+        ):
+            link_exiled_card(
+                source, card, owner_seat,
+                to="battlefield", ends_on=(LEAVES,),
+            )
+    game.log.append(f"{context.card.name} exiled {card.name}")
+    game._recompute_continuous_effects()
+    return True, "resolved"
+
+
 @effect_handler("exile_bound_permanent")
 def exile_bound_permanent(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"…**Exile it** at the beginning of the next end step." (Zirilan of the

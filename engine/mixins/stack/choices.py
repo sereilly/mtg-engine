@@ -2639,6 +2639,49 @@ class PendingChoicesMixin:
             player_index, 0 if take_the_damage else 1, kind="optional_damage_redirect"
         )
 
+    def confirm_entry_discard_toll(
+        self, player_index: int, hand_index: int | None = None
+    ) -> bool:
+        """Resolve the oldest pending "you may discard a card instead" entry
+        offer for *player_index* (Mox Diamond).
+
+        *hand_index* is a slot in the player's own hand; the offer lists only
+        the slots the printed phrase admits, so an index outside them declines
+        - which is the same answer ``None`` gives.
+        """
+        choice = next(
+            (
+                pending
+                for pending in pending_choices_for(self, "entry_discard_toll")
+                if pending.player_index == player_index
+            ),
+            None,
+        )
+        if choice is None:
+            return False
+        indices = list(choice.data.get("hand_indices") or [])
+        option = (
+            indices.index(hand_index)
+            if hand_index is not None and hand_index in indices
+            else len(indices)
+        )
+        return self.resolve_replacement_choice(
+            player_index, option, kind="entry_discard_toll"
+        )
+
+    def confirm_draw_becomes_counter(
+        self, player_index: int, take_the_counter: bool
+    ) -> bool:
+        """Resolve the oldest pending "you may put a counter on this instead of
+        drawing" offer for *player_index* (Pursuit of Knowledge).
+
+        Index 0 is the draw, which is the default a non-interactive seat takes
+        - see the interceptor for why that is the choice a player would make.
+        """
+        return self.resolve_replacement_choice(
+            player_index, 1 if take_the_counter else 0, kind="draw_becomes_counter"
+        )
+
     def confirm_leng_discard(self, player_index: int, to_library: bool) -> bool:
         """Resolve the oldest pending Library of Leng destination choice for
         *player_index*: the discarded card goes on top of their library (the
@@ -3702,15 +3745,40 @@ class PendingChoicesMixin:
             from ...grammar.vocabulary import CREATURE_TYPES
 
             permanent = choice.data["permanent"]
+            # "…choose **a color and a creature type**." (Volrath's Laboratory.)
+            # One prompt with two answers, the shape the opponent-and-colour
+            # branch at the bottom already has — so the colour is validated
+            # *before* anything is written, and a bad word refuses the whole
+            # answer rather than leaving the permanent holding one new choice
+            # and one default.
+            wants_color = bool(choice.data.get("needs_color"))
+            color = None
+            if wants_color:
+                try:
+                    color = self._normalize_mana_color(mana_color)
+                except ValueError:
+                    return False
+            word = None
             if creature_type:
                 word = str(creature_type).strip().lower()
                 if word not in CREATURE_TYPES:
                     return False
-                if self.is_on_battlefield(permanent):
+            if self.is_on_battlefield(permanent):
+                chose: list[str] = []
+                if word is not None:
                     permanent.metadata["chosen_creature_type"] = word
+                    chose.append(word)
+                if color is not None:
+                    permanent.metadata["chosen_color"] = color
+                    chose.append(color)
+                if chose:
                     self.log.append(
-                        f"{choice.data['card_name']}: chose {word}"
+                        f"{choice.data['card_name']}: chose {' and '.join(chose)}"
                     )
+                if color is not None:
+                    # A chosen colour can condition a static (Jihad's anthem),
+                    # and the board was last computed against the default.
+                    self._recalculate_lord_buffs()
             self.discard_pending_choice(choice)
             return True
         # "…choose **two basic land types**." (Illusionary Terrain.) A fourth
@@ -9400,6 +9468,43 @@ register_choice(
     # answers could run through one resolver — so nothing is waiting on the
     # answer to carry on. A non-interactive seat takes the stated policy where
     # it stands, exactly as the three offers above do.
+    default_at_arm=True,
+    spectator_visible=True,
+    hidden_for_ai=False,
+)
+
+register_choice(
+    "entry_discard_toll",
+    resolve=_resolve_replacement,
+    default=_default_replacement,
+    action="entry_discard_toll_confirm",
+    prompt_key="entry_discard_toll",
+    blocked_detail=(
+        "choose whether to discard a card to put that permanent onto the "
+        "battlefield (Mox Diamond) before other actions"
+    ),
+    # The entry that armed this was consumed so that both answers run through
+    # one resolver - the permanent is put onto the battlefield by the resolver
+    # itself - so nothing is waiting on the answer to carry on.
+    default_at_arm=True,
+    spectator_visible=True,
+    hidden_for_ai=False,
+)
+
+register_choice(
+    "draw_becomes_counter",
+    resolve=_resolve_replacement,
+    default=_default_replacement,
+    action="draw_becomes_counter_confirm",
+    prompt_key="draw_becomes_counter",
+    blocked_detail=(
+        "choose whether to take the counter instead of the draw (Pursuit of "
+        "Knowledge) before other actions"
+    ),
+    # The draw that armed this was consumed so that both the answer and the
+    # default run through one resolver, and the draw a decline remakes is the
+    # resolver's own business - so nothing is waiting on the answer to carry
+    # on, exactly as for the offers around it.
     default_at_arm=True,
     spectator_visible=True,
     hidden_for_ai=False,

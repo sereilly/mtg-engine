@@ -491,10 +491,44 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
     if stream.accept_word("there") and (
         stream.accept_word("are") or stream.accept_word("is")
     ):
-        there_quantifier = "no" if stream.accept_word("no") else (
-            "a" if stream.accept_word("a", "an") else None
-        )
-        if there_quantifier is not None:
+        # "if there are **two or more** other creatures on the battlefield"
+        # (Portcullis). A printed threshold where the two quantifiers below are
+        # English articles, so the comparison is read rather than derived from a
+        # word — through ``parse_comparison``, the one reader of "N or more" /
+        # "N or fewer" in this grammar, so a threshold here and a threshold on a
+        # power cannot come to mean different things.
+        #
+        # Tried first because "two" is neither "no" nor "a": the two readings
+        # cannot both match, and a number left unread used to fall out of this
+        # production entirely and be taken as *presence* by the clause below —
+        # a condition that holds on a board the card does not name.
+        there_comparison = None
+        number_mark = stream.mark()
+        # The two English articles are **not** numbers here, whatever
+        # ``parse_amount`` makes of them: "there is **a** creature on the
+        # battlefield" is the quantifier below and means one *or more*, and
+        # reading it as the number 1 would turn Pestilence's sibling clause into
+        # an exact count that a second creature falsifies.
+        if stream.peek_word() not in ("a", "an", "no"):
+            try:
+                there_comparison = parse_comparison(stream)
+            except GrammarError:
+                stream.reset(number_mark)
+                there_comparison = None
+        if there_comparison is not None and not isinstance(
+            there_comparison.value, ast.Fixed
+        ):
+            # A variable threshold has no number to compare against here — the
+            # board count is taken at once — so the words go back and the clause
+            # refuses rather than being read as a different bound.
+            stream.reset(number_mark)
+            there_comparison = None
+        there_quantifier = None
+        if there_comparison is None:
+            there_quantifier = "no" if stream.accept_word("no") else (
+                "a" if stream.accept_word("a", "an") else None
+            )
+        if there_comparison is not None or there_quantifier is not None:
             try:
                 there_filter = parse_object_filter(stream)
             except GrammarError:
@@ -503,11 +537,15 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
                 there_filter.on_the_battlefield
                 or stream.accept_phrase("on", "the", "battlefield")
             ):
+                if there_comparison is None:
+                    there_comparison = (
+                        ast.Comparison("eq", ast.Fixed(0))
+                        if there_quantifier == "no"
+                        else ast.Comparison("ge", ast.Fixed(1))
+                    )
                 return ast.OnBattlefield(
                     dataclasses.replace(there_filter, on_the_battlefield=False),
-                    ast.Comparison("eq", ast.Fixed(0))
-                    if there_quantifier == "no"
-                    else ast.Comparison("ge", ast.Fixed(1)),
+                    there_comparison,
                 )
     stream.reset(there_mark)
 

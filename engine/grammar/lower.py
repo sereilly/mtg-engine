@@ -212,7 +212,8 @@ def lower_ability(
             # again on resolution. The legacy compiler dropped these outright,
             # so conditional triggers always fired.
             condition = _lower_condition(
-                node.intervening_if, event=node.event.kind
+                node.intervening_if, event=node.event.kind,
+                event_subject=node.event.subject,
             )
             # CR 113.6b: "an ability that states which zones it functions in
             # functions only from those zones". Some conditions *are* that

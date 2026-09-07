@@ -318,6 +318,14 @@ _EVENT_SUBJECT_PLAYERS: frozenset[str] = frozenset({
     # three-player game is not "the opponent" — so it is frozen by the draw
     # sweep that announces it rather than re-derived at resolution.
     "draws_card",
+    # "Whenever an opponent discards a card, this enchantment deals 2 damage to
+    # **that player**" (Megrim). The draw row's twin one action over, admitted
+    # for its reason: CR 701.9a's discard is about one seat, which seat varies
+    # per firing, and the two discard seams (`Game._discard_card` and
+    # `_resolve_one_discard`) announce it through `announce_discard` — which
+    # freezes the discarding seat because nothing on a board records it once the
+    # card is in a graveyard.
+    "discards_card",
     # "At the beginning of each opponent's draw step, **that player** draws an
     # additional card …" (Malignant Growth). The seat whose draw step it is,
     # frozen by `phases/draw_step.py`'s enqueue — which seat varies per firing,
@@ -345,6 +353,13 @@ _EVENT_SUBJECT_PLAYERS: frozenset[str] = frozenset({
     # the phrase would mean the controller, which is the same answer — so one
     # entry covers every row of the kind.
     "attackers_declared",
+    # "Whenever a player plays a land, **that player** draws a card." (Horn of
+    # Greed.) CR 305.1's special action names the playing seat and nothing
+    # chose it; which seat it is varies per firing, and by resolution the land
+    # is an ordinary permanent whose controller says nothing about who played
+    # it. Frozen by the announcement in `mixins/stack/resolution.py`, beside the
+    # ``seat`` key that event's own filter compares.
+    "land_played",
     # "Whenever a player taps a land for mana, this enchantment deals 1 damage
     # to **that player**" (Manabarbs). The condition names the tapping seat and
     # nothing chose it. This event's trigger resolves *inline* at the
