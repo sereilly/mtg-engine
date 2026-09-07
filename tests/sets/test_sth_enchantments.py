@@ -795,3 +795,232 @@ def test_g4_an_ai_seat_sees_the_granted_cost_too(set_pool):
     assert not _alternative_cost_is_payable(
         game, 0, _G4_LEA["Ancestral Recall"], 0,
     ), "no colour-sharing card is no payable offer"
+
+
+# --- W2G1: Contempt ---
+"""Contempt — "When enchanted creature attacks, return it and this Aura to
+their owners' hands at end of combat."
+
+Three things had to be true at once and none of them was: the trigger condition
+had to exist on **both** front ends (only one of them dispatches), the
+declare-attackers fire site had to scan the attacker's attachments for the bare
+"attacks" event as well as the joined one, and the delayed ability had to bind
+the Aura's *host* — no fire site stamps it and an attached trigger's stack item
+has no target, so every other binding in `create_delayed_trigger` would have
+armed an entry about nothing while the card compiled clean.
+"""
+import pytest
+
+from engine import Game, PlayerState
+from engine.auras import attach_aura
+from engine.grammar import GrammarError, parse_line
+from engine.models import CardDefinition, Permanent
+from engine.oracle import compile_card_oracle
+
+
+def _w2g1_creature(name, power=2, toughness=2) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature - Test",
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature - Test",
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def _w2g1_attack_with_contempt(set_pool, *, aura_seat=1, extra_attackers=()):
+    """Seat 0 attacks with a creature enchanted by *aura_seat*'s Contempt.
+
+    Returns ``(game, aura, attacker)`` at the declare-attackers step with the
+    trigger already resolved, which is where the delayed ability is armed.
+    """
+    aura = Permanent(card=set_pool("STH")["Contempt"])
+    attacker = Permanent(card=_w2g1_creature("Charging Bull", 3, 3))
+    others = [Permanent(card=_w2g1_creature(name)) for name in extra_attackers]
+    seats = [
+        PlayerState(name="P0", battlefield=[attacker, *others]),
+        PlayerState(name="P1", battlefield=[]),
+    ]
+    seats[aura_seat].battlefield.append(aura)
+    game = Game(players=seats)
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    for perm in (attacker, *others):
+        perm.summoning_sick = False
+    attach_aura(aura, attacker)
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()   # beginning_of_combat
+    game.advance_combat_phase()   # declare_attackers
+    assert game.declare_attackers(0, list(range(1 + len(others))))[0]
+    game.resolve_stack()
+    return game, aura, attacker
+
+
+def _w2g1_run_out_combat(game):
+    """Every remaining combat step, resolving what each one puts on the stack."""
+    for _ in range(4):
+        game.advance_combat_phase()
+        game.resolve_stack()
+
+
+def test_contempt_compiles_to_a_delay_that_binds_the_attachments_host(set_pool):
+    """The whole card is one trigger, and every field of it is load-bearing.
+
+    ``binds_attached_host`` rather than ``binds_target``: the ability is the
+    Aura's own (CR 603.3a), and the fire site pushes its stack item with no
+    target at all — so the target reading would arm an entry about nothing.
+    """
+    program = compile_card_oracle(set_pool("STH")["Contempt"])
+    assert program.supported
+
+    (trigger,) = program.triggered_abilities
+    assert trigger.condition.kind == "creature_attacks"
+    assert trigger.condition.payload["combatant_attached"] == "creature"
+
+    delay = trigger.instruction
+    assert delay.kind == "create_delayed_trigger"
+    assert delay.payload["event"] == "next_end_of_combat"
+    assert delay.payload["binds_attached_host"] is True
+    assert delay.payload["binds_target"] is False
+    assert [
+        step.kind for step in delay.payload["instruction"].payload["steps"]
+    ] == ["return_bound_permanent_to_hand", "return_source_card_to_owners_hand"]
+
+
+@pytest.mark.parametrize("aura_seat", [0, 1])
+def test_contempt_returns_both_the_creature_and_itself_at_end_of_combat(
+    set_pool, aura_seat
+):
+    """The card's whole point: the Aura goes to a **hand**, not to a graveyard.
+
+    Run from either seat, because CR 400.3 sends each object to its own owner
+    and an Aura the attacker's opponent controls is the way the card is played.
+    """
+    game, aura, attacker = _w2g1_attack_with_contempt(
+        set_pool, aura_seat=aura_seat
+    )
+    assert "Charging Bull" in [p.card.name for p in game.players[0].battlefield]
+
+    _w2g1_run_out_combat(game)
+
+    assert [p.card.name for p in game.players[0].battlefield] == [], game.log
+    assert "Charging Bull" in [c.name for c in game.players[0].hand], game.log
+    assert [
+        p.card.name for p in game.players[aura_seat].battlefield
+    ] == [], game.log
+    assert "Contempt" in [
+        c.name for c in game.players[aura_seat].hand
+    ], game.log
+    assert [c.name for c in game.players[aura_seat].graveyard] == [], (
+        "the Aura returns to hand; it does not die to CR 704.5m"
+    )
+    assert [c.name for c in game.players[0].graveyard] == [], game.log
+
+
+def test_contempt_binds_the_creature_it_enchanted_and_not_another_attacker(
+    set_pool
+):
+    """The negative case. The delay names one permanent by id (CR 603.7c), so a
+    second creature in the same declaration is untouched — the failure a
+    reading that swept the attackers would produce."""
+    game, aura, attacker = _w2g1_attack_with_contempt(
+        set_pool, extra_attackers=("Bystander",)
+    )
+    (entry,) = game.delayed_triggers
+    assert entry.bound_permanent_id == attacker.permanent_id, game.log
+    assert entry.bound_permanent_id != aura.permanent_id
+
+    _w2g1_run_out_combat(game)
+    assert [
+        p.card.name for p in game.players[0].battlefield
+    ] == ["Bystander"], game.log
+
+
+def test_contempt_still_returns_the_creature_when_the_aura_is_gone(set_pool):
+    """CR 603.7c: the delayed ability is about the creature the Aura was on when
+    it was *created*, so destroying the Aura in between does not save it.
+
+    This is what makes the binding a resolution-time id rather than a read of
+    the attachment at end of combat — the reading that would have found no host
+    and quietly done nothing.
+    """
+    game, aura, attacker = _w2g1_attack_with_contempt(set_pool)
+    game.remove_from_battlefield(aura)
+    game.players[1].graveyard.append(aura.card)
+
+    _w2g1_run_out_combat(game)
+    assert [c.name for c in game.players[0].hand] == ["Charging Bull"], game.log
+    assert [c.name for c in game.players[1].graveyard] == ["Contempt"], game.log
+
+
+def test_contempt_does_not_fire_when_the_enchanted_creature_stays_home(set_pool):
+    """"When enchanted creature **attacks**" — CR 508.1's declaration, not the
+    combat phase. A creature that never attacked arms nothing."""
+    aura = Permanent(card=set_pool("STH")["Contempt"])
+    homebody = Permanent(card=_w2g1_creature("Homebody"))
+    attacker = Permanent(card=_w2g1_creature("Charging Bull", 3, 3))
+    game = Game(players=[
+        PlayerState(name="P0", battlefield=[attacker, homebody]),
+        PlayerState(name="P1", battlefield=[aura]),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    for perm in (attacker, homebody):
+        perm.summoning_sick = False
+    attach_aura(aura, homebody)
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [0])[0]
+    game.resolve_stack()
+
+    assert game.delayed_triggers == [], game.log
+    _w2g1_run_out_combat(game)
+    assert sorted(p.card.name for p in game.players[0].battlefield) == [
+        "Charging Bull", "Homebody",
+    ], game.log
+
+
+def test_an_attached_attack_trigger_reads_the_same_event_on_both_front_ends():
+    """Two trigger front ends and only one of them dispatches.
+
+    A condition in `engine/oracle.py`'s table alone parses and fires nowhere; a
+    production in the grammar alone compiles an instruction the fire sites never
+    reach. Both are asked here, of the same printed sentence.
+    """
+    from engine.oracle import _parse_triggered_ability
+
+    line = "whenever enchanted creature attacks, tap it"
+    parsed = _parse_triggered_ability(line, "Test")
+    assert parsed is not None and parsed.supported
+    assert parsed.condition.kind == "creature_attacks"
+    assert parsed.condition.payload["combatant_attached"] == "creature"
+
+    node = parse_line("Whenever enchanted creature attacks, tap it.")
+    assert node.event.kind == "creature_attacks"
+    assert node.event.subject.is_enchanted
+
+
+def test_the_bare_attached_attack_row_does_not_swallow_the_unblocked_one():
+    """The refusal test for the ordering. "attacks" is a strict prefix of
+    "attacks and isn't blocked" (Cloak of Confusion), so a bare row read first
+    would leave those words unconsumed — or worse, drop them and give the card
+    a trigger that fires on every attack."""
+    node = parse_line(
+        "Whenever enchanted creature attacks and isn't blocked, "
+        "you may have it assign no combat damage this turn."
+    )
+    assert node.event.kind == "attacks_unblocked"
+
+
+def test_a_union_ending_in_this_permanent_still_refuses_a_second_clause():
+    """The union may end in the ability's own source only where the phrase ends
+    the sentence, or in front of a clause the caller is about to read. A verb
+    after it is a new clause and must stay one — the hazard the whole
+    quantifier gate is written for."""
+    with pytest.raises(GrammarError):
+        parse_line(
+            "Return target creature and this enchantment deals 2 damage to you."
+        )
