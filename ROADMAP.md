@@ -1083,6 +1083,115 @@ complex", because the next wave finishes those parts for free; and run
   Cataclysm, Limited Resources, Kor Chant, Penance, Fighting Chance, Mogg
   Assassin.
 
+### Wave 2 closed: 137 → 142 of 143, and two of five groups had no cards
+
+Five worktree groups again, but only six cards left — so two groups were given
+the **debt wave 1 enumerated** instead, and that is the decision worth judging
+rather than the numbers. It paid: the two card-less groups produced three of the
+wave's four pool-wide findings.
+
+| group | work | EXO after |
+|---|---|---|
+| W2G3 — records and redirects | Mind Maggots; Kor Chant declined | 138 |
+| W2G4 — two tight modules + the noun draft | no cards; three splits | 138 |
+| W2G5 — three seat narrowings | no cards; three gaps closed | 138 |
+| W2G1 — keep an assignment, sacrifice the rest | Cataclysm, Limited Resources | 140 |
+| W2G2 — a choice somebody else makes | Pandemonium, Mogg Assassin | 142 |
+
+**Zero hooks added, for the second wave running and the fifth consecutive set.**
+Hollow lines 0, unclaimed sentences 0 and `picker_sweep` 0 at every merge.
+
+#### The four findings, none of them in Exodus
+
+* **A departed player was offered as a target, pool-wide.**
+  `legality._enumerate_targets`' player loop never excluded a seat that has left
+  the game (CR 800.4a) — `opponents_of` has encoded that rule since free-for-all
+  arrived, and this loop, the list the picker hands the client, was a second
+  opinion about the same question. Silent at two seats, because the game ends the
+  moment a seat is lost. **Oath of Ghouls actively prefers a departed seat**,
+  since its clause is "whose graveyard has fewer creature cards" and a graveyard
+  that left the game is empty.
+* **Balance has mis-counted creatures since Alpha.** `balance_resources._count`
+  asks `perm.card.primary_type`, the *printed* type line, where every other
+  sacrifice in the engine asks `subject_matches` (CR 613 layer 4). With Kormus
+  Bell and three Swamps out, `min_creatures` computes as `min(0, 1) = 0` and the
+  opponent's lone Grizzly Bears is sacrificed when the correct minimum is 1.
+  Declined as a round of its own, four parts, the fourth of which is a decision
+  the current payload cannot express: with layer 4 folded in one permanent is
+  both a land and a creature, so it counts against both quotas.
+* **Honorable Passage never offers its "source of your choice" to a human.**
+  `app.js` runs the `requires_source` stage only inside
+  `if (pending.castAction === "activate")`, so every *cast* arms a sourceless
+  shield. Bounded (`uses=1`, spent on one instance either way), which is exactly
+  why it went unseen.
+* **A `may` offer overwrote a target its own seat had already announced.**
+  `handlers/control_flow._offer_to_seat` rebinds `context.target` onto the
+  offered seat, and Pandemonium's action carries a target that seat announced —
+  so a player who aimed at their opponent shot themselves. The fix derives the
+  question from the compiled program (`targeting.announces_a_target`), and its
+  `described_only` parameter is the finding: a bare `recipient: "target_player"`
+  is a family's spelling for "this resolution's target", which for an offer is
+  exactly what the rebind sets. **Worms of the Earth went red on the wider
+  reading.** Eleven rebinding `may`s name an event's seat; exactly one carries a
+  description.
+
+#### The guard that was cover
+
+W2G4 was briefed to write a completeness guard for `nouns.py`'s filter draft,
+because wave 1 reported none existed. One existed —
+`test_every_filter_draft_field_is_carried_into_the_object_filter` — and its
+docstring claims exactly the check the brief asked for ("setting a marker on a
+fresh draft and reading it back off the built filter"). **Its body never sets a
+marker.** It spells the check `getattr(built, name, "?") != "?"`, which asks
+whether `ObjectFilter` *declares* a field of that name — something the assertion
+three lines above has just proved for every draft field there is. Deleting
+`nontoken=d.nontoken` from `_build_object_filter` left the suite green.
+
+That is worse than the "no assertion" wave 1 described, because a guard that
+reads as cover stops anyone looking. It is now a marker-and-read-back check
+negative-controlled against that same deletion, with a staleness assertion over
+its own exemption list. And `slots=True` — the brief's throwaway "measure which
+fits" — caught a live write to an undeclared field on the first run.
+
+#### Six splits, and the ones that were predicted were not the ones that fired
+
+Wave 1 crossed three caps and predicted none of them. Wave 2 pre-assigned the
+two tightest modules to a group with no cards, and **that group crossed a third
+nobody named** (`nouns.py`, on the comment recording the draft bug) while the
+card groups crossed two more (`ast/board.py`, `lowering/board.py`) that were
+also unnamed. `lowering/exile.py` and `lowering/conditions.py` — the two the
+whole wave was warned about — were opened by nobody except their owner.
+
+The prediction rule that keeps working is the *shared-module* one; the rule that
+keeps failing is "which module will this group's cards land in". Six of this
+set's eight cap crossings were in modules no brief mentioned.
+
+Two more seams turned out stale, which makes eight instances across three sets.
+`exile.py`'s docstring named three forms of which two are 8 and 32 lines, and its
+call graph is a **star** — every non-`_lower_exile` function an isolated node —
+so the technique that settled the two Phase 0 splits did not transfer and the
+branch semantics had to.
+
+#### The block convention hit its one failure mode, correctly
+
+W2G2 rewrote W1G2's "Pandemonium is still unsupported" test, because the card
+landed and the integrator's brief told it to. That is not an append, so the
+reconstruction's "both sides start with the merge base byte for byte" assertion
+refused — which is the assertion working, not failing. The fallback is a union
+at the **hunk**: git had already merged the rewrite cleanly, leaving one ordinary
+two-append region. Then every block of every EXO per-set file was swept against
+all nine branches, per the Alliances follow-up. Clean.
+
+#### What is left
+
+**Kor Chant**, and it is a considered refusal rather than a failure. The sentence
+parses; the blocker is the **announcement channel**, a layer none of the three
+briefs that scoped this card ever named. W2G3 refused to land the instruction
+kind alone because with no source chosen the record falls back to "any source" —
+and unlike every card taking that fallback today, Kor Chant is blanket for the
+turn rather than `uses=1`, so it would move every point of damage dealt all turn.
+Four parts, and part 4 must never ship without parts 1–3.
+
 ### Wave 1 closed: 91 → 137 of 143, zero hooks added
 
 Five worktree groups, forty-six cards, and **every group finished**. Forty-four
