@@ -90,6 +90,14 @@ def _parse_reveal_top(stream: TokenStream) -> ast.Statement:
     sorted_by_name = _accept_counted_reveal_sorting_by_name(stream)
     if sorted_by_name is not None:
         return sorted_by_name
+    # "Reveal the top **four cards** of your library. Put all **land cards**
+    # revealed this way into your hand and the rest into your graveyard."
+    # (Mulch.) The same counted reveal sorted by a printed filter instead of by
+    # a chosen name — tried here beside its sibling, both non-consuming, so
+    # neither takes a reading from the other.
+    sorted_by_filter = _accept_counted_reveal_sorting_by_filter(stream)
+    if sorted_by_filter is not None:
+        return sorted_by_filter
     for word in ("card", "of"):
         stream.expect_word(word)
     if stream.accept_word("your"):
@@ -213,6 +221,80 @@ def _accept_counted_reveal_sorting_by_name(
     )
 
 
+def _accept_counted_reveal_sorting_by_filter(
+    stream: TokenStream,
+) -> "ast.RevealTopSortingByFilter | None":
+    """``<N> cards of your library. Put all <filter> revealed this way into
+    your hand and the rest into your graveyard.`` at the cursor, with "Reveal
+    the top" already read — or None with the cursor where it was. (Mulch.)
+
+    The sibling of :func:`_accept_counted_reveal_sorting_by_name` one function
+    up, and a separate production rather than a branch of it because the two
+    sentences are punctuated differently: Wood Sage joins the sort to the reveal
+    with "and" inside one sentence and Mulch ends the reveal with a full stop.
+    What they share — one pile, both halves of it placed by the step that
+    turned it over — is shared where it matters, in the handler.
+
+    The predicate is a printed :class:`ObjectFilter` rather than the name an
+    earlier step chose, which is the whole difference: this sentence carries
+    everything it needs, so there is no record to demand and none to refuse
+    for.
+
+    Both destinations are read and checked against the same closed lists the
+    named sort uses, so a printing that sorted somewhere the handler cannot
+    reach refuses here rather than lowering onto a zone nothing moves to.
+    """
+    mark = stream.mark()
+    try:
+        count = parse_amount(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not isinstance(count, ast.Fixed) or count.value < 1:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("cards", "of", "your", "library"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("put", "all"):
+        stream.reset(mark)
+        return None
+    try:
+        filt = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    # A pile taken off a library is cards, never permanents (CR 400.1), so a
+    # phrase describing something on the battlefield is a different sentence.
+    if not filt.is_card:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase(
+        "revealed", "this", "way", "into", "your",
+    ):
+        stream.reset(mark)
+        return None
+    match_zone = stream.peek_word()
+    if match_zone not in _SORTED_MATCH_ZONES:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    if not stream.accept_phrase("and", "the", "rest", "into", "your"):
+        stream.reset(mark)
+        return None
+    rest_zone = stream.peek_word()
+    if rest_zone not in _SORTED_REST_ZONES:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    return ast.RevealTopSortingByFilter(
+        count, filt, match_zone=match_zone, rest_zone=rest_zone,
+    )
+
+
 #: What the cards a reveal-until turned over *before* the match may be printed
 #: to do. A closed list, for ``effects/library._REVEAL_DESTINATIONS``'
 #: reason: each of these is something ``reveal_until_match`` actually performs,
@@ -275,6 +357,31 @@ def _accept_reveal_until_from_top(
     if not stream.accept_word("and"):
         stream.reset(mark)
         return None
+    # **Two printed word orders for one sentence.** Sacred Guide puts a verb in
+    # front of the rest ("and *exile* all other cards revealed this way");
+    # Hermit Druid elides it and names a destination instead ("and all other
+    # cards revealed this way *into your graveyard*") — the same "put" the
+    # clause before it already carries, distributed across both objects. Read
+    # here rather than in a second production, because every word up to this
+    # one is identical and a production that differed only in a tail would be
+    # this sentence written twice.
+    if stream.accept_phrase("all", "other", "cards", "revealed", "this", "way"):
+        if not stream.accept_word("into"):
+            stream.reset(mark)
+            return None
+        # "into **your** graveyard" has the possessive and "into exile" does
+        # not; it is the same seat either way, since the run reads this seat's
+        # own library.
+        stream.accept_word("your")
+        rest_zone = stream.peek_word()
+        if rest_zone not in _REVEAL_UNTIL_REST:
+            stream.reset(mark)
+            return None
+        stream.advance()
+        return ast.RevealUntil(
+            "you", filt, destination="hand",
+            rest=_REVEAL_UNTIL_REST[rest_zone],
+        )
     rest = stream.peek_word()
     if rest not in _REVEAL_UNTIL_REST:
         stream.reset(mark)

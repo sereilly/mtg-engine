@@ -319,6 +319,7 @@ from .reveal import (
     _lower_reveal_top,
     _lower_reveal_top_opponent_chooses,
     _lower_reveal_top_sorting_by_chosen_name,
+    _lower_reveal_top_sorting_by_filter,
     _lower_reveal_until,
 )
 from .search import (
@@ -596,6 +597,7 @@ __all__ = [
     "_lower_put_library_top_into_hand",
     "_lower_put_exiled_pile_on_library",
     "_lower_reveal_top_sorting_by_chosen_name",
+    "_lower_reveal_top_sorting_by_filter",
     "_lower_put_revealed_card_onto_battlefield",
     "_lower_graveyard_top_to_library",
     "_lower_look_at_library_top",
