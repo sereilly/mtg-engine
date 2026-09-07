@@ -968,6 +968,132 @@ engine charges an alternative or repeated cost correctly and the browser can
 only announce the default — recorded as a named four-part item in
 SET_PLAYBOOK.md's Known gaps.
 
+## Exodus (EXO) — measured (91/143, insert index 19)
+
+**Ingest census: 91/143 supported (63.6%), and 143 of 143 cards are new to the
+pool.** Registered under `measured` on 2026-09-07 at release date 1998-06-15,
+which places it after Stronghold (1998-03-02) and before M21 — printing-order
+**index 19**, appended at the end of the pre-M21 run for the third consecutive
+set.
+
+**Not one oracle_id is shared with any of the twenty shipped sets**, which makes
+EXO the sixth all-new set and the seventh in a row the printing-order prefix
+guard is blind to: it compares prefixes of the ordering and so tests whether an
+*existing* card's origin moves, and a set sharing nothing cannot move one from
+any position. `test_the_shipped_sets_are_in_printing_order` is again the only
+assertion that can fire.
+
+**Which is exactly what Stronghold's entry said before Phase 4 rehearsed the
+wrong insert, so this paragraph is a claim awaiting a rehearsal rather than a
+conclusion.** STH read as all-new too, and its single reprint was Shock —
+printed in **M21**, not in the set immediately before it — so its insert decided
+Shock's own origin. EXO's zero is measured against oracle_id over both manifest
+roles rather than inferred from the block, and Phase 4 still owes the rehearsal.
+Count a reprint against the set that actually prints it.
+
+### Phase 2's three sweeps, and what is not in them
+
+**Nothing gates Phase 4 absolutely.** Every card is `layout: normal`, every
+printed type already ships, and the keyword diff is empty in the sense that
+matters: `Buyback` appears on seven cards and is implemented for `{N}` and for a
+single non-mana cost (Allay, Shattering Pulse, Pegasus Stampede, Reaping the
+Rewards and Slaughter all compile), `Enchant` and `Regenerate` read as "not in
+`IMPLEMENTED_KEYWORDS`" only because neither is dispatched from that table, and
+`oracle.UNSUPPORTED_KEYWORDS` — the third table that outranks the registry diff
+and cost Legends' rampage every one of its cards — matches nothing here.
+
+What buyback actually costs is two sentences: the **compound** cost (Flowstone
+Flood's "Pay 3 life, Discard a card at random"), which is the single non-mana
+cost `buyback_cost` already reads, generalised to a list; and Forbid's "Discard
+two cards", which is the same generalisation with a count. Memory Crystal's
+"Buyback costs cost {2} less" is a third thing entirely — a cost *modifier*
+keyed on a keyword's cost rather than on a spell's, and `engine/cost_modifiers.py`
+implements increases only.
+
+**The set is unusually clean below the sentence, and that is the number to
+watch.** `--hollow-lines` reports **0**, `parse_coverage --set EXO` reports
+143/143 fully claimed with **0** unclaimed sentences, and `picker_sweep --set
+EXO` reports **one** finding (Theft of Dreams: "Draw a card for each tapped
+creature target opponent controls" derives no cast picker, so the client sends a
+bare cast — the Roots class). Mirage reached 335/335 supported with thirteen
+unimplemented sentences behind it; EXO starts with none, and the exit criterion
+is that all three stay at zero rather than reach it.
+
+### The census: 52 cards, two cycles, and a largest site that is not a family
+
+The refusal census reads **52 cards over 55 lines**, and its two largest sites
+are the generic errors — 15 cards at "expected a subject" and 13 at "expected
+'a'" — which is SET_PLAYBOOK.md's "a refusal site is a work-list entry, not a
+diagnosis" for the second set running. The **fragment** census is where the
+structure is, and it names the wave's first group boundary outright:
+
+* **five Oaths** (Druids, Ghouls, Lieges, Mages, Scholars) share
+  `at the beginning of each player's upkeep that player chooses target player`
+  and, five words later, `and is their opponent the first player may`;
+* **five Keepers** (of the Beasts, the Dead, the Flame, the Light, the Mind)
+  share `{t} choose target opponent who` and `than you do as you activate this
+  ability`.
+
+Ten cards, two printed frames, and **one shared question**: a player picked out
+by a *comparison against another player* — more lands, more life, more
+creatures, more cards in hand, fewer creature cards in a graveyard. Both frames
+refuse at `expected 'a'`, which names neither the comparison nor the frame.
+
+### Round plan — wave 1, five worktree groups
+
+Ten to twelve cards each, split by the machinery rather than by the census
+bucket. Every group is told the same three things: make a name-keyed hook the
+**last resort**; write a decline as a **list of parts** rather than as "too
+complex", because the next wave finishes those parts for free; and run
+`oracle_diff` before believing a change is local.
+
+* **W1G1 — the comparative player.** The two cycles above, 10 cards. One
+  question, two frames, and a picker that has to enforce the narrowing or the
+  sentence acts on every player.
+* **W1G2 — triggers on what a player does.** Spellshock, Mana Breach,
+  Pandemonium, Predatory Hunger, Fade Away, Carnophage, Zealots en-Dal,
+  Manabond, City of Traitors, Avenging Druid. Two of its cards print "if you
+  do", which is the rider SET_PLAYBOOK.md's Known gaps has been waiting for a
+  set to bring.
+* **W1G3 — combat.** High Ground, Reconnaissance, Wall of Nets, Monstrous
+  Hound, Crashing Boars, Reckless Ogre, Cinder Crawler, Song of Serenity,
+  Maniacal Rage, Pit Spawn.
+* **W1G4 — counters, computed characteristics and the Licids.** Spike Cannibal,
+  Spike Rogue, Mind Maggots, Coat of Arms, Skyshroud War Beast, Dominating
+  Licid, Transmogrifying Licid, Paroxysm, Resuscitate, Price of Progress, Theft
+  of Dreams.
+* **W1G5 — costs, mass sacrifice, prevention and coin flips.** Forbid,
+  Flowstone Flood, Sonic Burst, Memory Crystal, Null Brooch, Volrath's Dungeon,
+  Cataclysm, Limited Resources, Kor Chant, Penance, Fighting Chance, Mogg
+  Assassin.
+
+### Phase 0's caps prediction
+
+Twelve grammar modules sat within 30 lines of the thousand-line guard, which is
+the widest spread any set has opened on. Stronghold priced the rule that follows
+from it — "pre-split every module two groups will reach", not "pre-split the
+tightest" — with a card: `lowering/characteristics.py` at 7 under was read as
+shared, judged too expensive and briefed, and W1G3 declined Spined Sliver naming
+that module as the entire blocker.
+
+So the count Phase 0 produced here is of **shared** modules, not of tight ones.
+Three were pre-split before anyone was briefed:
+
+* `ast/_references.py` (3 left) — reached by every group, since `ObjectFilter`
+  is the node a noun-phrase narrowing lands on. Split along the seam
+  Stronghold's Phase 6 had already measured;
+* `effects/prevention.py` (10 left) — W1G3's Fighting Chance and W1G5's Kor
+  Chant and Penance;
+* `lowering/_bound_returns.py` (11 left) — a shared *floor*, which is the case
+  no single group crosses alone: W1G2's Mana Breach and W1G3's Wall of Nets.
+
+The remaining eight each got a **single owning group** named in that group's
+brief with the instruction to expect its own split — `effects/stack.py` and
+`effects/cards.py` to W1G5 and W1G2, `nouns.py` to W1G1, `amounts.py` to W1G4,
+`ast/board.py` to W1G3, `lowering/conditions.py` and `lowering/control_flow.py`
+to W1G2. `effects/mana.py` at 12 under has no owner and is this wave's control,
+the way Weatherlight's wave 1 kept one.
+
 ## Stronghold (STH) — shipped (143/143, manifest index 18)
 
 **Ingest census: 97/143 supported (67.8%), 142 of 143 cards new to the pool.**
