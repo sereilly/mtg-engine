@@ -1151,7 +1151,12 @@ def test_layers_only_import_downward(layers):
         # board, split out at the size guard, and `conditions` reads it because
         # the `Condition` union is the roof over both halves. A floor, not a
         # family — nothing reads back.
-        ("ast", ("_core", "_primitives", "_references", "_seats", "_targets", "costs", "records"), ("statements",)),
+        # `_payloads` joins them at Exodus's Phase 0: it is the 307-line body of
+        # `ObjectFilter.to_payload`, moved out when `_references` sat three
+        # lines under the size guard. A floor like the rest — it imports
+        # `_primitives` and the vocabulary, names no node at run time, and
+        # nothing reads back.
+        ("ast", ("_core", "_payloads", "_primitives", "_references", "_seats", "_targets", "costs", "records"), ("statements",)),
     ],
     ids=["effects", "lowering", "ast"],
 )
@@ -1390,6 +1395,13 @@ def test_every_grammar_module_is_placed_or_exempt():
 # `UNLAYERED` is — see the test below.
 FAMILY_SHARED = {
     "_common", "_core", "_events", "conditions", "categories", "statements",
+    # `_payloads` split out of `ast/_references` at Exodus's Phase 0, when that
+    # module sat three lines under the size guard with five groups about to
+    # land noun-phrase work on it. It is `ObjectFilter.to_payload`'s 307-line
+    # body and nothing else: it names no node at run time (the class arrives as
+    # an argument), reads `_primitives` and the vocabulary, and nothing reads
+    # back. A floor under `_references` the way `_filters` is under `_common`.
+    "_payloads",
     # `_deaths` split out of `_events` when the Death Watch round pushed it
     # back over the size guard: the tables a *death* freezes (the dying
     # card, its last-known power and toughness, and which fire sites stamp
