@@ -318,3 +318,81 @@ def test_w1g5_thawing_glaciers_returns_itself_in_the_cleanup_step(set_pool):
     game.resolve_cleanup_step(0)
     assert all(perm.card.name != "Thawing Glaciers" for perm in p1.battlefield)
     assert [card.name for card in p1.hand] == ["Thawing Glaciers"]
+
+
+# --- W2G1: a delayed self-return reaches the battlefield only ---
+"""Thawing Glaciers, from the other end of its delay.
+
+STH's Contempt prints the same sentence as the effect of a delayed ability
+("…return it and this Aura to their owners' hands **at end of combat**"), and
+supporting it found that the handler behind "return this <noun> to its owner's
+hand" also reaches a *graveyard* — which is right for Puppet Master's rider,
+resolving in the same window CR 704.5m swept the Aura in, and wrong a whole
+turn-step later: CR 400.7 makes the card in the graveyard a different object
+from the permanent the ability was created about.
+
+So the delayed reading says which zone it reaches, and this is the ICE/ALL card
+that reading moved. Nothing above changes — the land still returns itself from
+the battlefield in the cleanup step — and a land destroyed in between now stays
+destroyed instead of being handed back.
+"""
+
+from engine import Game as _W2G1Game
+from engine.card_loader import load_cards as _w2g1_load_cards
+from engine.card_loader import manifest_set_path as _w2g1_manifest_set_path
+from engine.models import Permanent as _W2G1Permanent
+from engine.models import PlayerState as _W2G1PlayerState
+from engine.oracle import compile_card_oracle as _w2g1_compile
+
+
+def _w2g1_basic(name: str):
+    """One basic land out of LEA — Alliances prints none of its own, and the
+    ability searches for a basic."""
+    for card in _w2g1_load_cards(
+        _w2g1_manifest_set_path("LEA", include_measured=True)
+    ):
+        if card.name == name:
+            return card
+    raise AssertionError(f"{name} is not in LEA")
+
+
+def test_w2g1_thawing_glaciers_delay_names_the_battlefield(set_pool):
+    """The payload, so the reading is visible without a board: an unqualified
+    self-return reaches every zone, and this one may not."""
+    program = _w2g1_compile(set_pool("ALL")["Thawing Glaciers"])
+    steps = program.activated_abilities[0].instruction.payload["steps"]
+    delay = steps[1]
+    assert delay.payload["instruction"].kind == "return_source_card_to_owners_hand"
+    assert delay.payload["instruction"].payload == {"from": "battlefield"}
+
+
+def test_w2g1_a_destroyed_thawing_glaciers_is_not_handed_back(set_pool):
+    """CR 400.7. The card in the graveyard is not the permanent the delayed
+    ability was created about, so the cleanup step returns nothing.
+
+    The negative case is the one that finds the bug: the positive one above
+    passes whether or not the handler reaches a graveyard it should not."""
+    glaciers = set_pool("ALL")["Thawing Glaciers"]
+    game = _W2G1Game(players=[
+        _W2G1PlayerState(name="P1"), _W2G1PlayerState(name="P2"),
+    ])
+    game.active_player_index = 0
+    p1 = game.players[0]
+    land = _W2G1Permanent(card=glaciers)
+    p1.battlefield.append(land)
+    p1.library.append(_w2g1_basic("Forest"))
+    game._sync_control()
+    game.enforce_mana_costs = False
+
+    game.activate_permanent_ability(0, "Thawing Glaciers", ability_index=0)
+    game.auto_resolve_pending_choices()
+    game._settle()
+    assert game.delayed_triggers, game.log
+
+    game.remove_from_battlefield(land)
+    p1.graveyard.append(land.card)
+
+    game.resolve_end_step(0)
+    game.resolve_cleanup_step(0)
+    assert [card.name for card in p1.hand] == [], game.log
+    assert [card.name for card in p1.graveyard] == ["Thawing Glaciers"], game.log

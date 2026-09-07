@@ -1366,14 +1366,22 @@ class DeclareAttackersStepMixin:
                     )
                 )
                 self.log.append(f"{permanent.card.name} triggered on attack (added to stack)")
-            # "Whenever **enchanted creature** attacks or blocks" (Imprison).
-            # The same event, watched by something attached to the attacker
-            # rather than by the attacker itself — invisible to the scan above,
-            # because an Aura's ability is the Aura's and not a granted ability
-            # of its host (CR 113.7a). The attack half; the blocker-side twin
-            # is in declare_blockers_step.
+            # "Whenever **enchanted creature** attacks or blocks" (Imprison),
+            # "**When enchanted creature attacks**" (Contempt). The same events,
+            # watched by something attached to the attacker rather than by the
+            # attacker itself — invisible to the scan above, because an Aura's
+            # ability is the Aura's and not a granted ability of its host
+            # (CR 113.7a). The attack half; the blocker-side twin is in
+            # declare_blockers_step.
+            #
+            # Both kinds in one scan, because CR 508.1 announces one
+            # declaration: an Aura printing the bare "attacks" and one printing
+            # the union are watching the same moment, and a second loop over the
+            # same attachments would be a second place to forget one of them.
             for seat, attachment, trig in attached_subject_triggers(
-                self, permanent, {"creature_attacks_or_blocks"}, "combatant_attached",
+                self, permanent,
+                {"creature_attacks", "creature_attacks_or_blocks"},
+                "combatant_attached",
             ):
                 self._stack_push(
                     StackItem(

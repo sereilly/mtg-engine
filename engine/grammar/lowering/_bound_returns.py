@@ -36,9 +36,11 @@ from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS,
     chargeable_card_filter,
     _filter_payload,
+    _is_attached_host_pronoun,
     _is_enchanted,
     _is_source,
     _restrictions_beyond,
+    _source_return_reach,
 )
 
 
@@ -160,6 +162,9 @@ def lower_untargeted_return(
         and subject.quantifier in ("that", "it")
         and (subject.filter.is_card or subject.quantifier == "it")
         and not _returns_itself_to_the_battlefield(node, subject)
+        # An *attached* trigger's "it" names the Aura's host, not a card this
+        # event recorded, so it falls past to the two readings that find it.
+        and not _is_attached_host_pronoun(subject)
     ):
         # "Whenever a land is tapped for mana, **return it** to its owner's
         # hand." (Storm Cauldron.) The pronoun names a *permanent* — the land
@@ -319,10 +324,18 @@ def lower_untargeted_return(
     # same gate ``destroy_bound_permanent`` is held to one family over: under
     # any other event the words name a permanent nobody recorded, and the
     # handler would bounce nothing while the card compiled supported.
+    #
+    # "When enchanted creature attacks, return **it** … at end of combat."
+    # (Contempt.) The pronoun spelling, here and not with the attachment branch
+    # below for this branch's own reason: CR 603.7c is about the object as it
+    # was when the ability was created, so an Aura destroyed in between still
+    # returns the creature, where reading the attachment would find no host.
     if (
         isinstance(subject, ast.TargetSpec)
-        and subject.quantifier == "that"
-        and not subject.filter.is_card
+        and (
+            (subject.quantifier == "that" and not subject.filter.is_card)
+            or _is_attached_host_pronoun(subject)
+        )
         and event in _BOUND_OBJECT_DELAYED_EVENTS
     ):
         if (
@@ -350,7 +363,10 @@ def lower_untargeted_return(
             )
         # The noun restates what the trigger's own condition already required,
         # so the card type is not a narrowing to honour; every other field is.
-        if _restrictions_beyond(subject.filter, frozenset({"card_types"})):
+        # ``is_enchanted`` is that restatement one word shorter.
+        if _restrictions_beyond(
+            subject.filter, frozenset({"card_types", "is_enchanted"})
+        ):
             raise LoweringError(
                 "the bound-permanent bounce honours no further narrowing",
                 node=node,
@@ -429,7 +445,10 @@ def lower_untargeted_return(
             raise LoweringError(
                 f"the self-return does not honour {leftovers[0]!r}", node=node
             )
-        return (OracleInstruction("return_source_card_to_owners_hand", "", {}),)
+        payload = _source_return_reach(event)
+        return (
+            OracleInstruction("return_source_card_to_owners_hand", "", payload),
+        )
     # "Return **this card** from your graveyard to the battlefield [tapped]."
     # (Silversmote Ghoul; CR 113.6m's own example is Reassembling Skeleton.)
     # Nothing is chosen — the ability names the object it is printed on — so this

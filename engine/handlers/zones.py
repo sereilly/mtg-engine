@@ -2270,14 +2270,37 @@ def return_source_card_to_owners_hand(game: Game, instruction: OracleInstruction
     every graveyard rather than the resolving seat's: CR 404.1 puts the card in
     its *owner's*, and an Aura its controller did not own goes to the other
     player's.
+
+    ``from: "battlefield"`` takes that reach away, and one shape asks for it:
+    the sentence as the effect of a **delayed** ability (Contempt's "…return it
+    and this Aura to their owners' hands at end of combat"). A whole combat step
+    later, CR 400.7 makes the card in the graveyard a different object from the
+    permanent the ability was created about — so an Aura destroyed in response
+    to the trigger stays dead, where the reach above would hand it back. The
+    lowering decides which reading applies, from the event the sentence is
+    under (``_common._source_return_reach``).
     """
     card = context.card
     source = context.source_permanent
     if source is not None and game.is_on_battlefield(source):
-        owner = game.players[source.metadata.get("base_controller_index", 0)]
+        # CR 108.3's seat, read the way ``control.base_controller`` says to:
+        # the recorded base seat, and *where the permanent sits* when there is
+        # none. The literal ``.get(..., 0)`` this replaced was a third answer —
+        # seat 0 — so an Aura on a board that recorded no base controller went
+        # to the wrong player's hand, which no assertion about seat 0's hand can
+        # tell from the right one.
+        from ..control import base_controller
+
+        seat = base_controller(source)
+        if seat is None:
+            seat = game.controller_index_of(source)
+        owner = game.players[seat if seat is not None else 0]
         game.remove_from_battlefield(source)
         if game.put_card_into_hand(owner, card, from_battlefield=source):
             game.log.append(f"{card.name} returned to {owner.name}'s hand")
+        return True, "resolved"
+    if instruction.payload.get("from") == "battlefield":
+        game.log.append(f"{card.name} was no longer on the battlefield")
         return True, "resolved"
     for player in game.players:
         for index, held in enumerate(player.graveyard):

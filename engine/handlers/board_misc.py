@@ -21,6 +21,7 @@ from ..tokens import (CHOSEN_TOKEN_RECORDS, CREATED_TOKEN_RESULT_KEY,
                      CREATED_WITH_PERMANENT_ID, default_token_name,
                      make_token_card, tokens_created_with)
 from ._common import (BLOCK_PAIR_SUBJECT, SUBJECT_FROM_TRIGGER,
+                      attached_host,
                       block_pair_permanents, bound_permanent, evaluate_count,
                       one_recorded_permanent_id,
                       per_recipient_amount,
@@ -236,6 +237,26 @@ def create_delayed_trigger(game: Game, instruction: OracleInstruction, context: 
             )
             return True, "no object"
         bound_id = pair[0].permanent_id
+    elif payload.get("binds_attached_host"):
+        # "When enchanted creature attacks, return **it** and this Aura to
+        # their owners' hands at end of combat." (Contempt.) CR 603.7c's object
+        # a fifth time, and the fifth place a creating ability can have put it:
+        # the trigger is an *Aura's*, so the words name the permanent it is
+        # attached to — which no fire site stamps, and which the attached
+        # fire sites never make the stack item's target either. Both readings
+        # beside this one would arm an entry about nothing.
+        #
+        # Resolved **here**, as the trigger resolves, rather than left for the
+        # effect to ask at end of combat. That is the rule itself: the delayed
+        # ability is about the creature the Aura was on when it was created, so
+        # an Aura destroyed in between still returns that creature — where a
+        # handler reading the attachment at fire time would find none and
+        # quietly do nothing.
+        host = attached_host(game, context.source_permanent)
+        if host is None:
+            game.log.append(f"{context.card.name} was attached to nothing")
+            return True, "no object"
+        bound_id = host.permanent_id
     elif payload.get("binds_target"):
         # The **innermost** binding, not the resolution's target list: inside
         # "for each of those creatures, … destroy that creature at end of

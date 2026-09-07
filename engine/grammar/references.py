@@ -739,6 +739,7 @@ def _parse_further_subjects(
     *,
     several_targets: bool = False,
     before_verb: bool = False,
+    before_destination: bool = False,
 ) -> list[ast.Recipient]:
     """The rest of ``<noun phrase>, <noun phrase>, and <noun phrase>``.
 
@@ -830,10 +831,19 @@ def _parse_further_subjects(
         # only in the object position: before the verb the phrase is *followed*
         # by the verb on every line the pool prints, and requiring a terminator
         # there would refuse every subject union the source opens.
+        # "Return **it and this Aura** to their owners' hands at end of
+        # combat." (Contempt.) The second trailing clause a union may carry:
+        # the verb's own destination, which the caller reads the moment this
+        # returns. ``before_destination`` is that caller saying so, exactly as
+        # ``before_verb`` above is a caller saying it has read a subject and no
+        # verb — the word "to" cannot begin a clause after a noun phrase, but
+        # only a caller about to consume one knows the union is finished here
+        # rather than mid-sentence.
         if not before_verb and nxt.quantifier == "this" and not (
             stream.exhausted
             or stream.at_punct(".", ";", ",")
             or stream.at_word("at")
+            or (before_destination and stream.at_word("to"))
         ):
             stream.reset(mark)
             return extra
