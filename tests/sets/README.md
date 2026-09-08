@@ -20,9 +20,10 @@ M21 reached it: 149 of the set's cards are creatures, so
 CR 205.4a) and after every misfiled test had been moved out. Past that point the
 next division is **a round boundary** — `test_m21_creatures_early_rounds.py`.
 These files are written as a sequence of self-contained round sections, each one
-written up in ROADMAP.md under the round that bought its cards, so cutting at a
-section boundary keeps every section whole and keeps a test findable from the
-round it belongs to. That is what the guard is protecting; the type is only the
+written up in the commit that bought its cards (the round-by-round narrative
+lives in git history, not in ROADMAP.md), so cutting at a section boundary
+keeps every section whole and keeps a test findable from the round it belongs
+to. That is what the guard is protecting; the type is only the
 first axis that delivers it.
 
 Do this **only after** auditing the file for misfilings, which is what the guard

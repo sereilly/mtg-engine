@@ -1274,14 +1274,15 @@ is green, the trackers carry its row, and the census is in hand.
    file's `oracle_id`s against the shipped pool — one comparison, and it decides
    whether this is a set you implement or a set you promote. Do not read a
    100%-supported census as an anticlimax and skip the rest: the ingest still
-   pays, and where it pays is Phase 4. Ten such sets are still ahead (ROADMAP's
+   pays, and where it pays is Phase 4. Nine such sets are still ahead (ROADMAP's
    header names them), so this is a shape, not a curiosity.
 
 ## Phase 2 — Machinery census (the big rocks)
 
 **Entry:** the census exists. **Exit:** every unsupported card is assigned to
-exactly one bucket, and a round plan has been opened as the set's journal
-entry in ROADMAP.md.
+exactly one bucket, and a round plan exists — in the wave briefs and the
+commit that opens the set, not in ROADMAP.md, which carries only its live
+sections.
 
 The census question: *what does this set need that no amount of per-card work
 provides?* Three sweeps, in order of blast radius:
@@ -1345,9 +1346,10 @@ measured set so per-card tests can land as the cards do. **Exit:**
 `support_report.py --set <CODE>` reports every card supported.
 
 1. Each round, pick the card whose gap is **not about that card** — the
-   change that clears the most other cards. ROADMAP.md's Revised narrative is
-   the worked example: six cards, then three, then three, then one, then
-   none, each round opening with the most general gap left. Apply
+   change that clears the most other cards. The Revised narrative in git
+   history (at and before `ee28617`) is the worked example: six cards, then
+   three, then three, then one, then none, each round opening with the most
+   general gap left. Apply
    `engine/ARCHITECTURE.md`'s recipe top-down and stop at the first covering
    step. A name-keyed hook only under `card_hooks.py`'s entry bar — no second
    card, real or plausibly printable, shares the shape — and a hook-reliance
@@ -1561,9 +1563,12 @@ measured set so per-card tests can land as the cards do. **Exit:**
    print — Antiquities did, for thirty rounds. Take the split a grammar size
    guard asks for when it fires, too: the family boundary is easiest to see
    while the work that crossed the line is still in hand.
-5. Append the round's narrative to the set's ROADMAP.md entry as you go —
-   what the round bought, what it cost, what it exposed. Numbers live there,
-   not here.
+5. Write the round's narrative — what it bought, what it cost, what it
+   exposed — in the commit message that lands it, **not** in ROADMAP.md. The
+   roadmap carries only its live sections (an open item, a refusal, an idiom,
+   a row in "Where the sets landed"); a journal written there is culled every
+   few sets, and the fourth cull removed 5,300 lines of it. Numbers live in
+   those sections, not here.
 
 ## Phase 4 — Promotion gate
 
@@ -1777,8 +1782,10 @@ review directly shrinks this phase.
 retrospective beats none). **Exit:** *this file contains no instruction the
 set's execution proved wrong.*
 
-1. Close the set's ROADMAP.md journal entry: what held, what it cost, the
-   final numbers. Numbers go there, never here.
+1. Update ROADMAP.md's live sections: the set's row in "Where the sets
+   landed", the pool numbers, any open item the set found or drained, any
+   idiom it earned. No journal entry — the narrative is in the set's commits.
+   Numbers go there, never here.
 2. Diff this playbook against what actually happened, three questions:
    - **Engine changes** — a new subsystem or seam the set forced gets one
      pointer line in the phase that meets it (the real documentation lives in
