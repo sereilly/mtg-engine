@@ -465,8 +465,18 @@ def lower_described_return(
                 "whose graveyard it empties",
                 node=node,
             )
+        # "…**that were put there from the battlefield this turn**" (No Rest
+        # for the Wicked). Taken off the filter before the shared card gate is
+        # asked, and carried *beside* it — the card matcher answers a printed
+        # type line and a name (CR 613.1), and how a card reached a graveyard is
+        # not on it. The same split the sweep bounce makes for ``attached_to``,
+        # and for the same reason: a key inside the filter would reach a matcher
+        # with no answer for it, and a narrowing nothing tests is a sweep wider
+        # than the card.
+        history = subject.filter.put_there_from_battlefield_this_turn
         scoped = dataclasses.replace(
-            subject.filter, zone="battlefield", zone_owner=None
+            subject.filter, zone="battlefield", zone_owner=None,
+            put_there_from_battlefield_this_turn=False,
         )
         swept = chargeable_card_filter(scoped)
         if swept is None:
@@ -477,7 +487,10 @@ def lower_described_return(
         return (
             OracleInstruction(
                 "return_all_cards_from_graveyard", "",
-                {"filter": swept, "who": who, "destination": "hand"},
+                {
+                    "filter": swept, "who": who, "destination": "hand",
+                    **({"put_there_this_turn": True} if history else {}),
+                },
             ),
         )
     # "**Each player** returns all creature cards from their graveyard to the

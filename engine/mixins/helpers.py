@@ -975,6 +975,16 @@ class GameHelpersMixin:
         if consumed:
             return False
         self.players[seat].graveyard.append(card)
+        # "…**that were put there from the battlefield this turn**" (No Rest
+        # for the Wicked). Recorded on the one seam every arrival passes
+        # through, keyed by the pile it landed in (CR 400.3's owner) — the same
+        # place the exile replacement and the arrival event are, because "from
+        # the battlefield" is a fact about *this* move and nothing in the
+        # graveyard afterwards remembers it. A token never gets here: the
+        # permanent path keeps its card out (CR 111.7), which is the difference
+        # between this record and the tally beside it.
+        if from_zone == "battlefield":
+            self.players[seat].cards_put_into_your_graveyard_from_battlefield_this_turn.append(card)
         # Announced **after** the card has arrived, because CR 603.6 has a
         # zone-change trigger look for its object in the zone it moved to — and
         # a replacement that diverted the card returned above, so nothing fires
@@ -1071,7 +1081,9 @@ class GameHelpersMixin:
             # down. The token branch is deliberately outside this: CR 111.7
             # keeps a token's card out of the pile while leaving it something
             # that died.
-            if not self.put_card_into_graveyard(owner, permanent.card):
+            if not self.put_card_into_graveyard(
+                owner, permanent.card, from_zone="battlefield"
+            ):
                 return
         # "Whenever a land is put into a graveyard from the battlefield…"
         # (Dingus Egg). Announced here, on the one seam every land death

@@ -1237,3 +1237,86 @@ def test_w2g2_planar_void_exiles_a_creature_that_died(set_pool):
     assert not alice.graveyard
     assert [c.name for c in alice.exile] == ["Sanctum Custodian"]
     assert game.is_on_battlefield(void)
+
+
+def test_w2g2_no_rest_returns_only_what_died_this_turn(set_pool):
+    """"Sacrifice this enchantment: Return to your hand all creature cards in
+    your graveyard that were put there from the battlefield this turn."
+
+    Three cards in one graveyard and only one of them qualifies: the creature
+    that died this turn comes back, the creature that was discarded does not
+    (it never touched the battlefield), and the non-creature card does not
+    either. Without the history the sweep would take the discarded one too,
+    which is a card doing strictly more than it prints.
+    """
+    pool = set_pool("USG")
+    alice, bob = PlayerState(name="G2E-A"), PlayerState(name="G2E-B")
+    game = Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    rest = Permanent(card=pool["No Rest for the Wicked"])
+    game._put_permanent_onto_battlefield(0, rest, None)
+
+    discarded = pool["Serra Zealot"]
+    alice.graveyard = [discarded, pool["Gamble"]]
+    died = Permanent(card=pool["Shivan Hellkite"])
+    game._put_permanent_onto_battlefield(0, died, None)
+    game._permanent_to_graveyard(alice, died)
+
+    game.activate_permanent_ability(0, "No Rest for the Wicked")
+    resolve_stack(game)
+
+    assert [c.name for c in alice.hand] == ["Shivan Hellkite"]
+    assert [c.name for c in alice.graveyard] == [
+        "Serra Zealot", "Gamble", "No Rest for the Wicked",
+    ]
+
+
+def test_w2g2_no_rest_forgets_at_the_turn_boundary(set_pool):
+    """"This turn" is the window, and it is the half a bare "creature cards in
+    your graveyard" reading would lose: a creature that died on the previous
+    turn stays where it is."""
+    pool = set_pool("USG")
+    alice, bob = PlayerState(name="G2E-A"), PlayerState(name="G2E-B")
+    game = Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    rest = Permanent(card=pool["No Rest for the Wicked"])
+    game._put_permanent_onto_battlefield(0, rest, None)
+
+    died = Permanent(card=pool["Shivan Hellkite"])
+    game._put_permanent_onto_battlefield(0, died, None)
+    game._permanent_to_graveyard(alice, died)
+    alice.cards_put_into_your_graveyard_from_battlefield_this_turn = []
+
+    game.activate_permanent_ability(0, "No Rest for the Wicked")
+    resolve_stack(game)
+
+    assert not alice.hand
+    assert [c.name for c in alice.graveyard] == [
+        "Shivan Hellkite", "No Rest for the Wicked",
+    ]
+
+
+def test_w2g2_no_rest_counts_copies_rather_than_matching_by_name(set_pool):
+    """Two copies of one card in a deck are the same ``CardDefinition``, so
+    "was it put there this turn" cannot be answered of a card by looking at it.
+    One copy died and one was discarded: exactly one comes back."""
+    pool = set_pool("USG")
+    alice, bob = PlayerState(name="G2E-A"), PlayerState(name="G2E-B")
+    game = Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    rest = Permanent(card=pool["No Rest for the Wicked"])
+    game._put_permanent_onto_battlefield(0, rest, None)
+
+    hellkite = pool["Shivan Hellkite"]
+    alice.graveyard = [hellkite]
+    died = Permanent(card=hellkite)
+    game._put_permanent_onto_battlefield(0, died, None)
+    game._permanent_to_graveyard(alice, died)
+
+    game.activate_permanent_ability(0, "No Rest for the Wicked")
+    resolve_stack(game)
+
+    assert [c.name for c in alice.hand] == ["Shivan Hellkite"]
+    assert [c.name for c in alice.graveyard] == [
+        "Shivan Hellkite", "No Rest for the Wicked",
+    ]

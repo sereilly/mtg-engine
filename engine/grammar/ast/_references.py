@@ -654,6 +654,19 @@ class ObjectFilter:
     # is *left* on the creature, and regeneration and a toughness rewrite both
     # erase it while the damage stays dealt (CR 120.3).
     was_dealt_damage_this_turn: bool = False
+    # "…all creature cards in your graveyard **that were put there from the
+    # battlefield this turn**" (No Rest for the Wicked). A history, and one no
+    # matcher could answer by looking at the card: a card in a graveyard has a
+    # printed line and nothing else (CR 613.1), and how it got there is a fact
+    # the *game* wrote down as it happened
+    # (``PlayerState.cards_put_into_your_graveyard_from_battlefield_this_turn``).
+    #
+    # So it is deliberately **not** a payload key on the filter: the card
+    # matcher would have to answer it and cannot. The lowering hoists it beside
+    # the filter, exactly as the sweep bounce hoists ``attached_to`` for the
+    # same reason one family over, and the handler intersects the swept pile
+    # with the record.
+    put_there_from_battlefield_this_turn: bool = False
     # "target creature **of an opponent's choice** they control" (Preacher) —
     # who *picks* the object, which is not a property of any candidate. Never
     # emitted, so a lowering not written for it refuses the phrase instead of

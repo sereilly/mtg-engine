@@ -7888,6 +7888,12 @@ def return_all_cards_from_graveyard(game: Game, instruction: OracleInstruction, 
     destination = str(instruction.payload.get("destination", "battlefield"))
     # "…to the battlefield **tapped**." (Planar Birth.) CR 110.5b.
     tapped = bool(instruction.payload.get("tapped"))
+    # "…**that were put there from the battlefield this turn**." (No Rest for
+    # the Wicked.) Beside the filter and not inside it, because how a card
+    # reached a pile is not on the card: a graveyard has a printed type line and
+    # nothing else (CR 613.1), so the record the game kept as the move happened
+    # is the only thing that can answer.
+    only_this_turn = bool(instruction.payload.get("put_there_this_turn"))
     if who == "each_player":
         seats = list(range(len(game.players)))
     else:
@@ -7899,6 +7905,28 @@ def return_all_cards_from_graveyard(game: Game, instruction: OracleInstruction, 
             index for index, card in enumerate(player.graveyard)
             if _card_matches_filter(card, described, game=game, owner=player)
         ]
+        if only_this_turn:
+            # Matched by **count of entries**, not by membership: two copies of
+            # a card in a deck are the same immutable ``CardDefinition``, so a
+            # graveyard holding one that died this turn and one that was
+            # discarded last turn holds one object twice — and the record says
+            # how many of them arrived the way the sentence names. Newest first,
+            # since a death puts the card on top and that is the copy the record
+            # is about.
+            arrived = list(
+                player.cards_put_into_your_graveyard_from_battlefield_this_turn
+            )
+            allowed: list[int] = []
+            for index in sorted(taken, reverse=True):
+                card = player.graveyard[index]
+                match = next(
+                    (i for i, held in enumerate(arrived) if held is card), None
+                )
+                if match is None:
+                    continue
+                arrived.pop(match)
+                allowed.append(index)
+            taken = allowed
         cards = [player.graveyard[index] for index in taken]
         for index in sorted(taken, reverse=True):
             player.graveyard.pop(index)

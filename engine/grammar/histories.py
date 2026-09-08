@@ -157,6 +157,20 @@ def accept_relative_clause_history(stream: TokenStream, d, parse_filter) -> bool
     layers up.
     """
     start = stream.mark()
+    # "…all creature cards in your graveyard **that were put there from the
+    # battlefield this turn**" (No Rest for the Wicked). A history about a card
+    # in a pile rather than about a permanent on a board: "there" is the zone
+    # the noun phrase has already named, and "from the battlefield" is how it
+    # got there — neither readable off the card, both written down as the move
+    # happened.
+    #
+    # First in the run, and it can shadow nothing: no other arm opens on "were
+    # put", and this one requires the whole phrase before it sets anything.
+    if stream.accept_phrase(
+        "were", "put", "there", "from", "the", "battlefield", "this", "turn",
+    ):
+        d.put_there_from_battlefield_this_turn = True
+        return True
     # "…that **were blocked by that creature this turn**" (Glyph of
     # Doom). "That creature" is the object the sentence's delayed
     # ability was bound to, and "this turn" is what makes the record

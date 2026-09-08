@@ -222,6 +222,7 @@ class _FilterDraft:
     put_onto_battlefield_by_source: bool = False
     in_combat_with_source: bool = False
     was_dealt_damage_this_turn: bool = False
+    put_there_from_battlefield_this_turn: bool = False
     dealt_damage_to_source_this_turn: bool = False
     zone: str = "battlefield"
     zone_owner: ast.PlayerRef | None = None
@@ -334,6 +335,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         of_bound_type=d.of_bound_type,
         in_combat_with_source=d.in_combat_with_source,
         was_dealt_damage_this_turn=d.was_dealt_damage_this_turn,
+        put_there_from_battlefield_this_turn=d.put_there_from_battlefield_this_turn,
         chosen_by_opponent=d.chosen_by_opponent,
         not_chosen_this_way=d.not_chosen_this_way,
         on_the_battlefield=d.on_the_battlefield,
