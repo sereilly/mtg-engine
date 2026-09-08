@@ -875,8 +875,18 @@ class SpellCastingMixin:
                     classify_card(source_zone[hand_index]).effect_kind, details,
                 )
         else:
-            if from_zone not in ("graveyard", "exile"):
+            if from_zone not in ("graveyard", "exile", "library"):
                 raise ValueError(f"cannot cast from {from_zone!r}")
+            # "You may cast Goblin spells from the top of your library."
+            # (Conspicuous Snoop, since M21.) The permission seam has answered
+            # for the library since that card landed and this gate refused it,
+            # so the grant existed and nothing could ever spend it — the loud
+            # half of the same hole ``playable_from_zones`` had on the quiet
+            # side. The loop below needs no library branch of its own: every
+            # library permission is scoped to one card by identity
+            # (``library_top.top_castable`` compares ``library[0]``), so only
+            # the top card can match and the seat scan finds nothing in anybody
+            # else's deck.
             # Whose copy of the zone. The caster's own on every grant but one:
             # "Search target opponent's library for a card and exile it. … you
             # may play that card" (Grinning Totem) leaves the card in the

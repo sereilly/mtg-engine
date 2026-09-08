@@ -396,6 +396,10 @@ _COMPUTED_ATTRIBUTE_WRITES: dict[str, str] = {
     "engine/damage_redirects.py::redirects_on": (
         "the redirect collection's attribute on a recipient, not a zone."
     ),
+    "engine/library_top.py::reveal_grants_on": (
+        "the granted-reveal collection's attribute on a player, not a zone "
+        "— the same shape as the three collections below it."
+    ),
     "engine/land_mana_swaps.py::swaps_on": (
         "the mana-swap collection's attribute on a player, not a zone."
     ),

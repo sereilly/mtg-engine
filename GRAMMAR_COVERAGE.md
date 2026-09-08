@@ -37,7 +37,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | STH | 143 | 215 | 88.4% | 88.4% | 62.8% | 124 |
 | EXO | 143 | 207 | 90.3% | 90.3% | 66.2% | 127 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| USG *(measured)* | 335 | 486 | 86.0% | 85.8% | 61.5% | 259 |
+| USG *(measured)* | 335 | 486 | 86.2% | 86.0% | 61.7% | 260 |
 | **All (shipped)** | **4873** | **7239** | **90.7%** | **90.0%** | **60.1%** | **3649** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -52,7 +52,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ---: | ---: | --- | --- |
 | 406 | 174 | expected a subject |  |
 | 115 | 60 | unrecognized effect verb |  |
-| 87 | 43 | unconsumed text |  |
+| 86 | 42 | unconsumed text |  |
 | 39 | 23 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 15 | 14 | expected 'unless defending player controls' |  |
@@ -6443,6 +6443,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Temple of Triumph**
   - `When this land enters, scry 1. (Look at the top card of your library. You may put that card on the bottom.)`
   - `{T}: Add {R} or {W}.`
+- **Temporal Aperture**
+  - `{5}, {T}: Shuffle your library, then reveal the top card. Until end of turn, for as long as that card remains on top of your library, play with the top card of your library revealed and you may play that card without paying its mana cost. (If it has X in its mana cost, X is 0.)`
 - **Tempting Licid**
   - `{G}, {T}: This creature loses this ability and becomes an Aura enchantment with enchant creature. Attach it to target creature. You may pay {G} to end this effect.`
 - **Tendrils of Despair**

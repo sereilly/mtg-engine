@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**368 / 616 tracked rules covered (59%)** — 2251 tests, 0 unannotated.
+**368 / 616 tracked rules covered (59%)** — 2256 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -298,7 +298,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **118.6** Some objects have no mana cost. This represents an unpayable cost. An ability can also have an un... *(1 tests)*
 - [x] **118.7** What a player actually needs to do to pay a cost may be changed or reduced by effects. If the man... *(6 tests, subrules abc)*
 - [x] **118.8** Some spells and abilities have additional costs. An additional cost is a cost listed in a spell’s... *(5 tests)*
-- [x] **118.9** Some spells have alternative costs. An alternative cost is a cost listed in a spell’s text, or ap... *(15 tests, subrules abcd)*
+- [x] **118.9** Some spells have alternative costs. An alternative cost is a cost listed in a spell’s text, or ap... *(16 tests, subrules abcd)*
 - [ ] **118.10** Each payment of a cost applies to only one spell, ability, or effect. For example, a player can’t...
 - [ ] **118.11** The actions performed when paying a cost may be modified by effects. Even if they are, meaning th...
 - [x] **118.12** Some spells, activated abilities, and triggered abilities read, “[Do something]. If [a player] [d... *(1 tests, subrules a)*
@@ -478,7 +478,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 400. General
 
 - [x] **400.1** A zone is a place where objects can be during a game. There are normally seven zones: library, ha... *(4 tests)*
-- [x] **400.2** Public zones are zones in which all players can see the cards’ faces, except for those cards that... *(4 tests)*
+- [x] **400.2** Public zones are zones in which all players can see the cards’ faces, except for those cards that... *(5 tests)*
 - [x] **400.3** If an object would go to any library, graveyard, or hand other than its owner’s, it goes to its o... *(8 tests)*
 - [x] **400.4** Cards with certain card types can’t enter certain zones. *(1 tests)*
 - [x] **400.5** The order of objects in a library, in a graveyard, or on the stack can’t be changed except when e... *(2 tests)*
@@ -496,7 +496,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **401.2** Each library must be kept in a single face-down pile. Players can’t look at or change the order o... *(2 tests)*
 - [ ] **401.3** Any player may count the number of cards remaining in any player’s library at any time.
 - [x] **401.4** If an effect puts two or more cards in a specific position in a library at the same time, the own... *(3 tests)*
-- [x] **401.5** Some effects tell a player to play with the top card of their library revealed, or say that a pla... *(1 tests)*
+- [x] **401.5** Some effects tell a player to play with the top card of their library revealed, or say that a pla... *(2 tests)*
 - [ ] **401.6** If an effect causes a player to play with the top card of their library revealed, and that partic...
 - [ ] **401.7** If an effect causes a player to put a card into a library “Nth from the top,” and that library ha...
 
@@ -656,14 +656,14 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 514. Cleanup Step
 
 - [x] **514.1** First, if the active player’s hand contains more cards than their maximum hand size (normally sev... *(6 tests)*
-- [x] **514.2** Second, the following actions happen simultaneously: all damage marked on permanents (including p... *(9 tests)*
+- [x] **514.2** Second, the following actions happen simultaneously: all damage marked on permanents (including p... *(10 tests)*
 - [x] **514.3** Normally, no player receives priority during the cleanup step, so no spells can be cast and no ab... *(4 tests, subrules a)*
 
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
 - [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(232 tests, subrules abcdefghi)*
-- [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(23 tests, subrules a)*
+- [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(26 tests, subrules a)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [x] **601.5** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*
 - [ ] **601.6** Some spells specify that one of their controller’s opponents does something the controller would ...
@@ -754,7 +754,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 611. Continuous Effects
 
 - [x] **611.1** A continuous effect modifies characteristics of objects, modifies control of objects, or affects ... *(3 tests)*
-- [x] **611.2** A continuous effect may be generated by the resolution of a spell or ability. *(40 tests, subrules abc)*
+- [x] **611.2** A continuous effect may be generated by the resolution of a spell or ability. *(44 tests, subrules abc)*
 - [x] **611.3** A continuous effect may be generated by the static ability of an object. *(55 tests, subrules abc)*
 
 ### 612. Text-Changing Effects

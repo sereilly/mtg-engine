@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 
 from ._core import (
     Amount,
+    Duration,
     Fixed,
     ObjectFilter,
     PlayerRef,
@@ -484,6 +485,46 @@ class RevealTop:
     """
 
     player: PlayerRef = PlayerRef("you")
+
+
+@dataclass(frozen=True)
+class PlayWithTopRevealed:
+    """``Play with the top card of your library revealed.`` (Temporal
+    Aperture's second sentence, granted by an ability rather than printed as a
+    static.)
+
+    CR 400.2: the top card becomes a **public** object, visible to every
+    player. ``engine/library_top.py`` already answers the question for the
+    printed static a permanent carries (Conspicuous Snoop, Field of Dreams) by
+    reading it off that permanent's text; this node is the same permission
+    arriving as an *effect*, which is the half that needs a duration and a
+    record.
+
+    **Two duration fields, because a compound duration is two questions.**
+    Temporal Aperture prints "Until end of turn, for as long as that card
+    remains on top of your library, …" — CR 611.2a's stated moment *and*
+    CR 611.2b's stated condition, on one effect. They cannot share a slot:
+    ``duration`` is a moment something sweeps at (cleanup), and
+    ``linked_duration`` is a condition something re-asks, so they are answered
+    at different times and compose without either being a special case of the
+    other. ``sentence_clauses._distribute_duration`` fills the first and
+    ``_link_leading_duration`` the second, each recursing through the
+    conjunction this sentence is, which is why neither needed to learn about
+    the other.
+    """
+
+    player: PlayerRef = PlayerRef("you")
+    #: The swept half (CR 611.2a). ``kind=None`` is "no stated moment", which
+    #: the lowering refuses rather than reading as "until end of game": every
+    #: printing of this sentence as an *effect* states one.
+    duration: Duration = field(default_factory=lambda: Duration())
+    #: The re-asked half (CR 611.2b), as the condition name the record is read
+    #: back under — ``sentence_clauses.LINKED_WHILE_REVEALED_CARD_ON_TOP``. A
+    #: string rather than a :class:`Duration` for the reason
+    #: ``_link_leading_duration`` states: a linked duration is not a moment,
+    #: and the fields that carry the two must not be one field.
+    linked_duration: str | None = None
+
 
 @dataclass(frozen=True)
 class GraveyardTopOpponentChooses:

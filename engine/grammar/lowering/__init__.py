@@ -212,6 +212,7 @@ from ._piles import _SEARCH_EXILE_HONOURED
 from .permissions import (
     _lower_cast_from_exiled_with,
     _lower_cast_permission,
+    _lower_play_with_top_revealed,
 )
 from .attachments import (
     _lower_attach,
@@ -625,6 +626,7 @@ __all__ = [
     "_SEARCH_EXILE_HONOURED",
     "_lower_cast_from_exiled_with",
     "_lower_cast_permission",
+    "_lower_play_with_top_revealed",
     "_fused_exile_event_subject_until_source_leaves",
     "_lower_exile_graveyard_until_leaves",
     "_lower_put_exiled_pile_top_into_hand",

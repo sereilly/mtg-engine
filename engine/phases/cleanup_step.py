@@ -27,7 +27,8 @@ from ..layer_bridge import GAINED_TYPES
 from ..mixins._constants import _EOT_METADATA_KEYS
 from ..damage_redirects import clear_redirects
 from ..land_mana_swaps import clear_swaps as clear_land_mana_swaps
-from ..shields import clear_shields
+from ..library_top import clear_reveal_grants
+from ..shields import END_OF_TURN, clear_shields
 from ..text_changes import end_until_eot_text_changes
 from ..pt import remove_temporary_pt
 from ..turn_state import stamped_turn_has_passed
@@ -192,6 +193,13 @@ class CleanupStepMixin:
             # swap with a printed window, and it expires by the same one sweep
             # for the same reason (engine/land_mana_swaps.py).
             clear_land_mana_swaps(player)
+            # "Until end of turn, for as long as that card remains on top of
+            # your library, play with the top card of your library revealed."
+            # (Temporal Aperture.) CR 611.2a's half of that compound duration —
+            # the other half needs no sweep at all, because every read of the
+            # record re-asks whether the named card is still on top
+            # (engine/library_top.grant_holds).
+            clear_reveal_grants(player, END_OF_TURN)
             player.mirror_damage_charges = 0
             player.mirror_damage_sources = []
             player.channel_active_until_eot = False

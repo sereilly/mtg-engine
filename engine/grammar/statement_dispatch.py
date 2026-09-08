@@ -112,6 +112,7 @@ from .lowering import (
     _lower_sacrifice,
     _lower_destroy_unless_pay,
     _lower_cast_permission,
+    _lower_play_with_top_revealed,
     _lower_search_player_library,
     _lower_graveyard_pick_onto_battlefield,
     _lower_untap_restriction,
@@ -508,6 +509,13 @@ def lower_statement(
         # turn" (Elkin Lair) names the seat the firing trigger was about, and
         # only an event that freezes one can answer.
         return _lower_cast_permission(statement, produced, event)
+
+    # The reveal half of the same printed sentence (Temporal Aperture), and in
+    # the chain beside the permission for that branch's reason: the condition
+    # its duration holds under is about "that card", so the lowering has to see
+    # what the step in front of it recorded.
+    if isinstance(statement, ast.PlayWithTopRevealed):
+        return _lower_play_with_top_revealed(statement, produced)
 
     # "Search that player's library for **that many** cards" (Jester's Mask):
     # the count is a back-reference, so this lowering needs the record of what

@@ -194,6 +194,29 @@ def _action_cast(session, req, seat_type):
                 status_code=400,
                 detail="that card is not your commander in the command zone (CR 903.8)",
             )
+    elif req.from_zone == "library":
+        # A library is a hidden zone (CR 400.2), so this is not the loop below
+        # with a third zone in it: only the caster's own top card can be
+        # covered, and looking any further would be searching a deck for a
+        # named card. ``permission_for`` is still the gate — the engine
+        # re-checks it, and this turns "no" into a 400 with the reason.
+        own = session.game.players[req.seat].library
+        top = own[0] if own else None
+        card = (
+            top
+            if top is not None
+            and top.name == req.card_name
+            and permission_for(
+                session.game, req.seat, top, "library",
+                as_land=top.primary_type == "land",
+            ) is not None
+            else None
+        )
+        if card is None:
+            raise HTTPException(
+                status_code=400,
+                detail="no effect allows playing that card from the top of your library",
+            )
     elif req.from_zone in ("graveyard", "exile"):
         # Casting from outside the hand needs a permission grant
         # (engine/cast_permissions.py); the engine re-checks, this just

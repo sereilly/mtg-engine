@@ -15,6 +15,7 @@ That is what keeps the direction one-way and the guard able to say so.
 
 import dataclasses
 
+from ..library_top import WHILE_REVEALED_CARD_ON_TOP
 from ..oracle_types import DREW_BY_SEAT
 from . import ast
 from .errors import GrammarError
@@ -27,7 +28,8 @@ from .phrases import _accept_number, _accept_self_reference
 from .records import (_parse_for_each_this_way, accept_additional_cost_paid,
                       scaled_by_recorded_count)
 from .effects import (_parse_gain_control,
-                      _parse_linked_untap_restriction)
+                      _parse_linked_untap_restriction,
+                      _parse_play_with_top_revealed)
 # The toll family left for `tolls` at the thousand-line guard and is re-exported
 # here so every caller keeps the import it had — the same courtesy `phrases`
 # extends `prices`, and the reason `statements` needs no edit to find it.
@@ -534,6 +536,31 @@ def _distribute_duration(
                 "an animation's leading duration is until end of turn"
             )
         return dataclasses.replace(statement, until_end_of_turn=True)
+    # A cast-or-play permission keeps each printed moment as its **own bool**
+    # rather than as a ``Duration`` — the five of them are named in
+    # ``ast.CastPermission`` and exactly one may be set — so it takes the prefix
+    # by translation, exactly as the three nodes above do and for their reason:
+    # the ``replace`` below would find no ``duration`` field and refuse a
+    # sentence the grammar can read.
+    #
+    # "Until end of turn, for as long as that card remains on top of your
+    # library, … you may play that card without paying its mana cost."
+    # (Temporal Aperture.) The permission is the second half of a conjunction
+    # this function recurses into, so the prefix reaches it here rather than
+    # through the reader that would have read a *trailing* "this turn".
+    if isinstance(statement, ast.CastPermission):
+        if duration.kind != "until_end_of_turn":
+            raise stream.error(
+                "a cast permission's leading duration is until end of turn"
+            )
+        if (
+            statement.until_source_grants_again
+            or statement.until_your_next_upkeep
+            or statement.until_your_next_turn
+            or statement.while_exiled
+        ):
+            raise stream.error("this sentence prints two different durations")
+        return dataclasses.replace(statement, until_end_of_turn=True)
     fields = {field.name for field in dataclasses.fields(statement)}
     if "duration" not in fields:
         raise stream.error(
@@ -552,10 +579,32 @@ def _distribute_duration(
 #: three readers of one printed clause.
 LINKED_WHILE_SOURCE_TAPPED = "while_source_tapped"
 
+#: "…**for as long as that card remains on top of your library**." (Temporal
+#: Aperture.) The second clause of a compound duration, and a *state* rather
+#: than a moment: nothing schedules its end, because every reader of the record
+#: re-asks whether the named card is still the library's first card — the same
+#: shape ``cast_permissions``' ``while_exiled`` already has one zone over, and
+#: the reason that duration is swept by nothing.
+#:
+#: Its spelling lives in ``engine/library_top.py``, the module that finally
+#: asks the condition, and is re-exported here under the name every clause in
+#: this file carries — so the parse side that attaches the clause, the lowering
+#: that translates it and the reader that answers it cannot come to disagree
+#: about what it is called.
+LINKED_WHILE_REVEALED_CARD_ON_TOP = WHILE_REVEALED_CARD_ON_TOP
 
-def _link_leading_duration(statement: "ast.Statement", stream: TokenStream) -> "ast.Statement":
-    """*statement* with the fronted "for as long as this creature remains
-    tapped" attached, or a refusal naming what could not take it.
+
+def _link_leading_duration(
+    statement: "ast.Statement",
+    stream: TokenStream,
+    condition: str = LINKED_WHILE_SOURCE_TAPPED,
+) -> "ast.Statement":
+    """*statement* with the fronted "for as long as …" clause attached, or a
+    refusal naming what could not take it.
+
+    *condition* is which clause was printed — the tapped-source one by default,
+    because that is the only clause every caller written before Temporal
+    Aperture could print.
 
     The linked twin of :func:`_distribute_duration`, and separate from it for
     the reason that function's ``CreateDelayedTrigger`` branch already states:
@@ -574,7 +623,7 @@ def _link_leading_duration(statement: "ast.Statement", stream: TokenStream) -> "
         return dataclasses.replace(
             statement,
             effects=tuple(
-                _link_leading_duration(effect, stream)
+                _link_leading_duration(effect, stream, condition)
                 for effect in statement.effects
             ),
         )
@@ -582,24 +631,105 @@ def _link_leading_duration(statement: "ast.Statement", stream: TokenStream) -> "
         return dataclasses.replace(
             statement,
             steps=tuple(
-                _link_leading_duration(step, stream) for step in statement.steps
+                _link_leading_duration(step, stream, condition)
+                for step in statement.steps
             ),
         )
+    # The two halves of Temporal Aperture's granted sentence. Each carries the
+    # condition in its own field beside whatever *moment* the clause in front of
+    # it states, which is what makes the printed compound duration two answers
+    # rather than one contested slot — see `ast.PlayWithTopRevealed`.
+    if isinstance(statement, (ast.PlayWithTopRevealed, ast.CastPermission)):
+        if statement.linked_duration not in (None, condition):
+            raise stream.error("this sentence prints two different durations")
+        return dataclasses.replace(statement, linked_duration=condition)
     if isinstance(statement, ast.DoesntUntapWhileSourceTapped):
         # The node *is* the linked restriction — its whole meaning is this
         # duration, which is what the trailing spelling states in its own
         # words. Nothing to attach.
         return statement
     if isinstance(statement, ast.CreateDelayedTrigger):
-        if statement.duration not in (None, LINKED_WHILE_SOURCE_TAPPED):
+        if statement.duration not in (None, condition):
             raise stream.error("this sentence prints two different durations")
-        return dataclasses.replace(
-            statement, duration=LINKED_WHILE_SOURCE_TAPPED
-        )
+        return dataclasses.replace(statement, duration=condition)
     raise stream.error(
         "a leading linked duration has nothing to attach to in "
         f"{type(statement).__name__}"
     )
+
+
+def accept_shuffle_sequence_tail(
+    statement: "ast.Statement", stream: TokenStream, parse_statement
+) -> "ast.Statement":
+    """``Shuffle your library, then <effect>.`` — the step printed behind a bare
+    shuffle (Temporal Aperture).
+
+    The comma list every ordinary sentence gets is read at the bottom of
+    ``statements._parse_statement_body``, behind the subject-verb reader, and a
+    bare shuffle never reaches it: the sentence names a zone rather than an
+    object, so it is read by a production that returns early. That is why
+    "Shuffle your library, then draw a card" failed as loudly as the sentence
+    this card actually prints — the missing piece is a *tail*, not a shuffle
+    template.
+
+    The elided possessive is resolved here and only here. "…then reveal the top
+    card" names no library, and the one it means is the one the clause in front
+    of it just shuffled — which is in scope at this call site and nowhere else.
+    Read as a whole sentence it would be ``RevealTop``'s own refusal
+    ("expected 'of'"), and *defaulted* to the caster it would open the wrong
+    deck the moment a card prints "That player shuffles, then reveals the top
+    card".
+
+    Anything else behind the comma is an ordinary statement and raises on its
+    own words, which is the loud failure a half-read tail owes.
+    """
+    mark = stream.mark()
+    if not (stream.accept_punct(",") and stream.accept_word("then")):
+        stream.reset(mark)
+        return statement
+    whose = getattr(statement, "whose", None)
+    elided = stream.mark()
+    if (
+        whose is not None
+        and stream.accept_phrase("reveal", "the", "top", "card")
+        and (stream.exhausted or stream.at_punct(".", ";"))
+    ):
+        return ast.Sequence((statement, ast.RevealTop(whose)))
+    stream.reset(elided)
+    return ast.Sequence((statement, parse_statement(stream, top_level=False)))
+
+
+def _parse_granted_top_reveal(
+    stream: TokenStream, parse_body
+) -> "ast.Statement | None":
+    """``play with the top card of your library revealed[ and <effect>]`` — the
+    body of the clause above, with the conjunct the card prints behind it.
+
+    Two effects under one pair of durations (Temporal Aperture): the reveal and
+    the free play of the card that was revealed. Joined here rather than by the
+    sentence reader's own "and" loop, because that loop lives behind the
+    subject-verb reader and this production is reached from a clause instead —
+    and the sequence is what lets both distributors attach their half of the
+    compound duration to both halves of the sentence by ordinary recursion.
+
+    The conjunct is optional: the clause governs whatever it is printed in
+    front of, and a card stating only the reveal is the same sentence with one
+    half. A conjunct that *is* printed and does not parse declines the whole
+    reading rather than dropping it, for the tapped clause's stated reason —
+    a half-read conjunction is the window silently lifted off the rest.
+    """
+    mark = stream.mark()
+    reveal = _parse_play_with_top_revealed(stream)
+    if reveal is None:
+        return None
+    if not stream.accept_word("and"):
+        return reveal
+    try:
+        rest = parse_body(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    return ast.Sequence((reveal, rest))
 
 
 def _parse_leading_linked_duration(
@@ -631,6 +761,30 @@ def _parse_leading_linked_duration(
     mark = stream.mark()
     if not stream.accept_phrase("for", "as", "long", "as"):
         return None
+    # "…**that card remains on top of your library**, play with the top card of
+    # your library revealed and you may play that card …" (Temporal Aperture.)
+    # The second "for as long as" clause the pool prints, and the only one whose
+    # subject is a *card* rather than the source permanent — so it is read here,
+    # beside the tapped one, and hands its body to the production that reads the
+    # grant rather than to `parse_body`.
+    #
+    # Dispatched from here and from nowhere else, which is not a shortcut but
+    # the same discipline `_parse_play_with_hand_revealed` states one zone over:
+    # the bare sentence is Conspicuous Snoop's *static*, claimed off a
+    # permanent's printed line by ``engine/library_top.py``, and a production
+    # reachable from the ordinary sentence reader would parse that line and take
+    # the claim away — parsed-but-unlowered is still parsed. Behind a clause
+    # that has already been consumed, the words can only be a grant.
+    top_of_library = stream.mark()
+    if stream.accept_phrase(
+        "that", "card", "remains", "on", "top", "of", "your", "library"
+    ) and stream.accept_punct(","):
+        granted = _parse_granted_top_reveal(stream, parse_body)
+        if granted is not None:
+            return _link_leading_duration(
+                granted, stream, LINKED_WHILE_REVEALED_CARD_ON_TOP
+            )
+    stream.reset(top_of_library)
     if not (
         _accept_self_reference(stream)
         and stream.accept_phrase("remains", "tapped")

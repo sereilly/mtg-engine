@@ -22,6 +22,7 @@ be found to have permission to cast it.
 
 from __future__ import annotations
 
+from ...library_top import WHILE_REVEALED_CARD_ON_TOP
 from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
@@ -163,7 +164,75 @@ def _lower_cast_permission(
                 {"cards_from": "exiled_cards", "duration": "while_exiled"},
             ),
         )
+    if node.linked_duration == WHILE_REVEALED_CARD_ON_TOP:
+        # "Until end of turn, **for as long as that card remains on top of your
+        # library**, … you may play that card without paying its mana cost."
+        # (Temporal Aperture.)
+        #
+        # Read before the exiled-cards arm and keyed on the printed clause
+        # rather than on the pronoun, because "that card" is the same two words
+        # in both sentences and only the clause says which pile it names. The
+        # exile arm would demand a pile no step of this effect filled and refuse
+        # the card for the wrong reason.
+        #
+        # **Both durations survive into the payload**, in the two fields that
+        # answer them: ``duration`` is the moment the cleanup sweep ends it
+        # (CR 611.2a), and ``position`` is the state every read re-asks
+        # (CR 611.2b) — ``cast_permissions._covers`` refuses a named card that
+        # is no longer its zone's first, which is what the clause says in
+        # exactly as many words. Neither is a special case of the other and
+        # neither could carry both.
+        if node.mode != "play":
+            raise LoweringError(
+                "the top card of a library is played, not "
+                f"{node.mode!r}ed", node=node,
+            )
+        if "revealed_card" not in produced:
+            raise LoweringError(
+                "back-reference to the card on top with no reveal in this "
+                "effect",
+                node=node,
+            )
+        if not node.until_end_of_turn:
+            raise LoweringError(
+                "a top-of-library permission states the moment it ends as "
+                "well as the state it holds under",
+                node=node,
+            )
+        if node.grantee is not None:
+            raise LoweringError(
+                "a top-of-library permission reads the caster's own library, "
+                "so it is granted to the caster",
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "grant_cast_permission", "",
+                {
+                    "zone": "library",
+                    "mode": "play",
+                    "cards_from": "revealed_card",
+                    "position": "top",
+                    "free": node.free,
+                    "duration": "end_of_turn",
+                },
+            ),
+        )
+
     if node.what == "exiled_this_way":
+        if node.free:
+            # No card prints "you may play cards exiled this way **without
+            # paying their mana costs**", and the payload this arm builds has
+            # nowhere to carry one — so a card that did would be a permission
+            # with its waiver quietly dropped, and the player would pay for a
+            # spell the effect gave away. Refused by name rather than lowered
+            # short: the reader above accepts the phrase because Temporal
+            # Aperture's arm needs it, and that is exactly why this arm has to
+            # say it cannot honour it.
+            raise LoweringError(
+                "an exiled-cards permission has no cost waiver to grant",
+                node=node,
+            )
         if "exiled_cards" not in produced:
             raise LoweringError(
                 "back-reference to 'cards exiled this way' with no exile "
@@ -374,3 +443,63 @@ def _lower_cast_permission(
         )
 
     raise LoweringError(f"no cast-permission lowering for {node.what!r}", node=node)
+
+
+def _lower_play_with_top_revealed(
+    node: "ast.PlayWithTopRevealed", produced: frozenset[str],
+) -> tuple[OracleInstruction, ...]:
+    """"Until end of turn, for as long as that card remains on top of your
+    library, **play with the top card of your library revealed**." (Temporal
+    Aperture.)
+
+    CR 400.2's public object, granted by a resolution rather than printed as a
+    permanent's static — which is the whole of what makes it need an
+    instruction at all. Conspicuous Snoop's identical sentence produces none:
+    ``engine/library_top.py`` reads it off that permanent's text for as long as
+    it is there, and a permission that is *derived* needs nothing to end it.
+    This one is an effect's, so it is a record with a duration, exactly as
+    every grant in ``engine/cast_permissions.py`` is.
+
+    **Both halves of the printed duration are required**, and each is refused
+    by name:
+
+    * without the moment (CR 611.2a) the grant would last until end of game,
+      which is Future Sight rather than this card;
+    * without the state (CR 611.2b) it would reveal whatever the library's
+      first card happened to be for the rest of the turn — a strictly larger
+      effect than the one printed, and the direction a dropped clause must
+      never go.
+
+    The card the state is about is the one the reveal in front of this sentence
+    recorded, demanded here the way every other back-reference demands its
+    producer: a condition about "that card" with nothing to name is a duration
+    that can never end.
+    """
+    if node.player.kind != "you":
+        raise LoweringError(
+            f"no card reveals {node.player.kind!r}'s library top this way",
+            node=node,
+        )
+    if node.duration.kind != "until_end_of_turn":
+        raise LoweringError(
+            "a granted top-of-library reveal ends at end of turn, not "
+            f"{node.duration.kind or 'never'}",
+            node=node,
+        )
+    if node.linked_duration != WHILE_REVEALED_CARD_ON_TOP:
+        raise LoweringError(
+            "a granted top-of-library reveal holds for as long as the "
+            "revealed card remains on top",
+            node=node,
+        )
+    if "revealed_card" not in produced:
+        raise LoweringError(
+            "back-reference to the card on top with no reveal in this effect",
+            node=node,
+        )
+    return (
+        OracleInstruction(
+            "grant_top_of_library_revealed", "",
+            {"cards_from": "revealed_card", "duration": "end_of_turn"},
+        ),
+    )
