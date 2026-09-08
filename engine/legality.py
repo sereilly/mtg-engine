@@ -529,6 +529,18 @@ class LegalityMixin:
             return False
         if perm.metadata.get("cant_be_blocked_until_eot"):
             return True
+        # "Enchanted creature can't be blocked." (Cloak of Mists.) The attached
+        # channel, asked beside the printed one below because the blocker gate
+        # asks both -- and this predicate exists to agree with that gate. A
+        # creature it will refuse every blocker on and this does not tag is the
+        # UI promising a block the step then rejects.
+        from .auras import attached_combat_restrictions
+
+        if any(
+            restriction.kind == "cant_be_blocked"
+            for restriction in attached_combat_restrictions(perm)
+        ):
+            return True
         seat = self.controller_index_of(perm)
         return any(
             i.kind == "cant_be_blocked"

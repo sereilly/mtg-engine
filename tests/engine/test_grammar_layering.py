@@ -1316,7 +1316,7 @@ def test_layers_only_import_downward(layers):
     "package,shared,roof",
     [
         ("effects", (), ()),
-        ("lowering", ("_common", "_filters", "_events", "_deaths", "_delays", "_amounts", "_counted_damage", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_conjuncts", "_bound_returns", "_bound_exiles", "_described_returns", "_piles", "_counter_stores", "_blankets", "_zone_categories", "_record_keys", "_record_conditions", "categories", "conditions"), ()),
+        ("lowering", ("_common", "_filters", "_events", "_deaths", "_delays", "_amounts", "_counted_damage", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_conjuncts", "_bound_returns", "_bound_exiles", "_described_returns", "_piles", "_counter_stores", "_plus_one_counters", "_blankets", "_zone_categories", "_record_keys", "_record_conditions", "categories", "conditions"), ()),
         # `costs` is shared beside `_core` rather than a family: a cost is
         # charged on the way to the stack and never lowered, so it has no
         # `effects/` or `lowering/` twin to be a family of — and both
@@ -1790,6 +1790,19 @@ FAMILY_SHARED = {
     # `counters._lower_put_counter`, so `counters` reads it and it reads nothing
     # back.
     "_counter_stores",
+    # `_plus_one_counters` split out of `lowering/counters.py` at Urza's Saga
+    # wave 1, the third time that module crossed the guard — sixteen lines
+    # under it before the wave started, and Vampiric Embrace's second
+    # attached-counter trigger head was what took it over. The line is the
+    # gate `_lower_put_counter` had already written for itself: everything
+    # above `if node.counter != "+1/+1"` dispatches on *which counter* the
+    # sentence names or on a subject an earlier step bound, and everything
+    # below it has settled that and asks only how many and on what. A floor
+    # for `_described_returns`' reason exactly, tail call included:
+    # `counters`' last act is to hand the sentence down, so one
+    # printed-specificity order still reads top to bottom across two files,
+    # and nothing reads back.
+    "_plus_one_counters",
     # `records` split out of `ast/conditions.py` at Mirage, when three
     # intervening-if productions took that module past the guard. The line is
     # the one `lowering/conditions.py` had been drawing in prose card by card:

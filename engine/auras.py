@@ -377,8 +377,21 @@ def aura_enchants(oracle_text: str, noun: str) -> bool:
 #: to claim the line with a wildcard instead.
 _ADDITIONAL_MANA_ON_TAP = re.compile(
     r"^whenever enchanted land is tapped for mana, "
-    r"its controller adds an additional ((?:\{[wubrgc]\})+)$"
+    r"its controller adds an additional "
+    r"(?:(?P<symbols>(?:\{[wubrgc]\})+)|(?P<any>one mana of any color))$"
 )
+
+#: The member :func:`aura_additional_mana_on_tap_line` returns for "one mana of
+#: **any color**" (Fertile Ground) rather than a printed symbol. Carried in the
+#: same tuple as the printed pips because it is the same clause with the colour
+#: left open (CR 106.6: the controller chooses as the ability resolves), and one
+#: reader answering one question is what keeps the support gate and the
+#: dispatcher from drifting - which is the whole reason this pattern is here and
+#: not written out at the tap site.
+#:
+#: Never a mana symbol, so no caller can mistake it for one: the symbols this
+#: pattern produces are the five colours and {C}, upper-cased.
+AURA_ANY_COLOR_MANA = "any"
 
 
 def aura_additional_mana_on_tap_line(normalized_line: str) -> tuple[str, ...]:
@@ -391,7 +404,11 @@ def aura_additional_mana_on_tap_line(normalized_line: str) -> tuple[str, ...]:
     match = _ADDITIONAL_MANA_ON_TAP.match(normalized_line.strip().rstrip("."))
     if match is None:
         return ()
-    return tuple(sym.upper() for sym in re.findall(r"[wubrgc]", match.group(1)))
+    if match.group("any"):
+        return (AURA_ANY_COLOR_MANA,)
+    return tuple(
+        sym.upper() for sym in re.findall(r"[wubrgc]", match.group("symbols"))
+    )
 
 
 def aura_additional_mana_on_tap(oracle_text: str) -> tuple[str, ...]:
@@ -2344,6 +2361,19 @@ def aura_protection_colors(oracle_text: str) -> frozenset[str]:
 #: exactly the kinds a reader consults, and adding one means adding that
 #: reader.
 ENFORCED_ATTACHED_COMBAT_RESTRICTIONS = frozenset({
+    # "Enchanted creature can't be blocked." (Cloak of Mists.) The unnarrowed
+    # member of the family below: no blocker class, no count and no price, so
+    # nothing may block the host at all (CR 509.1b). Phantom Warrior prints the
+    # same sentence about itself, which is what makes it one table asked with
+    # the subject rewritten rather than a second reading.
+    #
+    # Its readers are ``phases/declare_blockers_step._can_block_attacker``,
+    # which refuses every blocker, and ``legality.is_unblockable``, which fades
+    # the creature in the UI. Both already answered the kind off the
+    # *attacker's own* program and had to be taught this channel as well --
+    # a kind in this set with only one of its readers widened is a restriction
+    # the UI shows and the step ignores, or the reverse.
+    "cant_be_blocked",
     "cant_be_blocked_by",
     # "Enchanted creature can't be blocked except by artifact creatures and/or
     # white creatures." (Seeker.) The whitelist form, read through the same
@@ -2785,9 +2815,50 @@ def aura_continuous_claim(line: str) -> str | None:
         return "artifact animation (layers 4 and 7b) — auras.animating_auras"
     if aura_ability_cost_reduction(normalized):
         return "activation cost reduction — auras.attached_ability_cost_reduction"
+    if aura_redirects_all_damage(normalized):
+        return (
+            "CR 614.9 redirection onto the host — "
+            "damage_redirects.attached_static_redirects"
+        )
     if aura_controller_cast_ban(normalized) is not None:
         return "cast restriction on the host's controller — auras.controller_cast_ban"
     return None
+
+
+#: "All damage that would be dealt to you is dealt to enchanted creature
+#: instead." (Pariah.) CR 614.9's redirection printed as an Aura's **static**
+#: ability: it lasts exactly as long as the Aura is attached, which is why it
+#: is derived here on every damage event rather than armed as a record —
+#: removal is the Aura ceasing to be attached, and there is no remembered
+#: delta to undo. The same shape ``prevention._attached_combat_shield`` has one
+#: module over, and for the same reason.
+#:
+#: "You" is CR 109.5's controller of the **Aura**, not of the creature: an
+#: opponent may well control the host, and Pariah on their creature still moves
+#: your damage onto it. The seat is read off the Aura at the event, so a control
+#: change moves the protection with it.
+#:
+#: The noun is payload the way every printed noun in this file is, and both
+#: attachment words are read (CR 301.5f) — an Equipment printing the sentence is
+#: the same rule.
+_ATTACHED_ALL_DAMAGE_REDIRECT = re.compile(
+    rf"^all damage that would be dealt to you is dealt to {_ATTACHED} "
+    rf"(?P<noun>{_NOUN}) instead$"
+)
+
+
+def aura_redirects_all_damage(line: str) -> bool:
+    """Whether one printed line moves all of its controller's damage onto the
+    attached permanent.
+
+    One reader, two callers, which is this file's standing rule: the support
+    gate asks it through :func:`aura_continuous_claim` so the line is claimed,
+    and ``damage_redirects.attached_static_redirects`` asks it at the damage
+    event so the line is *carried out*. A line claimed here and read nowhere
+    else would be an Aura reporting supported while every point of damage still
+    landed on its controller.
+    """
+    return _ATTACHED_ALL_DAMAGE_REDIRECT.match(_line_text(line)) is not None
 
 
 #: "Enchanted creature's **controller** can't cast creature spells."

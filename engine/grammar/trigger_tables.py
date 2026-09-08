@@ -95,6 +95,16 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # would claim the shorter reading and strand the rest of the clause.
     ("creature_dealt_damage_by_self_dies",
      ("a", "creature", "dealt", "damage", "by", "this", "creature", "this", "turn", "dies")),
+    # The attached spelling of the row above (Vampiric Embrace), and its own
+    # kind for the reason `engine/oracle.py`'s twin row states: the fire site
+    # reaches the observer by a different route. Both attachment words, because
+    # CR 301.5f makes them one rule.
+    ("creature_dealt_damage_by_attached_dies",
+     ("a", "creature", "dealt", "damage", "by", "enchanted", "creature",
+      "this", "turn", "dies")),
+    ("creature_dealt_damage_by_attached_dies",
+     ("a", "creature", "dealt", "damage", "by", "equipped", "creature",
+      "this", "turn", "dies")),
     ("creature_dies", ("a", "creature", "dies")),
     # "Whenever you discard a card" (Necropotence) and "whenever an opponent
     # discards a card" (Megrim). One event, two printed seats — the narrowing

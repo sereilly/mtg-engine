@@ -750,6 +750,23 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("creature_dealt_damage",
      r"whenever (?P<damaged_subject>an? [^,]+) is dealt damage"),
     ("creature_dealt_damage_by_self_dies",  r"whenever a creature dealt damage by this creature this turn dies"),
+    # "Whenever a creature dealt damage by **enchanted creature** this turn
+    # dies, put a +1/+1 counter on that creature." (Vampiric Embrace.) Sengir
+    # Vampire's condition read off an attachment instead of off the ability's
+    # own permanent -- which is a different *observer relationship*, not a
+    # narrowing of the same one, exactly as `attached_creature_dies` is a
+    # different kind from `creature_dies` and for the same reason: the fire site
+    # finds the observer by a different route (`_fire_creature_dies_triggers`
+    # compares the damagers against the observer for the row above and against
+    # what the observer is attached to for this one), and a kind is what a fire
+    # site dispatches on.
+    #
+    # Both attachment words (CR 301.5f): an Equipment printing the sentence is
+    # the same rule, and the row that reads only one of them is the drift this
+    # file's other comments keep naming.
+    ("creature_dealt_damage_by_attached_dies",
+     r"whenever a creature dealt damage by (?:enchanted|equipped) creature "
+     r"this turn dies"),
     # "Whenever this creature becomes the target of a spell or ability an
     # opponent controls" (Warden of the Woods). Whose spell it must be is a
     # named group, so "you control" and the unnarrowed form are the same

@@ -3,7 +3,7 @@ from __future__ import annotations
 import dataclasses
 import random
 
-from ..auras import aura_additional_mana_on_tap
+from ..auras import AURA_ANY_COLOR_MANA, aura_additional_mana_on_tap
 from ..delayed_triggers import matching_delayed_triggers
 from ..cast_permissions import expire_at_turn_start as expire_turn_permissions
 from ..hand_locks import expire_hand_locks
@@ -612,6 +612,19 @@ class TurnManagementMixin:
             for extra in aura_additional_mana_on_tap(
                 attached_aura.effective_card.oracle_text
             ):
+                if extra == AURA_ANY_COLOR_MANA:
+                    # "…adds an additional **one mana of any color**" (Fertile
+                    # Ground) rather than a printed pip. CR 106.6 leaves the
+                    # colour to the controller, and CR 605.4a gives a triggered
+                    # mana ability no window to be asked in — this is running
+                    # inline, inside the cost payment that tapped the land, so
+                    # there is no priority for a prompt. The seat's answer is
+                    # already in hand: `chosen_color` is the colour this very
+                    # call asked the land for, which is the same player making
+                    # the same kind of choice at the same moment. It is
+                    # normalized rather than trusted, because it arrives off the
+                    # wire.
+                    extra = self._normalize_mana_color(chosen_color) or "G"
                 player.mana_pool[extra] = player.mana_pool.get(extra, 0) + 1
                 self.log.append(f"{attached_aura.card.name}: {player.name} added an additional {{{extra}}}")
 

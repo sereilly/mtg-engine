@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**366 / 614 tracked rules covered (59%)** — 2199 tests, 0 unannotated.
+**366 / 614 tracked rules covered (59%)** — 2206 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -451,7 +451,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **305.4** Effects may also allow players to “put” lands onto the battlefield. This isn’t the same as “playi...
 - [ ] **305.5** Land subtypes are always a single word and are listed after a long dash. Land subtypes are also c...
 - [ ] **305.6** The basic land types are Plains, Island, Swamp, Mountain, and Forest. If an object uses the words...
-- [x] **305.7** If an effect sets a land’s subtype to one or more of the basic land types, the land no longer has... *(22 tests)*
+- [x] **305.7** If an effect sets a land’s subtype to one or more of the basic land types, the land no longer has... *(23 tests)*
 - [ ] **305.8** Any land with the supertype “basic” is a basic land. Any land that doesn’t have this supertype is...
 - [ ] **305.9** If an object is both a land and another card type, it can be played only as a land. It can’t be c...
 
@@ -626,7 +626,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 509. Declare Blockers Step
 
-- [x] **509.1** First, the defending player declares blockers. This turn-based action doesn’t use the stack. To d... *(74 tests, subrules abcdfghi)*
+- [x] **509.1** First, the defending player declares blockers. This turn-based action doesn’t use the stack. To d... *(75 tests, subrules abcdfghi)*
 - [x] **509.2** Second, the active player gets priority. (See rule 117, “Timing and Priority.”) *(4 tests, subrules a)*
 - [x] **509.3** Triggered abilities that trigger on blockers being declared may have different trigger conditions. *(11 tests, subrules acdg)*
 - [x] **509.4** If a creature is put onto the battlefield blocking, its controller chooses which attacking creatu... *(1 tests)*
@@ -681,7 +681,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **603.1** Triggered abilities have a trigger condition and an effect. They are written as “[When/Whenever/A... *(2 tests, subrules b)*
 - [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(24 tests, subrules bd)*
-- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(41 tests, subrules bcd)*
+- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(43 tests, subrules bcd)*
 - [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(4 tests)*
 - [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(6 tests)*
 - [x] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit... *(3 tests, subrules c)*
@@ -707,7 +707,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **605.1** Some activated abilities and some triggered abilities are mana abilities, which are subject to sp... *(9 tests, subrules ab)*
 - [x] **605.2** A mana ability remains a mana ability even if the game state doesn’t allow it to produce mana. *(1 tests)*
 - [x] **605.3** Activating an activated mana ability follows the rules for activating any other activated ability... *(11 tests, subrules abc)*
-- [x] **605.4** Triggered mana abilities follow all the rules for other triggered abilities (see rule 603, “Handl... *(5 tests, subrules a)*
+- [x] **605.4** Triggered mana abilities follow all the rules for other triggered abilities (see rule 603, “Handl... *(6 tests, subrules a)*
 - [x] **605.5** Abilities that don’t meet the criteria specified in rules 605.1a–b and spells aren’t mana abilities. *(3 tests, subrules ab)*
 
 ### 606. Loyalty Abilities
@@ -794,7 +794,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **614.6** If an event is replaced, it never happens. A modified event occurs instead, which may in turn tri... *(10 tests)*
 - [x] **614.7** If a replacement effect would replace an event, but that event never happens, the replacement eff... *(5 tests, subrules a)*
 - [x] **614.8** Regeneration is a destruction-replacement effect. The word “instead” doesn’t appear on the card b... *(9 tests)*
-- [x] **614.9** Some effects replace damage dealt to one battle, creature, planeswalker, or player with the same ... *(11 tests)*
+- [x] **614.9** Some effects replace damage dealt to one battle, creature, planeswalker, or player with the same ... *(13 tests)*
 - [x] **614.10** An effect that causes a player to skip an event, step, phase, or turn is a replacement effect. “S... *(6 tests, subrules a)*
 - [ ] **614.11** Some effects replace card draws. These effects are applied even if no cards could be drawn becaus...
 - [x] **614.12** Some replacement effects modify how a permanent enters the battlefield. (See rules 614.1c–d.) Suc... *(6 tests, subrules a)*
@@ -830,7 +830,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **700.1** Anything that happens in a game is an event. Multiple events may take place during the resolution...
 - [x] **700.2** A spell or ability is modal if it has two or more options in a bulleted list preceded by instruct... *(22 tests, subrules abde)*
 - [ ] **700.3** Some effects cause objects to be temporarily grouped into piles.
-- [x] **700.4** The term dies means “is put into a graveyard from the battlefield.” *(8 tests)*
+- [x] **700.4** The term dies means “is put into a graveyard from the battlefield.” *(10 tests)*
 - [ ] **700.5** A player’s devotion to [color] is equal to the number of mana symbols of that color among the man...
 - [ ] **700.6** The term historic refers to an object that has the legendary supertype, the artifact card type, o...
 - [ ] **700.7** If an ability uses a phrase such as “this [something]” to identify an object, where [something] i...
@@ -871,7 +871,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.2** Deathtouch *(4 tests, subrules bc)*
 - [x] **702.3** Defender *(6 tests, subrules b)*
 - [x] **702.4** Double Strike *(3 tests, subrules b)*
-- [x] **702.5** Enchant *(7 tests, subrules a)*
+- [x] **702.5** Enchant *(8 tests, subrules a)*
 - [x] **702.6** Equip *(15 tests, subrules ace)*
 - [x] **702.7** First Strike *(5 tests, subrules b)*
 - [x] **702.8** Flash *(3 tests, subrules ab)*

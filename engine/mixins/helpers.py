@@ -39,6 +39,18 @@ from ..oracle_types import single_chosen_id
 # are named here rather than tested for one at a time, so the general enqueue
 # beside them is "everything else" — a set that can be read, instead of a
 # sequence of loops whose gaps only show up as a card doing nothing.
+#: The two death conditions keyed on **who dealt the damage** rather than on
+#: whose death it was: "a creature dealt damage by *this* creature this turn
+#: dies" (Sengir Vampire, Axelrod Gunnarson) and the same sentence read off an
+#: attachment (Vampiric Embrace). One scan answers both, because the only thing
+#: that differs is which permanent the condition calls the killer -- and two
+#: scans is the shape this file's other comments keep naming, one fire site per
+#: card and every later card forgotten.
+_DAMAGER_DEATH_CONDITIONS = frozenset({
+    "creature_dealt_damage_by_self_dies",
+    "creature_dealt_damage_by_attached_dies",
+})
+
 _INLINE_DIES_KINDS = frozenset({
     "owner_loses_half_life",                    # Personal Incarnation
     "destroy_creatures_in_combat_with_source",  # Abu Ja'far
@@ -2939,13 +2951,28 @@ class GameHelpersMixin:
                 # ability *does* is the effect's business; the condition is
                 # about a death.
                 if (
-                    trig.condition.kind == "creature_dealt_damage_by_self_dies"
+                    trig.condition.kind in _DAMAGER_DEATH_CONDITIONS
                     and trig.instruction is not None
                 ):
                     damagers = dead_permanent.metadata.get("damaged_by_sources_this_turn", [])
+                    # Which permanent the condition says dealt the damage.
+                    # Sengir Vampire's is the observer itself; Vampiric
+                    # Embrace's is what the observer is attached to, which is
+                    # the whole of the difference between the two kinds and the
+                    # reason they are two. ``attached_to`` is the one record
+                    # both an Aura and an Equipment write, so CR 301.5f's two
+                    # words reach one answer.
+                    killer = (
+                        observer
+                        if trig.condition.kind
+                        == "creature_dealt_damage_by_self_dies"
+                        else observer.metadata.get("attached_to")
+                    )
                     # By identity: ``in`` compares Permanent by value, and a
                     # look-alike of the killer is not the killer (CR 400.7).
-                    if any(entry is observer for entry in damagers):
+                    if killer is not None and any(
+                        entry is killer for entry in damagers
+                    ):
                         # The dying card travels with the trigger, exactly as
                         # the three scans above already send it. Seraph's "put
                         # **that card** onto the battlefield under your control"
