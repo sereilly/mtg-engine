@@ -361,6 +361,18 @@ class BecomeCreature:
     #: that is what every other printing in the pool says out loud, and because
     #: a node built without the field must keep meaning what it used to.
     until_end_of_turn: bool = True
+    #: Whether the sentence printed **none** of CR 205.1b's retention clauses,
+    #: which makes it CR 205.1a's default: the new card types *replace* the
+    #: printed ones. "…it becomes a 2/2 Gargoyle creature with flying." (Opal
+    #: Gargoyle) — the enchantment stops being an enchantment, which is the
+    #: whole mechanism of the Hidden / Opal / Veiled cycle, since its own
+    #: intervening-if asks whether it still is one.
+    #:
+    #: Its own field rather than ``not until_end_of_turn``-style inference from
+    #: the others, and defaulted False so every node built before it existed
+    #: keeps meaning what it did: the retention clauses are the ones the pool
+    #: printed until now, and the addition is what those nodes claim.
+    replaces_types: bool = False
 
 
 #: The colour an effect does not name because CR 608.2d makes the choice part of
@@ -465,6 +477,14 @@ class GainType:
     card_types: tuple[str, ...]
     duration: Duration = field(default_factory=Duration)
     pt_from_mana_value: bool = False
+    #: Whether the sentence printed **no** retention clause at all — "…becomes
+    #: an enchantment." (Opal Acrolith.) CR 205.1a's default, so the types are
+    #: *set* rather than joined and the node stops being a "gain" in anything
+    #: but its name. Its own field for :attr:`BecomeCreature.replaces_types`'
+    #: reason and defaulted the same way round: the two cards in the pool that
+    #: predate it print the clause, and their nodes must keep meaning what they
+    #: did.
+    replaces_types: bool = False
 
 
 @dataclass(frozen=True)

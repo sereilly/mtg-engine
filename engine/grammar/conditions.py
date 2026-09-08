@@ -31,7 +31,7 @@ from .condition_clauses import (_accept_counter_condition,
                                 _parse_blockers_of_bound_creature,
                                 _parse_self_in_graveyard_above)
 from .stream import TokenStream
-from .vocabulary import COLOR_WORDS, NUMBER_WORDS
+from .vocabulary import CARD_TYPES, COLOR_WORDS, NUMBER_WORDS
 
 
 #: What every state condition below is asked *about*: the ability's own source.
@@ -888,6 +888,20 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
             # its own reading.
             if stream.accept_phrase("on", "the", "battlefield"):
                 return ast.SourceOnBattlefield(subject)
+            # "…**is an enchantment**" / "…**is a creature**" (the Hidden /
+            # Opal / Veiled cycle). CR 205.2's card type asked of the source,
+            # answered by CR 613 layer 4 rather than by the printed type line —
+            # which is the whole point of the clause, since the effect behind it
+            # is what changes the answer. Read after the state table and the
+            # zone clause, whose words this branch does not accept, so each
+            # keeps the sentence it owns.
+            type_mark = stream.mark()
+            if stream.accept_word("a", "an"):
+                word = stream.peek_word()
+                if word is not None and word in CARD_TYPES:
+                    stream.advance()
+                    return ast.SourceIsType(subject, (word,))
+            stream.reset(type_mark)
         # "…**didn't attack this turn**" / "…**attacked this turn**"
         # (Aggression, and the delayed end-step destruction Norritt's family
         # prints about a creature it chose). The same axis the present-tense

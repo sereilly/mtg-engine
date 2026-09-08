@@ -531,6 +531,17 @@ def _cast_narrowing_admits(
                 return False
         elif cast_type not in type_line:
             return False
+    # "…a creature spell **with flying**" (Hidden Spider). An ability of the
+    # spell rather than a word of its type line, so it is asked of the card's
+    # keywords — the printed ones, because a spell on the stack is not a
+    # permanent and layer 6 has nothing on it to read. A trigger naming a
+    # keyword the card does not have does not fire, which is the direction that
+    # leaves the Spider an enchantment.
+    cast_keyword = trig.condition.payload.get("cast_keyword")
+    if cast_keyword and cast_keyword not in {
+        str(word).lower() for word in (card.keywords or ())
+    }:
+        return False
     # "…a creature spell **that doesn't share a color with a creature you
     # control**" (Invoke Prejudice). CR 105.2: an object's colours are a set, so
     # "shares a colour" is a non-empty intersection — a colourless spell shares

@@ -79,6 +79,14 @@ GAINED_TYPES = "gained_types"
 #: list for the same reason. One entry per effect, so the removal ends by
 #: dropping the contribution rather than by remembering what was there.
 LOST_TYPES = "lost_types"
+#: The card types an effect **set** a permanent to (CR 205.1a): "{0}: This
+#: permanent becomes an enchantment." (Opal Acrolith), "Target creature becomes
+#: an enchantment…" (Soul Sculptor). One slot rather than a list, exactly as an
+#: animation record is one slot: a replacement says what the permanent now is,
+#: so a second one is not a second contribution to fold but the same question
+#: answered again — and the timestamp on the record is what decides it against
+#: the animation channel, which is the effect it is printed to undo.
+SET_CARD_TYPES = "set_card_types"
 #: Supertypes a board-wide **static** takes away ("All lands are no longer
 #: snow", Melting), rebuilt from the board by
 #: ``mixins/permanent_state._refresh_static_land_types`` on every recompute. A
@@ -743,6 +751,18 @@ def collect_type_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
     for _key in ("animate_until_end_of_turn", "animate_indefinitely"):
         animation = meta.get(_key)
         if animation:
+            # CR 205.1a where the sentence printed none of CR 205.1b's
+            # retention clauses ("it becomes a 2/2 Gargoyle creature with
+            # flying", Opal Gargoyle): the animation *replaces* the printed
+            # card types instead of joining them, which is what makes the
+            # cycle's own "if this permanent is an enchantment" false
+            # afterwards. Subtypes are replaced only when the sentence named
+            # some — CR 205.1a's third clause, that a removed card type takes
+            # its own subtypes with it, is not modelled, and no card in the
+            # pool animates a permanent carrying a subtype of the type it
+            # loses.
+            replaces = bool(animation.get("replaces_types"))
+            subtypes = animation.get("subtypes") or ()
             effects.append(add_types(
                 only,
                 # "…a 2/2 Assembly-Worker **artifact** creature" (Mishra's
@@ -750,10 +770,32 @@ def collect_type_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
                 # noun. A land animated without the artifact type is a permanent
                 # Shatter cannot reach and Titania's Song does not see.
                 card_types=["creature", *(animation.get("card_types") or ())],
-                subtypes=animation.get("subtypes") or (),
-                timestamp=0,
+                subtypes=subtypes,
+                replace_card_types=replaces,
+                replace_subtypes=replaces and bool(subtypes),
+                # Zero for every record written before a replacement could be
+                # one: the additions commute, so nothing needed an order. A
+                # replacement does not — Opal Acrolith turns itself back into
+                # an enchantment and then animates again — so those records
+                # carry the stamp CR 613.7b gives them.
+                timestamp=int(animation.get("timestamp") or 0),
                 label=f"animated ({_key})",
             ))
+    # "{0}: This permanent becomes an enchantment." (Opal Acrolith, Hidden
+    # Stag's second line, Soul Sculptor's target.) CR 205.1a again, with no
+    # creature body behind it: the record says what the permanent now is, and
+    # the timestamp is what puts it after or before the animation it undoes.
+    replacement = meta.get(SET_CARD_TYPES)
+    if replacement:
+        effects.append(add_types(
+            only,
+            card_types=list(replacement.get("card_types") or ()),
+            subtypes=(),
+            replace_card_types=True,
+            replace_subtypes=True,
+            timestamp=int(replacement.get("timestamp") or 0),
+            label=f"set types ({replacement.get('source', 'effect')})",
+        ))
     # Animate Artifact (CR 613.1d). Derived from the attached Aura, so the
     # artifact stops being a creature the moment the Aura leaves — where the
     # card-rebuilding version had to stash the original and restore it.

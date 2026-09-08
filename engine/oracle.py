@@ -983,6 +983,16 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("opponent_casts_spell",
      r"whenever an opponent casts an? (?P<cast_type>noncreature|nonartifact|creature|artifact|enchantment|instant|sorcery|land) spell"
      r" other than the (?P<after_spell_ordinal>[a-z]+) (?P=cast_type) spell that player casts each turn"),
+    # "…a creature spell **with flying**" (Hidden Spider). A narrowing on an
+    # *ability* of the spell rather than on its type line, so it is its own
+    # payload key and `events._cast_narrowing_admits` reads it off the card
+    # being cast. Above the bare type row below, which is its strict prefix:
+    # matched there the clause would be left unread and the Spider would wake
+    # for every creature an opponent cast, which is the silent widening this
+    # table is ordered longest-first to prevent.
+    ("opponent_casts_spell",
+     r"whenever an opponent casts an? (?P<cast_type>noncreature|nonartifact|creature|artifact|enchantment|instant|sorcery|land) spell"
+     r" with (?P<cast_keyword>[a-z]+)"),
     # "Whenever an opponent casts an artifact spell" (Citanul Druid) — the
     # type narrowing again, on the opponent-scoped kind. Before the bare row.
     ("opponent_casts_spell",

@@ -855,7 +855,10 @@ def _parse_line(line: str, *, card_name: str | None = None) -> ast.AbilityNode:
             bind_recorded_card(
                 event.kind, intervening,
                 rebind_combat_role_to_event_subject(
-                    event, rebind_pronoun_to_event_subject(event, statement)
+                    event,
+                    rebind_pronoun_to_event_subject(
+                        event, statement, intervening=intervening
+                    ),
                 ),
             ),
             intervening,

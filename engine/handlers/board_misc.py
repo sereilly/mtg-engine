@@ -7,7 +7,7 @@ from ..delayed_triggers import (END_OF_TURN, DelayedTrigger,
                                 arm_delayed_trigger)
 from ..land_types import MIRE_COUNTER, change_land_type
 from ..auras import BECAME_AURA_ENCHANT, BECAME_AURA_RECORD
-from ..layer_bridge import GAINED_TYPES
+from ..layer_bridge import GAINED_TYPES, SET_CARD_TYPES
 from ..models import CardDefinition, Permanent
 from ..oracle_types import (CHOSEN_TARGET_PERMANENTS, COUNTERS_REMOVED,
                             LAST_TARGET_CONTROLLER,
@@ -922,6 +922,41 @@ ANIMATE_UNTIL_EOT = "animate_until_end_of_turn"
 ANIMATE_INDEFINITELY = "animate_indefinitely"
 
 
+#: The payload keys an animation's *body* occupies. The sweep below hands
+#: everything else to ``subject_matches`` as the noun phrase it animates, so a
+#: key left off this list is a filter key that matcher has never heard of —
+#: which is a narrowing dropped on a board-wide effect, the one direction
+#: ``_lower_become_creature`` refuses outright.
+_ANIMATION_PAYLOAD_KEYS = frozenset({
+    "power", "toughness", "subtypes", "keywords", "card_types", "colors",
+    "replaces_types",
+})
+
+
+def _animation_record(payload: dict) -> dict:
+    """The record both animation handlers write, from the lowered payload.
+
+    One builder because the two handlers disagree about *which key* it goes on
+    and about nothing else — and because the replacement half below has two
+    fields that have to travel together: a record claiming CR 205.1a without a
+    timestamp would replace the printed types and then lose every ordering
+    argument against the "becomes an enchantment" effect printed to undo it.
+
+    Both keys are written **only** when the sentence claimed the replacement,
+    so every record an addition writes is byte-identical to the one it wrote
+    before this existed — the same rule the payload key itself follows.
+    """
+    record = {
+        "subtypes": list(payload.get("subtypes") or ()),
+        "keywords": list(payload.get("keywords") or ()),
+        "card_types": list(payload.get("card_types") or ()),
+    }
+    if payload.get("replaces_types"):
+        record["replaces_types"] = True
+        record["timestamp"] = next_timestamp()
+    return record
+
+
 @effect_handler("animate_self_until_eot")
 def animate_self_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"…becomes a 3/3 Sphinx creature with flying in addition to its other
@@ -985,11 +1020,7 @@ def _animate_self(
     payload = instruction.payload
     power, toughness = int(payload.get("power", 0)), int(payload.get("toughness", 0))
     set_base_pt(source, power, toughness, until_eot=until_eot)
-    source.metadata[record_key] = {
-        "subtypes": list(payload.get("subtypes") or ()),
-        "keywords": list(payload.get("keywords") or ()),
-        "card_types": list(payload.get("card_types") or ()),
-    }
+    source.metadata[record_key] = _animation_record(payload)
     _record_animation_colors(source, payload, until_eot=until_eot)
     game.log.append(
         f"{context.card.name} becomes a {power}/{toughness} creature {duration}"
@@ -1122,11 +1153,7 @@ def _animate_target(
     payload = instruction.payload
     power, toughness = int(payload.get("power", 0)), int(payload.get("toughness", 0))
     set_base_pt(target, power, toughness, until_eot=until_eot)
-    target.metadata[record_key] = {
-        "subtypes": list(payload.get("subtypes") or ()),
-        "keywords": list(payload.get("keywords") or ()),
-        "card_types": list(payload.get("card_types") or ()),
-    }
+    target.metadata[record_key] = _animation_record(payload)
     _record_animation_colors(target, payload, until_eot=until_eot)
     game.log.append(
         f"{target.card.name} becomes a {power}/{toughness} creature "
@@ -1160,20 +1187,14 @@ def animate_matching_until_eot(game: Game, instruction: OracleInstruction, conte
 
     described = {
         key: value for key, value in instruction.payload.items()
-        if key not in (
-            "power", "toughness", "subtypes", "keywords", "card_types", "colors",
-        )
+        if key not in _ANIMATION_PAYLOAD_KEYS
     }
     observer = (
         game.players.index(context.caster) if context.caster in game.players else None
     )
     payload = instruction.payload
     power, toughness = int(payload.get("power", 0)), int(payload.get("toughness", 0))
-    record = {
-        "subtypes": list(payload.get("subtypes") or ()),
-        "keywords": list(payload.get("keywords") or ()),
-        "card_types": list(payload.get("card_types") or ()),
-    }
+    record = _animation_record(payload)
     animated = []
     for permanent in game.all_permanents():
         if not subject_matches(
@@ -2769,6 +2790,43 @@ def gain_type(game: Game, instruction: OracleInstruction, context: OracleExecuti
     game.log.append(
         f"{context.card.name}: {target_perm.card.name} becomes "
         + " ".join(record["card_types"])
+    )
+    return True, "resolved"
+
+
+@effect_handler("set_card_types_self")
+def set_card_types_self(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"{0}: This permanent becomes an enchantment." (Opal Acrolith.) "Whenever
+    you play a land, if this permanent is a creature, it becomes an
+    enchantment." (Hidden Stag.)
+
+    CR 205.1a's replacement, written as one record the CR 613 layer-4 collector
+    reads (`layer_bridge.SET_CARD_TYPES`). Nothing is restored and the
+    animation record it undoes is **not** deleted: both are layer-4
+    contributions and CR 613.7 applies them in timestamp order, so the later
+    one wins — which is the whole of what makes Opal Acrolith work when it
+    animates a second time. Deleting the animation instead would work once and
+    then lose the size the third sentence needs.
+
+    The P/T the animation set stays on its own channel for the same reason: it
+    is layer 7b, and CR 208.3 makes a non-creature's power and toughness simply
+    not exist rather than something to unset. A permanent that animates again
+    is the size its own sentence gave it.
+    """
+    source = context.source_permanent
+    if source is None:
+        return False, "ability not implemented"
+    card_types = [str(word) for word in (instruction.payload.get("card_types") or ())]
+    if not card_types:
+        return False, "ability not implemented"
+    source.metadata[SET_CARD_TYPES] = {
+        "card_types": card_types,
+        "timestamp": next_timestamp(),
+        "source": context.card.name if context.card else "effect",
+    }
+    game._refresh_dynamic_creatures()
+    game.log.append(
+        f"{source.card.name} becomes " + " ".join(card_types)
     )
     return True, "resolved"
 

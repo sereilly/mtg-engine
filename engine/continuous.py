@@ -410,15 +410,31 @@ def add_types(
     subtypes: Iterable[str] = (),
     supertypes: Iterable[str] = (),
     replace_subtypes: bool = False,
+    replace_card_types: bool = False,
     timestamp: int,
     label: str = "",
 ) -> ContinuousEffect:
     """Layer 4: type-changing. ``replace_subtypes`` covers "is a Swamp"-style
-    effects, which replace the land's types rather than adding to them."""
+    effects, which replace the land's types rather than adding to them.
+
+    ``replace_card_types`` is CR 205.1a's other half and its **default**: "in
+    most such cases, the new card type(s) replaces any existing card types."
+    An addition is what CR 205.1b's printed clauses ask for ("in addition to
+    its other types", "that's still a land", the artifact-creature exception),
+    so the flag is off unless a caller says the sentence printed none of them —
+    "it becomes a 2/2 Gargoyle creature with flying" (Opal Gargoyle), where the
+    enchantment stops being an enchantment.
+
+    CR 205.1a's instant/sorcery carve-out is not modelled: neither card type
+    can be on the battlefield, and every caller here holds a permanent.
+    """
     card_types, subtypes, supertypes = tuple(card_types), tuple(subtypes), tuple(supertypes)
 
     def modify(char: Characteristics) -> None:
-        char.card_types.update(card_types)
+        if replace_card_types:
+            char.card_types = set(card_types)
+        else:
+            char.card_types.update(card_types)
         if replace_subtypes:
             char.subtypes = set(subtypes)
         else:

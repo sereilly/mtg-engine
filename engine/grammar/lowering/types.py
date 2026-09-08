@@ -162,6 +162,13 @@ def _animation_payload(node: ast.BecomeCreature) -> dict[str, object]:
     }
     if node.colors:
         payload["colors"] = list(node.colors)
+    if node.replaces_types:
+        # CR 205.1a's default, printed by saying nothing (Opal Gargoyle). Only
+        # emitted when the node claims it, for ``colors``' reason one clause
+        # up: every animation payload written before this key existed is
+        # byte-identical, and the absence means "the sentence kept the printed
+        # types", which is exactly what those cards' retention clauses said.
+        payload["replaces_types"] = True
     return payload
 
 
@@ -222,6 +229,37 @@ def _lower_gain_type(node: ast.GainType) -> tuple[OracleInstruction, ...]:
     if node.duration.kind not in _GAINED_TYPE_DURATIONS:
         raise LoweringError(
             f"no handler holds a gained type for {node.duration.kind}", node=node
+        )
+    if node.replaces_types:
+        # "{0}: This permanent becomes an enchantment." (Opal Acrolith,
+        # Hidden Stag's second line.) CR 205.1a's *replacement*, which is a
+        # different record from the gain below and so a different kind: the
+        # gain joins a type to whatever the permanent already had, and this one
+        # says what it now is — the two cannot share a handler without a flag
+        # deciding which of two channels to write, which is the shape this
+        # package spells as two kinds.
+        #
+        # Only the source, because that is what the pool prints: both cards
+        # here name themselves. A target would need a picker this instruction
+        # does not describe, so it refuses rather than resolving against
+        # whatever the context happened to hold.
+        if not _is_source(node.subject):
+            raise LoweringError(
+                "a card-type replacement names the ability's own source",
+                node=node,
+            )
+        if node.duration.kind is not None:
+            # Every duration in ``_GAINED_TYPE_DURATIONS`` has a sweep for the
+            # *gain* channel and none of them clears this one, so admitting a
+            # window here would be a replacement that never ends.
+            raise LoweringError(
+                f"no sweep ends a card-type replacement at {node.duration.kind}",
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "set_card_types_self", "", {"card_types": list(node.card_types)}
+            ),
         )
     payload: dict[str, object] = {
         "card_types": list(node.card_types),

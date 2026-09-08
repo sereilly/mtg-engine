@@ -21,11 +21,14 @@ the unshared-colour clause reads. It reaches no word table ``triggers`` owns.
 
 from __future__ import annotations
 
+import dataclasses
+
 from . import ast
 from .errors import GrammarError
 from .nouns import parse_object_filter
 from .stream import TokenStream
-from .vocabulary import CARD_TYPES, COLOR_WORDS, CREATURE_TYPES, ORDINAL_WORDS
+from .vocabulary import (CARD_TYPES, COLOR_WORDS, CREATURE_TYPES,
+                         IMPLEMENTED_KEYWORDS, ORDINAL_WORDS)
 from .trigger_tables import _CAST_TYPE_FILTERS, _CAST_TYPE_UNIONS
 
 
@@ -154,6 +157,24 @@ def _parse_cast_event(
                     # above is a real card (Citanul Druid); the words are
                     # consumed either way, or the line fails the
                     # full-consumption invariant.
+                    # "…casts a creature spell **with flying**" (Hidden
+                    # Spider). A narrowing on an ability of the spell rather
+                    # than on its type line, read here so the words are
+                    # consumed — left to the effect parser they fail the line,
+                    # which is where the Spider stopped. Checked against the
+                    # implemented keywords rather than any word, so "a creature
+                    # spell with an activated ability" keeps refusing instead
+                    # of compiling a trigger that fires on every creature.
+                    keyword_mark = stream.mark()
+                    if stream.accept_word("with"):
+                        keyword = stream.peek_word()
+                        if keyword is not None and keyword in IMPLEMENTED_KEYWORDS:
+                            stream.advance()
+                            narrowed = dataclasses.replace(
+                                narrowed, with_keywords=(keyword,)
+                            )
+                        else:
+                            stream.reset(keyword_mark)
                     unshared = _accept_unshared_colour(stream)
                     # "…**other than the first <type> spell that player
                     # casts each turn**" (Ichneumon Druid). The ordinal

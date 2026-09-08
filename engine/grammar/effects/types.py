@@ -333,6 +333,23 @@ def _parse_gain_type(
         return ast.GainType(subject, tuple(types), duration, pt_from_mana_value=True)
     if stream.accept_phrase("in", "addition", "to", "its", "other", "types"):
         return ast.GainType(subject, tuple(types), _parse_duration(stream))
+    # "…**becomes an enchantment**." (Opal Acrolith, Hidden Stag's second line,
+    # Soul Sculptor's target.) No tail at all, which CR 205.1a makes the
+    # default rather than an omission: "the new card type(s) replaces any
+    # existing card types". So the permanent stops being whatever it was —
+    # which is the entire content of Opal Acrolith's ``{0}``, an enchantment
+    # turning itself back from the creature its own trigger made it.
+    #
+    # Refused when the list names **creature**, and that is the boundary rather
+    # than a convenience: a permanent that becomes a creature needs a size, and
+    # the two sentences that give it one — a printed P/T and CR 604.3's
+    # "power and toughness each equal to …" — are :func:`_parse_become_creature`
+    # above and the mana-value branch two clauses up. A bare "becomes a
+    # creature" would compile a 0/0 that CR 704.5f bins on the next check.
+    if "creature" not in types:
+        return ast.GainType(
+            subject, tuple(types), _parse_duration(stream), replaces_types=True
+        )
     stream.reset(mark)
     return None
 
@@ -487,10 +504,8 @@ def _parse_become_creature(
     # already been consumed: the third spelling puts that clause *after* the
     # duration, so it has no sentence to find without one.
     until_eot = stream.accept_phrase("until", "end", "of", "turn")
-    if not until_eot and not in_addition:
-        stream.reset(mark)
-        return None
     if not in_addition:
+        tail = stream.mark()
         stream.accept_punct(".")
         # "**They're still lands.**" (Thelonite Druid) is the plural of "It's
         # still a land." — the same sentence agreeing with a subject that names
@@ -500,25 +515,44 @@ def _parse_become_creature(
         elif stream.accept_phrase("they're", "still"):
             plural_kept = True
         else:
-            stream.reset(mark)
-            return None
-        # The type the sentence names is one the permanent already has, so
-        # nothing reads it — the animation keeps every type either way. It is
-        # still required to *be* a card type, because a sentence naming
-        # something else is one this production has not understood.
-        kept = stream.peek_word()
-        if kept is None or _singular_type(kept) not in CARD_TYPES:
-            stream.reset(mark)
-            return None
-        if plural_kept and kept == _singular_type(kept):
-            # "They're still land" is not English and is not a sentence this
-            # production has read; the plural subject takes the plural noun.
-            stream.reset(mark)
-            return None
-        stream.advance()
+            plural_kept = None
+            stream.reset(tail)
+        if plural_kept is not None:
+            # The type the sentence names is one the permanent already has, so
+            # nothing reads it — the animation keeps every type either way. It
+            # is still required to *be* a card type, because a sentence naming
+            # something else is one this production has not understood.
+            kept = stream.peek_word()
+            if kept is None or _singular_type(kept) not in CARD_TYPES:
+                stream.reset(mark)
+                return None
+            if plural_kept and kept == _singular_type(kept):
+                # "They're still land" is not English and is not a sentence this
+                # production has read; the plural subject takes the plural noun.
+                stream.reset(mark)
+                return None
+            stream.advance()
+            in_addition = True
+    # …and the fifth spelling, which says none of the three and means the
+    # opposite: "it becomes a 2/2 Gargoyle creature with flying." (Opal
+    # Gargoyle, and the fifteen other Hidden / Opal / Veiled enchantments.)
+    #
+    # CR 205.1a is the default this production used to refuse — "in most such
+    # cases, the new card type(s) **replaces** any existing card types" — and
+    # the cycle turns on it: the enchantment stops being an enchantment, which
+    # is what makes its own intervening-if ("if this permanent is an
+    # enchantment") false the second time an opponent casts a creature spell.
+    # An animation that added the type instead would re-fire for ever, and for
+    # the two cards whose trigger is a *state* trigger (CR 603.8) that is not a
+    # cosmetic difference but an unbounded loop.
+    #
+    # ``in_addition`` stays the four printed spellings above; this is their
+    # absence, carried on the node as its own field rather than as
+    # ``not in_addition`` so the two claims are separable at every reader.
     return ast.BecomeCreature(
         subject, power.value, toughness.value, tuple(subtypes), tuple(keywords),
         tuple(card_types), tuple(colors), until_eot,
+        replaces_types=not in_addition,
     )
 
 
