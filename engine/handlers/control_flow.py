@@ -28,7 +28,8 @@ from typing import TYPE_CHECKING
 from ..damage_deaths import DAMAGED_BY_SOURCE_DIED
 from ..exiled_records import is_live, record_in_context, source_object
 from ..named_counters import counters_on
-from ..oracle_types import (MANA_PAID_BY_SEAT, MILLED_THIS_WAY,
+from ..oracle_types import (CHOSEN_COLOR_THIS_WAY, MANA_PAID_BY_SEAT,
+                            MILLED_THIS_WAY,
                             PER_OBJECT_SEAT_RECORDS,
                             OracleInstruction)
 from ..turn_state import started_the_turn
@@ -1346,6 +1347,20 @@ def choose_color(game: Game, instruction: OracleInstruction, context: OracleExec
         # else is the two-answers-to-one-question shape this handler's own
         # docstring above records removing.
         named = game._normalize_mana_color((context.choices or {}).get("new_color"))
+        # …and **recorded as this step's answer**, for the sentence behind it
+        # that says "of that color" (Persecute). The permanent branch below
+        # writes its word onto the source, which is where the next sentence of
+        # *that* ability looks; a spell has no source, so the resolution's own
+        # scratchpad is the equivalent place — the same channel every other
+        # "this way" record in the engine uses, and the one
+        # ``CHOSEN_CREATURE_TYPE_THIS_WAY`` already uses for the identical
+        # question one characteristic over.
+        #
+        # Written only when a colour was actually named: an absent record is
+        # what makes the reader refuse rather than sweep, and a key holding
+        # ``None`` would read as an answer.
+        if named:
+            context.results[CHOSEN_COLOR_THIS_WAY] = named
         game.log.append(
             f"{card_name}: {named} chosen" if named
             else f"{card_name}: no colour was chosen"

@@ -2674,8 +2674,31 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
     #
     # True when nobody owed anything, because a step that asked for nothing is
     # not a step that failed.
+    # "Sacrifice **any number of** artifacts, creatures, and/or lands."
+    # (Reprocess.) A ceiling rather than an amount, and one only the resolution
+    # can size: the bound is however many of the seat's own permanents answer
+    # the phrase. ``up_to`` is what makes none a legal answer, which is what the
+    # word says — and it is why an "any number" sacrifice never fails to be
+    # paid, so ``could_pay`` below is untouched by it.
+    any_number = bool(instruction.payload.get("any_number"))
     could_pay = True
     for seat in payers:
+        described = dict(instruction.payload.get("filter") or {})
+        if any_number:
+            offered = game._sacrifice_candidate_indices(
+                game.players[seat], described, exclude
+            )
+            if not offered:
+                continue
+            game.arm_forced_sacrifice(
+                seat, len(offered),
+                filter=described,
+                exclude=exclude,
+                reason=context.card.name,
+                record=context.results,
+                up_to=True,
+            )
+            continue
         owed = (
             evaluate_count(game, game.players[seat], per_seat)
             if per_seat is not None else count
@@ -2684,7 +2707,6 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
             # CR 608.2's "as much as possible": a seat that owes none is not
             # asked, rather than being handed a prompt with no answer.
             continue
-        described = dict(instruction.payload.get("filter") or {})
         if len(game._sacrifice_candidate_indices(
             game.players[seat], described, exclude
         )) < owed:

@@ -35,6 +35,7 @@ a client comes to offer a permanent the engine then refuses, or worse, accepts.
 
 from __future__ import annotations
 
+import dataclasses
 from typing import TYPE_CHECKING
 
 from ._common import count_from_payload
@@ -342,6 +343,49 @@ def choose_permanents(
     loop is currently on (``PER_OBJECT_SEAT_RECORDS``). With no entry there is
     nobody to ask, which is the honest outcome rather than handing the pick to
     the ability's controller.
+    """
+    payload = instruction.payload
+    # "**Each player** returns a creature they control to its owner's hand."
+    # (Curfew.) One decision per seat rather than one decision: every living
+    # player is asked, in CR 101.4's order, and the picks land in the one record
+    # the step behind this reads — which is why this is a loop over the same
+    # body rather than a second kind. The record already accumulates (see the
+    # docstring above), so nothing about the reading step changes.
+    #
+    # The seat rides the payload as an **integer** chooser, which is the
+    # convention ``_chooser_seat`` and ``_controlled_by_seat`` already document
+    # for a handler's own loop: "controlled_by: chooser" then draws each seat's
+    # candidates from that seat's own battlefield, which is what "a creature
+    # **they** control" says.
+    if payload.get("chooser") == "each_player":
+        total = len(game.players)
+        active = game.active_player_index or 0
+        seats = sorted(
+            (i for i, p in enumerate(game.players) if not p.lost),
+            key=lambda i: ((i - active) % total, i),
+        )
+        context.results.setdefault(payload["result_key"], [])
+        for seat in seats:
+            _choose_permanents_for_one_seat(
+                game,
+                dataclasses.replace(
+                    instruction, payload={**payload, "chooser": seat}
+                ),
+                context,
+            )
+        return True, "resolved"
+    return _choose_permanents_for_one_seat(game, instruction, context)
+
+
+def _choose_permanents_for_one_seat(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """One seat's answer to :func:`choose_permanents`.
+
+    Split out so the each-player spelling is the same body run once per seat
+    rather than a second copy of the candidate rule, the ceiling arithmetic and
+    the prompt — a second copy is how "any number" comes to mean one thing when
+    one player is asked and another when everybody is.
     """
     payload = instruction.payload
     result_key = payload["result_key"]

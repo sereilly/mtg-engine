@@ -522,6 +522,16 @@ class PutOntoBattlefield:
     #: only reader that has the whole printed line in view —
     #: ``rebinding.bind_recorded_card``.
     bound_card_from: str | None = None
+    #: "…put an Aura card from your hand onto the battlefield **attached to
+    #: this creature**." (Academy Researchers.) CR 303.4f: an Aura put onto the
+    #: battlefield this way is attached as it arrives rather than after — it
+    #: never exists unattached, so this is part of the entry and not a step
+    #: behind it.
+    #:
+    #: A flag rather than a referent, because the only host the pool prints
+    #: here is the ability's own source. A card naming somebody else's creature
+    #: would want the referent, and would say so.
+    attached_to_source: bool = False
 
 
 @dataclass(frozen=True)
@@ -709,6 +719,17 @@ class ShuffleHandIntoLibrary:
     """
     whose: PlayerRef
     then_draw: bool = False
+    #: "…into their library, **then draws seven cards**." (Time Spiral.) The
+    #: same trailing draw with a *printed* number instead of "that many", which
+    #: is a different card rather than a spelling of the same one: Winds of
+    #: Change hands back exactly what it took, and this draws seven whatever the
+    #: hand held — an empty hand and graveyard still draw a full grip.
+    #:
+    #: Its own field rather than a widening of ``then_draw`` above, because the
+    #: two answer different questions of the handler ("how many moved?" against
+    #: "how many does the card say?") and a bool that also meant a number would
+    #: make ``then_draw=1`` and ``then_draw=True`` the same payload.
+    then_draw_count: int | None = None
     #: How many cards move, when the sentence names a **number** of them rather
     #: than the whole zone: "Shuffle **a card** from your hand into your
     #: library." (Lat-Nam's Legacy.) None is Winds of Change's whole hand.

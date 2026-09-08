@@ -1252,7 +1252,9 @@ class GameHelpersMixin:
             self._fire_creature_dies_triggers(
                 permanent, self.players.index(player)
             )
-        self._fire_permanent_dies_triggers(permanent)
+        self._fire_permanent_dies_triggers(
+            permanent, self.players.index(player)
+        )
         # "When that creature dies this turn, …" (Reincarnation). A delayed
         # ability (CR 603.7) belongs to no permanent, so neither of the scans
         # above can reach it — and this is the seam every death already passes
@@ -2735,7 +2737,9 @@ class GameHelpersMixin:
         self.remove_all_from_battlefield(destroyed)
         return destroyed
 
-    def _fire_permanent_dies_triggers(self, dead_permanent: Permanent) -> None:
+    def _fire_permanent_dies_triggers(
+        self, dead_permanent: Permanent, last_known_seat: int | None = None
+    ) -> None:
         """"Whenever <noun phrase> is put into a graveyard from the
         battlefield" — any permanent type, narrowed by the printed phrase
         (Tablet of Epityr, Urza's Miter).
@@ -2755,6 +2759,21 @@ class GameHelpersMixin:
         """
         from ..subject_filters import subject_matches
 
+        # Who controlled it, for "**its controller** discards a card"
+        # (Bereavement). CR 603.10's last known information: by the time the
+        # trigger resolves the permanent is a card in a graveyard, which
+        # CR 108.4 gives no controller at all — and under a control-change
+        # effect that seat was never its owner either, so neither the card nor
+        # the ownership can answer.
+        #
+        # Read off the battlefield first and falling back to the seat the
+        # caller is making this move for, exactly as `_fire_creature_dies_
+        # triggers` does one screen down and for its reason: the destruction
+        # paths disagree about whether the permanent is removed before or after
+        # this call, so on half of them there is no battlefield left to read.
+        dead_seat = self.controller_index_of(dead_permanent)
+        if dead_seat is None:
+            dead_seat = last_known_seat
         events: list[dict] = []
         for controller_index, observer in self.permanents_with_controller():
             for trig in matching_triggers(
@@ -2836,6 +2855,13 @@ class GameHelpersMixin:
                         # creature-death site freezes them.
                         "dead_power": max(0, dead_permanent.effective_power),
                         "dead_toughness": max(0, dead_permanent.effective_toughness),
+                        # The seat above, under the one key every event that is
+                        # *about an object* records its subject's controller
+                        # under — so "its controller" means the same thing here
+                        # as it does on a tap, a block or a damage event, and
+                        # `_EVENT_SUBJECT_CONTROLLERS` can name this condition
+                        # without a second reader.
+                        "event_subject_controller": dead_seat,
                         # "…create a 1/1 green Saproling creature token **for
                         # each fungus counter on that creature**"
                         # (Sporogenesis). The counters with no rules meaning of
@@ -3190,6 +3216,15 @@ class GameHelpersMixin:
             # event had. Recorded on every entry because the cost is one integer
             # and the alternative is a fire site that knows which cards care.
             entering_power=max(0, permanent.effective_power),
+            # "…you gain life equal to **its toughness**" (Angelic Chorus). The
+            # other characteristic of the same object, frozen for the same
+            # reason and at the same moment — a creature that entered under an
+            # anthem is worth what the board made it, and by resolution the
+            # anthem may be gone or the creature with it. Its own key rather
+            # than a widening of the power beside it: two characteristics are
+            # two numbers, and a reader handed one for the other is wrong
+            # silently on every card whose P and T differ.
+            entering_toughness=max(0, permanent.effective_toughness),
             # Whose it is, for "…deals 3 damage to **that player**" (Thelon's
             # Chant, Tourach's Chant, whose printed condition is "whenever a
             # player puts a Swamp onto the battlefield" — the same event named

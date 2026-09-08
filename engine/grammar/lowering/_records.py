@@ -421,7 +421,11 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # key the counted discards already write — the printed sentence names no
     # number, and an empty hand makes the draw zero rather than the hand's
     # printed size, which is the only reading CR 608.2 allows.
-    "discard_hand": "discarded_count",
+    # …and the per-seat map beside it, which the ``who: "each_player"`` form
+    # writes: "the greatest number of cards **a player** discarded this way"
+    # (Windfall) is a maximum across seats, and the flat number above is
+    # whichever seat the loop emptied last.
+    "discard_hand": ("discarded_count", DISCARDED_BY_SEAT),
     "mill_target_player": MILLED_THIS_WAY,
     "mill_until_matching": MILLED_THIS_WAY,
     # And the graveyard exile, which is what "If **it** was a creature card"

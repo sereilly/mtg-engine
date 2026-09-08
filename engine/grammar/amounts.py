@@ -541,6 +541,17 @@ def _parse_equal_to_body(stream: TokenStream) -> ast.Amount | None:
     """
     mark = stream.mark()
 
+    # "…draws cards equal to **the greatest number of cards a player discarded
+    # this way**." (Windfall.) A maximum taken across seats over a record an
+    # earlier step of this same effect wrote — no board holds it and no scalar
+    # names it — so it is read whole by the one production that owns the phrase,
+    # before the counts below get a chance to claim "the … number of cards".
+    from .records import accept_greatest_discarded_this_way
+
+    greatest = accept_greatest_discarded_this_way(stream)
+    if greatest is not None:
+        return greatest
+
     # "equal to **half** the number of cards in their library" (Peer into the
     # Abyss). Handed to the quantity parser, which reads the half and the count
     # under it; the shapes below are the ones that are not quantities at all.

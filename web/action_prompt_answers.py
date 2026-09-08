@@ -522,6 +522,27 @@ def _action_draw_becomes_counter_confirm(session, req, seat_type):
     if not ok:
         raise HTTPException(status_code=400, detail="invalid counter-instead-of-draw choice")
 
+@action_handler("reveal_until_kind_draw_confirm")
+def _action_reveal_until_kind_draw_confirm(session, req, seat_type):
+    # Abundance: "you may instead choose land or nonland and reveal cards from
+    # the top of your library until you reveal a card of the chosen kind."
+    pending = [
+        e
+        for e in session.game.pending_reveal_until_kind_draws
+        if e["player_index"] == req.seat
+    ]
+    if not pending:
+        raise HTTPException(
+            status_code=400, detail="no reveal-until choice pending for you"
+        )
+    if req.option_index is None:
+        raise HTTPException(status_code=400, detail="option_index is required")
+    option = int(req.option_index)
+    if not 0 <= option < len(pending[0]["options"]):
+        raise HTTPException(status_code=400, detail="option_index is out of range")
+    if not session.game.confirm_reveal_until_kind_draw(req.seat, option):
+        raise HTTPException(status_code=400, detail="invalid reveal-until choice")
+
 @action_handler("resolve_optional_pay")
 def _action_resolve_optional_pay(session, req, seat_type):
     # Color rods (Wooden Sphere, …): "you may pay {1}. If you do, gain life."

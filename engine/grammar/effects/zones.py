@@ -359,15 +359,39 @@ def _parse_shuffle_hand_into_library(stream: TokenStream) -> ast.Statement | Non
         stream.reset(mark)
         return None
     then_draw = False
+    then_draw_count: int | None = None
     probe = stream.mark()
+    drew = "draws" if whose == "their" else "draw"
     if stream.accept_punct(",") and stream.accept_phrase(
-        "then", "draws" if whose == "their" else "draw", "that", "many", "cards"
+        "then", drew, "that", "many", "cards"
     ):
         then_draw = True
     else:
+        # "…into their library, **then draws seven cards**." (Time Spiral.) The
+        # same trailing draw with a printed number, read here rather than as the
+        # sentence after it for the reason "that many" is: CR 701.24a shuffles
+        # the library and the draw comes off the shuffled one, so a statement
+        # parsed apart would be a second sentence about the same step. The
+        # number is *not* what moved — an empty hand still draws seven — which
+        # is why it travels as its own field.
         stream.reset(probe)
+        counted = stream.mark()
+        if stream.accept_punct(",") and stream.accept_phrase("then", drew):
+            word = stream.peek_word()
+            printed = NUMBER_WORDS.get(word) if word else None
+            if printed is not None:
+                stream.advance()
+                if stream.accept_word("cards", "card"):
+                    then_draw_count = printed
+                else:
+                    stream.reset(counted)
+            else:
+                stream.reset(counted)
+        else:
+            stream.reset(counted)
     return ast.ShuffleHandIntoLibrary(
-        player, then_draw=then_draw, count=count, with_graveyard=with_graveyard,
+        player, then_draw=then_draw, then_draw_count=then_draw_count,
+        count=count, with_graveyard=with_graveyard,
     )
 
 

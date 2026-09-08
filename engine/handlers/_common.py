@@ -172,6 +172,21 @@ def count_from_payload(
     # creating resolution knew is handed back as ``captured_results``
     # (CR 608.2h), so the number is the one frozen when the spell resolved
     # however many attacks later the ability fires.
+    # "…draws cards equal to **the greatest number of cards a player discarded
+    # this way**." (Windfall.) A maximum over a ``{seat: number}`` record an
+    # earlier step of this same effect wrote — an aggregate *across* seats,
+    # which no zone count can be and no scalar record holds: the flat
+    # ``discarded_count`` beside it is the whole resolution's total, and the
+    # per-recipient channel would answer one seat at a time. An empty or absent
+    # record is zero, which is what "each player discarded nothing" means.
+    greatest = spec.get("greatest_per_seat")
+    if greatest is not None:
+        tallies = context.results.get(str(greatest)) or {}
+        values = [
+            int(value or 0) for value in
+            (tallies.values() if isinstance(tallies, dict) else ())
+        ]
+        return max(0, _scaled(max(values) if values else 0, spec))
     recorded_cards = spec.get("recorded_cards")
     if recorded_cards is not None:
         described = spec.get("filter") or {}

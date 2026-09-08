@@ -1125,6 +1125,23 @@ class EffectsMixin:
         ]
 
     @property
+    def pending_reveal_until_kind_draws(self) -> list[dict]:
+        """Abundance's outstanding CR 614.1 offers - one per draw a permanent
+        whose text prints the substitution would replace.
+
+        Beside ``pending_draw_becomes_counters`` above and shaped like it: the
+        offer is per *draw*, so a seven-card draw queues seven of them and the
+        client answers one at a time."""
+        return [
+            {
+                "player_index": choice.player_index,
+                "options": list(choice.options),
+                "source_id": choice.data["source_id"],
+            }
+            for choice in pending_choices_for(self, "reveal_until_kind_draw")
+        ]
+
+    @property
     def pending_optional_damage_redirects(self) -> list[dict]:
         """CR 614.9's outstanding optional offers — one per damage event whose
         recipient a class-scoped redirect watches (Blood of the Martyr)."""

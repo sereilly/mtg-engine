@@ -262,6 +262,22 @@ def lower_described_return(
                 "the sweep bounce cannot test " + ", ".join(sorted(untestable)),
                 node=node,
             )
+        # "At the beginning of each player's upkeep, return to its owner's hand
+        # each creature **that player** controls with power greater than the
+        # number of cards in **their** hand." (Noetic Scales.) Two narrowings
+        # naming one seat, and it is a seat no read of the board can make: the
+        # firing event picked it (CR 603.10), a different player every upkeep.
+        #
+        # Admitted only under an event whose fire site actually freezes one —
+        # the gate every other reading of the phrase is held to. Without it the
+        # matcher would refuse the words on every candidate and the sweep would
+        # return nothing, which is a card compiling supported and doing
+        # nothing; refusing here says so out loud instead.
+        if "that_player" in swept.values() and event not in _EVENT_SUBJECT_PLAYERS:
+            raise LoweringError(
+                f"no event named {event!r} freezes the seat 'that player' names",
+                node=node,
+            )
         if filt.attached_to is not None:
             # Added **after** the testability check, because it is not a key
             # ``subject_matches`` answers: no read of the Aura alone can say
@@ -480,19 +496,35 @@ def lower_described_return(
         chooser = "you"
         if subject.filter.controller == "that_player":
             actor = node.actor.kind if node.actor is not None else None
-            if actor != "that_player":
+            # "**Each player** returns a creature **they** control to its
+            # owner's hand." (Curfew.) The same sentence as Mana Breach's with
+            # the seat named by a quantifier instead of by an event: "they"
+            # still agrees with the subject, and the subject here is every
+            # living player rather than one the fire site froze. So the pairing
+            # is checked the same way and against a second actor — the pronoun
+            # names whoever the sentence named, and a card whose two halves
+            # disagree refuses rather than picking one.
+            #
+            # Nothing is frozen and nothing needs to be: the seats are the
+            # table, so this reading needs no event gate — which is exactly why
+            # it is a separate branch rather than a third value admitted into
+            # the one below.
+            if actor == "each_player":
+                chooser = "each_player"
+            elif actor != "that_player":
                 raise LoweringError(
                     "\"a land they control\" names the seat this sentence "
                     "already named, and no subject here names one",
                     node=node,
                 )
-            if event not in _EVENT_SUBJECT_PLAYERS:
+            elif event not in _EVENT_SUBJECT_PLAYERS:
                 raise LoweringError(
                     f"no event named {event!r} freezes the seat 'that player' "
                     "names",
                     node=node,
                 )
-            chooser = EVENT_SUBJECT_PLAYER
+            else:
+                chooser = EVENT_SUBJECT_PLAYER
         elif node.actor is not None and node.actor.kind != "you":
             # The "you control" reading is the controller's own price, so a
             # sentence naming somebody *else* as the one who returns it is a

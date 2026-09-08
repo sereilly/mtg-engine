@@ -20,466 +20,17 @@ from ._amounts import count_spec, halved_count_spec
 # evaluator cannot answer.
 from ._counted_damage import _READABLE_COST_SACRIFICE_CHARACTERISTICS
 from ._common import (
-    chargeable_card_filter,
+    dropped_narrowings,
     _amount_payload,
     _describe_targets,
-    _is_you,
     _restrictions_beyond,
 )
 from ._events import (
     _DAMAGED_PLAYER_EVENTS,
-    _DEFENDING_PLAYER_EVENTS,
     _EVENT_SUBJECT_PLAYERS,
     EVENT_SUBJECT_PLAYER,
     _back_reference_payload,
 )
-
-
-def _lower_discard(node: ast.Discard, event: str | None = None) -> tuple[OracleInstruction, ...]:
-    """"Target player discards N cards [at random]."
-
-    Only the targeted form has a handler; "you discard" and "each player
-    discards" are different effects, not this one with a flag.
-
-    **Who picks the cards is what separates the two handlers**, so "at random"
-    decides which one this lowers to rather than being a rider either could
-    carry. ``discard_target_cards`` raises a pending choice and lets the
-    discarding player choose (Disrupting Scepter); ``discard_x_target_cards``
-    takes them with ``random.sample`` (Mind Twist). Lowering an "at random"
-    line onto the first would hand the victim the choice their card denies
-    them, and lowering a plain discard onto the second would take it away.
-
-    The random handler is also the *variable* one: it sizes itself from the X
-    chosen as the spell was cast (``context.x_value``) and never reads the
-    payload, which is why the amount is emitted only for the counted form —
-    matching what the legacy rule wrote, and keeping the payload honest about
-    what the handler actually consults.
-    """
-    if node.of_drawn:
-        # "…discard one **of them**" points at cards a *previous step* drew, and
-        # only the fused draw-then-discard below holds them. Anywhere else the
-        # pronoun has no referent, so the restriction would be dropped and the
-        # discard would come out of the whole hand — wider than the card says.
-        raise LoweringError(
-            "'discard one of them' only reads the cards the step before it drew",
-            node=node,
-        )
-    # "Discard your hand" (Chandra, Heart of Fire) — the effect's controller
-    # discards every card. Checked before the targeted forms: the subject is
-    # the implied "you", which they refuse.
-    # "Target player reveals their hand and discards **all nonland cards**."
-    # (Amnesia.) Not a count at all: every card answering the phrase goes, so
-    # nobody chooses and there is no prompt — which is why it is read before the
-    # counted forms rather than as an amount one of them could carry. The filter
-    # is gated by the same reader every other card phrase is, so a narrowing the
-    # matcher cannot test refuses instead of being dropped into a discard that
-    # empties the whole hand.
-    if isinstance(node.count, ast.AllOf) and not node.whole_hand:
-        if node.player.kind not in ("target_player", "target_opponent"):
-            raise LoweringError(
-                "no handler discards every matching card from a seat nobody "
-                "targeted", node=node,
-            )
-        if node.at_random:
-            raise LoweringError(
-                "'all' names every matching card, so nothing is chosen at "
-                "random", node=node,
-            )
-        payload: dict[str, object] = {}
-        if node.filter is not None:
-            described = chargeable_card_filter(node.filter)
-            if not described:
-                raise LoweringError(
-                    "no discard can test this narrowing", node=node
-                )
-            payload["filter"] = described
-        _describe_targets(payload, node.player)
-        return (OracleInstruction("discard_all_matching_cards", "", payload),)
-    # Only the controller's own discard and the at-random one below carry a
-    # narrowing; every other handler arms a prompt that takes the whole hand, so
-    # a filter reaching them would be silently dropped.
-    if (
-        node.filter is not None
-        and node.player.kind != "you"
-        and not (
-            node.at_random
-            and node.player.kind in ("target_player", "target_opponent")
-        )
-    ):
-        raise LoweringError(
-            f"no {node.player.kind!r} discard handler carries a narrowing", node=node
-        )
-    if node.whole_hand:
-        if node.player.kind == "you":
-            return (OracleInstruction("discard_hand", "", {}),)
-        # "…, that player discards their hand" (Nicol Bolas). The same effect
-        # aimed at the seat the firing event recorded, so it is the same
-        # instruction with a `who` — a second kind would be a second copy of
-        # emptying a hand. Admitted only under a trigger whose fire site
-        # actually froze a damaged player: under any other event the words name
-        # a seat nobody recorded, and the discard would silently empty the
-        # ability's own controller's hand.
-        if node.player.kind == "that_player" and event in _DAMAGED_PLAYER_EVENTS:
-            return (
-                OracleInstruction("discard_hand", "", {"who": "damaged_player"}),
-            )
-        raise LoweringError(
-            f"no whole-hand discard handler for {node.player.kind!r}", node=node
-        )
-    # "Each player discards a card." (Liliana, Waker of the Dead.) The handler
-    # records which players could not, because the printed rider "Each opponent
-    # who can't loses 3 life." reads that answer out of the same resolution.
-    if node.player.kind == "each_player":
-        if node.at_random or node.filter is not None or node.up_to:
-            raise LoweringError(
-                "the each-player discard is chosen, unnarrowed and exact",
-                node=node,
-            )
-        # "…discards **a third of the cards in their hand**" (Pox). One number
-        # per seat, so it cannot be an amount: it is a count taken over *that*
-        # player's hand, and the handler asks the evaluator once per seat
-        # through the channel the per-recipient damage already uses.
-        per_seat = (
-            halved_count_spec(node.count, node)
-            if isinstance(node.count, ast.Half) else None
-        )
-        if per_seat is not None:
-            return (
-                OracleInstruction(
-                    "each_player_discards_a_card", "",
-                    {X_FROM_COUNT_PER_RECIPIENT: per_seat},
-                ),
-            )
-        if isinstance(node.count, ast.AnyNumber):
-            # "**Each player discards any number of cards**, then draws that
-            # many cards." (Flux.) A ceiling with no printed number: the bound
-            # is the seat's own hand, which only the resolution knows, so it
-            # travels as a flag and the handler sizes each prompt. The same
-            # prompt Mind Bomb's "up to three" arms — "any number" and "up to
-            # N" are one decision with two ceilings, and the "may" is already
-            # inside both (a player may answer with none).
-            return (
-                OracleInstruction(
-                    "each_player_discards_up_to_cards", "",
-                    {"actor": node.player.kind, "any_number": True},
-                ),
-            )
-        if not isinstance(node.count, ast.Fixed):
-            raise LoweringError("each-player discards have a one-card handler", node=node)
-        # A printed 1 keeps the empty payload every card written before the
-        # count existed produced, so nothing that worked changes shape.
-        payload = {} if node.count.value == 1 else {"amount": node.count.value}
-        return (OracleInstruction("each_player_discards_a_card", "", payload),)
-    # "You may draw a card. If you do, discard a card." (Jeskai Elder) — the
-    # effect's own controller discards, choosing the cards through the same
-    # pending choice the targeted form uses. Fixed counts only: the variable
-    # form stays with the random handler below, whose contract it is.
-    if node.player.kind == "you":
-        if isinstance(node.count, ast.AnyNumber) and not node.at_random:
-            # "…**discard any number of creature cards**." (Mind Maggots.) A
-            # ceiling with no printed number, which is the same sentence the
-            # each-player branch above already reads (Flux) pointed at one seat:
-            # the bound is what the printed phrase names in the caster's own
-            # hand, and only the resolution knows it. So it travels as a flag
-            # and ``discard_controller_cards`` sizes the prompt, exactly as that
-            # branch leaves the sizing to its handler.
-            #
-            # "Any number" carries its own "may" — a player may answer with
-            # none — so the prompt is armed as a ceiling (``up_to``) rather than
-            # as an amount. Read as an amount it would force the whole hand out,
-            # which is a strictly larger cost than the card asks for.
-            #
-            # ``at_random`` is excluded rather than folded in: who picks is what
-            # separates this handler from ``discard_x_target_cards``, and
-            # nobody chooses a random discard's size either.
-            payload: dict[str, object] = {"amount": 0, "any_number": True}
-            if node.filter is not None:
-                # The same reader the counted branch below uses, and for its
-                # reason: a phrase ``_card_matches_filter`` cannot test would be
-                # dropped where the prompt applies it, and a dropped narrowing
-                # here offers the whole hand to a sentence naming one card type.
-                described = chargeable_card_filter(node.filter)
-                if not described:
-                    raise LoweringError(
-                        "no discard prompt can test this narrowing", node=node
-                    )
-                payload["filter"] = described
-            return (
-                OracleInstruction("discard_controller_cards", "", payload),
-            )
-        amount = _amount_payload(node.count)
-        # "Discard **X** cards, then …" (Recall). The count may be the cast's X:
-        # `discard_controller_cards` sizes its prompt through `resolve_amount`,
-        # which reads `"x"` off the context, so the variable form is the same
-        # handler with the same payload key rather than a second kind. What
-        # stays refused is "at random" — who picks is what separates this
-        # handler from `discard_x_target_cards`, and lowering a chosen discard
-        # onto the random one takes the choice the card leaves its controller.
-        if node.at_random:
-            # "{5}, {T}: **Discard a card at random**, then draw two cards."
-            # (Ring of Renewal.) Nobody chooses, so it is not this handler at
-            # all: `discard_x_target_cards` is the one that samples, and what
-            # separates the two is the chooser rather than the seat. Routed to
-            # it with the seat named, because that handler reads
-            # ``context.target`` by default — which for an activated ability
-            # nobody targeted with is the **opponent**, so the ring would have
-            # emptied the wrong hand while reporting itself resolved.
-            if not isinstance(amount, (int, str)):
-                raise LoweringError(
-                    "the random controller discard is counted or X", node=node
-                )
-            random_payload: dict[str, object] = {
-                "amount": amount, "who": "caster",
-            }
-            if node.filter is not None:
-                # The same reader the targeted random discard uses one branch
-                # down (Rag Man): a phrase the card matcher cannot test would
-                # widen the sample to the whole hand, which is the one direction
-                # a narrowing must never be dropped in.
-                described = chargeable_card_filter(node.filter)
-                if not described:
-                    raise LoweringError(
-                        "no random discard can test this narrowing", node=node
-                    )
-                random_payload["filter"] = described
-            return (
-                OracleInstruction("discard_x_target_cards", "", random_payload),
-            )
-        if not isinstance(amount, (int, str)):
-            raise LoweringError(
-                "the controller discard is chosen, and counted or X", node=node
-            )
-        payload: dict[str, object] = {"amount": amount}
-        # "Discard a **creature** card" (Crypt Lurker). Gated by the same reader
-        # the discard *cost* is (round 87): the prompt and its re-check ask
-        # ``_card_matches_filter``, so a phrase reaching past what that can
-        # answer would be dropped where it is applied — and a dropped narrowing
-        # here is a discard that takes any card at all while the card still
-        # reports supported.
-        if node.filter is not None:
-            described = chargeable_card_filter(node.filter)
-            if not described:
-                raise LoweringError(
-                    "no discard prompt can test this narrowing", node=node
-                )
-            payload["filter"] = described
-        return (OracleInstruction("discard_controller_cards", "", payload),)
-    # "Each opponent discards two cards." (Bad Deal.) Chosen discards, one
-    # pending choice per opponent — the random and variable forms stay with the
-    # targeted handlers below, whose contracts they are.
-    if node.player.kind == "each_opponent":
-        amount = _amount_payload(node.count)
-        if node.at_random or not isinstance(amount, int):
-            raise LoweringError(
-                "the each-opponent discard is chosen and fixed-count", node=node
-            )
-        return (
-            OracleInstruction("each_opponent_discards_cards", "", {"amount": amount}),
-        )
-    # "**Defending player** discards a card at random." (Cloak of Confusion.)
-    # CR 506.2's seat, frozen into the trigger's context by the combat fire site
-    # — so the phrase names a player only under an event that stamped one, the
-    # same gate ``control_flow`` puts in front of an offer made to that seat.
-    # Under any other event nothing recorded the seat and the discard would
-    # empty whichever hand the resolution happened to be carrying.
-    if node.player.kind == "defending_player":
-        if event not in _DEFENDING_PLAYER_EVENTS:
-            raise LoweringError(
-                '"defending player" names a seat this event did not record',
-                node=node,
-            )
-        amount = _amount_payload(node.count)
-        if node.filter is not None or not isinstance(amount, int):
-            raise LoweringError(
-                "the defending-player discard is unnarrowed and counted",
-                node=node,
-            )
-        if node.at_random:
-            return (
-                OracleInstruction(
-                    "discard_x_target_cards", "",
-                    {"amount": amount, "who": "defending_player"},
-                ),
-            )
-        # "…**defending player discards three cards**." (Mindstab Thrull.) The
-        # same seat, chosen rather than sampled — so it is the chosen handler
-        # with the same ``who`` key, not the random one with a count. Who picks
-        # the cards is what separates the two handlers everywhere else in this
-        # function, and reading a chosen discard onto the random one would take
-        # the decision away from the player the card leaves it to.
-        return (
-            OracleInstruction(
-                "discard_target_cards", "",
-                {"amount": amount, "who": "defending_player"},
-            ),
-        )
-    if node.player.kind not in ("target_player", "target_opponent", "that_player"):
-        raise LoweringError(f"no discard handler for {node.player.kind!r}", node=node)
-    amount = _amount_payload(node.count)
-    # "…, that player discards a card at random" on a damage trigger. The
-    # handler discards exactly one, at random, from the player the trigger
-    # recorded — so every part of that shape is checked rather than assumed, and
-    # a count, a chooser or a trigger other than those makes it fall through to
-    # the general forms below and be refused there.
-    if (
-        node.player.kind == "that_player"
-        and node.at_random
-        and amount == 1
-        and event in _DAMAGED_PLAYER_EVENTS
-    ):
-        return (OracleInstruction("opponent_discards_random_card_on_damage", "", {}),)
-    payload: dict[str, object] = {}
-    if amount == "x":
-        if not node.at_random:
-            raise LoweringError(
-                "the only variable-count discard handler discards at random; "
-                "a chosen discard of X cards has none",
-                node=node,
-            )
-        kind = "discard_x_target_cards"
-    elif node.at_random:
-        # "**That player**" names the seat a firing event recorded, and only the
-        # damage-trigger shape above knows one was. Under any other event this
-        # handler's ``context.target`` is a seat nobody chose, so the discard
-        # would empty the wrong hand while the card reported supported — which
-        # is why that shape is matched in full rather than folded in below.
-        if node.player.kind == "that_player":
-            # "At the beginning of each player's upkeep, **that player discards
-            # a card at random**." (Bottomless Pit.) The seat the firing event
-            # froze (CR 603.10), under the one ``who``/``EVENT_SUBJECT_PLAYER``
-            # convention `_lower_exile_random_from_hand` uses one family over —
-            # and gated on the same table, because an event that froze nobody
-            # leaves this handler emptying whichever hand the resolution happens
-            # to be carrying. On this card that is its own controller's, on
-            # three upkeeps in four, silently.
-            if event not in _EVENT_SUBJECT_PLAYERS:
-                raise LoweringError(
-                    "no event named {!r} freezes the seat 'that player' names"
-                    .format(event),
-                    node=node,
-                )
-            random_payload: dict[str, object] = {
-                "amount": amount, "who": EVENT_SUBJECT_PLAYER,
-            }
-            if node.filter is not None:
-                described = chargeable_card_filter(node.filter)
-                if not described:
-                    raise LoweringError(
-                        "no random discard can test this narrowing", node=node
-                    )
-                random_payload["filter"] = described
-            if not isinstance(amount, int):
-                raise LoweringError(
-                    "the frozen-seat random discard is counted", node=node
-                )
-            return (
-                OracleInstruction("discard_x_target_cards", "", random_payload),
-            )
-        if node.player.kind not in ("target_player", "target_opponent"):
-            raise LoweringError(
-                "no handler discards at random from a seat nobody targeted",
-                node=node,
-            )
-        # "Target player discards a card at random." (Gwendlyn Di Corci.) The
-        # random handler again — the chooser is what picks the handler, and it
-        # is nobody here as much as it is for Mind Twist. The count rides in the
-        # payload rather than in the kind, so the variable and the printed forms
-        # are one handler.
-        kind = "discard_x_target_cards"
-        payload["amount"] = amount
-        # "…discards a **creature** card at random." (Rag Man.) The sample is
-        # drawn from the cards answering the phrase rather than from the whole
-        # hand — through the same card reader every other narrowing uses, so a
-        # phrase it cannot test refuses here instead of widening the sample to
-        # every card.
-        if node.filter is not None:
-            described = chargeable_card_filter(node.filter)
-            if not described:
-                raise LoweringError(
-                    "no random discard can test this narrowing", node=node
-                )
-            payload["filter"] = described
-    else:
-        kind = "discard_target_cards"
-        payload["amount"] = amount
-    _describe_targets(payload, node.player)
-    return (OracleInstruction(kind, "", payload),)
-
-
-def _fused_draw_then_discard(
-    steps: tuple[ast.Statement, ...]
-) -> tuple[OracleInstruction, ...] | None:
-    """"Draw N cards, then discard M cards." (Bazaar of Baghdad.)
-
-    Kept fused because the decomposition has nowhere to go. ``draw_controller_cards``
-    exists, but there is no controller-*discard* handler at all —
-    ``discard_target_cards`` makes a chosen player discard — so a
-    two-instruction lowering would draw the cards and then either discard
-    nothing or empty the wrong player's hand, while the card reported as
-    supported. ``draw_then_discard_self`` performs exactly this pair for the
-    effect's controller and is already parameterised by both counts, so nothing
-    about it is per-card: the legacy rule it replaces reads the two numbers out
-    of the sentence the same way.
-
-    Returning None rather than raising leaves a near-miss ("…then discard three
-    cards at random") to the ordinary step lowering, which refuses it by name.
-    """
-    if len(steps) != 2:
-        return None
-    draw, discard = steps
-    if not (isinstance(draw, ast.Draw) and isinstance(discard, ast.Discard)):
-        return None
-    if not (_is_you(draw.player) and _is_you(discard.player)) or discard.at_random:
-        return None
-    if not (isinstance(draw.count, ast.Fixed) and isinstance(discard.count, ast.Fixed)):
-        return None
-    payload: dict[str, object] = {
-        "draw": draw.count.value, "discard": discard.count.value,
-    }
-    if discard.of_drawn:
-        # "Draw two cards, then discard one **of them**." (Krovikan Sorcerer.)
-        # The discard is restricted to what this same resolution just drew — an
-        # identity, not a characteristic — and this is the only lowering that
-        # can carry it, because it is the only one that performs both halves.
-        # Dropped instead, the seat could pitch anything in hand, which is a
-        # strictly better card than the one printed.
-        payload["from_drawn"] = True
-    return (OracleInstruction("draw_then_discard_self", "", payload),)
-
-
-def _fused_discard_then_draw(
-    steps: tuple[ast.Statement, ...]
-) -> tuple[OracleInstruction, ...] | None:
-    """"Discard up to two cards, then draw that many cards." (Kinetic Augur.)
-
-    The mirror of :func:`_fused_draw_then_discard`, and fused for a *different*
-    reason. That one is fused because no controller-discard handler existed;
-    this one because **the second number is the answer to the first**. "That
-    many" is however many cards the player chose to discard, and the choice is a
-    pending prompt — so decomposed, the draw would run while the prompt was
-    still owed and draw nothing at all, with the card reporting supported.
-
-    One instruction arms the prompt and records what to do when it is answered.
-    That is also why the pair must be exactly this shape: any other second step
-    has no reason to wait, and any other count has nothing to read.
-    """
-    if len(steps) != 2:
-        return None
-    discard, draw = steps
-    if not (isinstance(discard, ast.Discard) and isinstance(draw, ast.Draw)):
-        return None
-    if not (_is_you(discard.player) and _is_you(draw.player)):
-        return None
-    if discard.at_random or discard.whole_hand or discard.filter is not None:
-        return None
-    if not isinstance(discard.count, ast.Fixed) or not isinstance(draw.count, ast.ThatMuch):
-        return None
-    return (
-        OracleInstruction(
-            "discard_then_draw_that_many", "",
-            {"amount": discard.count.value, "up_to": discard.up_to},
-        ),
-    )
 
 
 def _lower_next_draw_replacement(
@@ -648,6 +199,68 @@ def _lower_draw(
         payload: dict[str, object] = {
             "amount": "x", X_FROM_COUNT: count_spec(node.count.filter, node),
         }
+    elif isinstance(node.count, ast.GreatestDiscardedThisWay):
+        # "…draws cards equal to **the greatest number of cards a player
+        # discarded this way**." (Windfall.) A maximum over the per-seat record
+        # the discard in front of this one wrote — not a count of any zone, so
+        # it travels the shared ``x_from_count`` channel with an aggregate the
+        # evaluator answers rather than a zone spec. One number for every
+        # drawer, which is what makes the loop below leave it alone.
+        #
+        # Gated on that record really being written: with no producer the words
+        # name nothing, and every player would draw zero on a card reporting
+        # itself supported.
+        if DISCARDED_BY_SEAT not in produced:
+            raise LoweringError(
+                f"back-reference to {DISCARDED_BY_SEAT!r} with no producer in "
+                "this effect",
+                node=node,
+            )
+        payload: dict[str, object] = {
+            "amount": "x",
+            X_FROM_COUNT: {"greatest_per_seat": DISCARDED_BY_SEAT},
+        }
+    elif isinstance(node.count, ast.CountOfSacrificesThisWay):
+        # "Sacrifice any number of artifacts, creatures, and/or lands. Draw a
+        # card **for each permanent sacrificed this way**." (Reprocess.) The
+        # number is what the sentence in front of this one actually took, and
+        # nothing on a board holds it: "any number" prints no count, and by now
+        # the permanents are cards in a graveyard (CR 400.7) among everything
+        # else that ever arrived there.
+        #
+        # So it travels on ``recorded_cards`` — the channel Song of Blood's
+        # milled-card count already uses — which counts the entries of a
+        # recorded *list* against a printed phrase, rather than reading a slot
+        # that holds a number. Gated on a step of this same effect really
+        # writing that list: with no producer the words name nothing and the
+        # draw would be zero on a card reporting itself supported.
+        if "sacrificed_cards" not in produced:
+            raise LoweringError(
+                "back-reference to 'sacrificed_cards' with no producer in "
+                "this effect",
+                node=node,
+            )
+        from ...subject_filters import card_only_filter
+
+        described = card_only_filter(node.count.filter.to_payload())
+        if described is None or dropped_narrowings(
+            node.count.filter, node.count.filter.to_payload()
+        ):
+            # Only what is *printed* is testable off a record (CR 613.1): the
+            # permanents are gone, and what was kept is their cards. A narrowing
+            # the card matcher cannot answer refuses rather than being counted
+            # as though it were not there — a count that is too large is a draw
+            # the card never offered.
+            raise LoweringError(
+                "a sacrificed-permanent count cannot test this restriction",
+                node=node,
+            )
+        payload: dict[str, object] = {
+            "amount": "x",
+            X_FROM_COUNT: {
+                "recorded_cards": "sacrificed_cards", "filter": described,
+            },
+        }
     elif isinstance(node.count, ast.CountersOnSource):
         # "…draws an additional card **for each growth counter on this
         # enchantment**." (Malignant Growth.) A number on the ability's own
@@ -707,8 +320,18 @@ def _lower_draw(
             payload[X_FROM_COUNT_PER_RECIPIENT] = {"seat_record": per_seat}
             _describe_targets(payload, node.player)
             return (OracleInstruction(kind, "", payload),)
-        shared = payload.pop(X_FROM_COUNT, None)
-        if shared is not None:
+        shared = payload.get(X_FROM_COUNT)
+        # "…draws cards equal to **the greatest** number of cards **a player**
+        # discarded this way." (Windfall.) One number for the whole table, which
+        # is the opposite of the per-seat counts below: the aggregate is taken
+        # *across* the seats, so moving it onto the per-recipient channel would
+        # re-take the maximum once per drawer and answer the same thing every
+        # time — or, read as a zone count, refuse a spec that names no zone.
+        # It stays on the shared channel, where the one substitution point
+        # resolves it into `context.x_value` before the looping handler reads
+        # ``amount`` once.
+        if shared is not None and "greatest_per_seat" not in shared:
+            payload.pop(X_FROM_COUNT, None)
             if shared.get("owner") not in ("owner", "target"):
                 raise LoweringError(
                     "a looped draw counts each drawer's own zone", node=node,

@@ -445,28 +445,6 @@ def ante_self_then_clear_ante_and_draw(game: Game, instruction: OracleInstructio
     return True, "resolved"
 
 
-@effect_handler("wheel_of_fortune")
-def wheel_of_fortune(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    for player in game.players:
-        while player.hand:
-            game.put_card_into_graveyard(player, player.hand.pop(0))
-        game._draw_with_replacements(player, 7)
-    game.log.append("Wheel effect resolved for all players")
-    return True, "resolved"
-
-
-@effect_handler("timetwister")
-def timetwister(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    for player in game.players:
-        pool = player.library + player.hand + player.graveyard
-        player.library = list(pool)
-        player.hand = []
-        player.graveyard = []
-        game._draw_with_replacements(player, 7)
-    game.log.append("Timetwister effect resolved for all players")
-    return True, "resolved"
-
-
 def _search_restrictions(game: Game, payload: dict, context) -> dict:
     """The armed search's restrictions, with the ones only a resolution can
     answer resolved.
@@ -1135,6 +1113,25 @@ def discard_target_cards(game: Game, instruction: OracleInstruction, context: Or
         if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
             # The attacker can leave combat before this resolves, and a seat
             # nobody recorded is not a seat to empty a hand from.
+            return True, "resolved"
+        target = game.players[seat]
+    if instruction.payload.get("who") == "event_subject_controller":
+        # "Whenever a green creature dies, **its controller** discards a card."
+        # (Bereavement.) The seat that controlled what the firing event was
+        # about, frozen by the fire site (CR 603.10) because by now the
+        # permanent is a card in a graveyard and CR 108.4 gives it no
+        # controller. The same key the damage, sacrifice and life-gain handlers
+        # read for the same printed phrase, so one possessive names one player
+        # whatever the sentence goes on to do to them.
+        seat = (context.trigger_context or {}).get("event_subject_controller")
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            # A seat nobody froze is not a hand to empty. Dropping the phrase
+            # would discard from whichever player a targetless resolution
+            # defaults to — the ability's own controller on this card.
+            game.log.append(
+                f"{context.card.name if context.card else 'the ability'}: "
+                "no player was named to discard"
+            )
             return True, "resolved"
         target = game.players[seat]
     actual = min(
@@ -2690,10 +2687,19 @@ def return_all_matching(game: Game, instruction: OracleInstruction, context: Ora
                 f"{context.card.name}: nothing is attached to a permanent that is gone"
             )
             return True, "resolved"
+    # "…each creature **that player** controls with power greater than the
+    # number of cards in **their** hand." (Noetic Scales.) The seat the firing
+    # event froze (CR 603.10) — a different player on every upkeep, and never
+    # this artifact's controller except on their own turn. Read through the one
+    # reader of the printed phrase, so both narrowings that name it name the
+    # same player; None where nothing froze one, which the matcher answers by
+    # refusing the words rather than by widening the sweep to the table.
+    that_player = frozen_that_player_seat(game, context)
     matched = [
         perm for perm in game.all_permanents()
         if subject_matches(
             game, perm, swept, observer=observer, source=context.source_permanent,
+            that_player=that_player,
         )
         and (host_id is None or _was_attached_to(perm, host_id))
     ]
@@ -3416,6 +3422,26 @@ def discard_all_matching_cards(game: Game, instruction: OracleInstruction, conte
     """
     victim = context.target if context.target is not None else context.caster
     filters = instruction.payload.get("filter") or {}
+    # "…discards all cards **of that color**." (Persecute.) CR 608.2d's choice,
+    # made by the sentence in front of this one and read out of the scratchpad
+    # rather than off a permanent — the card that prints it is a sorcery and
+    # there is none. Resolved here into the ordinary ``color_filter`` every card
+    # matcher already reads, exactly as the sweep one family over resolves
+    # ``subtype_filter_from``.
+    #
+    # **No colour means no discard**, and it must: an unanswered choice read as
+    # "no narrowing" is not a card that does less, it is one that empties the
+    # whole hand.
+    color_key = instruction.payload.get("color_filter_from")
+    if color_key is not None:
+        chosen = context.results.get(str(color_key))
+        if not chosen:
+            game.log.append(
+                f"{context.card.name}: no colour was chosen, so nothing is discarded"
+            )
+            return True, "resolved"
+        filters = dict(filters)
+        filters["color_filter"] = str(chosen)
     doomed = [
         index for index, held in enumerate(victim.hand)
         if _card_matches_filter(held, filters, game=game, owner=victim)
@@ -5084,11 +5110,34 @@ def put_from_hand_candidates(game, payload: dict, player) -> list[int]:
     """
     described = payload.get("card_filter") or {}
     permanents_only = bool(payload.get("permanents_only"))
+    # "…put an Aura card from your hand onto the battlefield **attached to this
+    # creature**." (Academy Researchers.) CR 303.4a: an Aura may be put onto the
+    # battlefield only attached to an object its own enchant ability can
+    # enchant, so a card the host cannot legally carry is not among the answers
+    # — offering it would put an Aura into play attached to nothing, which
+    # CR 704.5m bins on the next sweep with the card already out of the hand.
+    #
+    # The host arrives as an **id** stamped on the payload when the offer was
+    # armed, because this function is called again to check the answer and by
+    # then the permanent may have moved (CR 400.7 — an index is not an
+    # identity). A host that has gone leaves nothing legal to pick, which is the
+    # direction that offers nothing rather than the whole hand.
+    from ..auras import enchant_card_refusal
+
+    host_id = payload.get("attach_to_permanent_id")
+    host = game.permanent_by_id(host_id) if isinstance(host_id, int) else None
+    seat = game.players.index(player) if player in game.players else None
+    if host_id is not None and (host is None or seat is None):
+        return []
     return [
         index
         for index, card in enumerate(player.hand)
         if _card_matches_filter(card, described, game=game, owner=player)
         and (not permanents_only or card.primary_type in _PERMANENT_TYPES)
+        and (
+            host is None
+            or enchant_card_refusal(game, card, seat, host) is None
+        )
     ]
 
 
@@ -5111,6 +5160,22 @@ def put_chosen_card_from_hand_onto_battlefield(game: Game, instruction: OracleIn
     payload = instruction.payload
     player = context.target if payload.get("whose") == "offered" else context.caster
     seat = game.players.index(player)
+    if payload.get("attach_to") == "source":
+        # "…attached to **this creature**." (Academy Researchers.) The host is
+        # the ability's own source, frozen onto the payload by **id** here —
+        # the one moment it is in hand — so the candidate rule, the prompt and
+        # the answer check all resolve the same permanent however long the seat
+        # takes to answer. A source that has already left names no host, and
+        # CR 303.4a leaves nothing that could legally be put onto the
+        # battlefield.
+        source = context.source_permanent
+        if source is None or not game.is_on_battlefield(source):
+            game.log.append(
+                f"{context.card.name}: it is no longer on the battlefield"
+            )
+            return True, "resolved"
+        payload = {**payload, "attach_to_permanent_id": source.permanent_id}
+        instruction = dataclasses.replace(instruction, payload=payload)
     if not put_from_hand_candidates(game, payload, player):
         # Nothing to pick. Not an offer declined — an offer never made, which is
         # the same rule ``handlers/control_flow._offer_to_seat`` states for an
@@ -5316,6 +5381,42 @@ def discard_hand(game: Game, instruction: OracleInstruction, context: OracleExec
     effect must not hit.
     """
     caster = context.caster
+    if instruction.payload.get("who") == "each_player":
+        # "**Each player** discards their hand…" (Windfall.) Every living seat
+        # in CR 101.4's order, which is the order every other each-player loop
+        # in this engine walks — nothing here is a decision, but a seeded run
+        # still has to replay identically.
+        #
+        # The tally is recorded **per seat**, under the key the per-seat
+        # discards already write: the sentence behind this one asks for "the
+        # greatest number of cards **a player** discarded this way", and a
+        # single number would be whichever hand the loop emptied last.
+        total = len(game.players)
+        active = game.active_player_index or 0
+        seats = sorted(
+            (i for i, p in enumerate(game.players) if not p.lost),
+            key=lambda i: ((i - active) % total, i),
+        )
+        by_seat = context.results.setdefault(DISCARDED_BY_SEAT, {})
+        emptied = 0
+        for seat in seats:
+            player = game.players[seat]
+            gone = list(player.hand)
+            player.hand = []
+            for card in gone:
+                game._discard_card(player, card)
+            by_seat[seat] = len(gone)
+            emptied += len(gone)
+            game.log.append(
+                f"{player.name} discarded their hand ({len(gone)} card(s))"
+            )
+        # The flat key too, for the sentence that asks about the whole
+        # resolution rather than about one seat — written for the same reason
+        # the single-seat branch below writes it, and as the total rather than
+        # as any one seat's share, which is what "this way" names when the
+        # effect emptied every hand.
+        context.results["discarded_count"] = emptied
+        return True, "resolved"
     if instruction.payload.get("who") == "damaged_player":
         seat = (context.trigger_context or {}).get("defending_player_index")
         if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
@@ -6777,6 +6878,12 @@ def shuffle_hand_into_library(game: Game, instruction: OracleInstruction, contex
     else:  # pragma: no cover - the lowering admits no other subject
         return False, "no player to shuffle"
     then_draw = bool(instruction.payload.get("then_draw"))
+    # "…, **then draws seven cards**." (Time Spiral.) The printed number, which
+    # is not what moved: a player whose hand and graveyard were both empty still
+    # draws a full grip, so this count is applied whatever the shuffle took —
+    # which is exactly what the ``and moved`` guard below is for the other
+    # spelling and must not be for this one.
+    then_draw_count = instruction.payload.get("then_draw_count")
     # "…their hand **and graveyard** into their library." (Diminishing Returns.)
     # The second pile joins the *same* move, which is why it rides this
     # instruction: CR 701.24 randomises the library once, and a graveyard
@@ -6805,7 +6912,9 @@ def shuffle_hand_into_library(game: Game, instruction: OracleInstruction, contex
             + (f" and {buried} from their graveyard" if with_graveyard else "")
             + " into their library"
         )
-        if then_draw and moved:
+        if then_draw_count is not None:
+            game._draw_with_replacements(player, int(then_draw_count))
+        elif then_draw and moved:
             game._draw_with_replacements(player, moved)
     return True, "resolved"
 

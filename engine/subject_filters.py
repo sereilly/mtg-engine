@@ -811,9 +811,17 @@ def subject_matches(
             k: v for k, v in described.items()
             if k != "power_greater_than_cards_in_hand"
         }
-        if observer is None or not (0 <= observer < len(game.players)):
+        # **Whose** hand the phrase names, which is the value the key carries
+        # rather than a constant: "your hand" is CR 109.5's seat (Ensnaring
+        # Bridge) and "their hand" is the one the sentence already named
+        # (Noetic Scales, whose subject is "each creature **that player**
+        # controls"). Read the second as the first and the Scales would compare
+        # every seat's creatures against the artifact controller's hand — right
+        # on one upkeep in two and silently wrong on the other.
+        seat = observer if hand_bound == "you" else that_player
+        if seat is None or not (0 <= seat < len(game.players)):
             return False
-        if int(obj.effective_power) <= len(game.players[observer].hand):
+        if int(obj.effective_power) <= len(game.players[seat].hand):
             return False
     relative = described.get("characteristic_vs_source")
     if relative:

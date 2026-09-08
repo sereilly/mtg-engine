@@ -872,6 +872,25 @@ def _draw_becomes_counter(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("reveal_until_kind_draw")
+def _reveal_until_kind_draw(ctx: PromptContext, choices: list) -> dict:
+    """Abundance: reveal until a nonland card, until a land card, or just draw.
+
+    One offer at a time - the replacement arms one per draw - with how many are
+    still queued behind it, exactly as the counter offer above reports. The
+    option labels come off the choice rather than being spelled here, so what
+    the client shows and what the resolver accepts are one list.
+    """
+    choice = choices[0]
+    source = ctx.game.permanent_by_id(int(choice.data["source_id"]))
+    return {
+        "player_seat": choice.player_index,
+        "source_name": source.card.name if source is not None else "",
+        "options": list(choice.options),
+        "remaining": sum(1 for c in choices if c.player_index == choice.player_index),
+    }
+
+
 @prompt_renderer("balance")
 def _balance(ctx: PromptContext, choices: list) -> dict:
     choice = choices[0]

@@ -216,6 +216,12 @@ def object_filter_payload(self: "ObjectFilter") -> dict[str, object]:
     # lowering that reads the word and puts the choice where the rules do.
     if self.creature_type_of_your_choice:
         payload["creature_type_of_your_choice"] = True
+    # Emitted and outside ``TESTABLE_SUBJECT_FILTER_KEYS`` for the reason
+    # directly above: no matcher holds the resolution that chose the colour, so
+    # every testability gate refuses the phrase and the only way through is a
+    # lowering that reads the key and names the record the choice went into.
+    if self.color_chosen_this_way:
+        payload["color_chosen_this_way"] = True
     if self.chosen_land_type:
         payload["chosen_land_type"] = True
     if self.attacked_this_turn is True:

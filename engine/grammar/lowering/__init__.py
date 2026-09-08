@@ -262,9 +262,6 @@ from .untap_restrictions import (
     _lower_doesnt_untap_while_source_tapped,
 )
 from .cards import (
-    _lower_discard,
-    _fused_discard_then_draw,
-    _fused_draw_then_discard,
     _lower_draw,
     _lower_next_draw_replacement,
     _lower_mill,
@@ -279,11 +276,14 @@ from .hand import (
     CHOSEN_HAND_CARDS_RESULT,
     HAND_CARDS_TO_LIBRARY_RESULT,
     _lower_choose_cards_in_hand,
+    _lower_discard,
     _lower_exile_random_from_hand,
     _lower_for_each_chosen,
     _lower_for_each_short_of_this_way,
     _lower_put_iterated_card_on_library,
     _lower_put_hand_cards_on_library,
+    _fused_discard_then_draw,
+    _fused_draw_then_discard,
 )
 from .mana import (
     _lower_add_mana,

@@ -1173,3 +1173,252 @@ def test_w1g5_every_usg_hollow_card_now_carries_an_instruction(set_pool):
         parts = list(program.activated_abilities) + list(program.triggered_abilities)
         hollow = [part.source_line for part in parts if part.instruction is None]
         assert not hollow, "%s still has an instruction-less part: %s" % (name, hollow)
+
+
+# --- W2G3: hands, libraries, reveals and per-player effects ---
+import pytest
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+from engine.revealed_hands import hand_revealed_to
+
+import dataclasses
+
+from tests.helpers import _mk_card, _mk_creature_card, resolve_stack
+
+
+def _g3w2_table(*, seats=2, interactive=()):
+    """A table with mana enforcement off and whichever seats answer prompts.
+
+    ``_g3w2_`` prefixed and ending on ``return game, list(game.players)`` rather
+    than on a bare ``return game`` — SET_PLAYBOOK.md's note about a union
+    splicing one helper's body onto another's signature.
+    """
+    players = [PlayerState(name=f"W2G3-{i}") for i in range(seats)]
+    game = Game(players=players)
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    return game, list(game.players)
+
+
+def _g3w2_enters(game, seat, card):
+    """One permanent onto *seat*'s battlefield through the one entry path."""
+    permanent = Permanent(card=card)
+    game._put_permanent_onto_battlefield(seat, permanent, None)
+    game._sync_control()
+    return permanent
+
+
+def _g3w2_land(name="W2G3 Forest"):
+    """A basic land card, for the halves of these sentences that turn on the
+    printed type line rather than on anything a permanent computes."""
+    return _mk_card(name, "Basic Land - Forest", "")
+
+
+def test_w2g3_telepathy_opens_only_the_opponents_hands(set_pool):
+    """"Your opponents play with their hands revealed."
+
+    The scope is the whole card, and it is the half a widened reading would
+    lose: the enchantment's own controller keeps a hidden hand. Read as
+    Revelation's "players play with their hands revealed" it would be a
+    symmetrical card, which is not the one printed.
+    """
+    card = set_pool("USG")["Telepathy"]
+    assert compile_card_oracle(card).supported
+
+    game, players = _g3w2_table(seats=3)
+    _g3w2_enters(game, 0, card)
+
+    assert hand_revealed_to(game, owner_seat=1, viewer_seat=0)
+    assert hand_revealed_to(game, owner_seat=2, viewer_seat=0)
+    assert not hand_revealed_to(game, owner_seat=0, viewer_seat=1), (
+        "the controller's own hand stays hidden"
+    )
+
+
+def test_w2g3_telepathy_stops_when_it_leaves(set_pool):
+    """The effect is derived from the battlefield scan, so there is nothing to
+    sweep: a Telepathy that has left is simply no longer found."""
+    game, players = _g3w2_table()
+    telepathy = _g3w2_enters(game, 0, set_pool("USG")["Telepathy"])
+    assert hand_revealed_to(game, 1, 0)
+
+    game.remove_from_battlefield(telepathy)
+    assert not hand_revealed_to(game, 1, 0)
+
+
+def test_w2g3_bereavement_makes_the_dead_creatures_controller_discard(set_pool):
+    """"Whenever a green creature dies, its controller discards a card."
+
+    "Its controller" is the seat that controlled the creature, which is neither
+    the enchantment's controller nor anybody targeted — and by the time the
+    trigger resolves the creature is a card in a graveyard, which CR 108.4 gives
+    no controller at all. So the seat has to be the one the fire site froze.
+    """
+    card = set_pool("USG")["Bereavement"]
+    assert compile_card_oracle(card).supported
+
+    game, players = _g3w2_table()
+    _g3w2_enters(game, 0, card)
+    green = _g3w2_enters(
+        game, 1, dataclasses.replace(_mk_creature_card("W2G3 Elf", 1, 1), colors=("G",))
+    )
+    players[1].hand = [_g3w2_land(), _g3w2_land("W2G3 Plains")]
+
+    game._permanent_to_graveyard(players[1], green)
+    resolve_stack(game)
+    # The trigger resolved and left a discard owed with an empty stack, so it is
+    # answered here rather than by `resolve_stack` — that helper drains only
+    # what *blocks* the stack, deliberately.
+    assert [c.player_index for c in game.pending_choices] == [1], (
+        "the discard is owed by the dead creature's controller, not by the "
+        "enchantment's"
+    )
+    game.auto_resolve_pending_choices()
+
+    assert len(players[1].hand) == 1, "the dead creature's controller discarded"
+    assert len(players[1].graveyard) == 2, "the creature and the discarded card"
+    assert players[0].hand == [], "and the enchantment's controller did not"
+
+
+def test_w2g3_bereavement_ignores_a_nongreen_death(set_pool):
+    """The printed narrowing, which a fire site that announced every death
+    would drop — and a discard that happens more often than the card says is
+    silent and in nobody's favour."""
+    game, players = _g3w2_table()
+    _g3w2_enters(game, 0, set_pool("USG")["Bereavement"])
+    white = _g3w2_enters(
+        game, 1, dataclasses.replace(_mk_creature_card("W2G3 Cleric", 1, 1), colors=("W",))
+    )
+    players[1].hand = [_g3w2_land()]
+
+    game._permanent_to_graveyard(players[1], white)
+    resolve_stack(game)
+
+    assert game.pending_choices == [], "no discard was owed at all"
+    assert len(players[1].hand) == 1, "a white creature dying discards nothing"
+
+
+def test_w2g3_angelic_chorus_gains_the_entering_creatures_toughness(set_pool):
+    """"Whenever a creature you control enters, you gain life equal to its
+    toughness."
+
+    The toughness is the *event's* number, frozen by the entry transition — read
+    at resolution it would be a card in whatever state the board had left it,
+    and read as the power beside it (the only characteristic the entry used to
+    freeze) it would be wrong on every creature whose P and T differ. So the
+    creature here is deliberately 1/4.
+    """
+    card = set_pool("USG")["Angelic Chorus"]
+    assert compile_card_oracle(card).supported
+
+    game, players = _g3w2_table()
+    _g3w2_enters(game, 0, card)
+    before = players[0].life
+
+    _g3w2_enters(game, 0, _mk_creature_card("W2G3 Wall", 1, 4))
+    resolve_stack(game)
+
+    assert players[0].life == before + 4, "the toughness, not the power"
+
+
+def test_w2g3_angelic_chorus_ignores_an_opponents_creature(set_pool):
+    """"a creature **you control**" — the narrowing the trigger's own subject
+    carries, which is the whole of what keeps this from being a symmetrical
+    card."""
+    game, players = _g3w2_table()
+    _g3w2_enters(game, 0, set_pool("USG")["Angelic Chorus"])
+    before = players[0].life
+
+    _g3w2_enters(game, 1, _mk_creature_card("W2G3 Bear", 2, 2))
+    resolve_stack(game)
+
+    assert players[0].life == before
+
+
+def test_w2g3_abundance_reveals_until_a_nonland_card(set_pool):
+    """"If you would draw a card, you may instead choose land or nonland and
+    reveal cards from the top of your library until you reveal a card of the
+    chosen kind. Put that card into your hand and put all other cards revealed
+    this way on the bottom of your library in any order."
+
+    A CR 614 replacement, so the draw never happens: the card arrives in the
+    hand by being *put* there (CR 121.1 — a draw is the top card of a library,
+    and this is not it). The non-interactive seat takes the recorded default,
+    which is "nonland".
+    """
+    card = set_pool("USG")["Abundance"]
+    assert compile_card_oracle(card).supported
+
+    game, players = _g3w2_table()
+    _g3w2_enters(game, 0, card)
+    spell = _mk_creature_card("W2G3 Spell", 2, 2)
+    players[0].library = [_g3w2_land("L1"), _g3w2_land("L2"), spell, _g3w2_land("L3")]
+
+    drawn = game._draw_with_replacements(players[0], 1)
+
+    assert drawn == 0, "the draw was replaced, so nothing was drawn"
+    assert [c.name for c in players[0].hand] == ["W2G3 Spell"]
+    assert [c.name for c in players[0].library] == ["L3", "L1", "L2"], (
+        "the two lands revealed on the way went to the bottom, in order"
+    )
+
+
+def test_w2g3_abundance_reveals_until_a_land_when_that_is_the_answer(set_pool):
+    """The other kind, answered explicitly so the option index is not something
+    only the default exercises."""
+    game, players = _g3w2_table(interactive=(0,))
+    _g3w2_enters(game, 0, set_pool("USG")["Abundance"])
+    spell = _mk_creature_card("W2G3 Spell", 2, 2)
+    players[0].library = [spell, _g3w2_land("L1"), _g3w2_land("L2")]
+
+    assert game._draw_with_replacements(players[0], 1) == 0
+    assert game.pending_reveal_until_kind_draws, "the interactive seat was asked"
+
+    assert game.confirm_reveal_until_kind_draw(0, 1)  # "Land"
+
+    assert [c.name for c in players[0].hand] == ["L1"]
+    assert [c.name for c in players[0].library] == ["L2", "W2G3 Spell"]
+
+
+def test_w2g3_abundance_can_be_declined_and_the_draw_still_happens(set_pool):
+    """"You **may** instead" — declining leaves the event to whatever is behind
+    it, which with nothing else armed is an ordinary draw. The decline is what a
+    replacement offering three options is for; modelled as a no-op it would make
+    the enchantment mandatory."""
+    game, players = _g3w2_table(interactive=(0,))
+    _g3w2_enters(game, 0, set_pool("USG")["Abundance"])
+    top = _mk_creature_card("W2G3 Top", 1, 1)
+    players[0].library = [top, _g3w2_land("L1")]
+
+    assert game._draw_with_replacements(players[0], 1) == 0
+    assert game.confirm_reveal_until_kind_draw(0, 2)  # "Draw a card"
+
+    assert [c.name for c in players[0].hand] == ["W2G3 Top"], "the top card, drawn"
+    assert [c.name for c in players[0].library] == ["L1"]
+
+
+def test_w2g3_abundance_finds_nothing_and_puts_the_library_back(set_pool):
+    """A library with no card of the chosen kind is revealed entirely and every
+    card goes back to the bottom: the sentence names a card to put into a hand
+    and there is none, so nothing is put anywhere and no card is drawn."""
+    game, players = _g3w2_table()
+    _g3w2_enters(game, 0, set_pool("USG")["Abundance"])
+    players[0].library = [_g3w2_land("L1"), _g3w2_land("L2")]
+
+    assert game._draw_with_replacements(players[0], 1) == 0
+    assert players[0].hand == []
+    assert [c.name for c in players[0].library] == ["L1", "L2"]
+
+
+def test_w2g3_abundance_only_replaces_its_own_controllers_draws(set_pool):
+    """"If **you** would draw a card" is CR 109.5's seat. An opponent's draw
+    goes through untouched, which is the difference between this card and a
+    symmetrical one."""
+    game, players = _g3w2_table()
+    _g3w2_enters(game, 0, set_pool("USG")["Abundance"])
+    players[1].library = [_g3w2_land("L1"), _g3w2_land("L2")]
+
+    assert game._draw_with_replacements(players[1], 1) == 1
+    assert [c.name for c in players[1].hand] == ["L1"]
