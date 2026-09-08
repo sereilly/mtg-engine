@@ -29,6 +29,21 @@ TOKEN_CARD_KEY = "is_token_card"
 #: is nothing about the token itself a later sentence could look it up by.
 CREATED_TOKEN_RESULT_KEY = "created_token_permanent_id"
 
+#: Its **plural**: every ``permanent_id`` the maker produced this step,
+#: for "Create three 2/2 white Knight creature tokens. **Exile them** at the
+#: beginning of the next cleanup step." (Waylay.)
+#:
+#: A second key rather than a wider value under the one above, because the
+#: singular is *read* by four callers that address one permanent — "that
+#: token" is a singular phrase and a list arriving where an int was
+#: expected is a back-reference that silently names whichever entry a
+#: reader happened to take. The maker writes both; which one a sentence
+#: reads is decided by the number the sentence prints.
+#:
+#: Here beside its sibling and for its reason: the handler writes it and the
+#: lowering gates the phrase on it, which are opposite ends of the pipeline.
+CREATED_TOKENS_RESULT_KEY = "created_token_permanent_ids"
+
 #: The metadata key a token maker stamps on the token it made, naming the
 #: permanent that made it by ``permanent_id``.
 #:

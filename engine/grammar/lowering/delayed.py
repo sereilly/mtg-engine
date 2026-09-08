@@ -34,7 +34,8 @@ from ...oracle_types import CHOSEN_TARGET_PERMANENTS, OracleInstruction
 from .. import ast
 from ..errors import LoweringError
 from ._events import (_EVENT_SUBJECT_PLAYERS, _RECORDED_PERMANENTS,
-                      CHOSEN_PLAYER, CREATED_TOKEN, binds_block_pair,
+                      CHOSEN_PLAYER, CREATED_TOKEN, CREATED_TOKENS,
+                      binds_block_pair,
                       damage_trigger_names_damaged_end)
 from ._common import (
     _REST_OF_TURN, _describe_several_targets, _describe_targets,
@@ -549,7 +550,7 @@ def _delay_is_about_a_created_token(effect, produced: frozenset[str]) -> bool:
     reason: the reference may be nested inside a sequence or an offer, and a
     statement class added later is covered by default.
     """
-    if CREATED_TOKEN not in produced:
+    if CREATED_TOKEN not in produced and CREATED_TOKENS not in produced:
         return False
     return _names_a_created_token(effect)
 

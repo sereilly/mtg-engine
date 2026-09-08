@@ -19,6 +19,7 @@ from ..named_counters import counters_on, remove_counters
 from ..pt import pt_counter_key, set_base_pt
 from ..text_changes import LAND_TYPE_WORDS, change_color_word, change_land_word
 from ..tokens import (CHOSEN_TOKEN_RECORDS, CREATED_TOKEN_RESULT_KEY,
+                      CREATED_TOKENS_RESULT_KEY,
                      CREATED_WITH_PERMANENT_ID, default_token_name,
                      make_token_card, tokens_created_with)
 from ._common import (BLOCK_PAIR_SUBJECT, SUBJECT_FROM_TRIGGER,
@@ -1798,6 +1799,13 @@ def create_token(game: Game, instruction: OracleInstruction, context: OracleExec
         # plural maker would be a card this engine has not met, and it would
         # arrive as one token addressed rather than as a silently wider effect.
         context.results[CREATED_TOKEN_RESULT_KEY] = token.permanent_id
+        # …and **all** of them, for the plural back-reference ("Exile
+        # them", Waylay). Appended per token rather than assigned at the
+        # end of the loop, so a sentence behind a maker that made some and
+        # then stopped still names the ones it made.
+        context.results.setdefault(CREATED_TOKENS_RESULT_KEY, []).append(
+            token.permanent_id
+        )
         if payload.get("attacking") and game.current_turn_phase == "combat":
             defending = (context.trigger_context or {}).get("trigger_defending_player_index")
             if not isinstance(defending, int):

@@ -54,7 +54,7 @@ from ...oracle_types import (BASE_PT_SET_PERMANENTS,
 from ...oracle_types import (
     REMOVED_FROM_COMBAT_PERMANENTS as _REMOVED_FROM_COMBAT_PERMANENTS,
 )
-from ...tokens import CREATED_TOKEN_RESULT_KEY
+from ...tokens import CREATED_TOKEN_RESULT_KEY, CREATED_TOKENS_RESULT_KEY
 # The two records a *death* freezes that are also produced quantities. `_deaths`
 # is the floor beside this one that owns what a death leaves behind, and it
 # reads nothing here, so the two sit side by side rather than one inside the
@@ -68,6 +68,11 @@ from ._deaths import (_EVENT_SUBJECT_POWER_RECORD,
 #: home for it, because the handler that writes it lives on the other side of
 #: the pipeline from the lowering that gates the phrase on it.
 CREATED_TOKEN = CREATED_TOKEN_RESULT_KEY
+
+#: Its plural (Waylay). Imported rather than spelled again for the reason
+#: above, and named here beside it so a lowering choosing between the two
+#: reads them from one place.
+CREATED_TOKENS = CREATED_TOKENS_RESULT_KEY
 
 #: What "**exiled this way**" names (Martyr's Cry): the `produced` marker a
 #: sweep that exiles stamps, and the scratchpad key it records the objects

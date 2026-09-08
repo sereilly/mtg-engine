@@ -58,7 +58,8 @@ from ._events import (ATTACHED_PERMANENT_CONTROLLER,
 from ._record_keys import (CHOSEN_CAST_DAMAGE, CHOSEN_DAMAGE_SOURCE,
                            CONTROL_EXCHANGED_PERMANENTS,
                            CHOSEN_PERMANENT, CHOSEN_PLAYER, COUNTED_NUMBER,
-                           CREATED_TOKEN, DAMAGE_RECIPIENT, EXTRA_TURN_GRANTED,
+                           CREATED_TOKEN, CREATED_TOKENS,
+                           DAMAGE_RECIPIENT, EXTRA_TURN_GRANTED,
                            OTHER_CHOSEN_PERMANENT, PUT_FROM_HAND_PERMANENTS,
                            REMOVED_FROM_COMBAT_PERMANENTS,
                            _BASE_PT_SET_PERMANENTS, _COUNTERS_PLACED_THIS_WAY,
@@ -354,7 +355,7 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # a later sentence of the same effect can name it from — a token is a new
     # object with a fresh id (CR 400.7), so there is nothing about it to look
     # up by.
-    "create_token": CREATED_TOKEN,
+    "create_token": (CREATED_TOKEN, CREATED_TOKENS),
     # "Create a token that's a copy of that creature. **That token** gains
     # haste until end of turn." (Echo Chamber.) The copy maker records what it
     # made under the same key the token maker above it does, and for that

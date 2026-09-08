@@ -49,6 +49,7 @@ from ._deaths import (DEAD_CHARACTERISTIC_EVENTS, DEAD_CHARACTERISTIC_RECORDS,
 from ._record_keys import (CHOSEN_CAST_DAMAGE,  # noqa: F401
                            CHOSEN_DAMAGE_SOURCE, CHOSEN_PERMANENT,
                            CHOSEN_PLAYER, COUNTED_NUMBER, CREATED_TOKEN,
+                           CREATED_TOKENS,
                            DAMAGE_RECIPIENT, EXTRA_TURN_GRANTED,
                            LOOP_BOUND_OBJECT, LOOP_BOUND_PLAYER,
                            OTHER_CHOSEN_PERMANENT, PUT_FROM_HAND_PERMANENTS,

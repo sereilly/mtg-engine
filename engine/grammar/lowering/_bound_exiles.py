@@ -57,7 +57,7 @@ from ._common import (_filter_payload, _is_created_token, _is_source,
                       _restrictions_beyond)
 from ._deaths import BOUND_CARD_EVENTS
 from ._delays import _BOUND_OBJECT_DELAYED_EVENTS
-from ._events import (_RECORDED_PERMANENTS, CREATED_TOKEN,
+from ._events import (_RECORDED_PERMANENTS, CREATED_TOKEN, CREATED_TOKENS,
                       damage_trigger_names_damaged_end)
 
 
@@ -308,6 +308,24 @@ def lower_pronoun_exile(
         if node.duration.kind is not None:
             raise LoweringError(
                 "a timed exile of a created token has no handler", node=node
+            )
+        # "Exile **them**…" (Waylay) — the plural of the same back-reference,
+        # told apart by the quantifier the parse recorded and gated on the
+        # plural record the maker writes beside the singular one. Same kind,
+        # because what differs is how many ids are read and not what is done
+        # with them; the payload key is what says so, and its absence is every
+        # singular payload ever written, unchanged.
+        if isinstance(subject, ast.TargetSpec) and subject.quantifier == "those":
+            if CREATED_TOKENS not in produced:
+                raise LoweringError(
+                    "back-reference to created tokens with no token maker in "
+                    "this effect",
+                    node=node,
+                )
+            return (
+                OracleInstruction(
+                    "exile_created_token", "", {"permanents_from": CREATED_TOKENS}
+                ),
             )
         if CREATED_TOKEN not in produced:
             raise LoweringError(
