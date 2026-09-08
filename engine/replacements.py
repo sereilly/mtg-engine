@@ -3661,9 +3661,18 @@ def _resolve_return_from_graveyard_instead_of_draw(
 #: "If a card would be put into **your** graveyard from anywhere, exile that
 #: card instead." (Forbidden Crypt.) Whose graveyard is payload for the reason
 #: every parameter in this file is: "an opponent\'s graveyard" (Leyline of the
-#: Void) and "a graveyard" (Rest in Peace, Planar Void) are the same sentence
-#: with a different seat in it, and the interceptor answers all three from one
+#: Void) and "a graveyard" (Rest in Peace) are the same sentence with a
+#: different seat in it, and the interceptor answers all three from one
 #: comparison. "That card" and "it" are the same back-reference.
+#:
+#: **Planar Void was named here and is not one of them.** Its Oracle text is
+#: "Whenever another card is put into a graveyard from anywhere, exile that
+#: card" -- a *trigger*, so the card reaches the graveyard and is exiled off
+#: the stack afterwards, where this pattern requires both "would" and
+#: "instead". The card is implemented as the trigger it is
+#: (``card_put_into_graveyard``, announced from
+#: ``Game.put_card_into_graveyard``); the claim here never matched it and
+#: nothing failed, which is how a comment comes to name a card it cannot read.
 _GRAVEYARD_TO_EXILE = re.compile(
     r"^if a card would be put into (?P<whose>your|an opponent\'s|a) graveyard "
     r"from anywhere, exile (?:that card|it) instead$"
