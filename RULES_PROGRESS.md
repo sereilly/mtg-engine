@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**367 / 615 tracked rules covered (59%)** — 2233 tests, 0 unannotated.
+**368 / 616 tracked rules covered (59%)** — 2248 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -88,7 +88,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [616. Interaction of Replacement and/or Prevention Effects](#616-interaction-of-replacement-andor-prevention-effects) | 2/2 | 100% |
 | [700. General](#700-general) | 2/15 | 13% |
 | [701. Keyword Actions](#701-keyword-actions) | 19/19 | 100% |
-| [702. Keyword Abilities](#702-keyword-abilities) | 30/30 | 100% |
+| [702. Keyword Abilities](#702-keyword-abilities) | 31/31 | 100% |
 | [703. Turn-Based Actions](#703-turn-based-actions) | 0/4 | 0% |
 | [704. State-Based Actions](#704-state-based-actions) | 5/8 | 62% |
 | [705. Flipping a Coin](#705-flipping-a-coin) | 2/3 | 66% |
@@ -244,7 +244,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **113.3** There are four general categories of abilities: *(4 tests, subrules bc)*
 - [ ] **113.4** Some activated abilities and some triggered abilities are mana abilities. Mana abilities follow s...
 - [ ] **113.5** Some activated abilities are loyalty abilities. Loyalty abilities follow special rules: A player ...
-- [x] **113.6** Abilities of an instant or sorcery spell usually function only while that object is on the stack.... *(11 tests, subrules bgkm)*
+- [x] **113.6** Abilities of an instant or sorcery spell usually function only while that object is on the stack.... *(16 tests, subrules bgjkm)*
 - [x] **113.7** The source of an ability is the object that generated it. The source of an activated ability on t... *(4 tests, subrules a)*
 - [ ] **113.8** The controller of an activated ability on the stack is the player who activated it. The controlle...
 - [ ] **113.9** Activated and triggered abilities on the stack aren’t spells, and therefore can’t be countered by...
@@ -662,7 +662,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(226 tests, subrules abcdefghi)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(228 tests, subrules abcdefghi)*
 - [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(23 tests, subrules a)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [x] **601.5** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*
@@ -893,6 +893,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.26** Phasing *(16 tests, subrules adfgim)*
 - [x] **702.27** Buyback *(7 tests, subrules a)*
 - [x] **702.28** Shadow *(6 tests, subrules abc)*
+- [x] **702.29** Cycling *(15 tests, subrules abef)*
 - [x] **702.30** Echo *(16 tests, subrules ab)*
 - [x] **702.36** Fear *(5 tests, subrules ab)*
 - [x] **702.108** Prowess *(3 tests, subrules a)*
