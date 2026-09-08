@@ -492,6 +492,30 @@ class CountersOnSource:
 
 
 @dataclass(frozen=True)
+class CountersOnEventSubject:
+    """"for each fungus counter on **that creature**" (Sporogenesis) — how many
+    CR 122.1 named counters the object the firing event was *about* was
+    carrying.
+
+    Its own node beside :class:`CountersOnSource` rather than a referent field
+    on it, because the two are answered by different records and a lowering
+    written for one would give the wrong number for the other in silence.
+    The source's counters are read live off the permanent
+    (``engine/named_counters.py``); this one's cannot be, because the only
+    sentence that prints it is a **death** trigger — by the time it resolves the
+    creature is a card in a graveyard with no counters at all (CR 400.7), so the
+    only legal reading is the last known information the fire site froze
+    (CR 603.10 / 608.2h, ``dead_counters``).
+
+    A defaulted field would have made every existing ``CountersOnSource``
+    lowering accept this phrase and count the *enchantment's* counters instead
+    of the dead creature's — a dropped referent with an arithmetic face. A
+    separate node makes every one of them refuse it by construction.
+    """
+    kind: str
+
+
+@dataclass(frozen=True)
 class DamageDealtThisTurn:
     """"the amount of damage dealt to this creature this turn by other sources
     named ~" (Blazing Effigy) — a *history*, not anything on a board.
@@ -543,7 +567,7 @@ class DamageDealtByChosenCast:
     card_type: str
 
 
-Amount = Union[Fixed, Var, CountOf, CountersOnSource, ThatMuch, SacrificedForCost, ExiledForCost, TappedForCost, TotalPowerSacrificedThisWay, Half, Times, AllOf, AnyNumber, BoardCount, Plus, Minus, CharacteristicOfTarget, DamageDealtThisTurn, DamageDealtByChosenCast, AdditionalCostPaidCount]
+Amount = Union[Fixed, Var, CountOf, CountersOnSource, CountersOnEventSubject, ThatMuch, SacrificedForCost, ExiledForCost, TappedForCost, TotalPowerSacrificedThisWay, Half, Times, AllOf, AnyNumber, BoardCount, Plus, Minus, CharacteristicOfTarget, DamageDealtThisTurn, DamageDealtByChosenCast, AdditionalCostPaidCount]
 
 
 # ---------------------------------------------------------------------------

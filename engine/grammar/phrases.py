@@ -22,7 +22,8 @@ from dataclasses import replace
 from ..pt import pt_counter_deltas
 from ..turn_state import THAT_PLAYERS_NEXT_TURN
 from . import ast
-from .amounts import accept_counter_kind, parse_amount
+from .amounts import (accept_counter_kind, accept_counters_on_event_subject,
+                      accept_counters_on_source, parse_amount)
 
 from .errors import GrammarError
 from .lexer import GToken, NUMBER, PUNCT, tokenize
@@ -274,6 +275,42 @@ def _parse_per_each_objects(
         return None, False
     beyond_first = stream.accept_phrase("beyond", "the", "first")
     return filt, beyond_first
+
+
+def _parse_per_each_counters(
+    stream: TokenStream,
+) -> "ast.CountersOnSource | ast.CountersOnEventSubject | None":
+    """``for each <word> counter on <the source | that <noun>>`` — the counter
+    pile whose size multiplies what the sentence in front of it does.
+
+    "…sacrifices a permanent of their choice **for each soot counter on this
+    artifact**" (Smokestack), "…create a 1/1 green Saproling creature token
+    **for each fungus counter on that creature**" (Sporogenesis).
+
+    A sibling of :func:`_parse_per_each_objects` and **not** a branch inside it,
+    because what it counts is not a set of objects: a counter has no controller,
+    no type line and no zone. The distinction is load-bearing rather than tidy —
+    "fungus" is a printed creature type, so the object reader claims "for each
+    fungus" happily and hands back a line with "counter on that creature" left
+    over. Every caller therefore asks **this** one first, exactly as the
+    sacrifice production already asks the history reader before the board one
+    and for that reader's reason.
+
+    Returns None with the cursor where it was when the clause is not there, so a
+    caller that does not find it still owes the rest of its line to full-token
+    consumption.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("for", "each"):
+        stream.reset(mark)
+        return None
+    counted = accept_counters_on_source(stream)
+    if counted is None:
+        counted = accept_counters_on_event_subject(stream)
+    if counted is None:
+        stream.reset(mark)
+        return None
+    return counted
 
 
 def _parse_for_each(

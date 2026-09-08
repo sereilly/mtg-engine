@@ -255,6 +255,18 @@ class CreateToken:
     #: chosen characteristic is not known until a permanent has entered. Folding
     #: the two would make the payload say a colour the card never states.
     from_chosen: tuple[str, ...] = ()
+    #: "…**for each fungus counter on that creature**" (Sporogenesis). A fourth
+    #: multiplier, and a fourth field for the reason ``per_each`` above gives
+    #: for being the third: the number comes from a fourth place. A pile of
+    #: counters is not a set of objects, not a game-wide tally and not a record
+    #: on this permanent — it sits on whichever object the clause names, and
+    #: which object that is decides which record answers.
+    #:
+    #: Holds the parsed node rather than the counter word, exactly as
+    #: ``per_death`` holds its history node: the two referents a counter clause
+    #: can name are two node types, and a bare string would make the lowering
+    #: guess which one the card printed.
+    per_counter: "CountersOnSource | CountersOnEventSubject | None" = None
 
 
 @dataclass(frozen=True)
