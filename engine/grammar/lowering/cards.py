@@ -6,7 +6,10 @@ families of their own: mana production in `mana.py`, the hidden-zone
 search/reveal/exile-linkage flows in `library.py`.
 """
 
-from ...oracle_types import (DISCARDED_BY_SEAT, MILLED_THIS_WAY,
+import dataclasses
+
+from ...oracle_types import (CHOSEN_COLOR_THIS_WAY, DISCARDED_BY_SEAT,
+                             MILLED_THIS_WAY,
                              PER_OBJECT_SEAT_RECORDS,
                              X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT,
                              OracleInstruction)
@@ -29,7 +32,9 @@ from ._common import (
 from ._events import (
     _DAMAGED_PLAYER_EVENTS,
     _DEFENDING_PLAYER_EVENTS,
+    _EVENT_SUBJECT_CONTROLLERS,
     _EVENT_SUBJECT_PLAYERS,
+    EVENT_SUBJECT_CONTROLLER,
     EVENT_SUBJECT_PLAYER,
     _back_reference_payload,
 )
@@ -87,12 +92,36 @@ def _lower_discard(node: ast.Discard, event: str | None = None) -> tuple[OracleI
             )
         payload: dict[str, object] = {}
         if node.filter is not None:
-            described = chargeable_card_filter(node.filter)
-            if not described:
+            # "…discards all cards **of that color**." (Persecute.) The colour
+            # an earlier sentence of this same resolution chose (CR 608.2d),
+            # taken off the filter **before** the testability gate and put back
+            # as its own key after it: no card matcher holds a resolution, so a
+            # gate asking "can every key be answered?" must not be shown one
+            # that only the handler can. The same shape `subject_matches`'
+            # ``subtype_filter_from`` takes for the identical question one
+            # characteristic over.
+            described_filter = node.filter
+            carried: dict[str, object] = {}
+            if described_filter.color_chosen_this_way:
+                described_filter = dataclasses.replace(
+                    described_filter, color_chosen_this_way=False
+                )
+                carried["color_filter_from"] = CHOSEN_COLOR_THIS_WAY
+            described = chargeable_card_filter(described_filter)
+            if described is None:
                 raise LoweringError(
                     "no discard can test this narrowing", node=node
                 )
-            payload["filter"] = described
+            # An empty payload is a phrase that reduced to "all cards", which is
+            # the whole hand — right for "discards all cards of that color",
+            # where the *colour* is the whole narrowing and rides its own key.
+            if described:
+                payload["filter"] = described
+            elif not carried:
+                raise LoweringError(
+                    "no discard can test this narrowing", node=node
+                )
+            payload.update(carried)
         _describe_targets(payload, node.player)
         return (OracleInstruction("discard_all_matching_cards", "", payload),)
     # Only the controller's own discard and the at-random one below carry a
@@ -311,6 +340,39 @@ def _lower_discard(node: ast.Discard, event: str | None = None) -> tuple[OracleI
             OracleInstruction(
                 "discard_target_cards", "",
                 {"amount": amount, "who": "defending_player"},
+            ),
+        )
+    # "Whenever a green creature dies, **its controller** discards a card."
+    # (Bereavement.) The possessive with nothing in front of it: it names the
+    # seat that controlled the object the *trigger's own event* was about, which
+    # is not the ability's controller and is not a seat anybody targeted. The
+    # same gate the sacrifice lowering puts in front of the identical phrase one
+    # family over — admitted only under an event whose fire site actually froze
+    # a controller, because with no record the discard would empty whichever
+    # hand a targetless resolution happens to be carrying, and on this card that
+    # is its own controller's every time their own creature dies.
+    if node.player.kind == "controller":
+        if event not in _EVENT_SUBJECT_CONTROLLERS:
+            raise LoweringError(
+                f"no event named {event!r} freezes the seat 'its controller' "
+                "names",
+                node=node,
+            )
+        amount = _amount_payload(node.count)
+        if node.at_random or node.filter is not None or not isinstance(amount, int):
+            # The pool prints one shape here — a chosen, unnarrowed, counted
+            # discard — and every other shape refuses rather than being folded
+            # into it: a narrowing the prompt never applies is a discard that
+            # takes any card at all, which is the failure this file refuses on
+            # behalf of every seat it does not name.
+            raise LoweringError(
+                "the frozen-controller discard is chosen, unnarrowed and counted",
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "discard_target_cards", "",
+                {"amount": amount, "who": EVENT_SUBJECT_CONTROLLER},
             ),
         )
     if node.player.kind not in ("target_player", "target_opponent", "that_player"):

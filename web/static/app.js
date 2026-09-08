@@ -2064,11 +2064,28 @@ function nonActivatedOracleText(card) {
     .join("\n");
 }
 
+// A spell whose own first sentence is the imperative "Choose a color."
+// (Prismatic Boon, Persecute). CR 608.2d puts that choice in the resolution and
+// it rides `mana_color` like every other one — but the substring list above
+// keys on the phrase that *spends* the colour ("the color of your choice"),
+// and these two cards spend it as "the chosen color" / "that color" instead. So
+// both were cast with no colour named, and both then did nothing at all while
+// logging themselves resolved.
+//
+// Anchored to a sentence boundary rather than matched as a substring, because
+// the same words appear inside an *entry* choice — "As this enchantment enters,
+// choose a color." (Psychic Allergy, Jihad, Quirion Elves) — which is answered
+// by the enter-choice prompt after the permanent is on the battlefield, not at
+// the cast. A comma is not a period, and that is the whole of the distinction.
+const STANDALONE_CHOOSE_A_COLOR = /(^|\.\s+)choose a color\./;
+
 // The cast-time variant: only text OUTSIDE activated abilities can put a
 // color choice on the spell itself (Metamorphosis, Feat of Resistance).
 function castRequiresManaColorChoice(card) {
   if (!card || typeof card === "string") return false;
-  return cardRequiresManaColorChoice({ oracle_text: nonActivatedOracleText(card) });
+  const outside = nonActivatedOracleText(card);
+  if (STANDALONE_CHOOSE_A_COLOR.test(outside.toLowerCase())) return true;
+  return cardRequiresManaColorChoice({ oracle_text: outside });
 }
 
 function cardRequiresCastColorChoice(card) {

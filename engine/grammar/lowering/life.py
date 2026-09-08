@@ -444,9 +444,24 @@ def _lower_gain_life(
         return (OracleInstruction("target_gains_life", "", payload),)
     if node.per_each is not None:
         filt = node.per_each
-        if node.player.kind != "you":
+        # **Whether the gainer has to be "you" is a question about the count,
+        # not about the gain.** The multiplier used to be a battlefield scan
+        # taken against the *gainer*, and this refusal was that scan's contract;
+        # the fold onto `count_from_payload` (see the comment below) made the
+        # count read its own ``owner`` scope instead, so the two are independent
+        # now and the refusal outlived its reason.
+        #
+        # It is narrowed rather than dropped, because most scopes still are
+        # about a seat: ``owner: "all"`` is CR 403.1's one shared battlefield —
+        # "for each creature **on the battlefield**" (Congregate) counts every
+        # seat's and names none — so it is the one scope that cannot disagree
+        # with whoever gains. Every other spec keeps the refusal, and gets it
+        # in the spelling that says what is actually wrong.
+        spec = count_spec(filt, node)
+        if node.player.kind != "you" and spec.get("owner") != "all":
             raise LoweringError(
-                "the per-each life gain counts the gainer's own battlefield", node=node
+                "a life gain counted off one seat's zone is that seat's own",
+                node=node,
             )
         # "For each artifact or creature card in target opponent's graveyard, …
         # you gain 1 life." (Spoils of Evil.) "You gain 2 life **for each card
@@ -467,7 +482,7 @@ def _lower_gain_life(
         # unscoped combat role is counted across **every** seat (CR 508.1a puts
         # the attackers on the active player's battlefield), where
         # `controller: "you"` answered zero for the seat casting the fog.
-        payload["per_each"] = count_spec(filt, node)
+        payload["per_each"] = spec
         return (OracleInstruction("target_gains_life", "", payload),)
     _describe_targets(payload, node.player)
     return (OracleInstruction("target_gains_life", "", payload),)

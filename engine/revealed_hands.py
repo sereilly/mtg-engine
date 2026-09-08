@@ -41,9 +41,17 @@ _REMINDER = re.compile(r"\([^)]*\)")
 #: Enduring Renewal's "Play with your hand revealed", where "your" is CR 109.5's
 #: answer: the controller of the static ability, which is the permanent's
 #: controller. The pair the module's docstring said the seam was shaped for.
+#:
+#: "opponents" is Telepathy's "**Your opponents** play with their hands
+#: revealed" — the scope the module's own docstring named as the reason the
+#: seam takes an ``(owner, viewer)`` pair, arriving as a printed line at last.
+#: "Your" is CR 109.5's again, so the seats are the source controller's
+#: opponents (CR 102.1), read through the one seam that already excludes a
+#: player who has left the game.
 _HANDS_LINES: dict[str, str] = {
     "players play with their hands revealed": "everyone",
     "play with your hand revealed": "controller",
+    "your opponents play with their hands revealed": "opponents",
 }
 
 
@@ -117,6 +125,16 @@ def hand_revealed_to(game, owner_seat: int, viewer_seat: int | None) -> bool:
             if scope == "everyone":
                 return True
             if scope == "controller" and owner_seat == controller_index:
+                return True
+            # "**Your** opponents play with their hands revealed." (Telepathy.)
+            # The mirror of the row above and not its negation: asked through
+            # ``opponents_of`` rather than as ``owner_seat != controller_index``,
+            # because CR 800.4a takes a player who has left the game out of
+            # everyone's opponents and a bare inequality would go on opening a
+            # hand that is no longer in the game.
+            if scope == "opponents" and owner_seat in game.opponents_of(
+                controller_index
+            ):
                 return True
     return False
 

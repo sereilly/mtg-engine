@@ -1137,6 +1137,25 @@ def discard_target_cards(game: Game, instruction: OracleInstruction, context: Or
             # nobody recorded is not a seat to empty a hand from.
             return True, "resolved"
         target = game.players[seat]
+    if instruction.payload.get("who") == "event_subject_controller":
+        # "Whenever a green creature dies, **its controller** discards a card."
+        # (Bereavement.) The seat that controlled what the firing event was
+        # about, frozen by the fire site (CR 603.10) because by now the
+        # permanent is a card in a graveyard and CR 108.4 gives it no
+        # controller. The same key the damage, sacrifice and life-gain handlers
+        # read for the same printed phrase, so one possessive names one player
+        # whatever the sentence goes on to do to them.
+        seat = (context.trigger_context or {}).get("event_subject_controller")
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            # A seat nobody froze is not a hand to empty. Dropping the phrase
+            # would discard from whichever player a targetless resolution
+            # defaults to — the ability's own controller on this card.
+            game.log.append(
+                f"{context.card.name if context.card else 'the ability'}: "
+                "no player was named to discard"
+            )
+            return True, "resolved"
+        target = game.players[seat]
     actual = min(
         resolve_amount(instruction.payload.get("amount", 0), context.x_value), len(target.hand)
     )
@@ -3416,6 +3435,26 @@ def discard_all_matching_cards(game: Game, instruction: OracleInstruction, conte
     """
     victim = context.target if context.target is not None else context.caster
     filters = instruction.payload.get("filter") or {}
+    # "…discards all cards **of that color**." (Persecute.) CR 608.2d's choice,
+    # made by the sentence in front of this one and read out of the scratchpad
+    # rather than off a permanent — the card that prints it is a sorcery and
+    # there is none. Resolved here into the ordinary ``color_filter`` every card
+    # matcher already reads, exactly as the sweep one family over resolves
+    # ``subtype_filter_from``.
+    #
+    # **No colour means no discard**, and it must: an unanswered choice read as
+    # "no narrowing" is not a card that does less, it is one that empties the
+    # whole hand.
+    color_key = instruction.payload.get("color_filter_from")
+    if color_key is not None:
+        chosen = context.results.get(str(color_key))
+        if not chosen:
+            game.log.append(
+                f"{context.card.name}: no colour was chosen, so nothing is discarded"
+            )
+            return True, "resolved"
+        filters = dict(filters)
+        filters["color_filter"] = str(chosen)
     doomed = [
         index for index, held in enumerate(victim.hand)
         if _card_matches_filter(held, filters, game=game, owner=victim)

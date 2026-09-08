@@ -289,6 +289,20 @@ class ObjectFilter:
     #: into a choosing step plus a ``subtype_filter_from`` key naming the
     #: scratchpad slot that step writes.
     creature_type_of_your_choice: bool = False
+    #: "…discards all cards **of that color**." (Persecute.) ``chosen_color``
+    #: above with the choice made at a different time, which is exactly the
+    #: difference ``creature_type_of_your_choice`` draws from
+    #: ``chosen_creature_type``: that word is a permanent's, recorded as it
+    #: entered (CR 614.1c) and read off its metadata, and this one is made
+    #: while a *spell* resolves (CR 608.2d) by an earlier sentence of the same
+    #: effect — Persecute is a sorcery and has no permanent to have recorded
+    #: anything.
+    #:
+    #: "That color" rather than "of your choice" because the choice is not made
+    #: here: the sentence in front of it made it, and this one spends it. The
+    #: lowering turns the key into a ``color_filter_from`` naming the
+    #: scratchpad slot that sentence writes.
+    color_chosen_this_way: bool = False
     # "Each **land** of the chosen type" (Shimmer). The same CR 614.1c choice
     # a third characteristic over, and its own field for ``chosen_color``'s
     # reason rather than a value of the one above: the *catalog* the word came

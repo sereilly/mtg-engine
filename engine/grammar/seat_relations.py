@@ -146,6 +146,19 @@ def accept_seat_relation(stream: TokenStream, d) -> bool:
     if stream.accept_phrase("of", "the", "chosen", "color"):
         d.chosen_color = True
         return True
+    # "Choose a color. Target player reveals their hand and discards all cards
+    # **of that color**." (Persecute.) The same narrowing with the choice made
+    # at a different time — CR 608.2d, while this spell resolves, rather than
+    # CR 614.1c as a permanent entered — which is precisely the distinction the
+    # creature-type pair below already draws. Its own key for that pair's
+    # reason: there is no permanent here to have recorded a word, so the
+    # readers that answer the row above cannot answer this one.
+    #
+    # Read after that row and before the type readings; the four phrases share
+    # only the word "of" and each consumes or resets whole.
+    if stream.accept_phrase("of", "that", "color"):
+        d.color_chosen_this_way = True
+        return True
     # "Creatures **of the chosen type**" (An-Zerrin Ruins). The same
     # CR 614.1c choice one characteristic over — a creature type recorded
     # on the source as it entered — so it is its own filter key for the

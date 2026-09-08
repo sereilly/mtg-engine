@@ -217,6 +217,15 @@ _EVENT_SUBJECT_CONTROLLERS: frozenset[str] = frozenset({
     # under a control-change effect that seat was never its owner. The same
     # fire-site accident as the row above, and retired with it.
     "land_dies",
+    # "Whenever a green creature dies, **its controller** discards a card."
+    # (Bereavement.) The dead permanent's, frozen by
+    # ``_fire_permanent_dies_triggers`` while the seat is still knowable — by
+    # resolution the permanent is a card in a graveyard, which CR 108.4 gives no
+    # controller, and under a control-change effect that seat was never its
+    # owner either. The board-wide sibling of ``creature_dies`` above: CR 700.4
+    # makes "dies" mean "put into a graveyard from the battlefield", and this is
+    # the kind a *narrowed* death compiles to.
+    "permanent_dies",
 })
 
 
@@ -554,6 +563,26 @@ _EVENT_QUANTITIES: dict[str, str] = {
 }
 
 
+#: The **toughness** twin of the table above, keyed by trigger kind the same way.
+#:
+#: A second table rather than more rows in that one, and ``amounts.py`` already
+#: wrote down why: every row of ``_EVENT_QUANTITIES`` names a *power*, so a
+#: toughness read through it would silently be handed one. Two characteristics
+#: of one object are two numbers, and a reader given the wrong one is wrong on
+#: every card whose P and T differ — which is most of them.
+#:
+#: Membership is a claim about a fire site, exactly as it is next door: the
+#: entry transition (``_put_permanent_onto_battlefield``) freezes
+#: ``entering_toughness`` beside the power it already froze, on every entry,
+#: because the cost is one integer and the alternative is a fire site that has
+#: to know which cards care.
+_EVENT_TOUGHNESS_QUANTITIES: dict[str, str] = {
+    # "Whenever a creature you control enters, you gain life equal to **its
+    # toughness**." (Angelic Chorus.)
+    "matching_permanent_enters": "entering_toughness",
+}
+
+
 
 def _back_reference_payload(
     amount: ast.ThatMuch,
@@ -611,6 +640,15 @@ def _back_reference_payload(
         record = DEAD_CHARACTERISTIC_RECORDS.get(amount.source)
         if record is not None and event in DEAD_CHARACTERISTIC_EVENTS:
             return {"amount_from_trigger": record}
+        # "Whenever a creature you control enters, you gain life equal to **its
+        # toughness**." (Angelic Chorus.) The same phrase under an event that is
+        # not a death: no step of this effect produced the number and no
+        # graveyard holds it, so it is the entry's own frozen toughness — read
+        # off its own table for the reason that table exists, one screen up.
+        if amount.source == _EVENT_SUBJECT_TOUGHNESS_RECORD:
+            toughness = _EVENT_TOUGHNESS_QUANTITIES.get(event or "")
+            if toughness is not None:
+                return {"amount_from_trigger": toughness}
         raise LoweringError(
             f"back-reference to {amount.source!r} with no producer in this effect",
             node=amount,

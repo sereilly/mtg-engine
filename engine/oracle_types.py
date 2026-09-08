@@ -959,6 +959,17 @@ REMOVED_FROM_COMBAT_PERMANENTS = "removed_from_combat_permanents"
 #: card that prints it is a sorcery.
 CHOSEN_CREATURE_TYPE_THIS_WAY = "chosen_creature_type_this_way"
 
+#: What "**that color**" names (Persecute). One colour symbol, chosen by the
+#: controller of the resolving spell (CR 608.2d) in the sentence in front, and
+#: read back by the sentence that spends it through a ``color_filter_from`` key.
+#:
+#: The scratchpad twin of the ``chosen_color`` metadata key, one characteristic
+#: over from :data:`CHOSEN_CREATURE_TYPE_THIS_WAY` and its exact analogue: that
+#: key is a permanent's choice made as it entered (CR 614.1c) and lives as long
+#: as the permanent, where this one is made and spent inside a single
+#: resolution and has no permanent at all.
+CHOSEN_COLOR_THIS_WAY = "chosen_color_this_way"
+
 #: What "…**each player who sacrificed a Plains this way**" names (Desolation).
 #: The cards a forced sacrifice took, split by the **seat** that gave each one
 #: up — ``{seat: [card, …]}``.
