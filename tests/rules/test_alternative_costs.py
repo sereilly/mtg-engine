@@ -351,11 +351,18 @@ def test_118_9_a_sacrifice_is_read_by_the_additional_cost_s_own_reader():
         cost.sacrifice_filter, cost.sacrifice_count,
     )
 
-    # An un-narrowed phrase refuses on both sides: "sacrifice two permanents"
-    # would let the payment eat a land the card never named.
-    assert alternative_cost_for_line(
+    # An un-narrowed phrase is read on both sides, and reads the same on both:
+    # "two permanents" names a land as much as anything else, which is what the
+    # words say. It refused until Urza's Saga printed two costs whose whole
+    # noun phrase is "a permanent" and the refusal turned out to be about a
+    # narrowing the charger *loses*, which cannot happen — the reduction
+    # returns None rather than dropping one.
+    unnarrowed = alternative_cost_for_line(
         "You may sacrifice two permanents rather than pay this spell's mana cost."
-    ) is None
+    )
+    assert unnarrowed is not None
+    assert (unnarrowed.sacrifice_filter, unnarrowed.sacrifice_count) == ({}, 2)
+    assert _w2g1_read_sacrifice("two permanents") == ({}, 2)
 
 
 @pytest.mark.cr("601.2h", "118.9")

@@ -485,6 +485,14 @@ PARSE_LAYERS = [
     # line layer takes that entry point as an argument rather than importing it
     # back, which is the cycle this order forbids.
     "quoted_lines",
+    # Whether the payment path can collect a printed cost object — the three
+    # gates the cost clause asks before admitting a "Sacrifice <noun>",
+    # "Exile <noun>" or "Put a counter on <noun>". Split out of `costs` at the
+    # size guard; below it, its only caller, and reading noun phrases and the
+    # filter floor. The name is the lowering side's own: `lowering/_filters.py`
+    # calls these "the two cost gates that answer 'may this phrase be
+    # charged?'", so the mirror re-forms rather than forking a vocabulary.
+    "chargeable",
     "costs", "parser",
 ]
 # `by_node` is the node-type registry `lower` dispatches through. It left

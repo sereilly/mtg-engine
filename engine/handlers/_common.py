@@ -1572,7 +1572,20 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
                 # recoloured permanent cannot match one key and miss the other.
                 return name in permanent_effective_colors(perm)
             if axis == "card_type":
-                return _has_type(name)
+                if not _has_type(name):
+                    return False
+                # "target land or **nonblack** creature" (Befoul). A colour
+                # negation on **one member** of the union, carried as a third
+                # element rather than on the filter's own `exclude_colors`:
+                # that key is ANDed across the whole phrase, so it would
+                # exclude black from the *land* half too and the spell would
+                # stop destroying a black opponent's Swamp. Read through the
+                # same layer-5 accessor the colour axis above uses.
+                excluded = entry[2] if len(entry) > 2 else ()
+                if not excluded:
+                    return True
+                colors = permanent_effective_colors(perm)
+                return not any(colour in colors for colour in excluded)
             if axis == "subtype":
                 return perm.has_type(name)
             # An axis nothing here reads must refuse rather than be ignored:
