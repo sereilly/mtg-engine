@@ -682,9 +682,34 @@ def _matches(modifier: CostModifier, card) -> bool:
     )
 
 
+def _names_a_permanent(modifier: CostModifier) -> bool:
+    """Whether *modifier*'s subject describes an object **on the battlefield**.
+
+    CR 109.2: a description that includes a card type or subtype and does not
+    name a zone or say "card"/"spell"/"source" means a *permanent* of that type.
+    So "activated abilities of creatures cost {1} less" (Heartstone) and
+    "activated abilities of white enchantments cost {3} more" (Gloom) say
+    nothing about a creature card or an enchantment card sitting in a hand —
+    and an ability activated from a hand (CR 113.6j: cycling, Waker of Waves)
+    is an ability of a card, not of a permanent.
+
+    Asked of the *modifier* rather than of the zone, because it is a fact about
+    the printed sentence. Fluctuator's subject is the **ability**
+    ("cycling abilities you activate"), which names no object at all and so
+    reaches a hand exactly as it reaches the battlefield.
+    """
+    return bool(
+        modifier.colour
+        or modifier.card_types
+        or modifier.keyword
+        or modifier.alternative_subjects
+    )
+
+
 def _tax(
     game, card, applies_to: str, *, wanted: str,
     controller_index: int | None = None, targeted=(), ability=None,
+    on_battlefield: bool = True,
 ) -> tuple[int, list[str]]:
     """The total *wanted* ("more" or "less") change to *card*'s cost from every
     permanent on any battlefield, and those permanents' names for the log.
@@ -696,6 +721,7 @@ def _tax(
     total, names, _floor = _tax_floored(
         game, card, applies_to, wanted=wanted,
         controller_index=controller_index, targeted=targeted, ability=ability,
+        on_battlefield=on_battlefield,
     )
     return total, names
 
@@ -732,6 +758,7 @@ def _ability_subject_holds(modifier: CostModifier, card, ability) -> bool:
 def _tax_floored(
     game, card, applies_to: str, *, wanted: str,
     controller_index: int | None = None, targeted=(), ability=None,
+    on_battlefield: bool = True,
 ) -> tuple[int, list[str], int]:
     """:func:`_tax` plus the highest floor any contributing modifier names.
 
@@ -768,6 +795,14 @@ def _tax_floored(
             # permanents' *names*, and a Derelor listed here would report a
             # generic tax it does not impose.
             if modifier.symbols and not modifier.amount:
+                continue
+            # CR 109.2: a subject naming a card type means a *permanent*, so a
+            # modifier that names one says nothing about an ability activated
+            # from a hand. Asked before `_matches`, which answers about the
+            # card's type line either way and cannot tell the two zones apart —
+            # left out, a Heartstone made Waker of Waves' hand ability cheaper
+            # and a Gloom taxed a white enchantment nobody had cast.
+            if not on_battlefield and _names_a_permanent(modifier):
                 continue
             if modifier.applies_to != applies_to or not _matches(modifier, card):
                 continue
@@ -1048,7 +1083,8 @@ def modified_ability_source_card(source):
 
 
 def ability_cost_tax(
-    game, controller_index: int, source, ability=None
+    game, controller_index: int, source, ability=None,
+    *, on_battlefield: bool = True,
 ) -> tuple[int, list[str]]:
     """Extra generic mana for activating *source*'s ability, plus the taxing
     permanents' names. Matched against the source's *effective* card so a
@@ -1058,15 +1094,21 @@ def ability_cost_tax(
     ability rather than by what its source is. None is the honest answer for a
     caller that has no ability in hand, and such a modifier then does not
     apply.
+
+    *on_battlefield* is False for an ability activated from a hand (CR 113.6j),
+    where CR 109.2 puts every object-scoped modifier out of reach — see
+    :func:`_names_a_permanent`.
     """
     return _tax(
         game, modified_ability_source_card(source), "activate", wanted="more",
         controller_index=controller_index, ability=ability,
+        on_battlefield=on_battlefield,
     )
 
 
 def ability_cost_reduction(
-    game, controller_index: int, source, ability=None
+    game, controller_index: int, source, ability=None,
+    *, on_battlefield: bool = True,
 ) -> tuple[int, list[str], int]:
     """Generic mana **off** *source*'s activation cost, the reducing permanents'
     names, and the floor those permanents impose.
@@ -1082,6 +1124,7 @@ def ability_cost_reduction(
     return _tax_floored(
         game, modified_ability_source_card(source), "activate", wanted="less",
         controller_index=controller_index, ability=ability,
+        on_battlefield=on_battlefield,
     )
 
 

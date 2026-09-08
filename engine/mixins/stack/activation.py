@@ -213,6 +213,13 @@ def hand_activation_cost(game, controller_index: int, card, ability):
     while the engine would let it through is the Roots class with the sign
     flipped.
 
+    **Which modifiers reach it is narrower than on the battlefield**, and by a
+    rule rather than by a scope: CR 109.2 makes "activated abilities of
+    creatures" (Heartstone) a sentence about creature *permanents*, so it says
+    nothing about a creature card in a hand — while Fluctuator's subject is the
+    **ability** and reaches both zones. Read the other way, a Heartstone made
+    Waker of Waves' hand ability cheaper than the card.
+
     Increases before reductions (CR 601.2f), and the floor is measured over the
     **whole** remaining cost — "the mana in that cost", coloured pips included
     — which is why it is applied after the subtraction rather than as a clamp
@@ -221,14 +228,16 @@ def hand_activation_cost(game, controller_index: int, card, ability):
     """
     required = dict(ability.cost.mana)
     notes: list[str] = []
-    tax, taxing_names = ability_cost_tax(game, controller_index, card, ability)
+    tax, taxing_names = ability_cost_tax(
+        game, controller_index, card, ability, on_battlefield=False,
+    )
     if tax:
         required["generic"] = required.get("generic", 0) + tax
         notes.append(
             f"{card.name}'s ability is taxed by {', '.join(taxing_names)}"
         )
     discount, reducing_names, floor = ability_cost_reduction(
-        game, controller_index, card, ability
+        game, controller_index, card, ability, on_battlefield=False,
     )
     if discount:
         before_total = sum(required.values())

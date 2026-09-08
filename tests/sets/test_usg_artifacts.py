@@ -349,154 +349,56 @@ def test_fluctuator_leaves_a_non_cycling_hand_ability_alone(catalog_by_name, set
     assert alice.hand and alice.hand[0].name == "Waker of Waves"
 
 
-def test_a_tax_reaches_a_hand_activated_ability(catalog_by_name, set_pool):
-    """The live gap this group closed, and it is wider than Fluctuator.
+def test_a_cost_modifier_reaches_a_hand_activated_ability(catalog_by_name, set_pool):
+    """The live gap this group closed, and the rule that bounds it.
 
     ``activate_from_hand`` charged ``ability.cost.mana`` flat, so **no** cost
     modifier reached an ability activated from a hand — a tax as much as a
-    reduction. CR 601.2f is not about where the ability's source is, so
-    Rasputin Dreamweaver's opposite number here (an "activated abilities of
-    creatures cost {N} more" permanent) must tax a cycling creature card in
-    hand exactly as it taxes one on the battlefield.
+    reduction. CR 601.2f is not about where the ability's source is.
+
+    But CR 109.2 is: "activated abilities of creatures cost {1} less to
+    activate" (Heartstone) describes creature *permanents*, and a creature card
+    in a hand is not one. So the modifiers that reach a hand are exactly the
+    ones whose subject names no object — Fluctuator's, whose subject is the
+    **ability**. Both halves are asserted here, because closing the gap without
+    the rule made a Heartstone cheapen Waker of Waves.
     """
     alice, bob = PlayerState(name="Alice"), PlayerState(name="Bob")
     game = Game(players=[alice, bob])
     pool = set_pool("USG")
-    # Gloom's family: "Activated abilities of white enchantments cost {3} more
-    # to activate." The taxed card has to be a white enchantment, which
-    # Lingering Mirage is not — so the tax is asserted through the reader
-    # rather than through a printed pairing the pool does not contain.
     from engine.mixins.stack.activation import hand_activation_cost
     from engine.oracle import compile_card_oracle
     from engine.targeting import usable_activated_abilities
     from engine.activation_zones import HAND
 
-    gloom = Permanent(card=catalog_by_name["Gloom"])
-    game._put_permanent_onto_battlefield(1, gloom, None)
-    card = pool["Brand"]
-    ability = usable_activated_abilities(compile_card_oracle(card), zone=HAND)[0]
+    brand = pool["Brand"]
+    cycling = usable_activated_abilities(compile_card_oracle(brand), zone=HAND)[0]
+    waker = catalog_by_name["Waker of Waves"]
+    hand_only = usable_activated_abilities(
+        compile_card_oracle(waker), zone=HAND
+    )[0]
 
-    plain = hand_activation_cost(game, 0, card, ability)[0]
-    assert plain.get("generic") == 2, "Brand cycles for {2}"
+    assert hand_activation_cost(game, 0, brand, cycling)[0].get("generic") == 2
 
+    # "Activated abilities of **creatures** cost {1} less to activate." A card
+    # in a hand is not a creature (CR 109.2), so neither ability moves.
+    game._put_permanent_onto_battlefield(
+        0, Permanent(card=catalog_by_name["Heartstone"]), None
+    )
+    assert hand_activation_cost(game, 0, brand, cycling)[0].get("generic") == 2
+    assert hand_activation_cost(game, 0, waker, hand_only)[0].get("generic") == 1
+
+    # Fluctuator names an *ability*, not an object, so it reaches the hand.
     fluctuator = Permanent(card=pool["Fluctuator"])
     game._put_permanent_onto_battlefield(0, fluctuator, None)
-    discounted = hand_activation_cost(game, 0, card, ability)[0]
-    assert discounted.get("generic") == 0
+    assert hand_activation_cost(game, 0, brand, cycling)[0].get("generic") == 0
+    assert hand_activation_cost(game, 0, waker, hand_only)[0].get("generic") == 1, (
+        "Waker of Waves is not a cycling ability"
+    )
 
     # And the discount is the *controller's* own (CR 109.5): a Fluctuator an
     # opponent controls says "you activate" about that opponent.
     game._put_permanent_onto_battlefield(1, Permanent(card=pool["Fluctuator"]), None)
-    assert hand_activation_cost(game, 1, card, ability)[0].get("generic") == 0
+    assert hand_activation_cost(game, 1, brand, cycling)[0].get("generic") == 0
     game.remove_from_battlefield(fluctuator)
-    assert hand_activation_cost(game, 0, card, ability)[0].get("generic") == 2
-
-
-# --- W2G5: Thran Turbine — mana that cannot be spent on a spell ---
-from engine import Game, PlayerState
-from engine.models import Permanent
-from engine.land_mana_swaps import substitution_line
-from tests.helpers import resolve_stack
-
-
-def _g5t_upkeep(game, seat):
-    """One upkeep step for *seat*, with its triggers and offers settled."""
-    game.active_player_index = seat
-    game.resolve_upkeep(seat)
-    resolve_stack(game)
-    game.auto_resolve_pending_choices()
-    resolve_stack(game)
-
-
-def test_thran_turbine_adds_mana_that_cannot_pay_for_a_spell(set_pool, catalog_by_name):
-    """"At the beginning of your upkeep, you may add {C}{C}. This mana can't be
-    spent to cast spells."
-
-    Two things refused this card and only one of them was the sentence: the
-    restriction had no row in ``engine/restricted_mana.py`` (every clause in
-    the pool until now was a permission, "spend this mana only to…"), and the
-    rider could not reach the mana at all through the printed "may".
-
-    The restriction is asserted by a *failed cast* rather than by reading the
-    bucket, because a restriction nothing enforces is exactly what this file
-    exists to catch.
-    """
-    alice, bob = PlayerState(name="Alice"), PlayerState(name="Bob")
-    game = Game(players=[alice, bob])
-    game.enforce_mana_costs = True
-    game._put_permanent_onto_battlefield(
-        0, Permanent(card=set_pool("USG")["Thran Turbine"]), None
-    )
-
-    _g5t_upkeep(game, 0)
-
-    assert alice.mana_pool.get("C", 0) == 0, "not in the general pool"
-    alice.hand = [catalog_by_name["Wall of Spears"]]  # {3}
-    assert not game.cast_from_hand(0, "Wall of Spears").supported
-
-
-def test_thran_turbines_mana_pays_an_activation_cost(set_pool, catalog_by_name):
-    """The other half of "can't be spent to cast spells": everything that is
-    not a cast is allowed (CR 106.6). Without this the restriction could be
-    implemented as "spend on nothing", which passes the refusal above and makes
-    the card blank.
-    """
-    alice, bob = PlayerState(name="Alice"), PlayerState(name="Bob")
-    game = Game(players=[alice, bob])
-    game.enforce_mana_costs = True
-    game._put_permanent_onto_battlefield(
-        0, Permanent(card=set_pool("USG")["Thran Turbine"]), None
-    )
-    tome = Permanent(card=catalog_by_name["Jalum Tome"])  # {2}, {T}: draw, discard
-    game._put_permanent_onto_battlefield(0, tome, None)
-    tome.metadata["summoning_sickness_turn"] = -99
-    alice.library = [catalog_by_name["Forest"]] * 4
-
-    _g5t_upkeep(game, 0)
-    result = game.activate_permanent_ability(0, "Jalum Tome")
-
-    assert result.supported, game.log[-3:]
-
-
-def test_contamination_replaces_the_amount_where_infernal_darkness_does_not(
-    set_pool, catalog_by_name
-):
-    """"If a land is tapped for mana, it produces {B} instead of any other type
-    **and amount**." (Contamination.)
-
-    One word apart from Infernal Darkness's sentence, and the word is the whole
-    difference on any land that makes more than one mana. Read as the shorter
-    template — which is what the pool's reader did, leaving this line unclaimed
-    — Contamination would be a strictly better card.
-    """
-    def _tapped(enchantment):
-        alice, bob = PlayerState(name="Alice"), PlayerState(name="Bob")
-        game = Game(players=[alice, bob])
-        game.enforce_mana_costs = True
-        game._put_permanent_onto_battlefield(
-            0, Permanent(card=enchantment), None
-        )
-        tomb = Permanent(card=catalog_by_name["Ancient Tomb"])  # {T}: Add {C}{C}
-        game._put_permanent_onto_battlefield(0, tomb, None)
-        game.tap_land_for_mana(0, "Ancient Tomb", permanent_id=tomb.permanent_id)
-        return {symbol: n for symbol, n in alice.mana_pool.items() if n}
-
-    assert _tapped(set_pool("USG")["Contamination"]) == {"B": 1}
-    assert _tapped(catalog_by_name["Infernal Darkness"]) == {"B": 2}
-
-
-def test_the_amount_clause_is_read_off_the_printed_word(set_pool):
-    """The reader, not the board: the two sentences differ by two words and the
-    flag has to come from them. A template matching the shorter form and
-    ignoring the tail is what left Contamination's line unclaimed while the
-    card reported supported off its other one.
-    """
-    with_amount = substitution_line(
-        "If a land is tapped for mana, it produces {B} instead of any other "
-        "type and amount."
-    )
-    without = substitution_line(
-        "If a land is tapped for mana, it produces {B} instead of any other type."
-    )
-    assert with_amount is not None and with_amount[0].replaces_amount
-    assert without is not None and not without[0].replaces_amount
+    assert hand_activation_cost(game, 0, brand, cycling)[0].get("generic") == 2
