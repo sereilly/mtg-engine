@@ -19,7 +19,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | LEA | 290 | 388 | 88.1% | 86.3% | 49.2% | 174 |
 | LEB | 292 | 389 | 88.2% | 86.4% | 49.4% | 175 |
 | 2ED | 292 | 389 | 88.2% | 86.4% | 49.4% | 175 |
-| ARN | 78 | 108 | 78.7% | 75.0% | 52.8% | 47 |
+| ARN | 78 | 108 | 80.6% | 76.9% | 54.6% | 48 |
 | ATQ | 85 | 120 | 90.8% | 90.8% | 63.3% | 68 |
 | 3ED | 296 | 389 | 89.7% | 87.4% | 51.2% | 179 |
 | LEG | 310 | 431 | 89.6% | 88.4% | 58.7% | 217 |
@@ -37,8 +37,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | STH | 143 | 215 | 88.4% | 88.4% | 62.8% | 124 |
 | EXO | 143 | 207 | 90.3% | 90.3% | 66.2% | 127 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| USG *(measured)* | 335 | 486 | 86.8% | 86.8% | 62.6% | 264 |
-| **All (shipped)** | **4873** | **7239** | **90.7%** | **90.0%** | **60.1%** | **3649** |
+| USG *(measured)* | 335 | 486 | 87.2% | 87.2% | 63.0% | 266 |
+| **All (shipped)** | **4873** | **7239** | **90.8%** | **90.0%** | **60.2%** | **3650** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
 
@@ -50,9 +50,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 405 | 173 | expected a subject |  |
+| 403 | 171 | expected a subject |  |
 | 115 | 60 | unrecognized effect verb |  |
-| 85 | 41 | unconsumed text |  |
+| 84 | 40 | unconsumed text |  |
 | 39 | 23 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 15 | 14 | expected 'unless defending player controls' |  |
@@ -78,7 +78,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 ## Cards executing through the grammar
 
-3649 cards, 4353 lines.
+3650 cards, 4355 lines.
 
 - **Abandon Hope**
   - `Look at target opponent's hand and choose X cards from it. That player discards those cards.`
@@ -902,6 +902,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}{G}: Regenerate this creature.`
 - **Carnophage**
   - `At the beginning of your upkeep, tap this creature unless you pay 1 life.`
+- **Carpet of Flowers**
+  - `At the beginning of each of your main phases, if you haven't added mana with this ability this turn, you may add X mana of any one color, where X is the number of Islands target opponent controls.`
 - **Carrier Pigeons**
   - `When this creature enters, draw a card at the beginning of the next turn's upkeep.`
 - **Carrion**
@@ -1753,6 +1755,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {W}.`
 - **Dromosaur**
   - `Whenever this creature blocks or becomes blocked, it gets +2/-2 until end of turn.`
+- **Drop of Honey**
+  - `At the beginning of your upkeep, destroy the creature with the least power. It can't be regenerated. If two or more creatures are tied for least power, you choose one of them.`
+  - `When there are no creatures on the battlefield, sacrifice this enchantment.`
 - **Drought**
   - `At the beginning of your upkeep, sacrifice this enchantment unless you pay {W}{W}.`
 - **Drowned**
@@ -4918,6 +4923,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Purgatory**
   - `Whenever a nontoken creature is put into your graveyard from the battlefield, exile that card.`
   - `At the beginning of your upkeep, you may pay {4} and 2 life. If you do, return a card exiled with this enchantment to the battlefield.`
+- **Purging Scythe**
+  - `At the beginning of your upkeep, this artifact deals 2 damage to the creature with the least toughness. If two or more creatures are tied for least toughness, you choose one of them.`
 - **Pursued Whale**
   - `When this creature enters, each opponent creates a 1/1 red Pirate creature token with "This token can't block" and "Creatures you control attack each combat if able."`
 - **Pursuit of Knowledge**
