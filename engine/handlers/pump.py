@@ -2146,6 +2146,55 @@ def remove_target_keyword_until_eot(game: Game, instruction: OracleInstruction, 
     return True, "resolved"
 
 
+@effect_handler("remove_target_abilities_until_eot")
+def remove_target_abilities_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Until end of turn, target creature **loses all abilities** and has base
+    power and toughness 0/1." (Humble; Soul Sculptor prints the clause behind a
+    type change.)
+
+    CR 613.1f's blanket removal aimed at one permanent, which is the half of
+    that rule the engine had no channel for: Humility and Titania's Song are
+    board-wide statics re-derived from a source on every recompute, and there is
+    no source here — the spell is in a graveyard the moment it has resolved.
+
+    So the record goes on the creature (``keywords.remove_all_abilities``) and
+    ``Permanent.effective_card`` reads it in the same fold that answers the
+    static. That is what makes one write reach all four consumers of "what does
+    it say?" — the layer-6 keyword set, the activated abilities the picker
+    enumerates off the compiled program, the triggered abilities the trigger
+    scan reads off the card, and the statics re-derived from its text.
+
+    **Layer 6 is timestamp-ordered (CR 613.3), so an ability granted after this
+    survives it**, which is the rule and not an accident of storage: the record
+    is a contribution rather than a rewrite, and the fold in ``effective_card``
+    applies it before the grants for exactly that reason.
+
+    The printed noun phrase is read through ``granted_target_legal``, the same
+    three questions the grant and the keyword removal beside it ask — a
+    fallback scan with no predicate is how Reality Anchor stripped shadow from a
+    Circle of Protection.
+    """
+    from ..keywords import remove_all_abilities
+
+    card = context.card
+    target = resolve_target_permanent(
+        game, context, predicate=granted_target_legal(game, instruction, context)
+    )
+    if target is None:
+        game.log.append(f"{card.name}: no valid target to strip")
+        return True, "resolved"
+    remove_all_abilities(target, duration="end_of_turn")
+    # Every characteristic this can move is computed rather than stored, but the
+    # derived channels are rebuilt from the board rather than on every read —
+    # a lord whose anthem the stripped creature was contributing has to stop
+    # contributing it now rather than at the next thing that happens to refresh.
+    game._refresh_dynamic_creatures()
+    game.log.append(
+        f"{target.card.name} loses all abilities until end of turn ({card.name})"
+    )
+    return True, "resolved"
+
+
 @effect_handler("remove_team_keyword_until_eot")
 def remove_team_keyword_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"All creatures lose flying until end of turn." (Whiteout.)

@@ -217,6 +217,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "grant_self_ability_text": "pump",
     # The negative twin ("It loses indestructible until end of turn", Soul Sear).
     "remove_target_keyword_until_eot": "pump",
+    # "Until end of turn, target creature loses **all abilities** …" (Humble.)
+    # The same layer-6 removal over every ability rather than one named word, so
+    # the same category and GRAMMAR_CATEGORIES is unchanged.
+    "remove_target_abilities_until_eot": "pump",
     # The same removal aimed at the object the *trigger's event* was about
     # ("Whenever a creature attacks you, it loses flanking until end of
     # turn", Barbed Foliage). One family, because what differs is which

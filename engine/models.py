@@ -185,10 +185,19 @@ _GRANTED_CARDS: dict[tuple, "CardDefinition"] = {}
 
 
 def _abilities_stripped(permanent) -> bool:
-    """Whether a board-wide static is stripping *permanent*'s abilities."""
-    from .global_statics import removes_all_abilities
+    """Whether anything is stripping *permanent*'s abilities (CR 613.1f).
 
-    return removes_all_abilities(permanent)
+    Two channels, one answer. A board-wide static (Humility, Titania's Song) is
+    re-derived from the sources recorded on the permanent; a spell aimed at one
+    creature (Humble, Soul Sculptor) leaves a durationed record on it. They are
+    read together here because the *question* is one question — every consumer
+    downstream asks "what does this permanent say?", and a reader that knew one
+    channel would answer the other wrongly for whichever card it had not met.
+    """
+    from .global_statics import removes_all_abilities
+    from .keywords import all_abilities_removed
+
+    return removes_all_abilities(permanent) or all_abilities_removed(permanent)
 
 
 def _without_any_abilities(card: "CardDefinition") -> "CardDefinition":

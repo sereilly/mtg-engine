@@ -195,6 +195,16 @@ class LoseKeyword:
     # Splicer). See :class:`GainKeyword`'s field of the same name: the two
     # halves of that sentence are one move, and the pronoun is the same pronoun.
     chosen_ability: bool = False
+    # "Until end of turn, target creature **loses all abilities** and has base
+    # power and toughness 0/1." (Humble; Soul Sculptor prints the same clause
+    # after a type change.) CR 613.1f's blanket removal aimed at one permanent.
+    #
+    # A field on this node rather than a node of its own, because what the
+    # sentence *is* is unchanged: a subject, a duration, and a set of abilities
+    # to take away. The set is simply "every one", which no tuple of keywords
+    # can spell — an empty ``keywords`` already means "the chosen one" under the
+    # flag above, and would mean "nothing at all" here.
+    all_abilities: bool = False
 
 
 @dataclass(frozen=True)

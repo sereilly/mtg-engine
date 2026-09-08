@@ -118,6 +118,26 @@ REMOVED_ABILITY_LINES = "removed_ability_lines"
 # turn step carries a list of what to undo.
 REMOVED_ABILITY_KEYWORDS = "removed_ability_keywords"
 
+# The **fourth** removal channel, and the one a per-permanent blanket needs.
+#
+# The three above each take something *named* away: a printed sentence, a
+# layer-6 word, a line-derived keyword. "Target creature loses all abilities"
+# (Humble, Soul Sculptor) names none of them — CR 613.1f's blanket, which the
+# engine had only as a board-wide static read off a permanent's text
+# (``global_statics.removes_all_abilities``, Humility and Titania's Song). A
+# static has no way to say "this one creature, until end of turn": it is
+# re-derived from the board on every recompute, so a permanent that entered
+# afterwards is covered by it and a permanent the spell named is not.
+#
+# So this is a record on the permanent, in the durationed shape the two
+# channels above already use, and ``Permanent.effective_card`` reads it in the
+# same fold that answers the static. One reader for both, which is what makes
+# the four consumers of "what does it say?" — the keyword set, the activated
+# abilities off the compiled program, the triggered ones off the card, the
+# statics re-derived from the text — agree without any of them knowing there
+# are two ways to lose everything.
+ALL_ABILITIES_REMOVED = "all_abilities_removed"
+
 #: Which keyword words that applies to. The membership test is not "does it have
 #: a number": it is "does the compiler build this keyword's behaviour out of the
 #: printed line". Prowess and lifelink also have behaviour the layer system does
@@ -551,6 +571,58 @@ def normalized_ability_line(line: str) -> str:
 def removed_ability_lines(perm: Permanent) -> tuple[str, ...]:
     """The printed ability lines an effect has taken away from *perm*."""
     return tuple(perm.metadata.get(REMOVED_ABILITY_LINES) or ())
+
+
+def remove_all_abilities(
+    perm: Permanent, *, duration: str | None = None, seat: int | None = None
+) -> None:
+    """Layer 6: *perm* loses **every** ability (CR 613.1f).
+
+    The blanket twin of :func:`remove_ability_keyword` above, and recorded in
+    the same durationed shape for the same reason: the sweep that gives the
+    abilities back is named by the entry, so no turn step carries a list of
+    what to undo, and an effect ending restores whatever the other
+    contributions still say.
+
+    *duration* is a key of :data:`GRANTED_ABILITY_DURATIONS`, the table the
+    grant side reads — "until end of turn" has to mean one moment whichever
+    direction the sentence points.
+    """
+    _check_duration(duration, seat, GRANTED_ABILITY_DURATIONS)
+    entries = perm.metadata.setdefault(ALL_ABILITIES_REMOVED, [])
+    entry: dict = {"duration": duration}
+    if seat is not None:
+        entry["seat"] = seat
+    entries.append(entry)
+
+
+def all_abilities_removed(perm: Permanent) -> bool:
+    """Whether an effect has taken every one of *perm*'s abilities away."""
+    return bool(perm.metadata.get(ALL_ABILITIES_REMOVED))
+
+
+def clear_all_abilities_removals(
+    perm: Permanent, duration: str, *, seat: int | None = None
+) -> None:
+    """Give the abilities back where the removal's window is *duration*.
+
+    The fourth member of the sweep group called at every duration boundary
+    (:func:`clear_granted_keywords`, :func:`clear_granted_ability_lines`,
+    :func:`clear_removed_ability_keywords`): a removal that outlived its window
+    would leave the permanent a vanilla creature for the rest of the game.
+    """
+    entries = perm.metadata.get(ALL_ABILITIES_REMOVED)
+    if not entries:
+        return
+    remaining = [
+        entry for entry in entries if not _expires_at(entry, duration, seat)
+    ]
+    if len(remaining) == len(entries):
+        return
+    if remaining:
+        perm.metadata[ALL_ABILITIES_REMOVED] = remaining
+    else:
+        perm.metadata.pop(ALL_ABILITIES_REMOVED, None)
 
 
 def remove_ability_keyword(
