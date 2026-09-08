@@ -37,11 +37,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | STH | 143 | 215 | 88.4% | 88.4% | 62.8% | 124 |
 | EXO | 143 | 207 | 90.3% | 90.3% | 66.2% | 127 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-<<<<<<< HEAD
-| USG *(measured)* | 335 | 486 | 74.7% | 70.4% | 48.1% | 205 |
-=======
-| USG *(measured)* | 335 | 486 | 71.8% | 66.0% | 44.4% | 183 |
->>>>>>> usg-w1g5
+| USG *(measured)* | 335 | 486 | 75.9% | 72.4% | 50.2% | 206 |
 | **All (shipped)** | **4873** | **7239** | **90.5%** | **89.8%** | **60.0%** | **3637** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -54,17 +50,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-<<<<<<< HEAD
-| 435 | 196 | expected a subject |  |
+| 434 | 195 | expected a subject |  |
 | 119 | 64 | unrecognized effect verb |  |
-| 103 | 58 | unconsumed text |  |
+| 100 | 55 | unconsumed text |  |
 | 39 | 23 | granted ability in quotes | phase 3 (quoted abilities) |
-=======
-| 450 | 211 | expected a subject |  |
-| 119 | 64 | unrecognized effect verb |  |
-| 99 | 54 | unconsumed text |  |
-| 41 | 25 | granted ability in quotes | phase 3 (quoted abilities) |
->>>>>>> usg-w1g5
 | 33 | 33 | unrecognized activation cost |  |
 | 16 | 15 | expected 'unless defending player controls' |  |
 | 13 | 8 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
@@ -83,13 +72,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 3 | 1 | expected 'of' |  |
 | 3 | 3 | unrecognized "can't be" restriction |  |
 | 3 | 3 | expected 'a' |  |
-<<<<<<< HEAD
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
+| 2 | 1 | expected 'the number of' in a where-clause |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
-=======
-| 3 | 3 | expected a colour or a creature body after 'becomes' |  |
-| 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
->>>>>>> usg-w1g5
 
 ## Cards executing through the grammar
 

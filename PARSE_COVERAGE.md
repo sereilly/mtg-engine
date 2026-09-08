@@ -25,66 +25,12 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-<<<<<<< HEAD
-**12 unclaimed sentence(s) across 11 supported card(s).**
-=======
-**16 unclaimed sentence(s) across 16 supported card(s).**
->>>>>>> usg-w1g5
+**2 unclaimed sentence(s) across 2 supported card(s).**
 
 - **Brand**
   - `gain control of all permanents you own`
 - **Contamination**
   - `if a land is tapped for mana, it produces {b} instead of any other type and amount`
-<<<<<<< HEAD
-- **Diabolic Servitude**
-  - `when the creature put onto the battlefield with this enchantment dies, exile it and return this enchantment to its owner's hand`
-  - `when this enchantment leaves the battlefield, exile the creature put onto the battlefield with this enchantment`
-- **Discordant Dirge**
-  - `{b}, sacrifice this enchantment: look at target opponent's hand and choose up to x cards from it, where x is the number of verse counters on this enchantment. that player discards those cards`
-- **Phyrexian Processor**
-  - `{4}, {t}: create an x/x black phyrexian minion creature token, where x is the life paid as this artifact entered`
-- **Recantation**
-  - `{u}, sacrifice this enchantment: return up to x target permanents to their owners' hands, where x is the number of verse counters on this enchantment`
-- **Serra's Hymn**
-  - `sacrifice this enchantment: prevent the next x damage that would be dealt this turn to any number of targets, divided as you choose, where x is the number of verse counters on this enchantment`
-- **Smokestack**
-  - `at the beginning of each player's upkeep, that player sacrifices a permanent of their choice for each soot counter on this artifact`
-- **Sporogenesis**
-  - `whenever a creature with a fungus counter on it dies, create a 1/1 green saproling creature token for each fungus counter on that creature`
-- **Vile Requiem**
-  - `{1}{b}, sacrifice this enchantment: destroy up to x target nonblack creatures, where x is the number of verse counters on this enchantment. they can't be regenerated`
-- **War Dance**
-  - `sacrifice this enchantment: target creature gets +x/+x until end of turn, where x is the number of verse counters on this enchantment`
-=======
-- **Expunge**
-  - `cycling {2}`
-- **Hush**
-  - `cycling {2}`
-- **Lay Waste**
-  - `cycling {2}`
-- **Lull**
-  - `cycling {2}`
-- **Rejuvenate**
-  - `cycling {2}`
-- **Rescind**
-  - `cycling {2}`
-- **Rune of Protection: Artifacts**
-  - `cycling {2}`
-- **Rune of Protection: Black**
-  - `cycling {2}`
-- **Rune of Protection: Blue**
-  - `cycling {2}`
-- **Rune of Protection: Green**
-  - `cycling {2}`
-- **Rune of Protection: Lands**
-  - `cycling {2}`
-- **Rune of Protection: Red**
-  - `cycling {2}`
-- **Rune of Protection: White**
-  - `cycling {2}`
-- **Scrap**
-  - `cycling {2}`
->>>>>>> usg-w1g5
 
 ## Acknowledged simplifications
 
