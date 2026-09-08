@@ -2247,6 +2247,31 @@ def divided_target_permanent(game: "Game", entry):
     return game.permanent_at(seat, index)
 
 
+def names_a_target_list(instruction) -> bool:
+    """Whether *instruction*'s target description names more than one slot.
+
+    Read off the description the lowering wrote rather than off the choices the
+    resolution happens to carry: a two-target ability whose player named one
+    creature is still a two-target ability, and deciding by what arrived would
+    make the strict multi-slot resolution below silently fall back to the
+    forgiving single-slot one.
+
+    Here rather than in one handler family, because it is the question every
+    caller of :func:`resolve_target_permanents` has to answer first and a second
+    family now asks it (``handlers/prevention.py``'s Redeem). It is a *floor*,
+    not a family: it reads a payload and nothing else.
+    """
+    targets = instruction.payload.get("targets")
+    if not isinstance(targets, dict):
+        return False
+    count = targets.get("count")
+    return (
+        count == "x"
+        or (isinstance(count, int) and count > 1)
+        or bool(targets.get("unbounded"))
+    )
+
+
 def resolve_target_permanents(
     game: Game,
     context: OracleExecutionContext,

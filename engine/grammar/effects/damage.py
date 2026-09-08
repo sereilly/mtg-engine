@@ -16,6 +16,7 @@ import dataclasses
 
 from .. import ast
 from ..amounts import parse_amount, parse_equal_to
+from ..bounds import accept_target_bound
 from ..errors import GrammarError
 from ..readers import accept_source_reference_spec
 from ..nouns import parse_object_filter
@@ -305,6 +306,42 @@ def _parse_recipient_list(stream: TokenStream) -> list[ast.Recipient]:
     return recipients
 
 
+def _parse_divided_recipients(stream: TokenStream) -> ast.Recipient:
+    """The recipient set a divided damage clause divides among.
+
+    Two printed spellings of CR 601.2d's "one or more targets", and the second
+    is what separates them: "among **any number of** targets" leaves the count
+    open (Fireball, Pyrotechnics), and "among **one, two, or three** targets"
+    prints its ceiling (Arc Lightning). The enumeration is read by the same
+    ``bounds.accept_target_bound`` Contagion's distributed counters use — CR
+    601.2d covers damage and counters in one sentence, so the two clauses are
+    the same clause and read by the same production.
+
+    The bound rides on ``TargetSpec.max_count``, which the lowering turns into
+    the ordinary ``max_targets`` every other picker spec carries. Dropped
+    instead, "one, two, or three" would parse as "any number" and let a
+    3-damage spell be announced over four targets that CR 601.2c forbids —
+    except that CR 601.2d's "at least 1 to each" already caps *this* card at
+    three, which is exactly why the word has to be carried rather than reasoned
+    about: the next card printing it need not have the amount to match.
+    """
+    if not stream.accept_phrase("any", "number", "of"):
+        bound = accept_target_bound(stream)
+    else:
+        bound = None
+    recipient = parse_recipient(stream)
+    if recipient is None:
+        raise stream.error("expected damage recipients")
+    if bound is not None:
+        if not isinstance(recipient, ast.TargetSpec):
+            # A ceiling on a count is a fact about *targets*; a bound printed
+            # in front of a recipient that chooses none would be read and
+            # dropped, which is the silent-widening class this grammar refuses.
+            raise stream.error("a target ceiling needs targets to bound")
+        recipient = dataclasses.replace(recipient, max_count=bound)
+    return recipient
+
+
 def _parse_damage(stream: TokenStream, source: ast.TargetSpec | None) -> ast.Statement:
     """``<source> deals <amount> damage to <recipients> [riders]``.
 
@@ -340,17 +377,12 @@ def _parse_damage(stream: TokenStream, source: ast.TargetSpec | None) -> ast.Sta
             divided=True, divided_evenly=evenly, rounding=rounding,
         )
         stream.accept_punct(",")
-        if stream.accept_word("among", "between"):
-            stream.accept_phrase("any", "number", "of")
-            recipient = parse_recipient(stream)
-            if recipient is None:
-                raise stream.error("expected damage recipients")
-            return ast.DealDamage(source, amount, (recipient,), riders)
-        if stream.accept_phrase("as", "you", "choose", "among"):
-            recipient = parse_recipient(stream)
-            if recipient is None:
-                raise stream.error("expected damage recipients")
-            return ast.DealDamage(source, amount, (recipient,), riders)
+        if stream.accept_word("among", "between") or stream.accept_phrase(
+            "as", "you", "choose", "among"
+        ):
+            return ast.DealDamage(
+                source, amount, (_parse_divided_recipients(stream),), riders
+            )
         raise stream.error("expected 'among' after divided damage")
 
     amount = _accept_rounding_rider(stream, amount)

@@ -551,6 +551,16 @@ def _lower_damage_shape(
                     node=node,
                 )
             described["filter"] = narrowing
+        # "…among **one, two, or three** targets." (Arc Lightning.) CR 601.2c's
+        # printed ceiling on a count the caster still chooses, carried under the
+        # same ``max_targets`` key every other picker spec uses — the client,
+        # `legality.py`'s cast gate and `divided_damage.division_refusal` all
+        # already read it, and the last of those has cited Arc Lightning's
+        # spelling in its docstring since Contagion arrived. A `None` here is
+        # "among any number of", which is a different sentence rather than a
+        # ceiling of infinity.
+        if isinstance(recipient, ast.TargetSpec) and recipient.max_count is not None:
+            described["max_targets"] = recipient.max_count
         payload["targets"] = described
         return (OracleInstruction("deal_damage", "", payload),)
 

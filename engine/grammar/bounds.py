@@ -32,6 +32,7 @@ from . import ast
 from .amounts import parse_amount
 from .lexer import MANA, WORD
 from .stream import TokenStream
+from .vocabulary import NUMBER_WORDS
 
 # A printed comparison is a bound on an amount — "power **3 or greater**" —
 # so it lives with the amounts it compares rather than with the filter that
@@ -266,7 +267,50 @@ def accept_life_gain_cap(stream: TokenStream) -> tuple["ast.LifeGainCap", ...]:
     return tuple(terms)
 
 
+def accept_target_bound(stream: TokenStream) -> int | None:
+    """``one or two`` / ``one, two, or three`` — the ceiling it names.
+
+    CR 601.2c's variable target count, printed as an enumeration rather than as
+    a range. The enumeration must run ``1, 2, … n`` with nothing skipped and
+    nothing repeated: a card printing "one or three" would mean something this
+    returns no room to say, and answering ``3`` for it would let the caster
+    name two. Nothing consumed when the words are not an enumeration, so the
+    caller can reset and refuse the line whole.
+
+    Here rather than in either family that reads it. It arrived in
+    ``effects/counters.py`` with Contagion's distributed counters ("among one or
+    two target creatures") and Arc Lightning prints the same clause about
+    *damage* ("among one, two, or three targets") — two families, so the
+    fragment moved down instead of one importing the other. This module,
+    because a printed ceiling on a count is what it is for: its own docstring
+    calls a cap "a ceiling it may not exceed", and the count is the quantity.
+
+    Numbers are read straight off ``NUMBER_WORDS``, as ``amounts`` and
+    ``condition_clauses`` already do — that table is the single source and
+    ``phrases._accept_number`` is one module's thin wrapper over it, not the
+    canonical reader, and it sits well above this layer.
+    """
+    mark = stream.mark()
+    numbers: list[int] = []
+    while True:
+        stream.accept_punct(",")
+        stream.accept_word("or")
+        word = stream.peek_word()
+        value = NUMBER_WORDS.get(word) if word is not None else None
+        if value is None:
+            break
+        stream.advance()
+        numbers.append(value)
+        if not (stream.at_punct(",") or stream.at_word("or")):
+            break
+    if numbers != list(range(1, len(numbers) + 1)) or len(numbers) < 2:
+        stream.reset(mark)
+        return None
+    return numbers[-1]
+
+
 __all__ = [
     "accept_comparative_characteristic", "accept_life_gain_cap",
+    "accept_target_bound",
     "accept_source_relative_comparison", "parse_comparison",
 ]
