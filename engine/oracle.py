@@ -394,7 +394,21 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      # still reaches here — the fixed branch matches "you", the comma bound
      # then fails, and the alternation backtracks into this one.
      r"|(?:(?P<damage_recipient_seat>you|an opponent) or )?"
-     r"(?P<damaged_subject>an? [^,]+)"
+     # "…deals damage to **a creature or opponent**" (Flesh Reaver). The same
+     # union with the two halves printed the other way round, and English drops
+     # the second article when it does — so the seat word is a bare one here
+     # and the noun phrase is lazy, letting the suffix take the last "or …"
+     # only when that word really is a seat. A colour disjunction inside the
+     # phrase ("a green or white creature") never reaches it: the alternation
+     # below names seats and nothing else, so the lookahead fails and the lazy
+     # phrase simply grows.
+     #
+     # A second group name rather than a second use of the one above, because
+     # Python forbids repeating one — `events.py` folds the two spellings back
+     # into a single seat before testing, so the word order is not a second
+     # answer to "whose damage was this".
+     r"(?P<damaged_subject>an? [^,]+?)"
+     r"(?: or (?P<damage_recipient_seat_after>opponent|you))?"
      r"))?(?=,|$)"),
     # "…blocks **or becomes blocked by** a non-Wall creature" (Thicket Basilisk,
     # Cockatrice), "…by a green or white creature" (Abomination), "…by a

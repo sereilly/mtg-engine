@@ -965,6 +965,13 @@ _DAMAGE_RECIPIENT_TESTS = {
 }
 
 
+#: The bare seat words a recipient union may end with, mapped to the spelling
+#: :data:`_DAMAGE_RECIPIENT_TESTS` is keyed by. "a creature **or opponent**"
+#: (Flesh Reaver) is "an opponent" with the article left out because the phrase
+#: in front of it already carried one.
+_SUFFIX_SEAT_WORDS = {"opponent": "an opponent", "you": "you"}
+
+
 def _is_player(recipient) -> bool:
     """Whether a damage event's recipient is a player rather than a permanent.
 
@@ -1068,6 +1075,14 @@ def _damage_dealt_filter(
     # is what keeps a union payload from falling through to "no narrowing" and
     # firing on every point of damage in the game.
     union_seat = payload.get("damage_recipient_seat")
+    if union_seat is None:
+        # "…to a creature **or opponent**" (Flesh Reaver). The seat half printed
+        # after the noun phrase, where English drops its article — folded to the
+        # spelling the seat-first arm produces so both word orders reach the one
+        # test below rather than growing a second branch that could disagree.
+        union_seat = _SUFFIX_SEAT_WORDS.get(
+            payload.get("damage_recipient_seat_after")
+        )
     if union_seat is not None:
         if _is_player(recipient):
             return bool(_DAMAGE_RECIPIENT_TESTS[union_seat](recipient, seat, observer))
