@@ -12,20 +12,20 @@ The measures are **ceilings**, the opposite direction to `GRAMMAR_COVERAGE.md`'s
 
 ## The headline
 
-**58 of 3109 supported cards (1.9%)** carry at least one name-keyed entry, across **64 entries** in 6 registries. The pool is 3109 cards, 100.0% supported.
+**56 of 3109 supported cards (1.8%)** carry at least one name-keyed entry, across **62 entries** in 6 registries. The pool is 3109 cards, 100.0% supported.
 
-Held at this rate, supporting the 26,113-card release line would need about **538 hand-written entries** covering **487 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
+Held at this rate, supporting the 26,113-card release line would need about **521 hand-written entries** covering **470 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
 
 ## By set
 
 | Set | Cards | Supported | Hooked cards | Rules lines | Hooked lines | Entries | Entries/100 supported |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 290 (100.0%) | 32 (11.0%) | 388 | 30 (7.7%) | 36 | 12.4 |
-| LEB | 292 | 292 (100.0%) | 32 (11.0%) | 389 | 30 (7.7%) | 36 | 12.3 |
-| 2ED | 292 | 292 (100.0%) | 32 (11.0%) | 389 | 30 (7.7%) | 36 | 12.3 |
+| LEA | 290 | 290 (100.0%) | 30 (10.3%) | 388 | 28 (7.2%) | 34 | 11.7 |
+| LEB | 292 | 292 (100.0%) | 30 (10.3%) | 389 | 28 (7.2%) | 34 | 11.6 |
+| 2ED | 292 | 292 (100.0%) | 30 (10.3%) | 389 | 28 (7.2%) | 34 | 11.6 |
 | ARN | 78 | 78 (100.0%) | 20 (25.6%) | 107 | 18 (16.8%) | 22 | 28.2 |
 | ATQ | 85 | 85 (100.0%) | 3 (3.5%) | 120 | 3 (2.5%) | 3 | 3.5 |
-| 3ED | 296 | 296 (100.0%) | 26 (8.8%) | 389 | 25 (6.4%) | 29 | 9.8 |
+| 3ED | 296 | 296 (100.0%) | 25 (8.4%) | 389 | 24 (6.2%) | 28 | 9.5 |
 | LEG | 310 | 310 (100.0%) | 2 (0.6%) | 430 | 2 (0.5%) | 2 | 0.6 |
 | DRK | 119 | 119 (100.0%) | 1 (0.8%) | 167 | 1 (0.6%) | 1 | 0.8 |
 | FEM | 102 | 102 (100.0%) | 0 (0.0%) | 190 | 0 (0.0%) | 0 | 0.0 |
@@ -41,8 +41,8 @@ Held at this rate, supporting the 26,113-card release line would need about **53
 | STH | 143 | 143 (100.0%) | 0 (0.0%) | 215 | 0 (0.0%) | 0 | 0.0 |
 | EXO | 143 | 143 (100.0%) | 0 (0.0%) | 207 | 0 (0.0%) | 0 | 0.0 |
 | M21 | 285 | 285 (100.0%) | 0 (0.0%) | 503 | 0 (0.0%) | 0 | 0.0 |
-| USG *(measured)* | 335 | 263 (78.5%) | 1 (0.4%) | 403 | 0 (0.0%) | 1 | 0.4 |
-| **Whole pool (shipped, deduped)** | **3109** | **3109 (100.0%)** | **58 (1.9%)** | **4852** | **54 (1.1%)** | **64** | **2.1** |
+| USG *(measured)* | 335 | 275 (82.1%) | 1 (0.4%) | 415 | 0 (0.0%) | 1 | 0.4 |
+| **Whole pool (shipped, deduped)** | **3109** | **3109 (100.0%)** | **56 (1.8%)** | **4852** | **52 (1.1%)** | **62** | **2.0** |
 
 *(measured)* — USG are ingested for measurement and **not shipped**: `cards/manifest.json` lists them under `measured`, the engine's catalog does not load them, and no player can put one in a deck. They are reported here and excluded from the ALL row and from the ceilings, because a ratchet over a set nobody has implemented would fire on its composition rather than on anything anyone did. A measured set moves up to `sets` when it is fully supported.
 
@@ -52,7 +52,7 @@ Held at this rate, supporting the 26,113-card release line would need about **53
 
 | Registry | Cards | Entries |
 | --- | ---: | ---: |
-| `CARD_LINE_INSTRUCTIONS` | 53 | 54 |
+| `CARD_LINE_INSTRUCTIONS` | 51 | 52 |
 | `ON_LEAVE_BATTLEFIELD` | 6 | 6 |
 | `DRAW_STEP_MODIFIERS` | 1 | 1 |
 | `ON_SELF_RESOLVED` | 1 | 1 |
@@ -115,7 +115,5 @@ Held at this rate, supporting the 26,113-card release line would need about **53
 - **Siren's Call** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Sorrow's Path** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Stone Giant** (`CARD_LINE_INSTRUCTIONS`) — 1 line
-- **Timetwister** (`CARD_LINE_INSTRUCTIONS`) — 1 line
-- **Wheel of Fortune** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Word of Command** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Ydwen Efreet** (`CARD_LINE_INSTRUCTIONS`) — 1 line

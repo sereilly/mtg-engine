@@ -16,12 +16,12 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Set | Cards | Lines | Parsed | Lowered | Executed | Cards executing |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 388 | 87.1% | 85.6% | 48.5% | 171 |
-| LEB | 292 | 389 | 87.1% | 85.6% | 48.6% | 172 |
-| 2ED | 292 | 389 | 87.1% | 85.6% | 48.6% | 172 |
+| LEA | 290 | 388 | 87.4% | 86.1% | 49.0% | 173 |
+| LEB | 292 | 389 | 87.4% | 86.1% | 49.1% | 174 |
+| 2ED | 292 | 389 | 87.4% | 86.1% | 49.1% | 174 |
 | ARN | 78 | 108 | 77.8% | 74.1% | 51.9% | 46 |
 | ATQ | 85 | 120 | 90.8% | 90.8% | 63.3% | 68 |
-| 3ED | 296 | 389 | 89.2% | 87.1% | 50.9% | 178 |
+| 3ED | 296 | 389 | 89.2% | 87.4% | 51.2% | 179 |
 | LEG | 310 | 431 | 89.6% | 88.4% | 58.7% | 217 |
 | DRK | 119 | 167 | 96.4% | 96.4% | 73.7% | 101 |
 | FEM | 102 | 191 | 99.0% | 99.0% | 75.9% | 99 |
@@ -37,8 +37,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | STH | 143 | 215 | 88.4% | 88.4% | 62.8% | 124 |
 | EXO | 143 | 207 | 90.3% | 90.3% | 66.2% | 127 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| USG *(measured)* | 335 | 486 | 75.9% | 72.4% | 50.2% | 206 |
-| **All (shipped)** | **4873** | **7239** | **90.5%** | **89.8%** | **60.0%** | **3637** |
+| USG *(measured)* | 335 | 486 | 77.6% | 74.9% | 52.3% | 216 |
+| **All (shipped)** | **4873** | **7239** | **90.5%** | **89.9%** | **60.1%** | **3644** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
 
@@ -50,9 +50,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 434 | 195 | expected a subject |  |
-| 119 | 64 | unrecognized effect verb |  |
-| 100 | 55 | unconsumed text |  |
+| 433 | 194 | expected a subject |  |
+| 118 | 63 | unrecognized effect verb |  |
+| 92 | 49 | unconsumed text |  |
 | 39 | 23 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 16 | 15 | expected 'unless defending player controls' |  |
@@ -64,7 +64,6 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 6 | 3 | expected a keyword ability |  |
 | 6 | 6 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
 | 5 | 1 | expected 'card' |  |
-| 5 | 2 | no whole-hand discard handler for 'each_player' |  |
 | 4 | 1 | the sacrifice prompt cannot test this restriction |  |
 | 4 | 1 | expected 'that' |  |
 | 4 | 1 | attach needs one chosen permanent to attach to |  |
@@ -75,10 +74,11 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 1 | expected 'the number of' in a where-clause |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
+| 2 | 2 | expected 'be' |  |
 
 ## Cards executing through the grammar
 
-3637 cards, 4341 lines.
+3644 cards, 4348 lines.
 
 - **Abandon Hope**
   - `Look at target opponent's hand and choose X cards from it. That player discards those cards.`
@@ -110,6 +110,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Abyssal Specter**
   - `Whenever this creature deals damage to a player, that player discards a card.`
   - `Whenever this creature deals damage to a player, that player discards a card.`
+- **Academy Researchers**
+  - `When this creature enters, you may put an Aura card from your hand onto the battlefield attached to this creature.`
 - **Acid Rain**
   - `Destroy all Forests.`
 - **Acidic Dagger**
@@ -261,6 +263,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Exile target creature or planeswalker. Its controller creates a 4/4 white Angel creature token with flying.`
 - **Angelic Blessing**
   - `Target creature gets +3/+3 and gains flying until end of turn. (It can't be blocked except by creatures with flying or reach.)`
+- **Angelic Chorus**
+  - `Whenever a creature you control enters, you gain life equal to its toughness.`
 - **Angelic Page**
   - `{T}: Target attacking or blocking creature gets +1/+1 until end of turn.`
 - **Angelic Protector**
@@ -584,6 +588,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Untap a tapped land an opponent controls: Add one mana of any type that land could produce.`
 - **Bequeathal**
   - `When enchanted creature dies, you draw two cards.`
+- **Bereavement**
+  - `Whenever a green creature dies, its controller discards a card.`
 - **Bestial Fury**
   - `When this Aura enters, draw a card at the beginning of the next turn's upkeep.`
   - `Whenever enchanted creature becomes blocked, it gets +4/+0 and gains trample until end of turn.`
@@ -1194,6 +1200,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `All creatures have haste.`
 - **Cone of Flame**
   - `Cone of Flame deals 1 damage to any target, 2 damage to another target, and 3 damage to a third target.`
+- **Congregate**
+  - `Target player gains 2 life for each creature on the battlefield.`
 - **Conservator**
   - `{3}, {T}: Prevent the next 2 damage that would be dealt to you this turn.`
   - `{3}, {T}: Prevent the next 2 damage that would be dealt to you this turn.`
@@ -1348,6 +1356,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When enchanted creature attacks or blocks, sacrifice this Aura at the beginning of the next cleanup step.`
 - **Cuombajj Witches**
   - `{T}: This creature deals 1 damage to any target and 1 damage to any target of an opponent's choice.`
+- **Curfew**
+  - `Each player returns a creature they control to its owner's hand.`
 - **Curiosity**
   - `Whenever enchanted creature deals damage to an opponent, you may draw a card.`
 - **Curse Artifact**
@@ -4325,6 +4335,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}{W}: Target creature gains first strike until end of turn.`
 - **Nocturnal Raid**
   - `Black creatures get +2/+0 until end of turn.`
+- **Noetic Scales**
+  - `At the beginning of each player's upkeep, return to its owner's hand each creature that player controls with power greater than the number of cards in their hand.`
 - **Nomads en-Kor**
   - `{0}: The next 1 damage that would be dealt to this creature this turn is dealt to target creature you control instead.`
 - **Norritt**
@@ -4564,6 +4576,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this creature enters, untap up to five lands.`
 - **Perish**
   - `Destroy all green creatures. They can't be regenerated.`
+- **Persecute**
+  - `Choose a color. Target player reveals their hand and discards all cards of that color.`
 - **Pestilence**
   - `At the beginning of the end step, if no creatures are on the battlefield, sacrifice this enchantment.`
   - `{B}: This enchantment deals 1 damage to each creature and each player.`
@@ -5098,6 +5112,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Target creature deals damage to itself equal to its power.`
 - **Reprisal**
   - `Destroy target creature with power 4 or greater. It can't be regenerated.`
+- **Reprocess**
+  - `Sacrifice any number of artifacts, creatures, and/or lands. Draw a card for each permanent sacrificed this way.`
 - **Rescind**
   - `Return target permanent to its owner's hand.`
 - **Reset**
@@ -6529,6 +6545,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{2}{U}{U}, {T}: Return target permanent that isn't enchanted to its owner's hand.`
   - `When this creature attacks or blocks, at end of combat, sacrifice it and it deals 5 damage to you.`
   - `{2}{U}{U}, {T}: Return target permanent that isn't enchanted to its owner's hand.`
+- **Time Spiral**
+  - `Exile Time Spiral. Each player shuffles their hand and graveyard into their library, then draws seven cards. You untap up to six lands.`
 - **Time Vault**
   - `{T}: Take an extra turn after this one.`
   - `{T}: Take an extra turn after this one.`
@@ -6541,6 +6559,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Target player takes an extra turn after this one.`
 - **Time and Tide**
   - `Simultaneously, all phased-out creatures phase in and all creatures with phasing phase out.`
+- **Timetwister**
+  - `Each player shuffles their hand and graveyard into their library, then draws seven cards. (Then put Timetwister into its owner's graveyard.)`
+  - `Each player shuffles their hand and graveyard into their library, then draws seven cards. (Then put Timetwister into its owner's graveyard.)`
+  - `Each player shuffles their hand and graveyard into their library, then draws seven cards. (Then put Timetwister into its owner's graveyard.)`
 - **Timid Drake**
   - `When another creature enters, return this creature to its owner's hand.`
 - **Timmerian Fiends**
@@ -7147,6 +7169,11 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{B}{B}, {T}: Destroy target white creature.`
 - **Whalebone Glider**
   - `{2}, {T}: Target creature with power 3 or less gains flying until end of turn.`
+- **Wheel of Fortune**
+  - `Each player discards their hand, then draws seven cards.`
+  - `Each player discards their hand, then draws seven cards.`
+  - `Each player discards their hand, then draws seven cards.`
+  - `Each player discards their hand, then draws seven cards.`
 - **Whim of Volrath**
   - `Change the text of target permanent by replacing all instances of one color word with another or one basic land type with another until end of turn. (For example, you may change "nonred creature" to "nongreen creature" or "plainswalk" to "swampwalk.")`
 - **Whip Vine**
@@ -7207,6 +7234,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Wind-Scarred Crag**
   - `When this land enters, you gain 1 life.`
   - `{T}: Add {R} or {W}.`
+- **Windfall**
+  - `Each player discards their hand, then draws cards equal to the greatest number of cards a player discarded this way.`
 - **Winding Canyons**
   - `{T}: Add {C}.`
   - `{2}, {T}: You may cast creature spells this turn as though they had flash.`
