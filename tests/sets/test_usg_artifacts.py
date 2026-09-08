@@ -244,15 +244,16 @@ def _g2_board(set_pool, name, *, seat=0):
 
 
 def _g2_kill(game, seat, permanent):
-    """Take *permanent* off the battlefield and file its card, the way a
-    state-based action does — the removal *then* the graveyard.
-
-    Calling ``_permanent_to_graveyard`` alone leaves the permanent standing:
-    the card reaches the pile and the object never leaves, so a death trigger
-    resolving afterwards reads a board the game does not have. W2G2's own.
+    """Kill *permanent*: file its card, then take the object off the
+    battlefield — the order ``_destroy_swept_permanents`` uses, and the order
+    the death triggers are announced in. ``_permanent_to_graveyard`` is what
+    announces them, and it is called while the permanent is still controlled,
+    so a "whenever a creature **you control** dies" observer can still answer
+    what it controlled. Removing first silently unfires every such trigger.
+    W2G2's own.
     """
-    game.remove_from_battlefield(permanent)
     game._permanent_to_graveyard(game.players[seat], permanent)
+    game.remove_from_battlefield(permanent)
     resolve_stack(game)
 
 

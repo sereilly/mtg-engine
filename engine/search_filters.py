@@ -191,6 +191,12 @@ def search_matches(card, data: dict, *, game=None, owner=None) -> bool:
     # caller that armed the search some other way cannot lose the narrowing.
     if restrictions.get("named_from_target") and named is None:
         return False
+    # "…a card **with the same name as that creature**" (Remembrance). The same
+    # rule one referent over: the arming site turns it into a ``named``, and the
+    # key surviving without one means the fire site recorded nothing — so the
+    # search finds no card rather than every card.
+    if restrictions.get("named_from_event") and named is None:
+        return False
     # "a card named Alpine Watchdog **and/or** a card named Igneous Cur"
     # (Alpine Houndmaster). Each find has its own name; this is the union the
     # *picker* offers, and which name each find actually consumed is settled by

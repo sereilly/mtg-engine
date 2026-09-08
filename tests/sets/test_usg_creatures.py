@@ -493,8 +493,11 @@ def test_w2g2_serra_avatar_shuffles_itself_back_after_dying(set_pool):
     avatar = Permanent(card=set_pool("USG")["Serra Avatar"])
     game._put_permanent_onto_battlefield(0, avatar, None)
 
-    game.remove_from_battlefield(avatar)
+    # The order ``_destroy_swept_permanents`` uses: the card is filed while the
+    # permanent is still on the battlefield — which is what announces the death
+    # triggers — and the object leaves afterwards.
     game._permanent_to_graveyard(alice, avatar)
+    game.remove_from_battlefield(avatar)
     resolve_stack(game)
 
     assert [c.name for c in alice.library] == ["Serra Avatar"]

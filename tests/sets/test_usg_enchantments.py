@@ -1184,13 +1184,16 @@ from tests.helpers import resolve_stack
 
 
 def _g2e_kill(game, seat, permanent):
-    """Take *permanent* off the battlefield and file its card, in the order a
-    state-based action does it. ``_permanent_to_graveyard`` alone leaves the
-    object standing, so a trigger resolving afterwards reads a board the game
-    does not have. W2G2's own.
+    """Kill *permanent*: file its card, then take the object off the
+    battlefield — the order ``_destroy_swept_permanents`` uses, and the order
+    the death triggers are announced in. ``_permanent_to_graveyard`` is what
+    announces them, and it is called while the permanent is still controlled,
+    so a "whenever a creature **you control** dies" observer can still answer
+    what it controlled. Removing first silently unfires every such trigger.
+    W2G2's own.
     """
-    game.remove_from_battlefield(permanent)
     game._permanent_to_graveyard(game.players[seat], permanent)
+    game.remove_from_battlefield(permanent)
     resolve_stack(game)
 
 
@@ -1330,3 +1333,77 @@ def test_w2g2_no_rest_counts_copies_rather_than_matching_by_name(set_pool):
     assert [c.name for c in alice.graveyard] == [
         "Shivan Hellkite", "No Rest for the Wicked",
     ]
+
+
+def test_w2g2_remembrance_searches_for_the_dead_creature_s_name(set_pool):
+    """"Whenever a nontoken creature you control dies, you may search your
+    library for a card with the same name as that creature, reveal it, put it
+    into your hand, then shuffle."
+
+    The narrowing is the whole card: the library holds one copy of the dead
+    creature and one of something else, and only the first is a legal find. A
+    search that dropped "with the same name as that creature" would offer both.
+    """
+    from engine.search_filters import search_matches
+
+    pool = set_pool("USG")
+    alice, bob = PlayerState(name="G2E-A"), PlayerState(name="G2E-B")
+    game = Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    # The "you may" is a real offer, so the seat has to be one that can take it:
+    # a non-interactive seat declines by default and the search is never armed.
+    game.interactive_seats = {0}
+    game._put_permanent_onto_battlefield(
+        0, Permanent(card=pool["Remembrance"]), None
+    )
+    zealot, hellkite = pool["Serra Zealot"], pool["Shivan Hellkite"]
+    alice.library = [zealot, hellkite]
+    victim = Permanent(card=zealot)
+    game._put_permanent_onto_battlefield(0, victim, None)
+
+    _g2e_kill(game, 0, victim)
+
+    assert game.confirm_optional_pay(0, "Remembrance", accept=True)
+    game._settle()
+
+    prompt = game.pending_choice_of("search_library", 0)
+    assert prompt is not None, "the may was offered and taken"
+    payload = {
+        "restrictions": prompt.data["restrictions"],
+        "card_type": prompt.data["card_type"],
+    }
+    admitted = [
+        c.name for c in alice.library
+        if search_matches(c, payload, game=game, owner=0)
+    ]
+    assert admitted == ["Serra Zealot"]
+
+    assert game.resolve_pending_choice(
+        "search_library", 0, library_index=0, zone="library"
+    )
+    game._settle()
+
+    assert [c.name for c in alice.hand] == ["Serra Zealot"]
+
+
+def test_w2g2_remembrance_ignores_a_token_s_death(set_pool):
+    """"**nontoken**" is enforced, not decoration: a token that dies leaves no
+    card to look for, and the trigger does not fire at all."""
+    pool = set_pool("USG")
+    alice, bob = PlayerState(name="G2E-A"), PlayerState(name="G2E-B")
+    game = Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    game._put_permanent_onto_battlefield(
+        0, Permanent(card=pool["Remembrance"]), None
+    )
+    alice.library = [pool["Serra Zealot"]]
+    token = Permanent(card=pool["Serra Zealot"])
+    token.metadata["is_token"] = True
+    game._put_permanent_onto_battlefield(0, token, None)
+
+    _g2e_kill(game, 0, token)
+
+    assert not game.pending_choices, "no offer at all, not an offer declined"
+    assert game.pending_choice_of("search_library", 0) is None
+    assert not alice.hand

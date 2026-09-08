@@ -485,6 +485,23 @@ def _search_restrictions(game: Game, payload: dict, context) -> dict:
         restrictions["mana_value"] = {
             **mana_value, "value": max(0, int(context.x_value or 0)),
         }
+    # "…a card **with the same name as that creature**" (Remembrance). The name
+    # of the object the firing event was about, turned into an ordinary
+    # ``named`` here for ``named_from_target``'s reason one branch down: every
+    # seat that answers this search reads the armed restrictions, and none of
+    # them has a trigger context in hand.
+    #
+    # Off ``dead_card`` rather than off ``dead_name``, because that is the
+    # channel every fire site in ``BOUND_CARD_EVENTS`` writes — the graveyard
+    # arrival records the card and no name at all. A record nothing wrote leaves
+    # the key in place with no name behind it, and ``search_matches`` then
+    # matches nothing: the search finds no card rather than every card, which is
+    # the direction a dropped narrowing must never fail in.
+    if restrictions.get("named_from_event"):
+        recorded = (context.trigger_context or {}).get("dead_card")
+        name = getattr(recorded, "name", None)
+        if name is not None:
+            restrictions["named"] = name
     if not restrictions.get("named_from_target"):
         return restrictions
     # Through the seam every handler resolves a chosen permanent by, so the

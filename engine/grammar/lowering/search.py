@@ -21,6 +21,7 @@ reported supported.
 
 from ...oracle_types import OracleInstruction
 from ...search_filters import SEARCH_COMPARISONS, SEARCH_RESTRICTIONS
+from ._deaths import BOUND_CARD_EVENTS
 from .. import ast
 from ..errors import LoweringError
 from ._amounts import count_spec
@@ -41,12 +42,21 @@ from ._events import _back_reference_payload
 # _restrictions_beyond, because nothing in the flow tests one: the player would
 # simply be offered their whole library.
 _SEARCH_HONOURED_FILTER_FIELDS = (
-    frozenset({"card_types", "is_card", "supertypes", "named_as_target"})
+    frozenset({
+        "card_types", "is_card", "supertypes", "named_as_target",
+        # "…a card **with the same name as that creature**" (Remembrance). The
+        # name of the object the firing event was about — honoured here and
+        # gated on the event below, since the field on its own says nothing
+        # about whether anything recorded one.
+        "name_from_event",
+    })
     | SEARCH_RESTRICTIONS
 )
 
 
-def _lower_search_library(node: ast.SearchLibrary) -> tuple[OracleInstruction, ...]:
+def _lower_search_library(
+    node: ast.SearchLibrary, event: str | None = None,
+) -> tuple[OracleInstruction, ...]:
     """"Search your library for a card, put that card into your hand, then
     shuffle." (Demonic Tutor.)
 
@@ -148,6 +158,30 @@ def _lower_search_library(node: ast.SearchLibrary) -> tuple[OracleInstruction, .
                 targeted=True,
             ),
         )
+    if filt.name_from_event:
+        # "…**with the same name as that creature**" (Remembrance). The name is
+        # not knowable when the card compiles, exactly as ``named_as_target``'s
+        # is not: it is turned into an ordinary ``named`` where the search is
+        # armed (`handlers/zones._search_restrictions`), so every seat answers
+        # the same search — the engine re-checking a pick, the AI choosing and
+        # the web picker offering all read ``search_matches`` and none of them
+        # has a trigger context in hand.
+        #
+        # Gated on ``BOUND_CARD_EVENTS`` — the fire sites that actually record
+        # the object — rather than on the one event this card prints, because
+        # that table is the claim this reading depends on and a second list
+        # would be free to disagree with it. Under any other event the words
+        # name a creature nobody wrote down, and the honest answer is a refusal
+        # rather than a search of the whole library.
+        if event not in BOUND_CARD_EVENTS:
+            raise LoweringError(
+                "\"that creature\" names the firing event's object, and this "
+                "event records none",
+                node=node,
+            )
+        if filt.named is not None:
+            raise LoweringError("one find is named once", node=node)
+        restrictions["named_from_event"] = True
     if filt.mana_value is not None:
         # A comparison the predicate cannot apply, or a bound that is not a
         # number ("with mana value X"), refuses rather than lowering to a search
