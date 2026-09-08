@@ -69,3 +69,71 @@ def test_w1g1_a_cycling_sorcery_is_discarded_for_a_card(set_pool, name):
     assert [c.name for c in player.graveyard] == [name]
     assert len(player.library) == 3
     assert player.life == life_before
+
+
+# --- W2G1: the two burn sorceries ---
+from engine import Game as _G1sGame, PlayerState as _G1sPlayerState  # noqa: E402
+from engine.models import Permanent as _G1sPermanent  # noqa: E402
+from engine.oracle import compile_card_oracle as _g1s_compile  # noqa: E402
+from engine.game_types import OracleExecutionContext as _G1sContext  # noqa: E402
+from engine.targeting import derive_cast_spec as _g1s_spec  # noqa: E402
+
+
+def _g1s_board(pool, mine=(), theirs=()):
+    """Two seats with a USG library each. Ends on the control sync, this
+    block's own helper tail."""
+    game = _G1sGame(players=[
+        _G1sPlayerState(name="G1sA", battlefield=list(mine),
+                        library=[pool["Remote Isle"]] * 8),
+        _G1sPlayerState(name="G1sB", battlefield=list(theirs),
+                        library=[pool["Remote Isle"]] * 8),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game._sync_control()
+    return game
+
+
+def test_w2g1_arc_lightning_offers_at_most_three_targets(set_pool):
+    """"Arc Lightning deals 3 damage divided as you choose among one, two, or
+    three targets."
+
+    CR 601.2c's printed ceiling on a variable target count, which the engine has
+    read since Contagion's counters — the same clause about damage instead, and
+    CR 601.2d covers both in one sentence. What was missing was only the parse,
+    so the whole of this test is the number reaching the picker: a spell whose
+    spec omitted it would offer a fourth target the cast gate then refuses.
+    """
+    pool = set_pool("USG")
+    card = pool["Arc Lightning"]
+    spec = _g1s_spec(card, _g1s_compile(card))
+    assert spec["kind"] == "divided"
+    assert spec["division"] == "chosen", "the caster divides, not the game"
+    assert spec["max_targets"] == 3, "one, two, or three"
+    assert spec["division_total"] == 3
+
+
+def test_w2g1_disorder_burns_white_creatures_and_only_their_controllers(set_pool):
+    """"Disorder deals 2 damage to each white creature and each player who
+    controls a white creature."
+
+    Two described sets in one sentence, the second keyed to the first. Three
+    assertions, one per way the sentence could reach further than it says: the
+    colour on the creature half, the presence test on the seat half, and the
+    seat that controls nothing white taking nothing.
+    """
+    pool = set_pool("USG")
+    white = _G1sPermanent(card=pool["Intrepid Hero"])
+    green = _G1sPermanent(card=pool["Blanchwood Treefolk"])
+    game = _g1s_board(pool, mine=[white], theirs=[green])
+
+    card = pool["Disorder"]
+    program = _g1s_compile(card)
+    context = _G1sContext(card=card, caster=game.players[0], target=game.players[0])
+    for instruction in program.instructions:
+        game._execute_oracle_instruction(instruction, context)
+
+    assert white.damage_marked == 2, "a white creature"
+    assert green.damage_marked == 0, "the colour is tested, not dropped"
+    assert game.players[0].life == 18, "its controller"
+    assert game.players[1].life == 20, "a player controlling nothing white"
