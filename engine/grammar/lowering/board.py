@@ -481,6 +481,16 @@ def _lower_sacrifice(
             payload[X_FROM_COUNT] = {
                 "history": f"creatures_{node.count.scope}"
             }
+        elif isinstance(node.count, ast.CountersOnSource):
+            # "…that player sacrifices a permanent of their choice **for each
+            # soot counter on this artifact**." (Smokestack.) One number for
+            # every payer, and on the *shared* channel beside Urborg Justice's
+            # for that branch's reason: the pile sits on the ability's own
+            # source, which is the same object whoever the upkeep belongs to.
+            # Read per-payer it would be counted on a permanent the payer does
+            # not control and answer zero every time.
+            payload["count"] = "x"
+            payload[X_FROM_COUNT] = {"source_counters": node.count.kind}
         elif node.count is not None:
             payload[X_FROM_COUNT_PER_RECIPIENT] = _per_payer_count(node)
         elif node.subject.count != 1:

@@ -232,6 +232,14 @@ def _lower_return_to_zone(
     # Tides' second mode.) Same instruction as the single-target bounce — the
     # effect per creature is identical — described with the several-targets
     # opt-in so the handler resolves a list and the picker collects up to N.
+    #
+    # "Return up to X target **permanents** to their owners' hands."
+    # (Recantation.) The same sentence over the widest noun there is, which
+    # reaches here as an *empty* filter — CR 109.1 already makes "permanent" the
+    # unnarrowed word — so the two card-type shapes are one branch. The
+    # singular path beside it has read the empty filter as a bounce since
+    # Boomerang and for the same reason; what kept the plural out was a literal
+    # naming one card type rather than anything the handler cannot do.
     if (
         isinstance(subject, ast.TargetSpec)
         and _names_several_targets(subject)
@@ -240,7 +248,7 @@ def _lower_return_to_zone(
         and node.to.owner is not None
         and node.to.owner.kind == "owner"
         and not subject.filter.is_card
-        and subject.filter.card_types == ("creature",)
+        and subject.filter.card_types in ((), ("creature",))
     ):
         several: dict[str, object] = {}
         _describe_several_targets(several, subject)

@@ -232,6 +232,8 @@ def object_filter_payload(self: "ObjectFilter") -> dict[str, object]:
         payload["token_only"] = True
     if self.created_with_source:
         payload["created_with_source"] = True
+    if self.put_onto_battlefield_by_source:
+        payload["put_onto_battlefield_by_source"] = True
     # "a card **named** Frantic Inventory". Emitted like every other
     # restriction, and tested like one — a key a matcher dropped would be a
     # count over every card in the graveyard.

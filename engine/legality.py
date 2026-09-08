@@ -35,8 +35,8 @@ describe it.
 
 import re
 
-from .handlers._common import (graveyard_card_matches, permanent_matches_filter,
-                               state_holds)
+from .handlers._common import (evaluate_count, graveyard_card_matches,
+                               permanent_matches_filter, state_holds)
 from .models import CardDefinition, Permanent
 from .alternative_costs import alternative_costs
 from .cast_costs import buyback_cost, cast_announces_x, costs_charged_from
@@ -1253,6 +1253,76 @@ class LegalityMixin:
         spec = {"kind": kind, **flags}
         return self._enumerate_targets(caster_index, card, spec, for_cast=False)
 
+    def _size_activation_x_targets(
+        self, controller_index: int, spec: dict, ability, source_permanent
+    ) -> None:
+        """Fill in what an ability's **defined** X makes knowable: CR 601.2c's
+        number of targets, and CR 601.2d's quantity to divide.
+
+        "Destroy up to **X** target nonblack creatures, where X is the number of
+        verse counters on this enchantment." (Vile Requiem, Recantation, and the
+        rest of Urza's Saga's verse cycle.) ``x_targets`` means "however many the
+        X pays for" — a question with no answer on the cast side until the
+        caster announces X, which is why that side leaves the flag alone until
+        ``announced_cast_x`` resolves it.
+
+        An ability's X comes from one of **two** places, and only one of them is
+        answerable here. Candelabra of Tawnos ("{X}, {T}: Untap X target lands")
+        prints the X in its *cost*: the player announces it at CR 601.2b and
+        nothing but the client can say what it will be, which is exactly what
+        the flag is for — it survives untouched, and the browser asks for X
+        before it offers a picker.
+
+        The verse cycle prints it in the *text* instead ("…where X is the number
+        of verse counters on this enchantment"). Nobody announces that one: the
+        where-clause defines it off a board the game can already read, and
+        CR 602.2b routes an activation through CR 601.2b–i so the number is
+        settled at 601.2c — with the source still on the battlefield, because a
+        sacrifice cost is not paid until 601.2h.
+
+        So the presence of an ``x_from_count`` spec is the whole test, and its
+        absence leaves the flag exactly as it was rather than guessing a
+        ceiling. Left unresolved for the *defined* kind, ``x_targets`` is an
+        unbounded picker in front of a handler that destroys everything it is
+        handed: Vile Requiem with one verse counter destroyed three creatures,
+        which is the wrong-in-the-player's-favour, silent failure a printed
+        restriction has to be *enforced* to avoid.
+
+        Writes ``max_targets`` and drops the flag, exactly as the cast side does
+        one question over, so everything downstream reads one key.
+
+        **And the same number sizes a division.** "Prevent the next X damage …
+        to any number of targets, divided as you choose, where X is the number
+        of verse counters on this enchantment." (Serra's Hymn.) CR 601.2d's
+        announcement needs the total *before* the shares are named, and the
+        client's own reader (``dividedDivisionTotal``) asks the spec for it —
+        so an ability whose X is defined has to say it here or the browser falls
+        back to the X box it was never shown and divides nothing. One method for
+        both, because it is one question: what is this ability's X, now, off the
+        board the where-clause names.
+        """
+        instruction = targeting_instruction(getattr(ability, "instruction", None))
+        counted = (getattr(instruction, "payload", None) or {}).get("x_from_count")
+        if not isinstance(counted, dict):
+            return
+        defined = max(0, evaluate_count(
+            self, self.players[controller_index], counted,
+            source=source_permanent,
+        ))
+        if spec.get("x_targets"):
+            spec.pop("x_targets", None)
+            spec["max_targets"] = defined
+        # ``division_total`` and not ``defined_x``: the client reads the total
+        # first and the announced X only as a fallback, and this X is not
+        # announced at all — an ``defined_x`` here would also make the picker
+        # stop asking for an X on abilities that legitimately want one.
+        if (
+            spec.get("kind") == "divided"
+            and "division_total" not in spec
+            and (getattr(instruction, "payload", None) or {}).get("amount") == "x"
+        ):
+            spec["division_total"] = defined
+
     def activation_target_spec(
         self, controller_index: int, permanent_index: int, ability_index: int | None = None
     ) -> dict:
@@ -1288,6 +1358,9 @@ class LegalityMixin:
         # one ability's prompt with the other ability's filter.
         ability_instruction = targeting_instruction(
             getattr(spec_ability, "instruction", None)
+        )
+        self._size_activation_x_targets(
+            controller_index, spec, spec_ability, source_permanent
         )
         spec["requires_target"] = spec["kind"] != "none"
         # "**Choose flying, first strike, trample, or shadow**:" (Phyrexian
@@ -1497,6 +1570,26 @@ class LegalityMixin:
                 ability_source=source,
             )
             return None if walked else refused
+        # CR 601.2c's count, asked of an **activation** — the twin of the
+        # ``max_targets`` gate ``_cast_refusal`` makes above every per-kind arm,
+        # and it was missing here entirely. Above the "no mandatory target"
+        # return below, because "up to X target" is precisely a non-mandatory
+        # announcement with a printed ceiling: an ability may legally name none
+        # of them and may never name more than X.
+        #
+        # Only a *list* is checked, which is what keeps the per-candidate probe
+        # inside ``_enumerate_targets`` from tripping over it: that probe
+        # re-enters with one slot, never several.
+        self._size_activation_x_targets(
+            controller_index, spec, ability, source
+        )
+        maximum = spec.get("max_targets")
+        if (
+            isinstance(maximum, int)
+            and isinstance(target_permanent_ids, list)
+            and len(target_permanent_ids) > maximum
+        ):
+            return f"too many targets for {card.name}"
         quantifiers = _ability_target_quantifiers(instruction)
         mandatory = "target" in quantifiers
         if not mandatory:

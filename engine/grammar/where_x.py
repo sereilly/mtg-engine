@@ -20,6 +20,7 @@ from .records import accept_added_base, accept_damage_dealt_this_turn, accept_ex
 from .errors import GrammarError
 from .lexer import NUMBER
 from .nouns import parse_object_filter
+from .readers import accept_source_reference
 from .stream import TokenStream
 from .vocabulary import NUMBER_WORDS
 from .phrases import NUMBER_SLOT, _accept_literal, _parse_duration
@@ -378,6 +379,21 @@ def parse_where_x_definition_body(stream: TokenStream) -> "ast.Amount":
         raise stream.error(
             "a total power is only read off what was sacrificed this way"
         )
+    # "…where X is **the life paid as this artifact entered**" (Phyrexian
+    # Processor). Not an aggregate over anything, so it is read beside the two
+    # cost channels above rather than under "the number of": the number was
+    # chosen once as a CR 614.1c entry replacement and lives on the permanent,
+    # and no zone holds a set that could be counted for it.
+    #
+    # The self-reference is required to be one — "as **this artifact**
+    # entered", "as **it** entered" — through the reader every other printed
+    # self-reference goes through, so a card naming some other object refuses
+    # rather than reading this permanent's own record for it.
+    life_mark = stream.mark()
+    if stream.accept_phrase("life", "paid", "as"):
+        if accept_source_reference(stream) and stream.accept_word("entered"):
+            return ast.LifePaidAsEntered()
+    stream.reset(life_mark)
     if not stream.accept_phrase("number", "of"):
         raise stream.error("expected 'the number of' in a where-clause")
     # "…the number of **+1/+1 counters on it**" (Primordial Ooze). In front of

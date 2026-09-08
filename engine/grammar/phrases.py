@@ -22,11 +22,15 @@ from dataclasses import replace
 from ..pt import pt_counter_deltas
 from ..turn_state import THAT_PLAYERS_NEXT_TURN
 from . import ast
-from .amounts import accept_counter_kind, parse_amount
+from .amounts import (accept_counter_kind, accept_counters_on_event_subject,
+                      accept_counters_on_source, parse_amount)
 
 from .errors import GrammarError
 from .lexer import GToken, NUMBER, PUNCT, tokenize
 from .nouns import _STATE_ADJECTIVES, parse_object_filter
+# Re-exported under the name this module's callers already use — the
+# arrangement `readers` documents for the fragments it holds.
+from .readers import _identifies_one_object  # noqa: F401
 # The price fragments, re-exported so every existing caller keeps its import
 # — the arrangement `readers` already has one layer down.
 from .prices import (_accept_conjoined_life_cost,  # noqa: F401
@@ -276,6 +280,42 @@ def _parse_per_each_objects(
     return filt, beyond_first
 
 
+def _parse_per_each_counters(
+    stream: TokenStream,
+) -> "ast.CountersOnSource | ast.CountersOnEventSubject | None":
+    """``for each <word> counter on <the source | that <noun>>`` — the counter
+    pile whose size multiplies what the sentence in front of it does.
+
+    "…sacrifices a permanent of their choice **for each soot counter on this
+    artifact**" (Smokestack), "…create a 1/1 green Saproling creature token
+    **for each fungus counter on that creature**" (Sporogenesis).
+
+    A sibling of :func:`_parse_per_each_objects` and **not** a branch inside it,
+    because what it counts is not a set of objects: a counter has no controller,
+    no type line and no zone. The distinction is load-bearing rather than tidy —
+    "fungus" is a printed creature type, so the object reader claims "for each
+    fungus" happily and hands back a line with "counter on that creature" left
+    over. Every caller therefore asks **this** one first, exactly as the
+    sacrifice production already asks the history reader before the board one
+    and for that reader's reason.
+
+    Returns None with the cursor where it was when the clause is not there, so a
+    caller that does not find it still owes the rest of its line to full-token
+    consumption.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("for", "each"):
+        stream.reset(mark)
+        return None
+    counted = accept_counters_on_source(stream)
+    if counted is None:
+        counted = accept_counters_on_event_subject(stream)
+    if counted is None:
+        stream.reset(mark)
+        return None
+    return counted
+
+
 def _parse_for_each(
     stream: TokenStream, *, allow_this_way: bool = False
 ) -> "ast.DiedThisTurn | ast.DiedThisWay | None":
@@ -376,15 +416,35 @@ def parse_subject_filter_at(
     # behind ("another **Rogue you control**"), which the noun parser quantifies
     # as the sweep "all"; without "another" the article has to be printed.
     another = bool(stream.accept_word("another"))
+    # "When **the** creature put onto the battlefield with this enchantment
+    # dies" (Diabolic Servitude). The definite article, which names *one*
+    # described object where "a" names any — the same reading
+    # ``references.parse_recipient`` gives "the token", and for that phrase's
+    # reason: a durable record on the object is what says which one.
+    #
+    # Consumed here rather than admitted as a quantifier, because the noun
+    # parser refuses "the" outright in this position and the phrase behind it
+    # reads exactly as the indefinite one does. **Guarded**, and the guard is
+    # the whole of what makes it safe: the description that follows must
+    # actually identify something, so a bare "the creature" refuses rather than
+    # becoming "a creature" and firing a trigger on every creature on the
+    # table. That widening is the one failure this function's docstring is
+    # about.
+    definite = not another and bool(stream.accept_word("the"))
     try:
         spec = parse_target_spec(stream)
     except GrammarError:
         stream.reset(mark)
         return None
-    if spec is None or spec.quantifier != ("all" if (another or plural) else "a"):
+    wanted = "all" if (another or plural or definite) else "a"
+    if spec is None or spec.quantifier != wanted:
+        stream.reset(mark)
+        return None
+    if definite and not _identifies_one_object(spec.filter):
         stream.reset(mark)
         return None
     return replace(spec.filter, other_than_source=True) if another else spec.filter
+
 
 
 def accept_or_planeswalker(

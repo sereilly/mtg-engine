@@ -25,7 +25,8 @@ from .. import ast
 from ..amounts import expect_pt, parse_amount, parse_equal_to
 from ..errors import GrammarError
 from ..lexer import PT, PUNCT, QUOTE, SELF, WORD
-from ..phrases import _parse_for_each, _parse_per_each_objects
+from ..phrases import (_parse_for_each, _parse_per_each_counters,
+                       _parse_per_each_objects)
 from ..back_references import parse_bound_subject
 from ..references import parse_target_spec
 from ..stream import TokenStream
@@ -517,7 +518,18 @@ def _finish_create_token(
     # in the grammar reads — never a second copy, which is how two spellings of
     # one clause end up counting different sets. Read after the regeneration
     # window above, which it rewinds off rather than claiming.
-    per_each, per_each_beyond_first = _parse_per_each_objects(stream)
+    # "…**for each fungus counter on that creature**" (Sporogenesis). Asked
+    # **before** the board reader below, and that order is the whole reason this
+    # is a separate production: "fungus" is a printed creature type, so
+    # `_parse_per_each_objects` claims "for each fungus" and hands back a line
+    # with "counter on that creature" left over — which is unconsumed text and
+    # takes the whole line down. This reader declines with the cursor unmoved,
+    # so asking it first costs the board reading nothing.
+    per_counter = _parse_per_each_counters(stream)
+    per_each, per_each_beyond_first = (
+        (None, False) if per_counter is not None
+        else _parse_per_each_objects(stream)
+    )
     if per_each_beyond_first:
         raise stream.error("no token count discounts the first of the set")
 
@@ -622,6 +634,7 @@ def _finish_create_token(
         attacking=attacking,
         per_source_regeneration=per_source_regeneration,
         per_each=per_each,
+        per_counter=per_counter,
         from_chosen=tuple(from_chosen),
     )
 

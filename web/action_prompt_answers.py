@@ -409,8 +409,11 @@ def _action_revealed_hand_pick_confirm(session, req, seat_type):
         raise HTTPException(status_code=400, detail="no revealed-hand choice pending")
     if req.seat != pending.player_index:
         raise HTTPException(status_code=400, detail="not your choice")
-    if req.hand_index is None:
-        raise HTTPException(status_code=400, detail="hand_index is required")
+    # A missing index is the chooser **declining**, which only "choose up to X
+    # cards from it" (Discordant Dirge) permits — so it is passed through rather
+    # than rejected here, and the resolver is what reads the printed permission.
+    # Rejected at this layer instead, the client would have to know which cards
+    # print the words, which is the split every other prompt here avoids.
     ok = session.game.confirm_revealed_hand_pick(req.seat, req.hand_index)
     if not ok:
         raise HTTPException(status_code=400, detail="that card cannot be chosen")

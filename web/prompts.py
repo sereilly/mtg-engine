@@ -695,6 +695,12 @@ def _revealed_hand_pick(ctx: PromptContext, choices: list) -> dict:
         "victim_seat": victim_seat,
         "victim_name": victim.name,
         "legal_indices": list(choice.data.get("legal_indices") or []),
+        # "…choose **up to** X cards from it" (Discordant Dirge). CR 601.2c's
+        # ceiling, sent for the reason the discard prompt one renderer down
+        # sends its own: the client is what offers the way to stop, and a
+        # ceiling only the engine knew about is a prompt the chooser cannot
+        # leave.
+        "up_to": bool(choice.data.get("up_to")),
         "cards": [ctx.serialize_card(card) for card in victim.hand],
     }
 

@@ -37,7 +37,11 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | STH | 143 | 215 | 88.4% | 88.4% | 62.8% | 124 |
 | EXO | 143 | 207 | 90.3% | 90.3% | 66.2% | 127 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
+<<<<<<< HEAD
 | USG *(measured)* | 335 | 486 | 74.7% | 70.4% | 48.1% | 205 |
+=======
+| USG *(measured)* | 335 | 486 | 71.8% | 66.0% | 44.4% | 183 |
+>>>>>>> usg-w1g5
 | **All (shipped)** | **4873** | **7239** | **90.5%** | **89.8%** | **60.0%** | **3637** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -50,10 +54,17 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
+<<<<<<< HEAD
 | 435 | 196 | expected a subject |  |
 | 119 | 64 | unrecognized effect verb |  |
 | 103 | 58 | unconsumed text |  |
 | 39 | 23 | granted ability in quotes | phase 3 (quoted abilities) |
+=======
+| 450 | 211 | expected a subject |  |
+| 119 | 64 | unrecognized effect verb |  |
+| 99 | 54 | unconsumed text |  |
+| 41 | 25 | granted ability in quotes | phase 3 (quoted abilities) |
+>>>>>>> usg-w1g5
 | 33 | 33 | unrecognized activation cost |  |
 | 16 | 15 | expected 'unless defending player controls' |  |
 | 13 | 8 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
@@ -70,11 +81,15 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 4 | 1 | attach needs one chosen permanent to attach to |  |
 | 4 | 1 | expected a destination zone after 'return' |  |
 | 3 | 1 | expected 'of' |  |
-| 3 | 2 | expected 'the number of' in a where-clause |  |
 | 3 | 3 | unrecognized "can't be" restriction |  |
 | 3 | 3 | expected 'a' |  |
+<<<<<<< HEAD
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
+=======
+| 3 | 3 | expected a colour or a creature body after 'becomes' |  |
+| 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
+>>>>>>> usg-w1g5
 
 ## Cards executing through the grammar
 
@@ -1554,6 +1569,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{3}: Regenerate this creature.`
 - **Diabolic Servitude**
   - `When this enchantment enters, return target creature card from your graveyard to the battlefield.`
+  - `When the creature put onto the battlefield with this enchantment dies, exile it and return this enchantment to its owner's hand.`
+  - `When this enchantment leaves the battlefield, exile the creature put onto the battlefield with this enchantment.`
 - **Diabolic Vision**
   - `Look at the top five cards of your library. Put one of them into your hand and the rest on top of your library in any order.`
 - **Diamond Kaleidoscope**
@@ -1584,6 +1601,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `End the turn. (Exile all spells and abilities from the stack, including this card. The player whose turn it is discards down to their maximum hand size. Damage wears off, and "this turn" and "until end of turn" effects end.)`
 - **Discordant Dirge**
   - `At the beginning of your upkeep, you may put a verse counter on this enchantment.`
+  - `{B}, Sacrifice this enchantment: Look at target opponent's hand and choose up to X cards from it, where X is the number of verse counters on this enchantment. That player discards those cards.`
 - **Discordant Spirit**
   - `At the beginning of each end step, if it's an opponent's turn, put a +1/+1 counter on this creature for each 1 damage dealt to you this turn.`
   - `At the beginning of your end step, remove all +1/+1 counters from this creature.`
@@ -4622,6 +4640,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{4}, {T}: Target opponent chooses one of the top two cards of your graveyard. Exile that card and put the other one into your hand.`
 - **Phyrexian Portal**
   - `{3}: If your library has ten or more cards in it, target opponent looks at the top ten cards of your library and separates them into two face-down piles. Exile one of those piles. Search the other pile for a card, put it into your hand, then shuffle the rest of that pile into your library.`
+- **Phyrexian Processor**
+  - `{4}, {T}: Create an X/X black Phyrexian Minion creature token, where X is the life paid as this artifact entered.`
 - **Phyrexian Purge**
   - `Destroy any number of target creatures.`
 - **Phyrexian Splicer**
@@ -4986,6 +5006,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Discard X cards, then return a card from your graveyard to your hand for each card discarded this way. Exile Recall.`
 - **Recantation**
   - `At the beginning of your upkeep, you may put a verse counter on this enchantment.`
+  - `{U}, Sacrifice this enchantment: Return up to X target permanents to their owners' hands, where X is the number of verse counters on this enchantment.`
 - **Reckless Embermage**
   - `{1}{R}: This creature deals 1 damage to any target and 1 damage to itself.`
 - **Reckless Ogre**
@@ -5580,6 +5601,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Creatures you control have vigilance. (Attacking doesn't cause them to tap.)`
 - **Serra's Hymn**
   - `At the beginning of your upkeep, you may put a verse counter on this enchantment.`
+  - `Sacrifice this enchantment: Prevent the next X damage that would be dealt this turn to any number of targets, divided as you choose, where X is the number of verse counters on this enchantment.`
 - **Serra's Liturgy**
   - `At the beginning of your upkeep, you may put a verse counter on this enchantment.`
   - `{W}, Sacrifice this enchantment: Destroy up to X target artifacts and/or enchantments, where X is the number of verse counters on this enchantment.`
@@ -5809,6 +5831,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Destroy target blocked creature.`
 - **Smokestack**
   - `At the beginning of your upkeep, you may put a soot counter on this artifact.`
+  - `At the beginning of each player's upkeep, that player sacrifices a permanent of their choice for each soot counter on this artifact.`
 - **Smoldering Crater**
   - `{T}: Add {R}.`
 - **Snake Basket**
@@ -6037,6 +6060,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature is dealt damage, you gain 1 life and create a 1/1 green Saproling creature token.`
 - **Sporogenesis**
   - `At the beginning of your upkeep, you may put a fungus counter on target nontoken creature.`
+  - `Whenever a creature with a fungus counter on it dies, create a 1/1 green Saproling creature token for each fungus counter on that creature.`
   - `When this enchantment leaves the battlefield, remove all fungus counters from all creatures.`
 - **Spreading Algae**
   - `When enchanted land becomes tapped, destroy it.`
@@ -6916,6 +6940,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{W}{W}, {T}, Sacrifice this creature: Counter target spell that targets an enchantment.`
 - **Vile Requiem**
   - `At the beginning of your upkeep, you may put a verse counter on this enchantment.`
+  - `{1}{B}, Sacrifice this enchantment: Destroy up to X target nonblack creatures, where X is the number of verse counters on this enchantment. They can't be regenerated.`
 - **Village Elder**
   - `{G}, {T}, Sacrifice a Forest: Regenerate target creature.`
 - **Village Rites**
@@ -7082,6 +7107,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{3}, {T}: Target creature gains trample until end of turn.`
 - **War Dance**
   - `At the beginning of your upkeep, you may put a verse counter on this enchantment.`
+  - `Sacrifice this enchantment: Target creature gets +X/+X until end of turn, where X is the number of verse counters on this enchantment.`
 - **Warded Battlements**
   - `Attacking creatures you control get +1/+0.`
 - **Warden of the Woods**

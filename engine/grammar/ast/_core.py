@@ -492,6 +492,50 @@ class CountersOnSource:
 
 
 @dataclass(frozen=True)
+class CountersOnEventSubject:
+    """"for each fungus counter on **that creature**" (Sporogenesis) — how many
+    CR 122.1 named counters the object the firing event was *about* was
+    carrying.
+
+    Its own node beside :class:`CountersOnSource` rather than a referent field
+    on it, because the two are answered by different records and a lowering
+    written for one would give the wrong number for the other in silence.
+    The source's counters are read live off the permanent
+    (``engine/named_counters.py``); this one's cannot be, because the only
+    sentence that prints it is a **death** trigger — by the time it resolves the
+    creature is a card in a graveyard with no counters at all (CR 400.7), so the
+    only legal reading is the last known information the fire site froze
+    (CR 603.10 / 608.2h, ``dead_counters``).
+
+    A defaulted field would have made every existing ``CountersOnSource``
+    lowering accept this phrase and count the *enchantment's* counters instead
+    of the dead creature's — a dropped referent with an arithmetic face. A
+    separate node makes every one of them refuse it by construction.
+    """
+    kind: str
+
+
+@dataclass(frozen=True)
+class LifePaidAsEntered:
+    """"where X is **the life paid as this artifact entered**" (Phyrexian
+    Processor) — the amount of life its controller chose to pay as a CR 614.1c
+    entry replacement.
+
+    Carries no parameter at all, unlike every counter and count node beside it,
+    because there is exactly one such payment: "As this permanent enters, pay
+    any amount of life" is the only sentence in the pool that records one, and
+    the record it writes is a single number on the permanent.
+
+    Its own node rather than a :class:`CountOf` for :class:`CountersOnSource`'s
+    reason and one further: what it names is not on any board *and* is not on
+    the object being counted — it is a **fixed** value, chosen once as the
+    permanent arrived and read unchanged however many activations later
+    (CR 614.1c, CR 608.2). A recomputed count would be a different card.
+    """
+    __slots__ = ()
+
+
+@dataclass(frozen=True)
 class DamageDealtThisTurn:
     """"the amount of damage dealt to this creature this turn by other sources
     named ~" (Blazing Effigy) — a *history*, not anything on a board.
@@ -543,7 +587,7 @@ class DamageDealtByChosenCast:
     card_type: str
 
 
-Amount = Union[Fixed, Var, CountOf, CountersOnSource, ThatMuch, SacrificedForCost, ExiledForCost, TappedForCost, TotalPowerSacrificedThisWay, Half, Times, AllOf, AnyNumber, BoardCount, Plus, Minus, CharacteristicOfTarget, DamageDealtThisTurn, DamageDealtByChosenCast, AdditionalCostPaidCount]
+Amount = Union[Fixed, Var, CountOf, CountersOnSource, CountersOnEventSubject, LifePaidAsEntered, ThatMuch, SacrificedForCost, ExiledForCost, TappedForCost, TotalPowerSacrificedThisWay, Half, Times, AllOf, AnyNumber, BoardCount, Plus, Minus, CharacteristicOfTarget, DamageDealtThisTurn, DamageDealtByChosenCast, AdditionalCostPaidCount]
 
 
 # ---------------------------------------------------------------------------

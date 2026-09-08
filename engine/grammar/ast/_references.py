@@ -333,6 +333,16 @@ class ObjectFilter:
     # has the ability's source tests it; ``permanent_matches_filter`` is
     # deliberately not told about it.
     created_with_source: bool = False
+    #: "…**put onto the battlefield with this enchantment**" (Diabolic
+    #: Servitude, and the enchant clause Necromancy prints as a quoted line).
+    #: The permanent this one's own ability reanimated, read off the record
+    #: ``handlers/zones.reanimate_creature`` stamps.
+    #:
+    #: Beside ``created_with_source`` and for its reason exactly: a fact about
+    #: the object's *history*, which nothing about its characteristics can
+    #: answer — the reanimation's target was a card in a graveyard, and CR 400.7
+    #: makes what arrived a new object with no history on the board.
+    put_onto_battlefield_by_source: bool = False
     # "a creature **of their choice**" (Run Afoul) — the player performing the
     # action picks. Recorded rather than dropped, because "of *your* choice" is a
     # different sentence; a lowering accepts it only where the rule it lowers to

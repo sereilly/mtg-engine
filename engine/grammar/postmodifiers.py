@@ -762,6 +762,23 @@ def _parse_postmodifiers(
                 continue
             stream.reset(probe)
             break
+        if stream.at_word("put"):
+            # "…creature **put onto the battlefield with this enchantment**"
+            # (Diabolic Servitude). The permanent this one's own ability
+            # reanimated, read off a record the reanimation stamps — beside
+            # ``created with`` below it and for that phrase's reason exactly:
+            # what it names is a fact about the object's history, and CR 400.7
+            # makes the arrival a new object with nothing on the board to say
+            # where it came from.
+            probe = stream.mark()
+            stream.advance()
+            if stream.accept_phrase(
+                "onto", "the", "battlefield", "with"
+            ) and accept_source_reference(stream):
+                d.put_onto_battlefield_by_source = True
+                continue
+            stream.reset(probe)
+            break
         if stream.at_word("created"):
             # "…tokens **created with this creature**" (Tetravus). Which
             # permanent made them — a fact about their history, so it is read

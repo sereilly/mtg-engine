@@ -245,7 +245,13 @@ def _lower_prevent_damage(
     # Circle or a blanket printed with a division would arm at the full amount
     # on one recipient and report the card supported.
     if node.division is not None and (
-        not isinstance(node.amount, ast.Fixed)
+        # A printed number (Remedy) or the X a where-clause behind the sentence
+        # defines (Serra's Hymn). Both are one number by the time CR 601.2d asks
+        # for the division — an ability's X is not announced, it is counted off
+        # a board the game can already read — so the shield below carries the
+        # string and the one substitution point resolves it, exactly as a
+        # counted pump or a counted destroy does.
+        not isinstance(node.amount, (ast.Fixed, ast.Var))
         or node.combat_only
         or node.from_filter is not None
         or node.dealt_by is not None

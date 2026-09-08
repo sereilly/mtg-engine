@@ -44,6 +44,7 @@ from .nouns import (
     _singular,
     parse_object_filter,
 )
+from .readers import _identifies_one_object
 from .stream import TokenStream
 from .vocabulary import ALL_SUBTYPES, CARD_TYPES, NUMBER_WORDS
 
@@ -761,6 +762,27 @@ def parse_recipient(stream: TokenStream) -> ast.Recipient | None:
     # record the token maker stamps on what it made — the same
     # ``created_with_source`` relation Tetravus's "tokens created with this
     # creature" reads, asked of one token rather than of any number.
+    # "…exile **the creature put onto the battlefield with this
+    # enchantment**." (Diabolic Servitude.) The definite article over a
+    # description that identifies one object, exactly as "the token" below it
+    # does — a durable record on the permanent is what says which, and the
+    # article is a promise that only one carries it rather than a narrowing of
+    # its own.
+    #
+    # The quantifier is the noun parser's own reading of the description
+    # without the article: "all objects this describes", which for a
+    # record-identified phrase is the one. Guarded by ``_identifies_one_object``
+    # so a bare "the creature" refuses here rather than becoming a sweep over
+    # every creature on the table.
+    mark_identified = stream.mark()
+    if stream.accept_word("the"):
+        try:
+            described = parse_object_filter(stream)
+        except GrammarError:
+            described = None
+        if described is not None and _identifies_one_object(described):
+            return ast.TargetSpec("all", described)
+    stream.reset(mark_identified)
     mark_the_token = stream.mark()
     if stream.accept_phrase("the", "token"):
         return ast.TargetSpec(

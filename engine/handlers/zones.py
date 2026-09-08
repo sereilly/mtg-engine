@@ -2511,13 +2511,46 @@ def bounce_target_creature(game: Game, instruction: OracleInstruction, context: 
     # collected: each slot resolves strictly (a departed target is dropped,
     # CR 608.2b) and each creature goes to its own owner's hand (CR 400.3).
     targets_desc = instruction.payload.get("targets") or {}
-    if isinstance(targets_desc, dict) and isinstance(targets_desc.get("count"), int) and targets_desc["count"] > 1:
-        chosen = resolve_target_permanents(game, context)
+    # ``not in (None, 1)`` and never ``isinstance(..., int) and > 1``, which is
+    # what stood here: a count of ``"x"`` is exactly what a computed number
+    # looks like on this key ("Return up to **X** target permanents to their
+    # owners' hands", Recantation), and an int test reads it as "not several"
+    # and falls through to the single-target path below — one permanent
+    # returned of the X the picker collected, with nothing to see. The destroy
+    # handler one family over already asks it this way.
+    if isinstance(targets_desc, dict) and targets_desc.get("count") not in (None, 1):
+        # The printed noun phrase, honoured rather than assumed. This branch
+        # used to take every slot the picker filled: right for "up to two target
+        # creatures", whose picker offers only creatures, and wrong the moment a
+        # narrowing the picker cannot enforce arrives — the same asymmetry the
+        # singular branch below spells out at length. Asked through
+        # ``subject_matches`` for that branch's reason: a controller is a seat
+        # comparison (CR 109.5) the object alone cannot answer.
+        from ..subject_filters import subject_matches
+
+        described = targets_desc.get("filter") or {}
+        observer = (
+            game.players.index(context.caster) if context.caster in game.players
+            else None
+        )
+        # Handed **into** the resolver as its predicate rather than applied to
+        # what it returns, and that is the whole of the fix: its default
+        # predicate is ``p.is_creature``, so a bare
+        # ``resolve_target_permanents(game, context)`` drops every non-creature
+        # slot before this branch can see it — Recantation returned two of the
+        # three permanents its picker collected and logged itself resolved.
+        chosen = resolve_target_permanents(
+            game, context,
+            predicate=lambda perm: subject_matches(
+                game, perm, described,
+                observer=observer, source=context.source_permanent,
+            ),
+        )
         for perm in chosen:
             owner = return_permanent_to_owners_hand(game, perm, context.caster)
             game.log.append(f"{perm.card.name} returned to {owner.name}'s hand")
         if not chosen:
-            game.log.append("No creatures to return")
+            game.log.append("No permanents to return")
         return True, "resolved"
     # A narrowed or widened bounce ("up to one target non-Spirit creature",
     # Roaming Ghostlight; "up to one other target creature or planeswalker",
@@ -3483,6 +3516,12 @@ def reveal_hand_and_choose(game: Game, instruction: OracleInstruction, context: 
         victim_index=victim_index,
         legal_indices=legal,
         remaining=wanted,
+        # "…choose **up to** X cards from it" (Discordant Dirge). CR 601.2c's
+        # ceiling, which is what lets the chooser stop before the number is
+        # reached. Carried onto every prompt of the chain by
+        # ``_rearm_revealed_hand_pick`` — the picks after the first are the same
+        # printed choice, so the permission has to survive each answer.
+        up_to=bool(instruction.payload.get("up_to")),
         # Carried so the picks after the first can recompute what is legal
         # against the hand as it then stands.
         exclude_types=exclude_types,

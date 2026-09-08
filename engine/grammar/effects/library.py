@@ -24,6 +24,7 @@ from ..references import parse_player_ref
 from ..stream import TokenStream
 from ..phrases import _parse_card_alternatives, _parse_mana_payment
 from ..vocabulary import CARD_TYPES
+from ..where_x import parse_where_x_definition
 
 
 
@@ -743,6 +744,11 @@ def _accept_look_and_choose(
     mark = stream.mark()
     if not stream.accept_phrase("and", "choose"):
         return None
+    # "…and choose **up to** X cards from it" (Discordant Dirge). CR 601.2c's
+    # ceiling, recorded rather than consumed: read as a plain count the chooser
+    # would be made to take every card the number allows, which is a strictly
+    # different card whenever taking fewer is better.
+    up_to = bool(stream.accept_phrase("up", "to"))
     try:
         count = parse_amount(stream)
     except GrammarError:
@@ -754,6 +760,21 @@ def _accept_look_and_choose(
     if not stream.accept_phrase("from", "it"):
         stream.reset(mark)
         return None
+    # "…, **where X is the number of verse counters on this enchantment**."
+    # (Discordant Dirge.) The clause sits *inside* the sentence, between the
+    # count it defines and the discard behind it, so the statement layer's
+    # trailing reader never reaches it — by the time that layer runs, the
+    # sentence has already been claimed whole by this production.
+    #
+    # Read here and returned as the wrapper the trailing spelling produces, so
+    # one node means one thing however the card punctuates it, and the stamping
+    # that gives the count its X is the same code either way.
+    definition = None
+    where_mark = stream.mark()
+    if stream.accept_punct(","):
+        definition = parse_where_x_definition(stream)
+        if definition is None:
+            stream.reset(where_mark)
     if not stream.accept_punct("."):
         stream.reset(mark)
         return None
@@ -787,10 +808,10 @@ def _accept_look_and_choose(
             # search's identical clause is. A field saying "the player
             # chooses" would be a second spelling of what the answer carries.
             stream.accept_phrase("in", "any", "order")
-            return ast.RevealHandAndChoose(
+            return _with_where_x(ast.RevealHandAndChoose(
                 player, ast.ObjectFilter(is_card=True), fate="library_top",
-                count=count, revealed=False,
-            )
+                count=count, revealed=False, up_to=up_to,
+            ), definition)
     stream.reset(tuck)
     # Whose discard, read as a reference rather than as the literal words
     # "that player": Leshrac's Sigil prints "**The player** discards that
@@ -809,10 +830,19 @@ def _accept_look_and_choose(
     ):
         stream.reset(mark)
         return None
-    return ast.RevealHandAndChoose(
+    return _with_where_x(ast.RevealHandAndChoose(
         player, ast.ObjectFilter(is_card=True), fate="discard",
-        count=count, revealed=False,
-    )
+        count=count, revealed=False, up_to=up_to,
+    ), definition)
+
+
+def _with_where_x(node, definition):
+    """*node*, wrapped in the where-clause it printed mid-sentence, or bare.
+
+    One helper for the production's two endings, so the tuck and the discard
+    cannot come to read the same printed clause differently.
+    """
+    return node if definition is None else ast.WhereX(node, definition)
 
 
 def parse_graveyard_top_to_library(stream: TokenStream) -> "ast.Statement | None":

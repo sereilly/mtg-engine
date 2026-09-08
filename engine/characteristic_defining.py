@@ -334,7 +334,9 @@ def _life_paid_on_entry_count(match: re.Match) -> dict[str, object]:
     """Nameless Race. The life its controller paid as it entered, which is not
     on any battlefield either - the same shape Wood Elemental's row has, one
     resource over."""
-    return {"count": "life_paid_as_entered"}
+    from .enter_effects import LIFE_PAID_AS_ENTERED
+
+    return {"count": LIFE_PAID_AS_ENTERED}
 
 
 def _sacrificed_on_entry_count(match: re.Match) -> dict[str, object]:

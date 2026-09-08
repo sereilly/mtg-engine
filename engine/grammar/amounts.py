@@ -370,6 +370,42 @@ def accept_counters_on_source(stream: TokenStream) -> "ast.CountersOnSource | No
     return None
 
 
+def accept_counters_on_event_subject(
+    stream: TokenStream,
+) -> "ast.CountersOnEventSubject | None":
+    """``<word> counters on that <noun>`` — the count of a named counter the
+    object the firing event was about was carrying, or None when the words are
+    something else.
+
+    The twin of :func:`accept_counters_on_source` over the other referent a
+    counter clause can name. Only "**that** <noun>" is admitted, and never a
+    bare "it": a pronoun after a trigger is rebound to the event's subject in
+    one place (``rebinding.rebind_pronoun_to_event_subject``) and reading it a
+    second time here would be a second answer to which object a sentence means.
+
+    The noun is checked but not otherwise read. What the phrase names is decided
+    by the trigger the sentence sits under, so the word is a printed agreement
+    with that event rather than a filter — and a clause naming some *other*
+    noun than the event's is one this cannot answer, which is why the word must
+    still be there for the production to claim the line.
+    """
+    mark = stream.mark()
+    token = accept_counter_kind(stream)
+    if token is not None:
+        kind = token.text
+        if (
+            stream.accept_word("counter", "counters")
+            and stream.accept_word("on")
+            and stream.accept_word("that")
+        ):
+            noun = stream.peek_word()
+            if noun is not None and _singular(noun) in _EVENT_SUBJECT_NOUNS:
+                stream.advance()
+                return ast.CountersOnEventSubject(kind)
+    stream.reset(mark)
+    return None
+
+
 def _parse_counted_amount(
     stream: TokenStream, *, back_reference: str | None = None
 ) -> ast.Amount:
@@ -752,6 +788,15 @@ def _parse_equal_to_body(stream: TokenStream) -> ast.Amount | None:
 #: refused the whole line rather than narrowing anything, because a card type is
 #: what the *previous* zone happened to be called.
 _POSSESSIVE_NOUNS = CARD_TYPES | ALL_SUBTYPES | {"card"}
+
+#: Nouns a "…counter on **that** <noun>" phrase may name — the same set, and
+#: for the same reason: the word agrees with whatever the trigger's condition
+#: called the object, and Sporogenesis' "that creature" is one printing of it
+#: while a card whose death trigger named a tribe would print that instead.
+#:
+#: Its own name rather than the constant above reused inline, so a later
+#: narrowing of one phrase's vocabulary cannot silently narrow the other's.
+_EVENT_SUBJECT_NOUNS = _POSSESSIVE_NOUNS
 
 
 def parse_pt_pair(text: str) -> tuple[ast.Amount, bool, ast.Amount, bool]:

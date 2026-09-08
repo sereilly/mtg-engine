@@ -218,6 +218,8 @@ class _FilterDraft:
     name_from_event: bool = False
     excluded_basic_lands: bool = False
     created_with_source: bool = False
+    #: See ``ast.ObjectFilter.put_onto_battlefield_by_source``.
+    put_onto_battlefield_by_source: bool = False
     in_combat_with_source: bool = False
     was_dealt_damage_this_turn: bool = False
     dealt_damage_to_source_this_turn: bool = False
@@ -266,6 +268,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         targets_object=d.targets_object,
         target_count=d.target_count,
         created_with_source=d.created_with_source,
+        put_onto_battlefield_by_source=d.put_onto_battlefield_by_source,
         controller=d.controller,
         owner=d.owned_by,
         owner_or_controller=d.owner_or_controller,

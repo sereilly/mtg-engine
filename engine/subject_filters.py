@@ -152,6 +152,12 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # point on a *sweep*: with the word untestable the lowering refused the
     # line, and dropping it instead would destroy every token on the table.
     "created_with_source",
+    # "…creature **put onto the battlefield with this enchantment**" (Diabolic
+    # Servitude). ``created_with_source`` one zone over: the same kind of
+    # history record, stamped by the reanimation rather than by a token maker,
+    # and testable here for the same reason — what it needs beyond the object is
+    # the ability's own source, and a caller with none answers no.
+    "put_onto_battlefield_by_source",
     # "target **nonsnow** land" (Hallowed Ground). The negative of
     # ``supertypes``, answered off the same effective type line — testable for
     # exactly the reason the positive is.
@@ -1143,6 +1149,22 @@ def subject_matches(
         if source is None:
             return False
         if obj.metadata.get(CREATED_WITH_PERMANENT_ID) != source.permanent_id:
+            return False
+    # "…**put onto the battlefield with this enchantment**" (Diabolic
+    # Servitude). The permanent the source's own reanimation made, by the id it
+    # stamped — the same record ``auras.enchant_card_refusal`` reads for
+    # Necromancy's enchant clause, so what one card may legally enchant and what
+    # the other's triggers name are one question with one answer.
+    #
+    # By id and not by identity for ``created_with_source``'s reason: a source
+    # that left and returned is a new object (CR 400.7) and did not put anything
+    # onto the battlefield.
+    if described.get("put_onto_battlefield_by_source"):
+        from .auras import PUT_ONTO_BATTLEFIELD_BY
+
+        if source is None:
+            return False
+        if obj.metadata.get(PUT_ONTO_BATTLEFIELD_BY) != source.permanent_id:
             return False
     # "Another" (CR 109.5) excludes the ability's own source by identity — a
     # look-alike on the same battlefield is a different permanent.

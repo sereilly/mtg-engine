@@ -244,6 +244,13 @@ def _lower_reveal_hand_and_choose(
     amount = _amount_payload(node.count)
     if amount != 1:
         payload["count"] = amount
+    if node.up_to:
+        # "…choose **up to** X cards from it" (Discordant Dirge). CR 601.2c's
+        # ceiling, carried so the prompt lets the chooser stop early. Emitted
+        # only when the card prints the words, for the reason the two keys above
+        # are: every earlier printing names exactly as many as it says, and its
+        # payload stays byte-identical.
+        payload["up_to"] = True
     if not node.revealed:
         payload["looked_at"] = True
     if node.player.kind == "that_player":

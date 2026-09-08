@@ -1476,6 +1476,24 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # printed and invisible from the outside.
     ("dies",
      r"when this creature dies (?P<dies_during_combat>)during combat"),
+    # "When **the creature put onto the battlefield with this enchantment**
+    # dies, …" (Diabolic Servitude.) A death the source *watches* rather than
+    # its own, so it is the whenever table's `permanent_dies` under the other
+    # printed word — and the subject is read by the noun parser rather than
+    # matched as words, exactly as that row's is.
+    #
+    # **Above** the bare row, whose `.+` swallowed it whole: matched there it
+    # became `dies`, the source's own death loop, so the trigger fired when the
+    # *enchantment* went to the graveyard and never when the creature did. An
+    # ability firing on the wrong event, which reads to every census as
+    # implemented — the failure this table's neighbouring comments name twice.
+    #
+    # The definite article is what keeps it off the bare row's other cards: it
+    # names one described object where "a"/"an" name any, and the description
+    # behind it is what says which. Nothing else in the pool prints "when the …
+    # dies".
+    ("permanent_dies",
+     r"when (?P<dying_subject>the [^,]+) dies"),
     ("dies",                        r"when (?:this creature|.+) dies"),
     # "you_gain_life" was here, spelled "when you gain life", with no dispatcher
     # and no card: a life gain is a repeatable event, so every printing of it is

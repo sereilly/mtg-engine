@@ -30,6 +30,8 @@ from ...cost_modifiers import (ability_cost_reduction, ability_cost_tax,
                                ability_self_reduction_amount,
                                 sacrifice_taxes)
 from ...cost_tap_records import record_tapped_to_pay
+from ...divided_damage import (DIVIDED_TARGETS, EVENLY, divided_description,
+                               divided_entry, division_refusal, stamped_entry)
 from ...cost_x_definitions import cost_x_is_defined, cost_x_value
 from ...oracle_types import x_spend_colors_from_text
 from ...activation_restrictions import x_zero_restriction_line
@@ -41,7 +43,7 @@ from ...events import emit
 from ...game_types import (OracleExecutionContext, OracleStateMachine,
                            SimulationResult, StackItem, chosen_damage_source)
 from ...handlers._common import (CHOSEN_ABILITY, _card_matches_filter,
-                                 attached_host)
+                                 attached_host, evaluate_count)
 from ...oracle import LOYALTY_ANY_TIME_STATIC, OracleInstruction, compile_card_oracle
 from ...subject_filters import card_matches_any, filter_head_noun, subject_matches
 
@@ -175,6 +177,36 @@ def activation_cost_choice(controller, cost, permanent) -> tuple[int, dict]:
     return life, {}
 
 
+def _stamped_divided_targets(game, entries):
+    """CR 601.2d's announcement, with each chosen permanent resolved to its id.
+
+    The cast path's cleaning step, for an ability. Both stamp the id **now**
+    because an index is not an address: the battlefield renumbers the moment
+    anything leaves it, so a slot carried from the announcement to the
+    resolution can name a different permanent — and the bounds check downstream
+    is satisfied by it, so the effect lands on the wrong object rather than
+    fizzling (CR 400.7 is what gives the id its meaning).
+
+    ``None`` for an announcement nobody made, which is what every ability but
+    Serra's Hymn sends and what the handler reads as "no division".
+    """
+    if not entries:
+        return None
+    cleaned = []
+    for entry in entries:
+        seat, index, share = divided_entry(entry)
+        if not (isinstance(seat, int) and 0 <= seat < len(game.players)):
+            continue
+        chosen = (
+            game.permanent_at(game.players[seat], index)
+            if index is not None else None
+        )
+        cleaned.append(stamped_entry(
+            seat, index, share, None if chosen is None else chosen.permanent_id,
+        ))
+    return cleaned or None
+
+
 class AbilityActivationMixin:
     def activate_permanent_ability(
         self,
@@ -196,6 +228,14 @@ class AbilityActivationMixin:
         # on different battlefields, which one `target_player_index` cannot
         # express — see `_stack_push`.
         target_permanent_ids: list[int | None] | None = None,
+        # "Prevent the next X damage that would be dealt this turn **to any
+        # number of targets, divided as you choose**." (Serra's Hymn.) CR
+        # 601.2d's announcement, reached through CR 602.2b like every other
+        # step of 601.2 — and the first *ability* in the pool to print one, so
+        # this channel is new here while the cast side has carried it since
+        # Fireball. ``(seat, index, share)`` per chosen recipient; a face is
+        # ``index=None``.
+        divided_targets: list[tuple] | None = None,
         target_stack_index: int | None = None,
         ability_index: int | None = None,
         x_value: int | None = None,
@@ -234,6 +274,7 @@ class AbilityActivationMixin:
             old_color=old_color,
             target_permanent_index=target_permanent_index,
             target_permanent_ids=target_permanent_ids,
+            divided_targets=divided_targets,
             target_stack_index=target_stack_index,
             ability_index=ability_index,
             x_value=x_value,
@@ -423,6 +464,14 @@ class AbilityActivationMixin:
         # on different battlefields, which one `target_player_index` cannot
         # express — see `_stack_push`.
         target_permanent_ids: list[int | None] | None = None,
+        # "Prevent the next X damage that would be dealt this turn **to any
+        # number of targets, divided as you choose**." (Serra's Hymn.) CR
+        # 601.2d's announcement, reached through CR 602.2b like every other
+        # step of 601.2 — and the first *ability* in the pool to print one, so
+        # this channel is new here while the cast side has carried it since
+        # Fireball. ``(seat, index, share)`` per chosen recipient; a face is
+        # ``index=None``.
+        divided_targets: list[tuple] | None = None,
         target_stack_index: int | None = None,
         ability_index: int | None = None,
         x_value: int | None = None,
@@ -690,6 +739,59 @@ class AbilityActivationMixin:
         if target_refusal is not None:
             self.log.append(target_refusal)
             return SimulationResult(permanent.card.name, False, "unsupported", target_refusal)
+
+        # CR 601.2d's announced division, resolved to ids **here** — which is
+        # where CR 601.2c/601.2d put it, before a single cost is paid at
+        # CR 601.2h.
+        #
+        # Not at the stack push below, which is the obvious place and the wrong
+        # one: Serra's Hymn sacrifices itself to pay for this ability, so by the
+        # time the item is built the announcement's battlefield indices name a
+        # board one permanent shorter and every slot after the source has
+        # shifted. The creature announced at index 1 was resolved to whatever
+        # slid into it — which is nothing at all when it was the last — and the
+        # shield went to the player alone with the card reporting success.
+        divided_targets = _stamped_divided_targets(self, divided_targets)
+
+        # CR 601.2d itself, asked of an **ability** — the twin of the gate
+        # ``queue_from_hand`` makes one file over, and it was missing here
+        # entirely because Serra's Hymn is the pool's first ability to print a
+        # division. Beside the target check above and before any cost is paid,
+        # for that gate's stated reason: CR 601.2e returns the game to the
+        # moment before an illegal proposal, and a division judged at
+        # resolution would already have eaten the enchantment.
+        #
+        # The total is the ability's own X, which for these cards the *text*
+        # defines rather than the activation announcing — the same number
+        # ``legality._size_activation_x_targets`` gives the picker, read through
+        # the same evaluator so what the browser offers and what this accepts
+        # cannot disagree.
+        ability_instruction = getattr(ability, "instruction", None)
+        divided = divided_description(
+            (ability_instruction,) if ability_instruction is not None else ()
+        )
+        if divided is not None:
+            spec = dict(divided[1])
+            payload_amount = divided[0].get("amount")
+            total = payload_amount if isinstance(payload_amount, int) else 0
+            counted = divided[0].get("x_from_count")
+            if payload_amount == "x" and isinstance(counted, dict):
+                total = max(0, evaluate_count(
+                    self, self.players[controller_index], counted,
+                    source=permanent,
+                ))
+            elif payload_amount == "x":
+                total = int(x_value or 0)
+            refusal = division_refusal(
+                total, divided_targets or (),
+                division=spec.get("division", EVENLY),
+                max_targets=spec.get("max_targets"),
+            )
+            if refusal is not None:
+                self.log.append(f"{permanent.card.name}: {refusal}")
+                return SimulationResult(
+                    permanent.card.name, False, "unsupported", refusal
+                )
 
         # "Remove a <kind> counter from this creature" (Scavenging Ghoul; the
         # ability Life Matrix grants) - CR 602.1a: a counter removal is an
@@ -2500,6 +2602,16 @@ class AbilityActivationMixin:
                     # `item.choices["new_color"]` for the Lace cycle). One key,
                     # so a handler need not know whether a spell or an ability
                     # asked the question.
+                    # CR 601.2d's announced division, on the very key the
+                    # cast side stamps it under — the shield handler reads
+                    # ``context.choices[DIVIDED_TARGETS]`` and does not know
+                    # whether a spell or an ability announced it (Serra's Hymn
+                    # is the pool's first ability to print one). Each entry's
+                    # chosen permanent is resolved to its **id** as it is
+                    # stamped, for the reason the cast path gives: an index is
+                    # not an address, and the battlefield renumbers the moment
+                    # anything leaves it.
+                    DIVIDED_TARGETS: divided_targets,
                     "new_color": self._normalize_mana_color(mana_color),
                     # The word a text change replaces, beside the one it
                     # replaces it with. See the parameter's note above.

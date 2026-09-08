@@ -25,12 +25,17 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
+<<<<<<< HEAD
 **12 unclaimed sentence(s) across 11 supported card(s).**
+=======
+**16 unclaimed sentence(s) across 16 supported card(s).**
+>>>>>>> usg-w1g5
 
 - **Brand**
   - `gain control of all permanents you own`
 - **Contamination**
   - `if a land is tapped for mana, it produces {b} instead of any other type and amount`
+<<<<<<< HEAD
 - **Diabolic Servitude**
   - `when the creature put onto the battlefield with this enchantment dies, exile it and return this enchantment to its owner's hand`
   - `when this enchantment leaves the battlefield, exile the creature put onto the battlefield with this enchantment`
@@ -50,6 +55,36 @@ anything anyone did, and every ingest would arrive red.
   - `{1}{b}, sacrifice this enchantment: destroy up to x target nonblack creatures, where x is the number of verse counters on this enchantment. they can't be regenerated`
 - **War Dance**
   - `sacrifice this enchantment: target creature gets +x/+x until end of turn, where x is the number of verse counters on this enchantment`
+=======
+- **Expunge**
+  - `cycling {2}`
+- **Hush**
+  - `cycling {2}`
+- **Lay Waste**
+  - `cycling {2}`
+- **Lull**
+  - `cycling {2}`
+- **Rejuvenate**
+  - `cycling {2}`
+- **Rescind**
+  - `cycling {2}`
+- **Rune of Protection: Artifacts**
+  - `cycling {2}`
+- **Rune of Protection: Black**
+  - `cycling {2}`
+- **Rune of Protection: Blue**
+  - `cycling {2}`
+- **Rune of Protection: Green**
+  - `cycling {2}`
+- **Rune of Protection: Lands**
+  - `cycling {2}`
+- **Rune of Protection: Red**
+  - `cycling {2}`
+- **Rune of Protection: White**
+  - `cycling {2}`
+- **Scrap**
+  - `cycling {2}`
+>>>>>>> usg-w1g5
 
 ## Acknowledged simplifications
 

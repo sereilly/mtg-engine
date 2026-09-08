@@ -456,6 +456,24 @@ def _with_no_regeneration(statement: ast.Statement) -> "ast.Statement | None":
             # None rather than a rewrite, and the caller rewinds.
             return None
         return dataclasses.replace(statement, options=folded)
+    if isinstance(statement, ast.WhereX):
+        # "Destroy up to X target nonblack creatures, **where X is the number of
+        # verse counters on this enchantment**. They can't be regenerated."
+        # (Vile Requiem.) A second wrapper a printed card puts between the verb
+        # and this rider, and the same argument as the conditional below it: the
+        # where-clause is folded on by the sentence layer *after* the destroy
+        # production has finished, so by the time the rider is read the destroy
+        # is one level down and the production's own probe has long since
+        # rewound.
+        #
+        # The card without the where-clause already worked ("Destroy up to two
+        # target nonblack creatures. They can't be regenerated."), which is what
+        # makes the omission invisible: nothing about the rider changed, only
+        # what was printed in front of it.
+        inner = _with_no_regeneration(statement.statement)
+        if inner is None:
+            return None
+        return dataclasses.replace(statement, statement=inner)
     if isinstance(statement, ast.Conditional):
         then = _with_no_regeneration(statement.then)
         otherwise = (

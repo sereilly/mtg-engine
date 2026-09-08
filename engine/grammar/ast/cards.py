@@ -289,6 +289,14 @@ class RevealHandAndChoose:
     #: is not the chooser — the same choice, made from a zone the rest of the
     #: table can or cannot see.
     revealed: bool = True
+    #: "…and choose **up to** X cards from it" (Discordant Dirge). CR 601.2c's
+    #: ceiling rather than a count: the chooser may name fewer, and every
+    #: printing before this one names exactly as many as it says.
+    #:
+    #: Its own field rather than a quantifier on ``count``, because ``count`` is
+    #: an :class:`Amount` and an amount has no room for "or fewer" — the same
+    #: split ``TargetSpec`` makes between its ``count`` and its quantifier.
+    up_to: bool = False
 
 
 @dataclass(frozen=True)

@@ -379,3 +379,52 @@ def test_w1g1_the_keyword_creatures_keep_the_keywords_beside_it(set_pool):
     )
     barrier = compile_card_oracle(pool["Shimmering Barrier"])
     assert set(barrier.static_lines) == {"defender", "first strike"}
+
+# --- W1G5: Carrion Beetles, the picker-sweep finding that is not a hollow card ---
+from engine import Game, PlayerState
+from engine.models import Permanent
+from tests.helpers import _mk_creature_card, resolve_stack
+
+
+def _g5c_game():
+    """Two seats with no mana enforcement, ending on its own three-tuple.
+
+    The ``_g5c_`` prefix and the distinct ending are SET_PLAYBOOK.md's rule
+    about a mechanical union splicing one helper's body onto another's
+    signature.
+    """
+    p1, p2 = PlayerState(name="G5A"), PlayerState(name="G5B")
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    return game, p1, p2
+
+
+def test_w1g5_carrion_beetles_exiles_three_cards_from_one_graveyard(set_pool):
+    """{2}{B}, {T}: Exile up to three target cards from a single graveyard.
+
+    Carrion Beetles is in ``picker_sweep`` and in **neither** of the other two
+    instruments, which is the whole reading of it: the ability is implemented
+    and works. What the sweep names is that its cards are chosen at *resolution*
+    rather than announced (CR 601.2c) — ROADMAP.md's recorded decline for a
+    graveyard target, not a card doing nothing.
+
+    So this test is the evidence for that reading rather than a fix: the cards
+    leave the pile, and they all leave the same one.
+    """
+    game, _p1, p2 = _g5c_game()
+    beetles = Permanent(card=set_pool("USG")["Carrion Beetles"])
+    game._put_permanent_onto_battlefield(0, beetles, None)
+    game._sync_control()
+    # CR 302.6: the {T} half of the cost needs a creature that has been under
+    # its controller's control since their turn began, and the entry path is
+    # what stamps the turn this reads.
+    beetles.metadata.pop("summoning_sickness_turn", None)
+    for i in range(4):
+        p2.graveyard.append(_mk_creature_card("G5 Corpse%d" % i, 1, 1))
+
+    assert game.activate_permanent_ability(0, "Carrion Beetles").supported
+    resolve_stack(game)
+
+    assert len(p2.exile) == 3
+    assert len(p2.graveyard) == 1
+    assert not game.pending_choices, "one pile with legal cards is not a decision"

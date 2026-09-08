@@ -2836,6 +2836,25 @@ class GameHelpersMixin:
                         # creature-death site freezes them.
                         "dead_power": max(0, dead_permanent.effective_power),
                         "dead_toughness": max(0, dead_permanent.effective_toughness),
+                        # "…create a 1/1 green Saproling creature token **for
+                        # each fungus counter on that creature**"
+                        # (Sporogenesis). The counters with no rules meaning of
+                        # their own (CR 122.3), frozen for the same reason the
+                        # two numbers above are and spelled the way both sibling
+                        # death sites already spell them.
+                        #
+                        # This was the *third* site and the one that did not
+                        # record them, which is exactly the shape
+                        # ``lowering/_deaths.py`` calls a claim about a fire
+                        # site: Sporogenesis' condition is ``permanent_dies``
+                        # and so is announced from here alone, so the clause
+                        # parsed, lowered and resolved to **zero** tokens with
+                        # every guard green.
+                        "dead_counters": {
+                            key[: -len("_counters")]: int(value or 0)
+                            for key, value in dead_permanent.metadata.items()
+                            if isinstance(key, str) and key.endswith("_counters")
+                        },
                     },
                 ))
         self._enqueue_triggered_batch(events)

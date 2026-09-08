@@ -695,6 +695,18 @@ def sacrifice_any_number_on_enter(line: str, card_name: str | None = None) -> di
 #: is a rider on it: two rows would be two claims on one sentence, and the
 #: reader that dropped the rider would let Nameless Race's controller pay more
 #: life than the card allows.
+#: Where the amount paid by the entry replacement below is recorded, on the
+#: permanent that paid it.
+#:
+#: A named constant because four readers now spell it: the choice that records
+#: it (``mixins/stack/choices.py``), the CR 604.3 recompute that reads it back
+#: (Nameless Race, ``characteristic_defining.py`` → ``permanent_state.py``), the
+#: reset that clears it, and the where-clause that sizes a token from it
+#: (Phyrexian Processor). One key has one name, exactly as
+#: ``lowering/_deaths.py`` argues for the death records — a second spelling is
+#: a record written in one place and read from another.
+LIFE_PAID_AS_ENTERED = "life_paid_as_entered"
+
 PAY_ANY_LIFE_ON_ENTER = re.compile(
     r"^as this [a-z]+ enters, pay any amount of life"
     r"(?:\. the amount you pay can't "

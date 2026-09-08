@@ -452,6 +452,26 @@ def _x_definition_spec(definition: ast.Amount, node) -> dict:
         return count_spec(definition.filter, node, aggregate="distinct_colors")
     if isinstance(definition, ast.CountOf):
         return count_spec(definition.filter, node)
+    if isinstance(definition, ast.CountersOnSource):
+        # "…, where X is the number of **verse counters on this enchantment**"
+        # (War Dance, and the four other verse cards Urza's Saga prints). Not an
+        # aggregate over a set either: a counter is not an object, so there is
+        # no zone to scan — what the words name is a number sitting on the
+        # ability's own source, which only a resolution knows.
+        #
+        # The same ``source_counters`` spec ``where_x._lower_where_x_counters``
+        # and ``cards._lower_draw`` already build for the identical phrase in
+        # their own word orders, so the one evaluator answers all three and the
+        # spellings cannot count differently. It reaches here rather than there
+        # because a P/T where-clause carries its definition on the ``Pump``
+        # node instead of wrapping the sentence in a ``WhereX``.
+        #
+        # Reading it off a *sacrificed* source is CR 608.2h's last known
+        # information and needs no code: the counters live in the permanent
+        # object's own metadata (``engine/named_counters.py``), and a cost that
+        # sacrificed it took it off the battlefield without destroying the
+        # object the resolution still holds.
+        return {"source_counters": definition.kind}
     if isinstance(definition, ast.CharacteristicOfSubject):
         # "…, where X is **its** mana value" (Great Defender, Subdue, Kry
         # Shield), "…, where X is **its toughness minus 1**" (Blood Lust). Not

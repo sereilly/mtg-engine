@@ -1664,6 +1664,18 @@ def create_token(game: Game, instruction: OracleInstruction, context: OracleExec
             0 if source is None
             else int(source.metadata.get(str(raw_count["source_record"]), 0) or 0)
         )
+    elif isinstance(raw_count, dict) and "dead_counters" in raw_count:
+        # "…for each fungus counter on that creature" (Sporogenesis). The
+        # counters the dying creature carried, out of what the death fire site
+        # froze (CR 603.10 / 608.2h) and never off any board: by the time this
+        # trigger resolves the creature is a card in a graveyard with no
+        # counters at all (CR 400.7), so a live read would answer zero on every
+        # card that can print the words.
+        #
+        # No record is a death nothing observed — zero tokens, rather than a
+        # guess at a pile that no longer exists.
+        frozen = (context.trigger_context or {}).get("dead_counters") or {}
+        count = max(0, int(frozen.get(str(raw_count["dead_counters"]), 0) or 0))
     elif isinstance(raw_count, dict) and "history" in raw_count:
         # "…for each nontoken creature that died this turn" (Gadrak): the game's
         # own tally, because the objects counted are exactly the ones no zone
@@ -2640,7 +2652,16 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
         "count"
     ) != "x" else 0
     if shared is not None:
-        count = evaluate_count(game, context.caster, shared)
+        # The source travels with the spec, because one of the shapes it can
+        # carry is a pile of counters sitting on the ability's own permanent —
+        # "…sacrifices a permanent of their choice **for each soot counter on
+        # this artifact**" (Smokestack). ``evaluate_count`` answers that key
+        # off the source it is handed and reads zero off the ``None`` it used
+        # to get here, which for Smokestack is a card that has never asked for
+        # anything.
+        count = evaluate_count(
+            game, context.caster, shared, source=context.source_permanent
+        )
     # "Sacrifice two Swamps. **If you can't**, …" (Infernal Denizen.) Whether
     # the sacrifice could be performed at all, recorded here rather than after
     # the prompt: an interactive seat answers a queued choice long after this

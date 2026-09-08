@@ -348,6 +348,36 @@ def _stamp_token_count(
             )
         payload["count"] = {"source_record": REGENERATED_THIS_TURN}
         return payload["count"]
+    if node.per_counter is not None:
+        # "…**for each fungus counter on that creature**" (Sporogenesis). A
+        # pile of counters rather than a set of objects, a game-wide tally or a
+        # record on this permanent — the fourth place a token count can come
+        # from, and the fourth branch for that reason.
+        #
+        # Only the **event subject** spelling is lowered. "…on this
+        # enchantment" parses to the sibling node and refuses here, because the
+        # count would have to be read live off the source and no card in the
+        # pool prints it on a token line — a branch with nothing behind it is a
+        # claim nothing checks, and the wrong one here makes a card that counts
+        # its own counters instead of the dying creature's.
+        if not isinstance(node.per_counter, ast.CountersOnEventSubject):
+            raise LoweringError(
+                "a token count reads counters off the event's subject and "
+                "nothing else",
+                node=node,
+            )
+        if not isinstance(node.count, ast.Fixed) or node.count.value != 1:
+            raise LoweringError(
+                "a per-counter token count multiplies one token, not several",
+                node=node,
+            )
+        # The pile is read out of what the death froze (CR 603.10 / 608.2h) and
+        # never off the board: by the time this resolves the creature is a card
+        # in a graveyard with no counters at all (CR 400.7), so a live read is
+        # not a smaller answer, it is zero on every card that could print the
+        # words.
+        payload["count"] = {"dead_counters": node.per_counter.kind}
+        return payload["count"]
     if node.per_each is not None:
         # "…**for each untapped Forest they control**" (Waiting in the Weeds).
         # A count of a board, where the two branches above read a history and a

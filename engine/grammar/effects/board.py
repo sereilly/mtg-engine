@@ -34,7 +34,8 @@ from ..records import _parse_for_each_history
 from ..references import parse_recipient, parse_target_spec
 from ..stream import TokenStream
 from ..phrases import (
-    _parse_mana_payment, _parse_pay_life, _parse_per_each_objects,
+    _parse_mana_payment, _parse_pay_life, _parse_per_each_counters,
+    _parse_per_each_objects,
     _parse_that_object, _parse_zone, accept_graveyard_position,
 )
 from ..sacrifices import (_parse_counted_sacrifice, _parse_sacrificed_subject,
@@ -123,6 +124,16 @@ def _parse_sacrifice(stream: TokenStream, player: ast.PlayerRef) -> ast.Statemen
     history = _parse_for_each_history(stream, parse_object_filter)
     if history is not None:
         return ast.Sacrifice(player, subject, count=history)
+    # "…that player sacrifices a permanent of their choice **for each soot
+    # counter on this artifact**." (Smokestack.) A pile of counters rather than
+    # a set of objects, read through the same shared fragment the token count
+    # reads and asked here for the reason the history reader above is asked
+    # here: the board reader below would claim a counter word that happens to
+    # also be a creature type and hand the rest of the clause back as
+    # unconsumed text.
+    per_counter = _parse_per_each_counters(stream)
+    if per_counter is not None:
+        return ast.Sacrifice(player, subject, count=per_counter)
     counted, beyond_first = _parse_per_each_objects(stream)
     if counted is not None and not beyond_first:
         return ast.Sacrifice(player, subject, count=ast.CountOf(counted))
