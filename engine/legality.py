@@ -1253,16 +1253,27 @@ class LegalityMixin:
         caster announces X, which is why that side leaves the flag alone until
         ``announced_cast_x`` resolves it.
 
-        An **ability**'s X is not announced: the where-clause defines it, off a
-        board the game can already read. CR 602.2b routes an activation through
-        CR 601.2b–i, so the number is settled at 601.2c — with the source still
-        on the battlefield, because a sacrifice cost is not paid until 601.2h.
+        An ability's X comes from one of **two** places, and only one of them is
+        answerable here. Candelabra of Tawnos ("{X}, {T}: Untap X target lands")
+        prints the X in its *cost*: the player announces it at CR 601.2b and
+        nothing but the client can say what it will be, which is exactly what
+        the flag is for — it survives untouched, and the browser asks for X
+        before it offers a picker.
 
-        Left unresolved, ``x_targets`` is an unbounded picker in front of a
-        handler that destroys everything it is handed: Vile Requiem with one
-        verse counter destroyed three creatures, which is the wrong-in-the
-        player's-favour, silent failure a printed restriction has to be
-        *enforced* to avoid.
+        The verse cycle prints it in the *text* instead ("…where X is the number
+        of verse counters on this enchantment"). Nobody announces that one: the
+        where-clause defines it off a board the game can already read, and
+        CR 602.2b routes an activation through CR 601.2b–i so the number is
+        settled at 601.2c — with the source still on the battlefield, because a
+        sacrifice cost is not paid until 601.2h.
+
+        So the presence of an ``x_from_count`` spec is the whole test, and its
+        absence leaves the flag exactly as it was rather than guessing a
+        ceiling. Left unresolved for the *defined* kind, ``x_targets`` is an
+        unbounded picker in front of a handler that destroys everything it is
+        handed: Vile Requiem with one verse counter destroyed three creatures,
+        which is the wrong-in-the-player's-favour, silent failure a printed
+        restriction has to be *enforced* to avoid.
 
         Writes ``max_targets`` and drops the flag, exactly as the cast side does
         one question over, so everything downstream reads one key.
@@ -1272,11 +1283,6 @@ class LegalityMixin:
         instruction = targeting_instruction(getattr(ability, "instruction", None))
         counted = (getattr(instruction, "payload", None) or {}).get("x_from_count")
         if not isinstance(counted, dict):
-            # No definition the game can read is not a licence to offer any
-            # number: the words print a ceiling, so an unreadable one bounds the
-            # announcement at nothing rather than at everything.
-            spec.pop("x_targets", None)
-            spec["max_targets"] = 0
             return
         spec.pop("x_targets", None)
         spec["max_targets"] = max(0, evaluate_count(
