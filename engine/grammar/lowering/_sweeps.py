@@ -45,7 +45,9 @@ from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
 from ._amounts import count_spec
-from ._common import (_filter_payload, refuse_untestable,
+from ._common import (
+    _restrictions_beyond,
+    _filter_payload, refuse_untestable,
                       testable_filter_payload)
 
 
@@ -266,16 +268,49 @@ def lower_described_set_damage(
     )
 
 
+#: What each fused sweep kind can say about its creatures, as ``ObjectFilter``
+#: fields. The kind's *name* is the whole narrowing — there is no filter payload
+#: on any of them — so a printed word outside its row would be read here and
+#: then dropped, and the card would deal to a strictly larger board than it
+#: names. Disorder is the card that made that visible: "each **white** creature
+#: and each player who controls a white creature" fused happily and burned every
+#: creature on the table.
+_SWEEP_NARROWINGS: dict[str, frozenset[str]] = {
+    "earthquake_damage": frozenset({"card_types", "without_keywords"}),
+    "hurricane_damage": frozenset({"card_types", "with_keywords"}),
+    "deal_damage_each_creature_and_player": frozenset({"card_types"}),
+    "deal_damage_each_attacking_creature": frozenset({"card_types", "attacking"}),
+}
+
+
 def _sweep_kind(recipients: tuple[ast.Recipient, ...]) -> str | None:
     """Recognize the board-sweep damage shapes as their dedicated handlers.
 
     These are genuinely different effects, not riders: they damage every player
     *and* a filtered set of creatures as one state-based-action batch.
+
+    None means "no fused kind says this", which is not a refusal — the caller
+    falls through to ``_conjuncts.lower_split_recipients``, one instruction per
+    recipient, which carries every narrowing as payload. So the checks below
+    cost a card nothing; what they buy is that a word these kinds cannot say
+    never reaches one of them.
     """
-    hits_players = any(
-        isinstance(r, ast.PlayerRef) and r.kind in ("each_player", "each_opponent")
-        for r in recipients
-    )
+    hits_players = [
+        r for r in recipients
+        if isinstance(r, ast.PlayerRef) and r.kind in ("each_player", "each_opponent")
+    ]
+    # A **narrowed** seat set is not the seat set these kinds damage: every one
+    # of them hits every player, and a printed relative clause ("each player
+    # **who controls a white creature**", Disorder) would be dropped on the way
+    # in. The split lowering below carries it, so this is a fall-through and not
+    # a refusal.
+    if any(
+        getattr(seats, "did", None) is not None
+        or getattr(seats, "controls", None) is not None
+        or getattr(seats, "compared", None) is not None
+        for seats in hits_players
+    ):
+        return None
     creature_specs = [
         r for r in recipients
         if isinstance(r, ast.TargetSpec) and r.quantifier == "each"
@@ -288,15 +323,25 @@ def _sweep_kind(recipients: tuple[ast.Recipient, ...]) -> str | None:
 
     if hits_players:
         if filt.without_keywords == ("flying",):
-            return "earthquake_damage"
+            return _if_says_it_all("earthquake_damage", filt)
         if filt.with_keywords == ("flying",):
-            return "hurricane_damage"
+            return _if_says_it_all("hurricane_damage", filt)
         if not filt.with_keywords and not filt.without_keywords:
-            return "deal_damage_each_creature_and_player"
+            return _if_says_it_all("deal_damage_each_creature_and_player", filt)
         return None
     if filt.attacking and not filt.with_keywords and not filt.without_keywords:
-        return "deal_damage_each_attacking_creature"
+        return _if_says_it_all("deal_damage_each_attacking_creature", filt)
     return None
+
+
+def _if_says_it_all(kind: str, filt: ast.ObjectFilter) -> str | None:
+    """*kind*, or None when the printed phrase says more than its name can.
+
+    The fused kinds carry no filter payload, so this is the one place a word
+    they cannot express can be caught — and catching it is a fall-through to
+    the split lowering, never a lost card.
+    """
+    return None if _restrictions_beyond(filt, _SWEEP_NARROWINGS[kind]) else kind
 
 
 def lower_counter_sweep(node: ast.PutCounter) -> tuple[OracleInstruction, ...]:

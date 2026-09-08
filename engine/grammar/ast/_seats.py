@@ -161,6 +161,21 @@ class PlayerRef:
     # narrowing is a sentence that acts on every player, which is the failure
     # direction this whole family exists to avoid.
     did: "PlayerDeed | None" = None
+    # "each player **who controls a white creature**" (Disorder). The board-state
+    # twin of `did` above and the *presence* twin of `compared` below: not what
+    # the seat did and not how it compares with another seat, but simply whether
+    # anything it controls answers a printed noun phrase.
+    #
+    # A third field rather than a `PlayerComparison` with a margin of one,
+    # because that node requires a reference seat and a direction — "every word
+    # is required and nothing is defaulted", its own reader says — and this
+    # clause has neither. Set only by the production that reads the words, so
+    # every existing `PlayerRef` carries None and no lowering moves.
+    #
+    # And subject to `did`'s rule exactly: a lowering handed one it cannot carry
+    # must **refuse**, because an unenforced seat narrowing is a sentence that
+    # acts on every player at the table.
+    controls: "ObjectFilter | None" = None
     # "target player **who controls more creatures than they do and is their
     # opponent**" (the Exodus Oaths), "target opponent **who has more life than
     # you do**" (the Keepers). The relative clause above with a *board* for its

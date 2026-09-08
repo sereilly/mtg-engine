@@ -2383,6 +2383,38 @@ def _as_slots(chosen: object) -> list:
     return [] if chosen is None else [chosen]
 
 
+def seats_controlling(game, seats, described) -> list:
+    """*seats*, narrowed to the ones controlling something *described* names.
+
+    "…deals 2 damage to each white creature and **each player who controls a
+    white creature**." (Disorder.) The board twin of
+    :func:`seats_matching_deed` below, and beside it because both answer the
+    same question — which of a loop's seats does the printed relative clause
+    name — off two different kinds of evidence: a record for that one, a
+    battlefield for this one.
+
+    Through the control seam, so a permanent somebody has taken control of
+    counts for the seat that controls it now (CR 613 layer 2) rather than for
+    its owner. The observer handed to the matcher is the **candidate seat**:
+    the phrase is about what *that* player controls, not about the ability's
+    controller, so "a creature you control" inside such a clause would mean the
+    candidate's own — which is what the words say.
+
+    ``None`` is no clause printed, which leaves the list exactly as it was.
+    """
+    from ..subject_filters import subject_matches
+
+    if not described:
+        return list(seats)
+    return [
+        seat for seat in seats
+        if any(
+            subject_matches(game, perm, described, observer=seat)
+            for perm in game.controlled_by(seat)
+        )
+    ]
+
+
 def seats_matching_deed(game, context, seats, deed) -> list:
     """*seats*, narrowed to the ones a ``who <did …>`` clause names.
 

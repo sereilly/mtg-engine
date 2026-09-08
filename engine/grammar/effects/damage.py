@@ -17,6 +17,7 @@ import dataclasses
 from .. import ast
 from ..amounts import parse_amount, parse_equal_to
 from ..bounds import accept_target_bound
+from ..seat_comparisons import accept_player_control
 from ..errors import GrammarError
 from ..readers import accept_source_reference_spec
 from ..nouns import parse_object_filter
@@ -293,17 +294,40 @@ def _parse_recipient_list(stream: TokenStream) -> list[ast.Recipient]:
     recipient = _parse_damage_recipient(stream)
     if recipient is None:
         raise stream.error("expected a damage recipient")
-    recipients = [recipient]
+    recipients = [_with_control_narrowing(stream, recipient)]
     while True:
         mark = stream.mark()
         if not stream.accept_word("and"):
             break
         extra = parse_recipient(stream)
-        if extra is None or not _ends_the_recipient_list(stream):
+        if extra is None:
+            stream.reset(mark)
+            break
+        extra = _with_control_narrowing(stream, extra)
+        if not _ends_the_recipient_list(stream):
             stream.reset(mark)
             break
         recipients.append(extra)
     return recipients
+
+
+def _with_control_narrowing(stream: TokenStream, recipient: ast.Recipient):
+    """*recipient* with a trailing ``who controls <noun phrase>`` folded in.
+
+    "…deals 2 damage to each white creature and **each player who controls a
+    white creature**." (Disorder.) Read at this call site rather than inside
+    ``parse_player_ref``, which is where ``accept_player_deed`` is read too and
+    for the same reason: a seat narrowing is only safe where a lowering carries
+    it, and reading it everywhere would let a clause be consumed under a verb
+    that then acts on every player. Left on the stream anywhere else, the words
+    fail full-token consumption and the line refuses — the loud direction.
+    """
+    if not isinstance(recipient, ast.PlayerRef):
+        return recipient
+    described = accept_player_control(stream, parse_object_filter)
+    if described is None:
+        return recipient
+    return dataclasses.replace(recipient, controls=described)
 
 
 def _parse_divided_recipients(stream: TokenStream) -> ast.Recipient:

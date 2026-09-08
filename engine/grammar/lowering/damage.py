@@ -144,6 +144,29 @@ def _stamp_recipient_deed(payload: dict, recipient, node) -> None:
     if deed is not None:
         payload["recipient_did"] = deed
 
+def _stamp_recipient_control(payload: dict, recipient, node) -> None:
+    """"…to **each player who controls a white creature**." (Disorder.)
+
+    The board narrowing the recipient printed, carried to the handler that
+    loops the seats — the twin of :func:`_stamp_recipient_deed` beside it, and
+    beside it for its reason: both seat-set recipients take it identically, and
+    what the clause narrows is *which of the loop's seats*.
+
+    Every key of the phrase must be one ``subject_matches`` can test, because a
+    narrowing the matcher drops here is a card that damages every player at the
+    table — the direction this whole family refuses in.
+    """
+    described = getattr(recipient, "controls", None)
+    if described is None:
+        return
+    payload["recipient_controls"] = testable_filter_payload(
+        described,
+        refusal="the seat narrowing cannot test this restriction",
+        node=node,
+        require_narrowing=False,
+    )
+
+
 def _lower_damage(
     node: ast.DealDamage,
     event: str | None = None,
@@ -193,6 +216,20 @@ def _lower_damage(
         raise LoweringError(
             "no damage handler carries the printed can't-be-prevented lock here",
             node=node,
+        )
+    # "…to each player **who controls a white creature**." (Disorder.) The same
+    # post-condition the riders above get, for the same reason and in the same
+    # place: only two arms carry the clause, and a recipient that printed one
+    # and reached any other arm would be a sentence damaging every player. A
+    # branch added later gets the check for free.
+    if any(
+        getattr(recipient, "controls", None) is not None
+        for recipient in node.recipients
+    ) and not any(
+        instruction.payload.get("recipient_controls") for instruction in lowered
+    ):
+        raise LoweringError(
+            "no damage handler carries the printed seat narrowing here", node=node
         )
     lowered = _with_attached_dealer(node, lowered)
     return lowered
@@ -679,12 +716,14 @@ def _lower_damage_shape(
         # the hole had never been dealt through.
         payload["recipient"] = "each_player"
         _stamp_recipient_deed(payload, recipient, node)
+        _stamp_recipient_control(payload, recipient, node)
     elif isinstance(recipient, ast.PlayerRef) and recipient.kind == "each_opponent":
         # "…deals 2 damage to each opponent" (Storm Caller). The handler loops
         # the caster's living opponents through the same player-damage path a
         # single face takes, so shields and replacements see each event.
         payload["recipient"] = "each_opponent"
         _stamp_recipient_deed(payload, recipient, node)
+        _stamp_recipient_control(payload, recipient, node)
     elif isinstance(recipient, ast.PlayerRef) and recipient.kind in (
         # "target opponent" joins the chosen-player forms: the damage handler
         # takes the seat off the resolution context either way, and the

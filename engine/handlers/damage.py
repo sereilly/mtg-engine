@@ -18,6 +18,7 @@ from ._common import (divided_target_permanent, recorded_permanent_ids,
     frozen_that_player_seat, per_recipient_amount, permanent_matches_filter,
     resolve_amount,
     resolve_target_permanent, resolve_target_permanents, resolve_target_slots,
+    seats_controlling,
     seats_matching_deed,
 )
 from ..oracle_types import single_chosen_id
@@ -610,10 +611,19 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
             # clause does not name is dealt no damage at all rather than zero
             # (CR 120.8 makes those the same thing, and a loop that visited it
             # would still ask every shield and replacement it has).
-            seats_matching_deed(
-                game, context,
-                [i for i, p in enumerate(game.players) if not p.lost],
-                instruction.payload.get("recipient_did"),
+            # "…to **each player who controls a white creature**" (Disorder).
+            # The board narrowing, applied to the same list the deed clause
+            # narrows and for the same reason: a seat the clause does not name
+            # is dealt no damage at all rather than zero, because a loop that
+            # visited it would still ask every shield and replacement it has.
+            seats_controlling(
+                game,
+                seats_matching_deed(
+                    game, context,
+                    [i for i, p in enumerate(game.players) if not p.lost],
+                    instruction.payload.get("recipient_did"),
+                ),
+                instruction.payload.get("recipient_controls"),
             ),
             _hit_player,
         )
@@ -631,10 +641,14 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
 
         run_resumable(
             game,
-            seats_matching_deed(
-                game, context,
-                game.opponents_of(game.players.index(caster)),
-                instruction.payload.get("recipient_did"),
+            seats_controlling(
+                game,
+                seats_matching_deed(
+                    game, context,
+                    game.opponents_of(game.players.index(caster)),
+                    instruction.payload.get("recipient_did"),
+                ),
+                instruction.payload.get("recipient_controls"),
             ),
             _hit_opponent,
         )
