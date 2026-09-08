@@ -41,7 +41,7 @@ Held at this rate, supporting the 26,113-card release line would need about **53
 | STH | 143 | 143 (100.0%) | 0 (0.0%) | 215 | 0 (0.0%) | 0 | 0.0 |
 | EXO | 143 | 143 (100.0%) | 0 (0.0%) | 207 | 0 (0.0%) | 0 | 0.0 |
 | M21 | 285 | 285 (100.0%) | 0 (0.0%) | 503 | 0 (0.0%) | 0 | 0.0 |
-| USG *(measured)* | 335 | 204 (60.9%) | 1 (0.5%) | 289 | 0 (0.0%) | 1 | 0.5 |
+| USG *(measured)* | 335 | 218 (65.1%) | 1 (0.5%) | 313 | 0 (0.0%) | 1 | 0.5 |
 | **Whole pool (shipped, deduped)** | **3109** | **3109 (100.0%)** | **58 (1.9%)** | **4852** | **54 (1.1%)** | **64** | **2.1** |
 
 *(measured)* — USG are ingested for measurement and **not shipped**: `cards/manifest.json` lists them under `measured`, the engine's catalog does not load them, and no player can put one in a deck. They are reported here and excluded from the ALL row and from the ceilings, because a ratchet over a set nobody has implemented would fire on its composition rather than on anything anyone did. A measured set moves up to `sets` when it is fully supported.

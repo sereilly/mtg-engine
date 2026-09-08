@@ -5635,6 +5635,13 @@ def expand_ability_lines(
       and is implemented at the one seam a resolving spell leaves the stack
       through (``mixins/stack/resolution._bin_spell_card``), off the same
       reader that produced this line.
+    * an **echo** keyword line becomes the triggered ability CR 702.30a says it
+      means — "At the beginning of your upkeep, if this permanent came under
+      your control since the beginning of your last upkeep, sacrifice it unless
+      you pay [cost]." (``engine/echo.py``). From there it is an ordinary
+      pay-or-sacrifice upkeep trigger to the grammar, to CR 603.4's
+      intervening-if gate the upkeep step already checks, and to the registered
+      handler that charges it, none of which know the word.
 
     And one rewrite that is the *card's* rather than the rules': a legendary
     card's shortened self-reference written out in full
@@ -5646,11 +5653,17 @@ def expand_ability_lines(
     wants.
     """
     from .cast_costs import expand_buyback_lines
+    from .echo import expand_echo_lines
     from .self_reference import expand_short_self_references
 
     oracle_text = expand_short_self_references(
         oracle_text, card_name, legendary=legendary
     )
+    # CR 702.30a's rewrite, as its own statement rather than another layer of
+    # the composition below: an echo keyword line is a whole line and none of
+    # the rewrites below reads one, so the order between them carries no
+    # meaning and nesting it would only make the next addition here a conflict.
+    oracle_text = expand_echo_lines(oracle_text)
     return expand_same_is_true_lines(
         expand_static_then_trigger_lines(expand_conjoined_trigger_lines(
             expand_buyback_lines(

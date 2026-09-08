@@ -29,6 +29,7 @@ from ..pt import BASE_PT_UPKEEP_START_REVERT_KEY, clear_base_pt
 from ..replacements import DAMAGE_TO_COUNTER_REMOVAL_RECORD
 from ..oracle import OracleInstruction, compile_card_oracle
 from ..trigger_utils import iter_triggered_abilities, matching_triggers
+from ..turn_state import record_controllers_upkeep
 from ..mixins._constants import _UPKEEP_PAY_KINDS
 from ..cumulative_upkeep import upcoming_cost
 from ..mana_payment import plan_payment, untapped_mana_lands
@@ -362,8 +363,23 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         """Return pay-or-consequence upkeep triggers that the player must decide on.
 
         Only returns triggers where the permanent's controller is ``player_index``
-        and the condition is ``upkeep_self`` (i.e. fires on *their* upkeep).
+        and the condition is ``upkeep_self`` (i.e. fires on *their* upkeep) —
+        and, since echo, only those whose intervening-if is true (CR 603.4).
+
+        This is the **prompt** side of the check ``resolve_upkeep`` already made
+        on the resolution side, and it has to be the same check: an ability
+        whose condition is false did not trigger, so offering its payment is
+        offering to pay for nothing. No card in the pool reached the pair before
+        — every trigger on one of these instruction kinds was ungated — so the
+        gap cost nothing until CR 702.30a printed a condition on exactly this
+        shape, at which point an echo creature would have asked for its cost at
+        every upkeep for the rest of the game while the handler correctly
+        sacrificed nothing. A player quoted a price the engine will not charge
+        is the same defect as one charged a price they were not quoted.
         """
+        from ..game_types import OracleExecutionContext
+        from ..handlers.control_flow import evaluate_condition
+
         controller = self.players[player_index]
         choices: list[dict] = []
         for _idx, permanent, trig in iter_triggered_abilities(
@@ -372,6 +388,19 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
             instruction_kinds=_UPKEEP_PAY_KINDS,
             players=[controller],
         ):
+            gate = (trig.instruction.payload or {}).get("intervening_if")
+            if gate is not None and not evaluate_condition(
+                self,
+                OracleExecutionContext(
+                    caster=controller,
+                    target=controller,
+                    card=permanent.card,
+                    source_permanent=permanent,
+                    trigger_context={"event_subject_player": player_index},
+                ),
+                gate,
+            ):
+                continue
             # The cost a counter-escalating upkeep will ask for (CR 702.24a's
             # cumulative upkeep, and Cyclone printing the same sentence
             # longhand): the counter for THIS upkeep is added when the trigger
@@ -826,6 +855,24 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         from ..game_types import OracleExecutionContext
         from ..handlers.control_flow import evaluate_condition
 
+        # CR 702.30a's "since the beginning of your last upkeep", written from
+        # the far end: stamp this upkeep as the first of *this seat's* that each
+        # permanent they control has seen, for the ones that have not seen one
+        # already (``engine/turn_state.py`` says why the record is shaped this
+        # way rather than as a moment-of-arrival stamp against a clock).
+        #
+        # **At the top of the step, before anything is collected or resolved.**
+        # CR 603.4 checks an intervening-if twice — once to decide whether the
+        # ability triggers and again as it resolves — and the offer that quotes
+        # its cost is collected before either. All three have to read one
+        # unchanging answer, which they do because this write happens before all
+        # of them and never repeats while the controller stays the same.
+        #
+        # Over the permanents this seat controls *now*, so one that enters later
+        # in this same step is correctly still owed its first upkeep.
+        record_controllers_upkeep(
+            self, list(self.controlled_by(player_index)), player_index
+        )
         self._process_mire_cleanups(player_index)
         # Layer 6: a keyword or a quoted ability granted "until your next
         # upkeep" (Erhnam Djinn, Gabriel Angelfire) expires now, at the start

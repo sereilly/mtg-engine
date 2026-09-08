@@ -523,6 +523,12 @@ def lower_record_condition(
         # the combat and no other window, and the object is the ability's own
         # source. The evaluator reads the answer the fire site froze.
         return {"kind": "attacked_or_blocked_this_combat"}
+    if isinstance(condition, ast.CameUnderControlSinceLastUpkeep):
+        # CR 702.30a. No payload, for the sibling below's reason exactly: the
+        # sentence names no seat other than "your" — the ability's controller,
+        # which the evaluator has — no object other than the ability's own
+        # source, and no window but the one the production spelled out in full.
+        return {"kind": "came_under_your_control_since_your_last_upkeep"}
     if isinstance(condition, ast.InABlockSinceLastUpkeep):
         # No payload: the sentence names no seat, no side of the block and no
         # other window. "Your" is the ability's controller, which the evaluator

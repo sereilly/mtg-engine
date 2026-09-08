@@ -428,6 +428,29 @@ class InABlockSinceLastUpkeep:
     """
     subject: "TargetSpec"
 @dataclass(frozen=True)
+class CameUnderControlSinceLastUpkeep:
+    """"if this permanent **came under your control since the beginning of your
+    last upkeep**" — CR 702.30a's intervening-if, the whole of what echo adds to
+    a sentence the grammar already read.
+
+    :class:`InABlockSinceLastUpkeep`'s sibling over the same window and for the
+    same reason: the moment it asks about may have been an opponent's turn ago,
+    and nothing on the board records when a permanent changed hands. So the
+    upkeep step records which of a seat's upkeeps a permanent first saw
+    (``turn_state.record_controllers_upkeep``) and this reads it.
+
+    **Control, not entry**, and the word is load-bearing: a permanent whose
+    controller changes has come under a new controller's control and owes a
+    fresh echo, while it entered the battlefield only once. A node keyed on
+    entry would be a different card.
+
+    No fields but the subject. The seat is "your" — the ability's controller,
+    which the evaluator has — and the window is the only one the sentence
+    admits, so a card printing a different one has to fail in the parse rather
+    than borrow this node.
+    """
+    subject: "TargetSpec"
+@dataclass(frozen=True)
 class AttackedOrBlockedThisCombat:
     """"if this creature **attacked or blocked this combat**" (Clockwork Beast,
     Avian, Steed and Swarm; Kjeldoran Home Guard).
