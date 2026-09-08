@@ -94,6 +94,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # layer-4 family as the gain above it — CR 205.1a replacing rather than
     # CR 205.1b joining — so the same category.
     "set_card_types_self": "characteristics",
+    # "**Target creature** becomes an enchantment …" (Soul Sculptor.) The same
+    # CR 205.1a replacement aimed somewhere other than the ability's own source,
+    # so the same family — what changes is who it lands on, not what layer it
+    # writes.
+    "set_card_types_target": "characteristics",
     # "…becomes a copy of that creature" (Unstable Shapeshifter). CR 613 layer
     # 1, so what it changes is every characteristic at once — which is why it
     # sits in this family rather than in `recolor` or `pump`, each of which is

@@ -1545,7 +1545,19 @@ def granted_target_legal(game, instruction, context, *, characteristics=True):
     wanted = (printed,) if isinstance(printed, str) else tuple(printed)
 
     def legal(perm) -> bool:
-        if not any(perm.has_type(kind) for kind in wanted):
+        # The type is a characteristic like any other, and CR 608.2b checks
+        # them **once**. So the second pass drops this floor with the rest:
+        # "Target creature becomes an enchantment **and** loses all abilities"
+        # (Soul Sculptor) is one noun phrase and two lowered steps, and the
+        # first step is what stops the target being a creature — re-asking the
+        # printed type at the second step found nothing and the card stripped
+        # no abilities at all, which is Phantasmal Mount's failure exactly, one
+        # characteristic over.
+        #
+        # Safe because ``characteristics=False`` is only ever asked with the
+        # fallback scan switched off (:func:`granted_target`), so a pass with no
+        # floor can return the permanent the player announced and nothing else.
+        if characteristics and not any(perm.has_type(kind) for kind in wanted):
             return False
         if characteristics and not permanent_matches_filter(perm, filters):
             return False
@@ -2177,20 +2189,30 @@ def remove_target_abilities_until_eot(game: Game, instruction: OracleInstruction
     from ..keywords import remove_all_abilities
 
     card = context.card
-    target = resolve_target_permanent(
-        game, context, predicate=granted_target_legal(game, instruction, context)
-    )
+    # Through ``granted_target``, the CR 608.2b resolver, rather than a single
+    # pass of the predicate: the removal's own sentence may have changed the
+    # target's characteristics one step earlier (Soul Sculptor's type change),
+    # and one printed instance of the word "target" is one legality check
+    # however many steps the sentence lowers to.
+    target = granted_target(game, instruction, context)
     if target is None:
         game.log.append(f"{card.name}: no valid target to strip")
         return True, "resolved"
-    remove_all_abilities(target, duration="end_of_turn")
+    # The window is payload, not the kind's name. "Until end of turn" is what
+    # Humble prints and what this kind was named for; Soul Sculptor prints one
+    # that ends on an **event** instead (CR 611.2a), and the record is what tells
+    # the sweep which — so the same instruction covers both and the removal
+    # cannot outlive the words that bought it.
+    remove_all_abilities(
+        target, duration=str(instruction.payload.get("duration") or "end_of_turn")
+    )
     # Every characteristic this can move is computed rather than stored, but the
     # derived channels are rebuilt from the board rather than on every read —
     # a lord whose anthem the stripped creature was contributing has to stop
     # contributing it now rather than at the next thing that happens to refresh.
     game._refresh_dynamic_creatures()
     game.log.append(
-        f"{target.card.name} loses all abilities until end of turn ({card.name})"
+        f"{target.card.name} loses all abilities ({card.name})"
     )
     return True, "resolved"
 

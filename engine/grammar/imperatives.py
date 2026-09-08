@@ -67,6 +67,7 @@ from .effects import (
     _parse_choose_cards_in_hand,
     _parse_choose_color,
     parse_choose_card_name,
+    parse_choose_card_type,
     _parse_choose_number,
     _parse_choose_player_who_cast,
     _parse_copy_that_spell,
@@ -741,6 +742,20 @@ def parse_imperative(
         chosen_color = _parse_choose_color(stream)
         if chosen_color is not None:
             return chosen_color
+        # "Choose artifact, creature, or land." (Turnabout.) The colour's
+        # sibling one characteristic over, and the *bare imperative* spelling of
+        # the sentence `player_verbs` already reads with a subject in front of
+        # it ("that player chooses artifact, creature, land, or non-Aura
+        # enchantment", Teferi's Realm). One production, two positions: with no
+        # subject the chooser is the effect's own controller, which is what
+        # `chooser_payload` answers for a `None` chooser.
+        #
+        # Non-consuming on refusal and it declines anything that is not a list
+        # of two or more card types, so every other "choose" sentence keeps the
+        # reading it has — the naming productions below included.
+        chosen_type = parse_choose_card_type(stream)
+        if chosen_type is not None:
+            return chosen_type
         # "Choose a player who cast one or more sorcery spells this turn."
         # (Backdraft.) Non-consuming on refusal for the reason every "choose"
         # production here is: the word opens several unrelated sentences, and a

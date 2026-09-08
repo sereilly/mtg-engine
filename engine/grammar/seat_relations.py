@@ -189,9 +189,20 @@ def accept_seat_relation(stream: TokenStream, d) -> bool:
         # Desert under a creature type's name — and the two choices are
         # recorded separately on the source, which is what the reader
         # holding that source resolves them from.
+        #
+        # A noun that names **no** card type at all has no catalog for the
+        # phrase to draw a subtype from, and that is the third reading:
+        # "Tap all untapped **permanents** of the chosen type target player
+        # controls" (Turnabout) is CR 205.2's card types, chosen by the
+        # sentence in front of it out of a printed list. It lands on the same
+        # field "of **that** type" does (Teferi's Realm) because it is the same
+        # relation — a type an earlier sentence of this ability recorded — and
+        # a fourth key would be a second name for one question.
         if "land" in d.card_types:
             d.chosen_land_type = True
-        else:
+        elif "creature" in d.card_types:
             d.chosen_creature_type = True
+        else:
+            d.of_bound_type = True
         return True
     return False

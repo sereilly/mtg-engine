@@ -1062,6 +1062,21 @@ CHOSEN_CREATURE_TYPE_THIS_WAY = "chosen_creature_type_this_way"
 #: resolution and has no permanent at all.
 CHOSEN_COLOR_THIS_WAY = "chosen_color_this_way"
 
+#: What "**the chosen type**" / "**that type**" names when the ability that
+#: chose it is a *spell* (Turnabout). One card type, chosen by the controller of
+#: the resolving spell (CR 608.2d) in the sentence in front, and read back by
+#: the sentence that spends it.
+#:
+#: The scratchpad twin of the ``chosen_card_type`` metadata key, and the third
+#: of the same pair after the creature type and the colour above: that key is a
+#: choice a *permanent* recorded and lives as long as the permanent
+#: (Teferi's Realm), where this one is made and spent inside a single
+#: resolution and has no permanent at all. One relation, two places to keep it,
+#: and which one it is depends on whether there is a source permanent — a fact
+#: only the handler holds, which is why both readings meet there rather than in
+#: two payload keys.
+CHOSEN_CARD_TYPE_THIS_WAY = "chosen_card_type_this_way"
+
 #: What "…**each player who sacrificed a Plains this way**" names (Desolation).
 #: The cards a forced sacrifice took, split by the **seat** that gave each one
 #: up — ``{seat: [card, …]}``.

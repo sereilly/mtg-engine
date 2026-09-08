@@ -713,6 +713,37 @@ def chosen_card_type_filter(word: str) -> dict | None:
     return None
 
 
+def resolve_chosen_card_type_in_resolution(described: dict, context) -> dict:
+    """*described* with "of the chosen type" spent out of the **scratchpad**.
+
+    The other end of :func:`_resolve_chosen_card_type`, and the difference is
+    only where the word was written down. A permanent's ability records its
+    choice on the permanent (Teferi's Realm), which that function reads; a
+    *spell* has no permanent, so ``choose_card_type`` writes the word into the
+    resolution its own next step runs in (Turnabout). One relation, two homes,
+    and which one a card uses is a fact about the card rather than about the
+    printed phrase — so the payload key stays one key and the two readings meet
+    here.
+
+    Untouched when this resolution recorded nothing, which leaves the key in the
+    filter for the source reading to answer. If neither answered, the key stays
+    and ``permanent_matches_filter`` refuses every permanent — the direction a
+    sweep must fail in, exactly as the source reader's own docstring says.
+    """
+    from ..oracle_types import CHOSEN_CARD_TYPE_THIS_WAY
+
+    if not described.get(CHOSEN_CARD_TYPE):
+        return described
+    word = (getattr(context, "results", None) or {}).get(CHOSEN_CARD_TYPE_THIS_WAY)
+    resolved_keys = chosen_card_type_filter(word) if word else None
+    if resolved_keys is None:
+        return described
+    resolved = dict(described)
+    resolved.pop(CHOSEN_CARD_TYPE, None)
+    resolved.update(resolved_keys)
+    return resolved
+
+
 def _resolve_chosen_card_type(filt: dict, source) -> dict:
     """*filt* with "of that type" turned into the ordinary type keys.
 

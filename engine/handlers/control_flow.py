@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING
 from ..damage_deaths import DAMAGED_BY_SOURCE_DIED
 from ..exiled_records import is_live, record_in_context, source_object
 from ..named_counters import counters_on
-from ..oracle_types import (CHOSEN_COLOR_THIS_WAY, MANA_PAID_BY_SEAT,
+from ..oracle_types import (CHOSEN_CARD_TYPE_THIS_WAY, CHOSEN_COLOR_THIS_WAY, MANA_PAID_BY_SEAT,
                             MILLED_THIS_WAY,
                             PER_OBJECT_SEAT_RECORDS,
                             OracleInstruction)
@@ -1513,8 +1513,37 @@ def choose_card_type(game: Game, instruction: OracleInstruction, context: Oracle
     permanent = context.source_permanent
     card_name = getattr(context.card, "name", "an effect")
     options = [str(word) for word in (instruction.payload.get("options") or ())]
-    if permanent is None or not options:
-        game.log.append(f"{card_name}: no permanent to record a chosen type on")
+    if not options:
+        game.log.append(f"{card_name}: no options were printed to choose from")
+        return True, "resolved"
+    if permanent is None:
+        # "Choose artifact, creature, or land. Tap all untapped permanents of
+        # the chosen type…" (Turnabout.) A **spell**'s choice, which has no
+        # permanent to be recorded on and needs none: the sentence that reads it
+        # back is the next step of this same resolution, and CR 608.2d puts both
+        # of them in it. The word goes to the resolution scratchpad — the
+        # channel ``choose_creature_type`` and ``choose_color`` already use for
+        # the identical question one characteristic over.
+        #
+        # The default is stamped **before** the prompt is armed, exactly as the
+        # permanent branch below stamps its own: a headless or AI seat is never
+        # blocked, and the sweep behind this always has an answer to spend.
+        if context.caster not in game.players:
+            game.log.append(f"{card_name}: nobody to choose a type")
+            return True, "resolved"
+        seat = game.players.index(context.caster)
+        default = _fewest_own_permanents_type(game, seat, options)
+        context.results[CHOSEN_CARD_TYPE_THIS_WAY] = default
+        game.arm_pending_choice(
+            "card_type_choice", seat,
+            card_name=card_name, options=list(options),
+            default_card_type=default,
+            result_key=CHOSEN_CARD_TYPE_THIS_WAY, _context=context,
+        )
+        game.log.append(
+            f"{card_name}: {game.players[seat].name} chooses a type "
+            f"({', '.join(options)})"
+        )
         return True, "resolved"
     seat = game.controller_index_of(permanent)
     if instruction.payload.get("chooser") == "event_subject_player":

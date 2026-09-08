@@ -146,6 +146,19 @@ _DURATIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # ability resolves in. Outside one nothing lowers it, which is the honest
     # answer: the phrase names a turn the reader cannot identify.
     ("until_end_of_that_turn", ("until", "the", "end", "of", "that", "turn")),
+    # "…**until a player casts a creature spell**." (Soul Sculptor.) The first
+    # duration in the pool that ends on an **event** rather than at a moment in
+    # the turn structure (CR 611.2a's "as long as stated"), and the only entry
+    # in this table whose
+    # sweep is not a turn step: `engine/event_durations.py` hangs it off the
+    # cast announcement, and a lowering handed this word refuses unless the
+    # channel it would write has that sweep.
+    #
+    # No prefix relation with anything above it — every other "until" entry
+    # diverges by the second word — so its position here is only where the
+    # other spelled-out windows are.
+    ("until_a_player_casts_a_creature_spell",
+     ("until", "a", "player", "casts", "a", "creature", "spell")),
     # "**During that player's next turn,** the chosen creatures attack if able,
     # and other creatures can't attack." (Oracle en-Vec.) A window that opens on
     # a turn nobody is taking yet, and the only entry in this table printed in

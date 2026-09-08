@@ -8,6 +8,7 @@ from ._common import (recorded_permanent_ids,
     frozen_that_player_seat,
     permanent_matches_filter,
     resolve_amount,
+    resolve_chosen_card_type_in_resolution,
     resolve_target_permanent,
     resolve_target_permanents,
 )
@@ -306,6 +307,19 @@ def _tap_or_untap_all_matching(
     # has. Emitted only for the chosen-seat spelling (Early Harvest), which is
     # exactly the case the branch below then resolves.
     chosen_seat_target = described.pop("targets", None)
+    # "Tap all untapped permanents **of the chosen type** target player
+    # controls…" (Turnabout.) The card type the sentence in front of this one
+    # chose (CR 608.2d). The spell has no permanent for that choice to have been
+    # recorded on, so it is in this resolution's own scratchpad; a *permanent's*
+    # ability records it on the permanent and ``subject_matches`` resolves it
+    # from there, which is why this is a read and not a branch — a filter this
+    # leaves alone is one the matcher still answers.
+    #
+    # An unresolved key is not dropped: ``permanent_matches_filter`` then
+    # refuses every permanent, which for a board sweep is the only safe
+    # direction — the alternative is tapping the target player's whole board on
+    # a choice nobody made.
+    described = resolve_chosen_card_type_in_resolution(described, context)
     # "…all untapped Islands **that player** controls" (Monsoon). The seat is
     # the one the firing event froze (CR 603.10), not the source's controller —
     # which is the wrong seat on every end step but their own.

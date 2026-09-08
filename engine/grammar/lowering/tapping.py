@@ -29,6 +29,7 @@ from ._common import (
     _is_target, _names_several_targets, _restrictions_beyond,
     refuse_untestable, testable_filter_payload
 )
+from ._filters import split_bound_card_type
 from ._record_keys import REMOVED_FROM_COMBAT_PERMANENTS
 from ._events import (_EVENT_SUBJECT_PLAYERS, _RECORDED_PERMANENTS,
                       CHOSEN_PERMANENT, EVENT_SUBJECT_PLAYER,
@@ -430,6 +431,15 @@ def _lower_tap(
                 # difference between a Thundermare that attacks into an
                 # untapped board and one that taps itself out.
                 "other_than_source",
+                # "Tap all untapped permanents **of the chosen type** target
+                # player controls, or untap all tapped permanents **of that
+                # type** that player controls." (Turnabout.) The two printed
+                # phrases are one relation — the card type a sentence of this
+                # same effect chose — and it has no ``to_payload`` form, so it
+                # is split off below and carried as the recorded-choice key the
+                # handler resolves. Listed here because the split leaves the
+                # field cleared and this gate reads the **unsplit** filter.
+                "of_bound_type",
             }),
         )
         if leftovers:
@@ -437,12 +447,21 @@ def _lower_tap(
                 "the tap/untap sweep cannot narrow by: " + ", ".join(leftovers),
                 node=node,
             )
-        described = testable_filter_payload(
-            spec.filter,
-            refusal="the tap/untap sweep cannot test this restriction",
-            node=node,
-            require_narrowing=False,
-        )
+        # Split before the payload is built, the arrangement `lowering/phasing`
+        # already has for Teferi's Realm's half of the same phrase: the field
+        # is one of the four relations `to_payload` deliberately never emits,
+        # so a lowering that has an answer for it strips it and carries the
+        # relation as its own key.
+        narrowed, bound = split_bound_card_type(spec.filter)
+        described = {
+            **testable_filter_payload(
+                narrowed,
+                refusal="the tap/untap sweep cannot test this restriction",
+                node=node,
+                require_narrowing=False,
+            ),
+            **bound,
+        }
         kind = "tap_all_matching" if isinstance(node, ast.Tap) else "untap_all_matching"
         # "**Target player** untaps all basic lands they control." (Early
         # Harvest.) The printed subject is a *chosen seat* (CR 601.2c) and the
