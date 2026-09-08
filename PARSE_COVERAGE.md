@@ -12,26 +12,6 @@ unclaimed text. Do not edit by hand.
 - With UNCLAIMED text (must fix or acknowledge): **0**
 - With deletion-probe findings (ignored words): **298**
 
-## Measured sets — reported, not gated
-
-Cards in a `measured` set (see `cards/manifest.json`) that the
-compiler calls **supported** while carrying a printed line nothing
-implements. They are the debt behind that set's progress number, and
-`--hollow-lines` sees only the ones that produced an *ability part* —
-a line yielding nothing at all leaves that probe nothing to find.
-
-Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
-`HOOK_RELIANCE.md`'s ceilings exclude the same sets: a ratchet over a
-set nobody has implemented fires on its composition rather than on
-anything anyone did, and every ingest would arrive red.
-
-**2 unclaimed sentence(s) across 2 supported card(s).**
-
-- **Brand**
-  - `gain control of all permanents you own`
-- **Contamination**
-  - `if a land is tapped for mana, it produces {b} instead of any other type and amount`
-
 ## Acknowledged simplifications
 
 | Card | Sentence | Why it is acceptable |
@@ -360,14 +340,14 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 
 | Channel | Sentences claimed |
 | --- | --- |
-| parse rule | 2958 |
+| parse rule | 2959 |
 | activation cost | 1315 |
 | trigger table | 888 |
 | static-line table | 769 |
 | keyword table | 641 |
 | aura enchant noun (oracle_instructions attach) | 214 |
 | activation_restrictions.py | 120 |
-| card_hooks bespoke (name-keyed) | 88 |
+| card_hooks bespoke (name-keyed) | 87 |
 | cast_costs.py | 71 |
 | loyalty cost | 33 |
 | oracle.py (modal trigger head) | 29 |

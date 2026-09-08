@@ -19,7 +19,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | LEA | 290 | 388 | 87.1% | 85.6% | 48.5% | 171 |
 | LEB | 292 | 389 | 87.1% | 85.6% | 48.6% | 172 |
 | 2ED | 292 | 389 | 87.1% | 85.6% | 48.6% | 172 |
-| ARN | 78 | 108 | 77.8% | 74.1% | 51.9% | 46 |
+| ARN | 78 | 108 | 78.7% | 75.0% | 52.8% | 47 |
 | ATQ | 85 | 120 | 90.8% | 90.8% | 63.3% | 68 |
 | 3ED | 296 | 389 | 89.2% | 87.1% | 50.9% | 178 |
 | LEG | 310 | 431 | 89.6% | 88.4% | 58.7% | 217 |
@@ -31,14 +31,14 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ALL | 144 | 251 | 90.4% | 90.0% | 70.5% | 132 |
 | MIR | 335 | 545 | 93.4% | 93.2% | 63.9% | 281 |
 | VIS | 167 | 278 | 89.6% | 89.6% | 61.5% | 138 |
-| 5ED | 434 | 631 | 94.1% | 93.8% | 60.7% | 318 |
+| 5ED | 434 | 631 | 94.3% | 94.0% | 60.9% | 319 |
 | WTH | 167 | 249 | 88.4% | 88.4% | 64.7% | 140 |
 | TMP | 335 | 478 | 92.5% | 92.3% | 65.7% | 271 |
 | STH | 143 | 215 | 88.4% | 88.4% | 62.8% | 124 |
 | EXO | 143 | 207 | 90.3% | 90.3% | 66.2% | 127 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| USG *(measured)* | 335 | 486 | 75.9% | 72.4% | 50.2% | 206 |
-| **All (shipped)** | **4873** | **7239** | **90.5%** | **89.8%** | **60.0%** | **3637** |
+| USG *(measured)* | 335 | 486 | 77.8% | 75.3% | 52.7% | 218 |
+| **All (shipped)** | **4873** | **7239** | **90.5%** | **89.8%** | **60.0%** | **3639** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
 
@@ -50,9 +50,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 434 | 195 | expected a subject |  |
+| 427 | 190 | expected a subject |  |
 | 119 | 64 | unrecognized effect verb |  |
-| 100 | 55 | unconsumed text |  |
+| 99 | 54 | unconsumed text |  |
 | 39 | 23 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 16 | 15 | expected 'unless defending player controls' |  |
@@ -78,7 +78,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 ## Cards executing through the grammar
 
-3637 cards, 4341 lines.
+3639 cards, 4343 lines.
 
 - **Abandon Hope**
   - `Look at target opponent's hand and choose X cards from it. That player discards those cards.`
@@ -522,6 +522,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Barrin's Codex**
   - `At the beginning of your upkeep, you may put a page counter on this artifact.`
   - `{4}, {T}, Sacrifice this artifact: Draw X cards, where X is the number of page counters on this artifact.`
+- **Barrin, Master Wizard**
+  - `{2}, Sacrifice a permanent: Return target creature to its owner's hand.`
 - **Barrin, Tolarian Archmage**
   - `When Barrin enters, return up to one other target creature or planeswalker to its owner's hand.`
   - `At the beginning of your end step, if a permanent was put into your hand from the battlefield this turn, draw a card.`
@@ -574,6 +576,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{G}: This creature gains banding until end of turn. (Any creatures with banding, and up to one without, can attack in a band. Bands are blocked as a group. If any creatures with banding you control are blocking or being blocked by a creature, you divide that creature's combat damage, not its controller, among any of the creatures it's being blocked by or is blocking.)`
 - **Beasts of Bogardan**
   - `This creature gets +1/+1 as long as an opponent controls a nontoken white permanent.`
+- **Befoul**
+  - `Destroy target land or nonblack creature. It can't be regenerated.`
 - **Bellowing Fiend**
   - `Whenever this creature deals damage to a creature, this creature deals 3 damage to that creature's controller and 3 damage to you.`
 - **Benalish Missionary**
@@ -757,6 +761,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Brainstorm**
   - `Draw three cards, then put two cards from your hand on top of your library in any order.`
   - `Draw three cards, then put two cards from your hand on top of your library in any order.`
+- **Brand**
+  - `Gain control of all permanents you own. (This effect lasts indefinitely.)`
 - **Brash Taunter**
   - `Whenever this creature is dealt damage, it deals that much damage to target opponent.`
   - `{2}{R}, {T}: This creature fights another target creature.`
@@ -1103,6 +1109,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Clairvoyance**
   - `Look at target player's hand.`
   - `Draw a card at the beginning of the next turn's upkeep.`
+- **Claws of Gix**
+  - `{1}, Sacrifice a permanent: You gain 1 life.`
 - **Clay Statue**
   - `{2}: Regenerate this creature.`
   - `{2}: Regenerate this creature.`
@@ -2055,6 +2063,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Faerie Noble**
   - `Other Faerie creatures you control get +0/+1.`
   - `{T}: Other Faerie creatures you control get +1/+0 until end of turn.`
+- **Faith Healer**
+  - `Sacrifice an enchantment: You gain life equal to the sacrificed enchantment's mana value.`
 - **Faith's Fetters**
   - `When this Aura enters, you gain 4 life.`
 - **Falconer Adept**
@@ -2490,6 +2500,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{2}{W}: Creatures you control get +1/+1 until end of turn.`
 - **Gerrard's Wisdom**
   - `You gain 2 life for each card in your hand.`
+- **Ghazbán Ogre**
+  - `At the beginning of your upkeep, if a player has more life than each other player, the player with the most life gains control of this creature.`
+  - `At the beginning of your upkeep, if a player has more life than each other player, the player with the most life gains control of this creature.`
 - **Ghost Hounds**
   - `Whenever this creature blocks or becomes blocked by a white creature, this creature gains first strike until end of turn.`
 - **Ghost Ship**
@@ -2706,6 +2719,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Target creature gets +0/+X until end of turn, where X is its mana value.`
 - **Great Whale**
   - `When this creature enters, untap up to seven lands.`
+- **Greater Good**
+  - `Sacrifice a creature: Draw cards equal to the sacrificed creature's power, then discard three cards.`
 - **Greater Realm of Preservation**
   - `{1}{W}: The next time a black or red source of your choice would deal damage to you this turn, prevent that damage.`
   - `{1}{W}: The next time a black or red source of your choice would deal damage to you this turn, prevent that damage.`
@@ -2722,6 +2737,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Remove any number of charge counters from this artifact: Add {G}, then add an additional {G} for each charge counter removed this way.`
 - **Green Scarab**
   - `Enchanted creature gets +2/+2 as long as an opponent controls a green permanent.`
+- **Greener Pastures**
+  - `At the beginning of each player's upkeep, if that player controls more lands than each other player, the player creates a 1/1 green Saproling creature token.`
 - **Griffin Aerie**
   - `At the beginning of your end step, if you gained 3 or more life this turn, create a 2/2 white Griffin creature token with flying.`
 - **Griffin Canyon**
@@ -3783,6 +3800,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Prevent all combat damage that would be dealt this turn.`
 - **Lure of Prey**
   - `You may put a green creature card from your hand onto the battlefield.`
+- **Lurking Evil**
+  - `Pay half your life, rounded up: This enchantment becomes a 4/4 Phyrexian Horror creature with flying.`
 - **Maddening Imp**
   - `{T}: Non-Wall creatures the active player controls attack this turn if able. At the beginning of the next end step, destroy each of those creatures that didn't attack this turn. Activate only during an opponent's turn and only before combat.`
 - **Maddening Wind**
@@ -3963,6 +3982,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever an opponent discards a card, this enchantment deals 2 damage to that player.`
 - **Melee**
   - `You choose which creatures block this combat and how those creatures block.`
+- **Meltdown**
+  - `Destroy each artifact with mana value X or less.`
 - **Melting**
   - `All lands are no longer snow.`
 - **Memory Lapse**
@@ -4756,6 +4777,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Each creature you control with a +1/+1 counter on it has trample. (It can deal excess combat damage to the player or planeswalker it's attacking.)`
 - **Priest of Gix**
   - `When this creature enters, add {B}{B}{B}.`
+- **Priest of Titania**
+  - `{T}: Add {G} for each Elf on the battlefield.`
 - **Priest of Yawgmoth**
   - `{T}, Sacrifice an artifact: Add an amount of {B} equal to the sacrificed artifact's mana value.`
 - **Primal Might**
@@ -6463,6 +6486,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add one mana of any color.`
 - **Thran Tome**
   - `{5}, {T}: Reveal the top three cards of your library. Target opponent chooses one of those cards. Put that card into your graveyard, then draw two cards.`
+- **Thran Turbine**
+  - `At the beginning of your upkeep, you may add {C}{C}. This mana can't be spent to cast spells.`
 - **Thrashing Brontodon**
   - `{1}, Sacrifice this creature: Destroy target artifact or enchantment.`
 - **Three Wishes**
@@ -7181,6 +7206,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, put a +1/+1 counter on this creature if it has blocked or been blocked since your last upkeep. Otherwise, remove a +1/+1 counter from it.`
 - **Wild Aesthir**
   - `{W}{W}: This creature gets +2/+0 until end of turn. Activate only once each turn.`
+- **Wild Dogs**
+  - `At the beginning of your upkeep, if a player has more life than each other player, the player with the most life gains control of this creature.`
 - **Wild Wurm**
   - `When this creature enters, flip a coin. If you lose the flip, return this creature to its owner's hand.`
 - **Wildfire**
