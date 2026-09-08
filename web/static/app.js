@@ -8250,9 +8250,13 @@ function renderRevealedHandPickModal(info) {
   // is offered only where the card printed the words. Every earlier printing
   // names exactly as many as it says and keeps a modal with no way out.
   const done = document.getElementById("revealedHandPickDone");
-  if (done) {
+  const doneFooter = document.getElementById("revealedHandPickFooter");
+  if (done && doneFooter) {
     const canStop = Boolean(info.up_to);
-    done.classList.toggle("hidden", !canStop);
+    // The **footer** is hidden, not just the button: it carries the divider
+    // rule, and a rule under an empty row would change how every card that
+    // prints no "up to" looks. Duress is unchanged, pixel for pixel.
+    doneFooter.classList.toggle("hidden", !canStop);
     done.onclick = canStop
       ? async () => {
           modal.classList.add("hidden");
