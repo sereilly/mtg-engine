@@ -12,17 +12,17 @@ The measures are **ceilings**, the opposite direction to `GRAMMAR_COVERAGE.md`'s
 
 ## The headline
 
-**58 of 3109 supported cards (1.9%)** carry at least one name-keyed entry, across **64 entries** in 6 registries. The pool is 3109 cards, 100.0% supported.
+**57 of 3109 supported cards (1.8%)** carry at least one name-keyed entry, across **63 entries** in 6 registries. The pool is 3109 cards, 100.0% supported.
 
-Held at this rate, supporting the 26,113-card release line would need about **538 hand-written entries** covering **487 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
+Held at this rate, supporting the 26,113-card release line would need about **529 hand-written entries** covering **479 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
 
 ## By set
 
 | Set | Cards | Supported | Hooked cards | Rules lines | Hooked lines | Entries | Entries/100 supported |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 290 (100.0%) | 32 (11.0%) | 388 | 30 (7.7%) | 36 | 12.4 |
-| LEB | 292 | 292 (100.0%) | 32 (11.0%) | 389 | 30 (7.7%) | 36 | 12.3 |
-| 2ED | 292 | 292 (100.0%) | 32 (11.0%) | 389 | 30 (7.7%) | 36 | 12.3 |
+| LEA | 290 | 290 (100.0%) | 31 (10.7%) | 388 | 29 (7.5%) | 35 | 12.1 |
+| LEB | 292 | 292 (100.0%) | 31 (10.6%) | 389 | 29 (7.5%) | 35 | 12.0 |
+| 2ED | 292 | 292 (100.0%) | 31 (10.6%) | 389 | 29 (7.5%) | 35 | 12.0 |
 | ARN | 78 | 78 (100.0%) | 20 (25.6%) | 107 | 18 (16.8%) | 22 | 28.2 |
 | ATQ | 85 | 85 (100.0%) | 3 (3.5%) | 120 | 3 (2.5%) | 3 | 3.5 |
 | 3ED | 296 | 296 (100.0%) | 26 (8.8%) | 389 | 25 (6.4%) | 29 | 9.8 |
@@ -41,8 +41,8 @@ Held at this rate, supporting the 26,113-card release line would need about **53
 | STH | 143 | 143 (100.0%) | 0 (0.0%) | 215 | 0 (0.0%) | 0 | 0.0 |
 | EXO | 143 | 143 (100.0%) | 0 (0.0%) | 207 | 0 (0.0%) | 0 | 0.0 |
 | M21 | 285 | 285 (100.0%) | 0 (0.0%) | 503 | 0 (0.0%) | 0 | 0.0 |
-| USG *(measured)* | 335 | 263 (78.5%) | 1 (0.4%) | 403 | 0 (0.0%) | 1 | 0.4 |
-| **Whole pool (shipped, deduped)** | **3109** | **3109 (100.0%)** | **58 (1.9%)** | **4852** | **54 (1.1%)** | **64** | **2.1** |
+| USG *(measured)* | 335 | 275 (82.1%) | 1 (0.4%) | 417 | 0 (0.0%) | 1 | 0.4 |
+| **Whole pool (shipped, deduped)** | **3109** | **3109 (100.0%)** | **57 (1.8%)** | **4852** | **53 (1.1%)** | **63** | **2.0** |
 
 *(measured)* — USG are ingested for measurement and **not shipped**: `cards/manifest.json` lists them under `measured`, the engine's catalog does not load them, and no player can put one in a deck. They are reported here and excluded from the ALL row and from the ceilings, because a ratchet over a set nobody has implemented would fire on its composition rather than on anything anyone did. A measured set moves up to `sets` when it is fully supported.
 
@@ -52,7 +52,7 @@ Held at this rate, supporting the 26,113-card release line would need about **53
 
 | Registry | Cards | Entries |
 | --- | ---: | ---: |
-| `CARD_LINE_INSTRUCTIONS` | 53 | 54 |
+| `CARD_LINE_INSTRUCTIONS` | 52 | 53 |
 | `ON_LEAVE_BATTLEFIELD` | 6 | 6 |
 | `DRAW_STEP_MODIFIERS` | 1 | 1 |
 | `ON_SELF_RESOLVED` | 1 | 1 |
@@ -93,7 +93,6 @@ Held at this rate, supporting the 26,113-card release line would need about **53
 - **Island Sanctuary** (`DRAW_STEP_MODIFIERS`)
 - **Ivory Tower** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Jade Monolith** (`CARD_LINE_INSTRUCTIONS`) — 1 line
-- **Jade Statue** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Jeweled Bird** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Kudzu** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Metamorphosis** (`CARD_LINE_INSTRUCTIONS`) — 1 line

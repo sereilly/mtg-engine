@@ -25,10 +25,8 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**3 unclaimed sentence(s) across 3 supported card(s).**
+**2 unclaimed sentence(s) across 2 supported card(s).**
 
-- **Arcane Laboratory**
-  - `each player can't cast more than one spell each turn`
 - **Brand**
   - `gain control of all permanents you own`
 - **Contamination**
