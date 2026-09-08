@@ -522,6 +522,16 @@ class PutOntoBattlefield:
     #: only reader that has the whole printed line in view —
     #: ``rebinding.bind_recorded_card``.
     bound_card_from: str | None = None
+    #: "…put an Aura card from your hand onto the battlefield **attached to
+    #: this creature**." (Academy Researchers.) CR 303.4f: an Aura put onto the
+    #: battlefield this way is attached as it arrives rather than after — it
+    #: never exists unattached, so this is part of the entry and not a step
+    #: behind it.
+    #:
+    #: A flag rather than a referent, because the only host the pool prints
+    #: here is the ability's own source. A card naming somebody else's creature
+    #: would want the referent, and would say so.
+    attached_to_source: bool = False
 
 
 @dataclass(frozen=True)

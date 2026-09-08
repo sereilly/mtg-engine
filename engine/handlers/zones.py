@@ -5110,11 +5110,34 @@ def put_from_hand_candidates(game, payload: dict, player) -> list[int]:
     """
     described = payload.get("card_filter") or {}
     permanents_only = bool(payload.get("permanents_only"))
+    # "…put an Aura card from your hand onto the battlefield **attached to this
+    # creature**." (Academy Researchers.) CR 303.4a: an Aura may be put onto the
+    # battlefield only attached to an object its own enchant ability can
+    # enchant, so a card the host cannot legally carry is not among the answers
+    # — offering it would put an Aura into play attached to nothing, which
+    # CR 704.5m bins on the next sweep with the card already out of the hand.
+    #
+    # The host arrives as an **id** stamped on the payload when the offer was
+    # armed, because this function is called again to check the answer and by
+    # then the permanent may have moved (CR 400.7 — an index is not an
+    # identity). A host that has gone leaves nothing legal to pick, which is the
+    # direction that offers nothing rather than the whole hand.
+    from ..auras import enchant_card_refusal
+
+    host_id = payload.get("attach_to_permanent_id")
+    host = game.permanent_by_id(host_id) if isinstance(host_id, int) else None
+    seat = game.players.index(player) if player in game.players else None
+    if host_id is not None and (host is None or seat is None):
+        return []
     return [
         index
         for index, card in enumerate(player.hand)
         if _card_matches_filter(card, described, game=game, owner=player)
         and (not permanents_only or card.primary_type in _PERMANENT_TYPES)
+        and (
+            host is None
+            or enchant_card_refusal(game, card, seat, host) is None
+        )
     ]
 
 
@@ -5137,6 +5160,22 @@ def put_chosen_card_from_hand_onto_battlefield(game: Game, instruction: OracleIn
     payload = instruction.payload
     player = context.target if payload.get("whose") == "offered" else context.caster
     seat = game.players.index(player)
+    if payload.get("attach_to") == "source":
+        # "…attached to **this creature**." (Academy Researchers.) The host is
+        # the ability's own source, frozen onto the payload by **id** here —
+        # the one moment it is in hand — so the candidate rule, the prompt and
+        # the answer check all resolve the same permanent however long the seat
+        # takes to answer. A source that has already left names no host, and
+        # CR 303.4a leaves nothing that could legally be put onto the
+        # battlefield.
+        source = context.source_permanent
+        if source is None or not game.is_on_battlefield(source):
+            game.log.append(
+                f"{context.card.name}: it is no longer on the battlefield"
+            )
+            return True, "resolved"
+        payload = {**payload, "attach_to_permanent_id": source.permanent_id}
+        instruction = dataclasses.replace(instruction, payload=payload)
     if not put_from_hand_candidates(game, payload, player):
         # Nothing to pick. Not an offer declined — an offer never made, which is
         # the same rule ``handlers/control_flow._offer_to_seat`` states for an

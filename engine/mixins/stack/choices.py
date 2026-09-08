@@ -5318,6 +5318,26 @@ class PendingChoicesMixin:
         self._put_permanent_onto_battlefield(
             choice.player_index, arrival, None
         )
+        # "…onto the battlefield **attached to this creature**." (Academy
+        # Researchers.) CR 303.4f: the Aura is attached as it enters. Done here
+        # rather than by a step behind this one because the permanent does not
+        # exist until the answer arrives — the same reason the id record below
+        # is written here — and because an Aura that existed for even one
+        # state-based check attached to nothing would be put into a graveyard
+        # by CR 704.5m.
+        #
+        # The host is addressed by the id the arming froze (CR 400.7), and the
+        # legality was already asked of the *candidate list* — CR 303.4a is why
+        # this card is not in the offer at all when the source cannot carry it,
+        # so nothing is re-checked here that could leave the Aura unattached.
+        host_id = (choice.data.get("_payload") or {}).get("attach_to_permanent_id")
+        if isinstance(host_id, int):
+            from ...auras import attach_aura
+
+            host = self.permanent_by_id(host_id)
+            if host is not None:
+                attach_aura(arrival, host)
+                self._recompute_continuous_effects()
         # "If you do, sacrifice **it** …" (Flash). By id, like every other
         # producer of a permanent this engine records: the permanent may leave
         # between two steps of one resolution, and a returning one is a new

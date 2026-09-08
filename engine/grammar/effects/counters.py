@@ -20,6 +20,7 @@ from ..records import (_parse_for_each_history, _parse_for_each_this_way,
                        scaled_by_recorded_count)
 from ..errors import GrammarError
 from ..lexer import PT
+from ..readers import accept_source_reference
 from ..references import parse_recipient
 from ..stream import TokenStream
 from ..vocabulary import CARD_TYPES, COLOR_WORDS
@@ -208,8 +209,28 @@ def _parse_put_counter(stream: TokenStream) -> ast.Statement:
             owners = not under and bool(
                 stream.accept_phrase("under", "its", "owner", "'s", "control")
             )
+            # "…onto the battlefield **attached to this creature**." (Academy
+            # Researchers.) CR 303.4f attaches the Aura as it enters, so the
+            # phrase belongs to this entry rather than to a sentence behind it:
+            # read apart, the Aura would exist for a moment attached to nothing
+            # and CR 704.5m would put it straight into a graveyard.
+            #
+            # The host is read through ``accept_source_reference``, the one
+            # reader of a card naming itself — so "this creature" and the
+            # printed name are one phrase here as everywhere else, and a card
+            # naming some *other* permanent refuses rather than being read as
+            # this one.
+            attached = False
+            if not under and not owners:
+                host = stream.mark()
+                if stream.accept_phrase("attached", "to"):
+                    if accept_source_reference(stream):
+                        attached = True
+                    else:
+                        stream.reset(host)
             return ast.PutOntoBattlefield(
                 moved, under_your_control=under, under_owners_control=owners,
+                attached_to_source=attached,
             )
     stream.reset(move_mark)
     up_to = stream.accept_phrase("up", "to")
