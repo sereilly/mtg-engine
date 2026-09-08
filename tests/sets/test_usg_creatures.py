@@ -493,6 +493,7 @@ def test_w2g2_serra_avatar_shuffles_itself_back_after_dying(set_pool):
     avatar = Permanent(card=set_pool("USG")["Serra Avatar"])
     game._put_permanent_onto_battlefield(0, avatar, None)
 
+    game.remove_from_battlefield(avatar)
     game._permanent_to_graveyard(alice, avatar)
     resolve_stack(game)
 

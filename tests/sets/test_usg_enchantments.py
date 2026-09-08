@@ -1183,6 +1183,17 @@ from engine.models import Permanent
 from tests.helpers import resolve_stack
 
 
+def _g2e_kill(game, seat, permanent):
+    """Take *permanent* off the battlefield and file its card, in the order a
+    state-based action does it. ``_permanent_to_graveyard`` alone leaves the
+    object standing, so a trigger resolving afterwards reads a board the game
+    does not have. W2G2's own.
+    """
+    game.remove_from_battlefield(permanent)
+    game._permanent_to_graveyard(game.players[seat], permanent)
+    resolve_stack(game)
+
+
 def _g2e_void(set_pool, *, seat=0):
     """Seat *seat* controls Planar Void. W2G2's own enchantment-block helper."""
     alice, bob = PlayerState(name="G2E-A"), PlayerState(name="G2E-B")
@@ -1231,8 +1242,7 @@ def test_w2g2_planar_void_exiles_a_creature_that_died(set_pool):
     victim = Permanent(card=set_pool("USG")["Sanctum Custodian"])
     game._put_permanent_onto_battlefield(0, victim, None)
 
-    game._permanent_to_graveyard(alice, victim)
-    resolve_stack(game)
+    _g2e_kill(game, 0, victim)
 
     assert not alice.graveyard
     assert [c.name for c in alice.exile] == ["Sanctum Custodian"]
@@ -1260,7 +1270,7 @@ def test_w2g2_no_rest_returns_only_what_died_this_turn(set_pool):
     alice.graveyard = [discarded, pool["Gamble"]]
     died = Permanent(card=pool["Shivan Hellkite"])
     game._put_permanent_onto_battlefield(0, died, None)
-    game._permanent_to_graveyard(alice, died)
+    _g2e_kill(game, 0, died)
 
     game.activate_permanent_ability(0, "No Rest for the Wicked")
     resolve_stack(game)
@@ -1284,7 +1294,7 @@ def test_w2g2_no_rest_forgets_at_the_turn_boundary(set_pool):
 
     died = Permanent(card=pool["Shivan Hellkite"])
     game._put_permanent_onto_battlefield(0, died, None)
-    game._permanent_to_graveyard(alice, died)
+    _g2e_kill(game, 0, died)
     alice.cards_put_into_your_graveyard_from_battlefield_this_turn = []
 
     game.activate_permanent_ability(0, "No Rest for the Wicked")

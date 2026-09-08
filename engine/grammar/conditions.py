@@ -614,14 +614,28 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
     # battlefield") is a threshold this does not model, and it falls through
     # rather than being taken as presence.
     zone_mark = stream.mark()
-    quantifier = "no" if stream.accept_word("no") else (
-        "a" if stream.accept_word("a", "an") else None
+    # "if **another** creature is on the battlefield" (Lifeline). The
+    # determiner spelling of the adjective the noun parser already reads as
+    # ``other``: "another creature" and "another creature you control" are one
+    # word where the phrase prints two ("an other creature" is not English), so
+    # it is read here — where the quantifier is — and turned into the exclusion
+    # the noun parser would have recorded. Which object the word excludes is
+    # then decided in one place, the lowering, exactly as Portcullis' "other"
+    # is: the trigger's frozen subject where the event has one, and the
+    # ability's own source otherwise.
+    another = stream.accept_word("another")
+    quantifier = "a" if another else (
+        "no" if stream.accept_word("no") else (
+            "a" if stream.accept_word("a", "an") else None
+        )
     )
     if quantifier is not None:
         try:
             present = parse_object_filter(stream)
         except GrammarError:
             present = None
+        if present is not None and another:
+            present = dataclasses.replace(present, other_than_source=True)
         if present is not None and (
             stream.accept_phrase("are", "on", "the", "battlefield")
             or stream.accept_phrase("is", "on", "the", "battlefield")

@@ -193,7 +193,21 @@ def _parse_return(
         stream.reset(top_mark)
     if top_of_graveyard is not None:
         subject = top_of_graveyard
-    elif stream.accept_phrase("that", "card"):
+    elif stream.accept_phrase("that", "card") or stream.accept_phrase(
+        "the", "first", "card"
+    ):
+        # "…return **the first card** to the battlefield under its owner's
+        # control at the beginning of the next end step." (Lifeline.) Oracle's
+        # spelling of the same referent "that card" names one branch up: the
+        # card the firing event put into a graveyard. One spec, so the gate on
+        # it is the one gate — a second reading would be a second answer to
+        # which object the sentence is about, and the lowering below already
+        # refuses every event whose fire site records none.
+        #
+        # Read only here, in the return production, and only as the *whole*
+        # subject: "the first card" is not always this referent — Rowen prints
+        # "reveal the first card **you draw each turn**" — and teaching the
+        # shared noun parser the words would hand them to that line too.
         subject = ast.TargetSpec("that", ast.ObjectFilter(is_card=True))
     else:
         stream.reset(bound)

@@ -339,6 +339,19 @@ class ReturnToZone:
     # the permanent the return created. Each entry is a printed ability line.
     losing_abilities: tuple[str, ...] = ()
     gaining_abilities: tuple[str, ...] = ()
+    #: Which event recorded the card "that card" names, when that is not the
+    #: trigger this return is lowered under — the same field
+    #: :class:`PutOntoBattlefield` carries, for the same reason and stamped by
+    #: the same walk (``rebinding.bind_recorded_card``): "…**at the beginning of
+    #: the next end step**" (Lifeline) makes the return a delayed ability, and
+    #: CR 608.2h freezes what the *creating* ability knew, so the card is the
+    #: death trigger's and not the end step's.
+    #:
+    #: Its own field rather than a shared reading of the sibling's, because the
+    #: two nodes are two sentences: "put that card onto the battlefield" and
+    #: "return that card to the battlefield" are one move, and the parser stamps
+    #: whichever the card printed.
+    bound_card_from: str | None = None
 
 
 @dataclass(frozen=True)

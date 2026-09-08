@@ -439,7 +439,14 @@ def lower_statement(
         # `produced` is what makes "…for each card discarded this way" legal:
         # the clause names a set an earlier step of this same effect made, so it
         # is admitted only where a step really recorded one.
-        return _lower_return_to_zone(statement, event, produced)
+        #
+        # ``bound_card_from`` over ``event`` for the reason the sibling
+        # `PutOntoBattlefield` branch below states: which event recorded the
+        # card "that card" names is a fact about the whole printed line, and the
+        # parser is what reads one (``rebinding.bind_recorded_card``).
+        return _lower_return_to_zone(
+            statement, statement.bound_card_from or event, produced
+        )
 
     if isinstance(statement, ast.PutOntoBattlefield):
         # One node, two families, composed here because composing them is what

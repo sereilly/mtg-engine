@@ -243,6 +243,19 @@ def _g2_board(set_pool, name, *, seat=0):
     return game, perm
 
 
+def _g2_kill(game, seat, permanent):
+    """Take *permanent* off the battlefield and file its card, the way a
+    state-based action does — the removal *then* the graveyard.
+
+    Calling ``_permanent_to_graveyard`` alone leaves the permanent standing:
+    the card reaches the pile and the object never leaves, so a death trigger
+    resolving afterwards reads a board the game does not have. W2G2's own.
+    """
+    game.remove_from_battlefield(permanent)
+    game._permanent_to_graveyard(game.players[seat], permanent)
+    resolve_stack(game)
+
+
 def test_w2g2_whetstone_mills_every_seat_not_a_target(set_pool):
     """"{3}: Each player mills two cards."
 
@@ -336,3 +349,52 @@ def test_w2g2_citanul_flute_puts_the_find_in_hand(set_pool):
 
     assert [c.name for c in game.players[0].hand] == [wanted.name]
     assert len(game.players[0].library) == 1
+
+
+def test_w2g2_lifeline_returns_the_dead_creature_at_the_next_end_step(set_pool):
+    """"Whenever a creature dies, if another creature is on the battlefield,
+    return the first card to the battlefield under its owner's control at the
+    beginning of the next end step."
+
+    Three claims: the card comes back at the *end step* and not on death, it
+    comes back under its **owner's** control rather than Lifeline's controller's,
+    and the intervening-if is real — the survivor is what lets the trigger fire
+    at all.
+    """
+    pool = set_pool("USG")
+    game, _ = _g2_board(set_pool, "Lifeline")
+    survivor = Permanent(card=pool["Sanctum Custodian"])
+    game._put_permanent_onto_battlefield(1, survivor, None)
+    victim = Permanent(card=pool["Serra Zealot"])
+    game._put_permanent_onto_battlefield(1, victim, None)
+
+    _g2_kill(game, 1, victim)
+
+    assert [c.name for c in game.players[1].graveyard] == ["Serra Zealot"]
+
+    game.resolve_end_step(0)
+    resolve_stack(game)
+
+    assert [p.card.name for p in game.controlled_by(1)] == [
+        "Sanctum Custodian", "Serra Zealot",
+    ]
+    assert not game.players[1].graveyard
+
+
+def test_w2g2_lifeline_stays_silent_with_no_other_creature(set_pool):
+    """CR 603.4's intervening-if. The only creature on the battlefield dies, so
+    "another creature is on the battlefield" is false when the trigger would
+    fire — and nothing comes back. Without the clause Lifeline would return
+    every creature that ever died, which is a different card.
+    """
+    pool = set_pool("USG")
+    game, _ = _g2_board(set_pool, "Lifeline")
+    victim = Permanent(card=pool["Serra Zealot"])
+    game._put_permanent_onto_battlefield(1, victim, None)
+
+    _g2_kill(game, 1, victim)
+    game.resolve_end_step(0)
+    resolve_stack(game)
+
+    assert [c.name for c in game.players[1].graveyard] == ["Serra Zealot"]
+    assert not list(game.controlled_by(1))
