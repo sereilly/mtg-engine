@@ -1192,6 +1192,25 @@ def _land_played_filter(
         played = event.payload.get("played_permanent_id")
         if played is None or played == permanent.permanent_id:
             return False
+    # "…plays a **nonbasic** land" (Hidden Herd). CR 205.4a's supertype read
+    # off the card that was played, which is what the announcement carries as
+    # its subject — the permanent it became is already on the battlefield and
+    # would answer through the layers, but a land whose supertype an effect
+    # changed between the play and this check is a card nobody prints and the
+    # printed line is what the trigger names.
+    #
+    # An announcement with no card on it fires nothing, the same safe direction
+    # the seat check above takes.
+    wanted_supertype = trig.condition.payload.get("played_land_supertype")
+    if wanted_supertype:
+        from .layer_bridge import printed_supertypes
+
+        played_card = event.subject
+        if played_card is None or not hasattr(played_card, "type_line"):
+            return False
+        basic = "basic" in printed_supertypes(played_card.type_line)
+        if basic != (wanted_supertype == "basic"):
+            return False
     land_player = trig.condition.payload.get("land_player")
     if land_player == "an opponent":
         return seat != observer

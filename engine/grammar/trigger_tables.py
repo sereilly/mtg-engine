@@ -200,6 +200,12 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # spellings are listed for `draws_card`'s reason below: which seat played is
     # the event's, the printed word is the condition's narrowing, and a line
     # only one front end reads is a card the other refuses.
+    # "When an opponent plays a **nonbasic** land" (Hidden Herd) — the same
+    # event with a supertype narrowing the other front end carries as payload
+    # (``engine/oracle.py``'s ``played_land_supertype`` group), exactly as
+    # ``other_land`` below is. Above the bare phrase, which is its strict
+    # prefix and would strand the word.
+    ("land_played", ("an", "opponent", "plays", "a", "nonbasic", "land")),
     ("land_played", ("an", "opponent", "plays", "a", "land")),
     # "Whenever **a player** plays a land" (Horn of Greed) — the unnarrowed
     # spelling of the same event. The seat is payload on ``engine/oracle.py``'s

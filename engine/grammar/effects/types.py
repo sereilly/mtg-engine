@@ -354,6 +354,17 @@ def _parse_gain_type(
     return None
 
 
+def _pt_value(amount: ast.Amount) -> "int | str":
+    """One half of a creature body's printed size, as the node carries it.
+
+    A number stays a number and an X becomes the string the whole engine spells
+    a variable amount with (``handlers/_common.resolve_amount``) — so a body
+    that prints "X/X" reaches the handler in the shape every other amount does,
+    rather than as a second vocabulary only the animation understands.
+    """
+    return amount.name if isinstance(amount, ast.Var) else amount.value
+
+
 def _parse_become_creature(
     stream: TokenStream, subject: ast.Recipient
 ) -> "ast.BecomeCreature | None":
@@ -376,8 +387,14 @@ def _parse_become_creature(
     except GrammarError:
         stream.reset(mark)
         return None
+    # "…becomes an **X/X** Construct artifact creature" (Chimeric Staff). The
+    # lexer already reads "X/X" as one P/T token and ``parse_pt_pair`` already
+    # produces ``Var``s from it; what refused was this gate. A *negative* one
+    # still refuses — a creature body states a size and never a delta, so a
+    # sign here would be a sentence this production has not understood.
     if power_negative or toughness_negative or not (
-        isinstance(power, ast.Fixed) and isinstance(toughness, ast.Fixed)
+        isinstance(power, (ast.Fixed, ast.Var))
+        and isinstance(toughness, (ast.Fixed, ast.Var))
     ):
         stream.reset(mark)
         return None
@@ -550,7 +567,8 @@ def _parse_become_creature(
     # absence, carried on the node as its own field rather than as
     # ``not in_addition`` so the two claims are separable at every reader.
     return ast.BecomeCreature(
-        subject, power.value, toughness.value, tuple(subtypes), tuple(keywords),
+        subject, _pt_value(power), _pt_value(toughness),
+        tuple(subtypes), tuple(keywords),
         tuple(card_types), tuple(colors), until_eot,
         replaces_types=not in_addition,
     )

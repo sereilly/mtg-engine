@@ -173,3 +173,75 @@ def _parse_emblem_line(line: str) -> "ast.CreateEmblem | None":
     if match is None:
         return None
     return ast.CreateEmblem(text=match.group("text").strip())
+
+
+#: ``…becomes a 4/4 Serpent creature with "<ability>."`` (Veiled Serpent) and
+#: ``…with flying and "<ability>."`` (Veiled Apparition) — a creature body whose
+#: last item is a whole printed ability rather than a keyword.
+#:
+#: Matched off the raw text for this module's standing reason: the lexer throws
+#: the quotation marks away, so the token stream cannot tell where the granted
+#: ability begins. Both joining words are read, because both are printed and
+#: they differ only in whether a keyword came first — "with" opens the body's
+#: list and "and" continues it.
+#:
+#: ``head`` is non-greedy so the split falls at the **first** joining word a
+#: quote follows: Veiled Apparition prints "with flying and "…"", where "with"
+#: is followed by a keyword and only "and" by the quote.
+_BECOMES_WITH_GRANTED_ABILITY_RE = re.compile(
+    r'(?P<head>^.*\bbecomes an? .*?)\s+(?:and|with)\s+'
+    r'["“](?P<granted>.+?)["”]\.?\s*$',
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def _parse_becomes_with_granted_ability(
+    line: str, *, card_name: str | None = None, parse
+) -> "ast.AbilityNode | None":
+    """*line* with the quoted ability lifted off its creature body, or None.
+
+    The same removal :func:`_parse_becomes_aura_line` performs and for the same
+    reason: what is left is an ordinary line, so the trigger prefix, the
+    intervening "if" and the creature body behind it are read by the ordinary
+    productions rather than by a second whole-line pattern.
+
+    Three refusals, each of them a card this has *not* understood rather than a
+    convenience:
+
+    * the rest of the line must lower to a creature body. "…gains "…"" is a
+      layer-6 grant with no animation in it and belongs to whatever production
+      reads that sentence, not to this one;
+    * the granted text must **parse as an ability line**, checked here through
+      the same entry point the card's own lines go through. A grant of text no
+      reader claims is a permanent that says something the engine will drop —
+      the failure the support gate exists to make loud;
+    * exactly one quoted ability, which is all the pool prints. A body granting
+      two would need the joining word read between them, and consuming only the
+      last is the dropped-rider bug this grammar refuses by construction.
+    """
+    match = _BECOMES_WITH_GRANTED_ABILITY_RE.match(line.strip())
+    if match is None:
+        return None
+    granted = match.group("granted").strip()
+    if '"' in granted or "“" in granted or "”" in granted:
+        return None
+    head = match.group("head").strip()
+    if not head.endswith("."):
+        head += "."
+    try:
+        node = parse(head, card_name=card_name)
+    except Exception:
+        return None
+    statement = getattr(node, "statement", None)
+    if not isinstance(statement, ast.BecomeCreature):
+        return None
+    try:
+        parse(granted, card_name=card_name)
+    except Exception:
+        return None
+    return dataclasses.replace(
+        node,
+        statement=dataclasses.replace(
+            statement, granted_ability_lines=(granted,)
+        ),
+    )

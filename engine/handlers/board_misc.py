@@ -929,7 +929,7 @@ ANIMATE_INDEFINITELY = "animate_indefinitely"
 #: ``_lower_become_creature`` refuses outright.
 _ANIMATION_PAYLOAD_KEYS = frozenset({
     "power", "toughness", "subtypes", "keywords", "card_types", "colors",
-    "replaces_types",
+    "replaces_types", "granted_ability_lines",
 })
 
 
@@ -955,6 +955,32 @@ def _animation_record(payload: dict) -> dict:
         record["replaces_types"] = True
         record["timestamp"] = next_timestamp()
     return record
+
+
+def _grant_animation_abilities(
+    perm, payload: dict, *, until_eot: bool
+) -> None:
+    """"…with "At the beginning of your upkeep, sacrifice this creature unless
+    you pay {1}{U}."" (Veiled Apparition.)
+
+    CR 613 layer 6 of the same sentence, on the one channel a *printed line*
+    grant goes through (`engine/keywords.grant_ability_line`) — so the granted
+    trigger reaches the upkeep step through the compiler, exactly as a printed
+    one does, rather than through a second reader that would have to know what
+    an animation granted.
+
+    The duration is the animation's own, and it is the whole reason this is not
+    a keyword write: a grant with no duration lasts as long as the object
+    (CR 611.2c), which is what the Veiled cycle's permanent animation means,
+    and an until-end-of-turn animation's ability has to be swept beside its
+    body or the permanent keeps saying something it no longer is.
+    """
+    from ..keywords import grant_ability_line
+
+    for line in payload.get("granted_ability_lines") or ():
+        grant_ability_line(
+            perm, str(line), duration="end_of_turn" if until_eot else None
+        )
 
 
 @effect_handler("animate_self_until_eot")
@@ -1018,9 +1044,14 @@ def _animate_self(
     if source is None:
         return False, "ability not implemented"
     payload = instruction.payload
-    power, toughness = int(payload.get("power", 0)), int(payload.get("toughness", 0))
+    # "…becomes an **X/X** Construct artifact creature" (Chimeric Staff): the X
+    # is the one the activation paid, through the same resolver every other
+    # amount in the engine uses. A printed number resolves to itself.
+    power = resolve_amount(payload.get("power", 0), context.x_value)
+    toughness = resolve_amount(payload.get("toughness", 0), context.x_value)
     set_base_pt(source, power, toughness, until_eot=until_eot)
     source.metadata[record_key] = _animation_record(payload)
+    _grant_animation_abilities(source, payload, until_eot=until_eot)
     _record_animation_colors(source, payload, until_eot=until_eot)
     game.log.append(
         f"{context.card.name} becomes a {power}/{toughness} creature {duration}"
@@ -1151,9 +1182,11 @@ def _animate_target(
         game.log.append(f"{context.card.name}: no land to animate")
         return True, "resolved"
     payload = instruction.payload
-    power, toughness = int(payload.get("power", 0)), int(payload.get("toughness", 0))
+    power = resolve_amount(payload.get("power", 0), context.x_value)
+    toughness = resolve_amount(payload.get("toughness", 0), context.x_value)
     set_base_pt(target, power, toughness, until_eot=until_eot)
     target.metadata[record_key] = _animation_record(payload)
+    _grant_animation_abilities(target, payload, until_eot=until_eot)
     _record_animation_colors(target, payload, until_eot=until_eot)
     game.log.append(
         f"{target.card.name} becomes a {power}/{toughness} creature "
@@ -1193,7 +1226,8 @@ def animate_matching_until_eot(game: Game, instruction: OracleInstruction, conte
         game.players.index(context.caster) if context.caster in game.players else None
     )
     payload = instruction.payload
-    power, toughness = int(payload.get("power", 0)), int(payload.get("toughness", 0))
+    power = resolve_amount(payload.get("power", 0), context.x_value)
+    toughness = resolve_amount(payload.get("toughness", 0), context.x_value)
     record = _animation_record(payload)
     animated = []
     for permanent in game.all_permanents():
@@ -1204,6 +1238,7 @@ def animate_matching_until_eot(game: Game, instruction: OracleInstruction, conte
             continue
         set_base_pt(permanent, power, toughness, until_eot=True)
         permanent.metadata[ANIMATE_UNTIL_EOT] = dict(record)
+        _grant_animation_abilities(permanent, payload, until_eot=True)
         _record_animation_colors(permanent, payload, until_eot=True)
         animated.append(permanent)
     if not animated:

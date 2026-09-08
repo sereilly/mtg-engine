@@ -162,6 +162,15 @@ def _animation_payload(node: ast.BecomeCreature) -> dict[str, object]:
     }
     if node.colors:
         payload["colors"] = list(node.colors)
+    if node.granted_ability_lines:
+        # "…a 4/4 Serpent creature **with "This creature can't attack unless
+        # defending player controls an Island.""** (Veiled Serpent.) Carried,
+        # never dropped: the quoted sentence is half of what the permanent
+        # becomes, and an animation that granted the body and not the ability
+        # is the silent narrowing this package refuses by construction. The
+        # handler puts it on `engine/keywords.grant_ability_line`, which
+        # ``effective_card`` folds back into the text the compiler reads.
+        payload["granted_ability_lines"] = list(node.granted_ability_lines)
     if node.replaces_types:
         # CR 205.1a's default, printed by saying nothing (Opal Gargoyle). Only
         # emitted when the node claims it, for ``colors``' reason one clause

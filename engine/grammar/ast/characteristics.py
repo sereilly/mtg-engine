@@ -335,8 +335,15 @@ class BecomeCreature:
     is a parenthetical the lexer has already dropped.
     """
     subject: Recipient
-    power: int
-    toughness: int
+    #: The printed size, or the string ``"x"`` where the card prints one —
+    #: "{X}: This artifact becomes an **X/X** Construct artifact creature until
+    #: end of turn." (Chimeric Staff.) The type is *widened* rather than
+    #: repurposed: every node built before this held an int and still does, so
+    #: no golden and no ratchet entry moves. ``handlers/_common.resolve_amount``
+    #: is what turns the word into the number the activation paid, exactly as it
+    #: does for every other amount a card spells with an X.
+    power: "int | str"
+    toughness: "int | str"
     subtypes: tuple[str, ...] = ()
     keywords: tuple[str, ...] = ()
     #: Card types the animation adds *besides* creature — "becomes a 2/2
@@ -373,6 +380,19 @@ class BecomeCreature:
     #: keeps meaning what it did: the retention clauses are the ones the pool
     #: printed until now, and the addition is what those nodes claim.
     replaces_types: bool = False
+    #: Whole printed abilities the body grants **in quotation marks** — "…a 4/4
+    #: Serpent creature with "This creature can't attack unless defending
+    #: player controls an Island."" (Veiled Serpent), "…with flying and "At the
+    #: beginning of your upkeep, sacrifice this creature unless you pay
+    #: {1}{U}."" (Veiled Apparition).
+    #:
+    #: The *lines*, not a parse of them, for ``CreateEmblem``'s reason one
+    #: family over: an ability is what a line compiles to, and the channel that
+    #: carries it (`engine/keywords.grant_ability_line`) is read back through
+    #: the compiler — so a granted trigger reaches the upkeep step exactly as a
+    #: printed one does. The production checks that each line parses before
+    #: admitting the card, so nothing here grants text no reader claims.
+    granted_ability_lines: tuple[str, ...] = ()
 
 
 #: The colour an effect does not name because CR 608.2d makes the choice part of

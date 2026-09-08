@@ -66,6 +66,16 @@ def _parse_state_trigger_event(
     # (Thought Lash.) Read on this front end as well as in `engine/oracle.py`'s
     # table, for the reason stated above: both see the whole line, and a
     # condition only one of them reads leaves the other refusing the effect.
+    # "When **a player has no cards in hand**, …" (Veiled Crocodile.) CR 603.8
+    # asked of a hand rather than of a board, and read on this front end for
+    # the reason every branch below it is: both front ends see the whole line,
+    # and a condition only one of them reads leaves the other refusing the
+    # effect behind it. The seat is not narrowed — the card says "a player",
+    # which is every seat — so the phrase carries no payload and
+    # ``engine/oracle.py``'s row is the one that names the kind.
+    if stream.accept_phrase("a", "player", "has", "no", "cards", "in", "hand"):
+        return ast.TriggerEvent("player_has_no_cards_in_hand", word)
+
     unpaid_mark = stream.mark()
     if stream.accept_phrase("a", "player", "doesn't", "pay", "this"):
         stream.accept_word(

@@ -330,6 +330,7 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     # with the noun read rather than welded into the kind.
     "controls_no_matching": "when you control no lands",
     "controls_matching_permanent": "when you control a dwarf",
+    "player_has_no_cards_in_hand": "when a player has no cards in hand",
     # at
     "upkeep_self": "at the beginning of your upkeep",
     "upkeep_each": "at the beginning of each upkeep",
