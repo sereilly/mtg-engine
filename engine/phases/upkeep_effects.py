@@ -753,57 +753,6 @@ class UpkeepEffectsMixin:
             f"{controller.name}'s next upkeep"
         )
 
-    @upkeep_effect("upkeep_self", "upkeep_destroy_least_power_creature")
-    def _on__upkeep_self__upkeep_destroy_least_power_creature(self, ctx: UpkeepContext) -> None:
-        controller = ctx.controller
-        permanent = ctx.permanent
-        # Drop of Honey: destroy the creature with the least
-        # power; it can't be regenerated. "If two or more
-        # creatures are tied for least power, you choose one of
-        # them" — a human controller gets a prompt
-        # (confirm_least_power_choice); AI/headless play breaks
-        # the tie by battlefield scan order.
-        candidates = [
-            (self.players[seat], perm)
-            for seat, perm in self.permanents_with_controller()
-            if perm.is_creature
-        ]
-        if candidates:
-            least = min(perm.effective_power for _, perm in candidates)
-            tied = [
-                (owner, perm)
-                for owner, perm in candidates
-                if perm.effective_power == least
-            ]
-            controller_index = self.players.index(controller)
-            if len(tied) > 1:
-                # A real tie is the controller's choice. An interactive seat is
-                # prompted; every other seat takes the kind's default (the first
-                # tied creature in battlefield scan order) as this is armed.
-                armed = self.arm_pending_choice(
-                    "least_power_choice", controller_index,
-                    card_name=permanent.card.name,
-                    candidates=[
-                        {
-                            "seat": self.players.index(owner),
-                            "index": next(
-                                i for i, p in enumerate(owner.battlefield) if p is victim
-                            ),
-                            "name": victim.card.name,
-                        }
-                        for owner, victim in tied
-                    ],
-                    _candidate_perms=[victim for _, victim in tied],
-                )
-                if armed is not None:
-                    self.log.append(
-                        f"{permanent.card.name}: {controller.name} chooses which "
-                        "creature tied for least power to destroy"
-                    )
-            else:
-                owner, victim = tied[0]
-                self._destroy_least_power_creature(owner, victim, permanent.card.name)
-
     @upkeep_effect("upkeep_self", "upkeep_pay_or_sacrifice_self")
     def _on__upkeep_self__upkeep_pay_or_sacrifice_self(self, ctx: UpkeepContext) -> None:
         controller = ctx.controller

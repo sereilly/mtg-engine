@@ -1406,7 +1406,7 @@ def test_layers_only_import_downward(layers):
     "package,shared,roof",
     [
         ("effects", (), ()),
-        ("lowering", ("_common", "_filters", "_events", "_deaths", "_delays", "_amounts", "_counted_damage", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_conjuncts", "_bound_returns", "_bound_exiles", "_described_returns", "_piles", "_counter_stores", "_plus_one_counters", "_blankets", "_pump_categories", "_zone_categories", "_record_keys", "_record_conditions", "categories", "conditions"), ()),
+        ("lowering", ("_common", "_filters", "_events", "_deaths", "_delays", "_amounts", "_counted_damage", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_conjuncts", "_bound_returns", "_bound_exiles", "_described_returns", "_piles", "_counter_stores", "_plus_one_counters", "_blankets", "_pump_categories", "_zone_categories", "_record_keys", "_record_conditions", "_superlatives", "categories", "conditions"), ()),
         # `costs` is shared beside `_core` rather than a family: a cost is
         # charged on the way to the stack and never lowered, so it has no
         # `effects/` or `lowering/` twin to be a family of — and both
@@ -1793,6 +1793,15 @@ FAMILY_SHARED = {
     # `damage.py`; the two had drifted, and the inline one was dropping the head
     # noun from the payload it built.
     "_sweeps",
+    # `_superlatives` arrived at Urza's Saga with the noun phrase two families
+    # print: "the creature with the least **toughness**" is a damage recipient
+    # (Purging Scythe) and "the creature with the least **power**" a destroy
+    # subject (Drop of Honey), and both lower to the same pick — one
+    # `choose_permanent` naming the extreme, whose answer the verb then reads
+    # back. A floor for `_amounts`' reason exactly: `damage` and `destruction`
+    # both read it and it reads nothing back, and a fragment two families need
+    # is not either one's property.
+    "_superlatives",
     # `_conjuncts` split out of `lowering/damage.py` the *third* time that
     # module reached the guard, along the boundary its own docstring already
     # listed ("damage conjunctions" is one of the four things it says it

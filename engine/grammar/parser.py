@@ -64,7 +64,7 @@ from .repeats import (_attach_repeat_for_types,
                       _attach_repeat_while_condition)
 from .riders import (_attach_destroyed_this_way, _attach_flip_stakes_to_loop,
     _attach_no_regeneration,
-    _attach_unaffected_when_cost_paid, _attach_exchanged_this_way, _attach_tap_when_control_lost, _attach_riders, _attach_source_damage_lock, _attach_counter_cap, _attach_new_target_bound, _attach_spend_only, _attach_unpaid_penalty, _parse_conditional_instead_rider, _parse_exile_instead_rider, _parse_its_controller_creates_rider, _parse_that_controller_reveals_rider, _parse_who_cant_rider)
+    _attach_unaffected_when_cost_paid, _attach_exchanged_this_way, _attach_tap_when_control_lost, _attach_riders, _attach_source_damage_lock, _attach_counter_cap, _attach_new_target_bound, _attach_spend_only, _attach_superlative_tie_break, _attach_unpaid_penalty, _parse_conditional_instead_rider, _parse_exile_instead_rider, _parse_its_controller_creates_rider, _parse_that_controller_reveals_rider, _parse_who_cant_rider)
 from .static_lines import (_looks_static, _parse_leading_static_condition_line,
                            _parse_static_condition_line,
                            _parse_turn_scoped_static_line)
@@ -512,6 +512,17 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             # word the other does not, and this one is the narrower question.
             if _attach_flip_stakes_to_loop(stream, steps):
                 stream.accept_punct(".")
+                continue
+            # "If two or more creatures are tied for least toughness, you
+            # choose one of them." (Purging Scythe, Drop of Honey.) CR 608.2d's
+            # choice on the superlative the sentence in front of it picked
+            # by — no step of its own, because that sentence's own
+            # ``choose_permanent`` already carries ``only_on_tie``. Read before
+            # `Otherwise` and after the four "repeat" riders for the reason
+            # every ordering here is documentation rather than precedence: it
+            # opens on "if two or more", which none of them does, and it
+            # refuses without consuming.
+            if _attach_superlative_tie_break(stream, steps):
                 continue
             # "Otherwise, it gets +4/-X until end of turn." (Blood Lust.) The
             # second arm of the conditional sentence before it.

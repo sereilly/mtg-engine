@@ -10,6 +10,13 @@ See ``postcombat_main_phase`` for the second main phase.
 "At the beginning of your first main phase, …" (the M21 Shrine cycle) is put on
 the stack here, and only from the precombat entry — the second main phase is not
 a first one, and the same method serves both.
+
+"At the beginning of **each of your main phases**, …" (Carpet of Flowers) is put
+on the stack from **both**, which is the whole difference and the reason it is a
+separate condition kind. The brief for this work called those "two fire sites";
+they are one method with a flag, so the announcement goes beside the flag rather
+than into ``postcombat_main_phase``, which has no code of its own and should
+keep none.
 """
 
 from ..delayed_triggers import fire_delayed_triggers
@@ -24,6 +31,11 @@ class PrecombatMainPhaseMixin:
         self._on_step_or_phase_begin(phase, step)
         if precombat:
             self._fire_first_main_phase_triggers()
+        # Both entries, on the active player's own permanents: "your main
+        # phases" are the ones on your turn, and CR 505.1 is what makes the
+        # postcombat one of them — "the precombat and postcombat main phases
+        # are individually and collectively known as the main phase".
+        self._fire_each_main_phase_triggers()
         # "At the beginning of your next main phase, …" (Mana Drain). Both main
         # phases, because "next" means the next one there is — and scoped to
         # the entry's own controller, which is what "your" says: a main phase
@@ -34,6 +46,56 @@ class PrecombatMainPhaseMixin:
         )
         if self._receives_priority(step):
             self.start_priority_window(self.active_player_index)
+
+    def _fire_each_main_phase_triggers(self) -> None:
+        """CR 603.2: every "at the beginning of each of your main phases" trigger.
+
+        The precombat scan's twin, announced from **both** main-phase entries
+        rather than the first — which is the whole content of the printed
+        difference and the reason the compiler gives it a kind of its own. A
+        scope the fire site did not read would be an enchantment that only ever
+        worked before combat.
+
+        "Your" is the turn's active player, for `_fire_first_main_phase_triggers`'
+        reason exactly: a permanent's controller only has a main phase on their
+        own turn, so the scan is that seat's own permanents.
+
+        **CR 603.4's first check lives here.** "…if you haven't added mana with
+        this ability this turn" is an intervening-if, and a trigger whose
+        condition is false does not trigger at all — it does not go on the
+        stack, hold priority or answer to anything in response. Asked through
+        the payload rather than through a list of instruction kinds, which is
+        the same reading the end step takes and for the reason recorded there:
+        a list of kinds is only ever as complete as the last card to touch it.
+        """
+        from ..game_types import OracleExecutionContext
+        from ..handlers.control_flow import evaluate_condition
+
+        active = self.active_player_index
+        events = []
+        for controller_index, permanent, trig in iter_triggered_abilities(
+            self,
+            condition_kinds={"main_phase_each_yours"},
+            players=[self.players[active]],
+        ):
+            if not trig.supported or trig.instruction is None:
+                continue
+            gate = (trig.instruction.payload or {}).get("intervening_if")
+            if gate is not None and not evaluate_condition(
+                self,
+                OracleExecutionContext(
+                    caster=self.players[controller_index],
+                    target=self.players[controller_index],
+                    card=permanent.card,
+                    source_permanent=permanent,
+                    trigger_context={"event_subject_player": active},
+                ),
+                gate,
+            ):
+                continue
+            events.append(make_trigger_event(controller_index, permanent, trig))
+        if events:
+            self._enqueue_triggered_batch(events)
 
     def _fire_first_main_phase_triggers(self) -> None:
         """CR 603.2: every "at the beginning of your first main phase" trigger.

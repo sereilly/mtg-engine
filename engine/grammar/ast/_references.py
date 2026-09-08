@@ -63,6 +63,27 @@ class SourceRelativeComparison:
 
 
 @dataclass(frozen=True)
+class Superlative:
+    """"…the creature with the **least toughness**" (Purging Scythe), "…the
+    creature they control with the **greatest mana value**" (Tariff).
+
+    Not a :class:`Comparison`, and the difference is the whole reason it is a
+    node: a comparison is answered by looking at one object, and a superlative
+    cannot be — "least" is a fact about the *set*, and no permanent knows
+    whether another one is smaller. That is also why the phrase always arrives
+    with a tie-break sentence behind it (CR 608.2d): a printed superlative that
+    named several would otherwise have no reading.
+
+    Both words travel as data for the reason every other printed word in this
+    grammar does. Four cards in the pool print this phrase between them, across
+    both extremes and all three characteristics, and none of them needs a
+    production of its own.
+    """
+    extreme: str          # "least" | "greatest"
+    characteristic: str   # "power" | "toughness" | "mana_value"
+
+
+@dataclass(frozen=True)
 class ObjectFilter:
     """A noun phrase describing a set of objects.
 
@@ -723,6 +744,15 @@ class ObjectFilter:
     #: Emitted under its own payload key, which ``subject_filters`` answers
     #: before the pure matcher runs and refuses when the caller named no source.
     characteristic_vs_source: "SourceRelativeComparison | None" = None
+    #: "…the creature with the **least toughness**" (Purging Scythe). A
+    #: selection over the set this phrase describes rather than a narrowing of
+    #: it — see :class:`Superlative`. ``to_payload`` emits it whenever it is
+    #: set, and the key is deliberately **outside**
+    #: ``subject_filters.TESTABLE_SUBJECT_FILTER_KEYS``: a matcher asked about
+    #: one permanent cannot answer it, so every lowering but the two written
+    #: for it refuses the phrase by name instead of dropping the word and
+    #: sweeping the board.
+    superlative: "Superlative | None" = None
 
     def to_payload(self) -> dict[str, object]:
         """Instruction-payload dict, emitting only keys that are set.

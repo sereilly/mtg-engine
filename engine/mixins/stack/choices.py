@@ -529,10 +529,6 @@ class PendingChoicesMixin:
         return self._choice_view("body_choice", "controller_index")
 
     @property
-    def pending_least_power_choice(self) -> dict | None:
-        return self._choice_view("least_power_choice", "controller_index")
-
-    @property
     def pending_optional_pays(self) -> list[dict]:
         return [
             {**choice.data, "player_index": choice.player_index}
@@ -7795,6 +7791,77 @@ class PendingChoicesMixin:
         order = list(counts)
         return min(order, key=lambda color: (counts[color], order.index(color)))
 
+    # -- Which colour a mana ability produces (CR 608.2d) ------------------
+
+    def confirm_mana_color_choice(self, player_index: int, color) -> bool:
+        """Answer "add N mana of any one color"."""
+        return self.resolve_pending_choice(
+            "mana_color_choice", player_index, color=color
+        )
+
+    def _mana_color_offered(self, choice: PendingChoice) -> list[str]:
+        """The colours this clause narrowed the choice to (CR 608.2d).
+
+        Read off the arming rather than recomputed: "any color that a land an
+        opponent controls could produce" was answered when the ability began
+        resolving, and a board that changed under a queued prompt would offer a
+        colour the card never had.
+        """
+        return [str(c).upper() for c in (choice.data.get("colors") or ())]
+
+    def _resolve_mana_color_choice(self, choice: PendingChoice, color) -> bool:
+        """Put the chosen colour's mana in the pool, and note it was added.
+
+        Refused rather than clamped when the answer is outside the offered set:
+        the picker was given that list, so an answer outside it is a stale or
+        invented one and taking the nearest colour would put mana the card
+        cannot make into somebody's pool (idiom 9).
+        """
+        offered = self._mana_color_offered(choice)
+        try:
+            symbol = self._normalize_mana_color(color)
+        except ValueError:
+            return False
+        if not symbol or (offered and symbol not in offered):
+            return False
+        self.discard_pending_choice(choice)
+        self._pay_out_chosen_mana(choice, symbol)
+        return True
+
+    def _default_mana_color_choice(self, choice: PendingChoice) -> None:
+        """The colour the resolution would have taken with nobody to ask.
+
+        Deliberately *not* a valuation: it is the same answer
+        ``add_mana_from_text`` reached before this prompt existed, so a seeded
+        AI run and a headless resolution produce exactly the mana they always
+        did. A seat that should choose better wants a weight in
+        ``engine/ai_valuation.py``, not a branch here.
+        """
+        self.discard_pending_choice(choice)
+        self._pay_out_chosen_mana(choice, str(choice.data.get("default_color") or "G"))
+
+    def _pay_out_chosen_mana(self, choice: PendingChoice, symbol: str) -> None:
+        """The half both answers share: the mana, the log line and the note.
+
+        One method because the record is the thing that must not drift — Carpet
+        of Flowers' second trigger reads it, and a default that added mana
+        without writing it down would let the enchantment fire twice in a turn.
+        """
+        from ...mana_ability_records import note_mana_added
+
+        player = self.players[choice.player_index]
+        amount = int(choice.data.get("amount", 0) or 0)
+        if amount > 0:
+            player.mana_pool[symbol] = player.mana_pool.get(symbol, 0) + amount
+            note_mana_added(
+                self, choice.data.get("source"), str(choice.data.get("record") or "")
+            )
+        note = str(choice.data.get("note") or "")
+        self.log.append(
+            f"{choice.data.get('card_name', 'An ability')} produced "
+            f"{amount} {symbol} mana{note}"
+        )
+
     def confirm_color_set_choice(self, player_index: int, colors) -> bool:
         """Answer "become the color or colors of your choice"."""
         return self.resolve_pending_choice(
@@ -8691,6 +8758,25 @@ register_choice(
     # deterministic answer before the flag is set — so headless and AI play run
     # exactly as they did.
     suspends=True,
+)
+
+register_choice(
+    "mana_color_choice",
+    resolve=lambda game, choice, r: game._resolve_mana_color_choice(
+        choice, r.get("color")
+    ),
+    default=lambda game, choice: game._default_mana_color_choice(choice),
+    action="mana_color_choice_confirm",
+    prompt_key="mana_color_choice",
+    blocked_detail="choose the color of the mana before other actions",
+    spectator_visible=True,
+    hidden_for_ai=False,
+    # CR 608.2d's choice is the whole of what the clause does, and nothing
+    # behind it in the same resolution reads the answer — the mana lands in a
+    # pool, not in the scratchpad. So the offer is taken inline by every
+    # non-interactive seat, which is what keeps a seeded AI run producing the
+    # mana it always produced.
+    default_at_arm=True,
 )
 
 register_choice(
@@ -9682,18 +9768,6 @@ register_choice(
     default_at_arm=True,
     # Nothing later in the same resolution reads the answer: the counter is the
     # last thing the ability does.
-)
-
-register_choice(
-    "least_power_choice",
-    resolve=lambda game, choice, r: game._resolve_least_power_choice(
-        choice, r["target_seat"], r["target_permanent_index"]
-    ),
-    default=lambda game, choice: game._default_least_power_choice(choice),
-    action="least_power_choice_confirm",
-    prompt_key="least_power_choice",
-    blocked_detail="choose which creature tied for least power is destroyed before other actions",
-    default_at_arm=True,
 )
 
 # Replacement effects that suspend on a decision (CR 614) keep their own queue —

@@ -202,22 +202,38 @@ class GameEndingMixin:
                         for described in empty_of
                     )
                     # "When there are **no lands on the battlefield**,
-                    # sacrifice this enchantment." (Mana Vortex.) The same
-                    # state trigger asked about every battlefield rather than
-                    # this seat's, so it is its own condition and its own
-                    # count: a Mana Vortex whose controller has run out of
-                    # lands stays while an opponent still has one.
-                    needs_any_land_anywhere = next(matching_triggers(
-                        perm.effective_card,
-                        condition_kinds={"no_lands_anywhere"},
-                        instruction_kinds={"sacrifice_self"},
-                    ), None) is not None
-                    lands_anywhere = any(
-                        p.has_type("land") for p in self.all_permanents()
+                    # sacrifice this enchantment." (Mana Vortex.) "When there
+                    # are **no creatures on the battlefield**, …" (Drop of
+                    # Honey.) The same state trigger asked about every
+                    # battlefield rather than this seat's, so it is its own
+                    # condition and its own count: a Mana Vortex whose
+                    # controller has run out of lands stays while an opponent
+                    # still has one.
+                    #
+                    # The noun is payload and goes through ``subject_matches``,
+                    # the same reader the seat-scoped twin above uses. It was
+                    # ``has_type("land")`` behind a kind with the type in its
+                    # name — the very mistake the comment above records fixing
+                    # for that twin — and the second card printing the sentence
+                    # was unreadable because of it.
+                    absent_anywhere = [
+                        trig.condition.payload.get("absent_filter") or {}
+                        for trig in matching_triggers(
+                            perm.effective_card,
+                            condition_kinds={"no_permanents_anywhere"},
+                            instruction_kinds={"sacrifice_self"},
+                        )
+                    ]
+                    board_is_empty_of = any(
+                        not any(
+                            subject_matches(
+                                self, other, described, observer=seat, source=perm
+                            )
+                            for other in self.all_permanents()
+                        )
+                        for described in absent_anywhere
                     )
-                    if needs_none or (
-                        needs_any_land_anywhere and not lands_anywhere
-                    ):
+                    if needs_none or board_is_empty_of:
                         # Through the one sacrifice transition (CR 701.21a), not
                         # a graveyard append beside a battlefield rebuild: the
                         # card says *sacrifice*, and the open-coded pair here
@@ -228,8 +244,8 @@ class GameEndingMixin:
                         # the seam was built.
                         self.sacrifice_permanent(perm)
                         reason = (
-                            "no lands on the battlefield"
-                            if needs_any_land_anywhere and not lands_anywhere
+                            "nothing its state trigger names is on the battlefield"
+                            if board_is_empty_of
                             else "controls none of what its state trigger names"
                         )
                         self.log.append(f"{perm.card.name} sacrificed ({reason})")

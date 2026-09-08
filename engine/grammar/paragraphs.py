@@ -660,7 +660,7 @@ def _parse_pay_or_sacrifice_greatest_mana_value(
         return None
     stream.accept_punct(".")
     # "**If two or more creatures a player controls are tied for greatest, that
-    # player chooses one.**" CR 101.4's answer to a superlative that names
+    # player chooses one.**" CR 608.2d's answer to a superlative that names
     # several: the seat whose permanents they are picks. Required, because
     # without it the paragraph would have to pick for them — and a tie broken
     # by the engine is a strictly different card on every board with two equal

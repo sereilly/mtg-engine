@@ -393,6 +393,65 @@ def frozen_seat_adds_mana(game: Game, instruction: OracleInstruction, context: O
     return True, "resolved"
 
 
+
+def _produce_one_color(
+    game, context, instruction, *, amount: int, symbol: str, named: str | None,
+    available: "tuple[str, ...] | None" = None, note: str = "",
+) -> tuple[bool, str]:
+    """Add *amount* mana of one colour — asking which, when nobody has said.
+
+    "Add N mana of any one color" is a **choice** (CR 608.2d), and until now the
+    resolution path made it silently: an activated ability carries the answer on
+    ``choices["new_color"]`` and a cast carries it on the announcement, but a
+    *triggered* ability carries neither and the branch fell through to a
+    hard-coded ``"G"``. Sanctum of Fruitful Harvest has produced green mana on
+    every board since it was ingested; Carpet of Flowers would have too.
+
+    So a colour nobody named is asked for — and only then. Every path that
+    already has an answer is untouched, which is what keeps every activated
+    ability and every seeded AI run byte-identical: the prompt is registered
+    ``default_at_arm``, so a non-interactive seat takes exactly the colour this
+    branch would have taken anyway, inline, before this function returns.
+
+    *available* is the set the clause narrows the choice to (Fellwar Stone's
+    opponents' lands, Reflecting Pool's own board); None means the five colours
+    of CR 106.1b's six mana types.
+
+    The **record** rides through both paths together with the mana, because it
+    is a note about mana having been added: writing it here and prompting there
+    would let Carpet of Flowers refuse its own second trigger after a resolution
+    that added nothing.
+    """
+    from ..mana_ability_records import MANA_RECORD_PAYLOAD_KEY, note_mana_added
+
+    caster = context.caster
+    card = context.card
+    record = str(instruction.payload.get(MANA_RECORD_PAYLOAD_KEY) or "")
+    seat = game.players.index(caster) if caster in game.players else None
+    colors = list(available) if available else ["W", "U", "B", "R", "G"]
+    if named is None and seat is not None and amount > 0 and len(colors) > 1:
+        armed = game.arm_pending_choice(
+            "mana_color_choice", seat,
+            card_name=card.name,
+            amount=amount,
+            colors=colors,
+            default_color=symbol,
+            note=note,
+            record=record,
+            source=context.source_permanent,
+        )
+        if armed is not None:
+            game.log.append(
+                f"{card.name}: {caster.name} chooses a color for {amount} mana"
+            )
+        return True, "resolved"
+    if amount > 0:
+        caster.mana_pool[symbol] = caster.mana_pool.get(symbol, 0) + amount
+        note_mana_added(game, context.source_permanent, record)
+    game.log.append(f"{card.name} produced {amount} {symbol} mana{note}")
+    return True, "resolved"
+
+
 @effect_handler("add_mana_from_text")
 def add_mana_from_text(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Add mana to the controller's pool.
@@ -695,10 +754,16 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
         if x_count is not None:
             x_value = count_from_payload(game, context, x_count)
         amount = resolve_amount(any_count, x_value)
-        symbol = game._normalize_mana_color(
+        # **Whether anybody named a colour**, kept apart from the fallback it
+        # used to be folded into. An activated ability carries the answer on
+        # ``choices["new_color"]`` and a cast carries it on the announcement;
+        # for a triggered ability nothing does, and `or "G"` is what made that
+        # silence look like an answer. `_produce_one_color` asks instead.
+        named = game._normalize_mana_color(
             instruction.payload.get("color")
             or (context.choices or {}).get("new_color")
-        ) or "G"
+        ) or None
+        symbol = named or "G"
         # "…of any color **that a land an opponent controls could produce**"
         # (Fellwar Stone). The choice is narrowed to that set, re-checked here
         # rather than trusted from the picker (idiom 9) - and with the set empty
@@ -725,8 +790,8 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
         if any_type_from is not None:
             from ..grammar.lowering.mana import ANY_TYPE_FROM_RECORDS
 
-            record, printed, _ = ANY_TYPE_FROM_RECORDS[any_type_from]
-            land = (context.choices or {}).get(record)
+            cost_record, printed, _ = ANY_TYPE_FROM_RECORDS[any_type_from]
+            land = (context.choices or {}).get(cost_record)
             available = tuple(dict.fromkeys(
                 str(sym).upper() for sym in (
                     land.effective_produced_mana if land is not None else ()
@@ -740,13 +805,13 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
                 # make, and a choice outside that set is not one of them —
                 # re-checked here rather than trusted from the picker (idiom 9).
                 symbol = sorted(available)[0]
-            if amount > 0:
-                caster.mana_pool[symbol] += amount
-            game.log.append(
-                f"{card.name} produced {amount} {symbol} mana "
-                f"({land.card.name} could make it)"
+            return _produce_one_color(
+                game, context, instruction,
+                amount=amount, symbol=symbol,
+                named=named if named in available else None,
+                available=available,
+                note=f" ({land.card.name} could make it)",
             )
-            return True, "resolved"
         # "…of any type **that a land you control** could produce" (Reflecting
         # Pool). CR 106.7's fixpoint over this seat's own board, which is what
         # keeps the Pool from reading *itself*: Scryfall records its
@@ -767,24 +832,29 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
                 # CR 608.2d again: the choice is among the types the board
                 # offers, re-checked here rather than trusted from the picker.
                 symbol = sorted(available)[0]
-            if amount > 0:
-                caster.mana_pool[symbol] += amount
-            game.log.append(f"{card.name} produced {amount} {symbol} mana")
-            return True, "resolved"
+            return _produce_one_color(
+                game, context, instruction,
+                amount=amount, symbol=symbol,
+                named=named if named in available else None,
+                available=available,
+            )
         narrowed_to = instruction.payload.get("any_color_from")
+        offered: "tuple[str, ...] | None" = None
         if narrowed_to is not None:
-            available = _colors_opponents_lands_produce(game, caster)
-            if not available:
+            offered = _colors_opponents_lands_produce(game, caster)
+            if not offered:
                 game.log.append(
                     f"{card.name}: no land an opponent controls produces colored mana"
                 )
                 return True, "resolved"
-            if symbol not in available:
-                symbol = sorted(available)[0]
-        if amount > 0:
-            caster.mana_pool[symbol] += amount
-        game.log.append(f"{card.name} produced {amount} {symbol} mana")
-        return True, "resolved"
+            if symbol not in offered:
+                symbol = sorted(offered)[0]
+        return _produce_one_color(
+            game, context, instruction,
+            amount=amount, symbol=symbol,
+            named=named if offered is None or named in offered else None,
+            available=offered,
+        )
 
     game._add_mana_from_text(
         caster,

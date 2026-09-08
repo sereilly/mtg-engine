@@ -39,7 +39,7 @@ from . import ast
 from .derived import derived_instruction_for_line
 from .errors import LoweringError
 from .statics import _lower_static_ability
-from .lowering.sequences import (_lower_steps)
+from .lowering.control_flow import WRAPPER_KINDS
 from .lowering import (
     GRAMMAR_ONLY_PAYLOAD_KEYS,
     INSTRUCTION_CATEGORIES,
@@ -51,6 +51,64 @@ from .lowering import (
     _lower_condition,
 )
 
+
+
+#: Where a wrapper keeps the instructions it carries, **for rewriting** — every
+#: row of :data:`WRAPPER_KINDS` plus the two an *offer* holds.
+#:
+#: Derived from ``lowering/control_flow``'s table rather than copied, so a
+#: wrapper added there is rewritable by construction. Here, beside
+#: :func:`lower_ability`, because that function is the only caller and the only
+#: place a condition and the instructions it is about are both in view. ``may`` is the difference and it is a real one:
+#: ``categories_of`` must **not** descend into an offer, because the offer is
+#: itself an effect with a category of its own (a prompt the card prints), while
+#: a rewrite that stopped at it would leave the instruction it wraps untouched —
+#: which for Carpet of Flowers is the whole ability.
+_REWRITE_NESTED_KEYS: dict[str, tuple[str, ...]] = {
+    **WRAPPER_KINDS,
+    "may": ("action", "otherwise"),
+}
+
+
+def stamp_payload_key(
+    instructions: tuple["OracleInstruction", ...],
+    *,
+    kind: str,
+    key: str,
+    value: object,
+) -> tuple["OracleInstruction", ...]:
+    """*instructions* with *key* added to every instruction of *kind*, at any
+    depth.
+
+    "At the beginning of each of your main phases, **if you haven't added mana
+    with this ability this turn**, you may add X mana…" (Carpet of Flowers.)
+    The clause that reads the record and the instruction that writes it are two
+    halves of one printed ability, and ``lower_ability`` is the only place both
+    are in view — the same pairing argument ``_lower_steps`` makes for "if you
+    do" and the step it reads. The mana instruction sits inside the offer, so
+    the stamp has to reach through it.
+
+    Rebuilt rather than mutated: an ``OracleInstruction`` is shared by every
+    copy of the card and its payload is read as a value everywhere.
+    """
+    def rewrite(instruction: "OracleInstruction") -> "OracleInstruction":
+        payload = instruction.payload
+        nested_keys = _REWRITE_NESTED_KEYS.get(instruction.kind)
+        if nested_keys:
+            changed = {
+                name: tuple(rewrite(step) for step in payload.get(name) or ())
+                for name in nested_keys
+                if payload.get(name)
+            }
+            if changed:
+                payload = {**payload, **changed}
+        if instruction.kind == kind:
+            payload = {**payload, key: value}
+        if payload is instruction.payload:
+            return instruction
+        return OracleInstruction(instruction.kind, instruction.value, payload)
+
+    return tuple(rewrite(instruction) for instruction in instructions)
 
 #: The node types whose lowering is *only* a name — one AST class, one
 #: function, nothing to decide. These were 78 two-line branches of the chain
@@ -229,6 +287,27 @@ def lower_ability(
             # one reader's reckoning and not the other's.
             zone = condition.get("functions_from")
             extra = {"functions_from": zone} if zone else {}
+            # "…**if you haven't added mana with this ability this turn**…"
+            # (Carpet of Flowers.) The clause reads a record that nothing else
+            # in the engine writes, and the instruction that must write it is
+            # the mana half of this same ability — sitting inside the offer, so
+            # the stamp reaches through it (:func:`stamp_payload_key`).
+            #
+            # Here rather than in the mana lowering because only here are the
+            # two halves in view: "add X mana of any one color" is the same
+            # printed sentence on Sanctum of Fruitful Harvest, which records
+            # nothing and must go on recording nothing. The same pairing
+            # argument ``_lower_steps`` makes for "if you do" and the step that
+            # writes what it reads.
+            if condition.get("kind") == "mana_added_with_this_ability":
+                from ..mana_ability_records import MANA_RECORD_PAYLOAD_KEY
+
+                instructions = stamp_payload_key(
+                    instructions,
+                    kind="add_mana_from_text",
+                    key=MANA_RECORD_PAYLOAD_KEY,
+                    value=condition["record"],
+                )
             instructions = tuple(
                 OracleInstruction(
                     instruction.kind, instruction.value,

@@ -137,6 +137,10 @@ class _FilterDraft:
     # "…with power equal to or greater than the enchanted creature's toughness"
     # (Ironclaw Curse) — see ``ast.SourceRelativeComparison``.
     characteristic_vs_source: "ast.SourceRelativeComparison | None" = None
+    #: "…with the least toughness" (Purging Scythe) — see
+    #: ``ast.Superlative``. A selection over the described set, not a narrowing
+    #: of it, which is why the payload key it emits is one no matcher answers.
+    superlative: "ast.Superlative | None" = None
     other_than_source: bool = False
     is_source: bool = False
     is_enchanted: bool = False
@@ -345,4 +349,5 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         on_the_battlefield=d.on_the_battlefield,
         dealt_damage_to_source_this_turn=d.dealt_damage_to_source_this_turn,
         characteristic_vs_source=d.characteristic_vs_source,
+        superlative=d.superlative,
     )

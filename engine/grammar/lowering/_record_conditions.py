@@ -518,6 +518,25 @@ def lower_record_condition(
             "count": condition.count,
             "comparison": condition.comparison,
         }
+    if isinstance(condition, ast.ManaAddedWithThisAbility):
+        # The polarity travels; what it is measured against is the per-turn
+        # stamp ``engine/mana_ability_records.py`` keeps, which the evaluator
+        # reads through that module's own accessor rather than off the metadata
+        # key — one reader, beside the one write site, so the note this
+        # ability makes and the question it asks cannot come to disagree.
+        #
+        # The **record name** travels too, and it is the same constant the
+        # mana instruction is stamped with (``MANA_ADDED_WITH_THIS_ABILITY``):
+        # the two halves of this card are lowered from one ability node, and
+        # naming the record in the payload is what lets a later card print a
+        # second such clause without either half guessing which note it meant.
+        from ...mana_ability_records import MANA_ADDED_WITH_THIS_ABILITY
+
+        return {
+            "kind": "mana_added_with_this_ability",
+            "record": MANA_ADDED_WITH_THIS_ABILITY,
+            "negated": condition.negated,
+        }
     if isinstance(condition, ast.AttackedOrBlockedThisCombat):
         # No payload for the sibling's reason: the sentence names no side of
         # the combat and no other window, and the object is the ability's own

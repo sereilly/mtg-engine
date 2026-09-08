@@ -1622,11 +1622,21 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("controls_no_matching",
      r"when you control no (?P<controlled_subjects>[^,]+)"),
     # "When there are **no lands on the battlefield**, sacrifice this
-    # enchantment." (Mana Vortex.) The same state trigger (CR 603.8) asked
-    # about every battlefield rather than the source controller's — a
-    # different set, so a different kind: a Mana Vortex whose controller has
-    # no land is not sacrificed while an opponent still has one.
-    ("no_lands_anywhere",           r"when there are no lands on the battlefield"),
+    # enchantment." (Mana Vortex.) "When there are **no creatures on the
+    # battlefield**, sacrifice this enchantment." (Drop of Honey.) The same
+    # state trigger (CR 603.8) asked about every battlefield rather than the
+    # source controller's — a different set from the row above, so a different
+    # kind: a Mana Vortex whose controller has no land is not sacrificed while
+    # an opponent still has one.
+    #
+    # **The noun is payload**, which is the correction the row above already
+    # states in its own comment: this was ``no_lands_anywhere``, with the type
+    # welded into the kind, so the second card printing the identical sentence
+    # about a second type could not be read at all — and Drop of Honey's
+    # printing of it went unimplemented behind a name-keyed hook, whose blanket
+    # claim is what kept ``parse_coverage`` from ever naming the line.
+    ("no_permanents_anywhere",
+     r"when there are no (?P<absent_subjects>[^,]+) on the battlefield"),
     # "When you control a Dwarf, sacrifice this creature." (Goblins of the
     # Flarg.) A state trigger (CR 603.8) like the two above, and the *positive*
     # one: those fire while a described set is empty, this while it is not.
@@ -1710,6 +1720,20 @@ AT_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("main_phase_first_each",
      r"at the beginning of each (?:(?P<main_phase_scope>opponent|player)'s )?"
      r"(?:first|precombat) main phase"),
+    # "At the beginning of **each of your main phases**" (Carpet of Flowers).
+    # CR 505.1's two main phases, both of them, on the controller's own turn —
+    # so it is neither of the rows above: `main_phase_first` fires once and only
+    # precombat, and `main_phase_first_each` fires precombat on everybody's
+    # turn. A third kind because the *dispatch* is what reads the difference,
+    # which is the reason `upkeep_self`/`upkeep_each` and
+    # `draw_step_self`/`draw_step_each` are two kinds each.
+    #
+    # Ordered here rather than above them because none of the three is a prefix
+    # of another ("each of your" and "each player's" diverge on the second
+    # word), so the placement is documentation and the specific-before-generic
+    # rule holds anyway.
+    ("main_phase_each_yours",
+     r"at the beginning of each of your main phases"),
     # "Your end step" is a *scope* narrowing, exactly like combat's below and
     # upkeep_self/upkeep_each above: it fires only on its controller's own end
     # step where the bare form fires on everyone's. A separate kind because the

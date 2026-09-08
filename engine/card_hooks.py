@@ -202,12 +202,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
                 mana={"W": 0, "U": 0, "B": 3, "R": 0, "G": 0, "C": 0, "generic": 0},
             ),
     },
-    'Drop of Honey': {
-        "at the beginning of your upkeep, destroy the creature with the least "
-        "power. it can't be regenerated. if two or more creatures are tied for "
-        "least power, you choose one of them":
-            _line("upkeep_destroy_least_power_creature", "upkeep_effect"),
-    },
     'Earthbind': {
         'when this aura enters, if enchanted creature has flying, this aura '
         'deals 2 damage to that creature and this aura gains "enchanted '

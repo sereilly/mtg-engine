@@ -959,6 +959,7 @@ def nested_instructions(instruction: OracleInstruction) -> tuple[OracleInstructi
     return nested
 
 
+
 def categories_of(instructions: tuple["OracleInstruction", ...]) -> frozenset[str]:
     """Migration categories covered by a lowered instruction sequence.
 

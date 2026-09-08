@@ -2531,6 +2531,17 @@ function getColorSetChoiceInfo(state = currentState) {
   return info;
 }
 
+// "Add N mana of any one color" (Carpet of Flowers, Sanctum of Fruitful
+// Harvest) resolving with nobody having named a colour. One colour for the
+// whole clause, so the picker chooses rather than toggles.
+function getManaColorChoiceInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.mana_color_choice;
+  if (!info) return null;
+  if (info.player_index !== seat) return null;
+  return info;
+}
+
 // Zur's Weirding: "If a player would draw a card, they reveal it instead. Then
 // any other player may pay 2 life." The offer goes round every other seat in
 // turn order and the first to pay bins the card.
@@ -2671,14 +2682,6 @@ function getEntryExileInfo(state = currentState) {
   const info = state.entry_exile;
   if (!info || info.caster_seat !== seat) return null;
   if (!Array.isArray(info.legal_indices) || info.legal_indices.length === 0) return null;
-  return info;
-}
-
-// Drop of Honey: the tie-break choice among creatures tied for least power.
-function getLeastPowerChoiceInfo(state = currentState) {
-  if (!state || seat === null) return null;
-  const info = state.least_power_choice;
-  if (!info || !Array.isArray(info.candidates) || info.candidates.length === 0) return null;
   return info;
 }
 
@@ -3426,22 +3429,6 @@ function getPromptBoardTargeting(state = currentState) {
         submitPromptAction(payload);
       },
       invalidHint: "Choose one of the highlighted opponents.",
-    });
-  }
-
-  // Drop of Honey: which of the creatures tied for least power is destroyed.
-  const leastPowerChoiceInfo = getLeastPowerChoiceInfo(state);
-  if (leastPowerChoiceInfo) {
-    return promptTargeting({
-      permanentKeys: (leastPowerChoiceInfo.candidates || []).map((c) => `${c.seat}-${c.index}`),
-      onPermanent: (targetSeat, idx) =>
-        submitPromptAction({
-          seat,
-          action: "least_power_choice_confirm",
-          target_seat: targetSeat,
-          target_permanent_index: idx,
-        }),
-      invalidHint: "Only the creatures tied for least power can be chosen.",
     });
   }
 
@@ -5112,6 +5099,43 @@ function applyColorSetChoicePrompt(info) {
   };
 }
 
+// "Add N mana of any one color": pick the colour the mana is added as.
+function applyManaColorChoicePrompt(info) {
+  const panel = q("activationPanel");
+  const steps = q("promptSteps");
+  const okBtn = q("promptOkBtn");
+
+  panel.classList.remove("hidden");
+  q("promptCustomRow").classList.add("hidden");
+  q("promptCancelBtn").classList.add("hidden");
+  q("promptCancelBtn").disabled = true;
+  okBtn.classList.add("hidden");
+
+  const amount = Number(info.amount || 0);
+  q("promptTitle").textContent = "Choose a Color";
+  q("promptBody").textContent =
+    `${info.card_name || "An ability"}: add ${amount} mana of any one color.`;
+  steps.innerHTML =
+    `<div class="prompt-choice-row">` +
+    (info.colors || [])
+      .map(
+        (c) =>
+          `<button type="button" class="prompt-choice-btn" ` +
+          `data-mana-color="${escapeHtml(c)}">${escapeHtml(c)}</button>`
+      )
+      .join("") +
+    `</div>`;
+  steps.querySelectorAll("[data-mana-color]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await sendAction({
+        seat,
+        action: "mana_color_choice_confirm",
+        mana_color: btn.dataset.manaColor,
+      });
+    });
+  });
+}
+
 // Zur's Weirding: the card the drawing player is about to draw is face up on
 // the table, and this seat may pay to bin it instead.
 function applyRevealedDrawBuyoutPrompt(info) {
@@ -6001,32 +6025,6 @@ function applyEnterChoicePrompt(info) {
     });
   });
 }
-
-// Drop of Honey: pick which of the creatures tied for least power is destroyed.
-function applyLeastPowerChoicePrompt(info) {
-  const panel = q("activationPanel");
-  const title = q("promptTitle");
-  const body = q("promptBody");
-  const steps = q("promptSteps");
-  const cancelBtn = q("promptCancelBtn");
-  const okBtn = q("promptOkBtn");
-  const customRow = q("promptCustomRow");
-  const customOkBtn = q("promptCustomOkBtn");
-
-  panel.classList.remove("hidden");
-  okBtn.classList.add("hidden");
-  customRow.classList.add("hidden");
-  cancelBtn.classList.add("hidden");
-  cancelBtn.disabled = true;
-  customOkBtn.disabled = true;
-
-  const cardName = info.card_name || "Drop of Honey";
-  title.textContent = "Choose a creature to destroy";
-  body.textContent = `${cardName}: these creatures are tied for least power — choose which one is destroyed.`;
-  // The tied creatures are highlighted on the battlefield; clicking one picks it.
-  steps.innerHTML = "<div>Action: click one of the highlighted creatures on the battlefield.</div>";
-}
-
 
 function applyLoyaltyRecipientPrompt(info) {
   const panel = q("activationPanel");
@@ -9413,6 +9411,12 @@ function renderActivationPrompt() {
     return;
   }
 
+  const manaColorChoiceInfo = getManaColorChoiceInfo();
+  if (manaColorChoiceInfo) {
+    applyManaColorChoicePrompt(manaColorChoiceInfo);
+    return;
+  }
+
   const optionalPayInfo = getOptionalPayInfo();
   if (optionalPayInfo) {
     applyOptionalPayPrompt(optionalPayInfo);
@@ -9530,12 +9534,6 @@ function renderActivationPrompt() {
   const retargetChoiceInfo = getRetargetChoiceInfo();
   if (retargetChoiceInfo) {
     applyRetargetChoicePrompt(retargetChoiceInfo);
-    return;
-  }
-
-  const leastPowerChoiceInfo = getLeastPowerChoiceInfo();
-  if (leastPowerChoiceInfo) {
-    applyLeastPowerChoicePrompt(leastPowerChoiceInfo);
     return;
   }
 
@@ -16557,7 +16555,7 @@ function renderBoard(state) {
       }
     }
     // A prompt that picks permanents off the board (forced sacrifice, Balance,
-    // Drop of Honey, …) highlights every legal permanent as a target and marks
+    // a superlative tie-break, …) highlights every legal permanent as a target and marks
     // the ones picked so far as selected.
     const boardTargeting = activePromptBoardTargeting(state);
     let targetingKeys = getTargetablePermanentKeysForPrompt();

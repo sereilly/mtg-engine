@@ -692,6 +692,33 @@ class ItHappened:
     producer here, where it would be a second copy of ``_PRODUCES``.
     """
 @dataclass(frozen=True)
+class ManaAddedWithThisAbility:
+    """"…**if you haven't added mana with this ability this turn**, …"
+    (Carpet of Flowers.)
+
+    CR 603.4's intervening-if over a record no board holds. Nothing about the
+    enchantment, about the mana pool or about the turn's history says which
+    *ability* a mana came from — CR 500.4 empties the pool at every step — so
+    the ability writes it down as it resolves and this clause reads it back
+    (``engine/mana_ability_records.py``, where both halves live so the string
+    they share cannot be spelled twice).
+
+    Its own condition rather than a spelling of
+    :class:`SourceAbilityActivations`: that one counts *activations* of an
+    activated ability, and this is a triggered ability that may resolve and add
+    nothing at all — the "you may" is inside it. What is recorded is the mana,
+    not the resolution.
+
+    ``negated`` is the printed polarity. Only the negative is in the pool; the
+    field is here for :class:`SourceAbilityActivations`' ``comparison`` reason —
+    the question is one question and what varies is which answer runs the
+    effect.
+    """
+
+    negated: bool = True
+
+
+@dataclass(frozen=True)
 class SourceAbilityActivations:
     """"**If this ability has been activated four or more times this turn**,
     sacrifice this creature at the beginning of the next end step." (Farrelite

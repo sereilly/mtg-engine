@@ -335,7 +335,7 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     "discarded_by_opponent_effect":
         "when a spell or ability an opponent controls causes you to discard this card",
     "no_islands": "when you control no islands",
-    "no_lands_anywhere": "when there are no lands on the battlefield",
+    "no_permanents_anywhere": "when there are no lands on the battlefield",
     "self_cast": "when you cast this spell",
     "self_put_into_graveyard_from_library":
         "when this card is put into your graveyard from your library",
@@ -392,6 +392,11 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
         "at the beginning of each player's precombat main phase",
         "at the beginning of each opponent's first main phase",
     ),
+    # "each of your main phases" (Carpet of Flowers) — CR 505.1's *both* main
+    # phases on the controller's own turn, which is neither of the two rows
+    # above: `main_phase_first` fires once and only precombat, and
+    # `main_phase_first_each` fires precombat on everybody's turn.
+    "main_phase_each_yours": "at the beginning of each of your main phases",
     "combat_your_turn": "at the beginning of combat on your turn",
     "combat": "at the beginning of combat",
     # CR 511.1 — the end of combat step (The Wretched).

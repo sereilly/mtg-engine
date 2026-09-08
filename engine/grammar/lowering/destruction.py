@@ -29,6 +29,7 @@ from ._common import (
 )
 from ._events import (ATTACHED_PERMANENT_CONTROLLER, _EVENT_SUBJECT_OBJECTS, _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER, ROLE_NAMES_BLOCK_PARTNER, names_attached_permanent, CHOSEN_PERMANENT)
 from ._delays import (_DELAYED_AGENT_EVENTS, _BOUND_OBJECT_DELAYED_EVENTS)
+from ._superlatives import superlative_pick
 
 
 #: Where a chosen attachment host is recorded for the step behind it to read.
@@ -104,6 +105,34 @@ def _lower_destroy(
         raise LoweringError("destroy needs an object target", node=node)
     spec = node.subject
     filt = spec.filter
+
+    # "Destroy **the creature with the least power**. It can't be regenerated."
+    # (Drop of Honey.) Purging Scythe prints the same noun phrase under a damage
+    # verb one family over, which is why the pick is a floor both read
+    # (``_superlatives``) rather than a branch in either. Above every sweep
+    # below, because "all" is the quantifier the definite article gives a
+    # described phrase and this one names **one** object — falling through, the
+    # word is refused by name at the key gate, which is the safe direction but
+    # not the card.
+    pick = superlative_pick(spec, node=node, verb="destroy")
+    if pick is not None:
+        if node.also_targets or node.delay:
+            raise LoweringError(
+                "a superlative destroy carries no second target and no delay",
+                node=node,
+            )
+        step, key = pick
+        destroy_payload: dict[str, object] = {"permanents_from": key}
+        if node.no_regen:
+            destroy_payload["bypass_regeneration"] = True
+        return (
+            OracleInstruction("sequence", "", {"steps": (
+                step,
+                OracleInstruction(
+                    "destroy_target_permanent", "", destroy_payload
+                ),
+            )}),
+        )
 
     if node.also_targets:
         # "Destroy target creature **and target land**." (Fumarole.) Several

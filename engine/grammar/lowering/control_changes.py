@@ -882,7 +882,12 @@ def _lower_exchange_greatest_mana_value(
                         "result_key": key,
                         "filter": {"type_filter": card_type},
                         "controlled_by": chooser,
-                        "greatest_mana_value": True,
+                        # CR 202.3's "greatest mana value", as the two payload words
+                        # ``ast.Superlative`` gives every printed superlative. It was
+                        # ``greatest_mana_value: True`` — one corner of the phrase
+                        # spelled into a flag of its own, which a card printing
+                        # "least toughness" could not reuse.
+                        "superlative": {"extreme": "greatest", "characteristic": "mana_value"},
                         "only_on_tie": True,
                         "chooser": chooser,
                         "prompt": (

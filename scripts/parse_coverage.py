@@ -721,12 +721,21 @@ HANDLER_CLAIMS: dict[str, tuple[str, ...]] = {
     "upkeep_wind_counter_pay_or_sacrifice": (
         "if you pay, this enchantment deals damage equal to the number of wind counters on it to each creature and each player",
     ),
-    # Drop of Honey's upkeep destruction bypasses regeneration by construction;
-    # a tie for least power prompts the (human) controller via
-    # pending_least_power_choice / confirm_least_power_choice (upkeep_step.py).
-    "upkeep_destroy_least_power_creature": (
-        "it can't be regenerated",
-        "if two or more creatures are tied for least power, you choose one of them",
+    # "If two or more creatures are tied for least toughness, you choose one of
+    # them." (Purging Scythe; Drop of Honey prints it with power.) CR 608.2d's
+    # choice on the superlative the sentence in front of it picked by, and
+    # the whole of what it says is what ``choose_permanent`` already does with
+    # ``only_on_tie``: one candidate records itself, two or more prompt the
+    # seat the pick was armed on. So the sentence is a rider that lowers to no
+    # instruction (``riders._attach_superlative_tie_break``) rather than a step
+    # nothing would run.
+    #
+    # Both extremes, because both are printed — and the phrase is anchored on
+    # "are tied for" so an ordinary sentence merely containing the word cannot
+    # be claimed by a card that happens to make a choice elsewhere.
+    "choose_permanent": (
+        "are tied for least",
+        "are tied for greatest",
     ),
     # Power Sink: "Counter target spell unless its controller pays {X}." The
     # counter handler arms the pending payment (handlers/stack.py); when it goes
@@ -1058,6 +1067,30 @@ def _channel_for(sentence: str, card=None) -> str | None:
     return None
 
 
+def _kinds_of(instruction) -> set[str]:
+    """*instruction*'s kind and every kind nested inside it.
+
+    ``seen_kinds`` used to record the top-level kind alone, which is right for
+    every ``HANDLER_CLAIMS`` key that names an effect a sentence lowers to
+    directly and blind for one that names a **step**. Purging Scythe's sentence
+    lowers to a ``sequence`` of a ``choose_permanent`` and a damage; the handler
+    that implements its tie-break rider is the first of those, and the card-wide
+    pass below could not see that the card had produced it at all.
+
+    Through ``nested_instructions``, the one walk over the wrapper kinds — so
+    ``sequence``, ``may``, ``if_then``, ``for_each`` and the delayed openers are
+    read here exactly as ``categories_of`` reads them, rather than by a second
+    list of wrapper names free to fall behind.
+    """
+    from engine.grammar.lowering.control_flow import nested_instructions
+
+    kinds = {instruction.kind}
+    inner = nested_instructions(instruction)
+    for step in inner or ():
+        kinds |= _kinds_of(step)
+    return kinds
+
+
 def analyze_card(card, hooked: set[str], run_probe: bool = True) -> CardCoverage:
     coverage = CardCoverage(card.name, supported=True)
     program = compile_card_oracle(card)
@@ -1102,7 +1135,7 @@ def analyze_card(card, hooked: set[str], run_probe: bool = True) -> CardCoverage
             sentence, activated, card.name, trigger_prefix, cost_prefix, event
         )
         if instruction is not None:
-            seen_kinds.add(instruction.kind)
+            seen_kinds.update(_kinds_of(instruction))
             coverage.claims.append((sentence, f"parse rule → {instruction.kind}"))
             if run_probe:
                 ignored = _probe(
@@ -1182,7 +1215,7 @@ def analyze_card(card, hooked: set[str], run_probe: bool = True) -> CardCoverage
                 single = next((s for s in sents if _same(s)), None)
                 if single is not None:
                     claimed, rest = [single], [s for s in sents if s != single]
-            seen_kinds.add(instruction.kind)
+            seen_kinds.update(_kinds_of(instruction))
             claimed_text = ". ".join(claimed)
             coverage.claims.append((claimed_text, f"parse rule → {instruction.kind}"))
             if run_probe:
@@ -1200,7 +1233,7 @@ def analyze_card(card, hooked: set[str], run_probe: bool = True) -> CardCoverage
                 )
             return
         if instruction is not None:
-            seen_kinds.add(instruction.kind)
+            seen_kinds.update(_kinds_of(instruction))
             coverage.claims.append((clause, f"parse rule → {instruction.kind}"))
             if run_probe:
                 ignored = _probe(

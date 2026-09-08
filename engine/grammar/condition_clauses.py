@@ -926,3 +926,34 @@ def _accept_counter_condition(stream: TokenStream) -> "ast.Condition | None":
             stream.reset(named_mark)
     stream.reset(counter_mark)
     return None
+
+
+def accept_mana_added_with_this_ability(
+    stream: TokenStream,
+) -> "ast.ManaAddedWithThisAbility | None":
+    """``you haven't added mana with this ability this turn`` (Carpet of
+    Flowers), or None with the cursor untouched.
+
+    CR 603.4's intervening-if over a record the ability writes as it resolves —
+    see ``ast.ManaAddedWithThisAbility`` for why no board can answer it.
+
+    Both polarities in one production, so a card printing the positive gets the
+    same reader rather than a second one free to disagree about which six words
+    follow. "With **this** ability" is required in full: dropping it would make
+    the clause ask whether the player has added mana at all, which every land
+    they tapped this turn already answers yes to.
+    """
+    mark = stream.mark()
+    if stream.accept_phrase("you", "haven't", "added"):
+        negated = True
+    elif stream.accept_phrase("you", "'ve", "added"):
+        negated = False
+    else:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase(
+        "mana", "with", "this", "ability", "this", "turn"
+    ):
+        stream.reset(mark)
+        return None
+    return ast.ManaAddedWithThisAbility(negated=negated)

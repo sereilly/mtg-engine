@@ -18,6 +18,14 @@ no draft at all. Each already documented itself as living below `references`
 "so the recursion can run one way" — which is the same argument for living
 here, one layer further down, where nothing can recurse at all.
 `postmodifiers` re-exports them under the names it used.
+
+**A fifth came down at Urza's Saga**, on the same boundary read one word
+further: ``_protection_quality`` is a late-bound wrapper over
+``engine/keywords.protection_quality`` and touches no filter, no draft and no
+stream at all. It sat in `postmodifiers` only because the protection branch was
+its first caller, which is the reading of "incidental home" this module's second
+paragraph already records — and `postmodifiers` was eleven lines under the
+thousand-line guard with a new noun phrase due to land on it.
 """
 
 from __future__ import annotations
@@ -55,8 +63,38 @@ _IDENTIFYING_FILTER_FIELDS = ("put_onto_battlefield_by_source", "created_with_so
 
 
 def _identifies_one_object(filt: "ast.ObjectFilter") -> bool:
-    """Whether *filt* names one object rather than a class."""
+    """Whether *filt* names one object rather than a class.
+
+    Two ways a phrase can, and they are different claims. The fields above are
+    a **record**: at most one permanent on the table carries the relation, so
+    the article is simply true. A **superlative** (``ast.Superlative``) is a
+    comparison instead: "the creature with the least toughness" picks the end of
+    a range, which names one object on almost every board and several on the
+    rest — which is exactly why every card printing the phrase prints a
+    tie-break sentence behind it (CR 608.2d). The article is honest either way,
+    and what resolves the remainder is the prompt the lowering arms rather than
+    anything this predicate can see.
+
+    Admitting it here is what lets ``references.parse_recipient`` read the whole
+    phrase: without it "the creature with the least toughness" falls past the
+    definite-article branch and the line refuses at "with".
+    """
+    if filt.superlative is not None:
+        return True
     return any(getattr(filt, field, False) for field in _IDENTIFYING_FILTER_FIELDS)
+
+
+def _protection_quality(word: str):
+    """The quality a protection clause's word names, or None.
+
+    Late-bound through a one-line wrapper because ``engine/keywords.py`` sits
+    *above* the grammar in the import order — the same inversion this file's
+    docstring describes for ``parse_object_filter``, taken for a leaf instead
+    of for a production.
+    """
+    from ..keywords import protection_quality
+
+    return protection_quality(word)
 
 
 def accept_source_reference(stream: TokenStream) -> bool:

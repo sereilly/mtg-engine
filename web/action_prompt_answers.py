@@ -601,6 +601,16 @@ def _action_color_set_choice_confirm(session, req, seat_type):
     if not ok:
         raise HTTPException(status_code=400, detail="that colour choice is not open")
 
+@action_handler("mana_color_choice_confirm")
+def _action_mana_color_choice_confirm(session, req, seat_type):
+    # "Add N mana of any one color" resolving with nobody having named one.
+    # The engine re-checks the symbol against the colours the clause offered,
+    # so a stale or invented answer is refused rather than clamped.
+    if req.mana_color is None:
+        raise HTTPException(status_code=400, detail="mana_color is required")
+    if not session.game.confirm_mana_color_choice(req.seat, req.mana_color):
+        raise HTTPException(status_code=400, detail="that colour is not on offer")
+
 @action_handler("revealed_draw_buyout_confirm")
 def _action_revealed_draw_buyout_confirm(session, req, seat_type):
     # Zur's Weirding: "Then any other player may pay 2 life." One offer at a
@@ -1357,20 +1367,6 @@ def _action_loyalty_recipient_confirm(session, req, seat_type):
         raise HTTPException(status_code=400, detail="target_permanent_id is required")
     if not session.game.confirm_loyalty_recipient(req.seat, req.target_permanent_id):
         raise HTTPException(status_code=400, detail="invalid loyalty-counter recipient")
-
-@action_handler("least_power_choice_confirm")
-def _action_least_power_choice_confirm(session, req, seat_type):
-    # Drop of Honey: the controller picks which of the creatures tied for
-    # least power is destroyed (target_seat + target_permanent_index).
-    pending = session.game.pending_least_power_choice
-    if pending is None or pending.get("controller_index") != req.seat:
-        raise HTTPException(status_code=400, detail="no least-power choice is pending for you")
-    if req.target_seat is None or req.target_permanent_index is None:
-        raise HTTPException(status_code=400, detail="target_seat and target_permanent_index are required")
-    if not session.game.confirm_least_power_choice(
-        req.seat, req.target_seat, req.target_permanent_index
-    ):
-        raise HTTPException(status_code=400, detail="invalid creature choice")
 
 @action_handler("player_choice_confirm")
 def _action_player_choice_confirm(session, req, seat_type):

@@ -175,18 +175,62 @@ def permanent_choice_candidates(game, payload: dict, context, among=None) -> lis
             ) is not None:
                 continue
         out.append(perm)
-    if payload.get("greatest_mana_value") and out:
-        # "…with the **greatest** mana value" (CR 202.3, read off the printed
-        # cost like every other mana-value question in the engine). A
-        # superlative over the narrowed set rather than a filter key, because
-        # it is a fact about the *set*: no permanent can answer it alone, which
-        # is exactly why the card then has to say who breaks a tie.
-        best = max(int(getattr(perm.card, "cmc", 0) or 0) for perm in out)
-        out = [
-            perm for perm in out
-            if int(getattr(perm.card, "cmc", 0) or 0) == best
-        ]
+    superlative = payload.get("superlative")
+    if superlative and out:
+        # "…with the **greatest** mana value" (Tariff, Juxtapose), "…with the
+        # **least toughness**" (Purging Scythe), "…with the **least power**"
+        # (Drop of Honey). A superlative over the narrowed set rather than a
+        # filter key, because it is a fact about the *set*: no permanent can
+        # answer it alone, which is exactly why every card printing one then has
+        # to say who breaks a tie.
+        #
+        # Both words are payload (``ast.Superlative``). This was
+        # ``greatest_mana_value: True`` — one card's spelling of one corner of
+        # the phrase — and the two cards that arrived printing "least
+        # toughness" and "least power" would each have needed a flag of their
+        # own, which is three keys answering one question and three chances for
+        # a lowering to set the wrong one.
+        out = superlative_extreme(out, superlative)
     return out
+
+
+#: How each printed characteristic is read off a candidate. Power and toughness
+#: go through the layer accessors (CR 613), because the whole point of a
+#: superlative is that it is asked *now*: a creature under an anthem is not the
+#: one with the least toughness any more.
+#:
+#: Mana value is read off ``card`` rather than ``effective_card``, which is what
+#: this comparison has always done and is left unchanged here deliberately —
+#: CR 707.2 says a copy has the copied cost, so a Clone of a Force of Nature
+#: should answer 8 and answers 0. That is a defect in its own right and not this
+#: one's to fix inside a rename; it is reported rather than corrected, so the
+#: only behaviour this table changes is the one the new cards need.
+_SUPERLATIVE_READS = {
+    "power": lambda perm: int(perm.effective_power or 0),
+    "toughness": lambda perm: int(perm.effective_toughness or 0),
+    "mana_value": lambda perm: int(getattr(perm.card, "cmc", 0) or 0),
+}
+
+
+def superlative_extreme(candidates: list, superlative: dict) -> list:
+    """*candidates* narrowed to those tied at the printed extreme.
+
+    Returns the whole tie rather than one permanent, because *which* of them is
+    the card's next sentence to say (CR 608.2d) — ``only_on_tie`` above turns the
+    single-candidate case into a recorded answer and the rest into a prompt.
+
+    A characteristic nothing reads leaves the set alone rather than emptying it
+    or picking arbitrarily: the phrase is refused at lowering
+    (``bounds.accept_superlative`` declines an unknown word without consuming),
+    so reaching here with one means a payload was built by hand, and widening is
+    the direction that cannot silently destroy the wrong permanent.
+    """
+    read = _SUPERLATIVE_READS.get(str(superlative.get("characteristic")))
+    if read is None:
+        return candidates
+    pick = min if superlative.get("extreme") == "least" else max
+    best = pick(read(perm) for perm in candidates)
+    return [perm for perm in candidates if read(perm) == best]
 
 
 def _controlled_by_seat(game, word: str, context, payload: dict | None = None) -> int | None:
