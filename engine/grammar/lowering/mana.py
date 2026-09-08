@@ -268,13 +268,32 @@ def _lower_add_mana(
             owner = node.per_each.controller if zone == "battlefield" else (
                 node.per_each.zone_owner.kind if node.per_each.zone_owner else None
             )
+            # "Add {G} for each Elf **on the battlefield**." (Priest of
+            # Titania.) CR 403.1 makes the battlefield one zone shared by every
+            # player, so a phrase that scopes to it scopes to nobody — the
+            # whole of it, not the producer's own share. ``owner: "all"`` is
+            # the spelling `evaluate_count` has answered to since Lhurgoyf and
+            # the one `_amounts.count_spec` writes for this exact phrase, so
+            # this is one more producer of a word rather than a second word.
+            #
+            # Two scopes in one phrase would name two different sets, so a
+            # filter saying both refuses instead of picking — the refusal
+            # `count_spec` makes of the same pair, spelled here because this
+            # lowering builds its own spec.
+            if zone == "battlefield" and node.per_each.on_the_battlefield:
+                if owner is not None or node.per_each.zone_owner:
+                    raise LoweringError(
+                        "the mana multiplier cannot be scoped to the "
+                        "battlefield and to a player", node=node,
+                    )
+                owner = "all"
             # "…in **target opponent's** graveyard" (Spoils of Evil). A chosen
             # seat rather than the producer's own, which the evaluator already
             # answers — `count_from_payload` reads any owner that is not "you"
             # off the resolution's target. Only out of a *zone*: "you control"
             # is a battlefield scope and a targeted one there would be a
             # different sentence with a different reader.
-            if owner != "you" and not (
+            if owner not in ("you", "all") and not (
                 zone != "battlefield" and owner == "target_opponent"
             ):
                 raise LoweringError(
@@ -286,9 +305,21 @@ def _lower_add_mana(
                 # the arrangement `carried_separately` exists to name. Everything
                 # else has to be answerable about a permanent alone, because that
                 # is what the evaluator's matcher is.
+                # "on the battlefield" travels beside "you control" for that
+                # word's reason exactly: it is a **scope**, performed by the
+                # count's ``owner`` above, and a key handed to a matcher that
+                # cannot test it is a key silently dropped — which for this one
+                # would be no change at all, since every candidate is on the
+                # battlefield, but the drop would be silent and the next scope
+                # word would inherit it.
                 carried = object_only_filter(
-                    _filter_payload(node.per_each),
-                    carried_separately=frozenset({"controller"}),
+                    _filter_payload(
+                        node.per_each,
+                        carried_separately=frozenset({"on_the_battlefield"}),
+                    ),
+                    carried_separately=frozenset(
+                        {"controller", "on_the_battlefield"}
+                    ),
                 )
             else:
                 # `_filter_payload` refuses a non-battlefield filter by design —

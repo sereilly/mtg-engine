@@ -313,7 +313,28 @@ def _attach_spend_only(stream: TokenStream, steps: list[ast.Statement]) -> bool:
     """
     from ..restricted_mana import mana_restriction_for
 
-    if not isinstance(steps[-1], ast.AddMana):
+    last = steps[-1] if steps else None
+    # "At the beginning of your upkeep, **you may** add {C}{C}. This mana can't
+    # be spent to cast spells." (Thran Turbine.) The printed offer puts a
+    # ``May`` between the rider and the mana it restricts, exactly as a printed
+    # condition puts a ``Conditional`` between the no-regeneration rider and
+    # its destroy — and through the wrapper for that rider's reason: the offer
+    # is folded on by the sentence layer *after* the mana production has
+    # finished, so by the time this runs the ``AddMana`` is one level down.
+    #
+    # Only through a wrapper this can name, and only where the offer's own
+    # action is the mana: an offer with a cost or a branch is a different
+    # sentence, and reading the rider onto it would restrict mana some other
+    # step made.
+    inside_may = (
+        isinstance(last, ast.May)
+        and last.cost is None
+        and last.then is None
+        and last.otherwise is None
+        and last.reflexive is None
+        and isinstance(last.action, ast.AddMana)
+    )
+    if not isinstance(last, ast.AddMana) and not inside_may:
         return False
     mark = stream.mark()
     start = stream.pos
@@ -324,7 +345,13 @@ def _attach_spend_only(stream: TokenStream, steps: list[ast.Statement]) -> bool:
     if restriction is None:
         stream.reset(mark)
         return False
-    steps[-1] = dataclasses.replace(steps[-1], spend_only=restriction.key)
+    if inside_may:
+        steps[-1] = dataclasses.replace(
+            last,
+            action=dataclasses.replace(last.action, spend_only=restriction.key),
+        )
+    else:
+        steps[-1] = dataclasses.replace(last, spend_only=restriction.key)
     return True
 
 

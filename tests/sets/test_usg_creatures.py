@@ -570,3 +570,60 @@ def test_diamond_valleys_toughness_reading_survives_the_shared_channel(catalog_b
     resolve_stack(game)
 
     assert alice.life == 22, "Grizzly Bears is 2/2"
+
+
+# --- W2G5: Priest of Titania — a count over every battlefield ---
+from engine import Game, PlayerState
+from engine.models import Permanent
+from tests.helpers import resolve_stack
+
+
+def _g5m_elf_board(set_pool, mine, theirs):
+    """A Priest of Titania on seat 0, plus *mine* / *theirs* extra Elves."""
+    alice, bob = PlayerState(name="Alice"), PlayerState(name="Bob")
+    game = Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    priest = Permanent(card=set_pool("USG")["Priest of Titania"])
+    game._put_permanent_onto_battlefield(0, priest, None)
+    priest.metadata["summoning_sickness_turn"] = -99
+    for seat, count in ((0, mine), (1, theirs)):
+        for _ in range(count):
+            game._put_permanent_onto_battlefield(
+                seat, Permanent(card=set_pool("USG")["Priest of Titania"]), None
+            )
+    return game
+
+
+def test_priest_of_titania_counts_elves_on_every_battlefield(set_pool):
+    """"{T}: Add {G} for each Elf on the battlefield."
+
+    CR 403.1 makes the battlefield one zone shared by every player, so the
+    phrase scopes to nobody — the whole of it. The lowering refused with "the
+    mana multiplier counts the producer's own board", which is the reading that
+    would have made this "for each Elf you control": a Priest opposite two
+    opposing Elves would have added one mana where the card adds three.
+
+    Both sides are populated unevenly, because a count that read only one
+    battlefield would still look right on a symmetric board.
+    """
+    game = _g5m_elf_board(set_pool, mine=1, theirs=2)
+
+    game.activate_permanent_ability(0, "Priest of Titania")
+    resolve_stack(game)
+
+    assert game.players[0].mana_pool.get("G") == 4, "2 mine + 2 theirs"
+
+
+def test_priest_of_titania_counts_only_elves(set_pool, catalog_by_name):
+    """The narrowing survives the widened scope: an opponent's non-Elf is on
+    the same battlefield and is not counted.
+    """
+    game = _g5m_elf_board(set_pool, mine=0, theirs=0)
+    game._put_permanent_onto_battlefield(
+        1, Permanent(card=catalog_by_name["Grizzly Bears"]), None
+    )
+
+    game.activate_permanent_ability(0, "Priest of Titania")
+    resolve_stack(game)
+
+    assert game.players[0].mana_pool.get("G") == 1, "the Priest itself"
