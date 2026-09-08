@@ -125,6 +125,8 @@ def lower_where_x(
         return _lower_where_x_exiled_for_cost(node, inner)
     if isinstance(node.definition, ast.SacrificedForCost):
         return _lower_where_x_sacrificed_for_cost(node, inner)
+    if isinstance(node.definition, ast.LifePaidAsEntered):
+        return _lower_where_x_life_paid(node, inner)
     counter_spec = _source_counter_spec(node.definition)
     if counter_spec is not None:
         return _lower_where_x_counters(node, inner, counter_spec)
@@ -344,6 +346,29 @@ def _lower_where_x_counters(
     if not _mentions_x(inner):
         raise LoweringError("a where-clause defined an X nothing reads", node=node)
     return _stamp_x_from_count(inner, spec)
+
+
+def _lower_where_x_life_paid(
+    node: ast.WhereX, inner: tuple[OracleInstruction, ...]
+) -> tuple[OracleInstruction, ...]:
+    """"…, where X is the life paid as this artifact entered."
+    (Phyrexian Processor.)
+
+    Not a count of anything and not a recompute: the number was chosen once, as
+    a CR 614.1c replacement while the permanent was entering, and is read
+    unchanged however many activations later. So it travels as a ``source_record``
+    — the same channel Spiny Starfish's regeneration tally already rides — and
+    the evaluator reads it off the ability's own source.
+
+    Beside the two cost channels rather than under ``count_spec`` for that
+    reason: a cost is paid as *this* ability is activated and a count is taken
+    as it resolves, while this was settled before either happened.
+    """
+    from ...enter_effects import LIFE_PAID_AS_ENTERED
+
+    if not _mentions_x(inner):
+        raise LoweringError("a where-clause defined an X nothing reads", node=node)
+    return _stamp_x_from_count(inner, {"source_record": LIFE_PAID_AS_ENTERED})
 
 
 def _lower_where_x_sacrificed_power(

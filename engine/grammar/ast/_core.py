@@ -516,6 +516,26 @@ class CountersOnEventSubject:
 
 
 @dataclass(frozen=True)
+class LifePaidAsEntered:
+    """"where X is **the life paid as this artifact entered**" (Phyrexian
+    Processor) — the amount of life its controller chose to pay as a CR 614.1c
+    entry replacement.
+
+    Carries no parameter at all, unlike every counter and count node beside it,
+    because there is exactly one such payment: "As this permanent enters, pay
+    any amount of life" is the only sentence in the pool that records one, and
+    the record it writes is a single number on the permanent.
+
+    Its own node rather than a :class:`CountOf` for :class:`CountersOnSource`'s
+    reason and one further: what it names is not on any board *and* is not on
+    the object being counted — it is a **fixed** value, chosen once as the
+    permanent arrived and read unchanged however many activations later
+    (CR 614.1c, CR 608.2). A recomputed count would be a different card.
+    """
+    __slots__ = ()
+
+
+@dataclass(frozen=True)
 class DamageDealtThisTurn:
     """"the amount of damage dealt to this creature this turn by other sources
     named ~" (Blazing Effigy) — a *history*, not anything on a board.
@@ -567,7 +587,7 @@ class DamageDealtByChosenCast:
     card_type: str
 
 
-Amount = Union[Fixed, Var, CountOf, CountersOnSource, CountersOnEventSubject, ThatMuch, SacrificedForCost, ExiledForCost, TappedForCost, TotalPowerSacrificedThisWay, Half, Times, AllOf, AnyNumber, BoardCount, Plus, Minus, CharacteristicOfTarget, DamageDealtThisTurn, DamageDealtByChosenCast, AdditionalCostPaidCount]
+Amount = Union[Fixed, Var, CountOf, CountersOnSource, CountersOnEventSubject, LifePaidAsEntered, ThatMuch, SacrificedForCost, ExiledForCost, TappedForCost, TotalPowerSacrificedThisWay, Half, Times, AllOf, AnyNumber, BoardCount, Plus, Minus, CharacteristicOfTarget, DamageDealtThisTurn, DamageDealtByChosenCast, AdditionalCostPaidCount]
 
 
 # ---------------------------------------------------------------------------

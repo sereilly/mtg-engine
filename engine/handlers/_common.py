@@ -764,6 +764,23 @@ def evaluate_count(
         from ..named_counters import counters_on
 
         return max(0, _scaled(counters_on(source, str(counters)), spec))
+    # "…where X is **the life paid as this artifact entered**" (Phyrexian
+    # Processor). A number the permanent is carrying that is not a pile of
+    # counters: it was chosen once as a CR 614.1c entry replacement and is read
+    # unchanged however many activations later, so nothing recomputes it and no
+    # zone holds a set it could be counted from.
+    #
+    # Answered here beside the counters, and for their reason: this is the one
+    # evaluator both a resolution and a CR 604.3 recompute reach, and a branch
+    # one layer up would be unreachable for the caller that has no context.
+    # A resolution with no source reads zero rather than guessing — an ability
+    # whose permanent has left makes a 0/0 that dies, which is what CR 608.2h's
+    # last known information says when nothing was known.
+    record = spec.get("source_record")
+    if record is not None:
+        if source is None:
+            return 0
+        return max(0, _scaled(int(source.metadata.get(str(record), 0) or 0), spec))
     filt = dict(spec.get("filter") or {})
     aggregate = spec.get("aggregate", "count")
     zone = spec.get("zone", "battlefield")
