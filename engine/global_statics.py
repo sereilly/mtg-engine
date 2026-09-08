@@ -204,6 +204,30 @@ _TEMPLATES: tuple[tuple[re.Pattern[str], GlobalStatic], ...] = (
         GlobalStatic(name="board_wide_color", applies_to="nonland_permanent_you_control"),
     ),
     (
+        # Darkest Hour. Celestial Dawn's sentence above with no controller
+        # narrowing and no second half, which is why the noun is payload
+        # exactly as it is on the granted-ability row: "all creatures are
+        # black" and "all artifacts are black" are one mechanism over
+        # different sets, and a row per noun would be this module deciding
+        # otherwise. Singularised in ``global_static_for`` beside the plural
+        # it already normalises there.
+        #
+        # The two nouns are exactly the two ``_global_static_applies`` can
+        # test, which is the same pair the granted-ability row admits. A wider
+        # alternation would produce a static whose predicate answers False for
+        # every permanent — a card compiling supported and doing nothing —
+        # which is the failure this whole family's whole-line matching is for.
+        #
+        # CR 105.3, layer 5: the colour is **set**, not added — a Grizzly Bears
+        # under this is black and not green-and-black — which is what
+        # ``sets_colors`` already means for the row above.
+        re.compile(
+            r"^all (?P<all_scope>artifacts|creatures) are "
+            r"(?P<sets>white|blue|black|red|green)$"
+        ),
+        GlobalStatic(name="board_wide_color", applies_to=""),
+    ),
+    (
         re.compile(
             r"^each noncreature artifact loses all abilities and becomes an "
             r"artifact creature with power and toughness each equal to its "
@@ -247,9 +271,17 @@ def global_static_for(oracle_text: str) -> GlobalStatic | None:
                 )
             sets = groups.get("sets")
             if sets:
+                # "All **creatures** are black" (Darkest Hour) carries its own
+                # scope; Celestial Dawn's sentence spells the scope into the
+                # template and leaves this group absent. Singularised here for
+                # the granted-ability row's reason one branch down: the plural
+                # is printed English, not a key.
+                scope = groups.get("all_scope")
                 return GlobalStatic(
                     name=static.name,
-                    applies_to=static.applies_to,
+                    applies_to=(
+                        scope.rstrip("s") if scope else static.applies_to
+                    ),
                     sets_colors=(sets,),
                     extends_to_spells_and_cards=bool(groups.get("extends")),
                 )

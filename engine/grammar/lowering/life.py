@@ -31,6 +31,7 @@ from ._common import (
     _describe_targets,
     _restrictions_beyond,
 )
+from ._counted_damage import _READABLE_COST_SACRIFICE_CHARACTERISTICS
 from ._deaths import DEAD_CHARACTERISTIC_EVENTS, DEAD_CHARACTERISTIC_RECORDS
 from ._events import (
     _DEFENDING_PLAYER_EVENTS,
@@ -268,16 +269,24 @@ def _lower_gain_life(
         )
     if isinstance(node.amount, ast.SacrificedForCost):
         # "You gain life equal to the sacrificed creature's toughness" (Life
-        # Chisel, Diamond Valley). The number is read off the permanent the
+        # Chisel, Diamond Valley); "…equal to the sacrificed enchantment's mana
+        # value" (Faith Healer). The number is read off the permanent the
         # ability's own cost ate, which the activation path carried forward as
-        # last-known information (CR 608.2h) — so the payload names the
-        # characteristic and the handler names the channel.
+        # last-known information (CR 608.2h).
         #
-        # Toughness alone, because that is the only characteristic anything
-        # reads back off that record today: emitting "power" here would produce
-        # an instruction the handler would answer with a zero, which is the
-        # silent half of the failure this file refuses on behalf of.
-        if node.amount.characteristic != "toughness":
+        # Through the ``x_from_count`` channel every *other* family already
+        # reads this record on — the mill (Altar of Dementia), the damage
+        # (Freyalise Supplicant) and the where-clause (Burnt Offering) — rather
+        # than the private ``amount_from_cost_sacrifice`` key this branch used
+        # to emit. That key was a second reader of one question and it had
+        # already drifted: it answered ``effective_<characteristic>`` off the
+        # permanent, which reads a P/T and cannot read a mana value at all, so
+        # "toughness" was the only word it could admit and Faith Healer refused
+        # for printing the one the shared evaluator has answered since Burnt
+        # Offering. The set is held to what that evaluator answers, because a
+        # characteristic it cannot answer is a card reporting supported and
+        # gaining nothing.
+        if node.amount.characteristic not in _READABLE_COST_SACRIFICE_CHARACTERISTICS:
             raise LoweringError(
                 "no handler reads the sacrificed permanent's "
                 f"{node.amount.characteristic!r}",
@@ -285,7 +294,7 @@ def _lower_gain_life(
             )
         if node.player.kind != "you":
             raise LoweringError(
-                "the sacrificed permanent's toughness is gained by the "
+                "the sacrificed permanent's characteristic is gained by the "
                 "ability's own controller",
                 node=node,
             )
@@ -293,7 +302,10 @@ def _lower_gain_life(
             OracleInstruction(
                 "target_gains_life", "",
                 {
-                    "amount_from_cost_sacrifice": node.amount.characteristic,
+                    "amount": "x",
+                    X_FROM_COUNT: {
+                        "cost_sacrifice_characteristic": node.amount.characteristic
+                    },
                     "recipient": "caster",
                 },
             ),

@@ -355,3 +355,184 @@ def test_w2g1_urzas_armor_shaves_one_point_from_every_event(set_pool):
                             "source": None}).dealt == 3, (
         "'to you' is the Armor's controller"
     )
+
+
+# --- W2G5: Claws of Gix and Fluctuator — costs charged and costs changed ---
+import pytest
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+from tests.helpers import resolve_stack
+
+
+def _g5a_slot(game, seat, permanent):
+    """*permanent*'s slot in *seat*'s battlefield, for ``cost_permanent_index``."""
+    for index, found in enumerate(game.controlled_by(seat)):
+        if found is permanent:
+            return index
+    raise AssertionError("permanent is not on that battlefield")
+
+
+def _g5a_table(set_pool, *names, seat=0):
+    alice, bob = PlayerState(name="Alice"), PlayerState(name="Bob")
+    game = Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    pool = set_pool("USG")
+    made = []
+    for name in names:
+        perm = Permanent(card=pool[name])
+        game._put_permanent_onto_battlefield(seat, perm, None)
+        perm.metadata["summoning_sickness_turn"] = -99
+        made.append(perm)
+    return game, made
+
+
+def test_claws_of_gix_eats_the_permanent_the_payer_names(set_pool, catalog_by_name):
+    """"{1}, Sacrifice a permanent: You gain 1 life."
+
+    Barrin's cost one card over, and the pair is the whole reason the refusal
+    was worth changing rather than hooking: one production, two cards. The
+    named permanent is a land, which is what "a permanent" says may pay.
+    """
+    game, (claws,) = _g5a_table(set_pool, "Claws of Gix")
+    swamp = Permanent(card=catalog_by_name["Swamp"])
+    game._put_permanent_onto_battlefield(0, swamp, None)
+    game.players[0].life = 20
+
+    game.activate_permanent_ability(
+        0, "Claws of Gix", cost_permanent_index=_g5a_slot(game, 0, swamp),
+    )
+    resolve_stack(game)
+
+    assert game.players[0].life == 21
+    assert [c.name for c in game.players[0].graveyard] == ["Swamp"]
+
+
+def test_fluctuator_makes_a_printed_cycling_cost_free(set_pool, catalog_by_name):
+    """"Cycling abilities you activate cost {2} less to activate."
+
+    CR 702.29a's rewrite erases the word, so the discount has to derive which
+    ability was a cycling ability — and it does that by running the rewrite
+    backwards over the card's printed lines
+    (``engine.cycling.is_cycling_ability``), never off the "Discard this card"
+    cost, which Waker of Waves also has and is not cycling.
+
+    Mana costs are *enforced* here, because a discount only means anything
+    against a payment: the seat has no mana at all, so an undiscounted
+    Cycling {2} would be refused and nothing would be drawn.
+    """
+    alice, bob = PlayerState(name="Alice"), PlayerState(name="Bob")
+    game = Game(players=[alice, bob])
+    game.enforce_mana_costs = True
+    pool = set_pool("USG")
+    fluctuator = Permanent(card=pool["Fluctuator"])
+    game._put_permanent_onto_battlefield(0, fluctuator, None)
+    alice.hand = [pool["Brand"]]
+    alice.library = [catalog_by_name["Forest"], catalog_by_name["Forest"]]
+    alice.mana_pool = {}
+
+    result = game.activate_from_hand(0, "Brand")
+
+    assert result.supported, game.log[-3:]
+    resolve_stack(game)
+    assert [c.name for c in alice.hand] == ["Forest"]
+    assert [c.name for c in alice.graveyard] == ["Brand"]
+
+
+def test_a_cycling_cost_is_not_free_without_the_fluctuator(set_pool, catalog_by_name):
+    """The control the test above needs: with no discount on the board the same
+    activation is refused for want of {2}.
+
+    Without it, a Fluctuator that did nothing would still pass — the engine's
+    hand path charged the printed cost *flat* until this group, so "it worked"
+    and "the discount was applied" were indistinguishable.
+    """
+    alice, bob = PlayerState(name="Alice"), PlayerState(name="Bob")
+    game = Game(players=[alice, bob])
+    game.enforce_mana_costs = True
+    pool = set_pool("USG")
+    alice.hand = [pool["Brand"]]
+    alice.library = [catalog_by_name["Forest"], catalog_by_name["Forest"]]
+    alice.mana_pool = {}
+
+    result = game.activate_from_hand(0, "Brand")
+
+    assert not result.supported
+    assert alice.hand and alice.hand[0].name == "Brand"
+
+
+def test_fluctuator_leaves_a_non_cycling_hand_ability_alone(catalog_by_name, set_pool):
+    """Waker of Waves prints "{1}{U}, Discard this card: …" and is **not** a
+    cycling ability (CR 702.29a defines the keyword as one sentence, and this
+    is a different one). Keying the discount on the discard cost — the obvious
+    shortcut — would have made it free, which is an ability cheaper than the
+    card.
+    """
+    alice, bob = PlayerState(name="Alice"), PlayerState(name="Bob")
+    game = Game(players=[alice, bob])
+    game.enforce_mana_costs = True
+    fluctuator = Permanent(card=set_pool("USG")["Fluctuator"])
+    game._put_permanent_onto_battlefield(0, fluctuator, None)
+    alice.hand = [catalog_by_name["Waker of Waves"]]
+    alice.library = [catalog_by_name["Forest"]] * 3
+    alice.mana_pool = {}
+
+    result = game.activate_from_hand(0, "Waker of Waves")
+
+    assert not result.supported, "the {1}{U} is still owed"
+    assert alice.hand and alice.hand[0].name == "Waker of Waves"
+
+
+def test_a_cost_modifier_reaches_a_hand_activated_ability(catalog_by_name, set_pool):
+    """The live gap this group closed, and the rule that bounds it.
+
+    ``activate_from_hand`` charged ``ability.cost.mana`` flat, so **no** cost
+    modifier reached an ability activated from a hand — a tax as much as a
+    reduction. CR 601.2f is not about where the ability's source is.
+
+    But CR 109.2 is: "activated abilities of creatures cost {1} less to
+    activate" (Heartstone) describes creature *permanents*, and a creature card
+    in a hand is not one. So the modifiers that reach a hand are exactly the
+    ones whose subject names no object — Fluctuator's, whose subject is the
+    **ability**. Both halves are asserted here, because closing the gap without
+    the rule made a Heartstone cheapen Waker of Waves.
+    """
+    alice, bob = PlayerState(name="Alice"), PlayerState(name="Bob")
+    game = Game(players=[alice, bob])
+    pool = set_pool("USG")
+    from engine.mixins.stack.activation import hand_activation_cost
+    from engine.oracle import compile_card_oracle
+    from engine.targeting import usable_activated_abilities
+    from engine.activation_zones import HAND
+
+    brand = pool["Brand"]
+    cycling = usable_activated_abilities(compile_card_oracle(brand), zone=HAND)[0]
+    waker = catalog_by_name["Waker of Waves"]
+    hand_only = usable_activated_abilities(
+        compile_card_oracle(waker), zone=HAND
+    )[0]
+
+    assert hand_activation_cost(game, 0, brand, cycling)[0].get("generic") == 2
+
+    # "Activated abilities of **creatures** cost {1} less to activate." A card
+    # in a hand is not a creature (CR 109.2), so neither ability moves.
+    game._put_permanent_onto_battlefield(
+        0, Permanent(card=catalog_by_name["Heartstone"]), None
+    )
+    assert hand_activation_cost(game, 0, brand, cycling)[0].get("generic") == 2
+    assert hand_activation_cost(game, 0, waker, hand_only)[0].get("generic") == 1
+
+    # Fluctuator names an *ability*, not an object, so it reaches the hand.
+    fluctuator = Permanent(card=pool["Fluctuator"])
+    game._put_permanent_onto_battlefield(0, fluctuator, None)
+    assert hand_activation_cost(game, 0, brand, cycling)[0].get("generic") == 0
+    assert hand_activation_cost(game, 0, waker, hand_only)[0].get("generic") == 1, (
+        "Waker of Waves is not a cycling ability"
+    )
+
+    # And the discount is the *controller's* own (CR 109.5): a Fluctuator an
+    # opponent controls says "you activate" about that opponent.
+    game._put_permanent_onto_battlefield(1, Permanent(card=pool["Fluctuator"]), None)
+    assert hand_activation_cost(game, 1, brand, cycling)[0].get("generic") == 0
+    game.remove_from_battlefield(fluctuator)
+    assert hand_activation_cost(game, 0, brand, cycling)[0].get("generic") == 2

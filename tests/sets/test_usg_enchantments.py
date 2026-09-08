@@ -1756,3 +1756,286 @@ def test_w2g1_antagonism_spares_a_player_whose_opponent_was_hurt(set_pool):
     assert _run(0, 0) == [17, 20], (
         "the player's own damage is not one of their opponents'"
     )
+
+
+# --- W2G5: Greater Good and Lurking Evil — costs that read a board ---
+import pytest
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+from tests.helpers import resolve_stack
+
+
+def _g5e_slot(game, seat, permanent):
+    """*permanent*'s slot in *seat*'s battlefield, for ``cost_permanent_index``."""
+    for index, found in enumerate(game.controlled_by(seat)):
+        if found is permanent:
+            return index
+    raise AssertionError("permanent is not on that battlefield")
+
+
+def _g5e_game(set_pool, *names, seat=0):
+    alice, bob = PlayerState(name="Alice"), PlayerState(name="Bob")
+    game = Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    pool = set_pool("USG")
+    made = []
+    for name in names:
+        perm = Permanent(card=pool[name])
+        game._put_permanent_onto_battlefield(seat, perm, None)
+        perm.metadata["summoning_sickness_turn"] = -99
+        made.append(perm)
+    return game, made
+
+
+def test_greater_good_draws_the_sacrificed_creatures_power_then_discards_three(
+    set_pool, catalog_by_name
+):
+    """"Sacrifice a creature: Draw cards equal to the sacrificed creature's
+    power, then discard three cards."
+
+    Both halves, because the discard is the half a sentence read as one
+    instruction would lose — and the draw is a characteristic of what the cost
+    ate (CR 601.2h), so it is read off the record the payment kept rather than
+    off a board that no longer holds it.
+    """
+    game, (good,) = _g5e_game(set_pool, "Greater Good")
+    alice = game.players[0]
+    alice.library = [catalog_by_name["Forest"]] * 12
+    alice.hand = [catalog_by_name["Mountain"]] * 4
+    ogre = Permanent(card=catalog_by_name["Hill Giant"])
+    game._put_permanent_onto_battlefield(0, ogre, None)
+
+    game.activate_permanent_ability(
+        0, "Greater Good", cost_permanent_index=_g5e_slot(game, 0, ogre),
+    )
+    resolve_stack(game)
+    # The discard is a decision its seat owes, and `resolve_stack` answers only
+    # what blocks the stack — the same shape Bazaar of Baghdad's ability has
+    # had since it shipped. Settling it here is what the helper's docstring
+    # says to do when the prompt itself is the thing under test.
+    game.auto_resolve_pending_choices()
+
+    assert [c.name for c in alice.graveyard][0] == "Hill Giant"
+    # 4 in hand + 3 drawn (Hill Giant is 3/3) - 3 discarded
+    assert len(alice.hand) == 4
+    assert len(alice.library) == 9
+
+
+def test_greater_good_reads_the_power_the_creature_last_had(set_pool, catalog_by_name):
+    """CR 608.2h's last-known information, and the reason the record carries a
+    ``Permanent`` rather than a card: a +1/+1 counter is layer 7, so the number
+    is the *effective* power the creature had as it left, not its printed one.
+    """
+    game, (good,) = _g5e_game(set_pool, "Greater Good")
+    alice = game.players[0]
+    alice.library = [catalog_by_name["Forest"]] * 12
+    alice.hand = [catalog_by_name["Mountain"]] * 5
+    bears = Permanent(card=catalog_by_name["Grizzly Bears"])
+    game._put_permanent_onto_battlefield(0, bears, None)
+    from engine.pt import add_pt_modifier
+
+    add_pt_modifier(bears, 3, 3)
+
+    game.activate_permanent_ability(
+        0, "Greater Good", cost_permanent_index=_g5e_slot(game, 0, bears),
+    )
+    resolve_stack(game)
+    game.auto_resolve_pending_choices()
+
+    assert len(alice.library) == 7, "5/5 after the boost, so five drawn"
+
+
+def test_lurking_evil_pays_half_the_life_total_rounded_up(set_pool):
+    """"Pay half your life, rounded up: This enchantment becomes a 4/4
+    Phyrexian Horror creature with flying."
+
+    The cost has no printed number: it is a fraction of the payer's own total,
+    read when the ability is activated (CR 601.2f) and rounded as the card says
+    (CR 107.2). An odd total is used so a reader rounding the other way is
+    caught, and the body is asserted as well as the payment — the effect
+    compiled before this group started and only the cost refused.
+    """
+    game, (evil,) = _g5e_game(set_pool, "Lurking Evil")
+    game.players[0].life = 15
+
+    game.activate_permanent_ability(0, "Lurking Evil")
+    resolve_stack(game)
+
+    assert game.players[0].life == 7, "15 -> pay 8 (half rounded up)"
+    assert evil.is_creature
+    assert evil.has_type("horror")
+    assert not evil.has_type("enchantment"), "it becomes a creature instead"
+    assert (evil.effective_power, evil.effective_toughness) == (4, 4)
+    assert evil.has_keyword("flying")
+
+
+def test_lurking_evil_costs_a_second_activation_half_of_what_is_left(set_pool):
+    """The cost is recomputed each time (CR 601.2f), not frozen at the printed
+    number a flat reader would have invented. Two activations at different
+    totals, because one would look right at whichever number the test picked.
+    """
+    game, (evil,) = _g5e_game(set_pool, "Lurking Evil")
+    game.players[0].life = 20
+
+    game.activate_permanent_ability(0, "Lurking Evil")
+    resolve_stack(game)
+    assert game.players[0].life == 10
+
+    game.activate_permanent_ability(0, "Lurking Evil")
+    resolve_stack(game)
+    assert game.players[0].life == 5
+
+
+# --- W2G5: Darkest Hour and Lingering Mirage — two statics one word apart ---
+from engine import Game, PlayerState
+from engine.models import Permanent
+from tests.helpers import resolve_stack
+
+
+def _g5c_two_seats():
+    alice, bob = PlayerState(name="Alice"), PlayerState(name="Bob")
+    game = Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    return game, alice, bob
+
+
+def test_darkest_hour_makes_every_creature_black_on_both_sides(
+    set_pool, catalog_by_name
+):
+    """"All creatures are black."
+
+    CR 105.3, layer 5: the colour is **set**, not added, so a green creature is
+    black and not green-and-black. Both battlefields, because the sentence
+    names no controller — and a non-creature is the control, since the noun is
+    payload on the row this uses and a scope read too widely would recolour the
+    artifact too.
+    """
+    game, _alice, _bob = _g5c_two_seats()
+    bears = Permanent(card=catalog_by_name["Grizzly Bears"])
+    game._put_permanent_onto_battlefield(1, bears, None)
+    mox = Permanent(card=catalog_by_name["Mox Ruby"])
+    game._put_permanent_onto_battlefield(0, mox, None)
+    assert bears.effective_colors == {"G"}
+
+    game._put_permanent_onto_battlefield(
+        0, Permanent(card=set_pool("USG")["Darkest Hour"]), None
+    )
+    game._recompute_continuous_effects()
+
+    assert bears.effective_colors == {"B"}, "set, not added (CR 105.3)"
+    assert mox.effective_colors == set(), "an artifact is not a creature"
+
+
+def test_darkest_hours_colour_ends_with_the_enchantment(set_pool, catalog_by_name):
+    """The contribution is derived from the source's own text on every
+    recompute, so a source that has left contributes nothing — there is no
+    stamped override to sweep.
+    """
+    game, _alice, _bob = _g5c_two_seats()
+    bears = Permanent(card=catalog_by_name["Grizzly Bears"])
+    game._put_permanent_onto_battlefield(1, bears, None)
+    hour = Permanent(card=set_pool("USG")["Darkest Hour"])
+    game._put_permanent_onto_battlefield(0, hour, None)
+    game._recompute_continuous_effects()
+    assert bears.effective_colors == {"B"}
+
+    game.remove_from_battlefield(hour)
+    game._recompute_continuous_effects()
+
+    assert bears.effective_colors == {"G"}
+
+
+def test_lingering_mirage_makes_the_land_an_island(set_pool, catalog_by_name):
+    """"Enchanted land is an Island."
+
+    Evil Presence's sentence with one word changed, and both halves of the
+    engine read the word wrongly: the support gate matched "a [a-z]+" (Island
+    takes "an") and the application compared against the literal "enchanted
+    land is a swamp". The tap is the assertion, because a type change nothing
+    reads is a card that attaches and does nothing.
+    """
+    game, _alice, bob = _g5c_two_seats()
+    forest = Permanent(card=catalog_by_name["Forest"])
+    game._put_permanent_onto_battlefield(1, forest, None)
+    game.players[0].hand = [set_pool("USG")["Lingering Mirage"]]
+
+    game.cast_from_hand(
+        0, "Lingering Mirage", target_player_index=1, target_permanent_index=0,
+    )
+    resolve_stack(game)
+
+    assert sorted(forest.basic_land_types) == ["island"]
+    assert not forest.has_type("forest"), "CR 305.7 replaces the subtype"
+    game.tap_land_for_mana(1, "Forest", permanent_id=forest.permanent_id)
+    assert bob.mana_pool.get("U") == 1
+
+
+# --- W2G5: Greener Pastures — a superlative across every seat ---
+def _g5p_upkeep(game, seat):
+    game.active_player_index = seat
+    game.resolve_upkeep(seat)
+    resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    resolve_stack(game)
+
+
+def _g5p_saprolings(game, seat):
+    return sum(1 for p in game.controlled_by(seat) if "Saproling" in p.card.name)
+
+
+def _g5p_board(set_pool, catalog_by_name, mine, theirs):
+    """Greener Pastures on seat 0, with *mine* / *theirs* lands beside it."""
+    game, _alice, _bob = _g5c_two_seats()
+    game._put_permanent_onto_battlefield(
+        0, Permanent(card=set_pool("USG")["Greener Pastures"]), None
+    )
+    for _ in range(mine):
+        game._put_permanent_onto_battlefield(
+            0, Permanent(card=catalog_by_name["Forest"]), None
+        )
+    for _ in range(theirs):
+        game._put_permanent_onto_battlefield(
+            1, Permanent(card=catalog_by_name["Island"]), None
+        )
+    return game
+
+
+def test_greener_pastures_pays_whichever_seat_leads_on_lands(
+    set_pool, catalog_by_name
+):
+    """"At the beginning of each player's upkeep, if that player controls more
+    lands than each other player, the player creates a 1/1 green Saproling
+    creature token."
+
+    Two independent gaps met on this card and only one of them was the
+    superlative: the *token* also went to the wrong seat, because "that player"
+    read ``context.target`` — whatever the resolution was carrying — where the
+    seat is the one the upkeep froze (CR 603.10).
+
+    The enchantment is on seat 0 throughout and the *opponent* is the one that
+    gets the token in the second board, which is what the wrong reading could
+    not produce.
+    """
+    game = _g5p_board(set_pool, catalog_by_name, mine=3, theirs=1)
+    for seat in (0, 1):
+        _g5p_upkeep(game, seat)
+    assert (_g5p_saprolings(game, 0), _g5p_saprolings(game, 1)) == (1, 0)
+
+    game = _g5p_board(set_pool, catalog_by_name, mine=1, theirs=3)
+    for seat in (0, 1):
+        _g5p_upkeep(game, seat)
+    assert (_g5p_saprolings(game, 0), _g5p_saprolings(game, 1)) == (0, 1)
+
+
+def test_greener_pastures_is_silent_on_a_level_board(set_pool, catalog_by_name):
+    """"More … than each other player" is strict, so a tie is nobody's lead.
+
+    The control the two boards above need: a superlative read as ">=" would
+    hand a token to *both* seats every turn, which is a different card.
+    """
+    game = _g5p_board(set_pool, catalog_by_name, mine=2, theirs=2)
+    for seat in (0, 1):
+        _g5p_upkeep(game, seat)
+
+    assert (_g5p_saprolings(game, 0), _g5p_saprolings(game, 1)) == (0, 0)

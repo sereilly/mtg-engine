@@ -693,6 +693,14 @@ TRIGGERED_LABELS: dict[str, str] = {
     # label is what the ability does.
     "discard_x_target_cards": "triggered_discard",
     "gain_control_until_eot": "triggered_control",
+    # --- Urza's Saga ------------------------------------------------------
+    # Wild Dogs' and Ghazban Ogre's "at the beginning of your upkeep, ... the
+    # player with the most life gains control of this creature". The kind
+    # reached a triggered ability for the first time when the production took
+    # the Ogre's hook over; the activated side already spells this family
+    # `activated_give_control`, so the trigger takes the same word its
+    # neighbours above do.
+    "give_control_of_source_to_player": "triggered_control",
     # --- Homelands ------------------------------------------------------
     # Two untap denials whose trigger is a combat moment rather than an
     # upkeep (Labyrinth Minotaur blocks, Spectral Bears attacks), the

@@ -120,6 +120,46 @@ def _color_alternative_offset(stream: TokenStream) -> int | None:
     return offset if stream.peek_word(offset) in COLOR_WORDS else None
 
 
+def _negated_color_type(
+    stream: TokenStream,
+) -> "tuple[tuple[str, ...], str, int] | None":
+    """``non<colour> <card type>`` at the cursor: the excluded colours, the
+    card type, and how many tokens it spans — or None, cursor unmoved.
+
+    "target land or **nonblack creature**" (Befoul). One member of a type union
+    carrying its own colour negation, which the union's flat ``card_types``
+    list cannot express and the filter's ``excluded_colors`` must not be asked
+    to: that key is ANDed across the whole phrase, so the exclusion would reach
+    the *land* half too and Befoul would stop destroying a Swamp its black
+    opponent controls.
+
+    A pure lookahead, like :func:`_color_alternative_offset` above and for its
+    reason: the caller has already consumed the separator's alternatives and a
+    half-consumed member refuses the whole line.
+
+    More than one negation is read ("nonblack nonartifact creature" would be
+    two), because the loop that reads them on an ordinary noun phrase reads any
+    number and a member of a union is the same phrase.
+    """
+    excluded: list[str] = []
+    offset = 0
+    while True:
+        word = stream.peek_word(offset)
+        if word is None or not word.startswith("non") or len(word) <= 3:
+            break
+        body = word[3:].lstrip("-")
+        if body not in COLOR_WORDS:
+            break
+        excluded.append(COLOR_WORDS[body])
+        offset += 1
+    if not excluded:
+        return None
+    head = stream.peek_word(offset)
+    if head is None or _singular(head) not in CARD_TYPES:
+        return None
+    return tuple(excluded), _singular(head), offset + 1
+
+
 def _match_subtype_or_plural(stream: TokenStream, start: int = 0) -> tuple[str, int] | None:
     """:func:`_match_subtype`, and the plural spelling of one.
 
@@ -449,6 +489,29 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
                 elif stream.accept_word("or"):
                     separated = True
                 following = stream.peek_word()
+                # "target land or **nonblack creature**" (Befoul). A union
+                # member carrying its own narrowing: the alternatives straddle
+                # nothing new — both are card types — but one of them is
+                # further restricted, which `card_types` cannot say. Collected
+                # into `any_classes` beside the cross-axis alternatives below,
+                # as a card type *with* the colours it excludes, because the
+                # union is over whole noun phrases and `excluded_colors` on the
+                # filter would exclude black from **both** halves: Befoul would
+                # stop destroying a black opponent's Swamp.
+                #
+                # Only after a separator, for the reason the subtype branch
+                # below states: an adjacent adjective belongs to the phrase
+                # this loop is already reading.
+                negated = _negated_color_type(stream) if separated else None
+                if negated is not None:
+                    excluded, card_type, width = negated
+                    cross_axis.extend(
+                        ("card_type", name) for name in d.card_types
+                    )
+                    cross_axis.append(("card_type", card_type, excluded))
+                    d.card_types = []
+                    stream.advance(width)
+                    continue
                 if following is not None and _singular(following) in CARD_TYPES:
                     d.card_types.append(_singular(following))
                     # No separator means juxtaposition ("artifact creature"),
@@ -475,6 +538,15 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
                 stream.reset(probe)
                 break
             if cross_axis:
+                # The alternatives already collected the head types where a
+                # negated member was read (it empties ``card_types`` as it
+                # goes), so this only has to add them when the cross-axis
+                # branches below did.
+                if d.card_types:
+                    cross_axis = [
+                        ("card_type", name) for name in d.card_types
+                    ] + cross_axis
+                    d.card_types = []
                 if d.type_match == "all":
                     # "artifact creature or Aura" — a conjunction and a union in
                     # one phrase. No card prints it and one field cannot hold
@@ -482,10 +554,7 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
                     raise stream.error(
                         "a class union cannot also be a conjunction of types"
                     )
-                d.any_classes = tuple(
-                    [("card_type", name) for name in d.card_types] + cross_axis
-                )
-                d.card_types = []
+                d.any_classes = tuple(cross_axis)
             d.is_card = _accept_card_noun(stream)
             # "target instant or sorcery **spell**" (Miscast): the head noun
             # after a type union may be "spell", naming an object on the stack

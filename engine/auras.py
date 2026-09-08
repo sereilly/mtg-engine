@@ -33,6 +33,45 @@ import re
 # The nouns an Aura's effect clause can address, from its "Enchant <noun>" line.
 _NOUN = r"(?:creature|artifact|enchantment|land|wall|permanent)"
 
+#: "Enchanted land is a Swamp." (Evil Presence.) "Enchanted land is **an**
+#: Island." (Lingering Mirage.) CR 305.7's replacement, layer 4 — and one
+#: pattern for the claim and for the change, so a line this table admits is a
+#: line the application can carry out.
+#:
+#: The article is an alternation because English puts "an" in front of Island,
+#: and it is the *whole* of what refused Lingering Mirage: the claim read "a
+#: [a-z]+" and the application compared against the literal "enchanted land is
+#: a swamp", so a second basic type had nowhere to land twice over.
+#:
+#: The five types are spelled out rather than taken from the creature-type
+#: catalogue, because CR 305.6 closes this set: those are the basic land types
+#: there are. A word outside it is not a land type at all, and admitting one
+#: would claim a line whose change nothing could make.
+_AURA_LAND_TYPE_RE = re.compile(
+    r"^enchanted land is an? (?P<type>plains|island|swamp|mountain|forest)$"
+)
+
+
+def aura_land_type_change(oracle_text: str) -> str | None:
+    """The basic land type an Aura's text sets its host to, or None.
+
+    The application half of the claim above, reading the same pattern — so the
+    line reported implemented and the line acted on are one line. It was a
+    substring test for ``"enchanted land is a swamp"`` inside
+    ``mixins/oracle_instructions.py``, which is a card name written as a
+    sentence: Evil Presence worked and every other printing of the template
+    attached and did nothing.
+
+    Takes the whole text and walks its lines, like every other reader here, so
+    the caller does not have to know which line carries the clause.
+    """
+    for raw_line in (oracle_text or "").splitlines():
+        line = " ".join(raw_line.strip().lower().split()).rstrip(".")
+        match = _AURA_LAND_TYPE_RE.match(line)
+        if match is not None:
+            return match.group("type")
+    return None
+
 # "Enchanted creature" / "equipped creature" — the attached permanent, named by
 # whichever word the card's own type uses. CR 301.5f: an ability referring to
 # the "equipped creature" refers to whatever creature the permanent is attached
@@ -215,8 +254,12 @@ _TEMPLATES: tuple[tuple[re.Pattern[str], str], ...] = (
         "Control Magic / Steal Artifact — control change",
     ),
     (
-        re.compile(r"^enchanted land is (?:a [a-z]+|the chosen type)$"),
-        "Evil Presence / Phantasmal Terrain — land-type change (layer 4)",
+        _AURA_LAND_TYPE_RE,
+        "Evil Presence / Lingering Mirage — land-type change (layer 4)",
+    ),
+    (
+        re.compile(r"^enchanted land is the chosen type$"),
+        "Phantasmal Terrain — land-type change to the chosen type (layer 4)",
     ),
     (
         re.compile(r"^as this aura enters, choose a basic land type$"),

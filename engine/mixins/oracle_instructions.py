@@ -8,10 +8,11 @@ from ..events import emit
 from ..game_types import OracleExecutionContext, OracleStateMachine
 from ..handlers import EFFECT_HANDLERS
 from ..handlers._common import count_from_payload
-from ..oracle_types import X_FROM_COUNT
+from ..oracle_types import X_FROM_COUNT, substitute_x_bounds
 from ..models import CardDefinition, Permanent, PlayerState
 from ..auras import (AURA_REANIMATION_PHRASES, AURA_REANIMATION_TAPPED,
-                     attach_aura, aura_animates_artifact, aura_keyword_grants)
+                     attach_aura, aura_animates_artifact, aura_keyword_grants,
+                     aura_land_type_change)
 from ..auras import aura_enchant_clause, aura_enchants
 from ..mixins.stack import aura_enchant_noun, permanent_matches_enchant_noun
 from ..oracle import OracleInstruction, compile_card_oracle
@@ -68,6 +69,15 @@ class OracleInstructionsMixin:
             context = dataclasses.replace(
                 context, x_value=count_from_payload(self, context, count_spec, instruction)
             )
+        # "each artifact with mana value **X** or less" (Meltdown). The bound
+        # is a number the announcement supplied (CR 601.2b), resolved here
+        # beside the ``x_from_count`` substitution above and for its stated
+        # reason: one substitution at the single dispatch point gives the
+        # clause to every effect family, where doing it per handler is how the
+        # pump ended up the only sentence that could carry one.
+        substituted = substitute_x_bounds(instruction.payload, context.x_value)
+        if substituted is not instruction.payload:
+            instruction = dataclasses.replace(instruction, payload=substituted)
         handler = EFFECT_HANDLERS.get(instruction.kind)
         if handler is None:
             self.log.append(
@@ -676,9 +686,25 @@ class OracleInstructionsMixin:
             # _remove_aura_effects ends it by source, leaving whatever *else*
             # still says the land is a type; Consecrate Land's indestructible
             # and can't-be-enchanted both derive from the Aura (engine/auras.py).
-            if "enchanted land is a swamp" in text:
+            # The type is read off the printed line rather than compared
+            # against one card's sentence: "enchanted land is a swamp" was a
+            # card name written as a substring, so Evil Presence worked and
+            # Lingering Mirage attached and did nothing. One reader with the
+            # support gate (`auras.aura_land_type_change`), so a line the gate
+            # admits is a line this can carry out.
+            #
+            # Off ``effective_card`` and not the resolution's normalized blob:
+            # the reader matches a whole *line* the way every template in
+            # `engine/auras.py` does, and the blob has had its newlines joined
+            # away. It is also the reading layer 3 wants — a Magical Hack on
+            # this Aura rewrites the printed word, and the type it sets should
+            # be the one the card now says.
+            printed_land_type = aura_land_type_change(
+                aura_permanent.effective_card.oracle_text
+            )
+            if printed_land_type is not None:
                 change_land_type(
-                    target_land, "swamp",
+                    target_land, printed_land_type,
                     source=aura_permanent, label=aura_permanent.card.name,
                 )
             elif "enchanted land is the chosen type" in text:

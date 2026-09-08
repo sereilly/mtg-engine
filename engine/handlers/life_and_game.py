@@ -539,15 +539,6 @@ def target_gains_life(game: Game, instruction: OracleInstruction, context: Oracl
             card.name,
         )
         return True, "resolved"
-    cost_characteristic = instruction.payload.get("amount_from_cost_sacrifice")
-    if cost_characteristic is not None:
-        sacrificed = context.choices.get("sacrificed_for_cost")
-        life_gain = (
-            max(0, int(getattr(sacrificed, f"effective_{cost_characteristic}", 0)))
-            if sacrificed is not None else 0
-        )
-        game._gain_life(gainer, life_gain, card.name)
-        return True, "resolved"
     if trigger_key is not None:
         # The firing event's own number, frozen into the trigger's context by
         # the fire site: "…you gain life equal to its power" on a dies trigger

@@ -80,21 +80,39 @@ COST_PERFORMING_KINDS: frozenset[str] = frozenset()
 _POOL_SYMBOLS = ("W", "U", "B", "R", "G", "C")
 
 
-def activation_life_cost(cost, permanent) -> int:
+def activation_life_cost(cost, permanent, controller=None) -> int:
     """How much life activating this ability actually costs, right now.
 
     ``ActivatedAbilityCost.pay_life`` is the printed number and is usually the
     whole answer. Where ``pay_life_per_counter`` is set it is a **rate**:
     "Pay 3 life for each velocity counter on this enchantment" (Tornado) owes
     nothing on the first activation and three more on each one after, because
-    the ability's own effect adds a counter as it resolves.
+    the ability's own effect adds a counter as it resolves. And where
+    ``pay_life_half_rounded_up`` is set there is no printed number at all: the
+    amount is half the payer's own life total, rounded up (Lurking Evil,
+    CR 107.2).
 
     CR 601.2f computes a cost as the ability is activated, so this is asked
     twice — once by the payability gate (CR 602.5c makes an unpayable cost an
     *unactivatable* ability rather than a free one) and once by the payment —
     and both must get the same number, which is why it is a function rather
     than two reads of the field.
+
+    *controller* is the seat paying, needed only by the halving: the other two
+    readings are about the printed cost and the ability's own source. Optional
+    so the callers that hold no seat keep working, and a halved cost with no
+    seat is 0 rather than a guess — the direction that refuses the activation
+    (CR 602.5c) rather than making it free.
     """
+    if getattr(cost, "pay_life_half_rounded_up", False):
+        # CR 119.4: a life payment is legal while the total is at least the
+        # amount, and half of a total rounded up never exceeds it — so this
+        # cost is always payable, which is why the gate never refuses it and
+        # the payment is the whole of what happens. Negative life (already lost
+        # by CR 704.5a, but the sweep runs at priority) halves to nothing
+        # rather than to a payment that would give life back.
+        life = 0 if controller is None else int(getattr(controller, "life", 0))
+        return max(0, -(-life // 2))
     per_counter = getattr(cost, "pay_life_per_counter", None)
     if not per_counter:
         return int(cost.pay_life)
@@ -168,13 +186,74 @@ def activation_cost_choice(controller, cost, permanent) -> tuple[int, dict]:
     choice to an interactive seat needs a cost-picker shape that does not exist
     (see ROADMAP's alternative-cost note, the same gap on the cast side).
     """
-    life = activation_life_cost(cost, permanent)
+    life = activation_life_cost(cost, permanent, controller)
     alternative = getattr(cost, "alternative_mana", None)
     if not alternative or not life:
         return life, {}
     if _pool_covers(getattr(controller, "mana_pool", {}) or {}, alternative):
         return 0, dict(alternative)
     return life, {}
+
+
+def hand_activation_cost(game, controller_index: int, card, ability):
+    """What activating *ability* off *card* **in a hand** costs right now, and
+    the log lines the modifiers earned: ``(symbol dict, notes)``.
+
+    CR 601.2f computes a cost as the ability is activated, and nothing in that
+    rule is about where the ability's source is — "Activated abilities of
+    creatures cost {1} more to activate" taxes a cycling ability in a hand
+    exactly as it taxes one on the battlefield. ``activate_from_hand`` charged
+    ``ability.cost.mana`` flat until Fluctuator arrived, so a tax on a
+    hand-activated ability was **unenforced** and a reduction reached nothing.
+
+    A function rather than a block inside that method because three other
+    readers ask the same question and must get the same number: the web layer's
+    ``payable`` flag on the hand-ability button, the AI's hand-activation loop,
+    and the payment itself. A button that reports a Cycling {2} unaffordable
+    while the engine would let it through is the Roots class with the sign
+    flipped.
+
+    **Which modifiers reach it is narrower than on the battlefield**, and by a
+    rule rather than by a scope: CR 109.2 makes "activated abilities of
+    creatures" (Heartstone) a sentence about creature *permanents*, so it says
+    nothing about a creature card in a hand — while Fluctuator's subject is the
+    **ability** and reaches both zones. Read the other way, a Heartstone made
+    Waker of Waves' hand ability cheaper than the card.
+
+    Increases before reductions (CR 601.2f), and the floor is measured over the
+    **whole** remaining cost — "the mana in that cost", coloured pips included
+    — which is why it is applied after the subtraction rather than as a clamp
+    inside it. The Aura reduction the battlefield path also folds in is
+    deliberately absent: an Aura enchants a permanent, and there is none here.
+    """
+    required = dict(ability.cost.mana)
+    notes: list[str] = []
+    tax, taxing_names = ability_cost_tax(
+        game, controller_index, card, ability, on_battlefield=False,
+    )
+    if tax:
+        required["generic"] = required.get("generic", 0) + tax
+        notes.append(
+            f"{card.name}'s ability is taxed by {', '.join(taxing_names)}"
+        )
+    discount, reducing_names, floor = ability_cost_reduction(
+        game, controller_index, card, ability, on_battlefield=False,
+    )
+    if discount:
+        before_total = sum(required.values())
+        generic = required.get("generic", 0)
+        coloured = before_total - generic
+        reduced_generic = max(0, generic - discount)
+        if reduced_generic + coloured < floor:
+            reduced_generic = max(0, floor - coloured)
+        required["generic"] = reduced_generic
+        if before_total != reduced_generic + coloured:
+            notes.append(
+                f"{card.name}'s ability costs "
+                f"{{{before_total - reduced_generic - coloured}}} less to "
+                f"activate ({', '.join(reducing_names)})"
+            )
+    return required, notes
 
 
 def _stamped_divided_targets(game, entries):
@@ -1960,7 +2039,9 @@ class AbilityActivationMixin:
         # Ability cost taxes (Gloom: "Activated abilities of white enchantments
         # cost {3} more to activate"; the white-spell cast tax is applied
         # separately in cast_from_hand).
-        extra_ability_tax, taxing_names = ability_cost_tax(self, controller_index, permanent)
+        extra_ability_tax, taxing_names = ability_cost_tax(
+            self, controller_index, permanent, ability
+        )
         if extra_ability_tax:
             required_cost["generic"] = required_cost.get("generic", 0) + extra_ability_tax
             self.log.append(f"{permanent.card.name}'s ability is taxed by {', '.join(taxing_names)}")
@@ -1996,7 +2077,7 @@ class AbilityActivationMixin:
         # every reduction to one cost. Two applications would each measure the
         # floor against a cost the other had already cut.
         board_discount, reducing_names, board_floor = ability_cost_reduction(
-            self, controller_index, permanent
+            self, controller_index, permanent, ability
         )
         aura_discount += board_discount
         # The **highest** floor, for ``attached_ability_cost_reduction``'s
@@ -2866,13 +2947,34 @@ class AbilityActivationMixin:
             return SimulationResult(card.name, False, "unsupported", details)
         ability = from_hand[ability_index]
 
+        # CR 601.2f: the cost is computed as the ability is activated, and
+        # that includes every increase and reduction on any battlefield —
+        # "Activated abilities of creatures cost {1} more" (Gloom's family)
+        # taxes an ability activated from a hand exactly as it taxes one
+        # activated from the battlefield, because nothing in CR 601.2f is about
+        # where the ability's source is.
+        #
+        # This whole block was missing: the hand path charged
+        # ``ability.cost.mana`` flat, so a tax on a hand-activated ability was
+        # **unenforced** and a reduction reached nothing. It is the same pass
+        # the battlefield path runs above, in the same order (increases first,
+        # then reductions, CR 601.2f), against the *card* rather than a
+        # permanent — an ability in a hand has none, which is what
+        # ``modified_ability_source_card`` answers.
+        #
+        # The Aura reduction beside it on the battlefield path is deliberately
+        # absent: an Aura enchants a permanent, and there is none here.
+        required_cost, cost_notes = hand_activation_cost(
+            self, controller_index, card, ability
+        )
+        self.log.extend(cost_notes)
         # CR 601.2h: an unpayable cost makes the ability unactivatable, checked
         # before anything is spent — the same order every other activation keeps.
         # The source is the *card* in hand, not a permanent: an ability
         # activated from a hand has no permanent, and its card is what a
         # restriction narrowing by type would be asking about.
         if self.enforce_mana_costs and not self._pay_mana_cost(
-            controller, ability.cost.mana,
+            controller, required_cost,
             purpose=PaymentPurpose(ACTIVATE, source=card),
         ):
             details = f"{controller.name} cannot pay for {card.name}'s ability"

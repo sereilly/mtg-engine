@@ -505,9 +505,17 @@ class TurnManagementMixin:
         # nothing to re-run it against.
         _, mana_event = apply_replacements(
             self, "land_mana_produced",
-            {"land": land, "player": player, "produced": None},
+            {
+                "land": land, "player": player, "produced": None,
+                "produced_amount": None,
+            },
         )
         swapped_to = mana_event.get("produced")
+        # "…instead of any other type **and amount**." (Contamination.) None is
+        # every other substitution, which replaces the type and leaves the
+        # count alone — an Ancient Tomb under Infernal Darkness makes {B}{B}
+        # and under Contamination makes {B}.
+        swapped_amount = mana_event.get("produced_amount")
         pool_before = dict(player.mana_pool) if swapped_to else {}
         # **The land's own compiled mana ability, when it has one.** This used
         # to add exactly one symbol chosen from `produced_mana`, which is right
@@ -573,9 +581,20 @@ class TurnManagementMixin:
                 if gained > 0 and symbol != swapped_to:
                     player.mana_pool[symbol] = int(amount) - gained
                     moved += gained
+            # Whatever the land already put into the pool under the swapped
+            # symbol itself counts toward the replaced amount: a Swamp under
+            # Contamination made its own {B}, and the sentence says the whole
+            # production is one {B} rather than one more.
+            moved += max(
+                0,
+                int(player.mana_pool.get(swapped_to, 0))
+                - int(pool_before.get(swapped_to, 0)),
+            )
+            if swapped_amount is not None:
+                moved = min(moved, int(swapped_amount)) if moved else moved
             if moved:
                 player.mana_pool[swapped_to] = (
-                    player.mana_pool.get(swapped_to, 0) + moved
+                    int(pool_before.get(swapped_to, 0)) + moved
                 )
                 self.log.append(
                     f"{land_name} produced {{{swapped_to}}} instead"

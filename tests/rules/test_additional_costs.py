@@ -349,22 +349,31 @@ def test_601_2b_a_clause_the_engine_cannot_charge_leaves_the_line_unread():
     engine and not of the card: the announcement is CR 601.2b and the charge is
     CR 601.2h, in that order, and the gate ran in the wrong one. "Exile a
     creature" was the example after it and is read now too (Soul Exchange), so
-    the boundary has moved again — what is left is a clause naming a **zone the
-    payment path cannot reach**, and a phrase naming no card type at all.
+    the boundary has moved again — and again at Urza's Saga, which prints two
+    *activation* costs whose noun phrase is exactly "a permanent" (Barrin,
+    Master Wizard; Claws of Gix). "Narrows nothing" turned out to be the wrong
+    reading of those: the widest printed noun is still a printed noun, and a
+    land is exactly what those cards say may pay. What the refusal was really
+    guarding is a narrowing the reduction **lost**, and the reduction refuses
+    rather than dropping.
 
-    Both refusals are the same rule read from two sides: the table charges what
-    ``engine/mixins/stack/casting.py`` can collect, which is the caster's own
-    battlefield, and a phrase it cannot enumerate or cannot test must leave the
-    line unread rather than be charged as the part of it that was."""
+    So what is left is a clause naming a **zone the payment path cannot
+    reach**: the table charges what ``engine/mixins/stack/casting.py`` can
+    collect, which is the caster's own battlefield, and a phrase it cannot
+    enumerate must leave the line unread rather than be charged as the part of
+    it that was."""
     from engine.cast_costs import additional_cost_for_line
 
     assert additional_cost_for_line(
         "As an additional cost to cast this spell, exile a creature card from "
         "your graveyard."
     ) is None
-    assert additional_cost_for_line(
+    # The widest printed noun *is* read, and its filter is empty — which the
+    # payment path reads as "any permanent you control", the card's own words.
+    unnarrowed = additional_cost_for_line(
         "As an additional cost to cast this spell, sacrifice a permanent."
-    ) is None
+    )
+    assert unnarrowed is not None and unnarrowed.sacrifice_filter == {}
 
 
 @pytest.mark.cr("601.2h")
@@ -798,8 +807,12 @@ def test_601_2b_an_additional_cost_may_name_its_payment_by_colour():
     )
     assert cost is not None
     assert cost.sacrifice_filter == {"color_filter": "U"}
-    # A phrase that narrows *nothing* still refuses, which is the half of the
-    # old rule that was load-bearing.
-    assert additional_cost_for_line(
+    # A phrase that narrows nothing used to refuse here too, on the same
+    # "unnamed cost" ground — and Urza's Saga printed two costs that say
+    # exactly that (Barrin, Master Wizard; Claws of Gix), where the land the
+    # refusal was protecting is what the card allows. It is read now, with the
+    # empty filter the payment path takes as "any permanent you control".
+    unnarrowed = additional_cost_for_line(
         "As an additional cost to cast this spell, sacrifice a permanent."
-    ) is None
+    )
+    assert unnarrowed is not None and unnarrowed.sacrifice_filter == {}

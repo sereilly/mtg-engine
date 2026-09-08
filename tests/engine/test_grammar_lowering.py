@@ -1348,12 +1348,49 @@ def test_a_literal_mana_value_restriction_reaches_the_payload():
     assert result.instructions[0].payload["mana_value"] == {"op": "le", "value": 3}
 
 
-def test_a_variable_mana_value_restriction_still_refuses():
-    """"mana value X" has no payload form, and dropping the bound would widen
-    the effect to every mana value — the dropped-rider bug class."""
+def test_a_variable_mana_value_restriction_still_refuses_where_it_is_targeted():
+    """"mana value X" is a bound the *announcement* supplies (CR 601.2b), and
+    only a reader that runs after the announcement can resolve it.
+
+    Every handler runs after one — ``_execute_oracle_instruction`` substitutes
+    the bound at the single dispatch point, beside ``x_from_count`` — and the
+    target **picker** does not: it reads the compiled description when the
+    spell is announced. So a targeted phrase carrying the bound still refuses,
+    where a sweep carrying one is read (Meltdown, below). Dropping the bound
+    would widen the effect to every mana value, which is the bug class this
+    refusal has always been about.
+    """
     result = compile_line("Tap target creature with mana value X.", card_name="Test")
 
     assert result.parsed and not result.lowered
+
+
+def test_a_variable_mana_value_sweep_carries_the_bound_for_the_dispatcher():
+    """"Destroy each artifact with mana value X or less." (Meltdown.)
+
+    No picker, so nothing reads the payload before the announcement has been
+    made — the bound rides as the same string every *amount* in the engine
+    uses, and the dispatch point resolves it.
+    """
+    from engine.oracle_types import substitute_x_bounds
+
+    result = compile_line(
+        "Destroy each artifact with mana value X or less.", card_name="Meltdown"
+    )
+
+    assert result.parsed and result.lowered, result.failure_reason
+    payload = result.instructions[0].payload
+    assert payload["mana_value"] == {"op": "le", "value": "x"}
+    assert substitute_x_bounds(payload, 3)["mana_value"] == {"op": "le", "value": 3}
+    # CR 107.3b: an unspecified X is zero, which is what every other amount
+    # reader takes it as.
+    assert substitute_x_bounds(payload, None)["mana_value"] == {"op": "le", "value": 0}
+    # A payload with no bound comes back as the same object, so the scan costs
+    # nothing on the 3,000-odd cards that never print one.
+    plain = compile_line(
+        "Destroy each artifact with mana value 3 or less.", card_name="Test"
+    ).instructions[0].payload
+    assert substitute_x_bounds(plain, 5) is plain
 
 
 def test_counter_unless_the_controller_pays_x():

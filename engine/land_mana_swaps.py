@@ -144,6 +144,17 @@ class ManaSubstitution:
 
     produced: str
     land_type: str | None = None
+    #: "…instead of any other type **and amount**." (Contamination.) The
+    #: sentence replaces *how much* as well as *which*, so a land that makes
+    #: two mana makes one {B} — where Infernal Darkness's "instead of any other
+    #: type" leaves the amount alone and a two-mana land makes {B}{B}.
+    #:
+    #: Its own field rather than a second template, because the two cards print
+    #: one sentence with one word's difference and the amount is what that word
+    #: changes. Read as the type-only form, Contamination is a strictly better
+    #: card on any land that makes more than one mana — which is the direction
+    #: a substitution must never drift in.
+    replaces_amount: bool = False
 
 
 #: "If a land is tapped for mana, it produces <mana> instead of any other
@@ -151,7 +162,7 @@ class ManaSubstitution:
 #: sentence saying more than this carries a rider nothing here performs.
 _ANY_LAND_RE = re.compile(
     r"^if a land is tapped for mana, it produces (?P<mana>.+?) "
-    r"instead of any other type$"
+    r"instead of any other type(?P<amount> and amount)?$"
 )
 
 #: "If tapped for mana, Plains produce {R}, Islands produce {G}, … instead of
@@ -226,7 +237,13 @@ def substitution_line(normalized_line: str) -> "tuple[ManaSubstitution, ...] | N
         symbol = _mana_symbol(untyped.group("mana"))
         if symbol is None:
             return None
-        return (ManaSubstitution(produced=symbol, land_type=None),)
+        return (
+            ManaSubstitution(
+                produced=symbol,
+                land_type=None,
+                replaces_amount=bool(untyped.group("amount")),
+            ),
+        )
     typed = _BY_TYPE_RE.match(line)
     if typed is None:
         return None
@@ -259,8 +276,8 @@ def substitutions_on(source) -> tuple[ManaSubstitution, ...]:
     return tuple(found)
 
 
-def static_substituted_symbol(game, land) -> str | None:
-    """The symbol a battlefield static makes *land* produce instead, or None.
+def static_substitution_for(game, land) -> "ManaSubstitution | None":
+    """The battlefield static that makes *land* produce something else, or None.
 
     Every battlefield, not the land controller's: "**a land** is tapped for
     mana" names no seat at all, so an opponent's Ritual of Subdual covers this
@@ -277,12 +294,25 @@ def static_substituted_symbol(game, land) -> str | None:
     for source in game.all_permanents():
         for substitution in substitutions_on(source):
             if substitution.land_type is None or land.has_type(substitution.land_type):
-                return substitution.produced
+                return substitution
     return None
 
 
-def swapped_symbol(game, land) -> str | None:
-    """The symbol *land* produces instead of whatever it would have, or None.
+def static_substituted_symbol(game, land) -> str | None:
+    """The **symbol** a battlefield static makes *land* produce, or None.
+
+    :func:`static_substitution_for` read for the one field most callers want.
+    Kept as its own name because that is what every reader outside the tap seam
+    asks for — the payment planner wants a colour, not a rule — and because the
+    two must not be able to disagree about *which* static won, which they
+    cannot when one calls the other.
+    """
+    found = static_substitution_for(game, land)
+    return None if found is None else found.produced
+
+
+def swapped_production(game, land) -> "ManaSubstitution | None":
+    """What *land* produces instead of whatever it would have, or None.
 
     The recorded per-seat swaps are asked of the **controller's** records and
     nobody else's: "a land **you** control" is CR 109.5's you, the seat whose
@@ -302,7 +332,7 @@ def swapped_symbol(game, land) -> str | None:
     seat = game.controller_index_of(land)
     if seat is None:
         return None
-    found = static_substituted_symbol(game, land)
+    found = static_substitution_for(game, land)
     for record in swaps_on(game.players[seat]):
         if not subject_matches(game, land, record.lands, observer=seat):
             continue
@@ -311,12 +341,27 @@ def swapped_symbol(game, land) -> str | None:
         # land that taps for no mana at all.
         symbol = record.symbol()
         if symbol:
-            found = symbol
+            # A recorded swap never replaces the amount: every card that arms
+            # one prints "instead of any other type" and stops there. The
+            # printed word is what sets the flag, so it is False here rather
+            # than inherited from whatever static it is overriding.
+            found = ManaSubstitution(produced=symbol, land_type=None)
     return found
+
+
+def swapped_symbol(game, land) -> str | None:
+    """The **symbol** *land* produces instead, or None.
+
+    :func:`swapped_production` read for the one field most callers want, and
+    the same pairing :func:`static_substituted_symbol` makes one level down.
+    """
+    found = swapped_production(game, land)
+    return None if found is None else found.produced
 
 
 __all__ = [
     "END_OF_TURN", "LandManaSwap", "ManaSubstitution", "add_swap",
-    "clear_swaps", "static_substituted_symbol", "substitution_line",
-    "substitutions_on", "swapped_symbol", "swaps_on",
+    "clear_swaps", "static_substituted_symbol", "static_substitution_for",
+    "substitution_line", "substitutions_on", "swapped_production",
+    "swapped_symbol", "swaps_on",
 ]

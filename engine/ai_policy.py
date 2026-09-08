@@ -618,7 +618,13 @@ def choose_hand_activation_action(
             continue
 
         land_taps: tuple[int, ...] = ()
-        required = dict(cost.mana)
+        # The cost as CR 601.2f computes it, through the same reader
+        # ``Game.activate_from_hand`` charges: a Fluctuator on the board makes
+        # a Cycling {2} free, and a policy pricing the printed cost would pass
+        # over an ability the engine would let it take for nothing.
+        from .mixins.stack.activation import hand_activation_cost
+
+        required = hand_activation_cost(game, player_index, card, ability)[0]
         if game.enforce_mana_costs and any(required.values()):
             plan = _plan_taps_for_cost(player, required)
             if plan is None:

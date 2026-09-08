@@ -563,6 +563,12 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # touch colour at all.
     "mark_text_modified": "text_change",
     "gain_control_of_target": "control",
+    # "Gain control of **all permanents you own**." (Brand.) The same untimed
+    # contribution over a *set* the effect fixes as it is applied (CR 611.2c)
+    # rather than over one chosen object, which is the same category for the
+    # reason the exchange above is: what the sentence is about does not depend
+    # on how many permanents it moves.
+    "gain_control_of_all_matching": "control",
     # "…gain control of that creature at end of combat" (Tolarian Entrancer):
     # the same untimed contribution, about the object a delayed ability bound.
     "gain_control_of_bound_permanent": "control",

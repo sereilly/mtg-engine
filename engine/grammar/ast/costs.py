@@ -247,6 +247,20 @@ class PayLifeCost:
     #: flat pair of costs charges *both*, which is what the compiler's prose
     #: reader did before this field existed.
     alternative_mana: tuple[tuple[str, int], ...] = ()
+    #: "**Pay half your life, rounded up**" (Lurking Evil). The amount is not a
+    #: printed number at all: it is a fraction of the payer's life total, read
+    #: when the ability is activated (CR 601.2f) and rounded the way the card
+    #: says (CR 107.2).
+    #:
+    #: A flag beside ``amount`` rather than an ``Amount`` of its own, for
+    #: ``per_counter``'s reason one field up: the grammar cannot evaluate it —
+    #: there is no life total at compile time — so what it carries is *which
+    #: rule computes the number*, and the two sites that check and charge the
+    #: payment read the total themselves. ``amount`` stays the default 1 and is
+    #: unread while this is set; a reader that has not learned the word would
+    #: charge 1 life for a cost that is usually ten, which is the direction a
+    #: cost must never drift in.
+    half_rounded_up: bool = False
 
 
 @dataclass(frozen=True)

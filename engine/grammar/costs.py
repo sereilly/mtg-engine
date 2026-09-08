@@ -15,18 +15,19 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from ..subject_filters import object_only_filter, untestable_filter_keys
+from ..subject_filters import untestable_filter_keys
 from . import ast
 from .amounts import parse_amount
 from .effects import _expect_counter_kind
 from .phrases import _parse_card_alternatives, accept_graveyard_position
 from .errors import GrammarError
 from .lexer import MANA, PT, SELF, WORD
-from .lowering._common import (_PAYLOAD_HONOURED_FILTER_FIELDS,
-                               _restrictions_beyond, chargeable_tap_filter,
+from .lowering._common import (chargeable_tap_filter,
                                graveyard_position_payload)
 from ..keywords import keyword_ability_name
 from .keywords import parse_keyword_list
+from .chargeable import (_is_chargeable_counter_target, _is_chargeable_exile,
+                         _is_chargeable_sacrifice)
 from .nouns import parse_object_filter
 from .readers import accept_source_reference
 from .references import parse_target_spec
@@ -143,141 +144,6 @@ def _accept_sacrifice_list_tail(
         except GrammarError:
             stream.reset(mark)
             return None
-
-
-def _is_chargeable_sacrifice(filt: ast.ObjectFilter) -> bool:
-    """Whether the payment path can actually collect this sacrifice cost.
-
-    A rider the charger cannot express must refuse the line rather than be
-    dropped — dropped, Portcullis Vine sacrifices any creature at all while
-    still reporting supported, which is the dropped-rider bug class.
-
-    Which riders those are is **not** decided here. This asks the charger's own
-    reader (``engine/oracle.py``'s ``_chargeable_sacrifice_filter``, through the
-    filter-key set it gates on), because two readers of one clause drift and the
-    direction they drift in is a cost nobody pays. The word "another" is left in
-    the filter: the charger has the ability's source and compares by identity.
-    """
-    from ..oracle import cost_object_is_named
-
-    if filt.is_source:
-        return True
-    if filt.is_enchanted:
-        # "**Sacrifice enchanted creature**: …" (Betrothed of Fire). The host,
-        # not a chosen permanent — CR 303.4m's "enchanted [object]" (and
-        # CR 301.5f's "equipped") names one object and the attachment record
-        # is the whole answer, so there is
-        # nothing for a filter to narrow. It is chargeable for
-        # :attr:`is_source`'s reason one branch up and charged in the same
-        # field family (``ActivatedAbilityCost.sacrifice_attached``); read as a
-        # *filter* it would have been "sacrifice a creature", which is the
-        # printed cost with its one word dropped.
-        return True
-    # ``controller`` travels beside it, for the reason the comment on the
-    # charger gives: a sacrifice is paid from the payer's own battlefield, so
-    # "creatures **you control**" narrows nothing the enumeration has not
-    # already done — but a key handed to a matcher that cannot test it is a key
-    # silently dropped, so it is lifted out rather than left in. Sword of the
-    # Ages prints the phrase and refused for it.
-    carried = object_only_filter(
-        filt.to_payload(),
-        carried_separately=frozenset({"exclude_self", "controller"}),
-    )
-    # An *unnamed* cost — one whose noun phrase narrows nothing the charger can
-    # test — would let the charger eat anything on the board, a land included.
-    # Asked of the charger's own reduction rather than of the AST fields, so
-    # the two halves of a sacrifice cost cannot answer it differently; see
-    # ``oracle.cost_object_is_named`` for what the axes are and why a card type
-    # is not one of them.
-    return carried is not None and cost_object_is_named(carried)
-
-
-def _is_chargeable_exile(filt: ast.ObjectFilter) -> bool:
-    """Whether the payment path can actually collect this exile cost.
-
-    :func:`_is_chargeable_sacrifice` one zone wider, and the same rule: the
-    charger's own reader decides (``engine/oracle.py``'s
-    ``chargeable_exile_payload``), so the two halves cannot answer differently.
-
-    Two zones and no others. The battlefield is a permanent the payer controls;
-    a **graveyard** is a card, and only the payer's own — "from your graveyard"
-    is what Necropolis prints, and a phrase naming somebody else's pile is a
-    cost this charger has no enumeration for.
-    """
-    from ..oracle import chargeable_exile_payload, cost_object_is_named
-
-    if filt.zone == "graveyard":
-        # Whose pile. "your graveyard" (Necropolis) is the payer's own; **no
-        # owner at all** is "a graveyard" — anybody's — which the charger
-        # enumerates seat by seat. Anything else (a named opponent's) is a
-        # phrase this charger has no enumeration for and refuses.
-        if not filt.is_card:
-            return False
-        if filt.zone_owner is not None and filt.zone_owner.kind != "you":
-            return False
-    elif filt.zone == "hand":
-        # "Exile **a card from your hand**" (Cadaverous Bloom). The payer's own
-        # hand and no other: a hand is hidden (CR 400.2), so a cost naming
-        # somebody else's would ask a player to choose a card they cannot see.
-        #
-        # And it returns **here**, before the type check below, because "a
-        # card" is the whole of what this cost names and it is not the
-        # anything-goes phrase that check refuses. That argument is about a
-        # zone the payer does not choose from freely: an untyped battlefield
-        # exile would let the charger eat a land the player would never have
-        # given up. A hand exile eats a card its owner picks out of their own
-        # hand, which is what "a card" says and what the discard cost beside it
-        # has always admitted with no type printed either.
-        if not filt.is_card:
-            return False
-        if filt.zone_owner is None or filt.zone_owner.kind != "you":
-            return False
-        if _restrictions_beyond(
-            filt, _PAYLOAD_HONOURED_FILTER_FIELDS | {"zone", "zone_owner", "is_card"}
-        ):
-            return False
-        return chargeable_exile_payload(filt.to_payload()) is not None
-    elif filt.zone != "battlefield" or filt.is_card:
-        return False
-    # A restriction with no ``to_payload`` key at all would vanish before the
-    # key check below ever saw it - the failure the AST gate in
-    # ``subject_filter_payload`` exists for. Asked here as well, because this
-    # reader does not go through that one.
-    if _restrictions_beyond(
-        filt, _PAYLOAD_HONOURED_FILTER_FIELDS | {"zone", "zone_owner", "is_card"}
-    ):
-        return False
-    carried = chargeable_exile_payload(filt.to_payload())
-    # An unnamed cost would let the charger eat anything the zone holds — the
-    # same refusal `_is_chargeable_sacrifice` makes, through the same reader,
-    # so a phrase one admits and the other refuses cannot exist.
-    return carried is not None and cost_object_is_named(carried)
-
-
-def _is_chargeable_counter_target(filt: ast.ObjectFilter) -> bool:
-    """Whether the payment path can find the permanent this counter goes on.
-
-    "Put a -1/-1 counter on **a creature you control**" (Wandering Mage). The
-    same two questions ``_is_chargeable_sacrifice`` asks, for the same reason:
-    the payer's candidates are enumerated with ``subject_matches``, so a key it
-    cannot test would be dropped — and a dropped narrowing on *this* cost is a
-    counter landing somewhere the card does not name **and** an ability payable
-    when it should not be.
-
-    The phrase must also pin a card type or a subtype. Without one the cost
-    could be paid by putting the counter on a land, which is no cost at all for
-    a card that means to shrink a creature.
-    """
-    if filt.is_source:
-        return True
-    if not (filt.card_types or filt.subtypes):
-        return False
-    described = filt.to_payload()
-    return not _restrictions_beyond(
-        filt, _PAYLOAD_HONOURED_FILTER_FIELDS
-    ) and object_only_filter(
-        described, carried_separately=frozenset({"controller"})
-    ) is not None
 
 
 def _accept_exile_top_of_library(
@@ -760,6 +626,27 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
             # The per-counter clause is **required**: a bare "Pay {1}" is the
             # mana symbol spelled twice, and admitting it here would charge a
             # flat rate for a cost whose whole point is that it grows.
+            # "Pay **half your life, rounded up**" (Lurking Evil). Read before
+            # the amount parser below, which wants a number and refuses on the
+            # word — the same one-token gap the attached mana cost above
+            # answers. The rounding word is **required**: CR 107.2 leaves a
+            # fraction unrounded unless the effect says which way, and reading
+            # "half your life" alone would pick a direction the card never
+            # printed. Rounding down is a different, strictly cheaper cost, so
+            # it refuses here rather than being folded in with a flag nothing
+            # in the pool sets.
+            halved = stream.mark()
+            if stream.accept_phrase("half", "your", "life"):
+                stream.accept_punct(",")
+                if stream.accept_phrase("rounded", "up"):
+                    costs.append(ast.PayLifeCost(half_rounded_up=True))
+                    stream.accept_punct(",")
+                    continue
+                stream.reset(halved)
+                raise stream.error(
+                    "only a life payment rounded up is charged"
+                )
+            stream.reset(halved)
             per_counter_mana = _accept_mana_run(stream)
             if per_counter_mana is not None:
                 rate = _accept_per_counter(stream)

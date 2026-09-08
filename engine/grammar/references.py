@@ -175,6 +175,22 @@ def parse_player_ref(stream: TokenStream) -> ast.PlayerRef | None:
         return ast.PlayerRef("chosen_player")
     mark_the_player = stream.mark()
     if stream.accept_phrase("the", "player"):
+        # "…**the player with the most life** gains control of this creature."
+        # (Wild Dogs.) A *description* of a seat rather than a back-reference:
+        # nobody chose it and no event froze it, so it is read off the life
+        # totals when the ability resolves.
+        #
+        # Its own referent and not an alias of ``that_player``, because the two
+        # answer different questions: the alias means "the seat the sentence in
+        # front named", and this one is answered by the board — under a "your
+        # upkeep" trigger the frozen seat is the *controller*, which is the
+        # player Wild Dogs is trying to leave.
+        #
+        # A **tie names nobody**, which the evaluator answers and the card's own
+        # intervening-if states in front of it ("if a player has more life than
+        # each other player"): the two agree because both are strict.
+        if stream.accept_phrase("with", "the", "most", "life"):
+            return ast.PlayerRef("most_life")
         if stream.exhausted or not stream.at_word("who", "with", "whose"):
             return ast.PlayerRef("that_player")
     stream.reset(mark_the_player)

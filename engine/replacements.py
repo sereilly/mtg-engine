@@ -3624,9 +3624,19 @@ def _substitute_land_mana(game, payload: dict) -> ReplacementOutcome | None:
     there, so the payment planner can ask what a land will make without
     applying a replacement to find out.
     """
-    from .land_mana_swaps import swapped_symbol
+    from .land_mana_swaps import swapped_production
 
-    payload["produced"] = swapped_symbol(game, payload["land"])
+    substitution = swapped_production(game, payload["land"])
+    if substitution is None:
+        return None
+    payload["produced"] = substitution.produced
+    # "…instead of any other type **and amount**." (Contamination.) The
+    # sentence replaces how much as well as which, so the whole production
+    # becomes one mana rather than however many the land made. Carried as the
+    # *amount* rather than as a second flag, because that is what the seam
+    # spends it on and a flag would have to be turned back into a number
+    # somewhere.
+    payload["produced_amount"] = 1 if substitution.replaces_amount else None
     return ReplacementOutcome()
 
 

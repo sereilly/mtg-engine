@@ -134,6 +134,24 @@ def _casting_the_named_card(purpose: "PaymentPurpose", card_name: str) -> bool:
     )
 
 
+def _not_casting_a_spell(purpose: "PaymentPurpose") -> bool:
+    """"This mana can't be spent to cast spells." (Thran Turbine.)
+
+    The first clause in the pool written as a **prohibition** rather than a
+    permission, and the reason it is a row here rather than a second mechanism:
+    CR 106.6 is one rule about what a payment may be made with, and "only to X"
+    and "not to Y" are two ways of writing one predicate. Modelled as the
+    predicate the rule states, so the mana pays an activation cost, an equip,
+    an upkeep — everything the word "cast" excludes.
+
+    A purpose with an unrecognised kind is admitted, which is the same
+    direction every predicate above takes with its own: this clause names the
+    one thing forbidden, so a payment that is not a cast is one the card
+    allows.
+    """
+    return purpose.kind != CAST
+
+
 def _activating_an_artifact_ability(purpose: "PaymentPurpose") -> bool:
     """"Spend this mana only to activate abilities of artifacts." (Soldevi
     Machinist.)
@@ -184,6 +202,16 @@ _PATTERNS: tuple[tuple[re.Pattern[str], ManaRestriction], ...] = (
         # ability's source, which only the activation path holds.
         re.compile(r"^spend this mana only to activate abilities of artifacts\.?$"),
         ManaRestriction("artifact_ability", _activating_an_artifact_ability),
+    ),
+    (
+        # Thran Turbine. The one clause printed as a prohibition; see
+        # `_not_casting_a_spell` for why it belongs on this table rather than
+        # beside it. Its own row and not a negation flag on the rows above,
+        # because "can't be spent to cast spells" is not the complement of any
+        # of them -- it is its own predicate, and a flag would invite a reader
+        # to compose two of them into a rule no card prints.
+        re.compile(r"^this mana can't be spent to cast spells\.?$"),
+        ManaRestriction("not_cast", _not_casting_a_spell),
     ),
     (
         # Ice Cauldron. The first clause whose subject is one *object* rather

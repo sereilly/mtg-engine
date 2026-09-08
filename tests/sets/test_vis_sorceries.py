@@ -171,12 +171,20 @@ def test_the_return_cost_reads_the_printed_destination():
         "As an additional cost to cast this spell, return X Swamps you "
         "control to the graveyard."
     ) is None
-    # …and an un-narrowed noun phrase is refused for the reason every other
-    # counted cost's is: it would let the payment eat anything the caster has.
-    assert _w2g1s_add_line(
+    # …and an un-narrowed noun phrase is *read*, with the empty filter the
+    # payment path takes as "any permanent you control". It refused until
+    # Urza's Saga printed two activation costs whose whole noun phrase is "a
+    # permanent" (Barrin, Master Wizard; Claws of Gix) and the shared gate
+    # stopped asking whether the reduction carried something — a narrowing the
+    # charger loses is a refusal, never a drop, so the empty reduction is the
+    # honest reading of the widest printed noun. The *zone* half above is what
+    # the refusal was always for and still is.
+    unnarrowed = _w2g1s_add_line(
         "As an additional cost to cast this spell, return X permanents you "
         "control to their owner's hand."
-    ) is None
+    )
+    assert unnarrowed is not None
+    assert unnarrowed.return_filter == {} and unnarrowed.return_count_x
 def _w2g2_catalog():
     return {card.name: card for card in _w2g2_load(_w2g2_paths(include_measured=True))}
 def _w2g2_slot(player, permanent):
