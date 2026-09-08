@@ -761,6 +761,17 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
             return ast.TriggerEvent(
                 "self_put_into_graveyard_from_library", "when"
             )
+        # "When **a card is put into your graveyard from anywhere**" (Energy
+        # Field). The row above with any card for its object and every zone for
+        # its source — a permanent watching its controller's graveyard rather
+        # than a card watching itself. Read on this front end too, for the
+        # reason every condition around it is: a condition only one of them
+        # sees leaves the other refusing the effect behind it.
+        if stream.accept_phrase(
+            "a", "card", "is", "put", "into", "your", "graveyard",
+            "from", "anywhere",
+        ):
+            return ast.TriggerEvent("card_put_into_graveyard", "when")
         # "When you control **no Islands** / **no Forests**, sacrifice this
         # creature." (Sea Serpent, Island Fish Jasconius; Gorilla Pack in Ice
         # Age.) The negative twin of `controls_matching_permanent` below, and

@@ -1482,6 +1482,15 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # swallow any line ending in the word.
     ("self_put_into_graveyard_from_library",
      r"when this card is put into your graveyard from your library"),
+    # "When **a card** is put into your graveyard **from anywhere**, sacrifice
+    # this enchantment." (Energy Field.) Not the row above and not a death:
+    # the object is any card, the destination is the watcher's own graveyard,
+    # and "from anywhere" names every source zone there is — which is exactly
+    # the seam ``Game.put_card_into_graveyard`` was built to be (CR 903.9b's
+    # argument, one zone over). Above the bare "dies" row for that row's stated
+    # reason: its ``.+`` would otherwise swallow this clause whole.
+    ("card_put_into_graveyard",
+     r"when a card is put into your graveyard from anywhere"),
     # "When this creature dies **during combat**, …" (Mongrel Pack). CR 506.1's
     # phase, asked of the death rather than of the creature: the same death, in
     # a different part of the turn, is a different card. The marker is an empty

@@ -366,6 +366,24 @@ def _moved_card_only_filter(
     return False
 
 
+@event_filter("card_put_into_graveyard")
+def _card_into_your_graveyard_filter(
+    game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event
+) -> bool:
+    """"When a card is put into **your** graveyard from anywhere, sacrifice
+    this enchantment." (Energy Field.)
+
+    "Your" is the watching permanent's controller (CR 109.5), never the card's
+    owner and never the seat that caused the move — an opponent milling their
+    own library must not break the Field, and the same card going to *its*
+    controller's graveyard must, however it got there.
+
+    Read through the control seam, so a Field somebody has taken control of
+    watches **their** graveyard from the moment they take it (CR 613 layer 2).
+    """
+    return game.controller_index_of(permanent) == event.payload.get("owner_index")
+
+
 @event_filter("you_play_card")
 def _controller_played_card_filter(
     game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event
