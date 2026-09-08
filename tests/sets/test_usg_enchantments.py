@@ -27,8 +27,6 @@ a prompt.
 
 
 # --- W1G3: "it becomes a N/N creature" — the Hidden / Opal / Veiled cycle ---
-import pytest
-
 from engine import Game, PlayerState
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.models import Permanent
