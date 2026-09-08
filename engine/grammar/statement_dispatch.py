@@ -32,8 +32,8 @@ from .lowering.where_x import lower_where_x
 from .lowering.control_flow import (
     _lower_may, _lower_one_of, _lower_unless_player_pays,
 )
-from .lowering.board import (_lower_exile_one_of_chosen,
-                            _lower_sacrifice_unless_pay)
+from .lowering.board import _lower_exile_one_of_chosen
+from .lowering.tolls import _lower_sacrifice_unless_pay
 from .lowering.sequences import _lower_steps
 from .lowering.loops import (
     _lower_for_each,

@@ -907,6 +907,28 @@ LOWERING_FAMILIES = [
      # carried on the parse side since Alpha's ante cards, so the mirror
      # re-forms rather than forking.
      "ownership",
+     # `tolls` split off `lowering/board.py` at Urza's Saga's second wave, when
+     # that module sat eight lines under the guard with a 72-card tail still to
+     # come. The seam was not found at the cap: `board.py`'s own docstring had
+     # been naming it for sets, calling the "… unless <someone> pays"
+     # productions "the one place that split cut a production family in half
+     # rather than along it". They are cut along it now.
+     #
+     # The family is an **offer whose refusal is the effect**, which is why its
+     # three printed verbs travel together instead of each going to the family
+     # it names: lowering "sacrifice this permanent unless you pay" as a
+     # sacrifice and "destroy this creature unless you pay" as a destruction
+     # would put the *price* in one family and the *consequence* in another. It
+     # reuses the name `grammar/tolls.py` has carried on the parse side since it
+     # left `sentence_clauses` for exactly this family — one sentence, "what
+     # price is offered, to whom, and what does paying it buy" — so the mirror
+     # re-forms rather than forking.
+     #
+     # `_per_payer_count` stayed behind: it reads an `ast.Sacrifice` for
+     # `_lower_sacrifice`'s own per-recipient count and no toll calls it. That
+     # was measured at the split rather than assumed, which is the check that
+     # keeps a seam from taking a neighbour with it.
+     "tolls",
      # `requirements` split off `lowering/combat.py` at Tempest's second wave,
      # the **second** time that module crossed the guard and the second time
      # the line was already drawn — `prohibitions` left on the printed voice,

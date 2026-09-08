@@ -773,8 +773,18 @@ a transform card does not have, so a double-faced card raises `ValueError` on
 `commander.py`'s colour-identity derivation — the compiler has never seen a
 second face. That is CR 709/710/712/714/715/720, 45 rules, none implemented;
 it already costs Origins 5 cards and M19 one. Second, keyword abilities stand at
-**31** of CR 702's 192 in the registry, with buyback, cumulative upkeep and
-equip implemented below it. Alternative costs (CR 118.9) were the third gap and
+**31** of CR 702's 192 in the registry, with buyback, cumulative upkeep, equip
+and now **cycling (CR 702.29) and echo (CR 702.30)** implemented below it.
+**Read that number with the registry's actual question in mind**, which two USG
+groups had to work out independently because this line does not say it:
+`IMPLEMENTED_KEYWORDS` admits a keyword being *granted* or *named* ("gains
+flying", "creatures with flanking"), so a keyword defined as a **rewrite** is
+absent from it by design — by the time any reader sees the card, the word is
+gone and the ability it means is in its place. `test_keyword_registry`'s
+bare-keyword-card guard is what forces the choice: listing cycling would mean
+either failing that guard or admitting a costless cycling that charges nothing.
+So "31 in the registry" undercounts what the engine implements and always has;
+the honest reading is 31 granted-or-named plus five rewrites. Alternative costs (CR 118.9) were the third gap and
 are closed: `engine/alternative_costs.py` reads the "rather than pay this
 spell's mana cost" template, the client offers optional and repeated costs
 through `legality.cast_cost_offers`, and the buyback/flashback/evoke/madness

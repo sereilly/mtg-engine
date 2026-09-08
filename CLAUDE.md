@@ -610,8 +610,14 @@ adding entries, not editing dispatch**:
   each is a separate round.
 - `engine/cost_modifiers.py` — text-keyed cost taxes (CR 601.2f): "<colour>
   spells cost {N} more to cast", "activated abilities of <colour> <type>s cost
-  {N} more to activate". Increases only; reduction should arrive with the card
-  that needs it, since it clamps at zero and there is nothing to verify against.
+  {N} more to activate". This entry read "increases only; reduction should
+  arrive with the card that needs it" for a long time after that stopped being
+  true — the cards arrived, and the module's own docstring says so. **Both
+  directions are live**, and they are not one mechanism with a sign: CR 118.7a–d
+  makes a reduction touch only the generic component, fall back to generic where
+  the cost has no mana of that colour, and spill an excess coloured reduction
+  onto generic. That arithmetic is `reduce_cost`, in one place, because getting
+  it wrong makes a spell castable that is not.
 - `engine/continuous.py` + `engine/layer_bridge.py` — the CR 613 layer system.
   Characteristics are **computed**, not stored: `has_type`, `is_creature`,
   `effective_power`, `has_keyword`, the colour accessors and

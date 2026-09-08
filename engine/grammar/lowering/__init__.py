@@ -224,15 +224,17 @@ from .board import (
     _lower_put_on_library_bottom,
     _lower_put_graveyard_top_on_library_bottom,
     _lower_delayed_self_action,
-    _lower_pay_or_sacrifice_greatest_mana_value,
     _lower_regenerate,
     _lower_rebalance_lands,
     _lower_keep_chosen_sacrifice_rest,
+    _lower_sacrifice,
+    _lower_sacrifice_expansion_permanents,
+)
+from .tolls import (
+    _lower_pay_or_sacrifice_greatest_mana_value,
     _lower_sacrifice_unless_pay,
     _lower_destroy_unless_pay,
     _lower_destroy_each_unless_paid,
-    _lower_sacrifice,
-    _lower_sacrifice_expansion_permanents,
 )
 from .destruction import (
     _DESTROY_ALL_KINDS,
