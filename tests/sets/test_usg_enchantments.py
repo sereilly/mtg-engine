@@ -1407,3 +1407,59 @@ def test_w2g2_remembrance_ignores_a_token_s_death(set_pool):
     assert not game.pending_choices, "no offer at all, not an offer declined"
     assert game.pending_choice_of("search_library", 0) is None
     assert not alice.hand
+
+
+def test_w2g2_planar_void_and_serra_avatar_both_watch_one_arrival(set_pool):
+    """One move, two abilities: Planar Void's board-wide trigger and Serra
+    Avatar's own ride the *same* announcement, which is why the seam emits one
+    event rather than two — CR 603.3b puts simultaneous triggers on the stack
+    together.
+
+    Both are on the stack, the Void resolves first and exiles the card, and the
+    Avatar's ability shuffles anyway: CR 701.24c says a library named by a
+    shuffle is shuffled even when the object is not where it was expected.
+    """
+    pool = set_pool("USG")
+    alice, bob = PlayerState(name="G2E-A"), PlayerState(name="G2E-B")
+    game = Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    game._put_permanent_onto_battlefield(
+        1, Permanent(card=pool["Planar Void"]), None
+    )
+    avatar = Permanent(card=pool["Serra Avatar"])
+    game._put_permanent_onto_battlefield(0, avatar, None)
+
+    game._permanent_to_graveyard(alice, avatar)
+    game.remove_from_battlefield(avatar)
+
+    assert len(game.stack) == 2, "one move, two triggers, one batch"
+
+    resolve_stack(game)
+
+    assert [c.name for c in alice.exile] == ["Serra Avatar"]
+    assert not alice.graveyard and not alice.library
+
+
+def test_w2g2_a_replaced_arrival_fires_planar_void_at_all(set_pool):
+    """CR 614: a replacement means the card never reaches the graveyard, so the
+    trigger that watches arrivals has nothing to watch. Yawgmoth's Will's own
+    second line is the replacement, which is what makes this pair testable at
+    all — the seam that announces is the seam the replacement guards.
+    """
+    pool = set_pool("USG")
+    alice, bob = PlayerState(name="G2E-A"), PlayerState(name="G2E-B")
+    alice.hand = [pool["Yawgmoth's Will"]]
+    game = Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    game._put_permanent_onto_battlefield(
+        1, Permanent(card=pool["Planar Void"]), None
+    )
+
+    game.cast_from_hand(0, "Yawgmoth's Will")
+    resolve_stack(game)
+
+    game.put_card_into_graveyard(alice, pool["Gamble"])
+
+    assert not game.stack, "nothing arrived, so nothing triggered"
+    assert not alice.graveyard
+    assert [c.name for c in alice.exile] == ["Yawgmoth's Will", "Gamble"]

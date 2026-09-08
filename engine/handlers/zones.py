@@ -8003,7 +8003,18 @@ def return_all_cards_from_graveyard(game: Game, instruction: OracleInstruction, 
     # is the only thing that can answer.
     only_this_turn = bool(instruction.payload.get("put_there_this_turn"))
     if who == "each_player":
-        seats = list(range(len(game.players)))
+        # CR 101.4's order, and a seat that has left the game returns nothing
+        # (CR 800.4a): a lost player has no battlefield, so putting a card onto
+        # it makes a permanent nobody controls. This read the raw seat range,
+        # which is All Hallow's Eve mis-played in the one game shape where the
+        # difference exists — and the two per-seat handlers beside it already
+        # answer the question this way.
+        total = len(game.players)
+        active = game.active_player_index or 0
+        seats = sorted(
+            (i for i, p in enumerate(game.players) if not p.lost),
+            key=lambda i: ((i - active) % total, i),
+        )
     else:
         seats = [game.players.index(context.caster)]
     returned = 0
