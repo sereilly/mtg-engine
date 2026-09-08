@@ -37,7 +37,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | STH | 143 | 215 | 88.4% | 88.4% | 62.8% | 124 |
 | EXO | 143 | 207 | 90.3% | 90.3% | 66.2% | 127 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| USG *(measured)* | 335 | 486 | 70.6% | 64.0% | 42.4% | 182 |
+| USG *(measured)* | 335 | 486 | 74.5% | 67.9% | 46.3% | 199 |
 | **All (shipped)** | **4873** | **7239** | **90.5%** | **89.8%** | **60.0%** | **3637** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -50,10 +50,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 451 | 212 | expected a subject |  |
+| 436 | 197 | expected a subject |  |
 | 119 | 64 | unrecognized effect verb |  |
-| 102 | 57 | unconsumed text |  |
-| 41 | 25 | granted ability in quotes | phase 3 (quoted abilities) |
+| 103 | 58 | unconsumed text |  |
+| 39 | 23 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 16 | 15 | expected 'unless defending player controls' |  |
 | 13 | 8 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
@@ -74,7 +74,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 3 | 2 | expected 'the number of' in a where-clause |  |
 | 3 | 3 | unrecognized "can't be" restriction |  |
 | 3 | 3 | expected 'a' |  |
-| 3 | 3 | expected a colour or a creature body after 'becomes' |  |
+| 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 
 ## Cards executing through the grammar
 
@@ -995,6 +995,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Chimeric Sphere**
   - `{2}: Until end of turn, this artifact becomes a 2/1 Construct artifact creature with flying.`
   - `{2}: Until end of turn, this artifact becomes a 3/2 Construct artifact creature and loses flying.`
+- **Chimeric Staff**
+  - `{X}: This artifact becomes an X/X Construct artifact creature until end of turn.`
 - **Choking Sands**
   - `Destroy target non-Swamp land. If that land was nonbasic, Choking Sands deals 2 damage to the land's controller.`
 - **Choking Vines**
@@ -2887,12 +2889,25 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Return all green permanents to their owners' hands.`
 - **Hibernation Sliver**
   - `All Slivers have "Pay 2 life: Return this permanent to its owner's hand."`
+- **Hidden Ancients**
+  - `When an opponent casts an enchantment spell, if this permanent is an enchantment, it becomes a 5/5 Treefolk creature.`
+- **Hidden Guerrillas**
+  - `When an opponent casts an artifact spell, if this permanent is an enchantment, it becomes a 5/3 Soldier creature with trample.`
+- **Hidden Herd**
+  - `When an opponent plays a nonbasic land, if this permanent is an enchantment, it becomes a 3/3 Beast creature.`
 - **Hidden Horror**
   - `When this creature enters, sacrifice it unless you discard a creature card.`
 - **Hidden Path**
   - `Green creatures have forestwalk. (They can't be blocked as long as defending player controls a Forest.)`
+- **Hidden Predators**
+  - `When an opponent controls a creature with power 4 or greater, if this permanent is an enchantment, it becomes a 4/4 Beast creature.`
 - **Hidden Retreat**
   - `Put a card from your hand on top of your library: Prevent all damage that would be dealt by target instant or sorcery spell this turn.`
+- **Hidden Spider**
+  - `When an opponent casts a creature spell with flying, if this permanent is an enchantment, it becomes a 3/5 Spider creature with reach. (It can block creatures with flying.)`
+- **Hidden Stag**
+  - `Whenever an opponent plays a land, if this permanent is an enchantment, it becomes a 3/2 Elk Beast creature.`
+  - `Whenever you play a land, if this permanent is a creature, it becomes an enchantment.`
 - **High Tide**
   - `Until end of turn, whenever a player taps an Island for mana, that player adds an additional {U}.`
 - **Historian of Zhalfir**
@@ -4355,6 +4370,17 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this creature dies, you gain 2 life.`
 - **Onyx Talisman**
   - `Whenever a player casts a black spell, you may pay {3}. If you do, untap target permanent.`
+- **Opal Acrolith**
+  - `Whenever an opponent casts a creature spell, if this permanent is an enchantment, it becomes a 2/4 Soldier creature.`
+  - `{0}: This permanent becomes an enchantment.`
+- **Opal Archangel**
+  - `When an opponent casts a creature spell, if this permanent is an enchantment, it becomes a 5/5 Angel creature with flying and vigilance.`
+- **Opal Caryatid**
+  - `When an opponent casts a creature spell, if this permanent is an enchantment, it becomes a 2/2 Soldier creature.`
+- **Opal Gargoyle**
+  - `When an opponent casts a creature spell, if this permanent is an enchantment, it becomes a 2/2 Gargoyle creature with flying.`
+- **Opal Titan**
+  - `When an opponent casts a creature spell, if this permanent is an enchantment, it becomes a 4/4 Giant creature with protection from each of that spell's colors.`
 - **Ophidian**
   - `Whenever this creature attacks and isn't blocked, you may draw a card. If you do, this creature assigns no combat damage this turn.`
 - **Opportunist**
@@ -6806,6 +6832,16 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Vec Townships**
   - `{T}: Add {C}.`
   - `{T}: Add {G} or {W}. This land doesn't untap during your next untap step.`
+- **Veil of Birds**
+  - `When an opponent casts a spell, if this permanent is an enchantment, it becomes a 1/1 Bird creature with flying.`
+- **Veiled Apparition**
+  - `When an opponent casts a spell, if this permanent is an enchantment, it becomes a 3/3 Illusion creature with flying and "At the beginning of your upkeep, sacrifice this creature unless you pay {1}{U}."`
+- **Veiled Crocodile**
+  - `When a player has no cards in hand, if this permanent is an enchantment, it becomes a 4/4 Crocodile creature.`
+- **Veiled Sentry**
+  - `When an opponent casts a spell, if this permanent is an enchantment, it becomes an Illusion creature with power and toughness each equal to that spell's mana value.`
+- **Veiled Serpent**
+  - `When an opponent casts a spell, if this permanent is an enchantment, it becomes a 4/4 Serpent creature with "This creature can't attack unless defending player controls an Island."`
 - **Veldt**
   - `At the beginning of your upkeep, remove a depletion counter from this land.`
   - `{T}: Add {G} or {W}. Put a depletion counter on this land.`
