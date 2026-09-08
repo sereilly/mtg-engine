@@ -174,6 +174,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # The "pump" family, because what the sentence does is set a P/T — the
     # type change beside it is the layer bridge reading the same record.
     "animate_self_until_eot": "pump",
+    # "…becomes a 3/6 Golem artifact creature until end of combat."
+    # (Jade Statue.) The same animation over the third window, so the same
+    # category and GRAMMAR_CATEGORIES is unchanged.
+    "animate_self_until_end_of_combat": "pump",
     # "{6}: This land becomes a 3/3 Elemental artifact creature that's still a
     # land." (Stalking Stones.) The row above with no end to it (CR 611.2a), so
     # the same category for `animate_target_indefinitely`'s reason: what differs

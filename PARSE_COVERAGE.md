@@ -10,7 +10,7 @@ unclaimed text. Do not edit by hand.
 - Fully claimed: **3107**
 - With acknowledged simplifications: **2**
 - With UNCLAIMED text (must fix or acknowledge): **0**
-- With deletion-probe findings (ignored words): **298**
+- With deletion-probe findings (ignored words): **306**
 
 ## Measured sets — reported, not gated
 
@@ -25,8 +25,10 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**2 unclaimed sentence(s) across 2 supported card(s).**
+**3 unclaimed sentence(s) across 3 supported card(s).**
 
+- **Arcane Laboratory**
+  - `each player can't cast more than one spell each turn`
 - **Brand**
   - `gain control of all permanents you own`
 - **Contamination**
@@ -62,6 +64,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Ancestral Knowledge | `look at the top ten cards of your library, then exile any number of th` | back |
 | Animal Sanctuary | `put a +1/+1 counter on target bird, cat, dog, goat, ox, or snake` | or |
 | Anvil of Bogardan | `that player draws an additional card, then discards a card` | additional |
+| Apes of Rath | `it doesn't untap during its controller's next untap step` | controller's |
 | Apocalypse | `exile all permanents. you discard your hand` | all |
 | Apocalypse Chime | `destroy all nontoken permanents with a name originally printed in the ` | all |
 | Arena of the Ancients | `tap all legendary creatures` | all |
@@ -71,6 +74,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Awakening | `untap all creatures and lands` | all |
 | Backdraft | `choose a player who cast one or more sorcery spells this turn. backdra` | down |
 | Baki's Curse | `baki's curse deals 2 damage to each creature for each aura attached to` | baki's |
+| Barl's Cage | `target creature doesn't untap during its controller's next untap step` | controller's |
 | Basri's Solidarity | `put a +1/+1 counter on each creature you control` | each |
 | Battle Cry | `untap all white creatures you control` | all |
 | Battle-Rattle Shaman | `you may have target creature get +2/+0 until end of turn` | have |
@@ -120,6 +124,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Ebony Charm | `exile up to three target cards from a single graveyard` | target |
 | Elder Druid | `you may tap or untap target artifact, creature, or land` | or |
 | Elven Rite | `distribute two +1/+1 counters among one or two target creatures` | target |
+| Elvish Hunter | `target creature doesn't untap during its controller's next untap step` | controller's |
 | Energy Vortex | `this enchantment deals 3 damage to that player unless they pay {1} for` | enchantment |
 | Enervate | `tap target artifact, creature, or land` | or |
 | Errant Minion | `that player may pay any amount of mana. this aura deals 2 damage to th` | aura |
@@ -139,6 +144,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Flashfires | `destroy all plains` | all |
 | Floodgate | `it deals damage to each nonblue creature without flying equal to half ` | each down |
 | Freyalise Supplicant | `this creature deals damage to any target equal to half the sacrificed ` | down |
+| Frost Breath | `tap up to two target creatures. those creatures don't untap during the` | controller's |
 | Fungal Rebirth | `return target permanent card from your graveyard to your hand. if a cr` | permanent |
 | Fyndhorn Pollen | `all creatures get -1/-0 until end of turn` | all |
 | Gabriel Angelfire | `choose flying, first strike, trample, or rampage 3. gabriel angelfire ` | or |
@@ -183,14 +189,16 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Johan | `you may have johan gain "johan can't attack" until end of combat. if y` | have |
 | Jokulhaups | `destroy all artifacts, creatures, and lands. they can't be regenerated` | all |
 | Jolt | `you may tap or untap target artifact, creature, or land` | or |
-| Joven's Ferrets | `tap all creatures that blocked this creature this turn. they don't unt` | all creature |
+| Joven's Ferrets | `tap all creatures that blocked this creature this turn. they don't unt` | all creature controller's |
 | Kaervek's Hex | `kaervek's hex deals 1 damage to each nonblack creature and an addition` | each each |
 | Keeper of the Dead | `choose target opponent who has at least two fewer creature cards in th` | cards |
 | Kjeldoran Frostbeast | `destroy all creatures blocking or blocked by this creature` | all creature |
 | Kjeldoran Home Guard | `if this creature attacked or blocked this combat, put a -0/-1 counter ` | creature |
 | Knight of Valor | `each creature without flanking blocking this creature gets -1/-1 until` | each |
 | Kor Chant | `all damage that would be dealt this turn to target creature you contro` | target another |
+| Labyrinth Minotaur | `that creature doesn't untap during its controller's next untap step` | controller's |
 | Land's Edge | `if the discarded card was a land card, this enchantment deals 2 damage` | card, |
+| Lead Golem | `it doesn't untap during its controller's next untap step` | controller's |
 | Legacy's Allure | `gain control of target creature with power less than or equal to the n` | enchantment |
 | Legerdemain | `exchange control of target artifact or creature and another target per` | another |
 | Lesser Werewolf | `if this creature's power is 1 or more, it gets -1/-0 until end of turn` | creature |
@@ -291,7 +299,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Spoils of Evil | `for each artifact or creature card in target opponent's graveyard, add` | card |
 | Spoils of War | `distribute x +1/+1 counters among any number of target creatures` | target |
 | Spontaneous Combustion | `spontaneous combustion deals 3 damage to each creature` | each |
-| Spore Cloud | `tap all blocking creatures. prevent all combat damage that would be de` | all each each |
+| Spore Cloud | `tap all blocking creatures. prevent all combat damage that would be de` | all each each controller's |
 | Stench of Evil | `destroy all plains. for each land destroyed this way, stench of evil d` | all |
 | Stromgald Spy | `you may have defending player play with their hand revealed for as lon` | have |
 | Subterranean Spirit | `this creature deals 1 damage to each creature without flying` | each |
@@ -302,6 +310,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Sylvan Library | `you may draw two additional cards. if you do, choose two cards in your` | additional |
 | Taniwha | `all lands you control phase out` | all |
 | Teferi's Realm | `that player chooses artifact, creature, land, or non-aura enchantment.` | or all |
+| Telekinesis | `tap target creature. prevent all combat damage that would be dealt by ` | controller's |
 | Telim'Tor | `all attacking creatures with flanking get +1/+1 until end of turn` | all |
 | Temper | `prevent the next x damage that would be dealt to target creature this ` | 1 |
 | The Wretched | `gain control of all creatures blocking this creature for as long as yo` | all |
@@ -348,6 +357,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Whiteout | `all creatures lose flying until end of turn` | all |
 | Willow Priestess | `you may put a faerie permanent card from your hand onto the battlefiel` | permanent |
 | Winds of Rath | `destroy all creatures that aren't enchanted. they can't be regenerated` | all |
+| Winter's Night | `that player adds one mana of any type that land produced. that land do` | controller's |
 | Word of Undoing | `return target creature and all white auras you own attached to it to t` | all |
 | Worms of the Earth | `any player may sacrifice two lands of their choice or have this enchan` | either, |
 | Wrath of God | `destroy all creatures. they can't be regenerated` | all |
@@ -360,14 +370,14 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 
 | Channel | Sentences claimed |
 | --- | --- |
-| parse rule | 2958 |
+| parse rule | 2959 |
 | activation cost | 1315 |
 | trigger table | 888 |
 | static-line table | 769 |
 | keyword table | 641 |
 | aura enchant noun (oracle_instructions attach) | 214 |
 | activation_restrictions.py | 120 |
-| card_hooks bespoke (name-keyed) | 88 |
+| card_hooks bespoke (name-keyed) | 87 |
 | cast_costs.py | 71 |
 | loyalty cost | 33 |
 | oracle.py (modal trigger head) | 29 |

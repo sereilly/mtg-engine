@@ -314,12 +314,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         "creature this turn, that source deals that damage to you instead":
             _line("jade_monolith_redirect", "activated_prevent"),
     },
-    'Jade Statue': {
-        '{2}: this artifact becomes a 3/6 golem artifact creature until end of '
-        'combat. activate only during combat':
-            _line('animate_self_until_end_of_combat', 'activated_animate', power=3,
-                toughness=6),
-    },
     'Jeweled Bird': {
         "{t}: ante this artifact. if you do, put all other cards you own from the "
         "ante into your graveyard, then draw a card":

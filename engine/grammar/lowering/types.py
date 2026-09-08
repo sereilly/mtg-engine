@@ -65,10 +65,32 @@ def _lower_become_creature(
         # outlive the cleanup sweep — its own kind for the reason the targeted
         # pair are two kinds, that a kind whose name says "until_eot" writing a
         # record nothing sweeps is a lie a reader has no way to see.
-        kind = (
-            "animate_self_until_eot" if node.until_end_of_turn
-            else "animate_self_indefinitely"
-        )
+        # "…becomes a 3/6 Golem artifact creature **until end of combat**."
+        # (Jade Statue.) A third kind for the reason there are two: the
+        # window is which sweep can see the record, and a kind whose name
+        # says one window while writing a record another sweep clears is a
+        # lie no reader can see.
+        #
+        # **The keyword and colour halves refuse here.** The end-of-combat
+        # sweep clears the animation record and the persistent P/T channel
+        # and nothing else; a granted keyword or a colour override would
+        # outlive the body it belongs to, which is a permanent left green,
+        # or flying, after it has stopped being a creature. No card in the
+        # pool prints either with this window, so the refusal costs nothing
+        # and closes the near miss rather than shipping the leak.
+        if node.until_end_of_combat:
+            if node.keywords or node.colors or node.granted_ability_lines:
+                raise LoweringError(
+                    "the end-of-combat sweep ends an animation's body and "
+                    "nothing it grants",
+                    node=node,
+                )
+            kind = "animate_self_until_end_of_combat"
+        else:
+            kind = (
+                "animate_self_until_eot" if node.until_end_of_turn
+                else "animate_self_indefinitely"
+            )
         return (OracleInstruction(kind, "", _animation_payload(node)),)
     # "**Forests you control** become 2/3 creatures until end of turn. They're
     # still lands." (Thelonite Druid.) A quantified subject, and a *third*

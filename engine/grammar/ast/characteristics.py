@@ -378,6 +378,17 @@ class BecomeCreature:
     #: that is what every other printing in the pool says out loud, and because
     #: a node built without the field must keep meaning what it used to.
     until_end_of_turn: bool = True
+    #: Whether the animation ends at **end of combat** instead (Jade Statue,
+    #: Clockwork Steed's cousin printings). A third state rather than a second
+    #: meaning for the flag above, because the two windows are cleared by two
+    #: different sweeps and a turn may hold two combats: a record swept at
+    #: cleanup would leave the Statue a creature through the whole postcombat
+    #: main phase, which is exactly the difference the card's own activation
+    #: restriction ("only during combat") is printed to make matter.
+    #:
+    #: Defaulted False so every node built before this field existed means
+    #: what it always did, and read only where the words are printed.
+    until_end_of_combat: bool = False
     #: Whether the sentence printed **none** of CR 205.1b's retention clauses,
     #: which makes it CR 205.1a's default: the new card types *replace* the
     #: printed ones. "…it becomes a 2/2 Gargoyle creature with flying." (Opal
