@@ -428,3 +428,82 @@ def test_w1g5_carrion_beetles_exiles_three_cards_from_one_graveyard(set_pool):
     assert len(p2.exile) == 3
     assert len(p2.graveyard) == 1
     assert not game.pending_choices, "one pile with legal cards is not a decision"
+
+
+# --- W2G3: an Aura put onto the battlefield attached as it arrives ---
+import pytest
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+
+from tests.helpers import _mk_card, resolve_stack
+
+
+def _g3w2c_table(*, interactive=()):
+    """Two seats, mana enforcement off, and whichever of them answers prompts.
+
+    ``_g3w2c_`` prefixed and ending on ``return game, game.players[0],
+    game.players[1]`` — SET_PLAYBOOK.md's note about a union splicing one
+    helper's body onto another's signature.
+    """
+    game = Game(players=[PlayerState(name="W2G3C-A"), PlayerState(name="W2G3C-B")])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    return game, game.players[0], game.players[1]
+
+
+def _g3w2c_aura(name, enchant="creature", effect="Enchanted creature gets +1/+1."):
+    return _mk_card(
+        name=name, mana_cost="{W}", type_line="Enchantment - Aura",
+        oracle_text=f"Enchant {enchant}\n{effect}",
+    )
+
+
+def test_w2g3_academy_researchers_arrives_wearing_the_aura(set_pool):
+    """"When this creature enters, you may put an Aura card from your hand onto
+    the battlefield attached to this creature."
+
+    CR 303.4f attaches the Aura as it enters, so the two halves are one event:
+    an Aura that existed for even one state-based check attached to nothing
+    would be in a graveyard by now (CR 704.5m).
+    """
+    card = set_pool("USG")["Academy Researchers"]
+    assert compile_card_oracle(card).supported
+
+    game, alice, bob = _g3w2c_table()
+    alice.hand = [_g3w2c_aura("W2G3 Blessing")]
+    researcher = Permanent(card=card)
+    game._put_permanent_onto_battlefield(0, researcher, None)
+    game._sync_control()
+    resolve_stack(game)
+    game.auto_resolve_pending_choices()
+
+    aura = next(
+        perm for perm in game.controlled_by(0)
+        if perm.card.name == "W2G3 Blessing"
+    )
+    assert aura.metadata.get("attached_to") is researcher
+    assert alice.graveyard == [], "it did not fall off for want of a host"
+    assert researcher.effective_power == 3, "and its grant applies (2/2 base, +1/+1)"
+
+
+def test_w2g3_academy_researchers_never_offers_an_illegal_aura(set_pool):
+    """CR 303.4a: an Aura may be put onto the battlefield only attached to
+    something its own enchant ability can enchant. An Aura the Researchers
+    cannot carry is not among the answers — offered and taken it would leave
+    the card out of the hand and the Aura in a graveyard.
+    """
+    game, alice, bob = _g3w2c_table()
+    land_aura = _g3w2c_aura(
+        "W2G3 Overgrowth", enchant="land", effect="Enchanted land gets +0/+0."
+    )
+    alice.hand = [land_aura]
+    researcher = Permanent(card=set_pool("USG")["Academy Researchers"])
+    game._put_permanent_onto_battlefield(0, researcher, None)
+    game._sync_control()
+    resolve_stack(game)
+    game.auto_resolve_pending_choices()
+
+    assert [c.name for c in alice.hand] == ["W2G3 Overgrowth"], "it stayed in hand"
+    assert alice.graveyard == []

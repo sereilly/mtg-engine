@@ -78,3 +78,99 @@ def test_w1g1_a_cycling_instant_is_discarded_for_a_card(set_pool, name):
     assert [c.name for c in player.hand] == [name]      # the card drawn
     assert len(player.library) == 3
     assert [p.card.name for p in game.players[1].battlefield] == opponent_board
+
+
+# --- W2G3: per-player bounces and whole-table counts ---
+import pytest
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+
+from tests.helpers import _mk_card, _mk_creature_card, resolve_stack
+
+
+def _g3w2i_table(*, interactive=()):
+    """Two seats, mana enforcement off, and whichever of them answers prompts.
+
+    ``_g3w2i_`` prefixed and ending on ``return game, game.players[0],
+    game.players[1]`` — SET_PLAYBOOK.md's note about a union splicing one
+    helper's body onto another's signature.
+    """
+    game = Game(players=[PlayerState(name="W2G3I-A"), PlayerState(name="W2G3I-B")])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    return game, game.players[0], game.players[1]
+
+
+def _g3w2i_creature(game, seat, name):
+    permanent = Permanent(card=_mk_creature_card(name, 2, 2))
+    game._put_permanent_onto_battlefield(seat, permanent, None)
+    game._sync_control()
+    return permanent
+
+
+def _g3w2i_cast(game, seat, card, **kwargs):
+    game.players[seat].hand.append(card)
+    result = game.cast_from_hand(seat, card.name, **kwargs)
+    resolve_stack(game)
+    return result
+
+
+def test_w2g3_curfew_makes_every_player_return_one_of_their_own(set_pool):
+    """"Each player returns a creature they control to its owner's hand."
+
+    "They" agrees with "each player", so every seat is asked and every seat
+    draws its candidates from its **own** battlefield. A reading that asked one
+    player would leave the other's creature on the table; one that drew from a
+    single battlefield would return two of the caster's.
+    """
+    card = set_pool("USG")["Curfew"]
+    assert compile_card_oracle(card).supported
+
+    game, alice, bob = _g3w2i_table()
+    _g3w2i_creature(game, 0, "W2G3 Alice Bear")
+    _g3w2i_creature(game, 1, "W2G3 Bob Bear")
+
+    _g3w2i_cast(game, 0, card)
+    game.auto_resolve_pending_choices()
+
+    assert [c.name for c in alice.hand] == ["W2G3 Alice Bear"]
+    assert [c.name for c in bob.hand] == ["W2G3 Bob Bear"]
+    assert list(game.all_permanents()) == []
+
+
+def test_w2g3_curfew_skips_a_player_with_no_creature(set_pool):
+    """CR 608.2's "as much as possible": a seat with nothing to return is not a
+    prompt with no answer, and the other seat still pays."""
+    game, alice, bob = _g3w2i_table()
+    _g3w2i_creature(game, 1, "W2G3 Bob Bear")
+
+    _g3w2i_cast(game, 0, set_pool("USG")["Curfew"])
+    game.auto_resolve_pending_choices()
+
+    assert alice.hand == []
+    assert [c.name for c in bob.hand] == ["W2G3 Bob Bear"]
+
+
+def test_w2g3_congregate_counts_every_battlefield(set_pool):
+    """"Target player gains 2 life for each creature on the battlefield."
+
+    CR 403.1's one shared zone: the count is every seat's creatures and names
+    none of them, which is exactly why it can be taken while somebody else
+    gains the life. Counted on the gainer's own board it would be 4 here, and
+    on the caster's 2 — so the two boards are deliberately uneven.
+    """
+    card = set_pool("USG")["Congregate"]
+    assert compile_card_oracle(card).supported
+
+    game, alice, bob = _g3w2i_table()
+    _g3w2i_creature(game, 0, "W2G3 A1")
+    _g3w2i_creature(game, 1, "W2G3 B1")
+    _g3w2i_creature(game, 1, "W2G3 B2")
+    before = bob.life
+
+    _g3w2i_cast(game, 0, card, target_player_index=1)
+
+    assert bob.life == before + 6, "three creatures on the battlefield, 2 life each"
+    assert alice.life == 20, "and the caster gains none"

@@ -412,6 +412,19 @@ def _lower_sacrifice(
             payload[X_FROM_COUNT] = {"source_counters": node.count.kind}
         elif node.count is not None:
             payload[X_FROM_COUNT_PER_RECIPIENT] = _per_payer_count(node)
+        elif node.subject.quantifier == "any_number":
+            # "**Sacrifice any number of** artifacts, creatures, and/or lands."
+            # (Reprocess.) A ceiling with no printed number, which the noun
+            # phrase carries as a count of **zero** — and zero is what the
+            # handler owed, so the sentence sacrificed nothing and the draw
+            # behind it drew nothing, with the card reporting itself supported.
+            #
+            # So it travels as a flag and the handler sizes the prompt from the
+            # board, exactly as the each-player discard's "any number" (Flux)
+            # already does: the bound is the seat's own permanents and only the
+            # resolution knows it. The word carries its own "may" — none is a
+            # legal answer — which is what ``up_to`` means on that prompt.
+            payload["any_number"] = True
         elif node.subject.count != 1:
             # "Sacrifice **two** Swamps" (Mold Demon). How many is payload on
             # the one prompt, never a second kind: the forced-sacrifice queue

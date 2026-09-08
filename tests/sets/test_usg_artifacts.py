@@ -221,3 +221,88 @@ def test_w1g5_smokestack_makes_the_upkeep_player_choose(set_pool):
     assert owed[0].player_index == 1, "the upkeep player, not the controller"
     assert owed[0].data["count"] == 2
     assert len(p2.battlefield) == 3, "nothing goes until the choice is answered"
+
+
+# --- W2G3: per-player upkeep sweeps ---
+import pytest
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+
+from tests.helpers import _mk_card, _mk_creature_card, resolve_stack
+
+
+def _g3w2a_table():
+    """Two seats with mana enforcement off.
+
+    ``_g3w2a_`` prefixed and ending on ``return game, game.players[0],
+    game.players[1]`` — SET_PLAYBOOK.md's note about a union splicing one
+    helper's body onto another's signature.
+    """
+    game = Game(players=[PlayerState(name="W2G3A-A"), PlayerState(name="W2G3A-B")])
+    game.enforce_mana_costs = False
+    return game, game.players[0], game.players[1]
+
+
+def _g3w2a_creature(game, seat, name, power, toughness):
+    permanent = Permanent(card=_mk_creature_card(name, power, toughness))
+    game._put_permanent_onto_battlefield(seat, permanent, None)
+    game._sync_control()
+    return permanent
+
+
+def test_w2g3_noetic_scales_bounces_by_that_players_own_hand(set_pool):
+    """"At the beginning of each player's upkeep, return to its owner's hand
+    each creature that player controls with power greater than the number of
+    cards in their hand."
+
+    Two narrowings naming one seat, and it is a seat no read of the board can
+    make — the firing event picked it, a different player every upkeep. Read as
+    CR 109.5's "your hand" the comparison would be against the artifact
+    controller's hand on every turn, which is right on one upkeep in two.
+
+    So the two hands are deliberately different sizes, and the creature that
+    survives is the one whose *own controller's* hand is the larger.
+    """
+    card = set_pool("USG")["Noetic Scales"]
+    assert compile_card_oracle(card).supported
+
+    game, alice, bob = _g3w2a_table()
+    game._put_permanent_onto_battlefield(0, Permanent(card=card), None)
+    game._sync_control()
+    alice.hand = [_mk_card(f"AH{i}", "Basic Land - Forest", "") for i in range(4)]
+    bob.hand = [_mk_card("BH0", "Basic Land - Forest", "")]
+    _g3w2a_creature(game, 0, "W2G3 Alice Giant", 3, 3)
+    _g3w2a_creature(game, 1, "W2G3 Bob Giant", 3, 3)
+
+    game.active_player_index = 1
+    game.resolve_upkeep(1)
+    resolve_stack(game)
+
+    assert [c.name for c in bob.hand] == ["BH0", "W2G3 Bob Giant"], (
+        "3 power beats a one-card hand, so Bob's creature comes back"
+    )
+    assert len(list(game.controlled_by(0))) == 2, (
+        "Alice's 3/3 stays: her four-card hand is not the one being compared, "
+        "and it is not her upkeep either"
+    )
+
+
+def test_w2g3_noetic_scales_spares_a_creature_under_the_bound(set_pool):
+    """The comparison is strict — "greater than" — so a 1-power creature and a
+    one-card hand is not a return."""
+    game, alice, bob = _g3w2a_table()
+    game._put_permanent_onto_battlefield(
+        0, Permanent(card=set_pool("USG")["Noetic Scales"]), None
+    )
+    game._sync_control()
+    bob.hand = [_mk_card("BH0", "Basic Land - Forest", "")]
+    _g3w2a_creature(game, 1, "W2G3 Bob Mouse", 1, 1)
+
+    game.active_player_index = 1
+    game.resolve_upkeep(1)
+    resolve_stack(game)
+
+    assert [c.name for c in bob.hand] == ["BH0"]
+    assert len(list(game.controlled_by(1))) == 1
