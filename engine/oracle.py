@@ -341,7 +341,7 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # into the effect clause.
     ("damage_dealt",
      r"whenever (?:"
-     r"(?P<damager_self>this (?:creature|artifact|enchantment|land|permanent))"
+     r"(?P<damager_self>this (?:creature|artifact|enchantment|land|aura|permanent))"
      r"|(?P<damager_attached>enchanted (?:creature|artifact|enchantment|land|permanent))"
      r"|a source (?P<damager_controller>you) control"
      # "…a red creature **or spell** deals damage" (Justice). One object, two
@@ -783,7 +783,7 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      r"|an ability)"
      r"(?: (?P<targeting_controller>an opponent controls|you control))?"),
     ("self_becomes_target",
-     r"whenever this (?:creature|artifact|enchantment|land|permanent) becomes "
+     r"whenever this (?:creature|artifact|enchantment|land|aura|permanent) becomes "
      r"the target of (?P<targeted_by>a spell or ability|an aura spell|a spell"
      r"|an ability)"
      r"(?: (?P<targeting_controller>an opponent controls|you control))?"),
@@ -1418,7 +1418,7 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # graveyard, so "a" and "your" name the same pile for a card its controller
     # owns, and the noun is the source either way.
     ("dies",
-     r"when this (?:creature|artifact|enchantment|land|permanent) is put into "
+     r"when this (?:creature|artifact|enchantment|land|aura|permanent) is put into "
      r"(?:a|your) graveyard from the battlefield"),
     # "When **this card** is put into your graveyard **from your library**"
     # (Gaea's Blessing). Not a death and not this table's `dies` row: the

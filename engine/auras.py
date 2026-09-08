@@ -766,6 +766,24 @@ def aura_compiled_trigger_claim(normalized_line: str, card_name: str = "") -> st
             "the creature-death trigger (CR 603.2) — "
             "mixins/helpers._fire_creature_dies_triggers"
         )
+    if cond == "dies" and kind in EFFECT_HANDLERS:
+        # "When this Aura is put into a graveyard from the battlefield, return
+        # it to its owner's hand." (Brilliant Halo, Despondency, Fiery Mantle,
+        # Fortitude, Launch, Spreading Algae.) CR 700.4's "dies", spelled long
+        # -- the permanent's *own* death, announced from
+        # ``_permanent_to_graveyard`` while the dying permanent is still in
+        # hand, which is what makes the claim true for an Aura and not only for
+        # a creature.
+        #
+        # It is the sibling of the ``creature_dies`` row above and separate for
+        # that row's stated reason -- each names one condition and the site that
+        # fires it. The pairing matters here: ``creature_dies`` is the
+        # board-wide scan and this is the source's own death, and an Aura is
+        # reached by exactly one of them.
+        return (
+            "the permanent's own death (CR 700.4) - "
+            "mixins/helpers._permanent_to_graveyard"
+        )
     if cond in ("spell_cast", "opponent_casts_spell") and kind in EFFECT_HANDLERS:
         # "Whenever an opponent casts a creature spell, put a +1/+1 counter on
         # enchanted creature." (Predatory Hunger.) CR 601.2i's announcement,

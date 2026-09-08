@@ -2709,6 +2709,16 @@ class LegalityMixin:
                 return False
             if casting_aura and _cant_be_enchanted_by_auras(perm):
                 return False
+            # "Enchant **Swamp**" (Spreading Algae). The subtype half of
+            # CR 702.5's [quality] on a land clause, narrowing the same land
+            # picker the bare noun builds — and asked of `has_type`, which is
+            # CR 613 layer 4 and the same reading `land_filter` above and
+            # `exclude_swamp` below already take: CR 305.7 makes a Swamp turned
+            # into an Island stop being one, so it stops being offered here and
+            # the CR 704.5m sweep bins an Aura already sitting on it.
+            enchant_land_type = spec.get("enchant_land_type")
+            if enchant_land_type and not perm.has_type(enchant_land_type):
+                return False
             if spec.get("exclude_swamp"):
                 # Same CR 305.7 point: a Swamp turned into an Island is no
                 # longer a Swamp, so "target non-Swamp land" may target it.

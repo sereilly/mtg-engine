@@ -1101,88 +1101,101 @@ class GameHelpersMixin:
                     trigger_context={"combat_opponents": opponents},
                 )
                 self.log.append(f"{permanent.card.name} triggered (died in combat)")
-            # **Every other** "when this creature dies" trigger, onto the stack
-            # (CR 603.3). One loop, not one per instruction kind.
-            #
-            # This was six loops, each keyed to the kind of the card that added
-            # it — ``may`` for Goblin Arsonist, ``target_gains_life`` for
-            # Conclave Mentor, and so on — and the answer to "what happens when
-            # a creature with a dies-trigger this engine has not met before
-            # dies?" was *nothing at all*. Onulet ships in the shipped pool at
-            # 388/388, marked verified: "When this creature dies, you gain 2
-            # life", and no life was ever gained, because its instruction kind
-            # was `target_gains_life` without Conclave Mentor's payload key. A
-            # fire site that enumerates instruction kinds cannot be complete;
-            # it can only be as complete as the last card that touched it.
-            #
-            # ``dead_power`` and ``dead_toughness`` are captured for every
-            # trigger whether or not it asks: the permanent is about to leave
-            # and CR 603.10 says the trigger uses the information the game had,
-            # so the read has to be here even though only some payloads consume
-            # it. Both characteristics, for the same reason there is one read
-            # rather than one per card — a fire site that freezes only what
-            # today's cards ask for is a fire site the next card has to edit.
-            for trig in matching_triggers(
-                permanent.effective_card, condition_kinds={"dies"},
-            ):
-                if trig.instruction is None or trig.instruction.kind in _INLINE_DIES_KINDS:
-                    continue
-                # "When this creature dies **during combat**" (Mongrel Pack).
-                # CR 506.1's phase, asked of the death: the same death outside
-                # combat is a different card. Enforced here rather than
-                # dropped, for the reason every narrowing in this engine is —
-                # an unenforced restriction is an ability that works *more*
-                # often than the card allows, wrong in the player's favour and
-                # silent. An absent key is the unnarrowed printing.
-                if (
-                    trig.condition.payload.get("dies_during_combat") is not None
-                    and self.current_turn_phase != "combat"
-                ):
-                    continue
-                self._enqueue_triggered_ability(
-                    controller_index=self.players.index(player),
-                    source_permanent=permanent,
-                    card=permanent.card,
-                    instruction=trig.instruction,
-                    effect_kind=trig.effect_kind,
-                    ability_text=trig.source_line,
-                    trigger_context={
-                        "dead_power": max(0, permanent.effective_power),
-                        "dead_toughness": max(0, permanent.effective_toughness),
-                        # The counters it carried, frozen for the paragraph
-                        # above's reason and spelled the way the *other* death
-                        # fire site spells them: "when a creature dies" and
-                        # "when **this** creature dies" are two loops over one
-                        # event, and last-known information that only one of
-                        # them records is a condition that answers differently
-                        # depending on which loop announced it.
-                        #
-                        # "…exile it **if it had a death counter on it**"
-                        # (Bogardan Phoenix) is the card that needs the second
-                        # of these, and it needs it here: its own death is what
-                        # fires it, and its counters are gone the instant the
-                        # card reaches the graveyard (CR 400.7).
-                        "had_plus1_counter": (
-                            int(permanent.metadata.get("plus_counters", 0)) > 0
-                        ),
-                        "dead_counters": {
-                            key[: -len("_counters")]: int(value or 0)
-                            for key, value in permanent.metadata.items()
-                            if isinstance(key, str) and key.endswith("_counters")
-                        },
-                    },
-                )
-                self.log.append(f"{permanent.card.name} triggered (died)")
-        text = permanent.effective_card.oracle_text.lower()
-        if (
-            "when this enchantment is put into a graveyard from the battlefield, you lose the game"
-            in text
-            and not player.lost
+        # CR 700.4's death of **any** permanent, not only a creature's. The
+        # loop sat inside the `is_creature` branch above, so an Aura, an
+        # artifact or an enchantment printing its own death trigger compiled
+        # one and nothing ever enqueued it — the shape `_INLINE_DIES_KINDS`
+        # names one screen up, one gate further out. Lich is the card that
+        # paid for it: its whole downside was carried by a **text match on
+        # the printed sentence**, inline and off the stack, because the
+        # general path could not reach a non-creature. That branch is gone
+        # with this lift, for the reason Creature Bond's bespoke dispatcher
+        # went (`grammar/lowering/_bound_returns.py`): one event announced
+        # by two mechanisms fires twice on the paths both reach.
+        #
+        # Still inside `_permanent_to_graveyard`, which is what makes it a
+        # claim about *this* permanent's death: the board-wide scan is
+        # `_fire_permanent_dies_triggers` below, and a permanent is reached
+        # by exactly one of the two.
+        # **Every other** "when this creature dies" trigger, onto the stack
+        # (CR 603.3). One loop, not one per instruction kind.
+        #
+        # This was six loops, each keyed to the kind of the card that added
+        # it — ``may`` for Goblin Arsonist, ``target_gains_life`` for
+        # Conclave Mentor, and so on — and the answer to "what happens when
+        # a creature with a dies-trigger this engine has not met before
+        # dies?" was *nothing at all*. Onulet ships in the shipped pool at
+        # 388/388, marked verified: "When this creature dies, you gain 2
+        # life", and no life was ever gained, because its instruction kind
+        # was `target_gains_life` without Conclave Mentor's payload key. A
+        # fire site that enumerates instruction kinds cannot be complete;
+        # it can only be as complete as the last card that touched it.
+        #
+        # ``dead_power`` and ``dead_toughness`` are captured for every
+        # trigger whether or not it asks: the permanent is about to leave
+        # and CR 603.10 says the trigger uses the information the game had,
+        # so the read has to be here even though only some payloads consume
+        # it. Both characteristics, for the same reason there is one read
+        # rather than one per card — a fire site that freezes only what
+        # today's cards ask for is a fire site the next card has to edit.
+        for trig in matching_triggers(
+            permanent.effective_card, condition_kinds={"dies"},
         ):
-            player.lost = True
-            self.log.append(
-                f"{player.name} lost the game ({permanent.card.name} was put into a graveyard from the battlefield)"
+            if trig.instruction is None or trig.instruction.kind in _INLINE_DIES_KINDS:
+                continue
+            # "When this creature dies **during combat**" (Mongrel Pack).
+            # CR 506.1's phase, asked of the death: the same death outside
+            # combat is a different card. Enforced here rather than
+            # dropped, for the reason every narrowing in this engine is —
+            # an unenforced restriction is an ability that works *more*
+            # often than the card allows, wrong in the player's favour and
+            # silent. An absent key is the unnarrowed printing.
+            if (
+                trig.condition.payload.get("dies_during_combat") is not None
+                and self.current_turn_phase != "combat"
+            ):
+                continue
+            self._enqueue_triggered_ability(
+                controller_index=self.players.index(player),
+                source_permanent=permanent,
+                card=permanent.card,
+                instruction=trig.instruction,
+                effect_kind=trig.effect_kind,
+                ability_text=trig.source_line,
+                trigger_context={
+                    "dead_power": max(0, permanent.effective_power),
+                    "dead_toughness": max(0, permanent.effective_toughness),
+                    # The counters it carried, frozen for the paragraph
+                    # above's reason and spelled the way the *other* death
+                    # fire site spells them: "when a creature dies" and
+                    # "when **this** creature dies" are two loops over one
+                    # event, and last-known information that only one of
+                    # them records is a condition that answers differently
+                    # depending on which loop announced it.
+                    #
+                    # "…exile it **if it had a death counter on it**"
+                    # (Bogardan Phoenix) is the card that needs the second
+                    # of these, and it needs it here: its own death is what
+                    # fires it, and its counters are gone the instant the
+                    # card reaches the graveyard (CR 400.7).
+                    "had_plus1_counter": (
+                        int(permanent.metadata.get("plus_counters", 0)) > 0
+                    ),
+                    "dead_counters": {
+                        key[: -len("_counters")]: int(value or 0)
+                        for key, value in permanent.metadata.items()
+                        if isinstance(key, str) and key.endswith("_counters")
+                    },
+                },
             )
+            self.log.append(f"{permanent.card.name} triggered (died)")
+        # Lich's "you lose the game" was here, as a **substring test on the
+        # printed sentence**, applied inline and off the stack. It existed
+        # because the general dies-enqueue above could not reach a non-creature
+        # permanent, not because the rule is special: CR 603.3 puts a death
+        # trigger on the stack whatever the permanent's type, and the loop
+        # above now does. Keeping both would fire the loss twice on every path
+        # that reaches both, which is Creature Bond's bug in a different zone.
 
         if permanent.card.primary_type == "creature":
             # "…if a creature dealt damage by this creature this turn **died**"

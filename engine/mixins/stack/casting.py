@@ -62,7 +62,8 @@ from ...target_restrictions import forbidden_target
 from ...targeting import (bounce_subject_filter, destroy_subject_filter,
                           graveyard_target_spec)
 from ...subject_filters import card_matches_any, filter_head_noun, subject_matches
-from ...targeting import (derive_cast_spec, enchant_subject_colours,
+from ...targeting import (_ENCHANT_LAND_SUBTYPES, derive_cast_spec,
+                          enchant_subject_colours,
                           enchant_subject_keyword_exclusion,
                           enchant_subject_seat, spec_roles, targets_mana_value_x)
 
@@ -199,6 +200,20 @@ _ENCHANT_TARGET_MATCHERS = {
     # is one (CR 110.1), so the answer is yes — written out rather than left to
     # the fallback below, which says yes for a noun nobody has read.
     "permanent": lambda perm: True,
+    # "Enchant **Swamp**" (Spreading Algae). A land subtype, from the same
+    # vocabulary catalog `targeting._ENCHANT_LAND_SUBTYPES` builds the picker's
+    # spec out of, so the hosts offered and the hosts allowed are one reading.
+    #
+    # This row is the half that would otherwise be missing, and its absence is
+    # not a refusal: the noun would fall through to the permissive fallback
+    # below, so an Aura whose *whole* effect is destroying the land it sits on
+    # could be put on any permanent at all while reporting the restriction
+    # implemented. That is Roots' failure exactly — one gate hiding two bugs —
+    # which is why this table and `_ENCHANT_NOUN_TO_SPEC` grow together.
+    **{
+        subtype: (lambda word: lambda perm: perm.has_type(word))(subtype)
+        for subtype in _ENCHANT_LAND_SUBTYPES
+    },
 }
 
 #: "Enchant **non-Wall** creature" (Aggression). The negation is a *prefix* on
