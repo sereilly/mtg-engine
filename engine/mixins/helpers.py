@@ -994,26 +994,32 @@ class GameHelpersMixin:
                 self, "self_put_into_graveyard_from_library",
                 subject=card, owner_index=seat,
             )
-        # "When a card is put into your graveyard **from anywhere**" (Energy
-        # Field). Announced here and nowhere else, for the reason this seam
-        # exists at all: a death, a discard, a mill, a sacrifice and a spell
-        # finishing on the stack are one event with twenty-six spellings, and a
-        # fire site per spelling is twenty-five places to forget it. Unscoped by
-        # source zone, which is what "from anywhere" says; whose graveyard it
-        # is rides as the seat and is tested by the watcher's own filter.
-        emit(self, "card_put_into_graveyard", subject=card, owner_index=seat)
-        # "Whenever another card is put into a graveyard **from anywhere**"
-        # (Planar Void), "when this creature is put into a graveyard from
-        # anywhere" (Serra Avatar). The unnarrowed announcement of the move this
-        # seam *is*, which is why it is here and unconditional: "from anywhere"
-        # has no single fire site — a death, a discard, a mill, a sacrifice and
-        # a spell finishing on the stack are all this event — and that is the
-        # reason CR 903.9b gave this seam to the replacement one screen up.
+        # "When a card is put into **your** graveyard from anywhere" (Energy
+        # Field), "whenever **another** card is put into a graveyard from
+        # anywhere" (Planar Void), "when **this creature** is put into a
+        # graveyard from anywhere" (Serra Avatar). **One** announcement for all
+        # three, which is the whole reason this seam exists: "from anywhere" has
+        # no single fire site — a death, a discard, a mill, a sacrifice and a
+        # spell finishing on the stack are all this event — and a fire site per
+        # spelling is twenty-five places to forget it. It is the same argument
+        # CR 903.9b makes for the replacement one screen up.
         #
-        # The card rides as ``dead_card`` as well as ``subject``, because that
-        # is the one channel "that card" already reads (`lowering/_deaths.py`'s
-        # BOUND_CARD_EVENTS, `exile_bound_card`). A second key for the same
-        # referent is how one printed phrase ends up with two answers.
+        # Unscoped by source zone, which is what "from anywhere" says. Every
+        # narrowing the three sentences print rides as *data* and is tested by
+        # the watcher's own filter: whose graveyard it is comes off the seat,
+        # and "another" is a comparison between the moved card and the observer.
+        #
+        # The card also rides as ``dead_card`` because that is the one channel
+        # "that card" already reads (`lowering/_deaths.py`'s BOUND_CARD_EVENTS,
+        # `exile_bound_card`). A second key for the same referent is how one
+        # printed phrase ends up with two answers.
+        #
+        # **Two branches of USG's wave 2 each added one of these emits**, and
+        # the merge kept both — so every card put into a graveyard announced
+        # itself twice and every watcher triggered twice. Nothing textual can
+        # see that: both statements are correct, and it is having two of them
+        # that is wrong. One emit, whose payload is the union of what the three
+        # sentences need.
         emit(
             self, "card_put_into_graveyard",
             subject=card, owner_index=seat, dead_card=card,
