@@ -1114,3 +1114,94 @@ def test_ghazban_ogre_keeps_working_with_its_hook_retired(catalog_by_name):
     resolve_stack(game)
 
     assert game.controller_index_of(ogre) == 1
+
+
+# --- W2G2: Serra Avatar — a life-total body and a graveyard trigger ---
+import pytest
+
+from engine import Game, PlayerState
+from engine.control import change_control
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+from tests.helpers import resolve_stack
+
+
+def _g2c_game(set_pool):
+    """Two seats, no mana costs. W2G2's own creature-block helper."""
+    alice, bob = PlayerState(name="G2C-A"), PlayerState(name="G2C-B")
+    game = Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    return game, alice, bob
+
+
+def test_w2g2_serra_avatar_is_the_size_of_its_controller_s_life(set_pool):
+    """"Serra Avatar's power and toughness are each equal to your life total."
+
+    CR 604.3 recomputes continuously, so the assertion is made twice at two
+    different life totals — a P/T frozen at the entry number would pass the
+    first read and only the first.
+    """
+    game, alice, _ = _g2c_game(set_pool)
+    alice.life = 20
+    avatar = Permanent(card=set_pool("USG")["Serra Avatar"])
+    game._put_permanent_onto_battlefield(0, avatar, None)
+
+    assert (avatar.effective_power, avatar.effective_toughness) == (20, 20)
+
+    alice.life = 7
+    game._refresh_dynamic_creatures()
+
+    assert (avatar.effective_power, avatar.effective_toughness) == (7, 7)
+
+
+def test_w2g2_serra_avatar_reads_the_controller_s_life_not_the_owner_s(set_pool):
+    """The same sentence under a control change. "Your" is CR 109.5's ability
+    controller, and the two seats are given different life totals so a read of
+    the wrong one is a different number rather than the same one twice.
+    """
+    game, alice, bob = _g2c_game(set_pool)
+    alice.life, bob.life = 20, 4
+    avatar = Permanent(card=set_pool("USG")["Serra Avatar"])
+    game._put_permanent_onto_battlefield(0, avatar, None)
+    change_control(avatar, 1, source="test")
+    game._sync_control()
+    game._refresh_dynamic_creatures()
+
+    assert (avatar.effective_power, avatar.effective_toughness) == (4, 4)
+
+
+def test_w2g2_serra_avatar_shuffles_itself_back_after_dying(set_pool):
+    """"When Serra Avatar is put into a graveyard from anywhere, shuffle it
+    into its owner's library."
+    """
+    game, alice, _ = _g2c_game(set_pool)
+    alice.library = []
+    avatar = Permanent(card=set_pool("USG")["Serra Avatar"])
+    game._put_permanent_onto_battlefield(0, avatar, None)
+
+    # The order ``_destroy_swept_permanents`` uses: the card is filed while the
+    # permanent is still on the battlefield — which is what announces the death
+    # triggers — and the object leaves afterwards.
+    game._permanent_to_graveyard(alice, avatar)
+    game.remove_from_battlefield(avatar)
+    resolve_stack(game)
+
+    assert [c.name for c in alice.library] == ["Serra Avatar"]
+    assert not alice.graveyard
+
+
+def test_w2g2_serra_avatar_shuffles_back_from_a_mill_too(set_pool):
+    """The half "from anywhere" buys and a death reading would lose: a milled
+    Avatar never touched a battlefield, so CR 700.4 says it did not die — and
+    the trigger still fires.
+    """
+    game, alice, _ = _g2c_game(set_pool)
+    avatar_card = set_pool("USG")["Serra Avatar"]
+    filler = set_pool("USG")["Sanctum Custodian"]
+    alice.library = [avatar_card, filler, filler]
+
+    game.put_card_into_graveyard(alice, alice.library.pop(0), from_zone="library")
+    resolve_stack(game)
+
+    assert [c.name for c in alice.library].count("Serra Avatar") == 1
+    assert not alice.graveyard

@@ -135,6 +135,27 @@ class PutExiledThisWay:
 
 
 @dataclass(frozen=True)
+class ExileGraveyardArrivalsThisTurn:
+    """``If a card would be put into your graveyard from anywhere this turn,
+    exile that card instead.`` (Yawgmoth's Will.)
+
+    CR 614's "would … instead", created by a *spell* rather than printed on a
+    permanent — which is the whole reason it is a node at all. The unbounded
+    spelling of the same sentence (Forbidden Crypt, Rest in Peace) is a static
+    ability of a permanent, and `engine/replacements.py` reads it straight off
+    that permanent's text; a sorcery is on no battlefield when the replacement
+    is meant to apply, so nothing could read it there and the effect has to
+    leave a record behind instead.
+
+    *whose* is the printed scope — ``"you"``, ``"opponent"`` or ``"any"``, the
+    same three words the static reading parameterizes and in the same
+    vocabulary, so the two cannot come to mean different things. Which of them
+    an effect can actually arm is the lowering's answer, not this node's.
+    """
+    whose: str
+
+
+@dataclass(frozen=True)
 class ExileBoundCard:
     """``Exile that card from your graveyard.`` (Necropotence.)
 

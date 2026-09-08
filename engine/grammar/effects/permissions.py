@@ -27,7 +27,7 @@ hands.
 """
 
 from .. import ast
-from ..phrases import _parse_duration
+from ..phrases import _parse_duration, _parse_zone
 from ..references import parse_player_ref, parse_target_spec
 from ..stream import TokenStream
 from ..vocabulary import CARD_TYPES, singular as _singular
@@ -209,6 +209,32 @@ def _parse_cast_permission(stream: TokenStream) -> ast.Statement | None:
             until_your_next_turn=next_turn,
             while_exiled=while_exiled,
         )
+    # "you may **play lands and cast spells** from your graveyard."
+    # (Yawgmoth's Will.) Two verbs and two nouns for one permission: CR 305.1
+    # plays a land and CR 601.2 casts a spell, and "play" is the word that
+    # covers both — which is exactly what ``CastPermission.mode == "play"``
+    # already means, so the compound is one grant rather than two.
+    #
+    # Read here, right after the verb, because it is the *second* verb that
+    # makes this sentence itself: every reading below opens on a noun, and the
+    # union reader among them would take "lands" and then fail on "and cast".
+    # Refuses without consuming, like every arm around it.
+    if mode == "play":
+        both_mark = stream.mark()
+        if stream.accept_phrase("lands", "and", "cast", "spells", "from"):
+            zone_of = _parse_zone(stream)
+            if zone_of.name in ("graveyard", "exile") and (
+                zone_of.owner is not None and zone_of.owner.kind == "you"
+            ):
+                _trailing_duration()
+                return ast.CastPermission(
+                    mode="play", what="spells_from_zone", grantee=grantee,
+                    card_types=(), zone=zone_of.name, position=None,
+                    until_end_of_turn=until_eot,
+                    until_your_next_upkeep=next_upkeep,
+                    until_your_next_turn=next_turn,
+                )
+        stream.reset(both_mark)
     # "spells from your hand without paying their mana costs" — a cost waiver.
     # The waiver clause is required: a bare "you may cast spells from your
     # hand" states the rules default and no card prints it.

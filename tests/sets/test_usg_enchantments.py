@@ -2039,3 +2039,293 @@ def test_greener_pastures_is_silent_on_a_level_board(set_pool, catalog_by_name):
         _g5p_upkeep(game, seat)
 
     assert (_g5p_saprolings(game, 0), _g5p_saprolings(game, 1)) == (0, 0)
+
+
+# --- W2G2: Planar Void — every card that reaches a graveyard is exiled ---
+import pytest
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+from tests.helpers import resolve_stack
+
+
+def _g2e_kill(game, seat, permanent):
+    """Kill *permanent*: file its card, then take the object off the
+    battlefield — the order ``_destroy_swept_permanents`` uses, and the order
+    the death triggers are announced in. ``_permanent_to_graveyard`` is what
+    announces them, and it is called while the permanent is still controlled,
+    so a "whenever a creature **you control** dies" observer can still answer
+    what it controlled. Removing first silently unfires every such trigger.
+    W2G2's own.
+    """
+    game._permanent_to_graveyard(game.players[seat], permanent)
+    game.remove_from_battlefield(permanent)
+    resolve_stack(game)
+
+
+def _g2e_void(set_pool, *, seat=0):
+    """Seat *seat* controls Planar Void. W2G2's own enchantment-block helper."""
+    alice, bob = PlayerState(name="G2E-A"), PlayerState(name="G2E-B")
+    game = Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    void = Permanent(card=set_pool("USG")["Planar Void"])
+    game._put_permanent_onto_battlefield(seat, void, None)
+    return game, alice, bob, void
+
+
+def test_w2g2_planar_void_exiles_a_card_milled_out_of_a_library(set_pool):
+    """"Whenever another card is put into a graveyard from anywhere, exile that
+    card."
+
+    A mill is the half a death-shaped reading would miss: the card was never a
+    permanent, so nothing on any battlefield could have watched it leave.
+    """
+    game, alice, _, _ = _g2e_void(set_pool)
+    filler = set_pool("USG")["Sanctum Custodian"]
+    alice.library = [filler, filler]
+
+    game.put_card_into_graveyard(alice, alice.library.pop(0), from_zone="library")
+    resolve_stack(game)
+
+    assert not alice.graveyard
+    assert [c.name for c in alice.exile] == ["Sanctum Custodian"]
+
+
+def test_w2g2_planar_void_reaches_the_other_seat_s_graveyard_too(set_pool):
+    """"**a** graveyard", not "your graveyard" — the pile is anybody's, which
+    is the narrowing Forbidden Crypt's sentence has and this one does not."""
+    game, _, bob, _ = _g2e_void(set_pool)
+    filler = set_pool("USG")["Sanctum Custodian"]
+
+    game.put_card_into_graveyard(bob, filler)
+    resolve_stack(game)
+
+    assert not bob.graveyard
+    assert [c.name for c in bob.exile] == ["Sanctum Custodian"]
+
+
+def test_w2g2_planar_void_exiles_a_creature_that_died(set_pool):
+    """The death half, through the same seam — and the Void itself stays on the
+    battlefield, which is what "another card" buys."""
+    game, alice, _, void = _g2e_void(set_pool)
+    victim = Permanent(card=set_pool("USG")["Sanctum Custodian"])
+    game._put_permanent_onto_battlefield(0, victim, None)
+
+    _g2e_kill(game, 0, victim)
+
+    assert not alice.graveyard
+    assert [c.name for c in alice.exile] == ["Sanctum Custodian"]
+    assert game.is_on_battlefield(void)
+
+
+def test_w2g2_no_rest_returns_only_what_died_this_turn(set_pool):
+    """"Sacrifice this enchantment: Return to your hand all creature cards in
+    your graveyard that were put there from the battlefield this turn."
+
+    Three cards in one graveyard and only one of them qualifies: the creature
+    that died this turn comes back, the creature that was discarded does not
+    (it never touched the battlefield), and the non-creature card does not
+    either. Without the history the sweep would take the discarded one too,
+    which is a card doing strictly more than it prints.
+    """
+    pool = set_pool("USG")
+    alice, bob = PlayerState(name="G2E-A"), PlayerState(name="G2E-B")
+    game = Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    rest = Permanent(card=pool["No Rest for the Wicked"])
+    game._put_permanent_onto_battlefield(0, rest, None)
+
+    discarded = pool["Serra Zealot"]
+    alice.graveyard = [discarded, pool["Gamble"]]
+    died = Permanent(card=pool["Shivan Hellkite"])
+    game._put_permanent_onto_battlefield(0, died, None)
+    _g2e_kill(game, 0, died)
+
+    game.activate_permanent_ability(0, "No Rest for the Wicked")
+    resolve_stack(game)
+
+    assert [c.name for c in alice.hand] == ["Shivan Hellkite"]
+    assert [c.name for c in alice.graveyard] == [
+        "Serra Zealot", "Gamble", "No Rest for the Wicked",
+    ]
+
+
+def test_w2g2_no_rest_forgets_at_the_turn_boundary(set_pool):
+    """"This turn" is the window, and it is the half a bare "creature cards in
+    your graveyard" reading would lose: a creature that died on the previous
+    turn stays where it is."""
+    pool = set_pool("USG")
+    alice, bob = PlayerState(name="G2E-A"), PlayerState(name="G2E-B")
+    game = Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    rest = Permanent(card=pool["No Rest for the Wicked"])
+    game._put_permanent_onto_battlefield(0, rest, None)
+
+    died = Permanent(card=pool["Shivan Hellkite"])
+    game._put_permanent_onto_battlefield(0, died, None)
+    _g2e_kill(game, 0, died)
+    alice.cards_put_into_your_graveyard_from_battlefield_this_turn = []
+
+    game.activate_permanent_ability(0, "No Rest for the Wicked")
+    resolve_stack(game)
+
+    assert not alice.hand
+    assert [c.name for c in alice.graveyard] == [
+        "Shivan Hellkite", "No Rest for the Wicked",
+    ]
+
+
+def test_w2g2_no_rest_counts_copies_rather_than_matching_by_name(set_pool):
+    """Two copies of one card in a deck are the same ``CardDefinition``, so
+    "was it put there this turn" cannot be answered of a card by looking at it.
+    One copy died and one was discarded: exactly one comes back."""
+    pool = set_pool("USG")
+    alice, bob = PlayerState(name="G2E-A"), PlayerState(name="G2E-B")
+    game = Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    rest = Permanent(card=pool["No Rest for the Wicked"])
+    game._put_permanent_onto_battlefield(0, rest, None)
+
+    hellkite = pool["Shivan Hellkite"]
+    alice.graveyard = [hellkite]
+    died = Permanent(card=hellkite)
+    game._put_permanent_onto_battlefield(0, died, None)
+    game._permanent_to_graveyard(alice, died)
+
+    game.activate_permanent_ability(0, "No Rest for the Wicked")
+    resolve_stack(game)
+
+    assert [c.name for c in alice.hand] == ["Shivan Hellkite"]
+    assert [c.name for c in alice.graveyard] == [
+        "Shivan Hellkite", "No Rest for the Wicked",
+    ]
+
+
+def test_w2g2_remembrance_searches_for_the_dead_creature_s_name(set_pool):
+    """"Whenever a nontoken creature you control dies, you may search your
+    library for a card with the same name as that creature, reveal it, put it
+    into your hand, then shuffle."
+
+    The narrowing is the whole card: the library holds one copy of the dead
+    creature and one of something else, and only the first is a legal find. A
+    search that dropped "with the same name as that creature" would offer both.
+    """
+    from engine.search_filters import search_matches
+
+    pool = set_pool("USG")
+    alice, bob = PlayerState(name="G2E-A"), PlayerState(name="G2E-B")
+    game = Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    # The "you may" is a real offer, so the seat has to be one that can take it:
+    # a non-interactive seat declines by default and the search is never armed.
+    game.interactive_seats = {0}
+    game._put_permanent_onto_battlefield(
+        0, Permanent(card=pool["Remembrance"]), None
+    )
+    zealot, hellkite = pool["Serra Zealot"], pool["Shivan Hellkite"]
+    alice.library = [zealot, hellkite]
+    victim = Permanent(card=zealot)
+    game._put_permanent_onto_battlefield(0, victim, None)
+
+    _g2e_kill(game, 0, victim)
+
+    assert game.confirm_optional_pay(0, "Remembrance", accept=True)
+    game._settle()
+
+    prompt = game.pending_choice_of("search_library", 0)
+    assert prompt is not None, "the may was offered and taken"
+    payload = {
+        "restrictions": prompt.data["restrictions"],
+        "card_type": prompt.data["card_type"],
+    }
+    admitted = [
+        c.name for c in alice.library
+        if search_matches(c, payload, game=game, owner=0)
+    ]
+    assert admitted == ["Serra Zealot"]
+
+    assert game.resolve_pending_choice(
+        "search_library", 0, library_index=0, zone="library"
+    )
+    game._settle()
+
+    assert [c.name for c in alice.hand] == ["Serra Zealot"]
+
+
+def test_w2g2_remembrance_ignores_a_token_s_death(set_pool):
+    """"**nontoken**" is enforced, not decoration: a token that dies leaves no
+    card to look for, and the trigger does not fire at all."""
+    pool = set_pool("USG")
+    alice, bob = PlayerState(name="G2E-A"), PlayerState(name="G2E-B")
+    game = Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    game._put_permanent_onto_battlefield(
+        0, Permanent(card=pool["Remembrance"]), None
+    )
+    alice.library = [pool["Serra Zealot"]]
+    token = Permanent(card=pool["Serra Zealot"])
+    token.metadata["is_token"] = True
+    game._put_permanent_onto_battlefield(0, token, None)
+
+    _g2e_kill(game, 0, token)
+
+    assert not game.pending_choices, "no offer at all, not an offer declined"
+    assert game.pending_choice_of("search_library", 0) is None
+    assert not alice.hand
+
+
+def test_w2g2_planar_void_and_serra_avatar_both_watch_one_arrival(set_pool):
+    """One move, two abilities: Planar Void's board-wide trigger and Serra
+    Avatar's own ride the *same* announcement, which is why the seam emits one
+    event rather than two — CR 603.3b puts simultaneous triggers on the stack
+    together.
+
+    Both are on the stack, the Void resolves first and exiles the card, and the
+    Avatar's ability shuffles anyway: CR 701.24c says a library named by a
+    shuffle is shuffled even when the object is not where it was expected.
+    """
+    pool = set_pool("USG")
+    alice, bob = PlayerState(name="G2E-A"), PlayerState(name="G2E-B")
+    game = Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    game._put_permanent_onto_battlefield(
+        1, Permanent(card=pool["Planar Void"]), None
+    )
+    avatar = Permanent(card=pool["Serra Avatar"])
+    game._put_permanent_onto_battlefield(0, avatar, None)
+
+    game._permanent_to_graveyard(alice, avatar)
+    game.remove_from_battlefield(avatar)
+
+    assert len(game.stack) == 2, "one move, two triggers, one batch"
+
+    resolve_stack(game)
+
+    assert [c.name for c in alice.exile] == ["Serra Avatar"]
+    assert not alice.graveyard and not alice.library
+
+
+def test_w2g2_a_replaced_arrival_fires_planar_void_at_all(set_pool):
+    """CR 614: a replacement means the card never reaches the graveyard, so the
+    trigger that watches arrivals has nothing to watch. Yawgmoth's Will's own
+    second line is the replacement, which is what makes this pair testable at
+    all — the seam that announces is the seam the replacement guards.
+    """
+    pool = set_pool("USG")
+    alice, bob = PlayerState(name="G2E-A"), PlayerState(name="G2E-B")
+    alice.hand = [pool["Yawgmoth's Will"]]
+    game = Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    game._put_permanent_onto_battlefield(
+        1, Permanent(card=pool["Planar Void"]), None
+    )
+
+    game.cast_from_hand(0, "Yawgmoth's Will")
+    resolve_stack(game)
+
+    game.put_card_into_graveyard(alice, pool["Gamble"])
+
+    assert not game.stack, "nothing arrived, so nothing triggered"
+    assert not alice.graveyard
+    assert [c.name for c in alice.exile] == ["Yawgmoth's Will", "Gamble"]

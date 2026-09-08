@@ -40,6 +40,21 @@ BOUND_CARD_EVENTS = frozenset({
     # which is why the set is what says an event is admitted rather than the
     # condition table that merely names it.
     "creature_dealt_damage_by_self_dies",
+    # "Whenever another card is put into a graveyard **from anywhere**, exile
+    # that card." (Planar Void.) Not a death at all — a milled card was never
+    # on a battlefield — which is why the set is named for what a fire site
+    # *records* rather than for what happened: ``Game.put_card_into_graveyard``
+    # stamps the same ``dead_card`` the three death scans do, because "that
+    # card" is one question and the handler that answers it (`exile_bound_card`)
+    # looks the card up by identity wherever CR 404.1 put it.
+    "card_put_into_graveyard",
+    # "Whenever **a creature** dies, … return the first card to the
+    # battlefield …" (Lifeline). The board-wide death scan
+    # (``mixins/helpers._fire_creature_dies_triggers``) builds one
+    # ``died_context`` and hands it to every ability it announces — including
+    # this condition, since the round that stopped dropping every instruction
+    # kind but two. It has stamped ``dead_card`` all along; nothing had asked.
+    "creature_dies",
 })
 
 #: The scratchpad key "that creature's power" falls back to when the sentence

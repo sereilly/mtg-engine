@@ -445,6 +445,8 @@ def ante_self_then_clear_ante_and_draw(game: Game, instruction: OracleInstructio
     return True, "resolved"
 
 
+
+
 def _search_restrictions(game: Game, payload: dict, context) -> dict:
     """The armed search's restrictions, with the ones only a resolution can
     answer resolved.
@@ -462,6 +464,34 @@ def _search_restrictions(game: Game, payload: dict, context) -> dict:
     dropped narrowing must never fail in.
     """
     restrictions = dict(payload.get("restrictions") or {})
+    # "…a creature card with mana value **X** or less" (Citanul Flute). CR
+    # 601.2b fixed X when the activation cost was paid, so by now it is a
+    # number — resolved here, once, because every seat that answers this search
+    # reads the armed restrictions and none of them has the activation in hand.
+    # A symbol left in the payload would reach ``search_matches``' comparison
+    # and be compared against a card's mana value as a string.
+    mana_value = restrictions.get("mana_value")
+    if isinstance(mana_value, dict) and mana_value.get("value") == "x":
+        restrictions["mana_value"] = {
+            **mana_value, "value": max(0, int(context.x_value or 0)),
+        }
+    # "…a card **with the same name as that creature**" (Remembrance). The name
+    # of the object the firing event was about, turned into an ordinary
+    # ``named`` here for ``named_from_target``'s reason one branch down: every
+    # seat that answers this search reads the armed restrictions, and none of
+    # them has a trigger context in hand.
+    #
+    # Off ``dead_card`` rather than off ``dead_name``, because that is the
+    # channel every fire site in ``BOUND_CARD_EVENTS`` writes — the graveyard
+    # arrival records the card and no name at all. A record nothing wrote leaves
+    # the key in place with no name behind it, and ``search_matches`` then
+    # matches nothing: the search finds no card rather than every card, which is
+    # the direction a dropped narrowing must never fail in.
+    if restrictions.get("named_from_event"):
+        recorded = (context.trigger_context or {}).get("dead_card")
+        name = getattr(recorded, "name", None)
+        if name is not None:
+            restrictions["named"] = name
     if not restrictions.get("named_from_target"):
         return restrictions
     # Through the seam every handler resolves a chosen permanent by, so the
@@ -4196,6 +4226,20 @@ def mill_target_player(game: Game, instruction: OracleInstruction, context: Orac
             game.players[i]
             for i in game.opponents_of(game.players.index(context.caster))
         ]
+    elif recipient == "each_player":
+        # "Each player mills two cards." (Whetstone.) CR 101.4's order — the
+        # active player first, then the rest in turn order — and a seat that
+        # has left the game mills nothing (CR 800.4a). The same shape
+        # ``draw_target_cards`` reads for the same two words one zone over.
+        total = len(game.players)
+        active = game.active_player_index or 0
+        victims = [
+            game.players[seat]
+            for seat in sorted(
+                (i for i, p in enumerate(game.players) if not p.lost),
+                key=lambda i: ((i - active) % total, i),
+            )
+        ]
     elif recipient == "damaged_player":
         seat = (context.trigger_context or {}).get("defending_player_index")
         if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
@@ -4222,6 +4266,172 @@ def mill_target_player(game: Game, instruction: OracleInstruction, context: Orac
             put_there.append(card)
             milled += 1
         game.log.append(f"{victim.name} milled {milled} card(s)")
+    return True, "resolved"
+
+
+@effect_handler("exile_graveyard_arrivals_this_turn")
+def exile_graveyard_arrivals_this_turn(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"If a card would be put into your graveyard from anywhere this turn,
+    exile that card instead." (Yawgmoth's Will.)
+
+    CR 614 for a window. The marker goes on the seat and the interceptor in
+    ``engine/replacements.py`` reads it — the arrangement Disintegrate's
+    "if it would die this turn" already has on a permanent, one object wider —
+    because a sorcery is on no battlefield when the replacement is meant to
+    apply, and the static reading of the same sentence works by scanning
+    battlefields for the text.
+
+    The seat is the spell's controller: "your graveyard" is CR 109.5's, and the
+    lowering refuses every other printed scope rather than arming a record whose
+    seat the interceptor could not answer.
+
+    Swept with the rest of the turn (``turn_management``'s cleanup loop), which
+    is CR 514.2 and the same place every other "this turn" record forgets.
+    """
+    context.caster.exile_cards_bound_for_graveyard_this_turn = True
+    game.log.append(
+        f"{context.caster.name}'s cards will be exiled instead of going to "
+        "their graveyard this turn"
+    )
+    return True, "resolved"
+
+
+@effect_handler("choose_target_cards")
+def choose_target_cards(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Choose two target creature cards in your graveyard." (Victimize.)
+
+    The announcement, and nothing else: CR 601.2c chose the cards as the spell
+    was cast, and this sentence prints no effect. It exists so
+    ``engine/targeting.py`` can derive the picker from the compiled program,
+    which is where every other card's comes from — the same job
+    ``choose_target_permanent`` does one zone over.
+
+    Nothing is *recorded* either, and that is the difference from the plural
+    permanent choice: the announced slots ride the stack item for the whole
+    resolution, so the sentence behind this reads the same list this picker
+    filled. A record would be a second copy of it, free to disagree the moment
+    an earlier step moved a card in the pile.
+
+    Nothing leaves the graveyard here. "Sacrifice a creature. **If you do**,
+    return the chosen cards" is a price that may not be paid, and cards taken
+    out now would be cards in no zone at all.
+    """
+    game.log.append(f"{context.card.name}: cards chosen from the graveyard")
+    return True, "resolved"
+
+
+@effect_handler("reanimate_announced_cards")
+def reanimate_announced_cards(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"…return **the chosen cards** to the battlefield tapped." (Victimize.)
+
+    The cards an earlier sentence of this same spell announced (CR 601.2c),
+    read off the resolution's own target list rather than out of a record —
+    ``choose_target_cards`` says why.
+
+    Through ``_resolve_graveyard_slots``, the one reader of a list of graveyard
+    slots: a card in a pile has no ``permanent_id`` and two copies of one card
+    there are the same ``CardDefinition``, so only the order of removal can tell
+    two slots apart. A slot whose card has left, or that names a card the
+    printed phrase does not (CR 608.2b), is dropped and the rest still happen.
+
+    Under the spell's controller (CR 110.2a), which is the seat whose graveyard
+    the phrase named.
+    """
+    caster = context.caster
+    tapped = bool(instruction.payload.get("tapped"))
+    seat = game.players.index(caster)
+
+    def _eligible(card) -> bool:
+        # The picker's own predicate, asked here so the resolution and the
+        # announcement cannot disagree about which cards were legal.
+        return graveyard_card_matches(instruction.payload, card)
+
+    picked = _resolve_graveyard_slots(caster, context, len(caster.graveyard), _eligible)
+    for card in picked:
+        permanent = Permanent(card=card)
+        if tapped:
+            permanent.tapped = True
+        game._put_permanent_onto_battlefield(seat, permanent, None)
+        game.log.append(
+            f"{caster.name} returned {card.name} to the battlefield from the graveyard"
+        )
+    if not picked:
+        game.log.append(f"{context.card.name}: no announced card to return")
+    return True, "resolved"
+
+
+@effect_handler("each_player_takes_from_graveyard")
+def each_player_takes_from_graveyard(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Each player puts a creature card from their graveyard onto the
+    battlefield." (Exhume.) "…each player … returns up to three cards from
+    their graveyard to their hand." (Ill-Gotten Gains.)
+
+    One pick per seat, out of that seat's own graveyard and into that seat's own
+    zone — which is why it arms a prompt per player rather than resolving a
+    target: nothing is announced (CR 115.1), there is nothing for targeting to
+    protect in a public zone, and the seat that chooses is not the seat that
+    cast the spell. The same ``search_library`` prompt Reincarnation's graveyard
+    pick already uses, with the two seats named on it, so one picker, one AI
+    policy and one re-check serve every reading of "a card from a graveyard".
+
+    How many, whether fewer is a legal answer and where they land are payload,
+    because the two cards differ in nothing else: both empty a pile into a zone
+    one seat at a time, and a second kind would be a second copy of arming this
+    prompt.
+
+    Offered in CR 101.4's order — the active player first — and only to a seat
+    whose graveyard actually holds a card the phrase names: a prompt over a pile
+    with nothing in it is a decision with one answer, and arming it would stop
+    the game to ask it (``ChoiceSpec.holds_priority``). A seat that cannot takes
+    nothing, which is CR 608.2's "as much as possible".
+    """
+    card_type = str(instruction.payload.get("card_type", "any"))
+    destination = str(instruction.payload.get("destination", "battlefield"))
+    count = max(1, int(instruction.payload.get("count", 1)))
+    up_to = bool(instruction.payload.get("up_to"))
+    total = len(game.players)
+    active = game.active_player_index or 0
+    seats = sorted(
+        (i for i, p in enumerate(game.players) if not p.lost),
+        key=lambda i: ((i - active) % total, i),
+    )
+    armed = 0
+    for seat in seats:
+        player = game.players[seat]
+        available = sum(
+            1 for card in player.graveyard
+            if card_type == "any" or card_has_type(card, card_type)
+        )
+        if not available:
+            game.log.append(f"{player.name} has no {card_type} card to take")
+            continue
+        # The printed ceiling, capped by the pile: a counted search is driven by
+        # one entry per find, and a slot with nothing that could fill it is a
+        # find the seat can never make.
+        slots = min(count, available)
+        game.arm_pending_choice(
+            "search_library", seat,
+            zone_seat=seat,
+            battlefield_seat=seat,
+            count=slots,
+            card_type=card_type,
+            zones=("graveyard",),
+            restrictions={},
+            destination=destination,
+            destinations=[destination] * slots if slots > 1 else [],
+            tapped=[],
+            card_name=context.card.name if context.card is not None else "",
+            enters_tapped=False,
+            untap_found_if=None,
+            up_to=up_to,
+            exile_rest=False,
+            reveal=False,
+            record=context.results,
+            record_key=None,
+        )
+        armed += 1
+    if not armed:
+        game.log.append(f"{context.card.name}: no graveyard holds one")
     return True, "resolved"
 
 
@@ -5456,6 +5666,32 @@ def discard_hand(game: Game, instruction: OracleInstruction, context: OracleExec
             game.log.append(f"{context.card.name}: no recorded player, no discard")
             return True, "resolved"
         caster = game.players[seat]
+    # "**Each player** discards their hand" (Ill-Gotten Gains). A set of seats
+    # rather than one, in CR 101.4's order and skipping a player who has left
+    # the game (CR 800.4a). The loop is the same body either way, which is why
+    # it is a value of ``who`` and not a second handler.
+    if instruction.payload.get("who") == "each_player":
+        total = len(game.players)
+        active = game.active_player_index or 0
+        emptied = 0
+        for seat in sorted(
+            (i for i, p in enumerate(game.players) if not p.lost),
+            key=lambda i: ((i - active) % total, i),
+        ):
+            player = game.players[seat]
+            gone = list(player.hand)
+            player.hand = []
+            for card in gone:
+                game._discard_card(player, card)
+            emptied += len(gone)
+            game.log.append(
+                f"{player.name} discarded their hand ({len(gone)} card(s))"
+            )
+        # Under the key every other discard in this file writes, so "…then
+        # draws that many cards" behind one of these reads one number however
+        # the sentence named its seats.
+        context.results["discarded_count"] = emptied
+        return True, "resolved"
     discarded = list(caster.hand)
     caster.hand = []
     for card in discarded:
@@ -7906,8 +8142,33 @@ def return_all_cards_from_graveyard(game: Game, instruction: OracleInstruction, 
     """
     described = dict(instruction.payload.get("filter") or {})
     who = str(instruction.payload.get("who", "you"))
+    # "…to **your hand**." (Crystal Chimes.) The pair of zones is what picks the
+    # move, and the graveyard half is the same either way — which is why it is
+    # one key rather than a second kind that would re-derive the same sweep.
+    # Absent means the battlefield, so every payload written before this means
+    # what it meant.
+    destination = str(instruction.payload.get("destination", "battlefield"))
+    # "…to the battlefield **tapped**." (Planar Birth.) CR 110.5b.
+    tapped = bool(instruction.payload.get("tapped"))
+    # "…**that were put there from the battlefield this turn**." (No Rest for
+    # the Wicked.) Beside the filter and not inside it, because how a card
+    # reached a pile is not on the card: a graveyard has a printed type line and
+    # nothing else (CR 613.1), so the record the game kept as the move happened
+    # is the only thing that can answer.
+    only_this_turn = bool(instruction.payload.get("put_there_this_turn"))
     if who == "each_player":
-        seats = list(range(len(game.players)))
+        # CR 101.4's order, and a seat that has left the game returns nothing
+        # (CR 800.4a): a lost player has no battlefield, so putting a card onto
+        # it makes a permanent nobody controls. This read the raw seat range,
+        # which is All Hallow's Eve mis-played in the one game shape where the
+        # difference exists — and the two per-seat handlers beside it already
+        # answer the question this way.
+        total = len(game.players)
+        active = game.active_player_index or 0
+        seats = sorted(
+            (i for i, p in enumerate(game.players) if not p.lost),
+            key=lambda i: ((i - active) % total, i),
+        )
     else:
         seats = [game.players.index(context.caster)]
     returned = 0
@@ -7917,11 +8178,47 @@ def return_all_cards_from_graveyard(game: Game, instruction: OracleInstruction, 
             index for index, card in enumerate(player.graveyard)
             if _card_matches_filter(card, described, game=game, owner=player)
         ]
+        if only_this_turn:
+            # Matched by **count of entries**, not by membership: two copies of
+            # a card in a deck are the same immutable ``CardDefinition``, so a
+            # graveyard holding one that died this turn and one that was
+            # discarded last turn holds one object twice — and the record says
+            # how many of them arrived the way the sentence names. Newest first,
+            # since a death puts the card on top and that is the copy the record
+            # is about.
+            arrived = list(
+                player.cards_put_into_your_graveyard_from_battlefield_this_turn
+            )
+            allowed: list[int] = []
+            for index in sorted(taken, reverse=True):
+                card = player.graveyard[index]
+                match = next(
+                    (i for i, held in enumerate(arrived) if held is card), None
+                )
+                if match is None:
+                    continue
+                arrived.pop(match)
+                allowed.append(index)
+            taken = allowed
         cards = [player.graveyard[index] for index in taken]
         for index in sorted(taken, reverse=True):
             player.graveyard.pop(index)
         for card in cards:
-            game._put_permanent_onto_battlefield(seat, Permanent(card=card), None)
+            if destination == "hand":
+                # CR 903.9b's seam, never `player.hand.append` — a bounce, a
+                # tuck and a regrowth are all "would be put into its owner's
+                # hand", and this is one of the thirty fire sites that rule has
+                # no single one of.
+                game.put_card_into_hand(player, card)
+                game.log.append(
+                    f"{player.name} returned {card.name} to their hand from the graveyard"
+                )
+                returned += 1
+                continue
+            permanent = Permanent(card=card)
+            if tapped:
+                permanent.tapped = True
+            game._put_permanent_onto_battlefield(seat, permanent, None)
             game.log.append(
                 f"{player.name} returned {card.name} to the battlefield from the graveyard"
             )

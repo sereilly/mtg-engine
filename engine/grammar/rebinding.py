@@ -892,6 +892,23 @@ def _stamp_bound_card(node, record: str):
         ):
             return replace(node, bound_card_from=record)
         return node
+    # "…**return the first card** to the battlefield under its owner's control
+    # at the beginning of the next end step." (Lifeline.) The same move under
+    # the other printed verb, so it is the same stamp: CR 400.1 knows only the
+    # zone change, and which event recorded the card is a fact about the whole
+    # line either way. Without this the delay lowered the inner sentence under
+    # ``next_end_step``, whose fire site records nothing, and refused the card
+    # for want of the answer this walk exists to supply.
+    if isinstance(node, ast.ReturnToZone):
+        subject = node.subject
+        if (
+            isinstance(subject, ast.TargetSpec)
+            and subject.quantifier == "that"
+            and subject.filter.is_card
+            and node.bound_card_from is None
+        ):
+            return replace(node, bound_card_from=record)
+        return node
     if dataclasses.is_dataclass(node) and not isinstance(node, type):
         changed = {}
         for field in dataclasses.fields(node):

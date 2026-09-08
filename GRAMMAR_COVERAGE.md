@@ -16,12 +16,21 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Set | Cards | Lines | Parsed | Lowered | Executed | Cards executing |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+<<<<<<< HEAD
 | LEA | 290 | 388 | 88.1% | 86.3% | 49.2% | 174 |
 | LEB | 292 | 389 | 88.2% | 86.4% | 49.4% | 175 |
 | 2ED | 292 | 389 | 88.2% | 86.4% | 49.4% | 175 |
 | ARN | 78 | 108 | 78.7% | 75.0% | 52.8% | 47 |
 | ATQ | 85 | 120 | 90.8% | 90.8% | 63.3% | 68 |
 | 3ED | 296 | 389 | 89.7% | 87.4% | 51.2% | 179 |
+=======
+| LEA | 290 | 388 | 87.1% | 85.8% | 48.7% | 172 |
+| LEB | 292 | 389 | 87.1% | 85.9% | 48.8% | 173 |
+| 2ED | 292 | 389 | 87.1% | 85.9% | 48.8% | 173 |
+| ARN | 78 | 108 | 77.8% | 74.1% | 51.9% | 46 |
+| ATQ | 85 | 120 | 90.8% | 90.8% | 63.3% | 68 |
+| 3ED | 296 | 389 | 89.2% | 87.4% | 51.2% | 179 |
+>>>>>>> usg-w2g2
 | LEG | 310 | 431 | 89.6% | 88.4% | 58.7% | 217 |
 | DRK | 119 | 167 | 96.4% | 96.4% | 73.7% | 101 |
 | FEM | 102 | 191 | 99.0% | 99.0% | 75.9% | 99 |
@@ -37,8 +46,13 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | STH | 143 | 215 | 88.4% | 88.4% | 62.8% | 124 |
 | EXO | 143 | 207 | 90.3% | 90.3% | 66.2% | 127 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
+<<<<<<< HEAD
 | USG *(measured)* | 335 | 486 | 83.7% | 82.7% | 58.4% | 245 |
 | **All (shipped)** | **4873** | **7239** | **90.7%** | **90.0%** | **60.1%** | **3649** |
+=======
+| USG *(measured)* | 335 | 486 | 78.2% | 75.5% | 53.3% | 220 |
+| **All (shipped)** | **4873** | **7239** | **90.5%** | **89.9%** | **60.0%** | **3641** |
+>>>>>>> usg-w2g2
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
 
@@ -50,9 +64,15 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
+<<<<<<< HEAD
 | 412 | 180 | expected a subject |  |
 | 116 | 61 | unrecognized effect verb |  |
 | 89 | 45 | unconsumed text |  |
+=======
+| 428 | 189 | expected a subject |  |
+| 118 | 63 | unrecognized effect verb |  |
+| 98 | 53 | unconsumed text |  |
+>>>>>>> usg-w2g2
 | 39 | 23 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 15 | 14 | expected 'unless defending player controls' |  |
@@ -70,15 +90,23 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 4 | 1 | expected a destination zone after 'return' |  |
 | 3 | 1 | expected 'of' |  |
 | 3 | 3 | unrecognized "can't be" restriction |  |
-| 3 | 3 | expected 'a' |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 1 | expected 'the number of' in a where-clause |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
+<<<<<<< HEAD
 | 1 | 1 | expected what to gain control of |  |
 
 ## Cards executing through the grammar
 
 3649 cards, 4353 lines.
+=======
+| 2 | 2 | expected 'a' |  |
+| 2 | 2 | expected 'be' |  |
+
+## Cards executing through the grammar
+
+3641 cards, 4345 lines.
+>>>>>>> usg-w2g2
 
 - **Abandon Hope**
   - `Look at target opponent's hand and choose X cards from it. That player discards those cards.`
@@ -1102,6 +1130,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, sacrifice this creature unless you exile the top creature card of your graveyard.`
 - **Citanul Druid**
   - `Whenever an opponent casts an artifact spell, put a +1/+1 counter on this creature.`
+- **Citanul Flute**
+  - `{X}, {T}: Search your library for a creature card with mana value X or less, reveal it, put it into your hand, then shuffle.`
 - **Citanul Hierophants**
   - `Creatures you control have "{T}: Add {G}."`
 - **City of Brass**
@@ -1348,6 +1378,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this creature enters, you may sacrifice a creature or discard a creature card. If you do, draw a card.`
 - **Crypt Rats**
   - `{X}: This creature deals X damage to each creature and each player. Spend only black mana on X.`
+- **Crystal Chimes**
+  - `{3}, {T}, Sacrifice this artifact: Return all enchantment cards from your graveyard to your hand.`
 - **Crystal Golem**
   - `At the beginning of your end step, this creature phases out. (While it's phased out, it's treated as though it doesn't exist. It phases in before you untap during your next untap step.)`
 - **Crystal Rod**
@@ -2065,8 +2097,13 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `This creature can't attack unless you sacrifice a land. (This cost is paid as attackers are declared.)`
 - **Excavator**
   - `{T}, Sacrifice a basic land: Target creature gains landwalk of each of the land types of the sacrificed land until end of turn. (It can't be blocked as long as defending player controls a land of any of those types.)`
+<<<<<<< HEAD
 - **Exhaustion**
   - `Creatures and lands target opponent controls don't untap during their next untap step.`
+=======
+- **Exhume**
+  - `Each player puts a creature card from their graveyard onto the battlefield.`
+>>>>>>> usg-w2g2
 - **Exile**
   - `Exile target nonwhite attacking creature. You gain life equal to its toughness.`
 - **Exorcist**
@@ -2490,6 +2527,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Gallantry**
   - `Target blocking creature gets +4/+4 until end of turn.`
   - `Draw a card.`
+- **Gamble**
+  - `Search your library for a card, put that card into your hand, discard a card at random, then shuffle.`
 - **Game of Chaos**
   - `Flip a coin. If you win the flip, you gain 1 life and target opponent loses 1 life, and you decide whether to flip again. If you lose the flip, you lose 1 life and that opponent gains 1 life, and that player decides whether to flip again. Double the life stakes with each flip.`
   - `Flip a coin. If you win the flip, you gain 1 life and target opponent loses 1 life, and you decide whether to flip again. If you lose the flip, you lose 1 life and that opponent gains 1 life, and that player decides whether to flip again. Double the life stakes with each flip.`
@@ -3132,6 +3171,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}{R}: This creature gets +2/+0 until end of turn.`
 - **Igneous Golem**
   - `{2}: This creature gains trample until end of turn.`
+- **Ill-Gotten Gains**
+  - `Exile Ill-Gotten Gains. Each player discards their hand, then returns up to three cards from their graveyard to their hand.`
 - **Illicit Auction**
   - `Each player may bid life for control of target creature. You start the bidding with a bid of 0. In turn order, each player may top the high bid. The bidding ends if the high bid stands. The high bidder loses life equal to the high bid and gains control of the creature. (This effect lasts indefinitely.)`
 - **Illumination**
@@ -3696,6 +3737,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Target spell or permanent becomes green. (Mana symbols on that permanent remain unchanged.)`
   - `Target spell or permanent becomes green. (Mana symbols on that permanent remain unchanged.)`
   - `Target spell or permanent becomes green. (Mana symbols on that permanent remain unchanged.)`
+- **Lifeline**
+  - `Whenever a creature dies, if another creature is on the battlefield, return the first card to the battlefield under its owner's control at the beginning of the next end step.`
 - **Lifetap**
   - `Whenever a Forest an opponent controls becomes tapped, you gain 1 life.`
   - `Whenever a Forest an opponent controls becomes tapped, you gain 1 life.`
@@ -4372,6 +4415,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **No Quarter**
   - `Whenever a creature becomes blocked by a creature with lesser power, destroy the blocking creature.`
   - `Whenever a creature blocks a creature with lesser power, destroy the attacking creature.`
+- **No Rest for the Wicked**
+  - `Sacrifice this enchantment: Return to your hand all creature cards in your graveyard that were put there from the battlefield this turn.`
 - **Noble Benefactor**
   - `When this creature dies, each player may search their library for a card and put that card into their hand. Then each player who searched their library this way shuffles.`
 - **Noble Steeds**
@@ -4751,6 +4796,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{G}{G}{G}, {T}: Target creature gains flying until end of turn.`
 - **Plaguebearer**
   - `{X}{X}{B}: Destroy target nonblack creature with mana value X.`
+- **Planar Birth**
+  - `Return all basic land cards from all graveyards to the battlefield tapped under their owners' control.`
+- **Planar Void**
+  - `Whenever another card is put into a graveyard from anywhere, exile that card.`
 - **Plated Rootwalla**
   - `{2}{G}: This creature gets +3/+3 until end of turn. Activate only once each turn.`
 - **Political Trickery**
@@ -5148,6 +5197,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `• Target player gains 1 life.`
 - **Remedy**
   - `Prevent the next 5 damage that would be dealt this turn to any number of targets, divided as you choose.`
+- **Remembrance**
+  - `Whenever a nontoken creature you control dies, you may search your library for a card with the same name as that creature, reveal it, put it into your hand, then shuffle.`
 - **Remote Isle**
   - `{T}: Add {U}.`
 - **Remove Enchantments**
@@ -5642,6 +5693,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{4}, {T}: Create a 1/1 colorless Snake artifact creature token. It has "Whenever this creature deals damage to a player, that player gets a poison counter." (A player with ten or more poison counters loses the game.)`
 - **Serpent Warrior**
   - `When this creature enters, you lose 3 life.`
+- **Serra Avatar**
+  - `When Serra Avatar is put into a graveyard from anywhere, shuffle it into its owner's library.`
 - **Serra Aviary**
   - `Creatures with flying get +1/+1.`
 - **Serra Bestiary**
@@ -7002,6 +7055,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Vibrating Sphere**
   - `During your turn, creatures you control get +2/+0.`
   - `During turns other than yours, creatures you control get -0/-2.`
+- **Victimize**
+  - `Choose two target creature cards in your graveyard. Sacrifice a creature. If you do, return the chosen cards to the battlefield tapped.`
 - **Victual Sliver**
   - `All Slivers have "{2}, Sacrifice this permanent: You gain 4 life."`
 - **Vigilant Martyr**
@@ -7238,6 +7293,11 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Each player discards their hand, then draws seven cards.`
   - `Each player discards their hand, then draws seven cards.`
   - `Each player discards their hand, then draws seven cards.`
+<<<<<<< HEAD
+=======
+- **Whetstone**
+  - `{3}: Each player mills two cards.`
+>>>>>>> usg-w2g2
 - **Whim of Volrath**
   - `Change the text of target permanent by replacing all instances of one color word with another or one basic land type with another until end of turn. (For example, you may change "nonred creature" to "nongreen creature" or "plainswalk" to "swampwalk.")`
 - **Whip Vine**
@@ -7407,6 +7467,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, you may sacrifice an artifact. If you don't, tap this creature and it deals 2 damage to you.`
 - **Yawgmoth's Edict**
   - `Whenever an opponent casts a white spell, that player loses 1 life and you gain 1 life.`
+- **Yawgmoth's Will**
+  - `Until end of turn, you may play lands and cast spells from your graveyard.`
+  - `If a card would be put into your graveyard from anywhere this turn, exile that card instead.`
 - **Zealots en-Dal**
   - `At the beginning of your upkeep, if all nonland permanents you control are white, you gain 1 life.`
 - **Zebra Unicorn**

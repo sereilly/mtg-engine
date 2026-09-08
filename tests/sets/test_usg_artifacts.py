@@ -536,3 +536,178 @@ def test_a_cost_modifier_reaches_a_hand_activated_ability(catalog_by_name, set_p
     assert hand_activation_cost(game, 1, brand, cycling)[0].get("generic") == 0
     game.remove_from_battlefield(fluctuator)
     assert hand_activation_cost(game, 0, brand, cycling)[0].get("generic") == 2
+
+
+# --- W2G2: the graveyard as a zone — Whetstone, Crystal Chimes, Citanul Flute, Lifeline ---
+from engine import Game, PlayerState
+from engine.models import Permanent
+from tests.helpers import resolve_stack
+
+
+def _g2_board(set_pool, name, *, seat=0):
+    """Seat *seat* controls *name*, untapped and free to activate. W2G2's own."""
+    alice, bob = PlayerState(name="G2-A"), PlayerState(name="G2-B")
+    game = Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    perm = Permanent(card=set_pool("USG")[name])
+    game._put_permanent_onto_battlefield(seat, perm, None)
+    perm.metadata["summoning_sickness_turn"] = -99
+    return game, perm
+
+
+def _g2_kill(game, seat, permanent):
+    """Kill *permanent*: file its card, then take the object off the
+    battlefield — the order ``_destroy_swept_permanents`` uses, and the order
+    the death triggers are announced in. ``_permanent_to_graveyard`` is what
+    announces them, and it is called while the permanent is still controlled,
+    so a "whenever a creature **you control** dies" observer can still answer
+    what it controlled. Removing first silently unfires every such trigger.
+    W2G2's own.
+    """
+    game._permanent_to_graveyard(game.players[seat], permanent)
+    game.remove_from_battlefield(permanent)
+    resolve_stack(game)
+
+
+def test_w2g2_whetstone_mills_every_seat_not_a_target(set_pool):
+    """"{3}: Each player mills two cards."
+
+    Both libraries are asserted, and they start at different sizes: a mill that
+    fell through to ``context.target`` would empty one pile twice as fast and a
+    single-library assertion would not notice.
+    """
+    game, _ = _g2_board(set_pool, "Whetstone")
+    filler = set_pool("USG")["Sanctum Custodian"]
+    game.players[0].library = [filler] * 6
+    game.players[1].library = [filler] * 9
+
+    game.activate_permanent_ability(0, "Whetstone")
+    resolve_stack(game)
+
+    assert len(game.players[0].library) == 4
+    assert len(game.players[1].library) == 7
+    assert len(game.players[0].graveyard) == 2
+    assert len(game.players[1].graveyard) == 2
+
+
+def test_w2g2_crystal_chimes_returns_only_enchantments_and_only_yours(set_pool):
+    """"{3}, {T}, Sacrifice this artifact: Return all enchantment cards from
+    your graveyard to your hand."
+
+    Three assertions the card would pass with one of its narrowings dropped:
+    the creature card stays put (the type filter reaches the sweep), the
+    opponent's enchantment stays put (the sweep is one seat's), and the Chimes
+    itself is in the graveyard afterwards (the sacrifice cost was paid).
+    """
+    pool = set_pool("USG")
+    game, chimes = _g2_board(set_pool, "Crystal Chimes")
+    mine, theirs = game.players
+    mine.graveyard = [pool["Sanctum Custodian"], pool["Rune of Protection: Red"]]
+    theirs.graveyard = [pool["Rune of Protection: Red"]]
+
+    game.activate_permanent_ability(0, "Crystal Chimes")
+    resolve_stack(game)
+
+    assert [c.name for c in mine.hand] == ["Rune of Protection: Red"]
+    assert [c.name for c in mine.graveyard] == ["Sanctum Custodian", "Crystal Chimes"]
+    assert [c.name for c in theirs.graveyard] == ["Rune of Protection: Red"]
+    assert not game.is_on_battlefield(chimes)
+
+
+def test_w2g2_citanul_flute_finds_only_what_x_paid_for(set_pool):
+    """"{X}, {T}: Search your library for a creature card with mana value X or
+    less, reveal it, put it into your hand, then shuffle."
+
+    The bound is the ability's own X, which nothing knows until the cost is
+    paid — so the armed search is read at two values of X over one library, and
+    the seven-drop is admitted by the second and not the first. A search that
+    dropped the bound would admit both every time.
+    """
+    from engine.search_filters import search_matches
+
+    pool = set_pool("USG")
+    cheap, dear = pool["Serra Zealot"], pool["Shivan Hellkite"]
+
+    def _admitted(x):
+        game, _ = _g2_board(set_pool, "Citanul Flute")
+        game.players[0].library = [cheap, dear]
+        game.activate_permanent_ability(0, "Citanul Flute", x_value=x)
+        prompt = game.pending_choice_of("search_library", 0)
+        assert prompt is not None
+        payload = {
+            "restrictions": prompt.data["restrictions"],
+            "card_type": prompt.data["card_type"],
+        }
+        return [
+            c.name for c in game.players[0].library
+            if search_matches(c, payload, game=game, owner=0)
+        ]
+
+    assert _admitted(1) == [cheap.name]
+    assert _admitted(7) == [cheap.name, dear.name]
+
+
+def test_w2g2_citanul_flute_puts_the_find_in_hand(set_pool):
+    """The Rock Hydra half: the search is answered and the card arrives."""
+    pool = set_pool("USG")
+    game, _ = _g2_board(set_pool, "Citanul Flute")
+    wanted = pool["Serra Zealot"]
+    game.players[0].library = [wanted, wanted]
+
+    game.activate_permanent_ability(0, "Citanul Flute", x_value=8)
+    assert game.resolve_pending_choice(
+        "search_library", 0, library_index=0, zone="library"
+    )
+    game._settle()
+
+    assert [c.name for c in game.players[0].hand] == [wanted.name]
+    assert len(game.players[0].library) == 1
+
+
+def test_w2g2_lifeline_returns_the_dead_creature_at_the_next_end_step(set_pool):
+    """"Whenever a creature dies, if another creature is on the battlefield,
+    return the first card to the battlefield under its owner's control at the
+    beginning of the next end step."
+
+    Three claims: the card comes back at the *end step* and not on death, it
+    comes back under its **owner's** control rather than Lifeline's controller's,
+    and the intervening-if is real — the survivor is what lets the trigger fire
+    at all.
+    """
+    pool = set_pool("USG")
+    game, _ = _g2_board(set_pool, "Lifeline")
+    survivor = Permanent(card=pool["Sanctum Custodian"])
+    game._put_permanent_onto_battlefield(1, survivor, None)
+    victim = Permanent(card=pool["Serra Zealot"])
+    game._put_permanent_onto_battlefield(1, victim, None)
+
+    _g2_kill(game, 1, victim)
+
+    assert [c.name for c in game.players[1].graveyard] == ["Serra Zealot"]
+
+    game.resolve_end_step(0)
+    resolve_stack(game)
+
+    assert [p.card.name for p in game.controlled_by(1)] == [
+        "Sanctum Custodian", "Serra Zealot",
+    ]
+    assert not game.players[1].graveyard
+
+
+def test_w2g2_lifeline_stays_silent_with_no_other_creature(set_pool):
+    """CR 603.4's intervening-if. The only creature on the battlefield dies, so
+    "another creature is on the battlefield" is false when the trigger would
+    fire — and nothing comes back. Without the clause Lifeline would return
+    every creature that ever died, which is a different card.
+    """
+    pool = set_pool("USG")
+    game, _ = _g2_board(set_pool, "Lifeline")
+    victim = Permanent(card=pool["Serra Zealot"])
+    game._put_permanent_onto_battlefield(1, victim, None)
+
+    _g2_kill(game, 1, victim)
+    game.resolve_end_step(0)
+    resolve_stack(game)
+
+    assert [c.name for c in game.players[1].graveyard] == ["Serra Zealot"]
+    assert not list(game.controlled_by(1))

@@ -27,6 +27,7 @@ from __future__ import annotations
 from .. import ast
 from ..errors import LoweringError
 from ...oracle_types import (CHOSEN_CREATURE_TYPE_THIS_WAY,
+                             CHOSEN_TARGET_GRAVEYARD_SLOTS,
                              CHOSEN_TARGET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
                              MILLED_THIS_WAY,
                              REVEALED_HAND_CARDS,
@@ -308,6 +309,12 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # later: by then the resolution has armed a second, resolution-time choice,
     # and ``context.target`` is one slot that cannot hold both answers.
     "choose_target_permanent": (CHOSEN_TARGET_PERMANENTS, CHOSEN_PLAYER),
+    # "**Choose two target creature cards in your graveyard.** … return **the
+    # chosen cards** to the battlefield tapped." (Victimize.) The same
+    # announcement one zone over, under a key of its own: what it records is a
+    # list of graveyard *slots*, and a reader written for the permanents above
+    # would take them for ``permanent_id``s.
+    "choose_target_cards": CHOSEN_TARGET_GRAVEYARD_SLOTS,
     # "Target player loses all poison counters. Leeches deals **that much**
     # damage to that player." The removal records how many actually came off,
     # which is the only place the sentence behind it can read the number: by

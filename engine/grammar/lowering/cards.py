@@ -33,6 +33,12 @@ from ._events import (
 )
 
 
+
+
+
+
+
+
 def _lower_next_draw_replacement(
     node: "ast.NextDrawReplacement", effect: tuple[OracleInstruction, ...],
 ) -> tuple[OracleInstruction, ...]:
@@ -445,6 +451,14 @@ def _lower_mill(
         return (OracleInstruction("mill_target_player", "", payload),)
     if node.player.kind == "each_opponent":
         payload["recipient"] = "each_opponent"
+        return (OracleInstruction("mill_target_player", "", payload),)
+    if node.player.kind == "each_player":
+        # "{3}: **Each player** mills two cards." (Whetstone.) The same
+        # ``recipient`` key the draw one zone over already reads for the same
+        # two words, and the same reason it is a set of seats rather than a
+        # target: each miller mills their own library, so the handler loops.
+        # CR 101.4's order is the handler's, where the active player is known.
+        payload["recipient"] = "each_player"
         return (OracleInstruction("mill_target_player", "", payload),)
     raise LoweringError(
         f"mill_target_player cannot mill {node.player.kind!r}", node=node

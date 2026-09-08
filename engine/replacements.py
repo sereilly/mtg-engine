@@ -3975,9 +3975,18 @@ def _resolve_return_from_graveyard_instead_of_draw(
 #: "If a card would be put into **your** graveyard from anywhere, exile that
 #: card instead." (Forbidden Crypt.) Whose graveyard is payload for the reason
 #: every parameter in this file is: "an opponent\'s graveyard" (Leyline of the
-#: Void) and "a graveyard" (Rest in Peace, Planar Void) are the same sentence
-#: with a different seat in it, and the interceptor answers all three from one
+#: Void) and "a graveyard" (Rest in Peace) are the same sentence with a
+#: different seat in it, and the interceptor answers all three from one
 #: comparison. "That card" and "it" are the same back-reference.
+#:
+#: **Planar Void was named here and is not one of them.** Its Oracle text is
+#: "Whenever another card is put into a graveyard from anywhere, exile that
+#: card" -- a *trigger*, so the card reaches the graveyard and is exiled off
+#: the stack afterwards, where this pattern requires both "would" and
+#: "instead". The card is implemented as the trigger it is
+#: (``card_put_into_graveyard``, announced from
+#: ``Game.put_card_into_graveyard``); the claim here never matched it and
+#: nothing failed, which is how a comment comes to name a card it cannot read.
 _GRAVEYARD_TO_EXILE = re.compile(
     r"^if a card would be put into (?P<whose>your|an opponent\'s|a) graveyard "
     r"from anywhere, exile (?:that card|it) instead$"
@@ -4030,8 +4039,26 @@ def _graveyard_exile_source(game, payload: dict):
     return None
 
 
+def _graveyard_exile_armed_by_effect(payload: dict) -> bool:
+    """Whether an *effect* armed this seat's graveyard exile for the turn.
+
+    "If a card would be put into your graveyard from anywhere **this turn**,
+    exile that card instead." (Yawgmoth's Will.) The unbounded spelling above
+    is a static ability and is read off a permanent's text; a sorcery is on no
+    battlefield when the replacement is meant to apply, so the effect leaves the
+    marker and this asks for it. Pure, like every applicability predicate here.
+    """
+    player = payload.get("player")
+    return bool(
+        getattr(player, "exile_cards_bound_for_graveyard_this_turn", False)
+    )
+
+
 def _applies_graveyard_exile(game, payload: dict) -> bool:
-    return _graveyard_exile_source(game, payload) is not None
+    return (
+        _graveyard_exile_source(game, payload) is not None
+        or _graveyard_exile_armed_by_effect(payload)
+    )
 
 
 @replacement_effect(

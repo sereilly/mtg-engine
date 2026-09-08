@@ -66,6 +66,7 @@ from .effects import (
     _parse_player_puts_whole_hand_on_library,
     _parse_put_hand_cards_on_library,
     _parse_put_exiled_card_on_stack_as_copy,
+    _parse_put_counter,
     _parse_put_exiled_this_way,
     _parse_repeated_graveyard_pick,
     _parse_return,
@@ -410,6 +411,27 @@ def parse_player_subject_verb(
             return parse_subject_verb(
                 stream, parse_optional_action=parse_optional_action
             )
+        # "**Each player** puts a creature card from their graveyard onto the
+        # battlefield." (Exhume.) The same argument one seat wider: it is the
+        # imperative's own sentence with a subject that is not "you", so it goes
+        # to the same reader and the *subject* is what this branch adds.
+        #
+        # Only the battlefield entry is claimed, and anything else rewinds
+        # whole. A printed subject changes who acts on several of the sentences
+        # that chain reads and on none of the rest, so admitting them all here
+        # would be this branch quietly answering questions it has not been
+        # asked; the shape it does claim carries its actor to a lowering that
+        # checks the actor and the printed pile against each other.
+        put_mark = stream.mark()
+        try:
+            moved = _parse_put_counter(stream)
+        except GrammarError:
+            stream.reset(put_mark)
+            return None
+        if isinstance(moved, ast.PutOntoBattlefield):
+            return dataclasses.replace(moved, actor=source_spec)
+        stream.reset(put_mark)
+        return None
     if token.text in ("sacrifices", "sacrifice") and isinstance(source_spec, ast.PlayerRef):
         stream.advance()
         return _parse_sacrifice(stream, source_spec)

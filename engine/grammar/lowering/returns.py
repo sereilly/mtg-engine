@@ -267,6 +267,14 @@ def _lower_return_to_zone(
     if (
         isinstance(subject, ast.TargetSpec)
         and _names_several_targets(subject)
+        # "**target**" is what this branch is: it describes the picks for the
+        # cast-time picker, which `_describe_several_card_targets` refuses to
+        # do for a phrase that announces nothing. An untargeted "up to three
+        # cards from their graveyard" is a choice made on resolution
+        # (Ill-Gotten Gains) and belongs to the untargeted readings below —
+        # without this it reached the describer and died there, so the whole
+        # sentence refused on a branch it was never in.
+        and subject.targeted
         and node.from_zone is not None
         and node.from_zone.name == "graveyard"
         and node.from_zone.owner is not None

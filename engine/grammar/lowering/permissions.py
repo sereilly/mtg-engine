@@ -286,21 +286,38 @@ def _lower_cast_permission(
                 "is granted to the caster",
                 node=node,
             )
-        if node.mode != "cast":
+        if node.mode not in ("cast", "play"):
             raise LoweringError(
-                "no card grants a blanket permission to *play* from a zone",
+                f"no card grants a blanket permission to {node.mode!r} from a "
+                "zone", node=node,
+            )
+        # **The widest grant is a card, not an oversight.** These two gates
+        # used to refuse an empty union and an absent position outright,
+        # reading either as a narrowing the parse had dropped — which was the
+        # right answer while the only card printing the sentence was Bösium
+        # Strip. "You may play lands and cast spells from your graveyard"
+        # (Yawgmoth's Will) prints both of them absent *on purpose*: every card
+        # type, the whole pile, and lands as well as spells.
+        #
+        # So what is checked is the pair rather than each half. A grant naming
+        # no class **and** no position is that sentence; a grant that names one
+        # and not the other is a phrase this reader half-read, and refuses.
+        if bool(node.card_types) != (node.position is not None):
+            raise LoweringError(
+                "a blanket zone permission names both which spells it covers "
+                "and where in the zone, or neither",
                 node=node,
             )
-        if not node.card_types:
+        if node.zone != "graveyard":
             raise LoweringError(
-                "a blanket zone permission names which spells it covers",
+                "the only zone a blanket permission opens is your own "
+                "graveyard",
                 node=node,
             )
-        if node.zone != "graveyard" or node.position != "top":
+        if node.position not in (None, "top"):
             raise LoweringError(
-                "the only blanket zone permission the cast path opens is the "
-                "top of your own graveyard",
-                node=node,
+                f"no blanket permission reads the {node.position!r} of a "
+                "graveyard", node=node,
             )
         if not node.until_end_of_turn:
             raise LoweringError(
@@ -312,7 +329,7 @@ def _lower_cast_permission(
                 "grant_cast_permission", "",
                 {
                     "zone": "graveyard",
-                    "mode": "cast",
+                    "mode": node.mode,
                     "blanket": True,
                     "card_types": tuple(node.card_types),
                     "position": node.position,

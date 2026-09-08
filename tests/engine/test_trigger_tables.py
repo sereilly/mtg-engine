@@ -339,8 +339,19 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     "self_cast": "when you cast this spell",
     "self_put_into_graveyard_from_library":
         "when this card is put into your graveyard from your library",
+    # One kind with **two** printed spellings, which is why only one of them
+    # can stand here: Energy Field's "into **your** graveyard" and Planar Void's
+    # "**another** card … into a graveyard". They differ by a narrowing that
+    # rides as payload (`your_graveyard` / `another_card`) rather than by kind,
+    # so a second entry would be the same key twice and the later would win
+    # silently. Both spellings are covered by their own per-card tests.
     "card_put_into_graveyard":
         "when a card is put into your graveyard from anywhere",
+    # Serra Avatar. One zone wider than the row above and deliberately not the
+    # death reading — CR 700.4 makes dying "from the battlefield", so an Avatar
+    # milled or discarded never dies and this condition still fires.
+    "self_put_into_graveyard_from_anywhere":
+        "when this creature is put into a graveyard from anywhere",
     # `no_lands` is gone: "when you control no lands" is
     # `controls_no_matching` with a land filter, which is the same sentence
     # with the noun read rather than welded into the kind.

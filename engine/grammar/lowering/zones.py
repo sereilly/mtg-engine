@@ -458,6 +458,62 @@ def _lower_put_onto_battlefield(
             ),
         )
     if filt.zone == "graveyard":
+        # "**Each player** puts a creature card from their graveyard onto the
+        # battlefield." (Exhume.) Nothing is targeted and nothing is chosen by
+        # the caster: every seat picks out of its own pile, which is why it is
+        # its own kind rather than the reanimation below with a wider payload —
+        # that handler resolves one announced target, and this one arms a
+        # prompt per player.
+        #
+        # The actor and the possessive are checked **against each other**, the
+        # way the sweep reanimation one family over checks them: "each player …
+        # their graveyard" is one claim said twice, and a pairing this cannot
+        # resolve refuses rather than picking a half. A card printing the
+        # possessive without the subject would be the caster raiding the table.
+        if node.actor is not None and node.actor.kind == "each_player":
+            owner = filt.zone_owner.kind if filt.zone_owner is not None else None
+            if owner not in ("owner", "each_player"):
+                raise LoweringError(
+                    "\"each player\" puts a card out of their own graveyard",
+                    node=node,
+                )
+            if _is_target(target) or target.quantifier not in ("a", "an"):
+                raise LoweringError(
+                    "the per-seat reanimation reads an article, not a target",
+                    node=node,
+                )
+            if node.under_your_control or node.under_owners_control or node.gains:
+                raise LoweringError(
+                    "the per-seat reanimation reads no rider", node=node
+                )
+            if not filt.is_card or filt.card_types != ("creature",):
+                raise LoweringError(
+                    "the per-seat reanimation only moves creature cards",
+                    node=node,
+                )
+            if _restrictions_beyond(
+                filt, frozenset({"is_card", "zone", "zone_owner", "card_types"})
+            ):
+                raise LoweringError(
+                    "the per-seat reanimation cannot test that card phrase",
+                    node=node,
+                )
+            return (
+                OracleInstruction(
+                    "each_player_takes_from_graveyard", "",
+                    {
+                        "card_type": "creature",
+                        "count": 1,
+                        "up_to": False,
+                        "destination": "battlefield",
+                    },
+                ),
+            )
+        if node.actor is not None and node.actor.kind != "you":
+            raise LoweringError(
+                f"no graveyard-entry handler is performed by {node.actor.kind!r}",
+                node=node,
+            )
         if not _is_target(target) or not filt.is_card:
             raise LoweringError("the reanimation handler reads one chosen card", node=node)
         if filt.card_types != ("creature",):

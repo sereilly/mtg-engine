@@ -78,6 +78,27 @@ def _names_that_player(stream: TokenStream) -> bool:
     )
 
 
+def _names_the_chosen_cards(stream: TokenStream) -> bool:
+    """Whether the rest of the line says "the chosen card(s)" anywhere.
+
+    :func:`_names_that_player`'s twin one zone over, and it is a token scan for
+    that function's reason: Victimize's binder is not the next sentence but the
+    one after it ("Sacrifice a creature. **If you do**, return the chosen cards
+    …"), and what binds is a definite noun phrase rather than a production. A
+    probe over one sentence would answer no and the whole line would refuse.
+
+    A *card* rather than a permanent, deliberately: what "the chosen cards"
+    names is the announcement over a graveyard, and a sentence saying "the
+    chosen creature" is about something on a battlefield that this production
+    never picked.
+    """
+    words = [str(token.text).lower() for token in stream.tokens[stream.pos:]]
+    return any(
+        first == "the" and second == "chosen" and third in ("card", "cards")
+        for first, second, third in zip(words, words[1:], words[2:])
+    )
+
+
 def _parse_choose_target(stream: TokenStream, parse_statement) -> "ast.ChooseTarget | None":
     """``Choose target creature.`` — a sentence whose whole content is
     CR 601.2c's choosing of targets (Reincarnation, Glyph of Life).
@@ -178,6 +199,13 @@ def _parse_choose_target(stream: TokenStream, parse_statement) -> "ast.ChooseTar
         # next sentence bind this choice — and a second binder is a second
         # answer to it, not a second production of this one.
         binds = _parse_bound_targeting_prevention(stream) is not None
+    if not binds:
+        # …or a later sentence naming what was chosen by its noun phrase —
+        # "Sacrifice a creature. If you do, return **the chosen cards** to the
+        # battlefield tapped." (Victimize.) The binder is two sentences away and
+        # is not a production at all, so the question is asked over the rest of
+        # the line exactly as the player arm asks its own.
+        binds = _names_the_chosen_cards(stream)
     if not binds:
         # …or a loop over the set this sentence just named — "**For each of
         # those creatures,** its controller may pay …" (Winter's Chill). The

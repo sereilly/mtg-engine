@@ -975,6 +975,16 @@ class GameHelpersMixin:
         if consumed:
             return False
         self.players[seat].graveyard.append(card)
+        # "…**that were put there from the battlefield this turn**" (No Rest
+        # for the Wicked). Recorded on the one seam every arrival passes
+        # through, keyed by the pile it landed in (CR 400.3's owner) — the same
+        # place the exile replacement and the arrival event are, because "from
+        # the battlefield" is a fact about *this* move and nothing in the
+        # graveyard afterwards remembers it. A token never gets here: the
+        # permanent path keeps its card out (CR 111.7), which is the difference
+        # between this record and the tally beside it.
+        if from_zone == "battlefield":
+            self.players[seat].cards_put_into_your_graveyard_from_battlefield_this_turn.append(card)
         # Announced **after** the card has arrived, because CR 603.6 has a
         # zone-change trigger look for its object in the zone it moved to — and
         # a replacement that diverted the card returned above, so nothing fires
@@ -992,6 +1002,23 @@ class GameHelpersMixin:
         # source zone, which is what "from anywhere" says; whose graveyard it
         # is rides as the seat and is tested by the watcher's own filter.
         emit(self, "card_put_into_graveyard", subject=card, owner_index=seat)
+        # "Whenever another card is put into a graveyard **from anywhere**"
+        # (Planar Void), "when this creature is put into a graveyard from
+        # anywhere" (Serra Avatar). The unnarrowed announcement of the move this
+        # seam *is*, which is why it is here and unconditional: "from anywhere"
+        # has no single fire site — a death, a discard, a mill, a sacrifice and
+        # a spell finishing on the stack are all this event — and that is the
+        # reason CR 903.9b gave this seam to the replacement one screen up.
+        #
+        # The card rides as ``dead_card`` as well as ``subject``, because that
+        # is the one channel "that card" already reads (`lowering/_deaths.py`'s
+        # BOUND_CARD_EVENTS, `exile_bound_card`). A second key for the same
+        # referent is how one printed phrase ends up with two answers.
+        emit(
+            self, "card_put_into_graveyard",
+            subject=card, owner_index=seat, dead_card=card,
+            graveyard_from_zone=from_zone,
+        )
         return True
 
     def _leaving_battlefield_replaced(self, permanent, owner, destination: str) -> bool:
@@ -1062,7 +1089,9 @@ class GameHelpersMixin:
             # down. The token branch is deliberately outside this: CR 111.7
             # keeps a token's card out of the pile while leaving it something
             # that died.
-            if not self.put_card_into_graveyard(owner, permanent.card):
+            if not self.put_card_into_graveyard(
+                owner, permanent.card, from_zone="battlefield"
+            ):
                 return
         # "Whenever a land is put into a graveyard from the battlefield…"
         # (Dingus Egg). Announced here, on the one seam every land death

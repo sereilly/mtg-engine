@@ -116,6 +116,41 @@ def _graveyard_to_hand_payload(filt: ast.ObjectFilter) -> dict[str, object]:
 
 
 
+def _sweep_graveyard_actor(node: ast.ReturnToZone, subject) -> str | None:
+    """Who performs a sweep out of a graveyard — ``"each_player"``, ``"you"``,
+    or None when the sentence's two halves cannot be reconciled.
+
+    The actor and the graveyard's possessive are checked **against each other**
+    rather than either being read alone: "each player … from their graveyard"
+    is one claim said twice, and who returns the cards is the whole difference
+    between All Hallow's Eve and a card that wins the game. One function
+    because the two destinations ask it identically — a second copy is how the
+    battlefield sweep and the hand sweep end up disagreeing about whose pile
+    they empty.
+    """
+    actor = node.actor.kind if node.actor is not None else None
+    owner = (
+        subject.filter.zone_owner.kind
+        if subject.filter.zone_owner is not None
+        else None
+    )
+    if actor == "each_player" and owner in ("owner", "each_player"):
+        return "each_player"
+    # "Return all basic land cards from **all graveyards** …" (Planar Birth).
+    # The plural pile with no printed subject in front of it: the spell's
+    # controller performs the move, but every graveyard on the table is swept,
+    # which is the same set of piles "each player … their graveyard" names.
+    # Read here rather than as a second `who`, because what the handler does
+    # with the pair is identical — each card comes back under its own player's
+    # side either way, and that is CR 400.3 rather than a choice this sentence
+    # makes.
+    if actor is None and owner == "each_player":
+        return "each_player"
+    if actor is None and owner == "you":
+        return "you"
+    return None
+
+
 def lower_described_return(
     node: ast.ReturnToZone,
     subject,
@@ -133,6 +168,60 @@ def lower_described_return(
     signature: a described set is read off the board, so no earlier step of the
     sentence has anything to hand it.
     """
+    # "Each player discards their hand, then **returns up to three cards from
+    # their graveyard to their hand**." (Ill-Gotten Gains.) One pick per seat
+    # out of that seat's own pile, which is the same move Exhume makes one zone
+    # over — so it is the same instruction with the destination as payload
+    # rather than a second handler that would arm the same prompt again.
+    #
+    # "their graveyard … their hand" has already been read as *the performer's
+    # own* by `effects/returns._agreeing_possessive`, which is why both
+    # possessives arrive here as "you": the actor is what says whose. Both are
+    # still checked, because a sentence naming the caster's hand after each
+    # player's graveyard is a card nobody printed and reading it as this one
+    # would hand the table's graveyards to one seat.
+    if (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "up_to"
+        and not subject.targeted
+        and subject.filter.is_card
+        and subject.filter.zone == "graveyard"
+        and subject.filter.zone_owner is not None
+        and subject.filter.zone_owner.kind == "you"
+        and node.to.name == "hand"
+        and node.to.owner is not None
+        and node.to.owner.kind == "you"
+        and node.actor is not None
+        and node.actor.kind == "each_player"
+    ):
+        if (
+            node.entering_tapped
+            or node.under_control_of
+            or node.repetitions
+            or node.also_stack
+        ):
+            raise LoweringError("the per-seat graveyard pick reads no rider", node=node)
+        if _reads_no_return_restriction(subject.filter) or subject.filter.card_types:
+            # The prompt narrows by one card type and nothing else, so an
+            # adjective admitted here would be a pick wider than the sentence.
+            # The type is refused too rather than carried: the printed card is
+            # untyped ("three **cards**"), and admitting a type without a card
+            # exercising it is a claim with nothing behind it.
+            raise LoweringError(
+                "the per-seat graveyard pick reads an untyped card phrase",
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "each_player_takes_from_graveyard", "",
+                {
+                    "card_type": "any",
+                    "count": int(subject.count or 1),
+                    "up_to": True,
+                    "destination": "hand",
+                },
+            ),
+        )
     # "…you may return **an** instant or sorcery card from your graveyard to
     # your hand." (Experimental Overload.) Chosen but not targeted (CR 115.1):
     # the card is in the chooser's own graveyard, so there is nothing for
@@ -342,6 +431,84 @@ def lower_described_return(
         if host_target is not None:
             bounce_payload["targets"] = host_target
         return (OracleInstruction("return_all_matching", "", bounce_payload),)
+    # "{3}, {T}, Sacrifice this artifact: Return **all enchantment cards** from
+    # your graveyard to your hand." (Crystal Chimes.) The sweep reanimation
+    # below with the other destination: same "no target, no pick, every card a
+    # printed noun phrase names", and the pair of zones is what picks the
+    # handler branch exactly as it does for every other return.
+    #
+    # Held to the same two gates the reanimation is held to — the actor and the
+    # graveyard's owner checked against each other, and the card phrase through
+    # the shared gate — because a sweep that drops a narrowing returns the pile
+    # rather than the wrong card.
+    #
+    # The hand is checked against the graveyard for the sweep bounce's reason
+    # one branch up: CR 400.3 puts a returned card in its **owner's** hand, and
+    # a card in your graveyard is one you own (CR 404.2), so "your graveyard …
+    # your hand" is the one pairing where the printed possessive and the rule
+    # agree. Anything else refuses rather than being read as the caster's.
+    if (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier in ("all", "each")
+        and not subject.targeted
+        and subject.filter.is_card
+        and subject.filter.zone == "graveyard"
+        and node.to.name == "hand"
+    ):
+        if (
+            node.entering_tapped
+            or node.under_control_of
+            or node.repetitions
+            or node.also_stack
+        ):
+            raise LoweringError("the sweep graveyard return reads no rider", node=node)
+        who = _sweep_graveyard_actor(node, subject)
+        if who is None:
+            raise LoweringError(
+                "the sweep graveyard return reads \"each player … their "
+                "graveyard\" or an unnamed subject over your own",
+                node=node,
+            )
+        hand_owner = node.to.owner
+        if hand_owner is None or hand_owner.kind not in ("you", "owner", "each_player"):
+            raise LoweringError(
+                "the sweep graveyard return puts a card in its owner's hand",
+                node=node,
+            )
+        if (who == "you") != (hand_owner.kind == "you"):
+            raise LoweringError(
+                "the hand the sweep graveyard return names is not the one "
+                "whose graveyard it empties",
+                node=node,
+            )
+        # "…**that were put there from the battlefield this turn**" (No Rest
+        # for the Wicked). Taken off the filter before the shared card gate is
+        # asked, and carried *beside* it — the card matcher answers a printed
+        # type line and a name (CR 613.1), and how a card reached a graveyard is
+        # not on it. The same split the sweep bounce makes for ``attached_to``,
+        # and for the same reason: a key inside the filter would reach a matcher
+        # with no answer for it, and a narrowing nothing tests is a sweep wider
+        # than the card.
+        history = subject.filter.put_there_from_battlefield_this_turn
+        scoped = dataclasses.replace(
+            subject.filter, zone="battlefield", zone_owner=None,
+            put_there_from_battlefield_this_turn=False,
+        )
+        swept = chargeable_card_filter(scoped)
+        if swept is None:
+            raise LoweringError(
+                "the sweep graveyard return cannot read this card phrase",
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "return_all_cards_from_graveyard", "",
+                {
+                    "filter": swept, "who": who, "destination": "hand",
+                    **({"put_there_this_turn": True} if history else {}),
+                },
+            ),
+        )
     # "**Each player** returns all creature cards from their graveyard to the
     # battlefield." (All Hallow's Eve.) A sweep *reanimation*: every card a
     # noun phrase names, out of a graveyard and onto the battlefield, with
@@ -361,24 +528,23 @@ def lower_described_return(
         and node.to.name == "battlefield"
         and node.to.owner is None
     ):
-        if (
-            node.entering_tapped
-            or node.under_control_of
-            or node.repetitions
-            or node.also_stack
-        ):
+        if node.repetitions or node.also_stack:
             raise LoweringError("the sweep reanimation reads no rider", node=node)
-        actor = node.actor.kind if node.actor is not None else None
-        owner = (
-            subject.filter.zone_owner.kind
-            if subject.filter.zone_owner is not None
-            else None
-        )
-        if actor == "each_player" and owner in ("owner", "each_player"):
-            who = "each_player"
-        elif actor is None and owner == "you":
-            who = "you"
-        else:
+        # "…to the battlefield **under their owners' control**." (Planar Birth.)
+        # CR 400.3's default said out loud, and it is what this handler already
+        # does — every card comes back under its own player's side, because the
+        # printed subject sweeps every graveyard. So the phrase is *consumed
+        # and checked* rather than carried: a possessive naming anyone else
+        # would be a different card, and dropping the words silently would be
+        # the rider bug this grammar refuses by construction.
+        if node.under_control_of is not None and node.under_control_of.kind != "owner":
+            raise LoweringError(
+                "the sweep reanimation returns each card under its owner's "
+                f"control, not {node.under_control_of.kind!r}",
+                node=node,
+            )
+        who = _sweep_graveyard_actor(node, subject)
+        if who is None:
             raise LoweringError(
                 "the sweep reanimation reads \"each player … their graveyard\" "
                 "or an unnamed subject over your own",
@@ -398,10 +564,14 @@ def lower_described_return(
             raise LoweringError(
                 "the sweep reanimation cannot read this card phrase", node=node
             )
+        # "…to the battlefield **tapped**." (Planar Birth.) CR 110.5b — the
+        # ability saying otherwise — carried only when the word was printed, so
+        # every payload written before this stays byte-identical.
+        tapped = {"tapped": True} if node.entering_tapped else {}
         return (
             OracleInstruction(
                 "return_all_cards_from_graveyard", "",
-                {"filter": swept, "who": who},
+                {"filter": swept, "who": who, **tapped},
             ),
         )
     # "{W}: Return **enchanted creature** to its owner's hand." (Sun Clasp.)

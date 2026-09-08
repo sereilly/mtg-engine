@@ -1996,6 +1996,12 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     # being *chosen*, not about what is then done to it.
     "prevent_damage_by_target_spell_until_eot": _counter_spec,
     "return_creature_from_graveyard_to_hand": _graveyard_return_spec,
+    # "Choose two target creature cards in your graveyard." (Victimize.) The
+    # same picker as the return above and derived by the same builder, because
+    # the announcement is identical — a fixed number of cards out of the
+    # caster's own pile, narrowed by a printed type. Only what a later sentence
+    # does with them differs, and that is the handler's business.
+    "choose_target_cards": _graveyard_return_spec,
     "reanimate_creature": _reanimation_spec,
     # Hakim, Loreweaver. The same graveyard picker, narrowed by the payload
     # the handler re-checks against — one predicate, so the Auras offered are

@@ -937,6 +937,29 @@ class PlayerState:
     # Neither is a reading of the graveyard itself, which forgets a token
     # (CR 111.7) and everything anything has since removed.
     creatures_put_into_your_graveyard_this_turn: int = 0
+    # The **cards** behind that tally, for the sentence that names them rather
+    # than counting them: "return to your hand all creature cards in your
+    # graveyard **that were put there from the battlefield this turn**" (No Rest
+    # for the Wicked). A list and not a set, because two copies of a card in a
+    # deck are the same immutable ``CardDefinition`` — so "how many of this card
+    # arrived that way" is a count of entries, and the sweep may take exactly
+    # that many out of the pile.
+    #
+    # Its own record beside the tally rather than a replacement for it: the
+    # tally counts a token (CR 111.7 puts it in the graveyard before the
+    # state-based action removes it) and this must not, because a token is not
+    # a card there is anything to return. Reset with the rest of the turn.
+    cards_put_into_your_graveyard_from_battlefield_this_turn: list = field(
+        default_factory=list
+    )
+    # "If a card would be put into your graveyard from anywhere **this turn**,
+    # exile that card instead." (Yawgmoth's Will.) CR 614 for a window, so what
+    # the spell leaves behind is this marker and the interceptor in
+    # `engine/replacements.py` reads it — the same arrangement Disintegrate's
+    # `exile_if_dies_this_turn` has on a permanent, one object wider. On the
+    # seat rather than on the game because the printed scope is a seat's own
+    # pile, and a game-wide flag could not say whose. Reset with the turn.
+    exile_cards_bound_for_graveyard_this_turn: bool = False
     # Whether this seat declared an attacker this turn (CR 508.1). On the seat
     # rather than derived from the board, because a player who attacked and
     # then lost the attacker still attacked this turn — reading

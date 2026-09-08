@@ -52,7 +52,8 @@ from .effects import (_parse_damage_becomes_counter_removal,
                       _parse_bound_permanent_activation_ban,
                       _parse_targeting_ban)
 from .sacrifices import _parse_counted_sacrifice
-from .effects.exile import _parse_bin_unplayed_exiled_card
+from .effects.exile import (_parse_bin_unplayed_exiled_card,
+                            parse_exile_graveyard_arrivals_this_turn)
 from .effects.game import parse_extra_land_plays, parse_extra_phases
 from .effects.stack import _parse_conditional_retarget
 
@@ -649,6 +650,18 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
         produces = _parse_tapper_produces_instead(stream)
         if produces is not None:
             return produces
+
+    # "If a card would be put into your graveyard from anywhere this turn,
+    # exile that card instead." (Yawgmoth's Will.) A CR 614 replacement a
+    # *spell* creates, which is what makes it a production: the unbounded
+    # spelling is a permanent's static ability and the registry claims that one
+    # off the card's text, where a sorcery is on no battlefield when the
+    # replacement is meant to apply. Read here beside the other
+    # replacement-shaped "If …" clauses and refusing without consuming, so the
+    # registry's line keeps its claim.
+    graveyard_exile = parse_exile_graveyard_arrivals_this_turn(stream)
+    if graveyard_exile is not None:
+        return graveyard_exile
 
     # "If a spell or ability that targets that creature would cause a source to
     # deal damage to that creature this turn, prevent that damage."

@@ -273,6 +273,22 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      r"graveyard from the battlefield"),
     ("permanent_dies",
      r"whenever (?P<dying_subject>an? [^,]+) is put into a graveyard from the battlefield"),
+    # "Whenever **another card** is put into **a** graveyard **from anywhere**."
+    # (Planar Void.) Not a death and not the row above it: the object is a
+    # *card*, the source zone is unnamed, and the pile is anybody's — so nothing
+    # on a battlefield is being watched and no permanent-shaped narrowing could
+    # express it. Announced from `Game.put_card_into_graveyard`, the one seam
+    # every arrival passes through, which is what makes "from anywhere" a fact
+    # rather than a list of fire sites.
+    #
+    # After the four `permanent_dies` rows because it is the widest reading
+    # here; none of them could match this line ("from the battlefield" against
+    # "from anywhere"), so the position is documentation rather than a guard.
+    # "another" is CR 109.5 and is enforced by the event filter, not by a
+    # payload: the comparison is between the moved card and the observer.
+    ("card_put_into_graveyard",
+     r"whenever (?P<another_card>)another card is put into a graveyard "
+     r"from anywhere"),
     # "Whenever **you** discard a card" (Necropotence) beside "whenever **an
     # opponent** discards a card" (Megrim). CR 701.9a's discard is an action
     # abilities watch, and the two discard seams announce it — the random/forced
@@ -1490,7 +1506,28 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # argument, one zone over). Above the bare "dies" row for that row's stated
     # reason: its ``.+`` would otherwise swallow this clause whole.
     ("card_put_into_graveyard",
-     r"when a card is put into your graveyard from anywhere"),
+     r"when a card is put into (?P<your_graveyard>)your graveyard "
+     r"from anywhere"),
+    # "When **this creature** is put into a graveyard **from anywhere**."
+    # (Serra Avatar.) The card's own move, out of any zone — a death, a
+    # discard, a mill and a countered spell are all this condition, which is
+    # exactly what the bare `dies` row two screens down is *not*: CR 700.4
+    # makes dying "from the battlefield", so reading this line as a death would
+    # be a trigger that never fires on a milled Avatar.
+    #
+    # Above the bare "dies" row for that row's stated reason, and above the
+    # long "put into a graveyard from the battlefield" row for the mirror one:
+    # this line does not end in "dies" and does not say "from the battlefield",
+    # so neither can claim it — but a later row written with a `.+` could, and
+    # the position is what says it must not.
+    #
+    # The noun is read rather than fixed, like the battlefield row's: a card
+    # names itself by whatever permanent word it likes (CR 109.5), and "card"
+    # is here too because a sentence about a move out of any zone is a sentence
+    # about a card.
+    ("self_put_into_graveyard_from_anywhere",
+     r"when this (?:creature|artifact|enchantment|land|aura|permanent|card) is "
+     r"put into a graveyard from anywhere"),
     # "When this creature dies **during combat**, …" (Mongrel Pack). CR 506.1's
     # phase, asked of the death rather than of the creature: the same death, in
     # a different part of the turn, is a different card. The marker is an empty

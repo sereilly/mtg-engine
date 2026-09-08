@@ -33,7 +33,7 @@ from ..errors import GrammarError
 from ..nouns import parse_object_filter
 from ..references import parse_player_ref, parse_target_spec
 from ..stream import TokenStream
-from ..phrases import _parse_zone
+from ..phrases import _accept_number, _parse_zone
 
 
 
@@ -320,6 +320,11 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
     # nowhere to put it and so failed the line on the word after the zone. Same
     # field, one entry — how a find enters is part of where it goes.
     tapped = bool(stream.accept_word("tapped"))
+    # "…, **discard a card at random**, then shuffle." (Gamble.) Read before
+    # the shuffle because that is where it is printed: the shuffle is this
+    # search's own last clause (CR 701.23a), so a production that stopped in
+    # front of the discard would strand the words it still owes.
+    discard_after, discard_at_random = _accept_search_discard_clause(stream)
     if graveyard:
         # "…into your hand. If you search your library this way, shuffle."
         # A printed sentence break, but not a second effect: the shuffle is the
@@ -345,7 +350,37 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
         named_alternatives=tuple(alternatives),
         untap_found_if=condition, untap_found_filter=counted,
         reveal=reveal,
+        discard_after=discard_after,
+        discard_after_at_random=discard_at_random,
     )
+
+
+def _accept_search_discard_clause(stream: TokenStream) -> tuple[int, bool]:
+    """``, discard <N> card[s] [at random]`` — the count and whether it is
+    random, or ``(0, False)`` with the cursor untouched.
+
+    Gamble prints it between the destination and the shuffle, which is a clause
+    of the search's own sentence rather than a statement behind it. Both halves
+    are data: a card printing two cards, or a chosen discard, is this reader
+    with a different answer rather than a second production. What it is *not*
+    is a fused effect — the lowering emits an ordinary discard after the search,
+    in the printed order, which is what puts the card just found inside the hand
+    the random discard reaches.
+    """
+    mark = stream.mark()
+    stream.accept_punct(",")
+    if not stream.accept_word("discard"):
+        stream.reset(mark)
+        return 0, False
+    count = _accept_number(stream)
+    if count is None:
+        stream.reset(mark)
+        return 0, False
+    if not stream.accept_word("card", "cards"):
+        stream.reset(mark)
+        return 0, False
+    at_random = bool(stream.accept_phrase("at", "random"))
+    return count, at_random
 
 
 def _parse_search_other_library(stream: TokenStream) -> ast.Statement:

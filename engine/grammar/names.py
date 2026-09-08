@@ -186,6 +186,33 @@ def accept_name_comparison(
         return None
     if stream.accept_phrase("that", "name"):
         return "event"
+    # "…a card **with the same name as that creature**" (Remembrance). The same
+    # referent "that name" names one line up — the object the firing event was
+    # about — spelled with the noun instead of the word "name". One return
+    # value, because it is one relation: a second would be a second answer to
+    # which object the sentence compares against, and every reader of the field
+    # would then have to know which spelling produced it.
+    #
+    # The noun is read and required, so "the same name as that **land**" under a
+    # creature-death trigger still refuses rather than being taken as this
+    # phrase with a word ignored.
+    same_as_that = stream.mark()
+    if stream.accept_phrase("the", "same", "name", "as", "that"):
+        from .vocabulary import CARD_TYPES
+
+        noun = singular(stream.peek_word() or "")
+        # Any card type, deliberately — **not** the phrase's own classes the
+        # way the "another" reading above requires. That branch compares a set
+        # against itself ("permanent with the same name as another permanent"),
+        # and this one compares two objects the sentence names separately:
+        # Remembrance searches for a *card* whose name matches a *creature*
+        # that died, and the two are the same class only by coincidence. What
+        # is still required is a real noun, so an invented one refuses rather
+        # than being read as this phrase with a word ignored.
+        if noun and (noun in CARD_TYPES or noun == "permanent"):
+            stream.advance()
+            return "event"
+        stream.reset(same_as_that)
     return None
 
 

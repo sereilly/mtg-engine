@@ -84,6 +84,16 @@ _BECOMES_TARGET_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = tuple(
 
 _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("land_dies", ("a", "land", "is", "put", "into", "a", "graveyard", "from", "the", "battlefield")),
+    # "Whenever **another card** is put into a graveyard **from anywhere**."
+    # (Planar Void.) A card rather than a permanent, out of no named zone and
+    # into anybody's pile — so nothing on a battlefield is watched, and the
+    # subject-led death reader below could not name it either. Carried here as
+    # well as in ``engine/oracle.py``'s table for the reason this file's
+    # docstring gives: a condition only one front end reads leaves the other
+    # refusing the effect behind it, and the engine dispatches on the compiler's.
+    ("card_put_into_graveyard",
+     ("another", "card", "is", "put", "into", "a", "graveyard", "from",
+      "anywhere")),
     # Longest first: the explicit-self spelling (Basri's Lieutenant) names the
     # same set as the bare one below it — see the oracle table's note.
     ("creature_you_control_dies",

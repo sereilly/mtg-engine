@@ -51,6 +51,7 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_add_mana_for_tappe
                        _lower_pay_life, _lower_ante, _lower_exchange_life_totals,
                        _lower_set_life_total, _lower_double_power, _lower_switch_pt,
                        _lower_exile_cost_sacrifices, _lower_exile_graveyard,
+                       _lower_exile_graveyard_arrivals_this_turn,
                        _lower_reveal_hand, _lower_reveal_random_from_hand,
                        _lower_graveyard_top_to_library,
                        _lower_reveal_top_sorting_by_filter,
@@ -239,12 +240,12 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.RevealRandomFromHand: _lower_reveal_random_from_hand,
     ast.ExileCostSacrifices: _lower_exile_cost_sacrifices,
     ast.ExileGraveyard: _lower_exile_graveyard,
+    ast.ExileGraveyardArrivalsThisTurn: _lower_exile_graveyard_arrivals_this_turn,
     ast.LookAtHand: _lower_look_at_hand,
     ast.GraveyardTopToLibrary: _lower_graveyard_top_to_library,
     ast.LookAtLibraryTop: _lower_look_at_library_top,
     ast.LookTopCycleForLife: _lower_look_top_cycle_for_life,
     ast.SeparateLibraryTopIntoPiles: _lower_separate_library_top_into_piles,
-    ast.SearchLibrary: _lower_search_library,
     ast.ExileTopOfLibrary: _lower_exile_top_of_library,
     ast.ExileGraveyardPosition: _lower_exile_graveyard_position,
     ast.LookTopExileRandom: _lower_look_top_exile_random,
@@ -331,6 +332,12 @@ _BY_NODE_TYPE_WITH_EVENT: dict[type, object] = {
     # the same seat question one zone over, and the same answer.
     ast.ExileRandomFromHand: _lower_exile_random_from_hand,
     ast.Mill: _lower_mill,
+    # "…a card **with the same name as that creature**" (Remembrance). The
+    # name is the firing event's object's, so the lowering has to know which
+    # event fired — and refuses under one that records none rather than
+    # searching for a name nobody wrote down. It left the name-only table above
+    # the moment its lowering started deciding something.
+    ast.SearchLibrary: _lower_search_library,
     # "…**that player** puts the cards in their hand on the bottom of their
     # library in any order, then draws that many cards" (Teferi's Puzzle Box).
     ast.PutHandCardsOnLibrary: _lower_put_hand_cards_on_library,

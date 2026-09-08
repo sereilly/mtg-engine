@@ -681,3 +681,57 @@ def _parse_put_exiled_this_way(
         subject.filter, zone=default.zone, zone_owner=default.zone_owner,
     )
     return ast.PutExiledThisWay(zone, described, player)
+
+
+def parse_exile_graveyard_arrivals_this_turn(
+    stream: TokenStream,
+) -> "ast.ExileGraveyardArrivalsThisTurn | None":
+    """``If a card would be put into <whose> graveyard from anywhere this turn,
+    exile that card instead.`` (Yawgmoth's Will.)
+
+    CR 614 created by a **spell**. The unbounded spelling of the same sentence
+    is a static ability of a permanent and `engine/replacements.py` reads it
+    off that permanent's text; this one names a window, so the effect has to
+    leave a record behind and the sentence needs a production.
+
+    Read whole or not at all, and non-consuming on refusal, exactly as every
+    other replacement-shaped "If …" reader in `statements.py` is: the words up
+    to "this turn" are a prefix of the static sentence the registry claims, and
+    a half-read line would take that claim away from it.
+
+    The three printed scopes are read in the same vocabulary
+    `replacements.graveyard_exile_scope` uses, so one phrase has one meaning
+    across the two readings. Which of them an *effect* can arm is the
+    lowering's answer.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("if", "a", "card", "would", "be", "put", "into"):
+        stream.reset(mark)
+        return None
+    if stream.accept_word("your"):
+        whose = "you"
+    elif stream.accept_phrase("an", "opponent", "'s"):
+        whose = "opponent"
+    elif stream.accept_word("a"):
+        whose = "any"
+    else:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase(
+        "graveyard", "from", "anywhere", "this", "turn",
+    ):
+        stream.reset(mark)
+        return None
+    stream.accept_punct(",")
+    if not stream.accept_word("exile"):
+        stream.reset(mark)
+        return None
+    # "…exile **that card** instead" and "…exile **it** instead" are one
+    # referent, which is what the static reading's own regex already says.
+    if not (stream.accept_phrase("that", "card") or stream.accept_word("it")):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("instead"):
+        stream.reset(mark)
+        return None
+    return ast.ExileGraveyardArrivalsThisTurn(whose)

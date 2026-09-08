@@ -348,14 +348,22 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 
 | Channel | Sentences claimed |
 | --- | --- |
+<<<<<<< HEAD
 | parse rule | 2962 |
+=======
+| parse rule | 2959 |
+>>>>>>> usg-w2g2
 | activation cost | 1315 |
 | trigger table | 888 |
 | static-line table | 769 |
 | keyword table | 641 |
 | aura enchant noun (oracle_instructions attach) | 214 |
 | activation_restrictions.py | 120 |
+<<<<<<< HEAD
 | card_hooks bespoke (name-keyed) | 84 |
+=======
+| card_hooks bespoke (name-keyed) | 87 |
+>>>>>>> usg-w2g2
 | cast_costs.py | 71 |
 | loyalty cost | 33 |
 | oracle.py (modal trigger head) | 29 |

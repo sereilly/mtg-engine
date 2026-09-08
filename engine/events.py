@@ -217,9 +217,23 @@ def cast_trigger_events(game: Game, event: Event) -> list[dict]:
 #: (Gaea's Blessing) can only ever be about the object that moved, so there is
 #: nothing for a card to declare and nothing for a second reader to disagree
 #: with.
-_MOVED_CARD_CONDITIONS: frozenset[str] = frozenset(
-    {"self_put_into_graveyard_from_library"}
-)
+#: Keyed by **event kind**, because the two are not always the same word. A
+#: card whose condition names a move nothing else watches announces itself under
+#: a kind of its own (``self_put_into_graveyard_from_library``); where a
+#: board-wide condition already announces the same move, the moved card rides
+#: that one announcement rather than a second — Serra Avatar's "when this
+#: creature is put into a graveyard **from anywhere**" and Planar Void's
+#: "whenever another card is put into a graveyard from anywhere" are one event
+#: asked from two places, and two emits would split one move's triggers across
+#: two batches where CR 603.3b puts simultaneous triggers on together.
+_MOVED_CARD_CONDITIONS: dict[str, frozenset[str]] = {
+    "self_put_into_graveyard_from_library": frozenset(
+        {"self_put_into_graveyard_from_library"}
+    ),
+    "card_put_into_graveyard": frozenset(
+        {"self_put_into_graveyard_from_anywhere"}
+    ),
+}
 
 
 def moved_card_trigger_events(game: Game, event: Event) -> list[dict]:
@@ -237,7 +251,8 @@ def moved_card_trigger_events(game: Game, event: Event) -> list[dict]:
     owner, so "shuffle **your** graveyard into **your** library" is that
     player's.
     """
-    if event.kind not in _MOVED_CARD_CONDITIONS:
+    conditions = _MOVED_CARD_CONDITIONS.get(event.kind)
+    if conditions is None:
         return []
     from .trigger_utils import matching_triggers
 
@@ -255,7 +270,7 @@ def moved_card_trigger_events(game: Game, event: Event) -> list[dict]:
             "ability_text": trig.source_line,
             "trigger_context": dict(event.payload) or None,
         }
-        for trig in matching_triggers(card, condition_kinds={event.kind})
+        for trig in matching_triggers(card, condition_kinds=conditions)
         if trig.instruction is not None
     ]
 
@@ -367,21 +382,49 @@ def _moved_card_only_filter(
 
 
 @event_filter("card_put_into_graveyard")
-def _card_into_your_graveyard_filter(
+def _card_put_into_graveyard_filter(
     game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event
 ) -> bool:
-    """"When a card is put into **your** graveyard from anywhere, sacrifice
-    this enchantment." (Energy Field.)
+    """One kind, two printed narrowings, read as **data** rather than as kinds.
 
-    "Your" is the watching permanent's controller (CR 109.5), never the card's
+    "When a card is put into **your** graveyard from anywhere, sacrifice this
+    enchantment." (Energy Field.) — and — "Whenever **another** card is put into
+    a graveyard from anywhere, exile that card." (Planar Void.)
+
+    The move is the same event and `Game.put_card_into_graveyard` is the same
+    seam; what differs is which cards each card's own sentence admits. So the
+    condition is one kind and each row carries its narrowing as an empty named
+    group, which is CLAUDE.md's rule stated the other way round: a narrowing is
+    data, not a kind. Two kinds here would be two names for one event, and two
+    *filters* is not an option either — `event_filter` allows one per kind, by
+    design, and USG's wave-2 integration is where that stopped being academic:
+    both cards arrived on different branches, each with its own filter, and the
+    merge silently left one of them undecorated.
+
+    **your**: the watching permanent's controller (CR 109.5), never the card's
     owner and never the seat that caused the move — an opponent milling their
-    own library must not break the Field, and the same card going to *its*
-    controller's graveyard must, however it got there.
+    own library must not break the Field, and the same card reaching *its*
+    controller's graveyard must, however it got there. Read through the control
+    seam, so a Field somebody has taken control of watches **their** graveyard
+    from the moment they take it (CR 613 layer 2).
 
-    Read through the control seam, so a Field somebody has taken control of
-    watches **their** graveyard from the moment they take it (CR 613 layer 2).
+    **another**: the ability's own source is excluded and nothing else is.
+    Compared by `CardDefinition` identity, which is the identity this engine
+    has — a deck repeats one immutable definition per copy, so a second Planar
+    Void milled while the first is on the battlefield is skipped. That is the
+    wrong half of a rare pair and it is chosen deliberately: the other reading
+    has Planar Void exiling itself as it dies, which is the one case the printed
+    word forbids.
+
+    A row carrying neither marker admits every card, which is what the sentence
+    without either word says.
     """
-    return game.controller_index_of(permanent) == event.payload.get("owner_index")
+    payload = trig.condition.payload
+    if "your_graveyard" in payload:
+        return game.controller_index_of(permanent) == event.payload.get("owner_index")
+    if "another_card" in payload:
+        return event.subject is not permanent.card
+    return True
 
 
 @event_filter("you_play_card")
