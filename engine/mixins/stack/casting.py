@@ -336,15 +336,31 @@ def permanent_matches_enchant_noun(permanent: Permanent, noun: str) -> bool:
         parts = [part.strip() for part in noun.split(" or ")]
         matchers = [_ENCHANT_TARGET_MATCHERS.get(part) for part in parts]
         if any(matcher is None for matcher in matchers):
-            return True
+            return False
         return any(matcher(permanent) for matcher in matchers)
     matcher = _ENCHANT_TARGET_MATCHERS.get(noun)
     if matcher is None:
-        # A noun nobody has read. Every one the pool prints has a row above, so
-        # this is unreachable today and is kept as the permissive answer rather
-        # than made strict: a printed clause reaching here is a gap to fill, and
-        # refusing every host would make the Aura uncastable instead of loud.
-        return True
+        # A noun nobody has read: **no** host, not every host.
+        #
+        # Both fallbacks used to answer True, on the reasoning that refusing
+        # would make such an Aura uncastable rather than loud. It is already
+        # loud, and one step earlier: an unread noun fails
+        # ``targeting.enchant_line_subject``'s vocabulary, so the enchant line
+        # is unclaimed, the card compiles **unsupported** ("unimplemented aura
+        # effect: enchant equipment") and no player can put it in a deck. What
+        # the permissive answer bought was therefore nothing, and what it cost
+        # was the one way the three vocabularies can drift apart: this table is
+        # the *gate*, ``targeting._ENCHANT_NOUNS`` is the *claim* and
+        # ``targeting._ENCHANT_NOUN_TO_SPEC`` is the *picker*, and a noun added
+        # to the other two and not to this one is a supported, deckable Aura
+        # whose printed restriction nothing tests — Roots' failure exactly, and
+        # a restriction that fails open is wrong in the player's favour and
+        # silent.
+        #
+        # Failing closed makes that drift a card that attaches to nothing,
+        # which is visible in one game. ``test_enchant_vocabularies.py`` makes
+        # it a failing test instead, which is visible without one.
+        return False
     if excluded is not None and permanent.has_type(excluded):
         return False
     return matcher(permanent)

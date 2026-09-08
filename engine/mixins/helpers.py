@@ -2547,7 +2547,17 @@ class GameHelpersMixin:
         build their own ``StackItem`` and push it here directly. A choice armed
         one layer up covered the enqueued triggers and quietly missed those,
         which is the fire-site problem in miniature.
+
+        **And one thing happens before the push rather than after it.** CR
+        603.4's intervening-if is asked when the trigger event occurs, and an
+        ability whose condition is false "does nothing" — it never goes on the
+        stack at all. So :meth:`trigger_condition_holds` is the one gate that
+        can refuse this method, and it returns ``None`` when it does. Every
+        caller ignores the return except the fire sites that log "added to the
+        stack", which now say so only if it was.
         """
+        if not self.trigger_condition_holds(item):
+            return None
         self._stack_push_object(item)
         self._choose_trigger_mode(item, targets_already_chosen=targets_already_chosen)
         # …and its non-modal twin: an ability whose printed noun phrase is a

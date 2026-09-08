@@ -435,11 +435,19 @@ def test_quirion_dryad_counters_only_the_listed_colours(set_pool):
 
 
 def test_adherent_of_hope_triggers_only_on_its_controllers_combat(set_pool):
-    """The trigger *condition* is the controller's combat — a separate question
-    from the intervening-if below, which decides whether the resolution does
-    anything."""
-    adherent = Permanent(card=set_pool("M21")["Adherent of Hope"])
-    p1 = PlayerState(name="P1", battlefield=[adherent])
+    """The trigger *condition* is the controller's combat, asked separately
+    from the intervening-if.
+
+    Both are asked at the same moment now (CR 603.4's first check, W3G5), so
+    the Basri planeswalker has to be on the battlefield for this test to be
+    about the condition at all: without it the ability does not trigger, and
+    an empty stack would pass for the wrong reason on the controller's own
+    combat as well as on the opponent's.
+    """
+    pool = set_pool("M21")
+    adherent = Permanent(card=pool["Adherent of Hope"])
+    basri = Permanent(card=pool["Basri Ket"])
+    p1 = PlayerState(name="P1", battlefield=[adherent, basri])
     game = Game(players=[p1, PlayerState(name="P2")])
 
     game.start_turn(0)
@@ -457,9 +465,13 @@ def test_adherent_of_hope_triggers_only_on_its_controllers_combat(set_pool):
 def test_adherent_of_hope_does_nothing_without_its_basri_planeswalker(set_pool):
     """CR 603.4. The printed line is "…**if you control a Basri planeswalker**,
     put a +1/+1 counter on this creature", and the condition was lowered onto
-    the payload and read by nothing — so the counter landed every combat. It is
-    checked on resolution now, and with no Basri in play the ability does
-    nothing at all."""
+    the payload and read by nothing — so the counter landed every combat.
+
+    It is checked at **both** of the rule's moments now: with no Basri in play
+    the ability never triggers, so nothing reaches the stack and no counter is
+    put on — where before W3G5 built the fire-time half it went on the stack,
+    sat there and removed itself, which is the same board and a different game.
+    """
     adherent = Permanent(card=set_pool("M21")["Adherent of Hope"])
     p1 = PlayerState(name="P1", battlefield=[adherent])
     game = Game(players=[p1, PlayerState(name="P2")])
@@ -468,8 +480,9 @@ def test_adherent_of_hope_does_nothing_without_its_basri_planeswalker(set_pool):
     game.start_turn(0)
     game._close_current_priority_step()
     game.advance_combat_phase()
-    game.resolve_top_of_stack()
 
+    assert not game.stack, "CR 603.4: it does not trigger at all"
+    game.resolve_top_of_stack()
     assert adherent.effective_power == base
 
 
