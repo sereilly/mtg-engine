@@ -1390,7 +1390,7 @@ def test_layers_only_import_downward(layers):
     "package,shared,roof",
     [
         ("effects", (), ()),
-        ("lowering", ("_common", "_filters", "_events", "_deaths", "_delays", "_amounts", "_counted_damage", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_conjuncts", "_bound_returns", "_bound_exiles", "_described_returns", "_piles", "_counter_stores", "_plus_one_counters", "_blankets", "_zone_categories", "_record_keys", "_record_conditions", "categories", "conditions"), ()),
+        ("lowering", ("_common", "_filters", "_events", "_deaths", "_delays", "_amounts", "_counted_damage", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_conjuncts", "_bound_returns", "_bound_exiles", "_described_returns", "_piles", "_counter_stores", "_plus_one_counters", "_blankets", "_pump_categories", "_zone_categories", "_record_keys", "_record_conditions", "categories", "conditions"), ()),
         # `costs` is shared beside `_core` rather than a family: a cost is
         # charged on the way to the stack and never lowered, so it has no
         # `effects/` or `lowering/` twin to be a family of — and both
@@ -1942,6 +1942,19 @@ FAMILY_SHARED = {
     # rows. **Not one row's value changed** — a category names the migration
     # family a kind belongs to, never the module its lowering lives in, and
     # renaming one leaves it out of `GRAMMAR_CATEGORIES`, which has no fallback.
+    # `_pump_categories` split out of `lowering/categories.py` at Urza's
+    # Saga's wave-2 integration, when that table crossed the guard at 1,003 —
+    # three lines over, from two groups' rows summing with neither at fault.
+    # The seam is the one its three earlier splits all used: take a whole
+    # *category*, and take the largest one left. `pump` was 50 of the 310 rows
+    # still declared there, as `zones` was when it left at Visions.
+    # The line is CLAUDE.md's own: a kind categorised `pump` is a kind whose
+    # handler ends in `engine/pt.py`'s single P/T write API, and every kind left
+    # in `categories` ends somewhere else — `_zone_categories`' question ("does
+    # this kind name two zones?") one layer of the CR down. A floor, not a
+    # family: 50 rows of data with no call graph, folded back in with
+    # `update()` so `INSTRUCTION_CATEGORIES`' address never moved.
+    "_pump_categories",
     "_zone_categories",
     # `_record_keys` split out of `_events` at Tempest's Phase 0, when that
     # module sat twelve lines from the guard as a floor eight lowering families
