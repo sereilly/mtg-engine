@@ -215,6 +215,22 @@ PARSE_LAYERS = [
     # attacking creature" nests a whole phrase.
     "postmodifiers",
     "nouns",
+    # Which **seat** a printed phrase names — CR 102's player, not CR 109's
+    # object. Split out of `references` at Urza's Saga's wave-2 integration,
+    # when that module reached the guard with **one** line to spare and a third
+    # wave still to come. The line is the one `references`' own opening
+    # paragraph has stated since the day it was written: "CR 109 is what an
+    # object is, CR 115 is how a spell chooses one, and a player (CR 102) is not
+    # an object at all". What stayed is the two halves of CR 115 — what a phrase
+    # points at, and how many — and this was the third question it carried.
+    #
+    # Above `nouns`, which it reads for the possessive's noun phrase, and below
+    # `references`, which imports it and re-exports `parse_player_ref` under the
+    # name every caller already used. It reuses the name `_seats` carries on the
+    # `ast` side since Weatherlight and on the `lowering` side since it left
+    # `_common`, so the mirror re-forms across all three rather than forking a
+    # fourth vocabulary for one idea.
+    "seats",
     # The object an *earlier step of the same effect* already chose — "that
     # creature", "those creatures", "the other creature", "that Wall". Split
     # out of `references` at Tempest's Phase 0, when that module sat four lines
