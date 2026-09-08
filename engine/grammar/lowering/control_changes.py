@@ -293,7 +293,7 @@ def _lower_another_seat_gains_control(
 ) -> tuple[OracleInstruction, ...]:
     """"Target opponent gains control of this creature." (Chaos Lord.)
 
-    CR 611.2b's untimed control change, handed to a seat the sentence names.
+    CR 611.2a's untimed control change, handed to a seat the sentence names.
     Its own branch rather than a duration row beside the four linked ones,
     because what those four have in common is a *link* — something the sweep
     re-checks — and this has none: nothing ends it but a later contribution.
@@ -417,7 +417,7 @@ def _lower_gain_control(
         raise LoweringError("the linked-control handler needs a named target", node=node)
     # "**Target opponent** gains control of this creature …" (Chaos Lord): the
     # sentence names the seat, so the permanent is handed over rather than taken.
-    # Read before the duration branches because CR 611.2b's change is untimed and
+    # Read before the duration branches because CR 611.2a's change is untimed and
     # every branch below is about when one ends. The offered form
     # (``node.offered``, Infernal Denizen) is a different sentence and keeps its
     # own branch further down — there the seat both picks and receives.

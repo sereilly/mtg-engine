@@ -583,7 +583,7 @@ def _parse_become_creature(
             # than admitting it with the first claim silently dropped.
             stream.reset(mark)
             return None
-    # **Read, not required.** A sentence printing no duration is CR 611.2b's
+    # **Read, not required.** A sentence printing no duration is CR 611.2a's
     # default — the animation lasts indefinitely (Mishra's Groundbreaker) — and
     # the two lower to different instruction kinds, so the absence is carried
     # rather than defaulted. It is only optional once the addition clause has

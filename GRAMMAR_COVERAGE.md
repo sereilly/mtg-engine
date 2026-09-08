@@ -37,7 +37,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | STH | 143 | 215 | 88.4% | 88.4% | 62.8% | 124 |
 | EXO | 143 | 207 | 90.3% | 90.3% | 66.2% | 127 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| USG *(measured)* | 335 | 486 | 86.0% | 85.8% | 61.5% | 259 |
+| USG *(measured)* | 335 | 486 | 86.2% | 86.2% | 61.9% | 261 |
 | **All (shipped)** | **4873** | **7239** | **90.7%** | **90.0%** | **60.1%** | **3649** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -50,7 +50,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 406 | 174 | expected a subject |  |
+| 405 | 173 | expected a subject |  |
 | 115 | 60 | unrecognized effect verb |  |
 | 87 | 43 | unconsumed text |  |
 | 39 | 23 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -62,8 +62,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 6 | 1 | no handler for this battlefield entry |  |
 | 6 | 1 | a counted redirect off the source moves the damage onto one chosen target |  |
 | 6 | 1 | unsupported life-loss target 'owner' |  |
-| 6 | 6 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
 | 5 | 1 | expected 'card' |  |
+| 5 | 5 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
 | 4 | 1 | the sacrifice prompt cannot test this restriction |  |
 | 4 | 1 | expected 'that' |  |
 | 4 | 1 | attach needs one chosen permanent to attach to |  |
@@ -2579,6 +2579,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `This creature can't block black creatures.`
 - **Gift of the Woods**
   - `Whenever enchanted creature blocks or becomes blocked, it gets +0/+3 until end of turn and you gain 1 life.`
+- **Gilded Drake**
+  - `When this creature enters, exchange control of this creature and up to one target creature an opponent controls. If you don't or can't make an exchange, sacrifice this creature. This ability still resolves if its target becomes illegal.`
 - **Glacial Chasm**
   - `When this land enters, sacrifice a land.`
 - **Glacial Crevasses**
@@ -5917,6 +5919,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{X}, Sacrifice this artifact: Create X 1/1 green Snake creature tokens. Activate only as a sorcery.`
 - **Snarespinner**
   - `Whenever this creature blocks a creature with flying, this creature gets +2/+0 until end of turn.`
+- **Sneak Attack**
+  - `{R}: You may put a creature card from your hand onto the battlefield. That creature gains haste. Sacrifice the creature at the beginning of the next end step.`
 - **Snow Devil**
   - `Enchanted creature has first strike as long as it's blocking and you control a snow land.`
 - **Snow Fortress**

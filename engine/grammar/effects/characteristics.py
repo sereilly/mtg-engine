@@ -182,7 +182,7 @@ def _parse_gains(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
     # not a sentence, and letting the words alone decide would build a node
     # whose gainer is a permanent.
     #
-    # No duration is read. CR 611.2b makes an untimed control change one that
+    # No duration is read. CR 611.2a makes an untimed control change one that
     # lasts indefinitely, which is what this printing is; a card printing a
     # duration behind this spelling would leave it unconsumed and fail the line
     # loudly rather than being silently given the wrong lifetime.

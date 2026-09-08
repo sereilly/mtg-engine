@@ -449,7 +449,7 @@ def _lower_pump(
             )
         # "{1}{R}: This creature gets +2/+0 …" (Goblin Ski Patrol) — a
         # *resolved* ability's modification with no duration printed, which
-        # CR 611.2b makes one that lasts indefinitely. It is not the continuous
+        # CR 611.2a makes one that lasts indefinitely. It is not the continuous
         # effect the refusal below is about: a static ability contributes
         # afresh on every layer recompute and is refused one layer up
         # (`_lower_static_ability`), while this is a one-shot the persistent
