@@ -17,7 +17,7 @@ import dataclasses
 
 from .. import ast
 from ..amounts import accept_fraction_head, accept_rounding, parse_amount, parse_equal_to
-from ..records import accept_as_many_as
+from ..records import accept_as_many_as, parse_for_each_sacrificed_this_way
 
 from ..amounts import accept_counters_on_source
 from ..errors import GrammarError
@@ -94,6 +94,20 @@ def _parse_draw_multiplier(stream: TokenStream) -> "ast.Amount | None":
     belongs to whatever production already handles a per-each, and adding a
     second reader is how the two come to disagree.
     """
+    # "Draw a card **for each permanent sacrificed this way**." (Reprocess.)
+    # A count off what the sentence in front of this one took, which no reading
+    # of the board can answer: "any number" prints no count and the permanents
+    # are gone by now (CR 400.7). Read through the one production that owns the
+    # phrase, and *before* "for each" is consumed, so the clause is claimed or
+    # refused whole.
+    #
+    # First, because the plain noun-phrase reading below would consume the noun
+    # and leave "sacrificed this way" as unconsumed text — the phrase claimed
+    # for a count of the whole battlefield, which is a strictly larger number
+    # than the card prints.
+    sacrificed = parse_for_each_sacrificed_this_way(stream, parse_object_filter)
+    if sacrificed is not None:
+        return sacrificed
     mark = stream.mark()
     if not stream.accept_phrase("for", "each"):
         stream.reset(mark)

@@ -584,7 +584,7 @@ def _lower_shuffle_hand_into_library(
         # (CR 402.1: only its owner may look) where a whole hand is a move. The
         # handler arms the prompt that asks it; the sweep above has nothing to
         # ask.
-        if node.then_draw:
+        if node.then_draw or node.then_draw_count is not None:
             # "…then draws that many cards" counts what the whole-hand move
             # took. Behind a printed number the phrase would be that number
             # said twice, and no card prints the pair — so it refuses rather
@@ -609,6 +609,15 @@ def _lower_shuffle_hand_into_library(
             {
                 "whose": node.whose.kind,
                 "then_draw": node.then_draw,
+                # "…, **then draws seven cards**." (Time Spiral.) The printed
+                # number, beside the flag rather than inside it: the flag means
+                # "as many as moved" and this means "this many whatever moved",
+                # and a handler handed one for the other draws a hand-sized grip
+                # where the card prints a fixed one.
+                **(
+                    {"then_draw_count": node.then_draw_count}
+                    if node.then_draw_count is not None else {}
+                ),
                 # "…their hand **and graveyard** into their library."
                 # (Diminishing Returns.) A second pile in the same move, and a
                 # flag on the same instruction rather than a second one for the

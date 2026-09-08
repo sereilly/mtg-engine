@@ -445,28 +445,6 @@ def ante_self_then_clear_ante_and_draw(game: Game, instruction: OracleInstructio
     return True, "resolved"
 
 
-@effect_handler("wheel_of_fortune")
-def wheel_of_fortune(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    for player in game.players:
-        while player.hand:
-            game.put_card_into_graveyard(player, player.hand.pop(0))
-        game._draw_with_replacements(player, 7)
-    game.log.append("Wheel effect resolved for all players")
-    return True, "resolved"
-
-
-@effect_handler("timetwister")
-def timetwister(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    for player in game.players:
-        pool = player.library + player.hand + player.graveyard
-        player.library = list(pool)
-        player.hand = []
-        player.graveyard = []
-        game._draw_with_replacements(player, 7)
-    game.log.append("Timetwister effect resolved for all players")
-    return True, "resolved"
-
-
 def _search_restrictions(game: Game, payload: dict, context) -> dict:
     """The armed search's restrictions, with the ones only a resolution can
     answer resolved.
@@ -5355,6 +5333,42 @@ def discard_hand(game: Game, instruction: OracleInstruction, context: OracleExec
     effect must not hit.
     """
     caster = context.caster
+    if instruction.payload.get("who") == "each_player":
+        # "**Each player** discards their hand…" (Windfall.) Every living seat
+        # in CR 101.4's order, which is the order every other each-player loop
+        # in this engine walks — nothing here is a decision, but a seeded run
+        # still has to replay identically.
+        #
+        # The tally is recorded **per seat**, under the key the per-seat
+        # discards already write: the sentence behind this one asks for "the
+        # greatest number of cards **a player** discarded this way", and a
+        # single number would be whichever hand the loop emptied last.
+        total = len(game.players)
+        active = game.active_player_index or 0
+        seats = sorted(
+            (i for i, p in enumerate(game.players) if not p.lost),
+            key=lambda i: ((i - active) % total, i),
+        )
+        by_seat = context.results.setdefault(DISCARDED_BY_SEAT, {})
+        emptied = 0
+        for seat in seats:
+            player = game.players[seat]
+            gone = list(player.hand)
+            player.hand = []
+            for card in gone:
+                game._discard_card(player, card)
+            by_seat[seat] = len(gone)
+            emptied += len(gone)
+            game.log.append(
+                f"{player.name} discarded their hand ({len(gone)} card(s))"
+            )
+        # The flat key too, for the sentence that asks about the whole
+        # resolution rather than about one seat — written for the same reason
+        # the single-seat branch below writes it, and as the total rather than
+        # as any one seat's share, which is what "this way" names when the
+        # effect emptied every hand.
+        context.results["discarded_count"] = emptied
+        return True, "resolved"
     if instruction.payload.get("who") == "damaged_player":
         seat = (context.trigger_context or {}).get("defending_player_index")
         if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
@@ -6816,6 +6830,12 @@ def shuffle_hand_into_library(game: Game, instruction: OracleInstruction, contex
     else:  # pragma: no cover - the lowering admits no other subject
         return False, "no player to shuffle"
     then_draw = bool(instruction.payload.get("then_draw"))
+    # "…, **then draws seven cards**." (Time Spiral.) The printed number, which
+    # is not what moved: a player whose hand and graveyard were both empty still
+    # draws a full grip, so this count is applied whatever the shuffle took —
+    # which is exactly what the ``and moved`` guard below is for the other
+    # spelling and must not be for this one.
+    then_draw_count = instruction.payload.get("then_draw_count")
     # "…their hand **and graveyard** into their library." (Diminishing Returns.)
     # The second pile joins the *same* move, which is why it rides this
     # instruction: CR 701.24 randomises the library once, and a graveyard
@@ -6844,7 +6864,9 @@ def shuffle_hand_into_library(game: Game, instruction: OracleInstruction, contex
             + (f" and {buried} from their graveyard" if with_graveyard else "")
             + " into their library"
         )
-        if then_draw and moved:
+        if then_draw_count is not None:
+            game._draw_with_replacements(player, int(then_draw_count))
+        elif then_draw and moved:
             game._draw_with_replacements(player, moved)
     return True, "resolved"
 

@@ -708,6 +708,70 @@ def accept_player_deed(stream: TokenStream, parse_filter) -> "ast.PlayerDeed | N
     return None
 
 
+def accept_greatest_discarded_this_way(
+    stream: TokenStream,
+) -> "ast.GreatestDiscardedThisWay | None":
+    """``the greatest number of cards a player discarded this way`` — or None,
+    cursor unmoved.
+
+    Windfall's second half. Every word is required, and each one of them is
+    load-bearing rather than ceremony:
+
+    * "greatest" is the aggregate, and without it the phrase would be a plain
+      count of somebody's discard;
+    * "a player" is what says the maximum is taken **across seats** — "they
+      discarded this way" is one seat's own answer and a different number;
+    * "this way" is the record, and letting it be absent would let the words be
+      deleted with no change to the parse.
+
+    Returning None leaves the cursor where it was.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase(
+        "the", "greatest", "number", "of", "cards", "a", "player",
+        "discarded", "this", "way",
+    ):
+        stream.reset(mark)
+        return None
+    return ast.GreatestDiscardedThisWay()
+
+
+def parse_for_each_sacrificed_this_way(
+    stream: TokenStream, parse_filter,
+) -> "ast.CountOfSacrificesThisWay | None":
+    """``for each <objects> sacrificed this way`` — how many of what an earlier
+    step of this same effect *sacrificed* answer a printed noun phrase.
+
+    "Sacrifice any number of artifacts, creatures, and/or lands. Draw a card
+    **for each permanent sacrificed this way**." (Reprocess.)
+
+    Its own reader beside :func:`parse_for_each_milled_this_way`, which it is
+    shaped exactly like and names a different record: a mill puts cards there
+    from a library and this took permanents off the battlefield, so reading one
+    as the other counts a set the card never named.
+
+    Not a row in ``_THIS_WAY_COUNTS`` above, and the difference is what the
+    record *is*: every key in that table names a scratchpad slot holding a
+    **number**, and the sacrifice records the **cards** — which is what lets a
+    narrowed spelling ask how many of them were creatures, and what makes a
+    bare ``int()`` of the slot a type error rather than a count.
+
+    Returning None leaves the cursor where it was.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("for", "each"):
+        return None
+    try:
+        filt = parse_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("sacrificed", "this", "way"):
+        stream.reset(mark)
+        return None
+    return ast.CountOfSacrificesThisWay(filt)
+
+
 def parse_for_each_milled_this_way(
     stream: TokenStream, parse_filter,
 ) -> "ast.CountOfMillsThisWay | None":

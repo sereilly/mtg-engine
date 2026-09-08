@@ -552,15 +552,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         "beginning of the next end step":
             _line("grant_flying_and_delayed_destruction", "activated_keyword"),
     },
-    'Timetwister': {
-        'each player shuffles their hand and graveyard into their library, then '
-        'draws seven cards':
-            _line('timetwister', 'spell_pattern'),
-    },
-    'Wheel of Fortune': {
-        'each player discards their hand, then draws seven cards':
-            _line('wheel_of_fortune', 'spell_pattern'),
-    },
     'Word of Command': {
         "look at target opponent's hand and choose a card from it. you control "
         'that player until word of command finishes resolving. the player plays '

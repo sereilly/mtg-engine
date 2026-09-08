@@ -120,6 +120,51 @@ class CountOfMillsThisWay:
 
 
 @dataclass(frozen=True)
+class GreatestDiscardedThisWay:
+    """"Each player discards their hand, then draws cards equal to **the
+    greatest number of cards a player discarded this way**." (Windfall.)
+
+    A *maximum across seats*, which is what makes it a node of its own rather
+    than a back-reference to a number: the discard in front of it has one answer
+    per player, and the sentence asks for the largest of them. There is no scalar
+    for the words to name — the flat ``discarded_count`` would be whichever seat
+    answered last — so the record read is the per-seat map and the aggregate is
+    part of the phrase.
+
+    And it is **one** number for everybody, not one per drawer: every player
+    draws the same greatest count, which is the whole reason Windfall is a
+    symmetrical card. That is the difference from "each player draws a card for
+    each card in **their** graveyard", which is per-seat all the way down.
+
+    A back-reference, so lowering refuses it unless a step of the same effect
+    really recorded the map: with no producer "this way" names nothing, and a
+    zero is a number the card never printed.
+    """
+
+
+@dataclass(frozen=True)
+class CountOfSacrificesThisWay:
+    """"Sacrifice any number of artifacts, creatures, and/or lands. Draw a card
+    **for each permanent sacrificed this way**." (Reprocess.)
+
+    :class:`CountOfMillsThisWay` one zone-change over, and its own node for that
+    class's reason: what the record holds is exactly what the sentence in front
+    of this one took off the battlefield, and neither the graveyard nor the
+    turn's death tally is that set — both also hold everything that arrived by
+    any other route.
+
+    The number cannot be the *printed* count either, which is what makes the
+    back-reference load-bearing rather than decorative: "any number" prints no
+    count at all, so how many went is known only once the seat has answered.
+
+    A back-reference, so lowering refuses it unless a step of the same effect
+    really records one — with no producer "this way" names nothing, and a zero
+    is a number the card never printed.
+    """
+    filter: "ObjectFilter"
+
+
+@dataclass(frozen=True)
 class CountOfTapsThisWay:
     """"the number of Islands **tapped this way**" (Monsoon) — how many
     permanents the *preceding step of this same effect* turned.
