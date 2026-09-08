@@ -4137,6 +4137,20 @@ def mill_target_player(game: Game, instruction: OracleInstruction, context: Orac
             game.players[i]
             for i in game.opponents_of(game.players.index(context.caster))
         ]
+    elif recipient == "each_player":
+        # "Each player mills two cards." (Whetstone.) CR 101.4's order — the
+        # active player first, then the rest in turn order — and a seat that
+        # has left the game mills nothing (CR 800.4a). The same shape
+        # ``draw_target_cards`` reads for the same two words one zone over.
+        total = len(game.players)
+        active = game.active_player_index or 0
+        victims = [
+            game.players[seat]
+            for seat in sorted(
+                (i for i, p in enumerate(game.players) if not p.lost),
+                key=lambda i: ((i - active) % total, i),
+            )
+        ]
     elif recipient == "damaged_player":
         seat = (context.trigger_context or {}).get("defending_player_index")
         if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
@@ -7764,6 +7778,14 @@ def return_all_cards_from_graveyard(game: Game, instruction: OracleInstruction, 
     """
     described = dict(instruction.payload.get("filter") or {})
     who = str(instruction.payload.get("who", "you"))
+    # "…to **your hand**." (Crystal Chimes.) The pair of zones is what picks the
+    # move, and the graveyard half is the same either way — which is why it is
+    # one key rather than a second kind that would re-derive the same sweep.
+    # Absent means the battlefield, so every payload written before this means
+    # what it meant.
+    destination = str(instruction.payload.get("destination", "battlefield"))
+    # "…to the battlefield **tapped**." (Planar Birth.) CR 110.5b.
+    tapped = bool(instruction.payload.get("tapped"))
     if who == "each_player":
         seats = list(range(len(game.players)))
     else:
@@ -7779,7 +7801,21 @@ def return_all_cards_from_graveyard(game: Game, instruction: OracleInstruction, 
         for index in sorted(taken, reverse=True):
             player.graveyard.pop(index)
         for card in cards:
-            game._put_permanent_onto_battlefield(seat, Permanent(card=card), None)
+            if destination == "hand":
+                # CR 903.9b's seam, never `player.hand.append` — a bounce, a
+                # tuck and a regrowth are all "would be put into its owner's
+                # hand", and this is one of the thirty fire sites that rule has
+                # no single one of.
+                game.put_card_into_hand(player, card)
+                game.log.append(
+                    f"{player.name} returned {card.name} to their hand from the graveyard"
+                )
+                returned += 1
+                continue
+            permanent = Permanent(card=card)
+            if tapped:
+                permanent.tapped = True
+            game._put_permanent_onto_battlefield(seat, permanent, None)
             game.log.append(
                 f"{player.name} returned {card.name} to the battlefield from the graveyard"
             )

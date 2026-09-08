@@ -310,6 +310,17 @@ def _parse_return(
         "under", "its", "owner", "'s", "control"
     ):
         under_control_of = ast.PlayerRef("owner")
+    # "…to the battlefield tapped **under their owners' control**." (Planar
+    # Birth.) The plural of the phrase above and the same field: a sweep over
+    # every graveyard on the table returns cards to several owners, so the
+    # possessive agrees with the swept set rather than with one card. Both
+    # spellings mean CR 400.3's seat, which is why they are one field and not
+    # two — a second kind here would be a second answer to a question the rule
+    # has already settled.
+    elif destination.name == "battlefield" and stream.accept_phrase(
+        "under", "their", "owners'", "control"
+    ):
+        under_control_of = ast.PlayerRef("owner")
 
     # "…attached to that creature." (Takklemaggot.) CR 303.4f: an effect that
     # puts an Aura onto the battlefield has to say what it attaches to. "That
