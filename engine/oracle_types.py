@@ -362,6 +362,19 @@ class ActivatedAbilityCost:
     #: charged too low is a free ability; too high is a refused one, and only
     #: the first is silent.
     pay_life_per_counter: str | None = None
+    #: "**Pay half your life, rounded up**" (Lurking Evil). The amount is a
+    #: fraction of the payer's own life total rather than a printed number, so
+    #: it is computed at activation (CR 601.2f) by the same two sites
+    #: ``pay_life_per_counter`` above is — the payability gate and the payment
+    #: — and never here. CR 107.2's rounding is the card's own word.
+    #:
+    #: Its own flag rather than a value of ``pay_life``, for that field's
+    #: reason exactly: a reader that has not learned the word charges the
+    #: printed number, and ``pay_life`` stays 0 while this is set, so such a
+    #: reader charges *nothing* — a free ability. The flag is what makes the
+    #: cost visible to `activation_life_cost`, which is the one function that
+    #: answers "how much, right now".
+    pay_life_half_rounded_up: bool = False
     #: "**Pay {1} for each +1/+1 counter on this creature**" (Skeleton
     #: Scavengers). The counter whose count multiplies
     #: :attr:`mana_per_counter_cost` below, on the ability's **own source** --

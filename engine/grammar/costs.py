@@ -158,7 +158,7 @@ def _is_chargeable_sacrifice(filt: ast.ObjectFilter) -> bool:
     direction they drift in is a cost nobody pays. The word "another" is left in
     the filter: the charger has the ability's source and compares by identity.
     """
-    from ..oracle import cost_object_is_named
+    from ..oracle import chargeable_sacrifice_payload, cost_object_is_chargeable
 
     if filt.is_source:
         return True
@@ -173,23 +173,33 @@ def _is_chargeable_sacrifice(filt: ast.ObjectFilter) -> bool:
         # *filter* it would have been "sacrifice a creature", which is the
         # printed cost with its one word dropped.
         return True
-    # ``controller`` travels beside it, for the reason the comment on the
-    # charger gives: a sacrifice is paid from the payer's own battlefield, so
+    # A permanent on a battlefield and nothing else: CR 701.21a lets a player
+    # sacrifice only a permanent they control, so a phrase naming a card in a
+    # zone is not a payable sacrifice at all and the reduction below would read
+    # it as a permanent.
+    if filt.zone != "battlefield" or filt.is_card:
+        return False
+    # A restriction with no ``to_payload`` key at all vanishes before any key
+    # check can see it — the AST gate ``_is_chargeable_exile`` has asked since
+    # it was written, missing here. It mattered less while the reduction had to
+    # carry *something*, because a phrase whose only narrowing was unhonoured
+    # reduced to nothing and was refused for that; with the empty reduction now
+    # a real answer ("a permanent", Claws of Gix) this is the gate that keeps a
+    # dropped rider from becoming a wider cost.
+    if _restrictions_beyond(
+        filt, _PAYLOAD_HONOURED_FILTER_FIELDS | {"zone", "zone_owner", "is_card"}
+    ):
+        return False
+    # The charger's own reader, not a second reduction spelled here: it drops
+    # ``controller`` (a sacrifice is paid off the payer's own battlefield, so
     # "creatures **you control**" narrows nothing the enumeration has not
-    # already done — but a key handed to a matcher that cannot test it is a key
-    # silently dropped, so it is lifted out rather than left in. Sword of the
-    # Ages prints the phrase and refused for it.
-    carried = object_only_filter(
-        filt.to_payload(),
-        carried_separately=frozenset({"exclude_self", "controller"}),
-    )
-    # An *unnamed* cost — one whose noun phrase narrows nothing the charger can
-    # test — would let the charger eat anything on the board, a land included.
-    # Asked of the charger's own reduction rather than of the AST fields, so
-    # the two halves of a sacrifice cost cannot answer it differently; see
-    # ``oracle.cost_object_is_named`` for what the axes are and why a card type
-    # is not one of them.
-    return carried is not None and cost_object_is_named(carried)
+    # already done), re-adds ``exclude_self`` (the charger holds the source and
+    # compares by identity) and refuses a phrase naming anybody else's
+    # permanent. Spelled here instead, the two halves disagreed about the last
+    # of those: this admitted "an opponent controls" and the charger refused it,
+    # which is a cost the grammar let through and nothing paid.
+    carried = chargeable_sacrifice_payload(filt.to_payload())
+    return cost_object_is_chargeable(carried)
 
 
 def _is_chargeable_exile(filt: ast.ObjectFilter) -> bool:
@@ -204,7 +214,7 @@ def _is_chargeable_exile(filt: ast.ObjectFilter) -> bool:
     is what Necropolis prints, and a phrase naming somebody else's pile is a
     cost this charger has no enumeration for.
     """
-    from ..oracle import chargeable_exile_payload, cost_object_is_named
+    from ..oracle import chargeable_exile_payload, cost_object_is_chargeable
 
     if filt.zone == "graveyard":
         # Whose pile. "your graveyard" (Necropolis) is the payer's own; **no
@@ -248,10 +258,9 @@ def _is_chargeable_exile(filt: ast.ObjectFilter) -> bool:
     ):
         return False
     carried = chargeable_exile_payload(filt.to_payload())
-    # An unnamed cost would let the charger eat anything the zone holds — the
-    # same refusal `_is_chargeable_sacrifice` makes, through the same reader,
-    # so a phrase one admits and the other refuses cannot exist.
-    return carried is not None and cost_object_is_named(carried)
+    # The same refusal `_is_chargeable_sacrifice` makes, through the same
+    # reader, so a phrase one admits and the other refuses cannot exist.
+    return cost_object_is_chargeable(carried)
 
 
 def _is_chargeable_counter_target(filt: ast.ObjectFilter) -> bool:
@@ -760,6 +769,27 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
             # The per-counter clause is **required**: a bare "Pay {1}" is the
             # mana symbol spelled twice, and admitting it here would charge a
             # flat rate for a cost whose whole point is that it grows.
+            # "Pay **half your life, rounded up**" (Lurking Evil). Read before
+            # the amount parser below, which wants a number and refuses on the
+            # word — the same one-token gap the attached mana cost above
+            # answers. The rounding word is **required**: CR 107.2 leaves a
+            # fraction unrounded unless the effect says which way, and reading
+            # "half your life" alone would pick a direction the card never
+            # printed. Rounding down is a different, strictly cheaper cost, so
+            # it refuses here rather than being folded in with a flag nothing
+            # in the pool sets.
+            halved = stream.mark()
+            if stream.accept_phrase("half", "your", "life"):
+                stream.accept_punct(",")
+                if stream.accept_phrase("rounded", "up"):
+                    costs.append(ast.PayLifeCost(half_rounded_up=True))
+                    stream.accept_punct(",")
+                    continue
+                stream.reset(halved)
+                raise stream.error(
+                    "only a life payment rounded up is charged"
+                )
+            stream.reset(halved)
             per_counter_mana = _accept_mana_run(stream)
             if per_counter_mana is not None:
                 rate = _accept_per_counter(stream)

@@ -428,3 +428,145 @@ def test_w1g5_carrion_beetles_exiles_three_cards_from_one_graveyard(set_pool):
     assert len(p2.exile) == 3
     assert len(p2.graveyard) == 1
     assert not game.pending_choices, "one pile with legal cards is not a decision"
+
+
+# --- W2G5: the activation-cost cluster (Barrin, Faith Healer) ---
+import pytest
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+from tests.helpers import resolve_stack
+
+
+def _g5_slot(game, seat, permanent):
+    """*permanent*'s slot in *seat*'s battlefield, for ``cost_permanent_index``.
+
+    The wire's own address, which is what that parameter takes; located by
+    identity so two copies of one card cannot answer for each other.
+    """
+    for index, found in enumerate(game.controlled_by(seat)):
+        if found is permanent:
+            return index
+    raise AssertionError("permanent is not on that battlefield")
+
+
+def _g5_cost_board(set_pool, *names, seat=0):
+    """A game with *names* on *seat*'s battlefield, none summoning sick."""
+    alice, bob = PlayerState(name="Alice"), PlayerState(name="Bob")
+    game = Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    pool = set_pool("USG")
+    made = []
+    for name in names:
+        perm = Permanent(card=pool[name])
+        game._put_permanent_onto_battlefield(seat, perm, None)
+        perm.metadata["summoning_sickness_turn"] = -99
+        made.append(perm)
+    return game, made
+
+
+def test_barrin_eats_a_land_to_bounce_a_creature(set_pool, catalog_by_name):
+    """"{2}, Sacrifice a permanent: Return target creature to its owner's hand."
+
+    The cost's noun phrase is the widest one printed — "a permanent" — and the
+    census reason said "no cost path charges a narrowed sacrifice". The charger
+    could always collect it; what refused was ``cost_object_is_named``, which
+    asked that the reduced filter carry *something* so an unnamed cost could
+    not eat a land. Here a land is exactly what the card says may pay, so the
+    land is the assertion: it goes to the graveyard and the bounce happens.
+    """
+    game, (barrin,) = _g5_cost_board(set_pool, "Barrin, Master Wizard")
+    forest = Permanent(card=catalog_by_name["Forest"])
+    game._put_permanent_onto_battlefield(0, forest, None)
+    victim = Permanent(card=catalog_by_name["Grizzly Bears"])
+    game._put_permanent_onto_battlefield(1, victim, None)
+
+    game.activate_permanent_ability(
+        0, "Barrin, Master Wizard",
+        target_player_index=1,
+        target_permanent_ids=[victim.permanent_id],
+        cost_permanent_index=_g5_slot(game, 0, forest),
+    )
+    resolve_stack(game)
+
+    assert [c.name for c in game.players[0].graveyard] == ["Forest"]
+    assert not any(p is forest for p in game.controlled_by(0))
+    assert [c.name for c in game.players[1].hand] == ["Grizzly Bears"]
+
+
+def test_barrin_pays_with_himself_when_he_is_the_only_permanent(set_pool, catalog_by_name):
+    """"A permanent" includes the source, so a lone Barrin can still activate.
+
+    The counterpart of a refusal test, and the more useful one here: the shape
+    that would fail is a charger reading "a permanent" as "another permanent",
+    which is the printed cost with a word added.
+    """
+    game, (barrin,) = _g5_cost_board(set_pool, "Barrin, Master Wizard")
+    victim = Permanent(card=catalog_by_name["Grizzly Bears"])
+    game._put_permanent_onto_battlefield(1, victim, None)
+
+    game.activate_permanent_ability(
+        0, "Barrin, Master Wizard",
+        target_player_index=1,
+        target_permanent_ids=[victim.permanent_id],
+    )
+    resolve_stack(game)
+
+    assert [c.name for c in game.players[0].graveyard] == ["Barrin, Master Wizard"]
+    assert [c.name for c in game.players[1].hand] == ["Grizzly Bears"]
+
+
+def test_faith_healer_gains_the_sacrificed_enchantments_mana_value(set_pool):
+    """"Sacrifice an enchantment: You gain life equal to the sacrificed
+    enchantment's mana value."
+
+    The number is a characteristic of what the *cost* ate (CR 601.2h), read
+    back as last-known information (CR 608.2h). Two different enchantments are
+    sacrificed in one game, because a reading that resolved to zero or to a
+    constant would look right at whichever card the test happened to pick.
+    """
+    game, (healer, lurking, greater) = _g5_cost_board(
+        set_pool, "Faith Healer", "Lurking Evil", "Greater Good"
+    )
+    game.players[0].life = 20
+
+    game.activate_permanent_ability(
+        0, "Faith Healer",
+        cost_permanent_index=_g5_slot(game, 0, lurking),
+    )
+    resolve_stack(game)
+    assert game.players[0].life == 23, "Lurking Evil is {B}{B}{B}"
+
+    game.activate_permanent_ability(
+        0, "Faith Healer",
+        cost_permanent_index=_g5_slot(game, 0, greater),
+    )
+    resolve_stack(game)
+    assert game.players[0].life == 27, "Greater Good is {2}{G}{G}"
+
+
+def test_diamond_valleys_toughness_reading_survives_the_shared_channel(catalog_by_name):
+    """One of the two cards the life family's private cost-sacrifice key was
+    written for.
+
+    Its lowering now emits the ``x_from_count`` channel every other family
+    reads that record on, so this is the differential the change owes: the
+    toughness is still what is gained, and it is the *effective* toughness the
+    permanent last had rather than the printed one.
+    """
+    alice, bob = PlayerState(name="Alice"), PlayerState(name="Bob")
+    game = Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    valley = Permanent(card=catalog_by_name["Diamond Valley"])
+    game._put_permanent_onto_battlefield(0, valley, None)
+    valley.metadata["summoning_sickness_turn"] = -99
+    bears = Permanent(card=catalog_by_name["Grizzly Bears"])
+    game._put_permanent_onto_battlefield(0, bears, None)
+    alice.life = 20
+
+    game.activate_permanent_ability(
+        0, "Diamond Valley", cost_permanent_index=_g5_slot(game, 0, bears),
+    )
+    resolve_stack(game)
+
+    assert alice.life == 22, "Grizzly Bears is 2/2"

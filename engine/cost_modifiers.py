@@ -133,6 +133,19 @@ class CostModifier:
     #: *result* and cannot be expressed as a smaller subtraction -- a {2}
     #: reduction meets the floor on a {2} ability and not on a {3} one.
     floor: int = 0
+    #: "**Cycling** abilities you activate cost {2} less to activate."
+    #: (Fluctuator.) Which *ability* is affected, where every field above says
+    #: which **object** is. The first modifier in the pool whose subject is not
+    #: a class of cards at all: a Fluctuator discounts one ability of a card
+    #: whose other abilities it leaves alone, so a reader that answered off the
+    #: card would discount them all.
+    #:
+    #: The keyword rather than a bare flag, because that is what the sentence
+    #: prints -- but only ``"cycling"`` is ever set, because
+    #: ``cycling.is_cycling_ability`` is the one keyword this engine can
+    #: recognise an ability *by* after CR 702.29a's rewrite has erased the
+    #: word. A second keyword needs its own derivation, not a second string.
+    ability_keyword: str | None = None
 
 
 @dataclass(frozen=True)
@@ -331,6 +344,35 @@ _BUYBACK_REDUCTION = re.compile(
     r"buyback costs cost \{(?P<amount>\d+)\} less"
 )
 
+#: "**Cycling abilities you activate cost {2} less to activate.**"
+#: (Fluctuator.) The same predicate as ``_ABILITY_REDUCTION`` above with a
+#: subject that names an **ability** rather than a class of cards, which is why
+#: it is its own row: "activated abilities of <colour> <type>s" narrows by what
+#: the source *is*, and this narrows by what the ability *is*.
+#:
+#: No floor sentence, unlike ``_ABILITY_REDUCTION``, and for
+#: ``_BUYBACK_REDUCTION``'s reason: the card prints none, so a Cycling {2}
+#: really does become free and CR 118.7a's clamp at zero is the whole of the
+#: arithmetic. A printing that *did* carry a floor would not match this pattern
+#: end to end and would be reported unsupported.
+#:
+#: The keyword is captured rather than spelled into the predicate so the
+#: refusal below has something to name: only "cycling" has a derivation
+#: (``engine/cycling.is_cycling_ability``), because CR 702.29a's rewrite is
+#: what erased the word in the first place, and a keyword with no derivation
+#: would discount every activated ability in the game.
+_KEYWORD_ABILITY_REDUCTION = re.compile(
+    r"(?P<keyword>[a-z]+) abilities you activate cost \{(?P<amount>\d+)\} "
+    r"less to activate"
+)
+
+#: The ability keywords :data:`_KEYWORD_ABILITY_REDUCTION` may name. One entry,
+#: and the set is what makes the refusal loud: a card naming any other keyword
+#: matches the pattern, produces no modifier, is claimed by no line and is
+#: reported unsupported -- rather than being read as a discount on abilities
+#: nothing can tell apart.
+_DERIVABLE_ABILITY_KEYWORDS = frozenset({"cycling"})
+
 
 @lru_cache(maxsize=None)
 def cost_modifiers_for(oracle_text: str) -> tuple[CostModifier, ...]:
@@ -399,6 +441,10 @@ def cost_modifiers_for(oracle_text: str) -> tuple[CostModifier, ...]:
                 floor=_ABILITY_FLOOR_WORDS[match.group("floor")],
             )
         )
+    for match in _KEYWORD_ABILITY_REDUCTION.finditer(text):
+        modifier = _keyword_ability_reduction(match)
+        if modifier is not None:
+            modifiers.append(modifier)
     for match in _BUYBACK_REDUCTION.finditer(text):
         modifiers.append(
             CostModifier(
@@ -412,6 +458,28 @@ def cost_modifiers_for(oracle_text: str) -> tuple[CostModifier, ...]:
         if modifier is not None:
             modifiers.append(modifier)
     return tuple(modifiers)
+
+
+def _keyword_ability_reduction(match: "re.Match[str]") -> CostModifier | None:
+    """The reduction :data:`_KEYWORD_ABILITY_REDUCTION` matched, or None when
+    the keyword it names is one no derivation can recognise.
+
+    Split out for ``_spell_tax_modifier``'s reason below: a pattern that
+    matches and then produces no modifier must also not *claim* the line, and
+    both questions are asked by calling this.
+    """
+    keyword = match.group("keyword")
+    if keyword not in _DERIVABLE_ABILITY_KEYWORDS:
+        return None
+    return CostModifier(
+        amount=int(match.group("amount")),
+        applies_to="activate",
+        reduces=True,
+        # "…**you** activate" (CR 109.5): the modifier's own controller, the
+        # same word ``_spell_tax_modifier`` reads for "you cast".
+        controller="you",
+        ability_keyword=keyword,
+    )
 
 
 def _spell_tax_modifier(match: "re.Match[str]") -> CostModifier | None:
@@ -527,6 +595,18 @@ def cost_modifier_claims_line(line: str) -> bool:
         )
     ):
         return True
+    # Claimed only when the keyword has a derivation, for
+    # `_sacrifice_symbol_modifier`'s reason: the pattern matches a sentence
+    # about any keyword and only one of them produces a modifier, so a claim
+    # taken off the match alone would report a card supported whose printed
+    # discount nothing applies.
+    keyword_ability = _KEYWORD_ABILITY_REDUCTION.match(text)
+    if (
+        keyword_ability is not None
+        and keyword_ability.end() == len(text)
+        and _keyword_ability_reduction(keyword_ability) is not None
+    ):
+        return True
     # Claimed only when the halves pair, for `_sacrifice_symbol_modifier`'s
     # reason: an unpaired sentence produces no modifier, and a claim over a line
     # nothing charges is the drift this seam exists to prevent.
@@ -604,7 +684,7 @@ def _matches(modifier: CostModifier, card) -> bool:
 
 def _tax(
     game, card, applies_to: str, *, wanted: str,
-    controller_index: int | None = None, targeted=(),
+    controller_index: int | None = None, targeted=(), ability=None,
 ) -> tuple[int, list[str]]:
     """The total *wanted* ("more" or "less") change to *card*'s cost from every
     permanent on any battlefield, and those permanents' names for the log.
@@ -615,14 +695,43 @@ def _tax(
     """
     total, names, _floor = _tax_floored(
         game, card, applies_to, wanted=wanted,
-        controller_index=controller_index, targeted=targeted,
+        controller_index=controller_index, targeted=targeted, ability=ability,
     )
     return total, names
 
 
+def _ability_subject_holds(modifier: CostModifier, card, ability) -> bool:
+    """Whether *ability* is the kind of ability *modifier* names.
+
+    True for every modifier that names none, which is all but Fluctuator's:
+    the printed subject is a class of *cards* and the ability it belongs to is
+    not part of the question.
+
+    An ability-narrowed modifier with **no ability in hand** answers False
+    rather than applying: the caller that has none is asking about a cast
+    (CR 601.2f), where a discount on activated abilities has nothing to
+    discount — and applying it there is the direction a cost must never drift
+    in.
+    """
+    if modifier.ability_keyword is None:
+        return True
+    if ability is None:
+        return False
+    from .cycling import is_cycling_ability
+
+    # One keyword, one derivation, and the table above admits no other -- so
+    # this is a lookup with a single row rather than a dispatch waiting to be
+    # written. A keyword reaching here without one would discount every
+    # activated ability on the card, which is why the pattern refuses it first.
+    return (
+        modifier.ability_keyword == "cycling"
+        and is_cycling_ability(card, ability)
+    )
+
+
 def _tax_floored(
     game, card, applies_to: str, *, wanted: str,
-    controller_index: int | None = None, targeted=(),
+    controller_index: int | None = None, targeted=(), ability=None,
 ) -> tuple[int, list[str], int]:
     """:func:`_tax` plus the highest floor any contributing modifier names.
 
@@ -661,6 +770,13 @@ def _tax_floored(
             if modifier.symbols and not modifier.amount:
                 continue
             if modifier.applies_to != applies_to or not _matches(modifier, card):
+                continue
+            # "**Cycling** abilities you activate…" (Fluctuator) narrows by
+            # which ability is being activated rather than by what its source
+            # is, so it is asked here beside `_matches` rather than inside it:
+            # that function answers about a card, and one card's abilities are
+            # not all the same ability.
+            if not _ability_subject_holds(modifier, card, ability):
                 continue
             if modifier.reduces != (wanted == "less"):
                 continue
@@ -917,18 +1033,40 @@ def sacrifice_taxes(
     return tuple(demands)
 
 
-def ability_cost_tax(game, controller_index: int, source) -> tuple[int, list[str]]:
+def modified_ability_source_card(source):
+    """The card a cost modifier tests *source* against.
+
+    A permanent is asked for its **effective** card, so a copied or animated
+    one is taxed and discounted on what it currently is (CR 613 layers 1 and
+    3). A card in a hand has no such reading and *is* the card: CR 113.6j puts
+    a cycling ability in a hand, where there is no permanent for a layer to
+    modify — and `getattr(source, "effective_card")` on a `CardDefinition`
+    raises, which is how the two ability-cost readers below came to be callable
+    only from the battlefield.
+    """
+    return getattr(source, "effective_card", source)
+
+
+def ability_cost_tax(
+    game, controller_index: int, source, ability=None
+) -> tuple[int, list[str]]:
     """Extra generic mana for activating *source*'s ability, plus the taxing
     permanents' names. Matched against the source's *effective* card so a
-    copied or animated permanent is taxed on what it currently is."""
+    copied or animated permanent is taxed on what it currently is.
+
+    *ability* is the one being activated, for a modifier that narrows by which
+    ability rather than by what its source is. None is the honest answer for a
+    caller that has no ability in hand, and such a modifier then does not
+    apply.
+    """
     return _tax(
-        game, source.effective_card, "activate", wanted="more",
-        controller_index=controller_index,
+        game, modified_ability_source_card(source), "activate", wanted="more",
+        controller_index=controller_index, ability=ability,
     )
 
 
 def ability_cost_reduction(
-    game, controller_index: int, source
+    game, controller_index: int, source, ability=None
 ) -> tuple[int, list[str], int]:
     """Generic mana **off** *source*'s activation cost, the reducing permanents'
     names, and the floor those permanents impose.
@@ -942,8 +1080,8 @@ def ability_cost_reduction(
     could apply one permanent's reduction under another's floor.
     """
     return _tax_floored(
-        game, source.effective_card, "activate", wanted="less",
-        controller_index=controller_index,
+        game, modified_ability_source_card(source), "activate", wanted="less",
+        controller_index=controller_index, ability=ability,
     )
 
 

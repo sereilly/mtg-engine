@@ -243,15 +243,37 @@ def test_every_admitted_cost_clause_is_charged(pool):
                             f"for {cost.kind!r}"
                         )
                 if isinstance(cost, ast.PayLifeCost):
+                    # "Pay **half your life, rounded up**" (Lurking Evil). No
+                    # printed number at all, so there is nothing for the amount
+                    # comparison below to compare: what the two readers must
+                    # agree on is *which rule computes it*, and a charger that
+                    # missed the word would read the clause as no life payment
+                    # and activate the ability for free.
+                    if cost.half_rounded_up:
+                        if not charged.pay_life_half_rounded_up:
+                            unpaid.append(
+                                f"{card.name}: charged a flat "
+                                f"{charged.pay_life} life for half the total"
+                            )
                     # Not "is life charged" but "is *this much* charged". The
                     # amount is printed, and a charger reading a smaller one is
                     # the same dropped-rider shape a narrowed sacrifice is —
                     # here it would be an ability cheaper than the card.
-                    wanted = cost.amount.value if isinstance(cost.amount, ast.Fixed) else None
-                    if charged.pay_life != wanted:
-                        unpaid.append(
-                            f"{card.name}: charged {charged.pay_life} life for {wanted}"
+                    else:
+                        wanted = (
+                            cost.amount.value
+                            if isinstance(cost.amount, ast.Fixed) else None
                         )
+                        if charged.pay_life != wanted:
+                            unpaid.append(
+                                f"{card.name}: charged {charged.pay_life} life "
+                                f"for {wanted}"
+                            )
+                        if charged.pay_life_half_rounded_up:
+                            unpaid.append(
+                                f"{card.name}: charged half the life total for "
+                                f"a printed {wanted}"
+                            )
                     # "Pay 3 life **for each velocity counter on this
                     # enchantment**" (Tornado). The multiplier decides how much
                     # is owed, so a charger that reads the rate and not the

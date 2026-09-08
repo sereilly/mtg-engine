@@ -107,6 +107,44 @@ def expand_cycling_lines(oracle_text: str) -> str:
     )
 
 
+def is_cycling_ability(card, ability) -> bool:
+    """Whether *ability* — a compiled ``ParsedActivatedAbility`` of *card* — is
+    a **cycling ability** (CR 702.29).
+
+    The rewrite erases the word, which is what makes every downstream seam able
+    to ignore the keyword; a card that asks *about* cycling abilities
+    (Fluctuator: "Cycling abilities you activate cost {2} less to activate")
+    has to get the word back, and this is the one place it is derived.
+
+    The derivation is the rewrite run backwards: an ability is a cycling
+    ability exactly when some printed line of its card is a cycling line whose
+    :func:`expand_cycling_line` is that ability's ``source_line``. So it is the
+    same equality ``web/state_view._printed_ability_line`` already walks to put
+    "Cycling {2}" on the button, lifted here rather than copied — the button
+    and the cost reduction must not be able to disagree about which ability the
+    keyword named.
+
+    **Not "has a ``discard_self`` cost".** That is CR 113.6j's zone question,
+    not this one: Waker of Waves prints "{1}{U}, Discard this card: ..." and is
+    not cycling, so keying on the cost would discount an ability the card never
+    calls cycling — a cost charged too low is a free ability, the direction
+    every cost reader here is written against.
+
+    CR 702.29f makes typecycling a cycling ability too, and the derivation
+    gives that free wherever the expansion can read the line. Today it cannot
+    (``cycling_cost`` refuses a typecycling line and the card is reported
+    unsupported naming it), so no such ability compiles at all — and when one
+    does, this answers yes about it without being told.
+    """
+    wanted = (getattr(ability, "source_line", "") or "").strip()
+    if not wanted:
+        return False
+    return any(
+        (expand_cycling_line(line) or "").strip() == wanted
+        for line in (getattr(card, "oracle_text", "") or "").split("\n")
+    )
+
+
 def unread_cycling_line(oracle_text: str) -> str | None:
     """A printed cycling-shaped line this module cannot rewrite, or None.
 
@@ -129,6 +167,7 @@ __all__ = [
     "cycling_cost",
     "expand_cycling_line",
     "expand_cycling_lines",
+    "is_cycling_ability",
     "is_cycling_line",
     "unread_cycling_line",
 ]

@@ -1926,8 +1926,9 @@ def chargeable_exile_payload(described: dict) -> dict | None:
     return carried
 
 
-def cost_object_is_named(carried: dict | None) -> bool:
-    """Whether a charged cost's *reduced* payload narrows what may pay it.
+def cost_object_is_chargeable(carried: dict | None) -> bool:
+    """Whether the payment path can collect a cost described by this *reduced*
+    payload.
 
     The one reader of a question three cost tables were each answering with
     their own spelling: ``grammar/costs._is_chargeable_sacrifice`` asked
@@ -1939,21 +1940,29 @@ def cost_object_is_named(carried: dict | None) -> bool:
     an *activation* cost and would have been refused as an additional one, on
     a phrase that pins the object harder than any type could.
 
-    The rule is what the refusal was always for: an **unnamed** cost — one
-    whose noun phrase narrows nothing the charger can test — would let the
-    payment eat the cheapest thing the payer owns, a land included. So the
-    test is that the reduction carries *something*, not that it carries a card
-    type. "A **blue** permanent" (Abjure) and "a **nontoken** permanent"
-    (Infernal Tribute) name what may pay them exactly as precisely as "a
-    creature" does, and both were refused for printing the narrowing on an
-    axis the copies happened to spell out.
+    It was called ``cost_object_is_named`` and asked ``bool(carried)`` — the
+    reduction must carry *something* — on the ground that an **unnamed** cost
+    would let the payment eat the cheapest thing the payer owns, a land
+    included. Urza's Saga prints two costs whose noun phrase is exactly "a
+    permanent" (Barrin, Master Wizard; Claws of Gix), and for those the land is
+    what the card says may pay: the widest printed noun is still a printed
+    noun, and refusing it cost both cards their support rather than protecting
+    anything.
+
+    What the old rule was really guarding is a narrowing the reduction
+    **lost**, and that cannot happen here: ``object_only_filter`` returns
+    ``None`` for any key the matcher cannot test rather than dropping it, and
+    the two keys it does drop are carried by the caller —
+    :func:`chargeable_sacrifice_payload` re-adds ``exclude_self`` and refuses a
+    ``controller`` that is not the payer's own. So the honest question left is
+    the one this now asks, and the empty reduction is a real answer: "any
+    permanent you control", which is what both cards print and what
+    ``filter_head_noun`` already logs and pickers as "permanent".
 
     It takes the reduction rather than the raw phrase payload deliberately: a
-    key the charger *drops* (``controller``, ``zone``) is not a narrowing the
-    payment can be held to, so a phrase whose only word is one of those is
-    unnamed however much it looks narrowed.
+    key the charger *drops* is not a narrowing the payment can be held to.
     """
-    return bool(carried)
+    return carried is not None
 
 
 def _chargeable_exile_filter(phrase: str, *, plural: bool = False) -> dict | None:
@@ -2256,6 +2265,24 @@ def _life_payment_cost(cost_lower: str) -> int:
         return 0
     word = match.group(1)
     return int(word) if word.isdigit() else _NUMBER_WORDS.get(word, 0)
+
+
+_HALF_LIFE_PAYMENT_RE = re.compile(r"\bpay half your life, rounded up\b")
+
+
+def _life_payment_is_half_rounded_up(cost_lower: str) -> bool:
+    """Whether the cost is "Pay half your life, rounded up" (Lurking Evil).
+
+    :func:`_life_payment_cost`'s neighbour, and separate for that function's
+    own reason: the two answer different questions — how much is printed, and
+    which rule computes it — and only one of them has a number to read at all.
+    The rounding word is part of the pattern because CR 107.2 leaves a fraction
+    unrounded without it, so a printing without the word is a cost this does
+    not recognize; the grammar's cost side refuses that line in the same
+    breath, and ``tests/engine/test_activation_costs.py`` compares the two
+    readings over the whole pool.
+    """
+    return _HALF_LIFE_PAYMENT_RE.search(cost_lower) is not None
 
 
 def _life_payment_per_counter(cost_lower: str) -> str | None:
@@ -2973,6 +3000,7 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         remove_counter_filter=remove_counter_filter,
         pay_life=_life_payment_cost(cost_lower),
         pay_life_per_counter=_life_payment_per_counter(cost_lower),
+        pay_life_half_rounded_up=_life_payment_is_half_rounded_up(cost_lower),
         mana_per_counter=per_counter_counter,
         mana_per_counter_cost=per_counter_mana,
         alternative_mana=alternative_mana,

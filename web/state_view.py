@@ -51,6 +51,7 @@ from engine.classifier import classify_card
 from engine.models import PlayerState
 from engine.activation_zones import HAND
 from engine.cycling import expand_cycling_line
+from engine.mixins.stack.activation import hand_activation_cost
 from engine.oracle import compile_card_oracle
 from engine.targeting import usable_activated_abilities
 
@@ -442,10 +443,19 @@ def _compute_hand_abilities(session: Session, player_index: int) -> list[dict]:
         for ability_index, ability in enumerate(
             usable_activated_abilities(program, zone=HAND)
         ):
+            # The cost as CR 601.2f computes it, not as it is printed: a
+            # Fluctuator on the board makes a Cycling {2} free, and a button
+            # reporting it unaffordable while the engine would let it through
+            # is the Roots class with the sign flipped. The same reader
+            # ``Game.activate_from_hand`` charges, so the button and the
+            # payment cannot disagree.
+            required = hand_activation_cost(
+                game, player_index, card, ability
+            )[0]
             payable = True
-            if game.enforce_mana_costs and any(ability.cost.mana.values()):
+            if game.enforce_mana_costs and any(required.values()):
                 payable = window is not None and _can_afford_with_pool(
-                    window.potential_pool, dict(ability.cost.mana), player
+                    window.potential_pool, dict(required), player
                 )
             entries.append({
                 "hand_index": hand_index,

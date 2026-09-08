@@ -648,6 +648,29 @@ def _lower_draw(
         payload: dict[str, object] = {
             "amount": "x", X_FROM_COUNT: count_spec(node.count.filter, node),
         }
+    elif isinstance(node.count, ast.SacrificedForCost):
+        # "Sacrifice a creature: Draw cards equal to **the sacrificed
+        # creature's power**, then discard three cards." (Greater Good.) A
+        # characteristic of the permanent the ability's own cost ate
+        # (CR 601.2h), so it is on no board by the time this resolves — read
+        # off the record the activation kept (CR 608.2h), through the same
+        # ``x_from_count`` channel `_lower_mill` already reads it on for Altar
+        # of Dementia. One evaluator, so the two sentences cannot count
+        # differently; and the characteristic is held to what that evaluator
+        # answers, because one it cannot is a card that reports supported and
+        # draws nothing.
+        if node.count.characteristic not in _READABLE_COST_SACRIFICE_CHARACTERISTICS:
+            raise LoweringError(
+                "no handler reads the sacrificed permanent's "
+                f"{node.count.characteristic!r}",
+                node=node,
+            )
+        payload: dict[str, object] = {
+            "amount": "x",
+            X_FROM_COUNT: {
+                "cost_sacrifice_characteristic": node.count.characteristic
+            },
+        }
     elif isinstance(node.count, ast.CountersOnSource):
         # "…draws an additional card **for each growth counter on this
         # enchantment**." (Malignant Growth.) A number on the ability's own

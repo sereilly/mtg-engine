@@ -1173,3 +1173,132 @@ def test_w1g5_every_usg_hollow_card_now_carries_an_instruction(set_pool):
         parts = list(program.activated_abilities) + list(program.triggered_abilities)
         hollow = [part.source_line for part in parts if part.instruction is None]
         assert not hollow, "%s still has an instruction-less part: %s" % (name, hollow)
+
+
+# --- W2G5: Greater Good and Lurking Evil — costs that read a board ---
+import pytest
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+from tests.helpers import resolve_stack
+
+
+def _g5e_slot(game, seat, permanent):
+    """*permanent*'s slot in *seat*'s battlefield, for ``cost_permanent_index``."""
+    for index, found in enumerate(game.controlled_by(seat)):
+        if found is permanent:
+            return index
+    raise AssertionError("permanent is not on that battlefield")
+
+
+def _g5e_game(set_pool, *names, seat=0):
+    alice, bob = PlayerState(name="Alice"), PlayerState(name="Bob")
+    game = Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    pool = set_pool("USG")
+    made = []
+    for name in names:
+        perm = Permanent(card=pool[name])
+        game._put_permanent_onto_battlefield(seat, perm, None)
+        perm.metadata["summoning_sickness_turn"] = -99
+        made.append(perm)
+    return game, made
+
+
+def test_greater_good_draws_the_sacrificed_creatures_power_then_discards_three(
+    set_pool, catalog_by_name
+):
+    """"Sacrifice a creature: Draw cards equal to the sacrificed creature's
+    power, then discard three cards."
+
+    Both halves, because the discard is the half a sentence read as one
+    instruction would lose — and the draw is a characteristic of what the cost
+    ate (CR 601.2h), so it is read off the record the payment kept rather than
+    off a board that no longer holds it.
+    """
+    game, (good,) = _g5e_game(set_pool, "Greater Good")
+    alice = game.players[0]
+    alice.library = [catalog_by_name["Forest"]] * 12
+    alice.hand = [catalog_by_name["Mountain"]] * 4
+    ogre = Permanent(card=catalog_by_name["Hill Giant"])
+    game._put_permanent_onto_battlefield(0, ogre, None)
+
+    game.activate_permanent_ability(
+        0, "Greater Good", cost_permanent_index=_g5e_slot(game, 0, ogre),
+    )
+    resolve_stack(game)
+    # The discard is a decision its seat owes, and `resolve_stack` answers only
+    # what blocks the stack — the same shape Bazaar of Baghdad's ability has
+    # had since it shipped. Settling it here is what the helper's docstring
+    # says to do when the prompt itself is the thing under test.
+    game.auto_resolve_pending_choices()
+
+    assert [c.name for c in alice.graveyard][0] == "Hill Giant"
+    # 4 in hand + 3 drawn (Hill Giant is 3/3) - 3 discarded
+    assert len(alice.hand) == 4
+    assert len(alice.library) == 9
+
+
+def test_greater_good_reads_the_power_the_creature_last_had(set_pool, catalog_by_name):
+    """CR 608.2h's last-known information, and the reason the record carries a
+    ``Permanent`` rather than a card: a +1/+1 counter is layer 7, so the number
+    is the *effective* power the creature had as it left, not its printed one.
+    """
+    game, (good,) = _g5e_game(set_pool, "Greater Good")
+    alice = game.players[0]
+    alice.library = [catalog_by_name["Forest"]] * 12
+    alice.hand = [catalog_by_name["Mountain"]] * 5
+    bears = Permanent(card=catalog_by_name["Grizzly Bears"])
+    game._put_permanent_onto_battlefield(0, bears, None)
+    from engine.pt import add_pt_modifier
+
+    add_pt_modifier(bears, 3, 3)
+
+    game.activate_permanent_ability(
+        0, "Greater Good", cost_permanent_index=_g5e_slot(game, 0, bears),
+    )
+    resolve_stack(game)
+    game.auto_resolve_pending_choices()
+
+    assert len(alice.library) == 7, "5/5 after the boost, so five drawn"
+
+
+def test_lurking_evil_pays_half_the_life_total_rounded_up(set_pool):
+    """"Pay half your life, rounded up: This enchantment becomes a 4/4
+    Phyrexian Horror creature with flying."
+
+    The cost has no printed number: it is a fraction of the payer's own total,
+    read when the ability is activated (CR 601.2f) and rounded as the card says
+    (CR 107.2). An odd total is used so a reader rounding the other way is
+    caught, and the body is asserted as well as the payment — the effect
+    compiled before this group started and only the cost refused.
+    """
+    game, (evil,) = _g5e_game(set_pool, "Lurking Evil")
+    game.players[0].life = 15
+
+    game.activate_permanent_ability(0, "Lurking Evil")
+    resolve_stack(game)
+
+    assert game.players[0].life == 7, "15 -> pay 8 (half rounded up)"
+    assert evil.is_creature
+    assert evil.has_type("horror")
+    assert not evil.has_type("enchantment"), "it becomes a creature instead"
+    assert (evil.effective_power, evil.effective_toughness) == (4, 4)
+    assert evil.has_keyword("flying")
+
+
+def test_lurking_evil_costs_a_second_activation_half_of_what_is_left(set_pool):
+    """The cost is recomputed each time (CR 601.2f), not frozen at the printed
+    number a flat reader would have invented. Two activations at different
+    totals, because one would look right at whichever number the test picked.
+    """
+    game, (evil,) = _g5e_game(set_pool, "Lurking Evil")
+    game.players[0].life = 20
+
+    game.activate_permanent_ability(0, "Lurking Evil")
+    resolve_stack(game)
+    assert game.players[0].life == 10
+
+    game.activate_permanent_ability(0, "Lurking Evil")
+    resolve_stack(game)
+    assert game.players[0].life == 5
