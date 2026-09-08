@@ -40,12 +40,14 @@ from ...oracle_types import MILLED_THIS_WAY
 from ._events import binds_block_pair, _EVENT_SUBJECT_OBJECTS
 from ._common import (
     chargeable_card_filter,
+    _describe_several_targets,
     _describe_targets,
     _durationless_reason,
     _filter_payload,
     _is_enchanted,
     _is_source,
     _is_target,
+    _names_several_targets,
     _restrictions_beyond,
     _signed,
 )
@@ -605,6 +607,41 @@ def _lower_pump(
         if pair_duration != "end_of_turn":
             pair_payload["duration"] = pair_duration
         return (OracleInstruction("pump_block_pair", "", pair_payload),)
+    # "**Two target creatures** each get +2/+2 until end of turn." (Symbiosis.)
+    # One printed boost over several chosen objects, which is the pump twin of
+    # the keyword grant's own several-target branch ("X target creatures gain
+    # islandwalk", Part Water) and takes the same route: one description with a
+    # count, and a handler that resolves the list.
+    #
+    # A branch of its own rather than a widening of ``_is_target`` below,
+    # because that predicate is what keeps every *other* pump lowering honest —
+    # a lowering that admitted several targets and then emitted a one-target
+    # instruction would collect the second choice and drop it, which is the
+    # ``_names_several_targets`` docstring's Rewind. So the widening is opted
+    # into here, by the one lowering whose handler now reads a list.
+    #
+    # ``_describe_several_targets`` refuses a phrase that prints no "target"
+    # (CR 115.1b: "up to two creatures" is chosen at resolution, not at
+    # announcement), so an untargeted plural still falls through to the class
+    # reading below rather than raising a picker in front of it.
+    if (
+        _names_several_targets(node.subject)
+        and isinstance(node.subject, ast.TargetSpec)
+        and node.subject.targeted
+    ):
+        several: dict[str, object] = {"power": power, "toughness": toughness}
+        several["blocking_only"] = bool(node.subject.filter.blocking)
+        _describe_several_targets(several, node.subject)
+        duration = _TARGET_PUMP_DURATIONS.get(node.duration.kind)
+        if duration is None:
+            raise LoweringError(
+                f"no sweep ends a target's pump at {node.duration.kind}", node=node
+            )
+        if duration != "end_of_turn":
+            several["duration"] = duration
+        return (
+            OracleInstruction("pump_target_creature_until_eot", "", several),
+        )
     if _is_target(node.subject):
         assert isinstance(node.subject, ast.TargetSpec)
         payload: dict[str, object] = {"power": power, "toughness": toughness}

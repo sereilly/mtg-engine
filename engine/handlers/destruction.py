@@ -7,6 +7,7 @@ from ..dexterity import flip_lands_on
 from ..static_bonuses import singular_land_type
 from ..models import Permanent, PlayerState
 from ..oracle_types import (ATTACHED_PERMANENT_CONTROLLER, LAST_TARGET_CONTROLLER,
+                            LAST_TARGET_OWNER,
                             OracleInstruction, PER_OBJECT_SEAT_RECORDS)
 from ..resumption import run_resumable
 from ._common import (one_recorded_permanent_id, 
@@ -803,6 +804,16 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
             return True, "resolved"
         chosen_index = game.battlefield_index_of(victim)
         seat = game.controller_index_of(victim)
+        # "Destroy target creature. **Its owner** gains 4 life." (Path of
+        # Peace.) CR 108.3's seat, which is not CR 109.5's: a stolen creature
+        # is destroyed by its controller's opponent and the *owner* is the one
+        # the card heals. Written here beside the controller and for the same
+        # reason — one moment later the permanent is a card in a graveyard
+        # (CR 608.2h) — and through the same accessor `base_controller_index`
+        # that CR 108.3 ownership is read off everywhere else in the engine.
+        owner_seat = game.owner_index_of(victim)
+        if owner_seat is not None:
+            context.results[LAST_TARGET_OWNER] = owner_seat
         if seat is not None:
             context.results[LAST_TARGET_CONTROLLER] = seat
             # The same seat under the per-object key, so a sentence counting

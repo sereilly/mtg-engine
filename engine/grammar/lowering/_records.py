@@ -46,7 +46,7 @@ from ...oracle_types import (CHOSEN_CREATURE_TYPE_THIS_WAY,
 from ._events import (ATTACHED_PERMANENT_CONTROLLER,
                       EXILED_SPELL_CONTROLLER,
                       EXILED_SPELL_RECORD,
-                      LAST_TARGET_CONTROLLER,
+                      LAST_TARGET_CONTROLLER, LAST_TARGET_OWNER,
                       EXILED_THIS_WAY,
                       _EVENT_SUBJECT_POWER_RECORD,
                       _EVENT_SUBJECT_TOUGHNESS_RECORD)
@@ -706,6 +706,10 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
         "its_mana_value", "destroyed_target", "destroyed_this_way",
         _EVENT_SUBJECT_POWER_RECORD, _EVENT_SUBJECT_TOUGHNESS_RECORD,
         LAST_TARGET_CONTROLLER,
+        # …and the victim's **owner** (Path of Peace). Its own key beside the
+        # controller because CR 108.3 and CR 109.5 answer differently for every
+        # stolen permanent, and the destroy step writes both at the same moment.
+        LAST_TARGET_OWNER,
         # "…equal to the number of artifacts **they controlled** that were put
         # into a graveyard this way." (Builder's Bane.) The same per-object
         # seat map the sweeps beside it write, read here as a per-seat tally

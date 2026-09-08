@@ -18,6 +18,7 @@ it, over a body vocabulary those files share, and is nowhere near the cap.
 """
 
 from ...oracle_types import (COUNTERED_SPELL_CONTROLLER, LAST_TARGET_CONTROLLER,
+                             LAST_TARGET_OWNER,
                              OracleInstruction, X_FROM_COUNT,
                              X_FROM_COUNT_PER_RECIPIENT)
 from .. import ast
@@ -149,6 +150,25 @@ def _lower_gain_life(
                     "effect chose, and no step here recorded one",
                     node=node,
                 )
+    # "Destroy target creature. **Its owner** gains 4 life." (Path of Peace.)
+    # CR 108.3's seat, and the branch above's twin in shape and its opposite in
+    # answer: the controller is who had the permanent and the owner is whose
+    # deck it came from, which differ for every stolen creature — so reading
+    # this possessive out of the controller record heals the thief.
+    #
+    # Gated on a producer for the reason that branch is: a sentence with no step
+    # in front of it that chose an object names nobody, and ``recipient`` would
+    # otherwise fall through to "target", which for a spell that destroyed
+    # something is whichever seat a targetless resolution defaults to. A refusal
+    # naming the missing producer is the loud direction.
+    if node.player.kind == "owner":
+        if LAST_TARGET_OWNER not in produced:
+            raise LoweringError(
+                '"its owner" names the object an earlier step of this effect '
+                "chose, and no step here recorded one",
+                node=node,
+            )
+        recipient = LAST_TARGET_OWNER
     # Read here so every branch below is held to it: the only branch that can
     # carry a cap is the back-reference one, and a branch that silently dropped
     # one would gain the uncapped amount.

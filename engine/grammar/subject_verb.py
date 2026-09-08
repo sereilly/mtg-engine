@@ -202,6 +202,29 @@ def parse_subject_verb(
     if source_spec is None:
         stream.reset(mark)
         raise stream.error("expected a subject")
+    # "Two target creatures **each** get +2/+2 until end of turn." (Symbiosis.)
+    # The distributive word between a counted plural subject and its verb, which
+    # says nothing the count did not already say: CR 601.2c gives the sentence
+    # two chosen objects either way, and every one of them is pumped. Consumed
+    # here, at the subject, rather than in each verb's production — it can
+    # precede any of them, and a per-verb probe would be the same word read in
+    # a dozen places, with the eleven that forgot refusing at "unrecognized
+    # effect verb" while the twelfth worked.
+    #
+    # Gated on a subject that really is **several** objects, which is what keeps
+    # this from eating a word other sentences use as a quantifier of their own:
+    # "each player draws a card" opens on "each" as the subject, and by this
+    # point that word is already inside `source_spec`. A singular subject
+    # followed by "each" is a sentence nobody prints, and it keeps its refusal.
+    if (
+        isinstance(source_spec, ast.TargetSpec)
+        and source_spec.quantifier in ("exactly", "up_to", "one_or_more",
+                                       "any_number")
+        and (source_spec.count_from_x or source_spec.count > 1
+             or source_spec.quantifier in ("one_or_more", "any_number"))
+        and stream.at_word("each")
+    ):
+        stream.advance()
     stream.last_subject = source_spec
     after_subject = stream.mark()
 

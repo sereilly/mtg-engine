@@ -180,6 +180,18 @@ def parse_player_ref(stream: TokenStream) -> ast.PlayerRef | None:
     stream.reset(mark_the_player)
     if stream.accept_phrase("its", "controller"):
         return ast.PlayerRef("controller")
+    # "Destroy target creature. **Its owner** gains 4 life." (Path of Peace.)
+    # CR 108.3's seat, and a different one from the possessive above it for
+    # every permanent anybody has ever stolen — which is the whole reason it is
+    # a second kind rather than a spelling of "controller". Read as that one,
+    # Path of Peace heals whoever took the creature.
+    #
+    # What it may *mean* is left to the lowerings, which refuse it wherever no
+    # step of the same effect recorded an object: a bare "its owner" with
+    # nothing in front of it names nobody, and a seat nobody named is the
+    # failure this file's neighbours all refuse rather than default.
+    if stream.accept_phrase("its", "owner"):
+        return ast.PlayerRef("owner")
     if stream.accept_phrase("their", "controller"):
         return ast.PlayerRef("controller")
     if stream.accept_phrase("defending", "player"):

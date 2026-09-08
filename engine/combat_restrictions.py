@@ -549,6 +549,33 @@ _PATTERNS: tuple[tuple[re.Pattern[str], "str | tuple[str, ...]"], ...] = (
     # spellings, rather than normalizing one to the other, because the normalizer
     # would have to know which cards are tokens.
     (re.compile(r"^this (?:creature|token) can't block$"), "cant_block"),
+    (
+        # "Creatures can't block." (Bedlam.) The blocking twin of
+        # `creatures_cant_attack`'s unnarrowed row above — Moat's sentence with
+        # the exclusion deleted, one step to the right — and its own kind for
+        # the reason that pair is always two: the two prohibitions are answered
+        # at two different steps, and one kind read at both is a kind one of
+        # them forgets. `declare_blockers_step._can_block_attacker` has scanned
+        # the board for this kind since Katabatic Winds, whose sentence names
+        # both halves at once; nothing had ever printed the blocking half on
+        # its own, so the row that produces it was missing while the
+        # enforcement was not.
+        #
+        # **The subject must end in the plural head noun**, which is the same
+        # gate the attack row states and holds for the same reason:
+        # `_printed_noun` answers ``{"type_filter": "creature"}`` for "this
+        # creature" *and* for "enchanted creature", so a row capturing any `.+`
+        # before "can't block" would read the row directly above this one — a
+        # restriction on one permanent — as a ban on every creature on the
+        # board. Requiring the plural tells the two apart in the printed words,
+        # and it still buys "Red creatures can't block" for nothing.
+        #
+        # Below the singular row above, which cannot reach this pattern
+        # ("creature" is not "creatures"), and below the narrowed blocking rows,
+        # whose sentences do not end here.
+        re.compile(r"^(?P<board_attack_subject>(?:[a-z'-]+ )*creatures) can't block$"),
+        "creatures_cant_block",
+    ),
     (re.compile(r"^this creature attacks each combat if able$"), "must_attack_each_combat"),
     # "This creature blocks each combat if able." (Watchdog.) CR 509.1c's
     # requirement, the mirror of the attack one above and a *separate kind*

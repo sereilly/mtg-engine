@@ -195,6 +195,42 @@ def pump_target_creature_until_eot(game: Game, instruction: OracleInstruction, c
             defending=defending,
         )
 
+    # "**Two target creatures** each get +2/+2 until end of turn." (Symbiosis.)
+    # The several-target reading of this same instruction, and the same branch
+    # `grant_target_keyword_until_eot` takes for "X target creatures gain
+    # islandwalk": the printed count is read off the description, resolved
+    # against the announced X because a printed "X" is a string until the spell
+    # is cast, and every chosen permanent is pumped.
+    #
+    # Above the single-target read rather than beside it, because that one
+    # *falls back to scanning the battlefield* when the chosen target no longer
+    # answers — right for one target and wrong for several, which is exactly
+    # what `resolve_target_permanents` was written to say. Reached only from a
+    # description carrying a count above one, so every one-target payload ever
+    # written takes the path below unchanged.
+    printed_count = (instruction.payload.get("targets") or {}).get("count")
+    maximum = (
+        resolve_amount(printed_count, context.x_value)
+        if printed_count is not None else None
+    )
+    if isinstance(maximum, int) and maximum > 1:
+        until = str(instruction.payload.get("duration") or "end_of_turn")
+        chosen = resolve_target_permanents(game, context, predicate=_eligible)
+        if not chosen:
+            # Every named target may have become illegal since (CR 608.2b), and
+            # an "up to N" may legally have named none.
+            game.log.append(f"{card.name}: no valid creature targets")
+            return True, "resolved"
+        for creature in chosen[:maximum]:
+            apply_temp_pt_boost(creature, power_delta, toughness_delta, until=until)
+        game.log.append(
+            ", ".join(p.card.name for p in chosen[:maximum])
+            + f" each get {power_delta:+}/{toughness_delta:+} until "
+            + until.replace("_", " ")
+            + f" ({card.name})"
+        )
+        return True, "resolved"
+
     target_perm = resolve_target_permanent(
         game, context, predicate=_eligible, fallback_players=(target, caster)
     )

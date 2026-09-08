@@ -1053,6 +1053,24 @@ ATTACHED_PERMANENT_CONTROLLER = "attached_permanent_controller"
 #: record — which is exactly what had happened.
 LAST_TARGET_CONTROLLER = "last_target_controller"
 
+#: The **owner** of the object a step that chose a permanent acted on.
+#: "Destroy target creature. **Its owner** gains 4 life." (Path of Peace.)
+#:
+#: A second record beside ``LAST_TARGET_CONTROLLER`` rather than a reading of
+#: it, because CR 108.3 and CR 109.5 are two different questions and the pool
+#: prints both possessives: the controller is who has the permanent *now* and
+#: the owner is whose deck it started in, and they differ for every permanent
+#: anyone has ever stolen. Answering "its owner" out of the controller record
+#: would heal the thief, which is the silent-and-in-somebody's-favour direction
+#: this engine refuses everywhere else.
+#:
+#: Read before the permanent leaves, for its sibling's reason: by the time the
+#: next step runs the object is a card in a graveyard (CR 608.2h, last-known
+#: information). Ownership does not in fact change when a permanent does, but
+#: the *record* is written at one moment for both keys so the two cannot come
+#: to disagree about which object the sentence was about.
+LAST_TARGET_OWNER = "last_target_owner"
+
 #: The ``deal_damage`` recipient meaning "the controller of the last <noun
 #: phrase> that dealt damage to you this turn" (Suffocation). A seat nobody
 #: chose and no event froze: it is read at resolution out of

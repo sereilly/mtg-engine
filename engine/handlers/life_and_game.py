@@ -9,7 +9,8 @@ from ..life_prohibitions import life_gain_banned
 from ..named_counters import counters_on
 from ..oracle_types import (COUNTERED_ABILITY_SOURCE,
                             COUNTERED_SPELL_CONTROLLER, COUNTERS_REMOVED,
-                            LAST_TARGET_CONTROLLER, PER_OBJECT_SEAT_RECORDS,
+                            LAST_TARGET_CONTROLLER, LAST_TARGET_OWNER,
+                            PER_OBJECT_SEAT_RECORDS,
                             X_FROM_COUNT_PER_RECIPIENT)
 from .registry import effect_handler
 from ..mana_payment import generic_cost
@@ -454,6 +455,21 @@ def target_gains_life(game: Game, instruction: OracleInstruction, context: Oracl
         seat = context.iteration_seats.get(recipient)
         if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
             game.log.append(f"{card.name}: no recorded controller, no life gained")
+            return True, "resolved"
+        gainer = game.players[seat]
+    elif recipient == LAST_TARGET_OWNER:
+        # "Destroy target creature. **Its owner** gains 4 life." (Path of
+        # Peace.) CR 108.3's seat, frozen by the destroy step before the
+        # permanent left (CR 608.2h) — and deliberately not the controller
+        # record beside it, which for a stolen creature names the player who
+        # destroyed it.
+        #
+        # No record is not "the caster", for the branch below's reason: the
+        # step chose nothing, so the sentence names nobody and no life is
+        # gained.
+        seat = context.results.get(recipient)
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            game.log.append(f"{card.name}: no recorded owner, no life gained")
             return True, "resolved"
         gainer = game.players[seat]
     elif recipient in (COUNTERED_SPELL_CONTROLLER, LAST_TARGET_CONTROLLER):
