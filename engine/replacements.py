@@ -244,6 +244,15 @@ DRAW_FROM_OUTSIDE = 10  # Ring of Ma'rûf
 # would put the choice to the affected player if one ever did.
 DRAW_ARMED_REPLACEMENT = 15  # Mangara's Tome
 DRAW_LOOKING_AT_TOP = 20  # Aladdin's Lamp
+# An **optional** replacement its own controller armed for their own benefit
+# (CR 109.5: "If **you** would draw a card"), so it belongs with the three above
+# rather than with the mandatory consumers below - and behind all of them,
+# because it consumes the draw where they hand something back. A draw a Lamp or
+# a Ring has already taken away never puts this question, which is the order the
+# drawing player would choose and CR 616.1e permits. Being optional, the number
+# matters less than for its mandatory neighbours: declining leaves the event for
+# whatever is behind it, exactly as Pursuit of Knowledge's does four slots on.
+DRAW_REVEALS_UNTIL_KIND = 21  # Abundance
 # Last of the draw replacements, and deliberately so. CR 616.1e gives the choice
 # to the affected player and the lowest order is the default they are taken to
 # make; every effect above this one is something the player armed for their own
@@ -2708,6 +2717,176 @@ def _run_armed_draw_replacement(game, payload: dict) -> ReplacementOutcome | Non
     return ReplacementOutcome(replaced=True)
 
 
+#: Abundance. One printed line, two sentences, and the constant is both because
+#: the interceptor performs both - the reveal-until and the two destinations the
+#: second sentence names. A claim stopping at the first would admit a card that
+#: reveals its library and puts nothing anywhere.
+REVEAL_UNTIL_KIND_TEXT = (
+    "if you would draw a card, you may instead choose land or nonland and "
+    "reveal cards from the top of your library until you reveal a card of the "
+    "chosen kind. put that card into your hand and put all other cards "
+    "revealed this way on the bottom of your library in any order"
+)
+
+
+def _reveal_until_kind_sources(game, payload: dict) -> list:
+    """The permanents whose replacement this draw answers to.
+
+    "If **you** would draw a card" is CR 109.5's seat: the sentence is about the
+    controller of the enchantment, so the scan is over the *drawing* player's
+    own battlefield and an Abundance an opponent controls never sees this draw.
+
+    The exclusion is CR 614.5, and it is what stops the declined branch - which
+    goes back through the seam to draw the card after all - from putting the
+    same question again forever. A *second* Abundance is a different effect and
+    does apply, which is why it names the source rather than the wording.
+    """
+    exclude = set(payload.get("exclude_sources") or ())
+    seat = game.players.index(payload["player"])
+    return [
+        perm
+        for perm in game.controlled_by(seat)
+        if REVEAL_UNTIL_KIND_TEXT in (perm.effective_card.oracle_text or "").lower()
+        and perm.permanent_id not in exclude
+    ]
+
+
+def _applies_reveal_until_kind(game, payload: dict) -> bool:
+    return int(payload.get("count", 0)) > 0 and bool(
+        _reveal_until_kind_sources(game, payload)
+    )
+
+
+@replacement_effect(
+    "draw", DRAW_REVEALS_UNTIL_KIND, applies=_applies_reveal_until_kind
+)
+def _reveal_until_kind_instead_of_drawing(game, payload: dict) -> ReplacementOutcome | None:
+    """Abundance: "If you would draw a card, you may instead choose land or
+    nonland and reveal cards from the top of your library until you reveal a
+    card of the chosen kind. Put that card into your hand and put all other
+    cards revealed this way on the bottom of your library in any order."
+
+    Two decisions in one sentence - whether to replace the draw at all, and
+    which kind - offered as one prompt because they are one announcement
+    (CR 614.1: the choice is made as the replacement applies). That is why this
+    is a :class:`ReplacementChoice` rather than an interceptor that simply acts:
+    ``apply_replacements`` returns synchronously and the answer arrives on a
+    later request from a human.
+
+    One draw at a time (CR 121.2), with the draws queued behind it made through
+    the seam again by the resolver - so a second replacement armed alongside
+    still gets its own. Declining is the third option and is carried out by the
+    resolver too, as a fresh draw with this source excluded: an optional
+    replacement not applied leaves the event to whatever is behind it, and the
+    exclusion is what keeps this one from asking again about the draw it just
+    let through.
+
+    **The card that arrives is put into a hand, not drawn** (CR 121.1: a draw is
+    the top card of a library, and this is not it), which is also why nothing
+    here recurses - Abundance replaces draws and makes none.
+    """
+    player = payload["player"]
+    count = int(payload["count"])
+    source = min(
+        _reveal_until_kind_sources(game, payload), key=lambda perm: perm.permanent_id
+    )
+    suspended, drawn = offer_replacement_choice(
+        game,
+        ReplacementChoice(
+            kind="reveal_until_kind_draw",
+            player_index=game.players.index(player),
+            options=("Nonland", "Land", "Draw a card"),
+            # What a player would normally do with an Abundance they paid for:
+            # the card is played to turn draws into spells, and the default is
+            # the option that does it. Never the decline - a null default would
+            # make the enchantment inert in every AI and headless game, which is
+            # the one outcome that reads as "implemented" and is not.
+            default_option=0,
+            data={
+                "remaining_draws": count - 1,
+                "exclude_sources": tuple(payload.get("exclude_sources") or ()),
+                "source_id": source.permanent_id,
+            },
+        ),
+    )
+    if suspended:
+        game.log.append(
+            f"{player.name} may reveal until a land or nonland card "
+            f"({source.card.name})"
+        )
+    payload["drawn"] = drawn
+    return ReplacementOutcome(replaced=True)
+
+
+@replacement_choice("reveal_until_kind_draw")
+def _resolve_reveal_until_kind_draw(
+    game, choice: ReplacementChoice, option_index: int
+) -> int:
+    """Carry out the answer to Abundance's offer.
+
+    The reveal stops at the **first** card of the chosen kind, and the whole run
+    is one reveal event to a client (CR 701.20a). A library holding no such card
+    is revealed entirely and every card goes back to the bottom: the sentence
+    names a card to put into a hand and there is none, so nothing is put
+    anywhere and no card is drawn.
+
+    The rest go back **in the order they were revealed**, which is one of the
+    orders "in any order" permits and the only one that is seed-reproducible.
+    """
+    player = game.players[choice.player_index]
+    excludes = tuple(choice.data.get("exclude_sources") or ()) + (
+        int(choice.data["source_id"]),
+    )
+    remaining = int(choice.data.get("remaining_draws", 0))
+    drawn = 0
+    if option_index >= 2:
+        # Declined. The draw happens after all, through the seam so every other
+        # armed replacement still gets its own opportunity - with this source
+        # excluded, because CR 614.5 gives an effect one opportunity per event
+        # and it has just had it.
+        drawn += game._draw_with_replacements(player, 1, exclude_sources=excludes)
+    else:
+        wants_land = option_index == 1
+        revealed: list = []
+        found = None
+        while player.library:
+            card = player.library.pop(0)
+            revealed.append(card)
+            if card_has_type(card, "land") is wants_land:
+                found = card
+                break
+        if revealed:
+            game.record_reveal(
+                choice.player_index, [card.name for card in revealed]
+            )
+        if found is not None:
+            revealed.pop()
+            # Through the hand seam, never a bare append: CR 903.9b has no
+            # single fire site, and "would be put into its owner's hand from
+            # anywhere" is exactly what this is.
+            game.put_card_into_hand(player, found)
+            game.log.append(
+                f"{player.name} revealed {len(revealed) + 1} card(s) and put "
+                f"{found.name} into their hand (Abundance)"
+            )
+        else:
+            game.log.append(
+                f"{player.name} revealed their whole library and found no "
+                f"{'land' if wants_land else 'nonland'} card (Abundance)"
+            )
+        for card in revealed:
+            game.put_card_into_library(player, card)
+    if remaining > 0:
+        # The draws queued behind this one are their own events (CR 121.2) and
+        # get their own trip through the seam - including this replacement
+        # again, which is what a two-card draw under Abundance is.
+        drawn += game._draw_with_replacements(
+            player, remaining,
+            exclude_sources=tuple(choice.data.get("exclude_sources") or ()),
+        )
+    return drawn
+
+
 def _applies_lamp_draw(game, payload: dict) -> bool:
     """Armed, not "will do something". The charge is spent even when the library
     turns out to be too short to look at anything (CR 614.1), so the short-library
@@ -3813,6 +3992,12 @@ REPLACEMENT_LINES: tuple[tuple[str, str], ...] = (
     # three printed sentences, because the interceptor performs all three — the
     # reveal, the graveyard for a creature card and the draw for anything else.
     (REVEAL_TOP_INSTEAD_OF_DRAW_TEXT, ""),
+    # _reveal_until_kind_instead_of_drawing (Abundance): the constant is both
+    # printed sentences, because the interceptor performs both — the choice and
+    # the reveal-until, and the two destinations the second sentence names. A
+    # claim stopping at the first would admit a card that reveals its library
+    # and then puts nothing anywhere.
+    (REVEAL_UNTIL_KIND_TEXT, ""),
     # _revealed_draw_taxed (Breathstealer's Crypt): the constant is both printed
     # sentences, because the interceptor performs both — the draw-and-reveal and
     # the pay-or-discard offer behind a creature card. A claim stopping at the

@@ -2715,6 +2715,20 @@ class PendingChoicesMixin:
             player_index, 1 if take_the_counter else 0, kind="draw_becomes_counter"
         )
 
+    def confirm_reveal_until_kind_draw(
+        self, player_index: int, option_index: int
+    ) -> bool:
+        """Resolve the oldest pending Abundance offer for *player_index*.
+
+        The answer is an index into the offered options ("Nonland", "Land",
+        "Draw a card") rather than a boolean, because the sentence asks two
+        things at once - whether to replace the draw, and which kind to reveal
+        until - and CR 614.1 makes them one announcement.
+        """
+        return self.resolve_replacement_choice(
+            player_index, int(option_index), kind="reveal_until_kind_draw"
+        )
+
     def confirm_leng_discard(self, player_index: int, to_library: bool) -> bool:
         """Resolve the oldest pending Library of Leng destination choice for
         *player_index*: the discarded card goes on top of their library (the
@@ -9765,6 +9779,25 @@ register_choice(
     # default run through one resolver, and the draw a decline remakes is the
     # resolver's own business - so nothing is waiting on the answer to carry
     # on, exactly as for the offers around it.
+    default_at_arm=True,
+    spectator_visible=True,
+    hidden_for_ai=False,
+)
+
+register_choice(
+    "reveal_until_kind_draw",
+    resolve=_resolve_replacement,
+    default=_default_replacement,
+    action="reveal_until_kind_draw_confirm",
+    prompt_key="reveal_until_kind_draw",
+    blocked_detail=(
+        "choose whether to reveal until a land or nonland card (Abundance) "
+        "before other actions"
+    ),
+    # The draw that armed this was consumed so that every answer - both kinds
+    # and the decline - runs through one resolver, and the draw a decline
+    # remakes is the resolver's own business. So nothing inside the resolution
+    # is waiting on the answer, exactly as for the offers around it.
     default_at_arm=True,
     spectator_visible=True,
     hidden_for_ai=False,
