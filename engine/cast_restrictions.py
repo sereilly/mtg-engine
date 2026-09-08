@@ -1168,6 +1168,91 @@ def global_play_timing(game: "Game", actor_index: int) -> str | None:
     return None
 
 
+#: "Each player can't cast more than one spell each turn." (Arcane Laboratory;
+#: Rule of Law is the same sentence.) CR 601.3a again, and the fourth scope this
+#: file reads it in — the three above ask *what* may be cast and this one asks
+#: **how many**, which is why it is its own row rather than a payload on any of
+#: them: nothing in those patterns counts, and a count is not a card type.
+#:
+#: The number is payload, for every other printed word in this table's reason: a
+#: card printed "more than two spells" is this restriction and must need no
+#: second row. Printed as a **word** on every card that prints it at all, so it
+#: is read through a number table, and a word with no number behind it leaves
+#: the line unclaimed rather than reaching the comparison as a string — where it
+#: would compare unequal to every count and stop nobody.
+#:
+#: It needs no record of its own. ``PlayerState.spells_cast_this_turn`` has held
+#: every cast of the turn since Stormwing Entity's ordinal, and
+#: ``turn_management`` empties it at the turn boundary — which is the half that
+#: matters, because a record outliving its turn is a restriction that stops
+#: applying, and a cap lifted is a spell castable when the card forbids it.
+_SPELL_CAP_PER_TURN = re.compile(
+    r"^each player can't cast more than (?P<count>[a-z]+) spells? each turn$"
+)
+
+#: Printed number words a cap can be written with. Its own table for the reason
+#: ``combat_restrictions._NUMBER_WORDS`` is its own: what the two have in common
+#: is English, not a rule.
+_CAP_NUMBER_WORDS = {
+    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+    "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+}
+
+#: The claim name the support gate and ``engine/grammar/registries.py`` use for
+#: the row above. Its own, for :data:`OWN_CAST_BAN_CLAIM`'s reason: that claim
+#: says which *types* a seat may not cast, and this sentence caps how many
+#: spells of any type everybody may cast.
+SPELL_CAP_CLAIM = "spell_cap"
+
+
+@lru_cache(maxsize=None)
+def spell_cap_line(line: str) -> int | None:
+    """How many spells a turn *line* caps every player at, or None.
+
+    One reader, three callers, exactly as :func:`global_cast_ban_line` has:
+    ``engine/grammar/registries.py`` asks it so the printed line is *claimed*,
+    ``engine/oracle.py``'s support gate asks it so the card is admitted on the
+    strength of a restriction that exists, and ``mixins/stack/casting.py`` asks
+    it at CR 601.2 so the line is *enforced*. A restriction claimed and not
+    enforced is an enchantment that reports supported while every player casts
+    as many spells as they like — which on this card is the whole of what it
+    does.
+    """
+    match = _SPELL_CAP_PER_TURN.match(line.strip().lower().rstrip("."))
+    if match is None:
+        return None
+    return _CAP_NUMBER_WORDS.get(match.group("count"))
+
+
+def spell_cap_ban(game: "Game", caster_index: int) -> str | None:
+    """The name of a permanent whose per-turn cap *caster_index* has reached.
+
+    Every battlefield and no seat comparison, for :func:`global_play_timing`'s
+    reason: the sentence says "each player", so it binds its own controller as
+    thoroughly as anybody (CR 601.3a).
+
+    The count read is the seat's **own** record, not a shared one: CR 601.3a
+    restricts the player who is casting, and one table-wide tally would let an
+    opponent's turn-one Ornithopter spend everybody's allowance. The record is
+    appended to further down the cast (``mixins/stack/casting.py``), so a seat
+    that has already cast *cap* spells is at its limit and the spell being
+    announced is the one too many.
+
+    ``effective_card`` rather than the printed face, for :func:`global_cast_ban`'s
+    reason: what a permanent says is what layer 1 and layer 3 have made of it
+    (CR 707.2, CR 612.1).
+    """
+    if not (0 <= caster_index < len(game.players)):
+        return None
+    cast_so_far = len(game.players[caster_index].spells_cast_this_turn)
+    for _seat, permanent in game.permanents_with_controller():
+        for raw_line in (permanent.effective_card.oracle_text or "").splitlines():
+            cap = spell_cap_line(raw_line)
+            if cap is not None and cast_so_far >= cap:
+                return permanent.card.name
+    return None
+
+
 def global_cast_ban(game: "Game", card) -> str | None:
     """The name of a permanent forbidding *card* from being cast, or None.
 

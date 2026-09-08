@@ -810,12 +810,25 @@ def skip_next_untap(game: Game, instruction: OracleInstruction, context: OracleE
             game.players.index(context.caster)
             if context.caster in game.players else None
         )
+        # "Creatures and lands **target opponent** controls don't untap during
+        # their next untap step." (Exhaustion.) A seat the *spell* chose
+        # (CR 115.4), which no read of a permanent can supply — so it goes to
+        # the matcher, which refuses the word without one. The same hand
+        # ``_tap_or_untap_all_matching`` and the damage and destroy sweeps
+        # already make; absent it this sweep matched **nothing** and the spell
+        # resolved having held nothing down, which is the silent half.
+        targeted_seat = (
+            game.players.index(context.target)
+            if context.target is not None and context.target in game.players
+            else None
+        )
         recorded = tuple(
             permanent.permanent_id
             for permanent in game.all_permanents()
             if subject_matches(
                 game, permanent, described, observer=observer,
                 source=context.source_permanent,
+                targeted_player=targeted_seat,
             )
         )
     elif key is None:

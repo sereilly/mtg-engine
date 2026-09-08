@@ -6108,6 +6108,18 @@ def _derived_static_claims(
         for line in (oracle_text or "").splitlines()
     ):
         claims.append(OWN_CAST_BAN_CLAIM)
+    # "Each player can't cast more than one spell each turn." (Arcane
+    # Laboratory.) The same CR 601.3a prohibition counting casts rather than
+    # naming a type, read off the board at every cast — so there is no
+    # instruction, and the enchantment's whole text is this sentence, which
+    # means no claim is an unsupported card however well the cap works.
+    from .cast_restrictions import SPELL_CAP_CLAIM, spell_cap_line
+
+    if any(
+        spell_cap_line(line) is not None
+        for line in (oracle_text or "").splitlines()
+    ):
+        claims.append(SPELL_CAP_CLAIM)
     # "Players can't gain life." (Forsaken Wastes, CR 119.7.) The life-gain seam
     # asks this same table on every gain, so there is no instruction to produce
     # — and a permanent whose whole text is the sentence would report
