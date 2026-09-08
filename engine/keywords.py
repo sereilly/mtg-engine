@@ -242,9 +242,26 @@ def protection_quality(word: str) -> tuple[str, str] | None:
 #: had no table to refuse against — it passed ``until_eot=True`` and lost the
 #: word. ``None`` — no printed duration — lasts as long as the object
 #: (CR 611.2c) and appears in no sweep.
+#: …and the windows that end on an **event** instead of at a turn step
+#: (CR 611.2b, `engine/event_durations.py`): "until a player casts a creature
+#: spell" (Soul Sculptor). Folded in rather than listed again, because that
+#: module *is* their sweep — this table's whole content is "a duration with
+#: something behind it", so a row added there becomes legal here for the reason
+#: it should, and a row removed stops being legal the same moment.
+#:
+#: Imported inside the function below rather than at module scope: the sweep
+#: module imports the four ``clear_*`` functions from this one, and naming it
+#: at the top would close the cycle.
 KEYWORD_GRANT_DURATIONS: frozenset[str] = frozenset({
     "end_of_turn", "end_of_combat", "your_next_upkeep",
 })
+
+
+def _sweepable_durations() -> frozenset[str]:
+    """Every duration something in this engine ends."""
+    from .event_durations import EVENT_DURATION_KINDS
+
+    return KEYWORD_GRANT_DURATIONS | EVENT_DURATION_KINDS
 
 #: The durations whose sweep has to know *whose* they are. "Until **your** next
 #: upkeep" is one player's step, and CR 109.5 makes that the controller of the
@@ -261,6 +278,13 @@ def _check_duration(duration: str | None, seat: int | None, table) -> None:
     card said — the failure the table exists to prevent.
     """
     if duration is not None and duration not in table:
+        # The event-ended windows are folded in here rather than into the table
+        # itself: the table is a module constant and this is the one question
+        # asked of it, so widening the *question* keeps the constant importable
+        # from the sweep module without a cycle. Asked second, so nothing
+        # changes for the three turn-step words.
+        if duration in _sweepable_durations():
+            return
         raise ValueError(f"no sweep ends a granted ability at {duration!r}")
     if duration in SEATED_GRANT_DURATIONS and seat is None:
         raise ValueError(f"a {duration!r} grant needs the seat whose step ends it")

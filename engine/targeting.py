@@ -829,6 +829,11 @@ _KIND_TO_SPEC: dict[str, dict] = {
     # the keyword is printed (Fetid Imp's deathtouch) or chosen.
     "grant_self_keyword_until_eot": {"kind": "none"},
     "tap_or_untap_target": {"kind": "permanent"},
+    # "Target creature becomes an enchantment and loses all abilities …"
+    # (Soul Sculptor.) The picker offers a permanent; which one is narrowed by
+    # the `targets` description the lowering emits, exactly as the ability
+    # removal beside it in the same sentence is.
+    "set_card_types_target": {"kind": "permanent"},
     "tap_target_player_lands_and_drain_mana": {"kind": "player"},
     # Phyrexian Furnace: "{T}: Exile the bottom card of **target player's**
     # graveyard." The pile is chosen (CR 115.1) and the card in it is not —

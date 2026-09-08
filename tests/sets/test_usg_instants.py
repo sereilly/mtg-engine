@@ -492,3 +492,127 @@ def test_brands_control_change_outlives_the_turn(set_pool, catalog_by_name):
     game.resolve_cleanup_step(0)
 
     assert game.controller_index_of(mine) == 0
+
+
+# --- W3G1: Turnabout — a card type and a mode both chosen on resolution ---
+import pytest
+
+from engine import Game, PlayerState
+from engine.card_loader import load_cards, manifest_set_paths
+from engine.grammar import parse_line
+from engine.grammar.errors import GrammarError
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+from engine.targeting import derive_cast_spec
+
+from tests.helpers import resolve_stack
+
+#: What Turnabout offers. The list is the card's, not a catalog's — a seat that
+#: could answer "enchantment" would name a type the sentence never printed.
+_W3G1_OPTIONS = ["artifact", "creature", "land"]
+
+
+def _w3g1_pool() -> dict:
+    pool: dict = {}
+    for path in manifest_set_paths(include_measured=True):
+        for card in load_cards([path]):
+            pool.setdefault(card.name, card)
+    return pool
+
+
+def _w3g1_turnabout(set_pool, *, tapped: bool):
+    """Seat 1 holds two Islands, a Grizzly Bears and a Black Lotus, all in the
+    same tapped state; seat 0 holds a Turnabout and an Island of their own.
+
+    The caster's own Island is what makes "target player controls" a real
+    assertion rather than a coincidence: an untargeted sweep would move it too.
+    """
+    pool = _w3g1_pool()
+    alice = PlayerState(
+        name="A", hand=[set_pool("USG")["Turnabout"]],
+        battlefield=[Permanent(card=pool["Island"])],
+    )
+    bob = PlayerState(name="B", battlefield=[
+        Permanent(card=pool["Island"]), Permanent(card=pool["Island"]),
+        Permanent(card=pool["Grizzly Bears"]), Permanent(card=pool["Black Lotus"]),
+    ])
+    game = Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    for permanent in bob.battlefield:
+        permanent.tapped = tapped
+    alice.battlefield[0].tapped = tapped
+    game.interactive_seats = {0}
+    return game, alice, bob
+
+
+def _w3g1_resolve(game, card_type: str, mode_index: int):
+    """Answer the two prompts Turnabout owes, in the order it asks them."""
+    game.cast_from_hand(0, "Turnabout", target_player_index=1)
+    assert [choice.kind for choice in game.pending_choices] == ["card_type_choice"]
+    assert game.pending_choices[0].data["options"] == _W3G1_OPTIONS
+    # Answering the first prompt arms the second — one resolution, two
+    # decisions, in the order the two sentences are printed.
+    assert game.confirm_card_type_choice(0, card_type)
+    assert [choice.kind for choice in game.pending_choices] == ["mode_choice"]
+    assert game.resolve_pending_choice("mode_choice", 0, mode_index=mode_index)
+    resolve_stack(game)
+
+
+def test_w3g1_turnabout_untaps_the_chosen_type(set_pool):
+    """The untap arm reaches the chosen type and nothing else."""
+    game, alice, bob, = _w3g1_turnabout(set_pool, tapped=True)
+
+    _w3g1_resolve(game, "land", mode_index=1)
+
+    assert [p.tapped for p in bob.battlefield] == [False, False, True, True]
+    # …and not the caster's own land, however tapped it is: the sweep is
+    # scoped to the player the spell chose (CR 601.2c).
+    assert alice.battlefield[0].tapped
+
+
+def test_w3g1_turnabout_taps_the_chosen_type(set_pool):
+    """The tap arm, over a different chosen type, on an untapped board."""
+    game, alice, bob = _w3g1_turnabout(set_pool, tapped=False)
+
+    _w3g1_resolve(game, "artifact", mode_index=0)
+
+    # Only the Black Lotus is an artifact.
+    assert [p.tapped for p in bob.battlefield] == [False, False, False, True]
+    assert not alice.battlefield[0].tapped
+
+
+def test_w3g1_turnabout_taps_creatures_when_creature_is_chosen(set_pool):
+    """The type is payload, so the same two instructions cover all three
+    options — this is the third one, and the one a Falter-style tap wants."""
+    game, _alice, bob = _w3g1_turnabout(set_pool, tapped=False)
+
+    _w3g1_resolve(game, "creature", mode_index=0)
+
+    assert [p.tapped for p in bob.battlefield] == [False, False, True, False]
+
+
+def test_w3g1_turnabout_offers_a_player_to_target(set_pool):
+    """The picker offers what the sentence names, derived from the compiled
+    program — the alternatives are nested inside a mode, and the seat has to
+    survive that."""
+    card = set_pool("USG")["Turnabout"]
+
+    assert derive_cast_spec(card, compile_card_oracle(card)) == {"kind": "player"}
+
+
+def test_w3g1_a_single_card_type_is_not_a_choice_sentence():
+    """"Choose artifact, creature, or land" is a *list*; one word is a
+    different sentence entirely and this production must not claim it."""
+    with pytest.raises(GrammarError):
+        parse_line("Choose artifact.")
+
+
+def test_w3g1_a_comma_before_or_claims_only_what_the_line_already_refused():
+    """The widened probe reads a comma in front of an alternative's "or".
+
+    It is safe because a comma at that position is where the line fails today —
+    so a sentence whose alternative cannot be parsed still fails, at the same
+    place, rather than being half-read and silently dropped.
+    """
+    with pytest.raises(GrammarError):
+        parse_line("Draw a card, or grokk the frumious bandersnatch.")

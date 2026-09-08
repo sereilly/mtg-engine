@@ -2998,14 +2998,80 @@ def set_card_types_self(game: Game, instruction: OracleInstruction, context: Ora
     card_types = [str(word) for word in (instruction.payload.get("card_types") or ())]
     if not card_types:
         return False, "ability not implemented"
-    source.metadata[SET_CARD_TYPES] = {
-        "card_types": card_types,
+    _record_set_card_types(game, source, instruction, context)
+    game.log.append(
+        f"{source.card.name} becomes " + " ".join(card_types)
+    )
+    return True, "resolved"
+
+
+def _record_set_card_types(
+    game: Game, perm: Permanent, instruction: OracleInstruction,
+    context: OracleExecutionContext,
+) -> None:
+    """Write the CR 205.1a replacement onto *perm*, with its window.
+
+    One writer for the two kinds that produce this record — the ability's own
+    source and a chosen target — so the slot's shape is decided in one place.
+    That matters here more than usual: the sweep that ends the window reads
+    ``duration`` off this dict, and a second writer that spelled it differently
+    would be a replacement nothing could end.
+
+    A **permanent** replacement carries no ``duration`` key at all rather than a
+    ``"permanent"`` sentinel: ``event_durations.clear_set_card_types`` compares
+    the key against the window that is closing, and an absent key can match
+    nothing — which is exactly right for Opal Acrolith, whose own animation this
+    undoes for the rest of the game.
+    """
+    record: dict[str, object] = {
+        "card_types": [str(word) for word in (instruction.payload.get("card_types") or ())],
         "timestamp": next_timestamp(),
         "source": context.card.name if context.card else "effect",
     }
+    duration = instruction.payload.get("duration")
+    if duration:
+        record["duration"] = str(duration)
+    perm.metadata[SET_CARD_TYPES] = record
     game._refresh_dynamic_creatures()
+
+
+@effect_handler("set_card_types_target")
+def set_card_types_target(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"{1}{W}, {T}: **Target creature** becomes an enchantment and loses all
+    abilities until a player casts a creature spell." (Soul Sculptor.)
+
+    :func:`set_card_types_self` aimed somewhere else, and the same record on the
+    same layer-4 channel — what is different is that the permanent has to be
+    resolved rather than assumed, and that the record carries a window.
+
+    CR 205.1a *replaces* the type line, so the creature stops being a creature:
+    it leaves combat, stops being able to attack or block, and its power and
+    toughness cease to exist (CR 208.3). Nothing here does any of that by hand
+    — every one of those is computed off the layer stack, which is the whole
+    reason the change is a contribution and not a rewrite of the card.
+
+    The printed noun phrase is applied through ``permanent_matches_filter``, the
+    same read every other targeted board effect makes, so "target **creature**"
+    is enforced against what the permanent is *now* (CR 613) rather than against
+    what it was printed as.
+    """
+    payload = instruction.payload
+    filters = (payload.get("targets") or {}).get("filter") or {}
+
+    def _eligible(perm: Permanent) -> bool:
+        return permanent_matches_filter(perm, filters)
+
+    target_perm = resolve_target_permanent(
+        game, context, predicate=_eligible,
+        fallback_players=(context.target, context.caster),
+    )
+    if target_perm is None:
+        game.log.append(f"{context.card.name}: no valid target")
+        return True, "resolved"
+    _record_set_card_types(game, target_perm, instruction, context)
     game.log.append(
-        f"{source.card.name} becomes " + " ".join(card_types)
+        f"{context.card.name}: {target_perm.card.name} becomes "
+        + " ".join(str(word) for word in (payload.get("card_types") or ()))
     )
     return True, "resolved"
 

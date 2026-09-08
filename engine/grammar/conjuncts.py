@@ -21,6 +21,8 @@ statement its caller has already parsed, exactly as `delayed` is handed
 `parse_statement`.
 """
 
+import dataclasses
+
 from . import ast
 from .errors import GrammarError
 from .stream import TokenStream
@@ -193,7 +195,43 @@ def _with_keyword_loss_conjunct(
         # can read it rather than joining a statement about the wrong subject.
         stream.reset(mark)
         return statement
-    return ast.Conjunction((statement, joined))
+    return ast.Conjunction((_share_trailing_duration(statement, joined), joined))
+
+
+def _share_trailing_duration(
+    statement: ast.Statement, joined: ast.Statement
+) -> ast.Statement:
+    """*statement* wearing the duration printed at the end of the joined clause.
+
+    "Target creature becomes an enchantment and loses all abilities **until a
+    player casts a creature spell**." (Soul Sculptor.) The window is printed
+    once, at the end of the sentence, and CR 611.2a gives it to the whole
+    continuous effect — both halves end together, which is what the card's own
+    ruling says. But the joiner parses the first clause *before* the words are
+    reached, so the first half is built with no duration at all and only the
+    clause that happened to be printed last carries one.
+
+    A dropped duration is the direction that never fails loudly: the type change
+    simply never ended, and the creature stayed an enchantment for the rest of
+    the game while its abilities came back on the first creature spell.
+
+    Only where the first clause carries **no** window of its own. A leading
+    duration ("Until end of turn, this artifact becomes a 3/2 Construct and
+    loses flying" — Chimeric Sphere) is already distributed to both halves by
+    the statement layer, and this must not overwrite it; a first clause that
+    printed a different window would be a sentence saying two things, which
+    nothing in the pool does and which this leaves alone rather than guessing
+    about.
+    """
+    if not dataclasses.is_dataclass(statement):
+        return statement
+    carried = getattr(statement, "duration", None)
+    trailing = getattr(joined, "duration", None)
+    if not isinstance(carried, ast.Duration) or carried.kind is not None:
+        return statement
+    if not isinstance(trailing, ast.Duration) or trailing.kind is None:
+        return statement
+    return dataclasses.replace(statement, duration=trailing)
 
 
 def _with_gained_type_conjunct(

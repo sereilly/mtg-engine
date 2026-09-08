@@ -286,10 +286,6 @@ def _lower_gain_type(node: ast.GainType) -> tuple[OracleInstruction, ...]:
     sentence of the same effect: the handler adds the record to *one* permanent,
     and a quantified subject would name a set it cannot reach.
     """
-    if node.duration.kind not in _GAINED_TYPE_DURATIONS:
-        raise LoweringError(
-            f"no handler holds a gained type for {node.duration.kind}", node=node
-        )
     if node.replaces_types:
         # "{0}: This permanent becomes an enchantment." (Opal Acrolith,
         # Hidden Stag's second line.) CR 205.1a's *replacement*, which is a
@@ -299,29 +295,51 @@ def _lower_gain_type(node: ast.GainType) -> tuple[OracleInstruction, ...]:
         # deciding which of two channels to write, which is the shape this
         # package spells as two kinds.
         #
-        # Only the source, because that is what the pool prints: both cards
-        # here name themselves. A target would need a picker this instruction
-        # does not describe, so it refuses rather than resolving against
-        # whatever the context happened to hold.
-        if not _is_source(node.subject):
-            raise LoweringError(
-                "a card-type replacement names the ability's own source",
-                node=node,
-            )
-        if node.duration.kind is not None:
-            # Every duration in ``_GAINED_TYPE_DURATIONS`` has a sweep for the
-            # *gain* channel and none of them clears this one, so admitting a
-            # window here would be a replacement that never ends.
+        from ...event_durations import EVENT_DURATION_KINDS
+
+        if node.duration.kind is not None and node.duration.kind not in EVENT_DURATION_KINDS:
+            # No *turn-step* sweep clears this channel — every duration in
+            # ``_GAINED_TYPE_DURATIONS`` has one for the **gain**, and none of
+            # them touches a replacement — so those windows would be a
+            # replacement that never ends. The event-ended windows do have one
+            # (`engine/event_durations.clear_set_card_types`), which is the
+            # whole of why they are admitted and the others are not.
             raise LoweringError(
                 f"no sweep ends a card-type replacement at {node.duration.kind}",
                 node=node,
             )
-        return (
-            OracleInstruction(
-                "set_card_types_self", "", {"card_types": list(node.card_types)}
-            ),
+        payload: dict[str, object] = {"card_types": list(node.card_types)}
+        # Written only for a window that has one, so every payload compiled
+        # before this duration existed stays the two-key dict it was.
+        if node.duration.kind is not None:
+            payload["duration"] = node.duration.kind
+        if _is_source(node.subject):
+            return (OracleInstruction("set_card_types_self", "", payload),)
+        # "**Target creature** becomes an enchantment …" (Soul Sculptor.) The
+        # same CR 205.1a replacement pointed somewhere else, and a different
+        # kind for the reason the replacement is a different kind from the gain:
+        # this one has a target to resolve and a picker to describe, and a flag
+        # deciding which of two subjects a handler reads is the shape this
+        # package spells as two kinds.
+        if _is_target(node.subject):
+            _describe_targets(payload, node.subject)
+            return (OracleInstruction("set_card_types_target", "", payload),)
+        raise LoweringError(
+            "a card-type replacement names the ability's own source or a "
+            "chosen target",
+            node=node,
         )
-    payload: dict[str, object] = {
+    # The *gain* channel's own windows, asked after the replacement branch
+    # above has answered for its own: the two write different records and are
+    # swept by different code, so one duration table cannot speak for both — a
+    # replacement admits exactly the event-ended windows
+    # `engine/event_durations.py` ends, and this admits exactly the turn-step
+    # ones the gained-type sweeps run.
+    if node.duration.kind not in _GAINED_TYPE_DURATIONS:
+        raise LoweringError(
+            f"no handler holds a gained type for {node.duration.kind}", node=node
+        )
+    payload = {
         "card_types": list(node.card_types),
         "duration": node.duration.kind or "permanent",
         "pt_from_mana_value": bool(node.pt_from_mana_value),

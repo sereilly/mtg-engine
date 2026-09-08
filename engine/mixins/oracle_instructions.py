@@ -4,6 +4,7 @@ import dataclasses
 
 from ..card_hooks import ON_SELF_RESOLVED
 from ..control import BASE_CONTROLLER, CONTROL_EFFECTS
+from ..event_durations import end_event_durations
 from ..events import emit
 from ..game_types import OracleExecutionContext, OracleStateMachine
 from ..handlers import EFFECT_HANDLERS
@@ -289,6 +290,17 @@ class OracleInstructionsMixin:
             self, "spell_cast", subject=card, caster_index=caster_index,
             cast_card=card, event_subject_player=caster_index,
         )
+        # …and the other thing a cast can do to the board: end a continuous
+        # effect that was printed to last **until** one (CR 611.2a) — "until a
+        # player casts a creature spell" (Soul Sculptor). Beside the emit rather
+        # than anywhere else because this is the moment, and one call site is
+        # what stops a cast announcing the trigger and not the ending.
+        #
+        # **Not** a trigger: nothing goes on the stack and nothing can respond.
+        # CR 611.2a's window simply closes, here, while the creature spell is
+        # still being announced — so countering that spell does not give the
+        # effect back.
+        end_event_durations(self, "spell_cast", card=card)
         # The zone rides along so "…from anywhere other than their hand"
         # (Ghostly Pilferer) has something to test. Every cast announces it;
         # only a trigger that narrows on it reads it.

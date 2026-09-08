@@ -101,7 +101,16 @@ def _lower_lose_all_abilities(
       pronoun this instruction cannot address. The removal writes a record onto
       one permanent, so the sentence has to name one.
     """
-    if node.duration.kind not in ("until_end_of_turn", "this_turn"):
+    from ...event_durations import EVENT_DURATION_KINDS
+
+    #: The printed windows this removal has a sweep for, and what each one is
+    #: called on the record. "This turn" and "until end of turn" are the same
+    #: moment (CR 514.2's cleanup step), which is why they share a value.
+    #: An event-ended window keeps its own name because the thing that ends it
+    #: is named by that name (`engine/event_durations.EVENT_DURATIONS`).
+    windows = {"until_end_of_turn": "end_of_turn", "this_turn": "end_of_turn"}
+    windows.update({kind: kind for kind in EVENT_DURATION_KINDS})
+    if node.duration.kind not in windows:
         raise LoweringError(
             "a durationless blanket ability removal is a static ability "
             "(engine/global_statics.py)",
@@ -112,7 +121,7 @@ def _lower_lose_all_abilities(
             "the blanket ability removal reaches one chosen permanent",
             node=node,
         )
-    payload: dict[str, object] = {"duration": "end_of_turn"}
+    payload: dict[str, object] = {"duration": windows[node.duration.kind]}
     _describe_targets(payload, node.subject)
     return (
         OracleInstruction("remove_target_abilities_until_eot", "", payload),

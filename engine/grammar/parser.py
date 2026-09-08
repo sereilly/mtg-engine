@@ -366,6 +366,26 @@ def _attach_granted_ability_permission(
     return True
 
 
+def _at_alternative(stream: TokenStream) -> bool:
+    """Whether the cursor is on the "or" that opens a statement alternative.
+
+    One reader for both spellings — a bare "or" and a comma in front of it —
+    so the loop below and its own guard cannot disagree about where an
+    alternative starts. Non-consuming in every branch: the probe past a comma
+    rewinds, because a comma followed by anything else is still the caller's
+    "unconsumed text".
+    """
+    if stream.at_word("or"):
+        return True
+    if not stream.at_punct(","):
+        return False
+    mark = stream.mark()
+    stream.advance()
+    found = stream.at_word("or")
+    stream.reset(mark)
+    return found
+
+
 def _parse_statement_alternatives(
     stream: TokenStream, first: ast.Statement, first_at: int
 ) -> ast.Statement:
@@ -390,13 +410,23 @@ def _parse_statement_alternatives(
     An alternative that does not parse is left alone — the cursor rewinds and
     the "unconsumed text" refusal below stands, naming the same offset it names
     now.
+
+    **A comma may stand in front of the "or"**, and that is the same sentence:
+    "Tap all untapped permanents of the chosen type target player controls**,
+    or** untap all tapped permanents of that type that player controls."
+    (Turnabout.) The punctuation separates two long clauses and says nothing
+    about how many actions are taken. Safe for the reason above and *only* that
+    reason: a comma at this position is where the line fails today — the caller
+    raises "unconsumed text" for anything that is neither a full stop nor a
+    semicolon — so the widened probe can claim no reading anything else has.
     """
-    if not stream.at_word("or"):
+    if not _at_alternative(stream):
         return first
     options: list[ast.Statement] = [first]
     spans: list[tuple[int, int]] = [(first_at, stream.pos)]
-    while stream.at_word("or"):
+    while _at_alternative(stream):
         mark = stream.mark()
+        stream.accept_punct(",")
         stream.advance()
         start = stream.pos
         try:

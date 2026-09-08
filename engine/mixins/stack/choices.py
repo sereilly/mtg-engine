@@ -2894,6 +2894,16 @@ class PendingChoicesMixin:
         if permanent is not None and self.is_on_battlefield(permanent):
             permanent.metadata[CHOSEN_CARD_TYPE] = word
             self.log.append(f"{choice.data.get('card_name', '')}: chose {word}")
+        # "Choose artifact, creature, or land." (Turnabout.) The **spell**'s
+        # reading of the same sentence: there is no permanent to write on, so
+        # the word goes into the resolution scratchpad the next step of this
+        # same resolution reads — the arrangement ``_resolve_creature_type_
+        # choice`` below already has, and for its reason.
+        context = choice.data.get("_context")
+        result_key = choice.data.get("result_key")
+        if context is not None and result_key is not None:
+            context.results[result_key] = word
+            self.log.append(f"{choice.data.get('card_name', '')}: chose {word}")
         self.discard_pending_choice(choice)
         return True
 
