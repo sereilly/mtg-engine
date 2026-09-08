@@ -210,6 +210,21 @@ class SearchLibrary:
     #: the searched zones are emptied, and both of them, which is why the
     #: search that prints it also prints no shuffle.
     exile_rest: bool = False
+    #: "…, **discard a card at random**, then shuffle." (Gamble.) A clause of
+    #: this sentence sitting between the destination and the shuffle, so it is
+    #: read here rather than left to the sequence parser: the shuffle is this
+    #: search's own last clause (CR 701.23a), and a production that stopped
+    #: before the discard would strand it.
+    #:
+    #: A *rider on the node*, not a fused effect — the lowering emits an
+    #: ordinary discard instruction after the search, which is what the printed
+    #: order says happens and what makes Gamble a gamble: the card just found is
+    #: in the hand the random discard reaches. The count is data and the
+    #: randomness is its own flag, so a card printing "discard two cards" or a
+    #: chosen discard is this field with a different value rather than a second
+    #: production.
+    discard_after: int = 0
+    discard_after_at_random: bool = False
 
 @dataclass(frozen=True)
 class LookAtLibraryTop:

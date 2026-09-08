@@ -153,7 +153,22 @@ def _lower_search_library(node: ast.SearchLibrary) -> tuple[OracleInstruction, .
         # number ("with mana value X"), refuses rather than lowering to a search
         # that ignores the half of the sentence that made the card printable.
         value = _amount_payload(filt.mana_value.value)
-        if filt.mana_value.op not in SEARCH_COMPARISONS or not isinstance(value, int):
+        # "…a creature card with mana value **X** or less" (Citanul Flute). The
+        # bound is the ability's own X, which CR 601.2b fixed when the cost was
+        # paid — so it is a number by the time anything looks in the library,
+        # just not a number this compile can write down. It travels as the
+        # literal ``"x"`` and is resolved once, where the search is armed
+        # (`handlers/zones._search_restrictions`), so the picker, the AI and the
+        # re-check all read one already-resolved bound rather than three
+        # readings of a symbol.
+        #
+        # Only ``"x"``. Every other non-numeric bound still refuses, which is
+        # what keeps this from becoming "any amount the payload happened to
+        # carry" — a search that ignores the half of the sentence that made the
+        # card printable.
+        if filt.mana_value.op not in SEARCH_COMPARISONS or not (
+            isinstance(value, int) or value == "x"
+        ):
             raise LoweringError(
                 "the search picker cannot test this mana value: "
                 f"{filt.mana_value.op} {value}",
@@ -286,7 +301,36 @@ def _lower_search_library(node: ast.SearchLibrary) -> tuple[OracleInstruction, .
                 "threshold": _amount_payload(node.untap_found_if.value),
                 "filter": count_spec(counted, node),
             }
-    return (OracleInstruction("search_library", "", payload),)
+    found = OracleInstruction("search_library", "", payload)
+    if not node.discard_after:
+        return (found,)
+    # "…, **discard a card at random**, then shuffle." (Gamble.) Two
+    # instructions, not one fused kind: the discard is an ordinary discard and
+    # the search is an ordinary search, and what makes the card a gamble is
+    # only the *order* — the tutored card is in the hand by the time the random
+    # pick is made, because the search's prompt is answered before the sentence
+    # behind it runs (CR 608.2, CR 117.3b).
+    #
+    # The printed shuffle sits between them on the card and nowhere in the IR,
+    # because the flow shuffles as the find is confirmed; there is no
+    # observable difference, since a shuffle of a library changes nothing about
+    # a hand.
+    #
+    # The two kinds are the ones "discard a card at random" and "discard a
+    # card" already lower to on their own, so a card printing the chosen
+    # spelling gets the chosen handler rather than a random discard nobody
+    # asked for.
+    discard = (
+        OracleInstruction(
+            "discard_x_target_cards", "",
+            {"amount": node.discard_after, "who": "caster"},
+        )
+        if node.discard_after_at_random
+        else OracleInstruction(
+            "discard_controller_cards", "", {"amount": node.discard_after},
+        )
+    )
+    return (found, discard)
 
 
 #: The zone names the search flow can put a found card into. A name outside this

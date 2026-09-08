@@ -484,6 +484,17 @@ def _search_restrictions(game: Game, payload: dict, context) -> dict:
     dropped narrowing must never fail in.
     """
     restrictions = dict(payload.get("restrictions") or {})
+    # "…a creature card with mana value **X** or less" (Citanul Flute). CR
+    # 601.2b fixed X when the activation cost was paid, so by now it is a
+    # number — resolved here, once, because every seat that answers this search
+    # reads the armed restrictions and none of them has the activation in hand.
+    # A symbol left in the payload would reach ``search_matches``' comparison
+    # and be compared against a card's mana value as a string.
+    mana_value = restrictions.get("mana_value")
+    if isinstance(mana_value, dict) and mana_value.get("value") == "x":
+        restrictions["mana_value"] = {
+            **mana_value, "value": max(0, int(context.x_value or 0)),
+        }
     if not restrictions.get("named_from_target"):
         return restrictions
     # Through the seam every handler resolves a chosen permanent by, so the

@@ -113,3 +113,44 @@ def test_w2g2_planar_birth_returns_every_seat_s_basics_tapped(set_pool):
     assert all(p.tapped for p in game.all_permanents())
     assert [c.name for c in alice.graveyard] == ["Gaea's Cradle", "Planar Birth"]
     assert not bob.graveyard
+
+
+def test_w2g2_gamble_discards_after_the_tutor_not_before(set_pool):
+    """"Search your library for a card, put that card into your hand, discard a
+    card at random, then shuffle."
+
+    The whole card is the order: the tutored card is in the hand the random
+    discard reaches, which is why a hand of exactly one card — the find — must
+    end up empty. A lowering that put the discard first would leave the find
+    sitting in hand and the test would read as a pass with the card broken.
+    """
+    pool = set_pool("USG")
+    game, alice, _ = _g2s_cast(set_pool, "Gamble")
+    wanted = pool["Shivan Hellkite"]
+    alice.library = [wanted, wanted]
+
+    game.cast_from_hand(0, "Gamble")
+    assert game.resolve_pending_choice(
+        "search_library", 0, library_index=0, zone="library"
+    )
+    game._settle()
+
+    assert not alice.hand
+    assert [c.name for c in alice.graveyard] == [wanted.name, "Gamble"]
+
+
+def test_w2g2_gamble_leaves_a_second_card_alone(set_pool):
+    """One card is discarded, not the hand: the count is data. Read over a hand
+    of two so a discard that emptied it would show."""
+    pool = set_pool("USG")
+    game, alice, _ = _g2s_cast(set_pool, "Gamble")
+    alice.hand.append(pool["Serra Zealot"])
+    alice.library = [pool["Shivan Hellkite"]] * 2
+
+    game.cast_from_hand(0, "Gamble")
+    assert game.resolve_pending_choice(
+        "search_library", 0, library_index=0, zone="library"
+    )
+    game._settle()
+
+    assert len(alice.hand) == 1

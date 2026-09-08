@@ -286,3 +286,53 @@ def test_w2g2_crystal_chimes_returns_only_enchantments_and_only_yours(set_pool):
     assert [c.name for c in mine.graveyard] == ["Sanctum Custodian", "Crystal Chimes"]
     assert [c.name for c in theirs.graveyard] == ["Rune of Protection: Red"]
     assert not game.is_on_battlefield(chimes)
+
+
+def test_w2g2_citanul_flute_finds_only_what_x_paid_for(set_pool):
+    """"{X}, {T}: Search your library for a creature card with mana value X or
+    less, reveal it, put it into your hand, then shuffle."
+
+    The bound is the ability's own X, which nothing knows until the cost is
+    paid — so the armed search is read at two values of X over one library, and
+    the seven-drop is admitted by the second and not the first. A search that
+    dropped the bound would admit both every time.
+    """
+    from engine.search_filters import search_matches
+
+    pool = set_pool("USG")
+    cheap, dear = pool["Serra Zealot"], pool["Shivan Hellkite"]
+
+    def _admitted(x):
+        game, _ = _g2_board(set_pool, "Citanul Flute")
+        game.players[0].library = [cheap, dear]
+        game.activate_permanent_ability(0, "Citanul Flute", x_value=x)
+        prompt = game.pending_choice_of("search_library", 0)
+        assert prompt is not None
+        payload = {
+            "restrictions": prompt.data["restrictions"],
+            "card_type": prompt.data["card_type"],
+        }
+        return [
+            c.name for c in game.players[0].library
+            if search_matches(c, payload, game=game, owner=0)
+        ]
+
+    assert _admitted(1) == [cheap.name]
+    assert _admitted(7) == [cheap.name, dear.name]
+
+
+def test_w2g2_citanul_flute_puts_the_find_in_hand(set_pool):
+    """The Rock Hydra half: the search is answered and the card arrives."""
+    pool = set_pool("USG")
+    game, _ = _g2_board(set_pool, "Citanul Flute")
+    wanted = pool["Serra Zealot"]
+    game.players[0].library = [wanted, wanted]
+
+    game.activate_permanent_ability(0, "Citanul Flute", x_value=8)
+    assert game.resolve_pending_choice(
+        "search_library", 0, library_index=0, zone="library"
+    )
+    game._settle()
+
+    assert [c.name for c in game.players[0].hand] == [wanted.name]
+    assert len(game.players[0].library) == 1
