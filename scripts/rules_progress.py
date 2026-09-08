@@ -119,6 +119,7 @@ SCOPE: dict[str, str | tuple[str, ...]] = {
         "702.24",  # Cumulative upkeep (ICE: 24 cards)
         "702.25",  # Flanking
         "702.28",  # Shadow (TMP: 17 Soltari/Dauthi/Thalakos creatures + 4 grants)
+        "702.29",  # Cycling (USG: 34 cards)
         "702.36",  # Fear
         "702.108", # Prowess
         "702.111", # Menace

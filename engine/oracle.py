@@ -49,6 +49,7 @@ from .oracle_types import (
 )
 from .characteristic_defining import dynamic_pt_for
 from .auras import aura_claim, unclaimed_aura_lines
+from .cycling import expand_cycling_lines, unread_cycling_line
 from .equipment import expand_equip_lines, has_equip_ability, is_equip_line
 from .alternative_costs import (
     alternative_cost_claims_line,
@@ -5625,6 +5626,14 @@ def expand_ability_lines(
       Activate only as a sorcery." (``engine/equipment.py``). From there it is
       an ordinary activated ability to the grammar, the cost parser, the timing
       table and the target picker, none of which know the word.
+    * a **cycling** keyword line becomes the activated ability CR 702.29a says
+      it *means* — "[Cost], Discard this card: Draw a card." (``engine/cycling.py``).
+      From there it is an ordinary activated ability to the grammar, the cost
+      parser, ``engine/activation_zones.py``'s CR 113.6j zone read and the web
+      layer's hand-activation path, none of which know the word. The rule's
+      *other* half — CR 702.29b, the ability existing in every zone while being
+      activatable from one — is not a rewrite and is not here: it is CR 113.6j
+      asked of the cost, in ``engine/activation_zones.py``.
     * a **buyback** keyword line becomes the additional cost CR 702.27a says it
       means — "As an additional cost to cast this spell, you may pay [cost]."
       (``engine/cast_costs.py``). From there it is an ordinary CR 601.2b
@@ -5651,6 +5660,12 @@ def expand_ability_lines(
     oracle_text = expand_short_self_references(
         oracle_text, card_name, legendary=legendary
     )
+    # Its own statement rather than another layer of the nested call below. The
+    # composition is what every keyword-as-a-rewrite adds itself to, so it is
+    # the one expression several parallel rounds edit at once; a statement line
+    # appends cleanly where a nested argument collides. Order is free here —
+    # no other rewrite produces a cycling line and none consumes one.
+    oracle_text = expand_cycling_lines(oracle_text)
     return expand_same_is_true_lines(
         expand_static_then_trigger_lines(expand_conjoined_trigger_lines(
             expand_buyback_lines(
@@ -6401,6 +6416,26 @@ def _compile_card_oracle(
                 f"printed cost nothing charges: {unread_cost}",
                 normalized_text,
             )
+
+    # A **cycling** keyword line the CR 702.29a rewrite could not read
+    # (``engine/cycling.py``). Beside the uncharged-cost gate above and for its
+    # reason: CR 702.29e's typecycling searches a library rather than drawing, so
+    # a card printing one must not be read as though it printed the draw — and
+    # for an instant or a sorcery, whose *other* line compiles happily, nothing
+    # below this point would refuse it. That is the shape the fourteen already-
+    # "supported" cycling cards in Urza's Saga had before the rewrite existed:
+    # supported, zero hollow lines, and a whole keyword missing.
+    #
+    # Asked of the expanded text, so a line the rewrite consumed is already gone
+    # and only a variant it declined can reach here.
+    unread_cycling = unread_cycling_line(oracle_text)
+    if unread_cycling is not None:
+        return OracleProgram(
+            False,
+            "unsupported",
+            f"unimplemented cycling ability: {unread_cycling}",
+            normalized_text,
+        )
 
     if any(pattern in normalized_text for pattern in UNSUPPORTED_PATTERNS):
         return OracleProgram(False, "unsupported", "complex oracle pattern", normalized_text)

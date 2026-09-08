@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import re
 
+from .activation_zones import BATTLEFIELD, ability_functions_from
 from .cast_costs import additional_costs, costs_charged_from
 from .divided_damage import CARD_DIVIDED, CHOSEN, DIVIDED_TARGETS, divided_entry
 from .enter_effects import copy_on_enter_type
@@ -3190,17 +3191,29 @@ def derive_activation_spec(ability) -> dict | None:
     return {**target_spec, "cost_spec": cost_spec}
 
 
-def usable_activated_abilities(program):
-    """The activated abilities of *program* the engine can actually run.
+def usable_activated_abilities(program, *, zone: str = BATTLEFIELD):
+    """The activated abilities of *program* the engine can actually run **from
+    *zone***.
 
     An unsupported ability, or one that compiled to no instruction, is not
     activatable — so it is not offered a target prompt, and it is not counted
     when the web layer indexes a permanent's abilities. Shared so the index the
     UI sends back means the same ability the engine derived a spec for.
+
+    *zone* is CR 113.6 (``engine/activation_zones.py``), and it defaults to the
+    battlefield because that is the rule's own default and what every caller of
+    this function meant before cycling arrived. It is not a refinement: an
+    ability that functions only from a hand — cycling, Waker of Waves — was
+    offered on the battlefield by this list, which is what let a card discard
+    itself while sitting in play and stay there. The filter is here rather than
+    at each caller because *this list is the index*: the web layer, the AI and
+    ``queue_permanent_ability`` all address an ability by its position in it,
+    so a caller filtering afterwards would renumber only itself.
     """
     return [
         ability for ability in program.activated_abilities
         if ability.supported and ability.instruction is not None
+        and ability_functions_from(ability) == zone
     ]
 
 

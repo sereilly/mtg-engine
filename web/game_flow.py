@@ -15,6 +15,7 @@ from fastapi import HTTPException
 
 from engine.ai_policy import (
     choose_activation_action,
+    choose_hand_activation_action,
     choose_cast_action,
     choose_combat_blockers,
     choose_combat_instant_cast_action,
@@ -198,6 +199,29 @@ def _ai_step(session: Session) -> bool:
             target_player_index=activation_action.target_player_index,
             permanent_index=activation_action.permanent_index,
             target_permanent_index=activation_action.target_permanent_index,
+        )
+        _auto_resolve_ai_pending(session)
+
+    # An ability activated from the seat's **hand** (CR 113.6j) — cycling. The
+    # engine's other activation entry point, so it is a second pass rather than
+    # a branch in the one above; after it, so the lands the payment is planned
+    # against are the ones the cast and the battlefield activation left alone.
+    hand_activation = choose_hand_activation_action(game, seat)
+    if hand_activation is not None:
+        for permanent_index in hand_activation.land_tap_indices:
+            # Through the seam, for the reason the ratchet in
+            # `tests/engine/test_control_reads.py` exists: the loops around this
+            # one are grandfathered slot reads, and a new one would raise their
+            # baseline rather than being migrated with them.
+            permanent = game.permanent_at(seat, permanent_index)
+            if permanent is None:
+                continue
+            game.tap_land_for_mana(seat, permanent.card.name, permanent_index=permanent_index)
+        game.activate_from_hand(
+            seat,
+            hand_activation.card_name,
+            ability_index=hand_activation.ability_index,
+            hand_index=hand_activation.hand_index,
         )
         _auto_resolve_ai_pending(session)
 

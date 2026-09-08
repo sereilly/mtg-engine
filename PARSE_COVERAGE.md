@@ -25,10 +25,10 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**26 unclaimed sentence(s) across 25 supported card(s).**
+**13 unclaimed sentence(s) across 12 supported card(s).**
 
-- **Clear**
-  - `cycling {2}`
+- **Brand**
+  - `gain control of all permanents you own`
 - **Contamination**
   - `if a land is tapped for mana, it produces {b} instead of any other type and amount`
 - **Diabolic Servitude**
@@ -36,44 +36,18 @@ anything anyone did, and every ingest would arrive red.
   - `when this enchantment leaves the battlefield, exile the creature put onto the battlefield with this enchantment`
 - **Discordant Dirge**
   - `{b}, sacrifice this enchantment: look at target opponent's hand and choose up to x cards from it, where x is the number of verse counters on this enchantment. that player discards those cards`
-- **Expunge**
-  - `cycling {2}`
-- **Hush**
-  - `cycling {2}`
-- **Lay Waste**
-  - `cycling {2}`
-- **Lull**
-  - `cycling {2}`
 - **Phyrexian Processor**
   - `{4}, {t}: create an x/x black phyrexian minion creature token, where x is the life paid as this artifact entered`
 - **Recantation**
   - `{u}, sacrifice this enchantment: return up to x target permanents to their owners' hands, where x is the number of verse counters on this enchantment`
-- **Rejuvenate**
-  - `cycling {2}`
-- **Rescind**
-  - `cycling {2}`
-- **Rune of Protection: Artifacts**
-  - `cycling {2}`
-- **Rune of Protection: Black**
-  - `cycling {2}`
-- **Rune of Protection: Blue**
-  - `cycling {2}`
-- **Rune of Protection: Green**
-  - `cycling {2}`
-- **Rune of Protection: Lands**
-  - `cycling {2}`
-- **Rune of Protection: Red**
-  - `cycling {2}`
-- **Rune of Protection: White**
-  - `cycling {2}`
-- **Scrap**
-  - `cycling {2}`
 - **Serra's Hymn**
   - `sacrifice this enchantment: prevent the next x damage that would be dealt this turn to any number of targets, divided as you choose, where x is the number of verse counters on this enchantment`
 - **Smokestack**
   - `at the beginning of each player's upkeep, that player sacrifices a permanent of their choice for each soot counter on this artifact`
 - **Sporogenesis**
   - `whenever a creature with a fungus counter on it dies, create a 1/1 green saproling creature token for each fungus counter on that creature`
+- **Veiled Serpent**
+  - `when an opponent casts a spell, if this permanent is an enchantment, it becomes a 4/4 serpent creature with "this creature can't attack unless defending player controls an island."`
 - **Vile Requiem**
   - `{1}{b}, sacrifice this enchantment: destroy up to x target nonblack creatures, where x is the number of verse counters on this enchantment. they can't be regenerated`
 - **War Dance**

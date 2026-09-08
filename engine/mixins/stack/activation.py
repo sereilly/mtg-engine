@@ -34,7 +34,8 @@ from ...cost_x_definitions import cost_x_is_defined, cost_x_value
 from ...oracle_types import x_spend_colors_from_text
 from ...activation_restrictions import x_zero_restriction_line
 from ...cast_restrictions import combat_play_ban, global_play_timing
-from ...targeting import derive_activation_spec
+from ...activation_zones import GRAVEYARD, HAND, ability_functions_from
+from ...targeting import derive_activation_spec, usable_activated_abilities
 from ...mana_payment import is_mana_ability, mana_cost_from_symbols
 from ...events import emit
 from ...game_types import (OracleExecutionContext, OracleStateMachine,
@@ -588,11 +589,13 @@ class AbilityActivationMixin:
         # card it is. This was `permanent.card.name == "Basalt Monolith"`, and
         # an identically-worded card under any other name tapped for mana once
         # and was then stuck tapped for good, its untap ability unreachable.
-        usable = [
-            item
-            for item in program.activated_abilities
-            if item.supported and item.instruction is not None
-        ]
+        # Through the shared reader, not a second copy of its predicate: this
+        # list *is* the index the web layer and the AI address an ability by
+        # (`activation_target_spec` narrows the same list), and it carries
+        # CR 113.6's zone read — an ability that functions only from a hand
+        # (cycling, Waker of Waves) is not among a permanent's, or a permanent
+        # could pay a "Discard this card" cost it is in no position to pay.
+        usable = usable_activated_abilities(program)
         if ability_index is not None:
             ability = usable[ability_index] if 0 <= ability_index < len(usable) else None
         else:
@@ -617,6 +620,31 @@ class AbilityActivationMixin:
             # could never use the one Zombie Master gave it. It is now a line on
             # the derived grant channel, folded into `effective_card` by
             # `playable_card_of` above, so it is in `usable` like any other.
+            #
+            # A permanent whose only implemented ability functions from another
+            # zone (CR 113.6) is refused *naming that zone*, because the generic
+            # message is the one a missing feature gives — and this one is a
+            # rule being enforced. Cycling is the shape: a Sandbar Merfolk on
+            # the battlefield has a compiled, supported, entirely correct
+            # "{2}, Discard this card: Draw a card." that it may not activate
+            # from where it is standing.
+            elsewhere = next(
+                (
+                    item for item in program.activated_abilities
+                    if item.supported and item.instruction is not None
+                ),
+                None,
+            ) if not usable else None
+            if elsewhere is not None:
+                zone = ability_functions_from(elsewhere)
+                details = (
+                    f"{permanent.card.name}'s ability functions only "
+                    f"from a {zone} (CR 113.6)"
+                )
+                self.log.append(details)
+                return SimulationResult(
+                    permanent.card.name, False, "unsupported", details
+                )
             self.log.append(f"No implemented activated ability for {permanent.card.name}")
             return SimulationResult(permanent.card.name, False, "unsupported", "ability not implemented")
 
@@ -2672,14 +2700,26 @@ class AbilityActivationMixin:
         ability_index: int = 0,
         hand_index: int | None = None,
     ) -> SimulationResult:
-        """Activate an ability of a card **in hand** (Waker of Waves).
+        """Activate an ability of a card **in hand** — cycling (CR 702.29a),
+        Waker of Waves.
 
         CR 113.6: an ability functions only from the battlefield unless
         something says otherwise, and a cost the card can only pay from hand —
-        "Discard this card" — is what says otherwise. So this refuses any
-        ability without that cost rather than opening the hand generally: an
-        ability activatable from anywhere would let a creature card tap for its
-        own {T} ability before it was ever cast.
+        "Discard this card" — is what says otherwise (CR 113.6j through
+        CR 701.9a). So this refuses any ability without that cost rather than
+        opening the hand generally: an ability activatable from anywhere would
+        let a creature card tap for its own {T} ability before it was ever cast.
+
+        The read is ``engine/activation_zones.py``'s, shared with the negative
+        half — ``usable_activated_abilities``, which is what keeps the *same*
+        ability off a permanent's list once the card is in play. This gate used
+        to ask ``cost.discard_self`` here and nothing asked anywhere else, so
+        Waker of Waves on the battlefield could discard a card that was not in
+        anybody's hand.
+
+        *ability_index* indexes the hand-activatable abilities, not the card's
+        printed ones: a cycling land prints a mana ability first, and an index
+        into the raw list would name it.
 
         A parallel entry point rather than a branch in
         ``activate_permanent_ability``, because almost everything that function
@@ -2703,19 +2743,16 @@ class AbilityActivationMixin:
         card = controller.hand[index]
 
         program = compile_card_oracle(card)
-        if not 0 <= ability_index < len(program.activated_abilities):
-            details = f"{card.name} has no ability {ability_index}"
-            self.log.append(details)
-            return SimulationResult(card.name, False, "unsupported", details)
-        ability = program.activated_abilities[ability_index]
-        if not ability.cost.discard_self:
+        from_hand = usable_activated_abilities(program, zone=HAND)
+        if not from_hand:
             details = f"{card.name}'s ability can only be activated from the battlefield"
             self.log.append(details)
             return SimulationResult(card.name, False, "unsupported", details)
-        if not ability.supported or ability.instruction is None:
-            details = f"{card.name}: ability not implemented"
+        if not 0 <= ability_index < len(from_hand):
+            details = f"{card.name} has no ability {ability_index}"
             self.log.append(details)
             return SimulationResult(card.name, False, "unsupported", details)
+        ability = from_hand[ability_index]
 
         # CR 601.2h: an unpayable cost makes the ability unactivatable, checked
         # before anything is spent — the same order every other activation keeps.
@@ -2824,7 +2861,7 @@ class AbilityActivationMixin:
             details = f"{card.name}: ability not implemented"
             self.log.append(details)
             return SimulationResult(card.name, False, "unsupported", details)
-        if ability.instruction.payload.get("functions_from") != "graveyard":
+        if ability_functions_from(ability) != GRAVEYARD:
             details = (
                 f"{card.name}'s ability does not function from a graveyard "
                 "(CR 113.6)"

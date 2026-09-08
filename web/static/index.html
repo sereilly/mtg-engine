@@ -377,6 +377,13 @@
                      cast, so it gets its own control rather than a second
                      meaning for an existing gesture. -->
                 <span id="specialActions" class="special-actions"></span>
+                <!-- CR 113.6j: an activated ability of a card in hand
+                     (cycling, CR 702.29a), filled from state.hand_abilities.
+                     Its own control for the special actions' reason above — a
+                     hand card's only affordance is "cast", and this is not one
+                     — and beside them rather than among them because this one
+                     *does* use the stack. -->
+                <span id="handAbilities" class="special-actions"></span>
                 <button id="undoBtn" type="button" class="secondary-btn">Undo</button>
                 <button id="nextPhaseBtn" type="button">Next Phase</button>
                 <button id="endTurnBtn" type="button">End Turn</button>
