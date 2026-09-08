@@ -1008,6 +1008,16 @@ COUNTERS_REMOVED = "counters_removed"
 CHOSEN_TARGET_PERMANENTS = "chosen_target_permanents"
 
 
+#: "**Choose two target creature cards in your graveyard.** … return **the
+#: chosen cards** to the battlefield tapped." (Victimize.) The same shape one
+#: zone over, and its own key rather than the permanents' for the reason those
+#: two are separate: a card in a graveyard has no ``permanent_id`` and two
+#: copies of one card there are the same ``CardDefinition``, so what the record
+#: holds is graveyard *slots* — and a reader written for permanents would take
+#: them for ids.
+CHOSEN_TARGET_GRAVEYARD_SLOTS = "chosen_target_graveyard_slots"
+
+
 #: The seat "destroy enchanted land" records: the controller of the permanent
 #: the Aura was attached to, read *before* the destroy (CR 608.2h, idiom 6) so
 #: the sentence behind it — "and this Aura deals 2 damage to **that land's

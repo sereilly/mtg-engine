@@ -834,6 +834,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # category and the same nothing-happens-here reading; the plural records
     # what it chose so the loop behind it has a set to walk.
     "choose_target_permanents": "targeting",
+    # "Choose two target creature cards in your graveyard." (Victimize.) The
+    # same announcement one zone over: it performs nothing and exists so the
+    # picker can be derived from the program.
+    "choose_target_cards": "targeting",
     # A delayed triggered ability (CR 603.7). The category is the *creating*
     # act; what the ability does when it fires is its inner instruction's, read
     # through `_nested_instructions` below for the reason `choose_one`'s

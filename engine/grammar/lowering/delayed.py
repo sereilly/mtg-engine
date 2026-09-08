@@ -38,6 +38,7 @@ from ._events import (_EVENT_SUBJECT_PLAYERS, _RECORDED_PERMANENTS,
                       damage_trigger_names_damaged_end)
 from ._common import (
     _REST_OF_TURN, _describe_several_targets, _describe_targets,
+    _describe_several_card_targets,
     _is_source, _names_several_targets, _restrictions_beyond,
     testable_filter_payload
 )
@@ -115,6 +116,49 @@ def _lower_choose_target(node: ast.ChooseTarget) -> tuple[OracleInstruction, ...
             payload["targets"]["chooser"] = node.chooser.kind
         payload["result_key"] = CHOSEN_PLAYER
         return (OracleInstruction("choose_target_player", "", payload),)
+    # "Choose **two target creature cards in your graveyard**." (Victimize.)
+    # The announcement over a *zone* rather than over a battlefield, which is
+    # why it is its own kind: everything below describes permanents through
+    # ``_filter_payload``, and that builder refuses a card and a non-battlefield
+    # zone outright — reading this phrase there would point the picker at the
+    # battlefield for a spell that names a graveyard.
+    #
+    # Like every "choose" here it does nothing on resolution. The cards travel
+    # on the stack item's own target list for the whole resolution, so the
+    # sentence that returns them reads the announcement directly; this
+    # instruction exists so `engine/targeting.py` can derive the picker from the
+    # compiled program, which is where every other card's comes from.
+    subject = node.subject
+    if (
+        isinstance(subject, ast.TargetSpec)
+        and subject.filter.is_card
+        and subject.filter.zone == "graveyard"
+    ):
+        if subject.filter.zone_owner is None or subject.filter.zone_owner.kind != "you":
+            raise LoweringError(
+                "the graveyard announcement reads the chooser's own pile",
+                node=node,
+            )
+        if _restrictions_beyond(
+            subject.filter, frozenset({"is_card", "zone", "zone_owner", "card_types"})
+        ):
+            raise LoweringError(
+                "the graveyard announcement cannot read that card phrase",
+                node=node,
+            )
+        if len(subject.filter.card_types) != 1:
+            raise LoweringError(
+                "the graveyard announcement reads one card type", node=node
+            )
+        _describe_several_card_targets(payload, subject)
+        # The narrowing on the *instruction* as well as in the description, in
+        # the key ``graveyard_card_matches`` reads — the picker, the CR 601.2c
+        # gate and the sentence behind this one all ask that one predicate, and
+        # a description carrying no filter (which is this shape's contract) has
+        # nowhere else to put it.
+        payload["any_card"] = False
+        payload["card_type"] = subject.filter.card_types[0]
+        return (OracleInstruction("choose_target_cards", "", payload),)
     if _names_several_targets(node.subject):
         # "Choose **X target attacking creatures**." (Winter's Chill.) A *set*,
         # and a different instruction rather than the same one with a count:

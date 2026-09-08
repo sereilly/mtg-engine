@@ -333,6 +333,7 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     # a category: what varies is which cards, not what happens to them.
     "return_all_cards_from_graveyard": "zones",
     "each_player_takes_from_graveyard": "zones",
+    "reanimate_announced_cards": "zones",
     "return_creature_from_graveyard_to_hand": "zones",
     # "…return a card from your graveyard to your hand **for each card
     # discarded this way**." (Recall.) The same zone change, counted by an

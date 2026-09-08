@@ -244,3 +244,57 @@ def test_w2g2_ill_gotten_gains_empties_both_hands_then_offers_both_graveyards(se
     # exile rather than to the graveyard the offer had just read.
     assert [c.name for c in alice.exile] == ["Ill-Gotten Gains"]
     assert not any(c.name == "Ill-Gotten Gains" for c in alice.graveyard)
+
+
+def test_w2g2_victimize_returns_both_announced_cards_tapped(set_pool):
+    """"Choose two target creature cards in your graveyard. Sacrifice a
+    creature. If you do, return the chosen cards to the battlefield tapped."
+
+    Four claims: the picker offers two cards out of the caster's own pile, the
+    sacrifice is paid, both announced cards come back (not one), and they come
+    back tapped. The third card in the graveyard is the control — a return that
+    swept the pile would bring it too.
+    """
+    from engine.oracle import compile_card_oracle
+    from engine.targeting import derive_cast_spec
+
+    pool = set_pool("USG")
+    game, alice, _ = _g2s_cast(set_pool, "Victimize")
+    zealot, hellkite = pool["Serra Zealot"], pool["Shivan Hellkite"]
+    alice.graveyard = [zealot, hellkite, pool["Sanctum Custodian"]]
+    fodder = Permanent(card=pool["Sanctum Custodian"])
+    game._put_permanent_onto_battlefield(0, fodder, None)
+
+    spec = derive_cast_spec(
+        pool["Victimize"], compile_card_oracle(pool["Victimize"])
+    )
+    assert spec["own_graveyard_only"] and spec["max_targets"] == 2
+    assert spec["exact_targets"], "'two target' is a number, not a ceiling"
+
+    game.cast_from_hand(0, "Victimize", target_permanent_index=[0, 1])
+    resolve_stack(game)
+
+    back = sorted(p.card.name for p in game.controlled_by(0))
+    assert back == ["Serra Zealot", "Shivan Hellkite"]
+    assert all(p.tapped for p in game.controlled_by(0))
+    assert [c.name for c in alice.graveyard] == [
+        "Sanctum Custodian", "Sanctum Custodian", "Victimize",
+    ]
+
+
+def test_w2g2_victimize_returns_nothing_with_no_creature_to_sacrifice(set_pool):
+    """"**If you do**" — the price is real. With nothing to sacrifice the cards
+    stay in the graveyard, which is the half `_action_is_takeable` exists for:
+    an empty action firing its rider is a spell that reanimates for free.
+    """
+    pool = set_pool("USG")
+    game, alice, _ = _g2s_cast(set_pool, "Victimize")
+    alice.graveyard = [pool["Serra Zealot"], pool["Shivan Hellkite"]]
+
+    game.cast_from_hand(0, "Victimize", target_permanent_index=[0, 1])
+    resolve_stack(game)
+
+    assert not list(game.controlled_by(0))
+    assert [c.name for c in alice.graveyard] == [
+        "Serra Zealot", "Shivan Hellkite", "Victimize",
+    ]

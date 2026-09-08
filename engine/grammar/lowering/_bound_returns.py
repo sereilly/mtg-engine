@@ -38,6 +38,7 @@ from __future__ import annotations
 from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
+from ...oracle_types import CHOSEN_TARGET_GRAVEYARD_SLOTS
 from ._deaths import BOUND_CARD_EVENTS
 from ._delays import _BOUND_OBJECT_DELAYED_EVENTS
 from ._described_returns import lower_described_return
@@ -130,6 +131,48 @@ def lower_untargeted_return(
     over, and the tail call at the bottom is what keeps that a *file* boundary
     rather than a change of contract: one call, one order, one answer.
     """
+    # "…**return the chosen cards to the battlefield tapped**." (Victimize.)
+    # The cards an earlier sentence of this same spell *announced* (CR 601.2c),
+    # not a set anything picks now — which is why nothing here is described:
+    # the announcement rides the stack item for the whole resolution, and the
+    # handler reads the same graveyard slots the choosing sentence's picker
+    # filled.
+    #
+    # Gated on a step of this effect having made that announcement, which is
+    # this package's standing rule for a back-reference: with no "choose"
+    # sentence in front of it the words name nothing at all, and the return
+    # would reach for a target list nobody collected.
+    if (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "chosen"
+        and subject.filter.is_card
+        and node.to.name == "battlefield"
+    ):
+        if CHOSEN_TARGET_GRAVEYARD_SLOTS not in produced:
+            raise LoweringError(
+                "no step of this effect chose the cards this sentence names",
+                node=node,
+            )
+        if node.under_control_of is not None and node.under_control_of.kind != "you":
+            raise LoweringError(
+                "the announced reanimation puts the cards under your control",
+                node=node,
+            )
+        if node.repetitions or node.also_stack or node.attached_to is not None:
+            raise LoweringError(
+                "the announced reanimation reads no rider", node=node
+            )
+        if _restrictions_beyond(subject.filter, frozenset({"is_card"})):
+            raise LoweringError(
+                "the announced reanimation honours no further narrowing",
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "reanimate_announced_cards", "",
+                {"tapped": True} if node.entering_tapped else {},
+            ),
+        )
     # "Return **that card** to its owner's hand." (Puppet Master.) The bound
     # object: the card of the creature whose death fired the trigger, which by
     # resolution is in a graveyard. Nothing is chosen and nothing is targeted —

@@ -4198,6 +4198,70 @@ def mill_target_player(game: Game, instruction: OracleInstruction, context: Orac
     return True, "resolved"
 
 
+@effect_handler("choose_target_cards")
+def choose_target_cards(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Choose two target creature cards in your graveyard." (Victimize.)
+
+    The announcement, and nothing else: CR 601.2c chose the cards as the spell
+    was cast, and this sentence prints no effect. It exists so
+    ``engine/targeting.py`` can derive the picker from the compiled program,
+    which is where every other card's comes from — the same job
+    ``choose_target_permanent`` does one zone over.
+
+    Nothing is *recorded* either, and that is the difference from the plural
+    permanent choice: the announced slots ride the stack item for the whole
+    resolution, so the sentence behind this reads the same list this picker
+    filled. A record would be a second copy of it, free to disagree the moment
+    an earlier step moved a card in the pile.
+
+    Nothing leaves the graveyard here. "Sacrifice a creature. **If you do**,
+    return the chosen cards" is a price that may not be paid, and cards taken
+    out now would be cards in no zone at all.
+    """
+    game.log.append(f"{context.card.name}: cards chosen from the graveyard")
+    return True, "resolved"
+
+
+@effect_handler("reanimate_announced_cards")
+def reanimate_announced_cards(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"…return **the chosen cards** to the battlefield tapped." (Victimize.)
+
+    The cards an earlier sentence of this same spell announced (CR 601.2c),
+    read off the resolution's own target list rather than out of a record —
+    ``choose_target_cards`` says why.
+
+    Through ``_resolve_graveyard_slots``, the one reader of a list of graveyard
+    slots: a card in a pile has no ``permanent_id`` and two copies of one card
+    there are the same ``CardDefinition``, so only the order of removal can tell
+    two slots apart. A slot whose card has left, or that names a card the
+    printed phrase does not (CR 608.2b), is dropped and the rest still happen.
+
+    Under the spell's controller (CR 110.2a), which is the seat whose graveyard
+    the phrase named.
+    """
+    caster = context.caster
+    tapped = bool(instruction.payload.get("tapped"))
+    seat = game.players.index(caster)
+
+    def _eligible(card) -> bool:
+        # The picker's own predicate, asked here so the resolution and the
+        # announcement cannot disagree about which cards were legal.
+        return graveyard_card_matches(instruction.payload, card)
+
+    picked = _resolve_graveyard_slots(caster, context, len(caster.graveyard), _eligible)
+    for card in picked:
+        permanent = Permanent(card=card)
+        if tapped:
+            permanent.tapped = True
+        game._put_permanent_onto_battlefield(seat, permanent, None)
+        game.log.append(
+            f"{caster.name} returned {card.name} to the battlefield from the graveyard"
+        )
+    if not picked:
+        game.log.append(f"{context.card.name}: no announced card to return")
+    return True, "resolved"
+
+
 @effect_handler("each_player_takes_from_graveyard")
 def each_player_takes_from_graveyard(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Each player puts a creature card from their graveyard onto the
