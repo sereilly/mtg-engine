@@ -241,6 +241,35 @@ class SourceOnBattlefield:
 
 
 @dataclass(frozen=True)
+class SourceIsType:
+    """"if this permanent is an enchantment" (the Hidden / Opal / Veiled cycle).
+
+    CR 603.4's intervening-if asking what the ability's own source **is** —
+    CR 205.2, read through CR 613 layer 4, so a permanent an earlier effect
+    animated is a creature and no longer an enchantment however its type line
+    is printed. That is the whole of what the clause is for: Opal Gargoyle's
+    trigger fires on every creature spell an opponent casts, and the "if" is
+    what stops the second one re-animating a permanent that is already a
+    creature.
+
+    Its own node rather than an :class:`IsState` row for
+    :class:`SourceOnBattlefield`'s reason: every state on that node is a field
+    of the permanent, and a card type is a *computed* characteristic that only
+    the layer system can answer. A state word nothing carries reads False
+    forever, which here would turn the clause into "never" and leave the whole
+    cycle inert.
+
+    The subject travels on the node for the same reason it does on the two
+    beside it — a printed "it" can have been rebound to an attached host — and
+    lowering refuses anything but the source rather than answering about the
+    wrong object.
+    """
+    subject: "TargetSpec"
+    card_types: tuple[str, ...]
+    negated: bool = False
+
+
+@dataclass(frozen=True)
 class SubjectCharacteristicIs:
     """"if this creature's power is 1 or more" (Lesser Werewolf), "if target
     creature has toughness 5 or greater" (Blood Lust).
@@ -524,6 +553,7 @@ Condition = Union[
     ItIsColor,
     ObjectHasKeyword,
     OnBattlefield,
+    SourceIsType,
     SourceOnBattlefield,
     LifeTotalDifference,
     PlayerLifeIs,

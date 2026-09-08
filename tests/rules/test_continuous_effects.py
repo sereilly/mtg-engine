@@ -1330,25 +1330,31 @@ def test_a_clause_less_artifact_animation_keeps_the_permanents_own_types():
 
 
 @pytest.mark.cr("205.1b")
-def test_an_animation_that_would_replace_a_type_is_refused_rather_than_added():
-    """The other half of CR 205.1b, and the reason the gate is narrow.
+def test_an_animation_with_no_retention_clause_replaces_the_printed_types():
+    """CR 205.1a's first sentence, which this production used to refuse.
 
-    A land that "becomes a 4/4 creature" with no retention clause is the rule's
-    *first* sentence — the new type replaces the old — and this engine's
-    animation record only ever adds. Admitting the line would leave a permanent
-    that is still a land when the card says it is not, silently; refusing leaves
-    the card unsupported and named.
+    A land that "becomes a 4/4 creature" with no retention clause **stops being
+    a land** — that is the rule, and it is why Mishra's Factory prints "It's
+    still a land" and this sentence does not. The animation record now carries
+    the claim (`BecomeCreature.replaces_types`) and the layer-4 collector reads
+    it, so admitting the line no longer means admitting it under an adding
+    record. That refusal was this test's whole subject; what it guards now is
+    that the line is read as a *replacement* rather than as an addition.
 
-    Its sibling is the narrower case one sentence later: "…becomes a '[creature
-    type] artifact creature'… replace any existing creature types". A creature
-    animated into a Construct would keep the subtypes the rule replaces, so that
-    subject is refused too.
+    Its sibling one sentence later is still refused, and for a reason the
+    replacement does not answer: "…becomes a '[creature type] artifact
+    creature'… these effects also allow the object to retain all of its prior
+    card types and subtypes other than creature types, but replace any existing
+    creature types" (CR 205.1b) is **two** claims, and the record makes only the
+    second — an enchantment creature animated into a Construct would stop being
+    an enchantment.
     """
     from engine.grammar import compile_line
 
-    assert not compile_line(
+    animated = compile_line(
         "Target land becomes a 4/4 creature until end of turn."
     ).instructions
+    assert animated and animated[0].payload.get("replaces_types") is True
     assert not compile_line(
         "Until end of turn, this creature becomes a 2/1 Construct artifact creature."
     ).instructions

@@ -531,6 +531,17 @@ def _cast_narrowing_admits(
                 return False
         elif cast_type not in type_line:
             return False
+    # "…a creature spell **with flying**" (Hidden Spider). An ability of the
+    # spell rather than a word of its type line, so it is asked of the card's
+    # keywords — the printed ones, because a spell on the stack is not a
+    # permanent and layer 6 has nothing on it to read. A trigger naming a
+    # keyword the card does not have does not fire, which is the direction that
+    # leaves the Spider an enchantment.
+    cast_keyword = trig.condition.payload.get("cast_keyword")
+    if cast_keyword and cast_keyword not in {
+        str(word).lower() for word in (card.keywords or ())
+    }:
+        return False
     # "…a creature spell **that doesn't share a color with a creature you
     # control**" (Invoke Prejudice). CR 105.2: an object's colours are a set, so
     # "shares a colour" is a non-empty intersection — a colourless spell shares
@@ -1180,6 +1191,25 @@ def _land_played_filter(
         # narrowing up.
         played = event.payload.get("played_permanent_id")
         if played is None or played == permanent.permanent_id:
+            return False
+    # "…plays a **nonbasic** land" (Hidden Herd). CR 205.4a's supertype read
+    # off the card that was played, which is what the announcement carries as
+    # its subject — the permanent it became is already on the battlefield and
+    # would answer through the layers, but a land whose supertype an effect
+    # changed between the play and this check is a card nobody prints and the
+    # printed line is what the trigger names.
+    #
+    # An announcement with no card on it fires nothing, the same safe direction
+    # the seat check above takes.
+    wanted_supertype = trig.condition.payload.get("played_land_supertype")
+    if wanted_supertype:
+        from .layer_bridge import printed_supertypes
+
+        played_card = event.subject
+        if played_card is None or not hasattr(played_card, "type_line"):
+            return False
+        basic = "basic" in printed_supertypes(played_card.type_line)
+        if basic != (wanted_supertype == "basic"):
             return False
     land_player = trig.condition.payload.get("land_player")
     if land_player == "an opponent":

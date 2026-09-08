@@ -43,7 +43,9 @@ from .derived import derived_instruction_for_line
 from .errors import GrammarError
 from .lexer import (BULLET, PUNCT, QUOTE, tokenize)
 from .quoted_lines import (_ASSIGN_UNBLOCKED_LINE_RE,
-                           _parse_becomes_aura_line, _parse_emblem_line,
+                           _parse_becomes_aura_line,
+                           _parse_becomes_with_granted_ability,
+                           _parse_emblem_line,
                            _parse_reanimation_aura_line)
 from .costs import _parse_costs
 from .registries import registry_for_line
@@ -767,6 +769,16 @@ def _parse_line(line: str, *, card_name: str | None = None) -> ast.AbilityNode:
         )
         if becomes_aura is not None:
             return becomes_aura
+        # "…becomes a 4/4 Serpent creature with "This creature can't attack
+        # unless defending player controls an Island."" (Veiled Serpent.) The
+        # same lift, on a creature body rather than on an Aura's enchant
+        # clause — after that one, whose sentence this pattern would also match
+        # and would read as an animation the card does not print.
+        becomes_granting = _parse_becomes_with_granted_ability(
+            lexed.source, card_name=card_name, parse=_parse_line
+        )
+        if becomes_granting is not None:
+            return becomes_granting
         if _ASSIGN_UNBLOCKED_LINE_RE.match(line.strip()):
             return ast.SpellEffectLine(
                 ast.RawEffect("grant_team_assign_unblocked_until_eot")
@@ -855,7 +867,10 @@ def _parse_line(line: str, *, card_name: str | None = None) -> ast.AbilityNode:
             bind_recorded_card(
                 event.kind, intervening,
                 rebind_combat_role_to_event_subject(
-                    event, rebind_pronoun_to_event_subject(event, statement)
+                    event,
+                    rebind_pronoun_to_event_subject(
+                        event, statement, intervening=intervening
+                    ),
                 ),
             ),
             intervening,

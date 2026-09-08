@@ -579,6 +579,22 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         value = permanent_state_holds(source, state)
         return (not value) if payload.get("negated") else value
 
+    if kind == "source_is_type":
+        # "if this permanent is an enchantment" (the Hidden / Opal / Veiled
+        # cycle). CR 205.2's card type asked of the ability's own source and
+        # answered by CR 613 layer 4 — ``has_type``, never ``type_line``:
+        # the whole cycle turns on the animation having *replaced* the
+        # enchantment type (CR 205.1a), which the printed line still shows.
+        #
+        # A source that has left answers False, the direction CR 603.4 takes
+        # for an intervening-if it cannot check.
+        source = context.source_permanent
+        if source is None:
+            return False
+        wanted = [str(word) for word in (payload.get("card_types") or ())]
+        answer = bool(wanted) and all(source.has_type(word) for word in wanted)
+        return (not answer) if payload.get("negated") else answer
+
     if kind == "source_on_battlefield":
         # "if this enchantment is on the battlefield" (Tombstone Stairwell) —
         # CR 603.4 checked again at resolution, which is the whole reason the

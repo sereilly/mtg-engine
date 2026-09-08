@@ -358,26 +358,36 @@ def test_thran_forge_refuses_an_artifact_creature(set_pool):
     assert (victim.effective_power, victim.effective_toughness) == (2, 2)
 
 
-def test_an_animation_that_drops_a_type_still_refuses(set_pool):
-    """The refusal test for the clause-less form, written before the gate is
-    trusted.
+def test_an_animation_that_drops_a_type_is_read_as_a_replacement(set_pool):
+    """The clause-less form, which this file used to assert refused.
 
     "Target land becomes a 4/4 creature until end of turn" names no land in its
     body, so replacement and addition are *not* the same permanent — the land
-    would stop being a land. The engine has no CR 205.1b type removal, so the
-    line has to keep refusing rather than be admitted under an adding record.
+    stops being a land, which is CR 205.1a's first sentence. The engine had no
+    type removal when this was written and the refusal was the safe reading; it
+    has one now (`BecomeCreature.replaces_types`, read by the layer-4
+    collector), so what is asserted is that the two forms compile to *different*
+    records rather than that one of them compiles to none.
+
+    The artifact-creature exception beside them is unchanged: CR 205.1b's
+    "becomes an 'artifact creature'" retains every prior card type, so
+    Chimeric Sphere's body is still an addition and carries no replacement
+    claim at all.
     """
     from engine.grammar import compile_line
 
-    assert compile_line(
+    kept = compile_line(
         "Until end of turn, this artifact becomes a 2/1 Construct artifact "
         "creature with flying."
     ).instructions
+    assert kept and "replaces_types" not in kept[0].payload
     for dropped in (
         "Target land becomes a 4/4 creature until end of turn.",
         "This land becomes a 2/2 Assembly-Worker artifact creature until end of turn.",
     ):
-        assert not compile_line(dropped).instructions, dropped
+        replaced = compile_line(dropped).instructions
+        assert replaced, dropped
+        assert replaced[0].payload.get("replaces_types") is True, dropped
 
 
 # --- W1G5: each player, in parallel ---

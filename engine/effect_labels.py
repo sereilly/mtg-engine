@@ -282,6 +282,10 @@ ACTIVATED_LABELS: dict[str, str] = {
     # permanent changing what it is is `activated_pump` — the P/T comes with it
     # in both cases.
     "gain_type": "activated_pump",
+    # Opal Acrolith turning itself back from the creature its own trigger made
+    # it. The same layer-4 change and the same bucket, for `gain_type`'s reason
+    # — the report has one word for a permanent changing what it is.
+    "set_card_types_self": "activated_pump",
     "animate_self_until_eot": "activated_pump",
     # Stalking Stones, the same sentence with no end to it. Same bucket — the
     # report has no word for a duration.

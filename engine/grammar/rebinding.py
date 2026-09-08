@@ -227,8 +227,34 @@ def _rebound(node, subject: ast.ObjectFilter):
     return _walk_specs(node, _rewrite)
 
 
+def intervening_if_names_source(condition) -> bool:
+    """Whether an intervening-if printed its own self-reference in full.
+
+    "When an opponent casts a creature spell, **if this permanent is an
+    enchantment**, **it** becomes a 2/2 Gargoyle creature with flying." (Opal
+    Gargoyle.) The pronoun's antecedent is the nearest noun phrase before it,
+    and here that is the "if" clause's subject rather than the trigger's — so
+    :func:`rebind_pronoun_to_event_subject` must *not* point the word at the
+    spell that was cast, which is what it does for every trigger whose
+    condition names an object.
+
+    Only a **printed** self-reference counts. A condition whose own subject is
+    the bare pronoun ("…if **it** was blocked this turn", Fyndhorn Druid) has
+    already been rebound by this same rule, so the word behind it names
+    whatever that one does and nothing here should change it — which is the
+    ``quantifier == "this"`` test: ``accept_source_reference_spec`` keeps the
+    printed word precisely so this distinction survives to here.
+    """
+    subject = getattr(condition, "subject", None)
+    return (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "this"
+        and subject.filter.is_source
+    )
+
+
 def rebind_pronoun_to_event_subject(
-    event: ast.TriggerEvent, statement: ast.Statement
+    event: ast.TriggerEvent, statement: ast.Statement, *, intervening=None
 ) -> ast.Statement:
     """"When enchanted land becomes tapped, destroy **it**" (Blight) — the
     pronoun names the object the *condition* was about.
@@ -248,7 +274,13 @@ def rebind_pronoun_to_event_subject(
 
     An event with no subject, or one whose subject *is* the source, leaves the
     statement untouched: there is nothing else for the word to name.
+
+    …and so does an intervening-if that named the source in full — see
+    :func:`intervening_if_names_source`, which is the antecedent rule the
+    trigger clause loses to whenever the "if" clause sits between them.
     """
+    if intervening is not None and intervening_if_names_source(intervening):
+        return statement
     subject = event.subject
     if not isinstance(subject, ast.ObjectFilter) or subject.is_source:
         return statement

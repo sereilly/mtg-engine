@@ -95,6 +95,15 @@ def _lower_become_creature(
                 "the animation sweep cannot test this noun phrase", node=node
             )
         _refuse_indefinite(node, "an animation sweep")
+        if node.pt_from_triggering_spell or node.protection_from_triggering_spell:
+            # Both read the spell a *trigger* fired on, and a sweep of a
+            # described set is printed on no trigger in this pool. Refusing
+            # names the missing piece; admitting it would animate the board at
+            # 0/0 with no protection, which is a card doing strictly less than
+            # it prints.
+            raise LoweringError(
+                "an animation sweep has no triggering spell to read", node=node
+            )
         payload = _animation_payload(node)
         payload.update(described)
         return (OracleInstruction("animate_matching_until_eot", "", payload),)
@@ -162,6 +171,42 @@ def _animation_payload(node: ast.BecomeCreature) -> dict[str, object]:
     }
     if node.colors:
         payload["colors"] = list(node.colors)
+    if node.pt_from_triggering_spell:
+        # "…an Illusion creature with power and toughness each equal to that
+        # spell’s mana value." (Veiled Sentry.) The size is the *event’s*, so
+        # it travels as the count spec every other resolution-time quantity
+        # uses (`handlers/_common.count_from_payload`) rather than as a second
+        # vocabulary only the animation understands — `triggering_spell` is the
+        # object the cast fire site froze on the trigger’s context.
+        payload["pt_count"] = {
+            "object_characteristic": {
+                "object": "triggering_spell",
+                "characteristic": "mana_value",
+                "offset": 0,
+            }
+        }
+    if node.protection_from_triggering_spell:
+        # "…with protection from each of that spell’s colors." (Opal Titan.)
+        # A flag, because the colours are not on the card: CR 105.2 makes them
+        # a characteristic of the spell, read at resolution off the same frozen
+        # record the size above reads.
+        payload["protection_from_triggering_spell_colors"] = True
+    if node.granted_ability_lines:
+        # "…a 4/4 Serpent creature **with "This creature can't attack unless
+        # defending player controls an Island.""** (Veiled Serpent.) Carried,
+        # never dropped: the quoted sentence is half of what the permanent
+        # becomes, and an animation that granted the body and not the ability
+        # is the silent narrowing this package refuses by construction. The
+        # handler puts it on `engine/keywords.grant_ability_line`, which
+        # ``effective_card`` folds back into the text the compiler reads.
+        payload["granted_ability_lines"] = list(node.granted_ability_lines)
+    if node.replaces_types:
+        # CR 205.1a's default, printed by saying nothing (Opal Gargoyle). Only
+        # emitted when the node claims it, for ``colors``' reason one clause
+        # up: every animation payload written before this key existed is
+        # byte-identical, and the absence means "the sentence kept the printed
+        # types", which is exactly what those cards' retention clauses said.
+        payload["replaces_types"] = True
     return payload
 
 
@@ -222,6 +267,37 @@ def _lower_gain_type(node: ast.GainType) -> tuple[OracleInstruction, ...]:
     if node.duration.kind not in _GAINED_TYPE_DURATIONS:
         raise LoweringError(
             f"no handler holds a gained type for {node.duration.kind}", node=node
+        )
+    if node.replaces_types:
+        # "{0}: This permanent becomes an enchantment." (Opal Acrolith,
+        # Hidden Stag's second line.) CR 205.1a's *replacement*, which is a
+        # different record from the gain below and so a different kind: the
+        # gain joins a type to whatever the permanent already had, and this one
+        # says what it now is — the two cannot share a handler without a flag
+        # deciding which of two channels to write, which is the shape this
+        # package spells as two kinds.
+        #
+        # Only the source, because that is what the pool prints: both cards
+        # here name themselves. A target would need a picker this instruction
+        # does not describe, so it refuses rather than resolving against
+        # whatever the context happened to hold.
+        if not _is_source(node.subject):
+            raise LoweringError(
+                "a card-type replacement names the ability's own source",
+                node=node,
+            )
+        if node.duration.kind is not None:
+            # Every duration in ``_GAINED_TYPE_DURATIONS`` has a sweep for the
+            # *gain* channel and none of them clears this one, so admitting a
+            # window here would be a replacement that never ends.
+            raise LoweringError(
+                f"no sweep ends a card-type replacement at {node.duration.kind}",
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "set_card_types_self", "", {"card_types": list(node.card_types)}
+            ),
         )
     payload: dict[str, object] = {
         "card_types": list(node.card_types),

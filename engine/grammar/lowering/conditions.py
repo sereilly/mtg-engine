@@ -415,6 +415,22 @@ def _lower_condition(
                 node=condition,
             )
         return {"kind": "source_on_battlefield", "negated": condition.negated}
+    if isinstance(condition, ast.SourceIsType):
+        # "if this permanent is an enchantment" (the Hidden / Opal / Veiled
+        # cycle). Refused for a rebound pronoun for the clause above's reason
+        # exactly: the evaluator asks the ability's own source what it is, and
+        # an Aura's "it" names the host instead — a CR 603.4 gate answered
+        # about somebody else's permanent.
+        if _is_enchanted(condition.subject):
+            raise LoweringError(
+                "a card-type gate is asked of the ability's own source",
+                node=condition,
+            )
+        return {
+            "kind": "source_is_type",
+            "card_types": list(condition.card_types),
+            "negated": condition.negated,
+        }
     if isinstance(condition, ast.ZoneHasCards):
         # "If your library has ten or more cards in it" (Phyrexian Portal); "if
         # that player has five or more cards in hand" (Misers' Cage). The seat

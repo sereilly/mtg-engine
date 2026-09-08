@@ -887,8 +887,15 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
         # state trigger (CR 603.8), read on this front end too because a
         # condition only one of them sees is a card whose halves watch
         # different sets — the narrowing has to be the same phrase on both.
+        # "When **an opponent** controls a creature with power 4 or greater"
+        # (Hidden Predators) is the same condition asked of another seat, and
+        # the seat is payload on ``engine/oracle.py``'s row rather than a kind
+        # of its own; this side has only to read the words. Both spellings in
+        # one branch, so a card printing either gets the same noun parser.
         mark_controls = stream.mark()
-        if stream.accept_phrase("you", "control"):
+        if stream.accept_phrase("you", "control") or stream.accept_phrase(
+            "an", "opponent", "controls"
+        ):
             controlled = parse_subject_filter_at(stream)
             if controlled is not None:
                 return ast.TriggerEvent(

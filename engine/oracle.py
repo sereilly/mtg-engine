@@ -1000,6 +1000,16 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("opponent_casts_spell",
      r"whenever an opponent casts an? (?P<cast_type>noncreature|nonartifact|creature|artifact|enchantment|instant|sorcery|land) spell"
      r" other than the (?P<after_spell_ordinal>[a-z]+) (?P=cast_type) spell that player casts each turn"),
+    # "…a creature spell **with flying**" (Hidden Spider). A narrowing on an
+    # *ability* of the spell rather than on its type line, so it is its own
+    # payload key and `events._cast_narrowing_admits` reads it off the card
+    # being cast. Above the bare type row below, which is its strict prefix:
+    # matched there the clause would be left unread and the Spider would wake
+    # for every creature an opponent cast, which is the silent widening this
+    # table is ordered longest-first to prevent.
+    ("opponent_casts_spell",
+     r"whenever an opponent casts an? (?P<cast_type>noncreature|nonartifact|creature|artifact|enchantment|instant|sorcery|land) spell"
+     r" with (?P<cast_keyword>[a-z]+)"),
     # "Whenever an opponent casts an artifact spell" (Citanul Druid) — the
     # type narrowing again, on the opponent-scoped kind. Before the bare row.
     ("opponent_casts_spell",
@@ -1192,9 +1202,15 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # permanent's id against the observer's — a `CardDefinition` identity
     # cannot, because a deck repeats one immutable definition per copy and a
     # second City of Traitors would be read as the first.
+    # "When an opponent plays a **nonbasic** land" (Hidden Herd). A third
+    # narrowing on the same announcement, and an *optional* group for
+    # ``other_land``'s stated reason: a card printing the bare phrase carries
+    # the payload it always carried, because a group that did not participate
+    # never reaches the dict. CR 205.4a's supertype is what answers it, read
+    # off the land that was played.
     ("land_played",
      r"whenever (?:you play|(?P<land_player>an opponent|a player) plays) "
-     r"(?:a|(?P<other_land>another)) land"),
+     r"(?:a|(?P<other_land>another)) (?:(?P<played_land_supertype>nonbasic|basic) )?land"),
     # "**When the chosen player** draws a card **with the chosen name**, …"
     # (Booby Trap.) Two narrowings on the same announcement rather than a second
     # kind, which is the same reading `land_played` above records: one event,
@@ -1537,8 +1553,23 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # The noun phrase is delimited, not described: the group is read by the noun
     # parser and refused if `subject_matches` cannot test it, so a card printing
     # any other tribe is the same trigger with different payload.
+    #
+    # "When **an opponent** controls a creature with power 4 or greater"
+    # (Hidden Predators) is the same condition asked of a different seat, so
+    # the seat is an *optional* payload group and not a second kind — the
+    # arrangement ``land_played`` and ``draws_card`` already use, and the one
+    # idiom 19 asks for: a kind is a dispatcher's address, and spelling the
+    # seat into it gives one card its own fire site. An absent group never
+    # reaches the payload, so Goblins of the Flarg compiles to exactly what it
+    # compiled to before.
     ("controls_matching_permanent",
-     r"when you control (?P<controlled_subject>an? [^,]+)"),
+     r"when (?:you control|(?P<controls_seat>an opponent) controls) "
+     r"(?P<controlled_subject>an? [^,]+)"),
+    # "When **a player has no cards in hand**" (Veiled Crocodile). CR 603.8
+    # again, and its own kind rather than a seat on the row above: what is
+    # counted is a *hand*, which no board census reaches, and the sweep that
+    # answers it walks players rather than permanents.
+    ("player_has_no_cards_in_hand",  r"when a player has no cards in hand"),
 )
 
 # "at the beginning of" triggers

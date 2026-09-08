@@ -7,7 +7,8 @@ from ..delayed_triggers import (END_OF_TURN, DelayedTrigger,
                                 arm_delayed_trigger)
 from ..land_types import MIRE_COUNTER, change_land_type
 from ..auras import BECAME_AURA_ENCHANT, BECAME_AURA_RECORD
-from ..layer_bridge import GAINED_TYPES
+from ..layer_bridge import GAINED_TYPES, SET_CARD_TYPES
+from ..oracle_types import _COLOR_WORD_TO_SYMBOL
 from ..models import CardDefinition, Permanent
 from ..oracle_types import (CHOSEN_TARGET_PERMANENTS, COUNTERS_REMOVED,
                             LAST_TARGET_CONTROLLER,
@@ -26,7 +27,8 @@ from ._common import (BLOCK_PAIR_SUBJECT, SUBJECT_FROM_TRIGGER,
                       one_recorded_permanent_id,
                       per_recipient_amount,
                       permanent_matches_filter,
-                      resolve_amount, resolve_target_permanent,
+                      count_from_payload, resolve_amount,
+                      resolve_target_permanent,
                       resolve_target_permanents, seats_matching_deed)
 from .registry import effect_handler
 
@@ -922,6 +924,117 @@ ANIMATE_UNTIL_EOT = "animate_until_end_of_turn"
 ANIMATE_INDEFINITELY = "animate_indefinitely"
 
 
+#: The payload keys an animation's *body* occupies. The sweep below hands
+#: everything else to ``subject_matches`` as the noun phrase it animates, so a
+#: key left off this list is a filter key that matcher has never heard of —
+#: which is a narrowing dropped on a board-wide effect, the one direction
+#: ``_lower_become_creature`` refuses outright.
+_ANIMATION_PAYLOAD_KEYS = frozenset({
+    "power", "toughness", "subtypes", "keywords", "card_types", "colors",
+    "replaces_types", "granted_ability_lines", "pt_count",
+    "protection_from_triggering_spell_colors",
+})
+
+
+def _animation_record(payload: dict) -> dict:
+    """The record both animation handlers write, from the lowered payload.
+
+    One builder because the two handlers disagree about *which key* it goes on
+    and about nothing else — and because the replacement half below has two
+    fields that have to travel together: a record claiming CR 205.1a without a
+    timestamp would replace the printed types and then lose every ordering
+    argument against the "becomes an enchantment" effect printed to undo it.
+
+    Both keys are written **only** when the sentence claimed the replacement,
+    so every record an addition writes is byte-identical to the one it wrote
+    before this existed — the same rule the payload key itself follows.
+    """
+    record = {
+        "subtypes": list(payload.get("subtypes") or ()),
+        "keywords": list(payload.get("keywords") or ()),
+        "card_types": list(payload.get("card_types") or ()),
+    }
+    if payload.get("replaces_types"):
+        record["replaces_types"] = True
+        record["timestamp"] = next_timestamp()
+    return record
+
+
+def _animation_size(
+    game: Game, payload: dict, context: OracleExecutionContext
+) -> tuple[int, int]:
+    """The P/T the body states, whichever of the three ways it states it.
+
+    A printed number, an X the activation paid (Chimeric Staff), or — for
+    Veiled Sentry — the mana value of the spell the trigger fired on, read
+    through the same ``count_from_payload`` every other resolution-time
+    quantity goes through. One reader, because all three animation handlers ask
+    the same question and a second copy is a second chance for one of them to
+    answer 0.
+    """
+    counted = payload.get("pt_count")
+    if counted is not None:
+        size = count_from_payload(game, context, counted)
+        return size, size
+    return (
+        resolve_amount(payload.get("power", 0), context.x_value),
+        resolve_amount(payload.get("toughness", 0), context.x_value),
+    )
+
+
+def _grant_animation_protection(
+    perm, payload: dict, context: OracleExecutionContext
+) -> None:
+    """"…with protection from each of that spell's colors." (Opal Titan.)
+
+    CR 702.16g: "protection from each of" a set of qualities is one protection
+    ability per quality, so a colourless spell grants none and a two-coloured
+    one grants two. Written on the ``protection_from_<word>`` channel every
+    other granted protection uses (`mixins/permanent_state._protection_qualities`),
+    so the Titan's shield is read by the same code a printed one is.
+
+    The colours are the spell's as the trigger froze it (CR 603.10): by the
+    time the ability resolves the spell may have resolved or been countered,
+    and the stack cannot be asked.
+
+    No lifetime, because the animation has none — the Titan is a creature for
+    the rest of the game and keeps what its own sentence gave it.
+    """
+    if not payload.get("protection_from_triggering_spell_colors"):
+        return
+    cast_card = (context.trigger_context or {}).get("cast_card")
+    symbols = set(getattr(cast_card, "colors", None) or ())
+    for word, symbol in _COLOR_WORD_TO_SYMBOL.items():
+        if symbol in symbols:
+            perm.metadata[f"protection_from_{word}"] = True
+
+
+def _grant_animation_abilities(
+    perm, payload: dict, *, until_eot: bool
+) -> None:
+    """"…with "At the beginning of your upkeep, sacrifice this creature unless
+    you pay {1}{U}."" (Veiled Apparition.)
+
+    CR 613 layer 6 of the same sentence, on the one channel a *printed line*
+    grant goes through (`engine/keywords.grant_ability_line`) — so the granted
+    trigger reaches the upkeep step through the compiler, exactly as a printed
+    one does, rather than through a second reader that would have to know what
+    an animation granted.
+
+    The duration is the animation's own, and it is the whole reason this is not
+    a keyword write: a grant with no duration lasts as long as the object
+    (CR 611.2c), which is what the Veiled cycle's permanent animation means,
+    and an until-end-of-turn animation's ability has to be swept beside its
+    body or the permanent keeps saying something it no longer is.
+    """
+    from ..keywords import grant_ability_line
+
+    for line in payload.get("granted_ability_lines") or ():
+        grant_ability_line(
+            perm, str(line), duration="end_of_turn" if until_eot else None
+        )
+
+
 @effect_handler("animate_self_until_eot")
 def animate_self_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"…becomes a 3/3 Sphinx creature with flying in addition to its other
@@ -983,13 +1096,11 @@ def _animate_self(
     if source is None:
         return False, "ability not implemented"
     payload = instruction.payload
-    power, toughness = int(payload.get("power", 0)), int(payload.get("toughness", 0))
+    power, toughness = _animation_size(game, payload, context)
     set_base_pt(source, power, toughness, until_eot=until_eot)
-    source.metadata[record_key] = {
-        "subtypes": list(payload.get("subtypes") or ()),
-        "keywords": list(payload.get("keywords") or ()),
-        "card_types": list(payload.get("card_types") or ()),
-    }
+    source.metadata[record_key] = _animation_record(payload)
+    _grant_animation_abilities(source, payload, until_eot=until_eot)
+    _grant_animation_protection(source, payload, context)
     _record_animation_colors(source, payload, until_eot=until_eot)
     game.log.append(
         f"{context.card.name} becomes a {power}/{toughness} creature {duration}"
@@ -1120,13 +1231,11 @@ def _animate_target(
         game.log.append(f"{context.card.name}: no land to animate")
         return True, "resolved"
     payload = instruction.payload
-    power, toughness = int(payload.get("power", 0)), int(payload.get("toughness", 0))
+    power, toughness = _animation_size(game, payload, context)
     set_base_pt(target, power, toughness, until_eot=until_eot)
-    target.metadata[record_key] = {
-        "subtypes": list(payload.get("subtypes") or ()),
-        "keywords": list(payload.get("keywords") or ()),
-        "card_types": list(payload.get("card_types") or ()),
-    }
+    target.metadata[record_key] = _animation_record(payload)
+    _grant_animation_abilities(target, payload, until_eot=until_eot)
+    _grant_animation_protection(target, payload, context)
     _record_animation_colors(target, payload, until_eot=until_eot)
     game.log.append(
         f"{target.card.name} becomes a {power}/{toughness} creature "
@@ -1160,20 +1269,14 @@ def animate_matching_until_eot(game: Game, instruction: OracleInstruction, conte
 
     described = {
         key: value for key, value in instruction.payload.items()
-        if key not in (
-            "power", "toughness", "subtypes", "keywords", "card_types", "colors",
-        )
+        if key not in _ANIMATION_PAYLOAD_KEYS
     }
     observer = (
         game.players.index(context.caster) if context.caster in game.players else None
     )
     payload = instruction.payload
-    power, toughness = int(payload.get("power", 0)), int(payload.get("toughness", 0))
-    record = {
-        "subtypes": list(payload.get("subtypes") or ()),
-        "keywords": list(payload.get("keywords") or ()),
-        "card_types": list(payload.get("card_types") or ()),
-    }
+    power, toughness = _animation_size(game, payload, context)
+    record = _animation_record(payload)
     animated = []
     for permanent in game.all_permanents():
         if not subject_matches(
@@ -1183,6 +1286,8 @@ def animate_matching_until_eot(game: Game, instruction: OracleInstruction, conte
             continue
         set_base_pt(permanent, power, toughness, until_eot=True)
         permanent.metadata[ANIMATE_UNTIL_EOT] = dict(record)
+        _grant_animation_abilities(permanent, payload, until_eot=True)
+        _grant_animation_protection(permanent, payload, context)
         _record_animation_colors(permanent, payload, until_eot=True)
         animated.append(permanent)
     if not animated:
@@ -2769,6 +2874,43 @@ def gain_type(game: Game, instruction: OracleInstruction, context: OracleExecuti
     game.log.append(
         f"{context.card.name}: {target_perm.card.name} becomes "
         + " ".join(record["card_types"])
+    )
+    return True, "resolved"
+
+
+@effect_handler("set_card_types_self")
+def set_card_types_self(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"{0}: This permanent becomes an enchantment." (Opal Acrolith.) "Whenever
+    you play a land, if this permanent is a creature, it becomes an
+    enchantment." (Hidden Stag.)
+
+    CR 205.1a's replacement, written as one record the CR 613 layer-4 collector
+    reads (`layer_bridge.SET_CARD_TYPES`). Nothing is restored and the
+    animation record it undoes is **not** deleted: both are layer-4
+    contributions and CR 613.7 applies them in timestamp order, so the later
+    one wins — which is the whole of what makes Opal Acrolith work when it
+    animates a second time. Deleting the animation instead would work once and
+    then lose the size the third sentence needs.
+
+    The P/T the animation set stays on its own channel for the same reason: it
+    is layer 7b, and CR 208.3 makes a non-creature's power and toughness simply
+    not exist rather than something to unset. A permanent that animates again
+    is the size its own sentence gave it.
+    """
+    source = context.source_permanent
+    if source is None:
+        return False, "ability not implemented"
+    card_types = [str(word) for word in (instruction.payload.get("card_types") or ())]
+    if not card_types:
+        return False, "ability not implemented"
+    source.metadata[SET_CARD_TYPES] = {
+        "card_types": card_types,
+        "timestamp": next_timestamp(),
+        "source": context.card.name if context.card else "effect",
+    }
+    game._refresh_dynamic_creatures()
+    game.log.append(
+        f"{source.card.name} becomes " + " ".join(card_types)
     )
     return True, "resolved"
 

@@ -25,7 +25,7 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**26 unclaimed sentence(s) across 25 supported card(s).**
+**27 unclaimed sentence(s) across 26 supported card(s).**
 
 - **Clear**
   - `cycling {2}`
@@ -74,6 +74,8 @@ anything anyone did, and every ingest would arrive red.
   - `at the beginning of each player's upkeep, that player sacrifices a permanent of their choice for each soot counter on this artifact`
 - **Sporogenesis**
   - `whenever a creature with a fungus counter on it dies, create a 1/1 green saproling creature token for each fungus counter on that creature`
+- **Veiled Serpent**
+  - `cycling {2}`
 - **Vile Requiem**
   - `{1}{b}, sacrifice this enchantment: destroy up to x target nonblack creatures, where x is the number of verse counters on this enchantment. they can't be regenerated`
 - **War Dance**

@@ -1203,4 +1203,93 @@ class GameEndingMixin:
                 }])
                 any_changed = True
 
+        # "When an opponent controls a creature with power 4 or greater, …"
+        # (Hidden Predators.) "When a player has no cards in hand, …" (Veiled
+        # Crocodile.) CR 603.8's two remaining state triggers in this pool, and
+        # they belong here for the counter thresholds' reason exactly: neither
+        # has a fire site to hang on. A creature's power can cross four from a
+        # counter, an anthem, an Aura, a pump or a layer effect ending, and a
+        # hand empties by a cast, a discard, a mill or a sacrificed cost — a
+        # list of those sites goes stale, and CR 603.8 says the *state* is what
+        # the ability watches.
+        #
+        # On the stack rather than resolved inline, unlike the sacrifice sweeps
+        # further up: what these two produce is an ordinary effect, so the
+        # difference the divergence buys there (a creature that is gone before
+        # anything can respond) has nothing to buy here.
+        #
+        # The latch is the neighbours' ``_state_trigger_announced`` set, and the
+        # rule is theirs: fire once, and not again until the state has stopped
+        # matching. CR 603.4 finishes the job at resolution — both cards print
+        # "if this permanent is an enchantment", which is false once the
+        # animation has replaced its types (CR 205.1a), so the ability an
+        # unchanged board announces again does nothing.
+        from ..subject_filters import subject_matches
+
+        for permanent in list(self.all_permanents()):
+            observer = self.controller_index_of(permanent)
+            if observer is None:
+                continue
+            for trig in compile_card_oracle(
+                permanent.effective_card
+            ).triggered_abilities:
+                kind = trig.condition.kind
+                if kind == "controls_matching_permanent":
+                    # The sacrifice shape is the inline sweep's above; a second
+                    # announcement here would put a second sacrifice on the
+                    # stack for a permanent that is already in a graveyard.
+                    if trig.instruction is None or trig.instruction.kind == "sacrifice_self":
+                        continue
+                    described = trig.condition.payload.get("controlled_filter") or {}
+                    if not described:
+                        continue
+                    # "**an opponent** controls" is the printed narrowing, and
+                    # it is the reason the seat is payload rather than a second
+                    # kind — every other seat in a three-player game qualifies,
+                    # which is what makes the unnarrowed reading wrong rather
+                    # than merely inverted.
+                    if trig.condition.payload.get("controls_seat") == "an opponent":
+                        seats = [
+                            index for index in range(len(self.players))
+                            if index != observer
+                        ]
+                    else:
+                        seats = [observer]
+                    holds = any(
+                        subject_matches(
+                            self, other, described, observer=seat, source=permanent
+                        )
+                        for seat in seats
+                        for other in self.controlled_by(seat)
+                    )
+                    key = ("controls", trig.source_line)
+                elif kind == "player_has_no_cards_in_hand":
+                    if trig.instruction is None:
+                        continue
+                    # "**a player**" is every seat, the source's controller
+                    # included: Veiled Crocodile wakes for its own player's
+                    # empty hand exactly as it does for an opponent's.
+                    holds = any(not player.hand for player in self.players)
+                    key = ("empty_hand", trig.source_line)
+                else:
+                    continue
+                announced = permanent.metadata.get("_state_trigger_announced") or set()
+                if not holds:
+                    if key in announced:
+                        permanent.metadata["_state_trigger_announced"] = announced - {key}
+                    continue
+                if key in announced:
+                    continue
+                permanent.metadata["_state_trigger_announced"] = announced | {key}
+                self._enqueue_triggered_batch([{
+                    "controller_index": observer,
+                    "source_permanent": permanent,
+                    "card": permanent.card,
+                    "instruction": trig.instruction,
+                    "effect_kind": trig.effect_kind,
+                    "ability_text": trig.source_line,
+                    "trigger_context": {},
+                }])
+                any_changed = True
+
         return any_changed

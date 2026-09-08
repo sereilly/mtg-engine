@@ -335,8 +335,15 @@ class BecomeCreature:
     is a parenthetical the lexer has already dropped.
     """
     subject: Recipient
-    power: int
-    toughness: int
+    #: The printed size, or the string ``"x"`` where the card prints one —
+    #: "{X}: This artifact becomes an **X/X** Construct artifact creature until
+    #: end of turn." (Chimeric Staff.) The type is *widened* rather than
+    #: repurposed: every node built before this held an int and still does, so
+    #: no golden and no ratchet entry moves. ``handlers/_common.resolve_amount``
+    #: is what turns the word into the number the activation paid, exactly as it
+    #: does for every other amount a card spells with an X.
+    power: "int | str"
+    toughness: "int | str"
     subtypes: tuple[str, ...] = ()
     keywords: tuple[str, ...] = ()
     #: Card types the animation adds *besides* creature — "becomes a 2/2
@@ -361,6 +368,45 @@ class BecomeCreature:
     #: that is what every other printing in the pool says out loud, and because
     #: a node built without the field must keep meaning what it used to.
     until_end_of_turn: bool = True
+    #: Whether the sentence printed **none** of CR 205.1b's retention clauses,
+    #: which makes it CR 205.1a's default: the new card types *replace* the
+    #: printed ones. "…it becomes a 2/2 Gargoyle creature with flying." (Opal
+    #: Gargoyle) — the enchantment stops being an enchantment, which is the
+    #: whole mechanism of the Hidden / Opal / Veiled cycle, since its own
+    #: intervening-if asks whether it still is one.
+    #:
+    #: Its own field rather than ``not until_end_of_turn``-style inference from
+    #: the others, and defaulted False so every node built before it existed
+    #: keeps meaning what it did: the retention clauses are the ones the pool
+    #: printed until now, and the addition is what those nodes claim.
+    replaces_types: bool = False
+    #: Whole printed abilities the body grants **in quotation marks** — "…a 4/4
+    #: Serpent creature with "This creature can't attack unless defending
+    #: player controls an Island."" (Veiled Serpent), "…with flying and "At the
+    #: beginning of your upkeep, sacrifice this creature unless you pay
+    #: {1}{U}."" (Veiled Apparition).
+    #:
+    #: The *lines*, not a parse of them, for ``CreateEmblem``'s reason one
+    #: family over: an ability is what a line compiles to, and the channel that
+    #: carries it (`engine/keywords.grant_ability_line`) is read back through
+    #: the compiler — so a granted trigger reaches the upkeep step exactly as a
+    #: printed one does. The production checks that each line parses before
+    #: admitting the card, so nothing here grants text no reader claims.
+    granted_ability_lines: tuple[str, ...] = ()
+    #: "…an Illusion creature with **power and toughness each equal to that
+    #: spell’s mana value**." (Veiled Sentry.) The size is not on the card at
+    #: all: it is a characteristic of the spell the trigger fired on, so
+    #: :attr:`power` and :attr:`toughness` carry nothing and the handler reads
+    #: the trigger’s frozen record. CR 208.2’s "defined by an effect" rather
+    #: than CR 604.3’s characteristic-defining ability — the number is fixed
+    #: as the ability resolves and does not track the spell afterwards.
+    pt_from_triggering_spell: bool = False
+    #: "…a 4/4 Giant creature with **protection from each of that spell’s
+    #: colors**." (Opal Titan.) CR 702.16g’s shorthand for one protection
+    #: ability per colour, and which colours the same frozen record answers —
+    #: a flag rather than a keyword string for that reason: the words are not
+    #: on the card.
+    protection_from_triggering_spell: bool = False
 
 
 #: The colour an effect does not name because CR 608.2d makes the choice part of
@@ -465,6 +511,14 @@ class GainType:
     card_types: tuple[str, ...]
     duration: Duration = field(default_factory=Duration)
     pt_from_mana_value: bool = False
+    #: Whether the sentence printed **no** retention clause at all — "…becomes
+    #: an enchantment." (Opal Acrolith.) CR 205.1a's default, so the types are
+    #: *set* rather than joined and the node stops being a "gain" in anything
+    #: but its name. Its own field for :attr:`BecomeCreature.replaces_types`'
+    #: reason and defaulted the same way round: the two cards in the pool that
+    #: predate it print the clause, and their nodes must keep meaning what they
+    #: did.
+    replaces_types: bool = False
 
 
 @dataclass(frozen=True)

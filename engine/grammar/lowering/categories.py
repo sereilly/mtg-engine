@@ -91,6 +91,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "sacrifice_expansion_permanents": "destruction",
     "become_aura_with_enchant": "characteristics",
     "gain_type": "characteristics",
+    # "{0}: This permanent becomes an enchantment." (Opal Acrolith.) The same
+    # layer-4 family as the gain above it — CR 205.1a replacing rather than
+    # CR 205.1b joining — so the same category.
+    "set_card_types_self": "characteristics",
     # "…becomes a copy of that creature" (Unstable Shapeshifter). CR 613 layer
     # 1, so what it changes is every characteristic at once — which is why it
     # sits in this family rather than in `recolor` or `pump`, each of which is
