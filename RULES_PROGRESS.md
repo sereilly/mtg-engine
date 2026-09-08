@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**366 / 614 tracked rules covered (59%)** — 2199 tests, 0 unannotated.
+**367 / 615 tracked rules covered (59%)** — 2219 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -88,7 +88,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [616. Interaction of Replacement and/or Prevention Effects](#616-interaction-of-replacement-andor-prevention-effects) | 2/2 | 100% |
 | [700. General](#700-general) | 2/15 | 13% |
 | [701. Keyword Actions](#701-keyword-actions) | 19/19 | 100% |
-| [702. Keyword Abilities](#702-keyword-abilities) | 29/29 | 100% |
+| [702. Keyword Abilities](#702-keyword-abilities) | 30/30 | 100% |
 | [703. Turn-Based Actions](#703-turn-based-actions) | 0/4 | 0% |
 | [704. State-Based Actions](#704-state-based-actions) | 5/8 | 62% |
 | [705. Flipping a Coin](#705-flipping-a-coin) | 2/3 | 66% |
@@ -292,7 +292,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **118.1** A cost is an action or payment necessary to take another action or to stop another action from ta... *(3 tests)*
 - [x] **118.2** If a cost includes a mana payment, the player paying the cost has a chance to activate mana abili... *(1 tests)*
-- [x] **118.3** A player can’t pay a cost without having the necessary resources to pay it fully. For example, a ... *(20 tests, subrules abc)*
+- [x] **118.3** A player can’t pay a cost without having the necessary resources to pay it fully. For example, a ... *(21 tests, subrules abc)*
 - [x] **118.4** Some costs include an {X} or an X. See rule 107.3. *(1 tests)*
 - [x] **118.5** Some costs are represented by {0}, or are reduced to {0}. The action necessary for a player to pa... *(3 tests, subrules a)*
 - [x] **118.6** Some objects have no mana cost. This represents an unpayable cost. An ability can also have an un... *(1 tests)*
@@ -483,7 +483,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **400.4** Cards with certain card types can’t enter certain zones. *(1 tests)*
 - [x] **400.5** The order of objects in a library, in a graveyard, or on the stack can’t be changed except when e... *(2 tests)*
 - [ ] **400.6** If an object would move from one zone to another, determine what event is moving the object. If t...
-- [x] **400.7** An object that moves from one zone to another becomes a new object with no memory of, or relation... *(17 tests)*
+- [x] **400.7** An object that moves from one zone to another becomes a new object with no memory of, or relation... *(18 tests)*
 - [ ] **400.8** If an object in the exile zone is exiled, it doesn’t change zones, but it becomes a new object th...
 - [ ] **400.9** If a face-up object in the command zone is turned face down, it becomes a new object.
 - [ ] **400.10** If an object in the command zone is put into the command zone, it doesn’t change zones, but it be...
@@ -682,7 +682,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **603.1** Triggered abilities have a trigger condition and an effect. They are written as “[When/Whenever/A... *(2 tests, subrules b)*
 - [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(24 tests, subrules bd)*
 - [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(41 tests, subrules bcd)*
-- [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(4 tests)*
+- [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(8 tests)*
 - [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(6 tests)*
 - [x] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit... *(3 tests, subrules c)*
 - [x] **603.7** An effect may create a delayed triggered ability that can do something at a later time. A delayed... *(33 tests, subrules bcde)*
@@ -772,7 +772,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 613. Interaction of Continuous Effects
 
-- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(94 tests, subrules abcdefg)*
+- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(95 tests, subrules abcdefg)*
 - [x] **613.2** Within layer 1, apply effects in a series of sublayers in the order described below. Within each ... *(17 tests, subrules ac)*
 - [ ] **613.3** Within layers 2–6, apply effects from characteristic-defining abilities first (see rule 604.3), t...
 - [x] **613.4** Within layer 7, apply effects in a series of sublayers in the order described below. Within each ... *(73 tests, subrules abcd)*
@@ -893,6 +893,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.26** Phasing *(16 tests, subrules adfgim)*
 - [x] **702.27** Buyback *(7 tests, subrules a)*
 - [x] **702.28** Shadow *(6 tests, subrules abc)*
+- [x] **702.30** Echo *(16 tests, subrules ab)*
 - [x] **702.36** Fear *(5 tests, subrules ab)*
 - [x] **702.108** Prowess *(3 tests, subrules a)*
 - [x] **702.111** Menace *(4 tests, subrules ab)*

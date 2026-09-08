@@ -228,6 +228,37 @@ def _accept_record_condition(stream: TokenStream) -> "ast.Condition | None":
     the parser cannot see the sentence in front of it, and every node here is
     refused downstream unless a step of the same effect declared the producer.
     """
+    # "if this permanent **came under your control since the beginning of your
+    # last upkeep**" — CR 702.30a, the whole of what echo adds to a sentence
+    # this grammar already read (``engine/echo.py`` rewrites the keyword line
+    # into it before any line is classified).
+    #
+    # A record condition, and a record for the reason Wiitigo's block clause in
+    # ``conditions`` is: the moment it asks about may have been an opponent's
+    # turn ago and nothing on the board says when a permanent changed hands, so
+    # the upkeep step records which of a seat's upkeeps a permanent first saw
+    # and ``turn_state`` answers off that.
+    #
+    # **Every word is required**, the discipline that clause states and this one
+    # needs more: "came under your control" alone is a different, wider claim
+    # (it is true of everything you have ever controlled), and "since the
+    # beginning of your last upkeep" is the only window this stamp can answer.
+    # A sentence naming another one has to fail here rather than borrow this
+    # node, because a window silently widened is an echo that never stops.
+    #
+    # Read at the top, before the "it was" back-reference below: both openings
+    # are a self-reference, this one is settled by eleven fixed words after it,
+    # and it consumes nothing when they are not there.
+    control_mark = stream.mark()
+    if accept_source_reference(stream) and stream.accept_phrase(
+        "came", "under", "your", "control", "since", "the", "beginning",
+        "of", "your", "last", "upkeep",
+    ):
+        return ast.CameUnderControlSinceLastUpkeep(
+            ast.TargetSpec("this", ast.ObjectFilter(is_source=True))
+        )
+    stream.reset(control_mark)
+
     # "if it was a creature card" (Scavenging Ooze). A back-reference, like the
     # flip above and unlike everything below it: no read of the board can answer
     # it, because the card it asks about has already left the zone the effect

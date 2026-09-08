@@ -240,6 +240,97 @@ def in_a_block_since_seats_last_upkeep(game, permanent, seat: int) -> bool:
     )
 
 
+#: The metadata key holding ``{"seat": …, "turn": …}`` for the **first** of its
+#: controller's upkeeps this permanent has been present for — CR 702.30a's
+#: "came under your control since the beginning of your last upkeep", recorded
+#: from the other end.
+#:
+#: Recorded rather than derived, and that is what ``record_turn_start_states``
+#: at the head of this module already says about a different question: a
+#: permanent that came under your control two of your turns ago and one that
+#: arrived during the opponent's turn in between look identical on the board,
+#: and every per-turn record of the difference is swept before the upkeep that
+#: asks. So the upkeep step writes the fact once and this reads it.
+#:
+#: **From the other end** is the whole design. The obvious record is "when did
+#: this come under your control", compared against a clock; the clock costs an
+#: ordinal that has to advance in step with every driver, and it has to not
+#: move between CR 603.4's two checks of the same condition — the one that
+#: decides whether the ability triggers and the one at resolution. Recording
+#: which upkeep was the *first* this permanent saw satisfies both by
+#: construction: it is written once, at the top of the step, and it is never
+#: overwritten while the controller stays the same, so the prompt that offers
+#: the payment, the gate that fires the trigger and the re-check that resolves
+#: it read one unchanging answer.
+#:
+#: Nothing sweeps it and nothing may. It dies with the permanent, which CR 400.7
+#: gives for free: what leaves and returns is a new object that has just come
+#: under your control, which is exactly what echo says about it.
+FIRST_CONTROLLERS_UPKEEP_KEY = "first_controllers_upkeep"
+
+
+def record_controllers_upkeep(game, permanents, seat: int) -> None:
+    """Stamp this upkeep as the first of *seat*'s that each of *permanents* has
+    seen — for the ones that have not seen one already.
+
+    ``setdefault`` is the whole rule: a permanent that already carries a stamp
+    for this seat has been through an earlier upkeep of theirs and must keep
+    saying so, and one that carries a stamp for somebody else has changed hands
+    without :func:`forget_controllers_upkeep` running, which is a record about a
+    seat that is not being asked about.
+
+    Called from the top of the upkeep step over the permanents that seat
+    controls **at that moment**. At the top so CR 603.4's two checks of the same
+    condition cannot straddle the write; over the permanents present then, so
+    one that enters later in the same step is correctly still owed its first
+    upkeep.
+    """
+    for permanent in permanents:
+        stamp = permanent.metadata.get(FIRST_CONTROLLERS_UPKEEP_KEY)
+        if isinstance(stamp, dict) and stamp.get("seat") == seat:
+            continue
+        permanent.metadata[FIRST_CONTROLLERS_UPKEEP_KEY] = {
+            "seat": int(seat), "turn": int(game.turn),
+        }
+
+
+def forget_controllers_upkeep(permanent) -> None:
+    """Drop the stamp because *permanent* has changed hands.
+
+    CR 702.30a is about coming under a **controller's** control, so a permanent
+    that changes hands starts the window again — for the new controller, and
+    also for the old one if it ever comes back. Storing the seat is not enough
+    to say so: a permanent stolen and returned between two of your upkeeps came
+    under your control again, and a stamp still naming you would deny it.
+    """
+    permanent.metadata.pop(FIRST_CONTROLLERS_UPKEEP_KEY, None)
+
+
+def came_under_control_since_seats_last_upkeep(game, permanent, seat: int) -> bool:
+    """Whether *permanent* came under *seat*'s control since the beginning of
+    that seat's previous upkeep — CR 702.30a's intervening-if.
+
+    True in exactly two cases, and the pair is the reading:
+
+    * **the stamp names this turn** — this upkeep is the first of *seat*'s that
+      the permanent has seen, so it cannot have been here at the previous one;
+    * **there is no stamp for this seat at all** — it has seen none of *seat*'s
+      upkeeps yet, which is the answer while the offer is being collected
+      (``get_upkeep_pay_triggers`` runs before the step writes anything) and the
+      answer for a permanent placed straight onto a battlefield by a test
+      fixture. Both want the same thing, and both are self-correcting: the step
+      stamps this turn a moment later and every later upkeep reads False.
+
+    A stamp naming a different seat reads as no stamp, which is the same
+    "it has seen none of *your* upkeeps" and the honest answer for a permanent
+    whose record is about somebody else.
+    """
+    stamp = permanent.metadata.get(FIRST_CONTROLLERS_UPKEEP_KEY)
+    if not isinstance(stamp, dict) or stamp.get("seat") != seat:
+        return True
+    return stamp.get("turn") == game.turn
+
+
 def attacked_during_seats_last_turn(game, permanent, seat: int) -> bool:
     """Whether *permanent* attacked during *seat*'s previous turn.
 

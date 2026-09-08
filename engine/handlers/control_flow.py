@@ -1053,6 +1053,27 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             (context.trigger_context or {}).get("attacked_or_blocked_this_combat")
         )
 
+    if kind == "came_under_your_control_since_your_last_upkeep":
+        # CR 702.30a's intervening-if — echo's whole condition, and the reason
+        # an echo creature pays once and never again. Read off the record the
+        # upkeep step writes, for the block clause below's reason: the moment it
+        # asks about may have been an opponent's turn ago and nothing on the
+        # board records when a permanent changed hands.
+        #
+        # "Your" is the ability's controller (CR 109.5), which is also the seat
+        # the record names — a permanent under a thief's control has seen the
+        # thief's upkeeps, and its old controller's window holds nothing about
+        # it. A missing source answers False, the direction that stops the
+        # ability rather than the one that sacrifices on a guess.
+        from ..turn_state import came_under_control_since_seats_last_upkeep
+
+        source = context.source_permanent
+        if source is None or context.caster not in game.players:
+            return False
+        return came_under_control_since_seats_last_upkeep(
+            game, source, game.players.index(context.caster)
+        )
+
     if kind == "in_a_block_since_your_last_upkeep":
         # "…if it has blocked or been blocked since your last upkeep" (Wiitigo).
         # A window that outlives every per-turn combat record, so the

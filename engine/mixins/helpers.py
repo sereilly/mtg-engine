@@ -29,6 +29,7 @@ from ..regeneration import regeneration_replaces_destruction
 from ..targeting import graveyard_target_spec
 from ..tokens import CREATED_WITH_PERMANENT_ID, is_token_card
 from ..trigger_utils import make_trigger_event, matching_triggers
+from ..turn_state import forget_controllers_upkeep
 from ._constants import _MANA_SYMBOLS, _NO_PRIORITY_STEPS
 from ..oracle_types import single_chosen_id
 
@@ -563,6 +564,18 @@ class GameHelpersMixin:
             # this turn, in either direction.
             if self._is_creature(permanent):
                 permanent.metadata["summoning_sickness_turn"] = self.turn
+            # CR 702.30a: echo's window starts again when a permanent comes
+            # under a new controller's control, so the record of which of its
+            # controller's upkeeps it has seen is about the seat that has just
+            # lost it and is dropped here (``engine/turn_state.py``).
+            #
+            # Here because this is the one place in the engine a permanent
+            # changes hands, and a forget wired into any single
+            # control-changing effect would be one every other effect forgot.
+            # Unconditional on type, unlike CR 302.6's marker above it — echo is
+            # a keyword of *permanents*, and an artifact that changes hands owes
+            # a fresh one exactly as a creature does.
+            forget_controllers_upkeep(permanent)
 
     def phase_out_permanent(self, permanent: Permanent) -> bool:
         """CR 702.26: *permanent* phases out, its attached Auras with it.
