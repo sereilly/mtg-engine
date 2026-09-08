@@ -12,9 +12,9 @@ The measures are **ceilings**, the opposite direction to `GRAMMAR_COVERAGE.md`'s
 
 ## The headline
 
-**55 of 3109 supported cards (1.8%)** carry at least one name-keyed entry, across **61 entries** in 6 registries. The pool is 3109 cards, 100.0% supported.
+**54 of 3109 supported cards (1.7%)** carry at least one name-keyed entry, across **60 entries** in 6 registries. The pool is 3109 cards, 100.0% supported.
 
-Held at this rate, supporting the 26,113-card release line would need about **512 hand-written entries** covering **462 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
+Held at this rate, supporting the 26,113-card release line would need about **504 hand-written entries** covering **454 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
 
 ## By set
 
@@ -23,7 +23,7 @@ Held at this rate, supporting the 26,113-card release line would need about **51
 | LEA | 290 | 290 (100.0%) | 29 (10.0%) | 388 | 27 (7.0%) | 33 | 11.4 |
 | LEB | 292 | 292 (100.0%) | 29 (9.9%) | 389 | 27 (6.9%) | 33 | 11.3 |
 | 2ED | 292 | 292 (100.0%) | 29 (9.9%) | 389 | 27 (6.9%) | 33 | 11.3 |
-| ARN | 78 | 78 (100.0%) | 20 (25.6%) | 107 | 18 (16.8%) | 22 | 28.2 |
+| ARN | 78 | 78 (100.0%) | 19 (24.4%) | 107 | 17 (15.9%) | 21 | 26.9 |
 | ATQ | 85 | 85 (100.0%) | 3 (3.5%) | 120 | 3 (2.5%) | 3 | 3.5 |
 | 3ED | 296 | 296 (100.0%) | 25 (8.4%) | 389 | 24 (6.2%) | 28 | 9.5 |
 | LEG | 310 | 310 (100.0%) | 2 (0.6%) | 430 | 2 (0.5%) | 2 | 0.6 |
@@ -35,14 +35,14 @@ Held at this rate, supporting the 26,113-card release line would need about **51
 | ALL | 144 | 144 (100.0%) | 0 (0.0%) | 251 | 0 (0.0%) | 0 | 0.0 |
 | MIR | 335 | 335 (100.0%) | 1 (0.3%) | 546 | 0 (0.0%) | 1 | 0.3 |
 | VIS | 167 | 167 (100.0%) | 0 (0.0%) | 279 | 0 (0.0%) | 0 | 0.0 |
-| 5ED | 434 | 434 (100.0%) | 10 (2.3%) | 631 | 9 (1.4%) | 11 | 2.5 |
+| 5ED | 434 | 434 (100.0%) | 9 (2.1%) | 631 | 8 (1.3%) | 10 | 2.3 |
 | WTH | 167 | 167 (100.0%) | 0 (0.0%) | 249 | 0 (0.0%) | 0 | 0.0 |
 | TMP | 335 | 335 (100.0%) | 1 (0.3%) | 485 | 0 (0.0%) | 1 | 0.3 |
 | STH | 143 | 143 (100.0%) | 0 (0.0%) | 215 | 0 (0.0%) | 0 | 0.0 |
 | EXO | 143 | 143 (100.0%) | 0 (0.0%) | 207 | 0 (0.0%) | 0 | 0.0 |
 | M21 | 285 | 285 (100.0%) | 0 (0.0%) | 503 | 0 (0.0%) | 0 | 0.0 |
-| USG *(measured)* | 335 | 300 (89.6%) | 1 (0.3%) | 445 | 0 (0.0%) | 1 | 0.3 |
-| **Whole pool (shipped, deduped)** | **3109** | **3109 (100.0%)** | **55 (1.8%)** | **4852** | **51 (1.1%)** | **61** | **2.0** |
+| USG *(measured)* | 335 | 314 (93.7%) | 1 (0.3%) | 462 | 0 (0.0%) | 1 | 0.3 |
+| **Whole pool (shipped, deduped)** | **3109** | **3109 (100.0%)** | **54 (1.7%)** | **4852** | **50 (1.0%)** | **60** | **1.9** |
 
 *(measured)* — USG are ingested for measurement and **not shipped**: `cards/manifest.json` lists them under `measured`, the engine's catalog does not load them, and no player can put one in a deck. They are reported here and excluded from the ALL row and from the ceilings, because a ratchet over a set nobody has implemented would fire on its composition rather than on anything anyone did. A measured set moves up to `sets` when it is fully supported.
 
@@ -52,7 +52,7 @@ Held at this rate, supporting the 26,113-card release line would need about **51
 
 | Registry | Cards | Entries |
 | --- | ---: | ---: |
-| `CARD_LINE_INSTRUCTIONS` | 50 | 51 |
+| `CARD_LINE_INSTRUCTIONS` | 49 | 50 |
 | `ON_LEAVE_BATTLEFIELD` | 6 | 6 |
 | `DRAW_STEP_MODIFIERS` | 1 | 1 |
 | `ON_SELF_RESOLVED` | 1 | 1 |
@@ -85,7 +85,6 @@ Held at this rate, supporting the 26,113-card release line would need about **51
 - **Forcefield** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Fork** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Gaea's Liege** (`CARD_LINE_INSTRUCTIONS`, `ON_LEAVE_BATTLEFIELD`) — 1 line
-- **Ghazbán Ogre** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Guardian Angel** (`CARD_LINE_INSTRUCTIONS`, `ON_SELF_RESOLVED`) — 1 line
 - **Guardian Beast** (`UNTAPPED_ARTIFACT_PROTECTORS`)
 - **Hurkyl's Recall** (`CARD_LINE_INSTRUCTIONS`) — 1 line
