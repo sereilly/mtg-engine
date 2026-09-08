@@ -112,6 +112,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # names rather than one the sentence does, so the same family.
     "swap_land_types_until_eot": "characteristics",
     "restrict_untap_while_source_tapped": "tapping",
+    # "…for as long as this creature remains **on the battlefield**."
+    # (Somnophore.) The same linked restriction ended by the other fact
+    # about the same source, so the same category and GRAMMAR_CATEGORIES is
+    # unchanged.
+    "restrict_untap_while_source_present": "tapping",
     # Its counter-conditioned sibling: "…doesn't untap during its controller's
     # untap step **for as long as it has a paralyzation counter on it**"
     # (Dread Wight). The condition is a fact about the restricted permanent

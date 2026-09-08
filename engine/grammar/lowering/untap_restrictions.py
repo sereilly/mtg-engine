@@ -380,6 +380,18 @@ def _lower_doesnt_untap_next_step(
     )
 
 
+#: The two facts about a source that can end a linked untap restriction, and
+#: the instruction kind each one is dispatched by. Two kinds rather than one
+#: carrying a flag, because the *reading* differs at the enforcement site: one
+#: asks whether the holder is still tapped and the other only whether it is
+#: still there, and a kind whose handler had to be told which question it was
+#: answering is a kind that can be told wrong.
+_LINKED_UNTAP_KINDS = {
+    False: "restrict_untap_while_source_tapped",
+    True: "restrict_untap_while_source_present",
+}
+
+
 def _lower_doesnt_untap_while_source_tapped(
     node: ast.DoesntUntapWhileSourceTapped,
 ) -> tuple[OracleInstruction, ...]:
@@ -424,7 +436,9 @@ def _lower_doesnt_untap_while_source_tapped(
                 "this untap restriction names no target it can hold", node=node
             )
         return (
-            OracleInstruction("restrict_untap_while_source_tapped", "", payload),
+            OracleInstruction(
+                _LINKED_UNTAP_KINDS[node.while_on_battlefield], "", payload
+            ),
         )
     # "Tap target artifact. **It** doesn't untap …" — the pronoun refers to the
     # permanent the sentence before it chose. The noun parser collapses a bare
@@ -451,7 +465,11 @@ def _lower_doesnt_untap_while_source_tapped(
                 "a bound object carries no narrowing this lock could honour",
                 node=node,
             )
-        return (OracleInstruction("restrict_untap_while_source_tapped", "", {}),)
+        return (
+            OracleInstruction(
+                _LINKED_UNTAP_KINDS[node.while_on_battlefield], "", {}
+            ),
+        )
     if not (
         isinstance(subject, ast.TargetSpec)
         # "**It** doesn't untap…" or the card naming itself — both spellings of
@@ -465,4 +483,8 @@ def _lower_doesnt_untap_while_source_tapped(
             "sentence tapped",
             node=node,
         )
-    return (OracleInstruction("restrict_untap_while_source_tapped", "", {}),)
+    return (
+        OracleInstruction(
+            _LINKED_UNTAP_KINDS[node.while_on_battlefield], "", {}
+        ),
+    )

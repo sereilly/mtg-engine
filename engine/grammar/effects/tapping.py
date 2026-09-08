@@ -112,8 +112,20 @@ def _parse_doesnt_untap_next_step(
         # `paragraphs.py` were tightened out of at the same time.
         if stream.accept_word(
             "creature", "artifact", "enchantment", "land", "permanent"
-        ) and stream.accept_phrase("remains", "tapped"):
-            return ast.DoesntUntapWhileSourceTapped(subject)
+        ):
+            if stream.accept_phrase("remains", "tapped"):
+                return ast.DoesntUntapWhileSourceTapped(subject)
+            # "…for as long as this creature remains **on the battlefield**."
+            # (Somnophore.) The second fact about the source that can end this
+            # restriction, and every word of it is required for the reason the
+            # noun above is: "remains" alone names no condition, and a tail
+            # accepted and dropped would be a lock that never ends.
+            if stream.accept_phrase(
+                "remains", "on", "the", "battlefield"
+            ):
+                return ast.DoesntUntapWhileSourceTapped(
+                    subject, while_on_battlefield=True
+                )
     stream.reset(linked)
     return _parse_next_untap_steps(stream, subject, whose="controller")
 

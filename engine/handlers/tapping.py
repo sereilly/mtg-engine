@@ -1150,6 +1150,16 @@ def untap_up_to_matching(game: Game, instruction: OracleInstruction, context: Or
 #: in different files and a second spelling is how they come apart.
 UNTAP_LOCK_WHILE_TAPPED_KEY = "untap_lock_while_tapped"
 
+#: Its twin for "for as long as this creature remains **on the
+#: battlefield**" (Somnophore). A second key rather than a flag inside the
+#: record, for ``ANIMATE_INDEFINITELY``'s reason one module over: what
+#: separates the two is exactly which question the untap step asks of the
+#: holder — "is it still tapped" against "is it still there" — and a reader
+#: told which record it was looking at would be a reader that can be told
+#: wrong. Both are recorded on the **source**, so both end by the source
+#: leaving and neither needs anything cleared off the permanent it holds.
+UNTAP_LOCK_WHILE_PRESENT_KEY = "untap_lock_while_present"
+
 
 def end_untap_lock(permanent) -> int | None:
     """End the lock *permanent* is holding, if any; returns what it held.
@@ -1191,6 +1201,28 @@ def restrict_untap_while_source_tapped(game: Game, instruction: OracleInstructio
     tapped. :func:`end_untap_lock` is what CR 611.2a asks for, and
     ``become_untapped`` is the moment it is asked at.
     """
+    return _restrict_untap_while_source(
+        game, instruction, context,
+        key=UNTAP_LOCK_WHILE_TAPPED_KEY, condition="remains tapped",
+    )
+
+
+def _restrict_untap_while_source(
+    game: Game,
+    instruction: OracleInstruction,
+    context: OracleExecutionContext,
+    *,
+    key: str,
+    condition: str,
+) -> tuple[bool, str]:
+    """Both linked untap locks: record the held permanent on the source.
+
+    One body because which fact about the source ends the lock is the only
+    thing the two kinds disagree about — the target resolution, the printed
+    noun phrase re-checked at CR 608.2b, and the "nothing to hold" outcome are
+    word for word the same, and a second copy is a second chance for one of
+    them to drift.
+    """
     source = context.source_permanent
     if source is None:
         return False, "ability not implemented"
@@ -1226,11 +1258,35 @@ def restrict_untap_while_source_tapped(game: Game, instruction: OracleInstructio
                 f"{context.card.name}: {target.card.name} is not what it names"
             )
             return True, "resolved"
-    source.metadata[UNTAP_LOCK_WHILE_TAPPED_KEY] = target.permanent_id
+    source.metadata[key] = target.permanent_id
     game.log.append(
-        f"{target.card.name} won't untap while {context.card.name} remains tapped"
+        f"{target.card.name} won't untap while {context.card.name} {condition}"
     )
     return True, "resolved"
+
+
+@effect_handler("restrict_untap_while_source_present")
+def restrict_untap_while_source_present(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Somnophore: "…That creature doesn't untap during its controller's untap
+    step **for as long as this creature remains on the battlefield**."
+
+    The lock above with its condition one step weaker: the holder need only
+    still be there. Same body, because everything else is the same — the record
+    goes on the source, nothing is written onto the creature it holds, and the
+    restriction ends when the source leaves (CR 400.7 makes a returning
+    permanent a new object, so a Somnophore that flickers releases what it
+    held).
+
+    **No ``end_untap_lock`` twin.** The tapped lock needs one because a source
+    can untap while staying on the battlefield, which is a moment nothing else
+    would notice; this one ends only when the source goes, and a record on a
+    permanent that has left is read by nobody.
+    """
+    return _restrict_untap_while_source(
+        game, instruction, context,
+        key=UNTAP_LOCK_WHILE_PRESENT_KEY,
+        condition="remains on the battlefield",
+    )
 
 
 #: The counters whose presence keeps a permanent from untapping, recorded on the
