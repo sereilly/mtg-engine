@@ -555,9 +555,10 @@ def _parse_become_creature(
     #   replaces. Nothing in the pool prints it; refusing keeps it that way
     #   rather than admitting it silently.
     #
-    # "Target land becomes a 4/4 creature until end of turn" fails the first and
-    # keeps refusing, which is the point: admitting it under an adding record is
-    # the silent half of a type replacement this engine has not built.
+    # "Target land becomes a 4/4 creature until end of turn" fails the first
+    # and is now read as CR 205.1a's *replacement* instead of refusing: the
+    # land stops being a land, which is exactly why Mishra's Factory prints
+    # "It's still a land" and this sentence does not.
     if not in_addition and isinstance(subject, ast.TargetSpec):
         printed = set(subject.filter.card_types)
         if (
@@ -566,6 +567,22 @@ def _parse_become_creature(
             and printed <= set(card_types) | {"creature"}
         ):
             in_addition = True
+        elif "creature" in printed and card_types:
+            # CR 205.1b's **second** sentence, and the one reading this
+            # production still has no record for: "Some effects state that an
+            # object becomes a '[creature type] artifact creature'; these
+            # effects also allow the object to retain all of its prior card
+            # types and subtypes **other than creature types**, but replace any
+            # existing creature types."
+            #
+            # That is two claims at once — keep the card types, replace the
+            # creature types — and the replacement below makes only the second.
+            # An enchantment creature animated into a Construct would stop
+            # being an enchantment, which the rule says it does not. Nothing in
+            # the pool prints the sentence; refusing keeps it that way rather
+            # than admitting it with the first claim silently dropped.
+            stream.reset(mark)
+            return None
     # **Read, not required.** A sentence printing no duration is CR 611.2b's
     # default — the animation lasts indefinitely (Mishra's Groundbreaker) — and
     # the two lower to different instruction kinds, so the absence is carried
