@@ -309,6 +309,43 @@ A drainable list of things the playbook knows are not yet true, each naming
 the phase that clears it. A retrospective that drains an item deletes it; a
 set that hits a new one adds it.
 
+**Added at USG's Phase 6: a hooked card's every sentence is blanket-claimed, so
+`parse_coverage` cannot see an unimplemented line on it.** W3G3 retired Drop of
+Honey's `card_hooks.py` entry and the retirement *exposed* a second printed line
+— "when there are no creatures on the battlefield, sacrifice this enchantment" —
+that nothing had ever implemented. `parse_coverage` had been reporting the card
+fully claimed the whole time, because a card with **any** hook entry has all of
+its sentences attributed to that entry.
+
+That is a hole in the one instrument built to find unimplemented lines, and it
+is exactly the failure mode the instrument exists to catch, hiding inside the
+instrument. It is bounded by the hook count — 53 cards — and it shrinks every
+time a hook is retired, which is the wrong direction for a guard: the *fewer*
+hooks there are, the more it looks like the instrument is working.
+
+**Phase 4 of the next set clears it**, as two parts: attribute a hook's claim to
+the *lines the hook actually compiles* (`CARD_LINE_INSTRUCTIONS` is keyed by
+line, so the data is already there — it is `card_hooks bespoke` as a whole-card
+claim that is wrong), and re-run `parse_coverage --check` over the pool to see
+what the other 52 hooked cards have been hiding. Budget for that second number
+being non-zero.
+
+**Added at USG's Phase 6: `simulate_ai_games.py` never enters a main phase.**
+W3G3 checked a claim in its brief rather than believing it and found the
+simulator's turn loop is bookkeeping → untap → upkeep → draw → cast, with no
+`_enter_main_phase` call at all. So every `main_phase_first` /
+`main_phase_each_yours` trigger in the pool — Sanctum of Fruitful Harvest,
+Eladamri's Vineyard, USG's Carpet of Flowers — has **never fired in an AI game**,
+and a Rock Hydra test routed through the simulator silently exercises nothing.
+
+Not a wrong result, an absent one, which is why no guard sees it: the run
+completes, the interaction count is non-zero, and the issue list is empty. It is
+the same shape as the `begin_turn_bookkeeping` omission this set fixed between
+waves, in the same function, and that one cost six shipped cards their per-turn
+records. **Phase 0 of the next set clears it** — the fix is a phase call in the
+loop, and it owes the same re-baseline check that one did (which turned out to
+be unnecessary: no seeded run moved).
+
 **Added at FEM's Phase 6: `permanents_from` carries two arities and only one
 reader knows.** That payload key names a scratchpad record, and its producers
 disagree about shape — a reanimation writes a *list* of permanent ids, a
@@ -884,6 +921,24 @@ this list already says does not travel with a wave. Whoever takes it owes the
 element-type question in the same round, which is the half Visions found nobody
 had named.
 
+**Re-read at USG's Phase 6, and the entry was one axis short.** W3G5 found three
+shipped cards mis-played through this field — Sidar Jabari (MIR), Seasoned
+Marshal (USG) and Elite Javelineer (TMP) — and they are **not** the arity
+disagreement this entry describes. The combat fire sites stamp a **scalar**, the
+same arity `stack/choices` uses, and `resolve_own_combatant` reads it correctly.
+What is wrong is the **relation**: one field carries "the target the controller
+chose" *and* "the object this ability is about", with nothing recording which.
+Seasoned Marshal tapped itself and Elite Javelineer damaged itself, because the
+self-stamp suppressed CR 603.3d's choice; Sidar Jabari tapped **nothing**,
+because its `defending_player` narrowing correctly refused the self-stamp.
+
+Same root — one field, two facts — different axis, and the entry now names both.
+The three cards were fixed by gating the picker; the principled fix is a
+**separate field**, which touches every combat fire site and
+`resolve_own_combatant`. Whoever takes the 119-reader refactor should settle
+arity, element type **and** relation in the one round, because a field that
+means two things cannot be folded onto one shape until it means one.
+
 **Cleared at EXO's Phase 0 — and the measured seam was right, which is the
 first time an inherited one has been.** `effects/prevention.py` was at 990 with
 two of wave 1's groups about to land in it, and STH's W1G1 had reported by call
@@ -1012,6 +1067,21 @@ production reads the phrase in its printed position and the node is complete.
 Parts 1–3 are what makes part 4 safe; landing 4 alone is the wide-fallback
 mis-play this entry exists to refuse. Verify with **Honorable Passage**, which
 is shipped and so can be driven in the running app.
+
+**Re-checked at USG's Phase 6 and it survives, with its scope now measured
+rather than assumed.** Urza's Saga prints "a source of your choice" on **eight**
+cards — the seven Runes of Protection and Sanctum Guardian — so on the entry's
+own trigger condition ("the next set printing either shape") it looked due.
+All eight are **activated** abilities, which `mixins/stack/activation.py`
+already announces correctly through `choices["chosen_source"]`, so not one of
+them touches the gap. The gap is a **cast** that names a target *as well*, and
+the pool's only instance is still Kor Chant, still refused by name in
+`lowering/redirection.py`.
+
+Which is the check this list asks every retrospective for: the entry's *work* is
+undone, and its *premise* — that the next set printing the phrase will meet it —
+turned out to be wrong. Printing the phrase is not the trigger; printing it on a
+**spell with its own target** is. The condition is amended to say so.
 
 **Added at EXO's Phase 5: a client-only envelope has no guard, and one had
 been wrong for four sets.** `GameActionRequest.seat` is required of every
@@ -1266,7 +1336,19 @@ is green, the trackers carry its row, and the census is in hand.
    printed exclusion was enforced by nothing and the Aura could be attached to a
    flyer. The sweep sees only the first, and one gate hid both: the support claim
    and the coverage channel each accepted any line starting with "enchant ".
-5. **Ask how many of the set's cards are new to the pool**, before planning any
+5. **Probe a keyword's *rewrite target* against the live grammar before sizing
+   it.** A keyword whose CR definition is a rewrite (equip, cycling, echo,
+   buyback, cumulative upkeep) costs a rewrite in `oracle.expand_ability_lines`
+   plus whatever the rewritten sentence still needs — and the census cannot tell
+   you which, because it reports the *printed* line refusing at the line gate.
+   USG's census read Cycling (34 cards) and Echo (14) as the set's two big rocks
+   and both looked like grammar rounds; `parse_line` on "{2}, Discard this card:
+   Draw a card." and on "At the beginning of your upkeep, sacrifice this creature
+   unless you pay {1}{G}" answered in full, and the real work was a rewrite each
+   plus one intervening-if. Two probes, before any brief was written, and they
+   changed the shape of the wave.
+
+6. **Ask how many of the set's cards are new to the pool**, before planning any
    round. Every phase after this one is written for a set that brings cards,
    and a reprint set brings printings: 4ED's 378 entries were 368 unique cards
    and *all* of them were already shipped, so the census read 368/368 supported
@@ -1297,6 +1379,17 @@ provides?* Three sweeps, in order of blast radius:
 2. **Keywords.** Diff the set's keyword lines against
    `vocabulary.IMPLEMENTED_KEYWORDS` — **and against
    `oracle.UNSUPPORTED_KEYWORDS`, which is a third table and outranks both.**
+   **And a keyword defined as a *rewrite* is absent from the registry by
+   design** — read that before sending anyone to add one. `IMPLEMENTED_KEYWORDS`
+   admits a keyword being **granted or named** ("gains flying", "creatures with
+   flanking"); equip, buyback and cumulative upkeep are all missing from it for
+   the reason cycling and echo are. By the time any reader sees the card the word
+   is gone and the ability it means is in its place, and
+   `test_keyword_registry`'s bare-keyword-card guard forces the point: listing
+   one means either failing that guard or admitting a costless ability that
+   charges nothing. USG's brief said the opposite to two groups and both refused
+   it, correctly.
+
    That set is matched against the *ingested* `keywords` field before any line
    is classified, so a keyword can be implemented in full and still cost every
    card that prints it: Legends' rampage had working behaviour and three
@@ -1344,6 +1437,28 @@ only something that reads the compiled program line by line will find them.
 **Entry:** the round plan exists, and `set_pool("<CODE>")` resolves the
 measured set so per-card tests can land as the cards do. **Exit:**
 `support_report.py --set <CODE>` reports every card supported.
+
+**A late wave may spend a group on no cards at all.** By the last wave the
+earlier ones have usually enumerated a pile of *shipped* defects they found,
+measured and correctly declined to fix in round — the rule that a change whose
+blast radius is the whole pool does not travel with a wave. That pile is a
+group's brief. USG's third wave gave its fifth group **no cards from the set**,
+and it returned twenty shipped permanents dealing damage as the printed card
+rather than as the permanent (CR 120.7), a lifelink fallback that had never run
+once, four cards whose triggers targeted themselves, and CR 603.4's fire-time
+half. Spend the group this way only when the pile is already enumerated —
+finding the work is a different job from doing it, and the enumeration is what
+makes it one round's worth.
+
+**A new census or instrument must be validated *backwards* before anyone trusts
+it.** Run it against a commit where the defects it is meant to find are still
+present, and require it to name them. USG's `scripts/unasked_narrowings.py` was
+held to exactly that — against its round's parent it names all three dead cards
+and nothing the round did not find; against HEAD they are gone. Two details of
+its construction were both discovered *because* the first draft reported the
+pre-round engine clean, which is the outcome a backwards validation exists to
+disbelieve. A census that cannot reproduce a known finding is a census that will
+report zero and mean nothing.
 
 1. Each round, pick the card whose gap is **not about that card** — the
    change that clears the most other cards. The Revised narrative in git
@@ -2525,3 +2640,52 @@ across 119 reader sites, already paid for with one live defect; three near-cap
 grammar modules with no owner, two with measured seams). *One drained* (the bare
 noun `spell`, drained before the set began). *One amended* (the `web/` layer-read
 scan, with its second site).
+
+### USG — 2026-09-08
+
+*The round with no cards in it was the round that paid best.* Three waves, but
+the fifth group of wave 3 was given **no Urza's Saga cards** — only the shipped
+defects earlier waves had found, measured and correctly declined to fix inside a
+wave. It returned twenty shipped permanents dealing damage as the printed
+`CardDefinition` rather than as the permanent (CR 120.7, four handlers wide),
+`_apply_lifelink`'s documented fallback that had **never run once**, four cards
+whose triggers targeted themselves, and CR 603.4's fire-time half. Phase 3's
+text now says a wave may spend a group this way when earlier waves have
+enumerated enough deferred work to fill one.
+
+*It also produced the first instrument this process has gained from a wave.*
+`scripts/unasked_narrowings.py` answers "which predicates are asked on one of a
+pair of paths?", and it was **validated backwards** — run against its own
+round's parent it names all three dead cards and nothing else the round found.
+That validation is now the bar Phase 3 states for a new instrument: a census
+that cannot reproduce a known finding is a census nobody should trust.
+
+*Probing the two keywords before briefing anyone changed the whole plan.* The
+census reads Cycling (34 cards) and Echo (14) as the set's big rocks and both
+look like grammar work; both were already parsed, and both are the equip shape —
+a rewrite plus a registry entry. Phase 1's text now says to probe a keyword's
+*rewrite target* against the live grammar before sizing it.
+
+*Two groups independently refused the same brief instruction and both were
+right.* `IMPLEMENTED_KEYWORDS` admits a keyword being **granted or named**, so a
+rewrite-defined keyword is absent from it by design — equip, buyback and
+cumulative upkeep already were. Phase 2's keyword text says so now, because the
+brief said the opposite twice.
+
+*The wrong-insert rehearsal earned its minute for the third consecutive set.*
+USG shares 17 oracle_ids, of which exactly **three** (Duress, Glorious Anthem,
+Rewind) have their only other printing in M21 — so its index decides those three
+cards' origin. Appended after M21 the prefix guard passed and all three read
+`m21`; the order guard failed at index 20 and was the only one that did.
+
+*Two items added to Known gaps* (a hooked card's every sentence is
+blanket-claimed, so `parse_coverage` is blind to an unimplemented line on one —
+found only by retiring a hook; and `simulate_ai_games.py` never enters a main
+phase, so no `main_phase_*` trigger has ever fired in an AI game). *Two amended
+rather than drained*: `StackItem.target_permanent_id` gained a **third axis** —
+the field carries "the target chosen" and "the object this is about" with
+nothing recording which, which is a relation problem rather than the arity one
+the entry described — and CR 615.8's chosen source had its trigger condition
+corrected, because USG printed the phrase eight times and all eight were
+activated abilities the engine already handles. Printing the phrase was never
+the trigger; printing it on a **spell with its own target** is.

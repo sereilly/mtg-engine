@@ -1,8 +1,8 @@
 # Scaling Roadmap
 
-Target: grow the card pool from **3,109** unique cards — twenty-one sets,
+Target: grow the card pool from **3,427** unique cards — twenty-two sets,
 LEA/LEB/2ED/ARN/ATQ/3ED/LEG/DRK/FEM/4ED/ICE/HML/ALL/MIR/VIS/5ED/WTH/TMP/STH/EXO/
-M21, all shipped and all supported — to the full release line: **140 sets,
+USG/M21, all shipped and all supported — to the full release line: **140 sets,
 33,594 printings, 26,113 unique cards** per `set_progress.json`.
 
 **The reprint shape recurs and is worth planning for.** `set_progress.json`
@@ -776,14 +776,19 @@ expire:
 > what is already there); `test_the_shipped_sets_are_in_printing_order` is the
 > assertion that can.
 
-Run against `set_progress.json` on 2026-09-07 it answers **Urza's Saga** (USG,
-1998-10-12, 335 cards, 309 new to the pool), then Urza's Legacy (143 cards, 140
-new), then 6ED — dated 1999-04-21 with **0** new cards against the shipped pool,
-so it waits for the whole Urza block the way it waited for the Mirage and Tempest
-ones — then Urza's Destiny and Mercadian Masques. **USG has never been measured
-here.** Every ingest estimate this file has carried was stale by the time it was
-read, so no candidate table is kept: measure at Phase 1, against the compiler of
-that day.
+Run against `set_progress.json` on 2026-09-08, with USG shipped, it answers
+**Urza's Legacy** (ULG, 1999-02-15, 143 cards), then 6ED — dated 1999-04-21 with
+**0** new cards against the shipped pool, so it waits for the whole Urza block
+the way it waited for the Mirage and Tempest ones — then Urza's Destiny and
+Mercadian Masques. Every ingest estimate this file has carried was stale by the
+time it was read, so no candidate table is kept: measure at Phase 1, against the
+compiler of that day.
+
+**USG's own estimate was 309 new and the answer was 325**, which is the rule
+working rather than failing — the number moved because the *pool* moved under it
+between the estimate and the ingest, not because the count was wrong when
+written. It is the fifth consecutive estimate this file has carried that was
+stale on arrival.
 
 **Phase 1 opens with the census, not the ingest.** Fetch the candidate to a
 scratch directory (never `cards/`) and read **all five** instruments beside each
@@ -874,6 +879,7 @@ a wave is five parallel worktree groups integrated serially.
 | TMP | 335 | 67.8% | 4 waves |
 | STH | 143 | 67.8% | 2 waves |
 | EXO | 143 | 63.6% | 2 waves + 1 closer |
+| USG | 335 | 60.9% | 3 waves |
 
 Three data points shape an estimate. **Legends** is the warning: the lowest
 starting coverage and the flattest ranking — after eight rounds, 113 of its 135
