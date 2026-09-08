@@ -257,6 +257,7 @@ def _parse_registry_claimed_sentence(stream: TokenStream) -> bool:
     the registry's matcher.
     """
     from ..cost_modifiers import cost_modifier_claims_line
+    from ..resolution_overrides import resolution_override_sentence
     from ..special_actions import permanent_special_action_sentence
 
     mark = stream.mark()
@@ -283,6 +284,15 @@ def _parse_registry_claimed_sentence(stream: TokenStream) -> bool:
     # sentence is consumed by the table that performs it
     # (`engine/special_actions.py`), exactly as the cost reduction above is.
     if permanent_special_action_sentence(text) is not None:
+        stream.accept_punct(".")
+        return True
+    # "**This ability still resolves if its target becomes illegal.**" (Gilded
+    # Drake.) The fourth sentence of a triggered ability's line, and not an
+    # effect either: it says what the *rules* do with the object when it begins
+    # to resolve (CR 608.2b), so there is nothing here for a production to lower
+    # and the sentence is consumed by the table `engine/legality.py` reads —
+    # exactly as the cost reduction and the special action above are.
+    if resolution_override_sentence(text) is not None:
         stream.accept_punct(".")
         return True
     stream.reset(mark)

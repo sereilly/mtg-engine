@@ -93,6 +93,7 @@ def defender_assigns_claims(sentence: str) -> bool:
         defender_assigns_line(sentence)
         or sentence.strip().lower().rstrip(".") == _DEFENDER_ASSIGNS_RESTATEMENT
     )
+from engine.resolution_overrides import resolution_override_sentence  # noqa: E402
 from engine.special_actions import (permanent_special_action_sentence,  # noqa: E402
                                     special_action_line)
 from engine.cast_timing import (grants_flash,  # noqa: E402
@@ -311,6 +312,16 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # population this census exists to keep honest.
     ("special_actions.py (permanent offer)",
      lambda s: permanent_special_action_sentence(s) is not None),
+    # CR 608.2b relaxed by the object itself — "This ability still resolves if
+    # its target becomes illegal" (Gilded Drake). A rider on an ability that
+    # says what the *rules* do with the object rather than what the object
+    # does, so there is no instruction to point at: the whole clause parses and
+    # lowers to the identical program with the sentence and without it, which
+    # is precisely the "trailing sentence riding along" this census exists to
+    # find. Asked of the table `engine/legality.py` reads, the same seam the
+    # two special-action rows above use.
+    ("resolution_overrides.py",
+     lambda s: resolution_override_sentence(s) is not None),
     # The board half of CR 601.3 — "Cast this spell only if you control a
     # snow land" (Blizzard). A row whose noun phrase is payload, so the
     # claim asks the reader that answers it rather than comparing against a

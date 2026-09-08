@@ -47,6 +47,7 @@ from .oracle import compile_card_oracle, expand_ability_lines
 from .mana_payment import (mana_cost_from_symbols, plan_payment, total_pips,
                           untapped_mana_lands)
 from .oracle_types import cost_target_count
+from .resolution_overrides import resolves_with_illegal_targets
 from .static_bonuses import conditional_static_holds
 from .subject_filters import card_matches_any, subject_matches
 from .modal_triggers import modal_trigger_mode_spec, modal_trigger_modes
@@ -1909,6 +1910,11 @@ class LegalityMixin:
         for every instance of the word "target", is illegal, the object does
         not resolve at all. Returns the reason, or None to resolve normally.
 
+        **An object may print the exception on itself** ("This ability still
+        resolves if its target becomes illegal", Gilded Drake). That is read
+        first, through `engine/resolution_overrides.py`, because an exception
+        applied only where the rule would have applied anyway is not one.
+
         This is not the same as a handler finding nothing to do. Each handler
         already re-checks its own target and skips its own effect, which is
         CR 608.2b's *last* sentence ("illegal targets won't be affected by
@@ -1949,6 +1955,19 @@ class LegalityMixin:
         be a guess dressed as a rule.
         """
         card = item.card
+        # "**This ability still resolves if its target becomes illegal.**"
+        # (Gilded Drake.) CR 608.2b's exception, printed on the object itself,
+        # so it is asked before every reason this engine has for declining the
+        # question — an exception that only applies where the rule would have
+        # applied anyway is not an exception.
+        #
+        # Read through `engine/resolution_overrides.py`, the table the grammar's
+        # claim also goes through, so the sentence cannot be consumed by one and
+        # unknown to the other. It is asked of the *ability's own line* where
+        # there is one: the sentence is a rider on one ability, and a card whose
+        # second ability targets without printing it must not inherit it.
+        if resolves_with_illegal_targets(card, item.ability_text):
+            return None
         if item.ability_instruction is not None:
             # **Spells only, and the reason is a different bug.** A spell's
             # targets are a player's choice, made at announcement through

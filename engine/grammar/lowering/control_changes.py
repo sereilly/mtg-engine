@@ -38,6 +38,48 @@ def _lower_exchange_control(node: ast.ExchangeControl) -> tuple[OracleInstructio
     part of the kind, because a card exchanging (say) two enchantments would be
     this same effect with a different noun phrase.
     """
+    # "Exchange control of **this creature** and up to one target creature an
+    # opponent controls." (Gilded Drake.) The first side is not chosen at all:
+    # it is the ability's own source, which the resolution already holds. So
+    # there is **one** chosen slot, and describing it as one is the whole of
+    # what this branch is for — a two-slot description would raise a two-step
+    # picker for a card that prints one "target", and the announcement gate
+    # would then ask for a permanent the card never named.
+    #
+    # Everything downstream is the same effect: CR 701.12b's exchange, with
+    # CR 701.12a's atomicity, the cross-slot Guardian Beast check and the
+    # same-controller early exit all unchanged. Which permanent fills slot 0 is
+    # payload, exactly as ``shares_a_type`` and the printed type list are — a
+    # second card exchanging itself for something would be this same sentence
+    # with a different noun phrase on the far side.
+    if (
+        isinstance(node.first, ast.TargetSpec)
+        and _is_source(node.first)
+        and isinstance(node.second, ast.TargetSpec)
+        and _is_target(node.second)
+    ):
+        described: dict[str, object] = {
+            "first": "source",
+            # The printed noun on the source's side, re-checked at resolution
+            # for the reason the two-slot branch re-checks both of its own:
+            # CR 701.12a makes the exchange atomic, so a side that no longer
+            # answers its own noun phrase means no part of it happens.
+            "first_filter": _filter_payload(node.first.filter),
+            "shares_a_type": bool(node.shares_a_type),
+            "destroy_attached_auras": bool(node.destroy_attached_auras),
+        }
+        # The ordinary one-target description, so the picker, the announcement
+        # gate and ``engine/targeting.py`` all read this slot the way they read
+        # every other single target — including the "up to" that lets it be
+        # left empty (CR 601.2c), which on this card is what the sentence
+        # behind the exchange is about.
+        _describe_targets(described, node.second)
+        if "targets" not in described:
+            raise LoweringError(
+                "an exchange with the source on one side needs a chosen "
+                "permanent on the other", node=node,
+            )
+        return (OracleInstruction("exchange_control_of_targets", "", described),)
     if not isinstance(node.first, ast.TargetSpec) or not _is_target(node.first):
         raise LoweringError(
             "an exchange of control needs a chosen permanent on each side", node=node

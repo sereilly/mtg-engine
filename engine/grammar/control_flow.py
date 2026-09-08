@@ -536,6 +536,39 @@ def _attach_if_that_card_was_returned(
         return False
     steps.append(ast.Conditional(ast.ItHappened(), branch))
     return True
+
+
+#: The printed restatement of a producing step's verb, by the node that step
+#: parses to. Read by :func:`_names_the_previous_action`; see its docstring for
+#: why a restatement is matched rather than skipped.
+_RESTATED_ACTIONS: tuple[tuple[type, tuple[str, ...]], ...] = (
+    (ast.ExchangeControl, ("make", "an", "exchange")),
+)
+
+
+def _names_the_previous_action(stream: TokenStream, previous) -> bool:
+    """``make an exchange`` after an :class:`ast.ExchangeControl`, and nothing
+    else.
+
+    "If you don't or can't **make an exchange**, …" (Gilded Drake) is the
+    "if you can't" rider with its verb written out, which is the only form the
+    two negations can be printed in at all — "if you don't or can't," on its own
+    names no action. So the restatement is read and *matched* against the step
+    in front of it, exactly as ``_accept_restated_sacrifice`` matches its noun
+    phrase: a phrase naming a different action would fold the branch onto the
+    wrong step, and dropping the words unread would let the fold happen after
+    any producing step whatever the sentence said.
+
+    A table of (step type, printed words) rather than an equality test, because
+    the next card to print this shape will restate a different verb — and one
+    row per verb is what keeps the check from becoming "consume to the comma".
+    """
+    for node_type, words in _RESTATED_ACTIONS:
+        if isinstance(previous, node_type) and stream.accept_phrase(*words):
+            return True
+    return False
+
+
 def _attach_if_you_cant(stream: TokenStream, steps: list[ast.Statement]) -> bool:
     """Fold "If you can't, …" into the preceding mandatory action.
 
@@ -557,19 +590,44 @@ def _attach_if_you_cant(stream: TokenStream, steps: list[ast.Statement]) -> bool
     the way the counter removal does (``_PRODUCES``), which is what keeps this
     fold from being a claim the lowering cannot check.
 
-    Only these two are folded onto: they are the producing steps the pool prints
-    this rider after, and a wider fold would pair the words with steps whose
-    "can't" nobody records.
+    "…exchange control of this creature and up to one target creature an
+    opponent controls. **If you don't or can't make an exchange**, sacrifice
+    this creature." (Gilded Drake.) The third producing step, and the one whose
+    printed words say the same thing at length: CR 701.12a makes an exchange
+    atomic, so "don't" and "can't" are one outcome — nothing was exchanged —
+    and the card spells both out because the two reasons are different
+    (nobody was targeted, versus a target that stopped being a legal one).
+    The exchange records its answer the way the two above do (``_PRODUCES``),
+    which is what keeps this fold from being a claim the lowering cannot check.
+
+    Only these three are folded onto: they are the producing steps the pool
+    prints this rider after, and a wider fold would pair the words with steps
+    whose "can't" nobody records.
+
+    The verb is restated only in the long spelling, and it is **checked against
+    the step in front of it** (``_names_the_previous_action``) rather than
+    consumed as filler — the same rule ``_accept_restated_sacrifice`` follows
+    one production up. A restatement naming something else is not this
+    sentence, so the words are put back and the line refuses rather than
+    folding a branch onto an action it is not about.
     """
     last = steps[-1] if steps else None
-    if not isinstance(last, (ast.RemoveCounter, ast.Sacrifice)):
+    if not isinstance(last, (ast.RemoveCounter, ast.Sacrifice, ast.ExchangeControl)):
         return False
     mark = stream.mark()
-    if not (
-        stream.accept_word("if")
-        and stream.accept_word("you")
+    if not (stream.accept_word("if") and stream.accept_word("you")):
+        stream.reset(mark)
+        return False
+    if stream.accept_word("can't"):
+        pass
+    elif (
+        stream.accept_word("don't")
+        and stream.accept_word("or")
         and stream.accept_word("can't")
+        and _names_the_previous_action(stream, last)
     ):
+        pass
+    else:
         stream.reset(mark)
         return False
     stream.accept_punct(",")

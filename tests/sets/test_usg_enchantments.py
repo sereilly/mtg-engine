@@ -2329,3 +2329,148 @@ def test_w2g2_a_replaced_arrival_fires_planar_void_at_all(set_pool):
     assert not game.stack, "nothing arrived, so nothing triggered"
     assert not alice.graveyard
     assert [c.name for c in alice.exile] == ["Yawgmoth's Will", "Gamble"]
+
+
+# --- W3G2: Sneak Attack, a grant that outlives its sentence ---
+#
+# Three printed steps, each given a game rather than a compile check: the
+# put-from-hand, an *undurated* keyword grant to the permanent that step made
+# (CR 611.2a — it lasts as long as the object, not until end of turn), and a
+# delayed sacrifice bound to that same permanent (CR 603.7c). The last two are
+# riders on an offer, so the empty-hand direction is tested too: a rider that
+# fired on an action that did not happen is the failure
+# `handlers/control_flow._action_is_takeable` exists for.
+import pytest
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+from tests.helpers import resolve_stack
+
+
+def _g2s_sneak_attack_board(set_pool, hand=()):
+    """Seat 0 with Sneak Attack on the battlefield and *hand* in hand.
+
+    Returns ``(game, alice, bob)`` — never a bare game, so no mechanical union
+    can splice a different group's helper body onto this signature.
+    """
+    g2s_alice = PlayerState(name="G2S-A", hand=list(hand))
+    g2s_bob = PlayerState(name="G2S-B")
+    g2s_game = Game(players=[g2s_alice, g2s_bob])
+    g2s_game.enforce_mana_costs = False
+    g2s_game._put_permanent_onto_battlefield(
+        0, Permanent(card=set_pool("USG")["Sneak Attack"]), None
+    )
+    return g2s_game, g2s_alice, g2s_bob
+
+
+def test_w3g2_sneak_attack_puts_a_creature_in_with_haste(set_pool, catalog_by_name):
+    """The whole sentence, end to end: the creature arrives from hand and can
+    attack the turn it did.
+
+    The grant carries **no** printed duration, so CR 611.2a makes it last as
+    long as the object — the layer-6 write API spells that as a ``None``
+    lifetime, and a grant that quietly became "until end of turn" would be a
+    different card the moment anything looked at it on a later turn.
+    """
+    game, alice, _bob = _g2s_sneak_attack_board(
+        set_pool, hand=[catalog_by_name["Grizzly Bears"]]
+    )
+
+    assert game.activate_permanent_ability(0, "Sneak Attack").supported
+    resolve_stack(game)
+    game.auto_resolve_pending_choices()
+
+    arrived = next(p for p in game.controlled_by(0) if p.card.name == "Grizzly Bears")
+    assert arrived.has_keyword("haste")
+    assert not alice.hand
+
+
+def test_w3g2_sneak_attack_sacrifices_it_at_the_next_end_step(set_pool, catalog_by_name):
+    """CR 603.7c: the delayed ability is about the permanent *that* resolution
+    put onto the battlefield, frozen by id when the ability was created.
+
+    Nothing on the stack or on the board pointed at it — the card was in a hand
+    when the ability was activated — so the binding is the only reading that
+    can name it, and an unbound entry would answer to the first creature to be
+    around at the end step.
+    """
+    game, alice, _bob = _g2s_sneak_attack_board(
+        set_pool, hand=[catalog_by_name["Grizzly Bears"]]
+    )
+    game.activate_permanent_ability(0, "Sneak Attack")
+    resolve_stack(game)
+    game.auto_resolve_pending_choices()
+
+    game.resolve_end_step(0)
+    resolve_stack(game)
+
+    assert sorted(p.card.name for p in game.controlled_by(0)) == ["Sneak Attack"]
+    assert [c.name for c in alice.graveyard] == ["Grizzly Bears"]
+
+
+def test_w3g2_sneak_attack_binds_the_creature_it_put_in_not_a_bystander(set_pool, catalog_by_name):
+    """The binding tested against a board that can tell the two apart: another
+    creature is already out, and only the one that arrived is sacrificed."""
+    bystander = catalog_by_name["Hurloon Minotaur"]
+    game, alice, _bob = _g2s_sneak_attack_board(
+        set_pool, hand=[catalog_by_name["Grizzly Bears"]]
+    )
+    game._put_permanent_onto_battlefield(0, Permanent(card=bystander), None)
+
+    game.activate_permanent_ability(0, "Sneak Attack")
+    resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    game.resolve_end_step(0)
+    resolve_stack(game)
+
+    assert sorted(p.card.name for p in game.controlled_by(0)) == [
+        "Hurloon Minotaur", "Sneak Attack",
+    ]
+    assert [c.name for c in alice.graveyard] == ["Grizzly Bears"]
+
+
+def test_w3g2_sneak_attack_with_no_creature_in_hand_arms_nothing(set_pool, catalog_by_name):
+    """The empty direction, which is the one a wrongly-True rider would break.
+
+    Nothing was put onto the battlefield, so the record the two riders read is
+    absent: the keyword grant finds nothing to grant to and the delayed ability
+    has no permanent to be about, so **no** entry is armed. An unbound entry
+    would answer to whatever creature happened to be around at the end step —
+    the enchantment's controller sacrificing a bystander for a {R} they spent
+    on nothing.
+    """
+    game, alice, _bob = _g2s_sneak_attack_board(
+        set_pool, hand=[catalog_by_name["Mox Pearl"]]
+    )
+    game._put_permanent_onto_battlefield(
+        0, Permanent(card=catalog_by_name["Hurloon Minotaur"]), None
+    )
+
+    game.activate_permanent_ability(0, "Sneak Attack")
+    resolve_stack(game)
+    game.auto_resolve_pending_choices()
+
+    assert not game.delayed_triggers
+
+    game.resolve_end_step(0)
+    resolve_stack(game)
+
+    assert sorted(p.card.name for p in game.controlled_by(0)) == [
+        "Hurloon Minotaur", "Sneak Attack",
+    ]
+    assert not alice.graveyard
+    assert [c.name for c in alice.hand] == ["Mox Pearl"]
+
+
+def test_w3g2_sneak_attack_only_offers_creature_cards(set_pool, catalog_by_name):
+    """"a **creature** card from your hand" — the printed noun, enforced by the
+    candidate rule the prompt and its default both read."""
+    from engine.handlers.zones import put_from_hand_candidates
+
+    game, alice, _bob = _g2s_sneak_attack_board(
+        set_pool,
+        hand=[catalog_by_name["Mox Pearl"], catalog_by_name["Grizzly Bears"]],
+    )
+    payload = {"card_filter": {"type_filter": "creature"}, "whose": "you"}
+
+    assert put_from_hand_candidates(game, payload, alice) == [1]

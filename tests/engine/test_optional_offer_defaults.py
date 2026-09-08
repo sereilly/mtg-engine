@@ -514,6 +514,16 @@ def test_every_offer_with_a_rider_names_a_reviewed_action_kind(catalog):
         # the two rows this round added, with nothing at stake. Ice Cauldron
         # grants permission over an empty pile; Flash offers a cost computed
         # from a permanent nothing recorded and then sacrifices nothing.
+        #
+        # Sneak Attack (USG) is the third card behind the put-from-hand row and
+        # the first whose rider is not obviously nothing: "That creature gains
+        # haste. Sacrifice the creature at the beginning of the next end step."
+        # Both halves read the permanent that step recorded, and with an empty
+        # record the grant finds nothing to grant to and
+        # ``create_delayed_trigger`` arms **nothing** rather than binding a
+        # bystander — so the row still holds, and it holds because it was
+        # re-checked rather than because it was already written down.
+        # `tests/sets/test_usg_enchantments.py` is where that is a game.
         "exile_chosen_card_from_hand",
         "put_chosen_card_from_hand_onto_battlefield",
         # Answered by `_action_is_takeable`, so the offer is withdrawn.

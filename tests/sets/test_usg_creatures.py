@@ -1205,3 +1205,177 @@ def test_w2g2_serra_avatar_shuffles_back_from_a_mill_too(set_pool):
 
     assert [c.name for c in alice.library].count("Serra Avatar") == 1
     assert not alice.graveyard
+
+
+# --- W3G2: Gilded Drake, an exchange whose first side is the source itself ---
+#
+# Four printed parts and every one of them given a game: the exchange, the
+# "up to one" that may name nobody, the sacrifice that fires on the exchange
+# *not* having happened, and CR 608.2b's printed exception. "It reports
+# supported" is what the hollow-lines and parse-coverage instruments exist to
+# catch.
+import pytest
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+from tests.helpers import resolve_stack
+
+
+def _g2d_duel(set_pool, theirs=(), mine=()):
+    """A two-seat game with the Drake in hand and *theirs* on seat 1's board.
+
+    Returns ``(game, alice, bob)`` — never a bare game, so no mechanical union
+    can splice a different group's helper body onto this signature.
+    """
+    pool = set_pool("USG")
+    g2d_alice = PlayerState(name="G2D-A", hand=[pool["Gilded Drake"]])
+    g2d_bob = PlayerState(name="G2D-B")
+    g2d_game = Game(players=[g2d_alice, g2d_bob])
+    g2d_game.enforce_mana_costs = False
+    for card in mine:
+        g2d_game._put_permanent_onto_battlefield(0, Permanent(card=card), None)
+    for card in theirs:
+        g2d_game._put_permanent_onto_battlefield(1, Permanent(card=card), None)
+    return g2d_game, g2d_alice, g2d_bob
+
+
+def test_w3g2_gilded_drake_exchanges_itself_for_the_targeted_creature(set_pool, catalog_by_name):
+    """CR 701.12b, with the source on the first side.
+
+    The whole point of the card: what the opponent gets is the Drake, and what
+    its controller gets is the creature they named.
+    """
+    bears = catalog_by_name["Grizzly Bears"]
+    game, _alice, bob = _g2d_duel(set_pool, theirs=[bears])
+    victim = next(iter(game.controlled_by(1)))
+
+    game.cast_from_hand(
+        0, "Gilded Drake",
+        target_player_index=1, target_permanent_ids=[victim.permanent_id],
+    )
+    resolve_stack(game)
+
+    assert sorted(p.card.name for p in game.controlled_by(0)) == ["Grizzly Bears"]
+    assert sorted(p.card.name for p in game.controlled_by(1)) == ["Gilded Drake"]
+    assert not bob.graveyard
+
+
+def test_w3g2_gilded_drake_is_sacrificed_when_no_exchange_happens(set_pool):
+    """"If you don't or can't make an exchange, sacrifice this creature."
+
+    The printed "up to one" lets the trigger name nobody (CR 601.2c), and an
+    opponent with no creature is exactly that board. The condition is the
+    *absence* of the exchange record, so this is the sentence firing rather
+    than the exchange half-happening.
+    """
+    game, alice, _bob = _g2d_duel(set_pool)
+
+    game.cast_from_hand(0, "Gilded Drake")
+    resolve_stack(game)
+
+    assert not list(game.controlled_by(0))
+    assert [c.name for c in alice.graveyard] == ["Gilded Drake"]
+
+
+def test_w3g2_gilded_drake_still_resolves_when_its_target_has_left(set_pool, catalog_by_name):
+    """"This ability still resolves if its target becomes illegal."
+
+    CR 608.2b would take the object off the stack unresolved when every target
+    is illegal, and this sentence says not to. Reproduced by handing the
+    trigger the id of a creature that has left: the exchange cannot happen and
+    the *sacrifice* must, which is the whole reason the card prints the
+    sentence — a fizzle would leave its controller a 3/3 flier for {1}{U}.
+    """
+    from engine.game_types import OracleExecutionContext
+
+    bears = catalog_by_name["Grizzly Bears"]
+    game, alice, _bob = _g2d_duel(set_pool, theirs=[bears])
+    departed = next(iter(game.controlled_by(1)))
+    game.remove_from_battlefield(departed)
+
+    drake = Permanent(card=set_pool("USG")["Gilded Drake"])
+    game._put_permanent_onto_battlefield(0, drake, None)
+    program = compile_card_oracle(drake.card)
+    trigger = next(t for t in program.triggered_abilities)
+    game._execute_oracle_instruction(
+        trigger.instruction,
+        OracleExecutionContext(
+            caster=alice, target=game.players[1], card=drake.card,
+            source_permanent=drake, target_permanent_id=departed.permanent_id,
+        ),
+    )
+
+    assert not list(game.controlled_by(0)), "the ability resolved rather than fizzling"
+    assert [c.name for c in alice.graveyard] == ["Gilded Drake"]
+
+
+def test_w3g2_gilded_drake_offers_only_an_opponents_creature(set_pool):
+    """CR 601.2c's announcement, off the compiled program.
+
+    "target creature **an opponent controls**" is a seat question, and the
+    picker is what has to ask it — a spec that offered every creature would let
+    the caster name their own and exchange a permanent with themselves.
+    """
+    from engine.targeting import derive_cast_spec
+
+    card = set_pool("USG")["Gilded Drake"]
+    spec = derive_cast_spec(card, compile_card_oracle(card))
+
+    assert spec == {"kind": "creature", "opponent_only": True}
+
+
+@pytest.mark.parametrize(
+    "sentence,expected",
+    [
+        ("This ability still resolves if its target becomes illegal", True),
+        ("This spell still resolves if its target becomes illegal", True),
+        ("This ability still resolves", False),
+        ("This ability still resolves if its controller becomes illegal", False),
+    ],
+)
+def test_w3g2_the_resolution_override_is_matched_whole(sentence, expected):
+    """A substring match is how a whitelist comes to claim text it does not
+    implement, so the table anchors the sentence — the rule
+    `special_actions.special_action_line` states one module over."""
+    from engine.resolution_overrides import resolution_override_sentence
+
+    assert (resolution_override_sentence(sentence) is not None) is expected
+
+
+def test_w3g2_the_restated_rider_refuses_when_it_names_another_action(set_pool):
+    """The refusal, which is the half a positive test cannot show.
+
+    "If you don't or can't **make an exchange**" is folded onto the step in
+    front of it only when the restatement names *that* step. A sentence naming
+    something else must put its words back and let the line refuse as
+    unconsumed text, rather than folding a branch onto an action it is not
+    about — which would sacrifice the creature on the wrong condition and
+    compile clean.
+    """
+    from engine.grammar import parse_line
+    from engine.grammar.errors import GrammarError
+
+    with pytest.raises(GrammarError):
+        parse_line(
+            "exchange control of this creature and up to one target creature "
+            "an opponent controls. If you don't or can't sacrifice a Forest, "
+            "sacrifice this creature."
+        )
+
+
+def test_w3g2_an_exchange_with_neither_side_chosen_still_refuses(set_pool):
+    """The lowering admits the source on the **first** side and nothing wider.
+
+    An exchange naming no chosen permanent at all has nothing for the picker to
+    offer and nothing for the handler to re-check at resolution (CR 608.2b), so
+    it must go on refusing rather than resolving against whatever the context
+    happened to carry.
+    """
+    from engine.grammar import parse_line
+    from engine.grammar.errors import LoweringError
+    from engine.grammar.lower import lower_ability
+
+    node = parse_line("exchange control of this creature and this creature")
+    with pytest.raises(LoweringError, match="chosen permanent"):
+        lower_ability(node)
