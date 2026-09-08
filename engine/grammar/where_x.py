@@ -170,7 +170,27 @@ def parse_where_x_definition(stream: TokenStream) -> "ast.Amount | None":
         return None
     if not (stream.accept_word("x") and stream.accept_word("is")):
         raise stream.error("expected 'X is' after 'where'")
-    return _parse_where_x_alternatives(stream)
+    defined = _parse_where_x_alternatives(stream)
+    # "…where X is the number of cards in your hand **minus the number of cards
+    # in that player's hand**." (Bulwark.) A second whole definition on the far
+    # side of the word, not the printed constant ``_accept_offset`` reads — so
+    # it is here, after the alternatives, rather than inside one of them: what
+    # is subtracted is the *whole* left-hand quantity however it was spelled.
+    #
+    # Tried only when the word is not followed by a number, which is what keeps
+    # "twice the number of age counters on this enchantment minus 2" (Heart of
+    # Bogardan) where it already is: that clause reads its constant inside the
+    # multiplier arm and never reaches here with a "minus" left on the stream.
+    subtrahend = stream.mark()
+    if stream.accept_word("minus"):
+        try:
+            defined = ast.Minus(defined, _parse_where_x_alternatives(stream))
+        except GrammarError:
+            # Not a definition after all. The word goes back and the line fails
+            # full-token consumption, which is the loud direction — a "minus"
+            # consumed and dropped is a card dealing more damage than it says.
+            stream.reset(subtrahend)
+    return defined
 
 
 def _parse_where_x_alternatives(stream: TokenStream) -> "ast.Amount":

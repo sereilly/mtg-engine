@@ -542,6 +542,15 @@ def lower_record_condition(
             "kind": "dealt_damage_this_turn",
             "who": condition.recipient,
         }
+    if isinstance(condition, ast.SeatWasDealtDamageThisTurn):
+        # Whose opponents, as the referent the evaluator resolves — the seat the
+        # firing event was about, or the ability's controller. Payload for the
+        # reason the recipient above is: the two spellings are one question
+        # asked about two seats.
+        return {
+            "kind": "seat_dealt_damage_this_turn",
+            "opponents_of": condition.who,
+        }
     if isinstance(condition, ast.LifeGainedThisTurn):
         # The seat rides the payload rather than being baked into the kind, so
         # "if an opponent gained…" is the same condition with a different `who`

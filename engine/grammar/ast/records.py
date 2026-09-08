@@ -411,6 +411,25 @@ class DealtDamageThisTurn:
     subject: "TargetSpec"
     recipient: str
 @dataclass(frozen=True)
+class SeatWasDealtDamageThisTurn:
+    """"…unless **one of their opponents was dealt damage this turn**."
+    (Antagonism.)
+
+    The passive twin of :class:`DealtDamageThisTurn` above with a **seat** for
+    its subject instead of a permanent: that one asks what the ability's source
+    dealt, this asks whether anything was dealt to any of a described set of
+    players. No board read answers it — a life total is the turn's *net*, so a
+    player dealt 4 who then gained 4 has been dealt damage and has lost no life
+    — which is why ``engine/damage_ledger.py`` keeps the record and this reads
+    it.
+
+    ``who`` is the printed seat class, and it is payload for the reason every
+    narrowing in this package is: "one of **their** opponents" and "one of
+    **your** opponents" are the same sentence with a different referent, and a
+    node that welded either in would make the other a card nobody can print.
+    """
+    who: str
+@dataclass(frozen=True)
 class InABlockSinceLastUpkeep:
     """"if **it has blocked or been blocked since your last upkeep**" (Wiitigo).
 

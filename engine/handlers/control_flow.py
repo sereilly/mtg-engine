@@ -1127,6 +1127,37 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             return controller_seat in seats
         return any(seat != controller_seat for seat in seats)
 
+    if kind == "seat_dealt_damage_this_turn":
+        # "…unless **one of their opponents was dealt damage this turn**"
+        # (Antagonism). The turn's damage ledger, never a read of a life total:
+        # a life total is the turn's *net*, so a player dealt 4 who then gained
+        # 4 has been dealt damage and has lost no life, and the card asks about
+        # the damage.
+        #
+        # Whose opponents is payload. "Their" is the seat the firing event was
+        # about — frozen into the trigger's context (CR 603.10) by the end step,
+        # under the same key the damage recipient beside it reads, so the
+        # condition and the effect can never be about two different players.
+        from ..damage_ledger import damage_dealt_to_seat
+
+        if context.caster not in game.players:
+            return False
+        seat = game.players.index(context.caster)
+        if payload.get("opponents_of") == "that_player":
+            frozen = (context.trigger_context or {}).get("event_subject_player")
+            if not isinstance(frozen, int):
+                # The words name a seat nothing recorded. Answering False would
+                # let Antagonism fire on every end step; answering True would
+                # silence it for ever. Refusing to answer is neither: the
+                # condition is reported as unmet, and the lowering is what keeps
+                # the clause off an event that freezes no seat.
+                return False
+            seat = frozen
+        return any(
+            damage_dealt_to_seat(game, opponent) > 0
+            for opponent in game.opponents_of(seat)
+        )
+
     if kind == "your_turn":
         # "At the beginning of each end step, **if it's an opponent's turn**, …"
         # (Discordant Spirit.) Whose turn it is, asked as a CR 603.4

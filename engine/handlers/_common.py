@@ -135,6 +135,27 @@ def count_from_payload(
     (Alpine Houndmaster) excludes it, and `permanent_matches_filter` cannot —
     that is an identity comparison, not a property of a permanent.
     """
+    # "…where X is the number of cards in your hand **minus the number of cards
+    # in that player's hand**." (Bulwark.) A whole second count taken off this
+    # one, which is why it is a nested spec rather than another scalar key on
+    # this one: both sides are read at resolution, with their own zones and
+    # their own owners, and this function is the only thing that can read
+    # either.
+    #
+    # Taken at the top, over the *finished* left-hand value, so every branch
+    # below — a board scan, a payment record, a scratchpad read — is subtracted
+    # from without knowing it can be. Clamped at zero where every quantity in
+    # this engine is (CR 107.1b): a hand smaller than the opponent's deals no
+    # damage rather than healing them.
+    subtracted = spec.get("minus_count")
+    if isinstance(subtracted, dict):
+        whole = dict(spec)
+        whole.pop("minus_count")
+        return max(0, count_from_payload(
+            game, context, whole, instruction, source=source,
+        ) - count_from_payload(
+            game, context, subtracted, instruction, source=source,
+        ))
     # "…where X is **its** mana value" — a characteristic of one named object
     # rather than a count of a set, so it is answered here, where the context
     # knows which object the sentence named. `evaluate_count` is owner-scoped

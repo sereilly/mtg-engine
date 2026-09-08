@@ -648,6 +648,30 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
                 stream.reset(if_mark)
             else:
                 statement = ast.Conditional(condition, statement)
+        # "…deals 2 damage to that player **unless one of their opponents was
+        # dealt damage this turn**." (Antagonism.) The same trailing clause with
+        # the printed word that puts the body on the *false* branch. Read here,
+        # beside the "if" above, because it modifies the whole sentence for that
+        # branch's reason exactly — and read **after** it, so nothing changes
+        # for a sentence that printed neither word.
+        #
+        # ``tolls.accept_trailing_toll`` has already had its say on this
+        # sentence by now and returns None for anything that is not a price, so
+        # an "unless <player> pays …" never reaches here — the two readers name
+        # the two things the word can introduce, and neither claims the other's.
+        #
+        # Refusing without consuming keeps a clause `_parse_condition` cannot
+        # describe failing the line as unconsumed text, rather than being
+        # dropped off a card that would then fire unconditionally.
+        elif not stream.exhausted and stream.at_word("unless"):
+            unless_mark = stream.mark()
+            stream.advance()
+            try:
+                condition = _parse_condition(stream)
+            except GrammarError:
+                stream.reset(unless_mark)
+            else:
+                statement = ast.Conditional(condition, statement, negated=True)
         statement = _parse_statement_alternatives(stream, statement, sentence_at)
         steps.append(statement)
         if (
