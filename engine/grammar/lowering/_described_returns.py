@@ -168,6 +168,60 @@ def lower_described_return(
     signature: a described set is read off the board, so no earlier step of the
     sentence has anything to hand it.
     """
+    # "Each player discards their hand, then **returns up to three cards from
+    # their graveyard to their hand**." (Ill-Gotten Gains.) One pick per seat
+    # out of that seat's own pile, which is the same move Exhume makes one zone
+    # over — so it is the same instruction with the destination as payload
+    # rather than a second handler that would arm the same prompt again.
+    #
+    # "their graveyard … their hand" has already been read as *the performer's
+    # own* by `effects/returns._agreeing_possessive`, which is why both
+    # possessives arrive here as "you": the actor is what says whose. Both are
+    # still checked, because a sentence naming the caster's hand after each
+    # player's graveyard is a card nobody printed and reading it as this one
+    # would hand the table's graveyards to one seat.
+    if (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "up_to"
+        and not subject.targeted
+        and subject.filter.is_card
+        and subject.filter.zone == "graveyard"
+        and subject.filter.zone_owner is not None
+        and subject.filter.zone_owner.kind == "you"
+        and node.to.name == "hand"
+        and node.to.owner is not None
+        and node.to.owner.kind == "you"
+        and node.actor is not None
+        and node.actor.kind == "each_player"
+    ):
+        if (
+            node.entering_tapped
+            or node.under_control_of
+            or node.repetitions
+            or node.also_stack
+        ):
+            raise LoweringError("the per-seat graveyard pick reads no rider", node=node)
+        if _reads_no_return_restriction(subject.filter) or subject.filter.card_types:
+            # The prompt narrows by one card type and nothing else, so an
+            # adjective admitted here would be a pick wider than the sentence.
+            # The type is refused too rather than carried: the printed card is
+            # untyped ("three **cards**"), and admitting a type without a card
+            # exercising it is a claim with nothing behind it.
+            raise LoweringError(
+                "the per-seat graveyard pick reads an untyped card phrase",
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "each_player_takes_from_graveyard", "",
+                {
+                    "card_type": "any",
+                    "count": int(subject.count or 1),
+                    "up_to": True,
+                    "destination": "hand",
+                },
+            ),
+        )
     # "…you may return **an** instant or sorcery card from your graveyard to
     # your hand." (Experimental Overload.) Chosen but not targeted (CR 115.1):
     # the card is in the chooser's own graveyard, so there is nothing for

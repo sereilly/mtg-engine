@@ -445,16 +445,6 @@ def ante_self_then_clear_ante_and_draw(game: Game, instruction: OracleInstructio
     return True, "resolved"
 
 
-@effect_handler("wheel_of_fortune")
-def wheel_of_fortune(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    for player in game.players:
-        while player.hand:
-            game.put_card_into_graveyard(player, player.hand.pop(0))
-        game._draw_with_replacements(player, 7)
-    game.log.append("Wheel effect resolved for all players")
-    return True, "resolved"
-
-
 @effect_handler("timetwister")
 def timetwister(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     for player in game.players:
@@ -4191,29 +4181,35 @@ def mill_target_player(game: Game, instruction: OracleInstruction, context: Orac
     return True, "resolved"
 
 
-@effect_handler("each_player_reanimates")
-def each_player_reanimates(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+@effect_handler("each_player_takes_from_graveyard")
+def each_player_takes_from_graveyard(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Each player puts a creature card from their graveyard onto the
-    battlefield." (Exhume.)
+    battlefield." (Exhume.) "…each player … returns up to three cards from
+    their graveyard to their hand." (Ill-Gotten Gains.)
 
-    One pick per seat, out of that seat's own graveyard and onto that seat's own
-    battlefield — which is why it arms a prompt per player rather than resolving
-    a target: nothing is announced (CR 115.1), there is nothing for targeting to
+    One pick per seat, out of that seat's own graveyard and into that seat's own
+    zone — which is why it arms a prompt per player rather than resolving a
+    target: nothing is announced (CR 115.1), there is nothing for targeting to
     protect in a public zone, and the seat that chooses is not the seat that
     cast the spell. The same ``search_library`` prompt Reincarnation's graveyard
     pick already uses, with the two seats named on it, so one picker, one AI
     policy and one re-check serve every reading of "a card from a graveyard".
 
-    Offered in CR 101.4's order — the active player first — and only to a seat
-    whose graveyard actually holds one: a prompt over an empty pile is a
-    decision with one answer, and arming it would stop the game to ask it
-    (``ChoiceSpec.holds_priority``). A seat that cannot puts nothing, which is
-    CR 608.2's "as much as possible".
+    How many, whether fewer is a legal answer and where they land are payload,
+    because the two cards differ in nothing else: both empty a pile into a zone
+    one seat at a time, and a second kind would be a second copy of arming this
+    prompt.
 
-    ``up_to`` is deliberately off. The sentence is not an offer: a player who
-    has a creature card in their graveyard puts one onto the battlefield.
+    Offered in CR 101.4's order — the active player first — and only to a seat
+    whose graveyard actually holds a card the phrase names: a prompt over a pile
+    with nothing in it is a decision with one answer, and arming it would stop
+    the game to ask it (``ChoiceSpec.holds_priority``). A seat that cannot takes
+    nothing, which is CR 608.2's "as much as possible".
     """
     card_type = str(instruction.payload.get("card_type", "any"))
+    destination = str(instruction.payload.get("destination", "battlefield"))
+    count = max(1, int(instruction.payload.get("count", 1)))
+    up_to = bool(instruction.payload.get("up_to"))
     total = len(game.players)
     active = game.active_player_index or 0
     seats = sorted(
@@ -4223,27 +4219,32 @@ def each_player_reanimates(game: Game, instruction: OracleInstruction, context: 
     armed = 0
     for seat in seats:
         player = game.players[seat]
-        if not any(
-            card_has_type(card, card_type) if card_type != "any" else True
-            for card in player.graveyard
-        ):
-            game.log.append(f"{player.name} has no {card_type} card to return")
+        available = sum(
+            1 for card in player.graveyard
+            if card_type == "any" or card_has_type(card, card_type)
+        )
+        if not available:
+            game.log.append(f"{player.name} has no {card_type} card to take")
             continue
+        # The printed ceiling, capped by the pile: a counted search is driven by
+        # one entry per find, and a slot with nothing that could fill it is a
+        # find the seat can never make.
+        slots = min(count, available)
         game.arm_pending_choice(
             "search_library", seat,
             zone_seat=seat,
             battlefield_seat=seat,
-            count=1,
+            count=slots,
             card_type=card_type,
             zones=("graveyard",),
             restrictions={},
-            destination="battlefield",
-            destinations=[],
+            destination=destination,
+            destinations=[destination] * slots if slots > 1 else [],
             tapped=[],
             card_name=context.card.name if context.card is not None else "",
             enters_tapped=False,
             untap_found_if=None,
-            up_to=False,
+            up_to=up_to,
             exile_rest=False,
             reveal=False,
             record=context.results,
@@ -5411,6 +5412,32 @@ def discard_hand(game: Game, instruction: OracleInstruction, context: OracleExec
             game.log.append(f"{context.card.name}: no recorded player, no discard")
             return True, "resolved"
         caster = game.players[seat]
+    # "**Each player** discards their hand" (Ill-Gotten Gains). A set of seats
+    # rather than one, in CR 101.4's order and skipping a player who has left
+    # the game (CR 800.4a). The loop is the same body either way, which is why
+    # it is a value of ``who`` and not a second handler.
+    if instruction.payload.get("who") == "each_player":
+        total = len(game.players)
+        active = game.active_player_index or 0
+        emptied = 0
+        for seat in sorted(
+            (i for i, p in enumerate(game.players) if not p.lost),
+            key=lambda i: ((i - active) % total, i),
+        ):
+            player = game.players[seat]
+            gone = list(player.hand)
+            player.hand = []
+            for card in gone:
+                game._discard_card(player, card)
+            emptied += len(gone)
+            game.log.append(
+                f"{player.name} discarded their hand ({len(gone)} card(s))"
+            )
+        # Under the key every other discard in this file writes, so "…then
+        # draws that many cards" behind one of these reads one number however
+        # the sentence named its seats.
+        context.results["discarded_count"] = emptied
+        return True, "resolved"
     discarded = list(caster.hand)
     caster.hand = []
     for card in discarded:

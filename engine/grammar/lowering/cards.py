@@ -123,6 +123,13 @@ def _lower_discard(node: ast.Discard, event: str | None = None) -> tuple[OracleI
             return (
                 OracleInstruction("discard_hand", "", {"who": "damaged_player"}),
             )
+        # "**Each player** discards their hand" (Ill-Gotten Gains). The same
+        # instruction with a set of seats under the same ``who`` key, for the
+        # reason the row above states: a second kind would be a second copy of
+        # emptying a hand, and CR 101.4's order is the handler's to apply where
+        # the active player is known.
+        if node.player.kind == "each_player":
+            return (OracleInstruction("discard_hand", "", {"who": "each_player"}),)
         raise LoweringError(
             f"no whole-hand discard handler for {node.player.kind!r}", node=node
         )

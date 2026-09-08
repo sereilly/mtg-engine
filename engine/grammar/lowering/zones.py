@@ -488,7 +488,13 @@ def _lower_put_onto_battlefield(
                 )
             return (
                 OracleInstruction(
-                    "each_player_reanimates", "", {"card_type": "creature"},
+                    "each_player_takes_from_graveyard", "",
+                    {
+                        "card_type": "creature",
+                        "count": 1,
+                        "up_to": False,
+                        "destination": "battlefield",
+                    },
                 ),
             )
         if node.actor is not None and node.actor.kind != "you":

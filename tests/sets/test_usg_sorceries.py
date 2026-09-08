@@ -198,3 +198,49 @@ def test_w2g2_exhume_asks_nobody_over_an_empty_graveyard(set_pool):
 
     owed = [c.player_index for c in game.pending_choices if c.kind == "search_library"]
     assert owed == [0]
+
+
+def test_w2g2_ill_gotten_gains_empties_both_hands_then_offers_both_graveyards(set_pool):
+    """"Exile Ill-Gotten Gains. Each player discards their hand, then returns up
+    to three cards from their graveyard to their hand."
+
+    Three claims in printed order: the spell exiles itself rather than going to
+    a graveyard it is about to let people raid, both hands are emptied — not
+    just the caster's — and each seat is then offered its *own* pile. The
+    discarded cards are in the graveyard the offer reads, which is the whole
+    card.
+    """
+    pool = set_pool("USG")
+    game, alice, bob = _g2s_cast(set_pool, "Ill-Gotten Gains")
+    alice.hand.append(pool["Serra Zealot"])
+    bob.hand = [pool["Shivan Hellkite"], pool["Gamble"]]
+
+    game.cast_from_hand(0, "Ill-Gotten Gains")
+
+    assert not alice.hand and not bob.hand
+
+    owed = {
+        c.player_index: c.data["count"]
+        for c in game.pending_choices if c.kind == "search_library"
+    }
+    assert owed == {0: 1, 1: 2}, "the ceiling is capped by each seat's own pile"
+
+    # A one-slot offer takes the single-find answer and a counted one is
+    # answered whole; both are the ordinary search prompt's two shapes.
+    assert game.resolve_pending_choice(
+        "search_library", 0, library_index=0, zone="graveyard"
+    )
+    assert game.confirm_search_library_picks(
+        1, [{"zone": "graveyard", "index": 0}]
+    )
+    game._settle()
+
+    assert [c.name for c in alice.hand] == ["Serra Zealot"]
+    # One of the two the ceiling allowed: "up to" is an offer, and a seat that
+    # takes fewer has answered it.
+    assert len(bob.hand) == 1
+    # CR 608.2n: the spell is binned as the last part of its own resolution,
+    # which is after the prompts it armed have been answered — so it goes to
+    # exile rather than to the graveyard the offer had just read.
+    assert [c.name for c in alice.exile] == ["Ill-Gotten Gains"]
+    assert not any(c.name == "Ill-Gotten Gains" for c in alice.graveyard)
