@@ -390,6 +390,14 @@ def test_every_divided_card_in_the_pool_is_described(catalog):
         # *number of targets* is the announced X (CR 107.3a), so the count and
         # the cost are one number.
         "Cone of Flame", "Firestorm",
+        # Reviewed at Urza's Saga's promotion. Neither is a new side and both
+        # were derived rather than assigned, which is the check this inventory
+        # is: Arc Lightning answers "opponent" off the `damage` category like
+        # every burn spell above it, and Serra's Hymn answers "you" off
+        # `prevention` — the category Remedy's entry taught to answer, for the
+        # reason CR 615 gives. A shield is a gift, so the pool's second divided
+        # prevention needed no new rule at all.
+        "Arc Lightning", "Serra's Hymn",
         # Reviewed at Tempest's promotion, and it is the entry that adds
         # nothing -- which is the reviewable result rather than the absence of
         # one. Rolling Thunder's every derived field already matched four cards

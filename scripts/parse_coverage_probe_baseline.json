@@ -7,6 +7,13 @@
   ]
  },
  {
+  "card": "Academy Researchers",
+  "clause": "you may put an aura card from your hand onto the battlefield attached to this creature",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
   "card": "Acid Rain",
   "clause": "destroy all forests",
   "ignored": [
@@ -21,6 +28,13 @@
   ]
  },
  {
+  "card": "Acridian",
+  "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {1}{g}",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
   "card": "Aftershock",
   "clause": "destroy target artifact, creature, or land. aftershock deals 3 damage to you",
   "ignored": [
@@ -32,6 +46,13 @@
   "clause": "put a +1/+1 counter on each creature each opponent controls",
   "ignored": [
    "each"
+  ]
+ },
+ {
+  "card": "Albino Troll",
+  "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {1}{g}",
+  "ignored": [
+   "permanent"
   ]
  },
  {
@@ -114,6 +135,13 @@
   ]
  },
  {
+  "card": "Arc Lightning",
+  "clause": "arc lightning deals 3 damage divided as you choose among one, two, or three targets",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
   "card": "Arena of the Ancients",
   "clause": "tap all legendary creatures",
   "ignored": [
@@ -167,6 +195,13 @@
   "clause": "target creature doesn't untap during its controller's next untap step",
   "ignored": [
    "controller's"
+  ]
+ },
+ {
+  "card": "Barrin's Codex",
+  "clause": "draw x cards, where x is the number of page counters on this artifact",
+  "ignored": [
+   "artifact"
   ]
  },
  {
@@ -255,6 +290,13 @@
   ]
  },
  {
+  "card": "Brand",
+  "clause": "gain control of all permanents you own",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Brine Hag",
   "clause": "change the base power and toughness of all creatures that dealt damage to it this turn to 0/2",
   "ignored": [
@@ -266,6 +308,13 @@
   "clause": "reveal the top card of your library. if it's a creature card, put it onto the battlefield. otherwise, put it into your graveyard",
   "ignored": [
    "card,"
+  ]
+ },
+ {
+  "card": "Carrion Beetles",
+  "clause": "exile up to three target cards from a single graveyard",
+  "ignored": [
+   "target"
   ]
  },
  {
@@ -302,6 +351,13 @@
   "clause": "the next time an artifact source of your choice would deal damage to you this turn, prevent that damage",
   "ignored": [
    "source"
+  ]
+ },
+ {
+  "card": "Citanul Centaurs",
+  "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {3}{g}",
+  "ignored": [
+   "permanent"
   ]
  },
  {
@@ -348,10 +404,38 @@
   ]
  },
  {
+  "card": "Cradle Guard",
+  "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {1}{g}{g}",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Crater Hellion",
+  "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {4}{r}{r}",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Crater Hellion",
+  "clause": "it deals 4 damage to each other creature",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
   "card": "Creeping Mold",
   "clause": "destroy target artifact, enchantment, or land",
   "ignored": [
    "or"
+  ]
+ },
+ {
+  "card": "Crystal Chimes",
+  "clause": "return all enchantment cards from your graveyard to your hand",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -383,10 +467,24 @@
   ]
  },
  {
+  "card": "Diabolic Servitude",
+  "clause": "exile the creature put onto the battlefield with this enchantment",
+  "ignored": [
+   "enchantment"
+  ]
+ },
+ {
   "card": "Didgeridoo",
   "clause": "you may put a minotaur permanent card from your hand onto the battlefield",
   "ignored": [
    "permanent"
+  ]
+ },
+ {
+  "card": "Disorder",
+  "clause": "disorder deals 2 damage to each white creature and each player who controls a white creature",
+  "ignored": [
+   "each"
   ]
  },
  {
@@ -510,6 +608,13 @@
   ]
  },
  {
+  "card": "Electryte",
+  "clause": "it deals damage equal to its power to each blocking creature",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
   "card": "Elven Rite",
   "clause": "distribute two +1/+1 counters among one or two target creatures",
   "ignored": [
@@ -628,6 +733,13 @@
   "clause": "tap all creatures blocking target attacking creature. prevent all combat damage that would be dealt this turn by that creature and each creature blocking it",
   "ignored": [
    "all",
+   "each"
+  ]
+ },
+ {
+  "card": "Fire Ants",
+  "clause": "this creature deals 1 damage to each other creature without flying",
+  "ignored": [
    "each"
   ]
  },
@@ -759,11 +871,32 @@
   ]
  },
  {
+  "card": "Goblin Lackey",
+  "clause": "you may put a goblin permanent card from your hand onto the battlefield",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Goblin Patrol",
+  "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {r}",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
   "card": "Goblin Shrine",
   "clause": "it deals 1 damage to each goblin creature",
   "ignored": [
    "each",
    "creature"
+  ]
+ },
+ {
+  "card": "Goblin War Buggy",
+  "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {1}{r}",
+  "ignored": [
+   "permanent"
   ]
  },
  {
@@ -778,6 +911,13 @@
   "clause": "all creatures gain menace until end of turn",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Grafted Skullcap",
+  "clause": "draw an additional card",
+  "ignored": [
+   "additional"
   ]
  },
  {
@@ -859,10 +999,80 @@
   ]
  },
  {
+  "card": "Herald of Serra",
+  "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {2}{w}{w}",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Hibernation",
+  "clause": "return all green permanents to their owners' hands",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Hidden Ancients",
+  "clause": "if this permanent is an enchantment, it becomes a 5/5 treefolk creature",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Hidden Guerrillas",
+  "clause": "if this permanent is an enchantment, it becomes a 5/3 soldier creature with trample",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Hidden Herd",
+  "clause": "if this permanent is an enchantment, it becomes a 3/3 beast creature",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Hidden Predators",
+  "clause": "if this permanent is an enchantment, it becomes a 4/4 beast creature",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Hidden Spider",
+  "clause": "if this permanent is an enchantment, it becomes a 3/5 spider creature with reach",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Hidden Stag",
+  "clause": "if this permanent is a creature, it becomes an enchantment",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Hidden Stag",
+  "clause": "if this permanent is an enchantment, it becomes a 3/2 elk beast creature",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
   "card": "Hollow Trees",
   "clause": "if this land is tapped, put a storage counter on it",
   "ignored": [
    "land"
+  ]
+ },
+ {
+  "card": "Hush",
+  "clause": "destroy all enchantments",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -1074,10 +1284,24 @@
   ]
  },
  {
+  "card": "Lightning Dragon",
+  "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {2}{r}{r}",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
   "card": "Liliana, Death Mage",
   "clause": "target opponent loses 2 life for each creature card in their graveyard",
   "ignored": [
    "card"
+  ]
+ },
+ {
+  "card": "Lilting Refrain",
+  "clause": "counter target spell unless its controller pays {x}, where x is the number of verse counters on this enchantment",
+  "ignored": [
+   "enchantment"
   ]
  },
  {
@@ -1101,6 +1325,13 @@
   "clause": "target player reveals their hand, then you choose a card other than a basic land card from it. search that player's graveyard, hand, and library for all cards with the same name as the chosen card and exile them. then that player shuffles",
   "ignored": [
    "card"
+  ]
+ },
+ {
+  "card": "Lotus Blossom",
+  "clause": "add x mana of any one color, where x is the number of petal counters on this artifact",
+  "ignored": [
+   "artifact"
   ]
  },
  {
@@ -1165,6 +1396,20 @@
   "clause": "exile all white creatures. for each creature exiled this way, its controller draws a card",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Meltdown",
+  "clause": "destroy each artifact with mana value x or less",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
+  "card": "Midsummer Revel",
+  "clause": "create x 3/3 green beast creature tokens, where x is the number of verse counters on this enchantment",
+  "ignored": [
+   "enchantment"
   ]
  },
  {
@@ -1268,6 +1513,20 @@
   ]
  },
  {
+  "card": "No Rest for the Wicked",
+  "clause": "return to your hand all creature cards in your graveyard that were put there from the battlefield this turn",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Noetic Scales",
+  "clause": "return to its owner's hand each creature that player controls with power greater than the number of cards in their hand",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
   "card": "Oath of Druids",
   "clause": "that player chooses target player who controls more creatures than they do and is their opponent. the first player may reveal cards from the top of their library until they reveal a creature card. if the first player does, that player puts that card onto the battlefield and all other cards revealed this way into their graveyard",
   "ignored": [
@@ -1310,6 +1569,41 @@
   "clause": "return all islands to their owners' hands. each player sacrifices a plains or a white permanent of their choice for each white permanent they control",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Opal Acrolith",
+  "clause": "if this permanent is an enchantment, it becomes a 2/4 soldier creature",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Opal Archangel",
+  "clause": "if this permanent is an enchantment, it becomes a 5/5 angel creature with flying and vigilance",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Opal Caryatid",
+  "clause": "if this permanent is an enchantment, it becomes a 2/2 soldier creature",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Opal Gargoyle",
+  "clause": "if this permanent is an enchantment, it becomes a 2/2 gargoyle creature with flying",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Opal Titan",
+  "clause": "if this permanent is an enchantment, it becomes a 4/4 giant creature with protection from each of that spell's colors",
+  "ignored": [
+   "permanent"
   ]
  },
  {
@@ -1376,6 +1670,27 @@
   ]
  },
  {
+  "card": "Phyrexian Processor",
+  "clause": "create an x/x black phyrexian minion creature token, where x is the life paid as this artifact entered",
+  "ignored": [
+   "artifact"
+  ]
+ },
+ {
+  "card": "Planar Birth",
+  "clause": "return all basic land cards from all graveyards to the battlefield tapped under their owners' control",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Pouncing Jaguar",
+  "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {g}",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
   "card": "Power Leak",
   "clause": "that player may pay any amount of mana. this aura deals 2 damage to that player. prevent x of that damage, where x is the amount of mana that player paid this way",
   "ignored": [
@@ -1425,6 +1740,13 @@
   ]
  },
  {
+  "card": "Recantation",
+  "clause": "return up to x target permanents to their owners' hands, where x is the number of verse counters on this enchantment",
+  "ignored": [
+   "enchantment"
+  ]
+ },
+ {
   "card": "Reins of Power",
   "clause": "untap all creatures you control and all creatures target opponent controls. you and that opponent each gain control of all creatures the other controls until end of turn. those creatures gain haste until end of turn",
   "ignored": [
@@ -1464,6 +1786,13 @@
   "clause": "each other attacking creature gets +1/+0 until end of turn",
   "ignored": [
    "each"
+  ]
+ },
+ {
+  "card": "Reprocess",
+  "clause": "sacrifice any number of artifacts, creatures, and/or lands. draw a card for each permanent sacrificed this way",
+  "ignored": [
+   "and/or"
   ]
  },
  {
@@ -1513,6 +1842,27 @@
   "clause": "destroy all nonbasic lands",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Rumbling Crescendo",
+  "clause": "destroy up to x target lands, where x is the number of verse counters on this enchantment",
+  "ignored": [
+   "enchantment"
+  ]
+ },
+ {
+  "card": "Rune of Protection: Artifacts",
+  "clause": "the next time an artifact source of your choice would deal damage to you this turn, prevent that damage",
+  "ignored": [
+   "source"
+  ]
+ },
+ {
+  "card": "Rune of Protection: Lands",
+  "clause": "the next time a land source of your choice would deal damage to you this turn, prevent that damage",
+  "ignored": [
+   "source"
   ]
  },
  {
@@ -1615,6 +1965,20 @@
   ]
  },
  {
+  "card": "Serra's Hymn",
+  "clause": "prevent the next x damage that would be dealt this turn to any number of targets, divided as you choose, where x is the number of verse counters on this enchantment",
+  "ignored": [
+   "enchantment"
+  ]
+ },
+ {
+  "card": "Serra's Liturgy",
+  "clause": "destroy up to x target artifacts and/or enchantments, where x is the number of verse counters on this enchantment",
+  "ignored": [
+   "enchantment"
+  ]
+ },
+ {
   "card": "Serrated Arrows",
   "clause": "if there are no arrowhead counters on this artifact, sacrifice it",
   "ignored": [
@@ -1658,6 +2022,20 @@
   ]
  },
  {
+  "card": "Shivan Raptor",
+  "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {2}{r}",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Show and Tell",
+  "clause": "each player may put an artifact, creature, enchantment, or land card from their hand onto the battlefield",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
   "card": "Shyft",
   "clause": "you may have this creature become the color or colors of your choice",
   "ignored": [
@@ -1669,6 +2047,13 @@
   "clause": "simoon deals 1 damage to each creature target opponent controls",
   "ignored": [
    "each"
+  ]
+ },
+ {
+  "card": "Smokestack",
+  "clause": "that player sacrifices a permanent of their choice for each soot counter on this artifact",
+  "ignored": [
+   "artifact"
   ]
  },
  {
@@ -1773,6 +2158,13 @@
   ]
  },
  {
+  "card": "Sporogenesis",
+  "clause": "remove all fungus counters from all creatures",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Stench of Evil",
   "clause": "destroy all plains. for each land destroyed this way, stench of evil deals 1 damage to that land's controller unless they pay {2}",
   "ignored": [
@@ -1808,6 +2200,13 @@
   ]
  },
  {
+  "card": "Sunder",
+  "clause": "return all lands to their owners' hands",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Sworn Defender",
   "clause": "this creature's power becomes the toughness of target creature blocking or being blocked by this creature minus 1 until end of turn, and its toughness becomes 1 plus the power of that creature until end of turn",
   "ignored": [
@@ -1828,6 +2227,13 @@
   "clause": "you may draw two additional cards. if you do, choose two cards in your hand drawn this turn. for each of those cards, pay 4 life or put the card on top of your library",
   "ignored": [
    "additional"
+  ]
+ },
+ {
+  "card": "Symbiosis",
+  "clause": "two target creatures each get +2/+2 until end of turn",
+  "ignored": [
+   "each"
   ]
  },
  {
@@ -1895,6 +2301,13 @@
   ]
  },
  {
+  "card": "Titania's Boon",
+  "clause": "put a +1/+1 counter on each creature you control",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
   "card": "Tivadar's Crusade",
   "clause": "destroy all goblins",
   "ignored": [
@@ -1922,6 +2335,13 @@
   "ignored": [
    "enchantment",
    "card"
+  ]
+ },
+ {
+  "card": "Torch Song",
+  "clause": "it deals x damage to any target, where x is the number of verse counters on this enchantment",
+  "ignored": [
+   "enchantment"
   ]
  },
  {
@@ -2011,6 +2431,13 @@
   ]
  },
  {
+  "card": "Turnabout",
+  "clause": "choose artifact, creature, or land. tap all untapped permanents of the chosen type target player controls, or untap all tapped permanents of that type that player controls",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
   "card": "Twiddle",
   "clause": "you may tap or untap target artifact, creature, or land",
   "ignored": [
@@ -2053,6 +2480,41 @@
   ]
  },
  {
+  "card": "Veil of Birds",
+  "clause": "if this permanent is an enchantment, it becomes a 1/1 bird creature with flying",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Veiled Apparition",
+  "clause": "if this permanent is an enchantment, it becomes a 3/3 illusion creature with flying and \"at the beginning of your upkeep, sacrifice this creature unless you pay {1}{u}.\"",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Veiled Crocodile",
+  "clause": "if this permanent is an enchantment, it becomes a 4/4 crocodile creature",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Veiled Sentry",
+  "clause": "if this permanent is an enchantment, it becomes an illusion creature with power and toughness each equal to that spell's mana value",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Veiled Serpent",
+  "clause": "if this permanent is an enchantment, it becomes a 4/4 serpent creature with \"this creature can't attack unless defending player controls an island.\"",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
   "card": "Venomous Breath",
   "clause": "choose target creature. at this turn's next end of combat, destroy all creatures that blocked or were blocked by it this turn",
   "ignored": [
@@ -2074,6 +2536,13 @@
   ]
  },
  {
+  "card": "Viashino Outrider",
+  "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {2}{r}",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
   "card": "Vitalize",
   "clause": "untap all creatures you control",
   "ignored": [
@@ -2092,6 +2561,13 @@
   "clause": "if this artifact is untapped, destroy this artifact and it deals damage to you equal to the number of pin counters on it",
   "ignored": [
    "artifact"
+  ]
+ },
+ {
+  "card": "Vug Lizard",
+  "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {1}{r}{r}",
+  "ignored": [
+   "permanent"
   ]
  },
  {
@@ -2139,6 +2615,13 @@
   ]
  },
  {
+  "card": "War Dance",
+  "clause": "target creature gets +x/+x until end of turn, where x is the number of verse counters on this enchantment",
+  "ignored": [
+   "enchantment"
+  ]
+ },
+ {
   "card": "Wave of Terror",
   "clause": "destroy each creature with mana value equal to the number of age counters on this enchantment. they can't be regenerated",
   "ignored": [
@@ -2154,6 +2637,13 @@
   ]
  },
  {
+  "card": "Whirlwind",
+  "clause": "destroy all creatures with flying",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Whiteout",
   "clause": "all creatures lose flying until end of turn",
   "ignored": [
@@ -2161,8 +2651,22 @@
   ]
  },
  {
+  "card": "Wildfire",
+  "clause": "each player sacrifices four lands of their choice. wildfire deals 4 damage to each creature",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
   "card": "Willow Priestess",
   "clause": "you may put a faerie permanent card from your hand onto the battlefield",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Winding Wurm",
+  "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {4}{g}",
   "ignored": [
    "permanent"
   ]

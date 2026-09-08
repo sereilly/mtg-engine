@@ -12,9 +12,10 @@ for which sets ship): Limited Edition Alpha (290 cards), Limited Edition Beta
 Antiquities (85), Revised Edition (296), Legends (310), The Dark (119),
 Fallen Empires (102), Fourth Edition (368), Ice Age (373), Homelands (115),
 Alliances (144), Mirage (335), Visions (167), Fifth Edition (434),
-Weatherlight (167), Tempest (335), Stronghold (143), Exodus (143) and
-Core Set 2021 (285), 3,109 unique cards, all classified as supported.
-**Twenty-one sets, and their sizes are the whole spread**: 4ED and 5ED are pure
+Weatherlight (167), Tempest (335), Stronghold (143), Exodus (143),
+Urza's Saga (335) and Core Set 2021 (285), 3,427 unique cards, all classified
+as supported.
+**Twenty-two sets, and their sizes are the whole spread**: 4ED and 5ED are pure
 reprint sets, every one of their cards already in the pool, so they are the two
 sets that ship without implementing a card; Ice Age is the largest ever ingested and brought
 **346 new cards**, more than any set since Alpha; and Fallen Empires is the
@@ -50,8 +51,20 @@ it is worth keeping beside Stronghold rather than instead of it. EXO shares
 position really cannot move any card's origin — but that was *measured at the
 promotion*, in both directions, rather than inferred from the block the way
 Stronghold's was. The rehearsal costs a minute and is the difference between
-"it looks immune" and "it is". Which is why
-the per-set totals sum to far more than 3,109 — they are printings (4,873 of
+"it looks immune" and "it is".
+
+**Urza's Saga is Stronghold's lesson with three cards instead of one, and it is
+the set to point at when somebody asks whether the rehearsal is worth a
+minute.** 325 of its 335 are new and it shares 17 oracle_ids (32 card *names*)
+with the pool — so it reads as an ordinary reprint-carrying set. But of those
+17, exactly **three** — Duress, Glorious Anthem and Rewind — have their only
+other printing in **M21**, and nothing else. So USG's index decides their
+origin: at index 20 they read `usg`, and appended after M21 they read `m21`.
+Rehearsed at the wrong end before the real promotion, the prefix guard passed
+and `test_the_shipped_sets_are_in_printing_order` failed at index 20 — which is
+exactly the division of labour those two guards are documented to have, observed
+rather than assumed. Which is why
+the per-set totals sum to far more than 3,427 — they are printings (5,208 of
 them). Alliances was the
 first set to reach 100% with **zero name-keyed hooks**, across all 144, Visions
 is the second across all 167, **Weatherlight is the third** across all 167
@@ -62,11 +75,22 @@ Alpha's Power Sink arriving as a reprint — **Stronghold is the fifth**,
 143 of 143 across ten parallel groups in two waves, adding no hook and
 *retiring* one (Mana Short's, as a side effect of a noun phrase) — and
 **Exodus is the sixth**, 143 of 143 across eleven parallel groups in two
-waves plus a closing round, adding none. Reliance is
-**1.9% of supported cards**, 58 of 3,109, and it has now fallen in each of the
-last three sets while the pool grew. The hooked *count* has not moved for two
-sets running: what falls is the share, because 286 new cards arrived and not
-one of them needed a name. `scripts/support_report.py` reports on the whole manifest pool, not one set. Card files hold only the fields
+waves plus a closing round, adding none — and **Urza's Saga is the seventh and
+the first to move the count downward on purpose**: 335 cards across fifteen
+parallel groups in three waves, adding no hook and **retiring five**.
+Reliance is **1.5% of supported cards**, 53 of 3,427, down from 58 of 3,109.
+
+USG's five are worth naming because four of them were hooks that were *wrong*,
+and wrong in one way: **a hook writes the end state directly, so it is a place a
+general rule can be skipped in silence.** Timetwister never shuffled. Wheel of
+Fortune never announced its discards, so nothing watching a discard ever saw the
+largest discard in the format. Jade Statue animated into a 3/6 that was not a
+Golem. And retiring Drop of Honey's exposed a second line — "when there are no
+creatures on the battlefield, sacrifice this enchantment" — that nothing had
+ever implemented, which `parse_coverage` had been reporting as claimed **because
+the card had a hook at all, and a hooked card's every sentence is blanket-
+claimed**. That is a hole in the one instrument built to find unimplemented
+lines, and only a retirement could surface it. `scripts/support_report.py` reports on the whole manifest pool, not one set. Card files hold only the fields
 the engine and web layer read; `scripts/ingest_set.py` produces them. The
 engine is **registry-based**: card support grows by adding small isolated
 entries, never by editing core control flow.
@@ -944,11 +968,12 @@ The board UI is **canvas-rendered** (`web/static/battlefield-canvas.js`).
 ## Card verification tracker
 
 `CARD_VERIFICATION.md` / `card_verification.json` track which cards have been
-manually validated in-game (572 of the 3,109 catalog cards passing — 398
-checked in-game and 174 auto-passed — with 42 more reported `equivalent`; the
+manually validated in-game (590 of the 3,427 catalog cards passing — 398
+checked in-game and 192 auto-passed — with 45 more reported `equivalent`; the
 rest — almost all of M21, Antiquities, Legends, The Dark, Ice Age, Fallen
 Empires, Homelands, Alliances, Mirage, Visions, Weatherlight, Tempest,
-Stronghold and Exodus, all promoted before their in-game pass — have no
+Stronghold, Exodus and Urza's Saga, all promoted before their in-game pass —
+have no
 recorded result yet, which SET_PLAYBOOK.md Phase 5 owns and deliberately does
 not gate promotion on; the summary at the top of the markdown is the current
 number).

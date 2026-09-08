@@ -261,7 +261,36 @@ def test_a_shield_on_yourself_or_on_the_source_targets_nothing(by_name):
 #: "delete when that handler honours its filter", and round 98 did: the grammar
 #: lowers the line and the derivation answers from the compiled program. There
 #: is no shadow parser left on the activation side.
+#:
+#: It stayed empty at Urza's Saga's promotion, and the attempt to put Carrion
+#: Beetles here is worth recording: this list is for an ability kept alive by a
+#: **text predicate**, and the paired guard below asserts exactly that in both
+#: directions. Carrion Beetles derives no spec *and* the text fallback answers
+#: None for it too — it has no picker at all rather than a shadow one — so it
+#: belongs in `_UNANNOUNCEABLE_TARGETS` below and the guard is what said so.
 _FALLBACK_ABILITIES: dict[tuple[str, int], str] = {}
+
+#: Abilities whose printed target this engine cannot **announce** at activation
+#: (CR 601.2c) — a different claim from the one above, and the reason they are
+#: two lists rather than one.
+#:
+#: Carrion Beetles: "{2}{B}, {T}: Exile up to three target cards from a single
+#: graveyard." The ability works — driven in a game, the three cards leave the
+#: pile — and what it does not do is choose them at announcement; the handler
+#: picks at resolution. `picker_sweep.py` has reported it since the day Urza's
+#: Saga was ingested and it is ROADMAP's recorded decline, with its four
+#: missing pieces enumerated there: a picker for several cards in one
+#: graveyard, a cross-pile distinctness constraint ("from a single graveyard"
+#: is a fact about the *set*, not about each card), an arm in
+#: `legality._enumerate_targets` for a graveyard-card kind at activation, and
+#: CR 608.2b at resolution for a graveyard target.
+#:
+#: **Delete the entry when a graveyard target can be announced.** It is the only
+#: card in the shipped pool that needs it, so the entry and the gap have the
+#: same lifetime.
+_UNANNOUNCEABLE_TARGETS: dict[tuple[str, int], str] = {
+    ("Carrion Beetles", 0): "a graveyard target is chosen at resolution, not announced",
+}
 
 _REMINDER = re.compile(r"\([^)]*\)")
 # A **quoted** ability is not this ability's text. "You get an emblem with 'At
@@ -327,6 +356,7 @@ def test_every_ability_that_names_a_target_derives_its_own_prompt(supported_card
         for card, index, ability, line in _targeting_abilities(supported_cards)
         if derive_activation_spec(ability) is None
         and (card.name, index) not in _FALLBACK_ABILITIES
+        and (card.name, index) not in _UNANNOUNCEABLE_TARGETS
         and not _another_seat_chooses(ability)
     ]
 

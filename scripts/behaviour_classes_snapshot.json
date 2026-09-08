@@ -4,6 +4,8 @@
     "Balduvian Bears",
     "Barbary Apes",
     "Barktooth Warbeard",
+    "Blanchwood Treefolk",
+    "Coral Merfolk",
     "Craw Wurm",
     "Crimson Kobolds",
     "Crookshank Kobolds",
@@ -15,6 +17,7 @@
     "Fire Elemental",
     "Garruk's Gorehorn",
     "Goblin Hero",
+    "Gorilla Warrior",
     "Gray Ogre",
     "Grizzly Bears",
     "Headless Horseman",
@@ -82,7 +85,29 @@
     "Hazerider Drake",
     "Melesse Spirit",
     "Sea Sprite",
+    "Voice of Grace",
+    "Voice of Law",
     "Windreaper Falcon"
+  ],
+  [
+    "Anaconda",
+    "Bog Raiders",
+    "Bog Wraith",
+    "Lost Soul",
+    "Marsh Goblins",
+    "Moor Fiend",
+    "Pygmy Allosaurus",
+    "Warthog"
+  ],
+  [
+    "Elvish Archers",
+    "Hornet Cobra",
+    "Land Leeches",
+    "Ramirez DePietro",
+    "Sabretooth Tiger",
+    "Serra Zealot",
+    "Stone-Throwing Devils",
+    "Youthful Knight"
   ],
   [
     "Benalish Hero",
@@ -103,21 +128,20 @@
     "Wall of Wood"
   ],
   [
-    "Elvish Archers",
-    "Hornet Cobra",
-    "Land Leeches",
-    "Ramirez DePietro",
-    "Sabretooth Tiger",
-    "Stone-Throwing Devils",
-    "Youthful Knight"
+    "Argothian Swine",
+    "Crash of Rhinos",
+    "Iron Tusk Elephant",
+    "Moorish Cavalry",
+    "War Mammoth",
+    "Wild Elephant"
   ],
   [
-    "Bog Wraith",
-    "Lost Soul",
-    "Marsh Goblins",
-    "Moor Fiend",
-    "Pygmy Allosaurus",
-    "Warthog"
+    "Death Speakers",
+    "Guma",
+    "Ihsan's Shade",
+    "Karoo Meerkat",
+    "Repentant Blacksmith",
+    "Scalebane's Elite"
   ],
   [
     "Divine Transformation",
@@ -149,6 +173,13 @@
     "Zephyr Falcon"
   ],
   [
+    "Benthic Behemoth",
+    "Bull Hippo",
+    "Devouring Deep",
+    "Pale Bears",
+    "Segovian Leviathan"
+  ],
+  [
     "Black Scarab",
     "Blue Scarab",
     "Green Scarab",
@@ -170,11 +201,11 @@
     "Circle of Protection: White"
   ],
   [
-    "Crash of Rhinos",
-    "Iron Tusk Elephant",
-    "Moorish Cavalry",
-    "War Mammoth",
-    "Wild Elephant"
+    "Clergy en-Vec",
+    "Femeref Healer",
+    "Orim, Samite Healer",
+    "Samite Healer",
+    "Sanctum Custodian"
   ],
   [
     "Crystal Rod",
@@ -182,13 +213,6 @@
     "Ivory Cup",
     "Throne of Bone",
     "Wooden Sphere"
-  ],
-  [
-    "Death Speakers",
-    "Ihsan's Shade",
-    "Karoo Meerkat",
-    "Repentant Blacksmith",
-    "Scalebane's Elite"
   ],
   [
     "Dwarven Song",
@@ -219,10 +243,11 @@
     "Winter's Grasp"
   ],
   [
-    "Benthic Behemoth",
-    "Devouring Deep",
-    "Pale Bears",
-    "Segovian Leviathan"
+    "Rune of Protection: Black",
+    "Rune of Protection: Blue",
+    "Rune of Protection: Green",
+    "Rune of Protection: Red",
+    "Rune of Protection: White"
   ],
   [
     "Burn Bright",
@@ -231,22 +256,34 @@
     "Warrior's Honor"
   ],
   [
-    "Clergy en-Vec",
-    "Femeref Healer",
-    "Orim, Samite Healer",
-    "Samite Healer"
-  ],
-  [
     "Deathlace",
     "Lifelace",
     "Purelace",
     "Thoughtlace"
   ],
   [
+    "Drowned",
+    "Restless Dead",
+    "Unworthy Dead",
+    "Walking Dead"
+  ],
+  [
     "Ekundu Griffin",
     "Sabertooth Wyvern",
     "Sky Spirit",
     "Thunder Spirit"
+  ],
+  [
+    "Endoskeleton",
+    "Spirit Shield",
+    "Tawnos's Weaponry",
+    "Zelyon Sword"
+  ],
+  [
+    "Fetid Horror",
+    "Frozen Shade",
+    "Hoar Shade",
+    "Looming Shade"
   ],
   [
     "Firefly",
@@ -276,9 +313,19 @@
     "Giant Spider"
   ],
   [
+    "Canyon Wildcat",
+    "Goblin Spelunkers",
+    "Mountain Goat"
+  ],
+  [
     "Cat Warriors",
     "Heartwood Treefolk",
     "Shanodin Dryads"
+  ],
+  [
+    "Cave Tiger",
+    "Rabid Wolverines",
+    "Viashino Weaponsmith"
   ],
   [
     "Cloud Djinn",
@@ -291,6 +338,16 @@
     "Wildwood Patrol"
   ],
   [
+    "Craven Giant",
+    "Goblin Raider",
+    "Hulking Cyclops"
+  ],
+  [
+    "D'Avenant Archer",
+    "Elite Archers",
+    "Heavy Ballista"
+  ],
+  [
     "Darkness",
     "Fog",
     "Holy Day"
@@ -299,16 +356,6 @@
     "Dauthi Marauder",
     "Soltari Foot Soldier",
     "Thalakos Sentry"
-  ],
-  [
-    "Drowned",
-    "Restless Dead",
-    "Walking Dead"
-  ],
-  [
-    "Fetid Horror",
-    "Frozen Shade",
-    "Hoar Shade"
   ],
   [
     "Fyndhorn Elves",
@@ -321,14 +368,22 @@
     "Whiptongue Frog"
   ],
   [
+    "Lightning Elemental",
+    "Raging Goblin",
+    "Thundering Giant"
+  ],
+  [
     "Prodigal Sorcerer",
     "Rootwater Hunter",
     "Zuran Spellcaster"
   ],
   [
-    "Spirit Shield",
-    "Tawnos's Weaponry",
-    "Zelyon Sword"
+    "Absolute Grace",
+    "Absolute Law"
+  ],
+  [
+    "Acridian",
+    "Winding Wurm"
   ],
   [
     "Adarkar Sentinel",
@@ -367,6 +422,10 @@
     "Crusade"
   ],
   [
+    "Basri's Solidarity",
+    "Titania's Boon"
+  ],
+  [
     "Black Knight",
     "White Knight"
   ],
@@ -383,16 +442,16 @@
     "Counterspell"
   ],
   [
-    "Canyon Wildcat",
-    "Mountain Goat"
-  ],
-  [
     "Carapace",
     "Thrull Retainer"
   ],
   [
     "Cemetery Gate",
     "Wall of Light"
+  ],
+  [
+    "Charging Paladin",
+    "Hollow Dogs"
   ],
   [
     "Charging Rhino",
@@ -403,12 +462,8 @@
     "Diabolic Machine"
   ],
   [
-    "Craven Giant",
-    "Hulking Cyclops"
-  ],
-  [
-    "D'Avenant Archer",
-    "Heavy Ballista"
+    "Crazed Skirge",
+    "Volcanic Dragon"
   ],
   [
     "Dand\u00e2n",
@@ -419,8 +474,20 @@
     "Pincher Beetles"
   ],
   [
+    "Disciple of Grace",
+    "Disciple of Law"
+  ],
+  [
+    "Dromosaur",
+    "Raging Gorilla"
+  ],
+  [
     "Dwarven Nomad",
     "Dwarven Warriors"
+  ],
+  [
+    "Eastern Paladin",
+    "Western Paladin"
   ],
   [
     "El-Hajj\u00e2j",
@@ -487,6 +554,10 @@
     "Sea Monster"
   ],
   [
+    "Hawkeater Moth",
+    "Zephid"
+  ],
+  [
     "Hell Swarm",
     "Marsh Gas"
   ],
@@ -515,6 +586,10 @@
     "Nettletooth Djinn"
   ],
   [
+    "Kjeldoran Dead",
+    "Spined Fluke"
+  ],
+  [
     "Kjeldoran Phalanx",
     "Pikemen"
   ],
@@ -531,12 +606,16 @@
     "Ritual of Steel"
   ],
   [
-    "Lightning Elemental",
-    "Raging Goblin"
+    "Lim-D\u00fbl's High Guard",
+    "Sanguine Guard"
   ],
   [
     "Living Plane",
     "Nature's Revolt"
+  ],
+  [
+    "Mana Leech",
+    "Mole Worms"
   ],
   [
     "Mesa Falcon",
@@ -579,6 +658,10 @@
     "Stromgald Cabal"
   ],
   [
+    "Parasitic Bond",
+    "Wanderlust"
+  ],
+  [
     "Phantasmal Forces",
     "Spindrift Drake"
   ],
@@ -601,6 +684,14 @@
   [
     "Rock Basilisk",
     "Thicket Basilisk"
+  ],
+  [
+    "Sage Owl",
+    "Spire Owl"
+  ],
+  [
+    "Sandbar Merfolk",
+    "Sandbar Serpent"
   ],
   [
     "Shatter",

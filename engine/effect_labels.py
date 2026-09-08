@@ -247,6 +247,20 @@ ACTIVATED_LABELS: dict[str, str] = {
     # the whole zone. Same bucket for the reason the three above share one:
     # what the ability is for is that the graveyard stops holding it.
     "exile_graveyard_position": "activated_recursion",
+    # Urza's Saga's three, added at its promotion — the moment
+    # `load_catalog()` first sees them, which is what this file's own note two
+    # hundred lines down says promotion is for. All three take the same bucket
+    # for the reason the four above share one: what the ability is for is that
+    # the graveyard stops holding it, and which zone the card lands in is
+    # payload rather than a family.
+    #
+    # Carrion Beetles exiles up to three cards out of a single pile;
+    # Crystal Chimes and No Rest for the Wicked hand a whole class of card back
+    # (enchantments, and creatures that died this turn). Exile and hand are
+    # already both here — `exile_target_graveyard` and
+    # `return_creature_from_graveyard_to_hand` — so neither destination is new.
+    "exile_cards_from_graveyard": "activated_recursion",
+    "return_all_cards_from_graveyard": "activated_recursion",
     # "Until end of turn, you may cast …" (Idol of Endurance). Not any of the
     # above: nothing moves and nothing changes characteristics — the ability's
     # whole effect is a permission (CR 601.3).
@@ -916,6 +930,24 @@ TRIGGERED_LABELS: dict[str, str] = {
     # Knowledge Vault's leave-trigger empties the pile its activated ability
     # filled; `triggered_exile` is where that pile lives.
     "put_exiled_with_source": "triggered_exile",
+    # --- Urza's Saga's four, added at its promotion -------------------------
+    # The Hidden / Opal / Veiled cycle is fifteen cards printing one sentence
+    # with the nouns changed — "if this permanent is an enchantment, it becomes
+    # a 2/2 Gargoyle creature". Both of its kinds already sit in
+    # `ACTIVATED_LABELS` under `activated_pump` (the animation is a P/T and a
+    # type arriving together, and `engine/pt.py` is where it lands), so the
+    # triggered spellings take the mirror bucket. Hidden Stag prints both, one
+    # in each direction.
+    "animate_self_indefinitely": "triggered_pump",
+    "set_card_types_self": "triggered_pump",
+    # Cackling Fiend, beside `discard_hand` above: the seat set is payload, and
+    # a discard is a discard whoever the sentence names (CR 701.9a).
+    "each_opponent_discards_cards": "triggered_discard",
+    # Noetic Scales returns every creature whose power outruns its controller's
+    # hand. `triggered_return` for `return_source_card_to_owners_hand`'s reason
+    # — the destination is a hand and the act is a bounce; that it names a
+    # described set rather than one object is the payload's business.
+    "return_all_matching": "triggered_return",
     # Aisling Leprechaun turns a blocker green — the colour change whose bucket
     # `recolor_target_chosen_color` settles on the activated side.
     "recolor_target_from_text": "triggered_pump",
