@@ -1116,3 +1116,77 @@ def test_704_1_a_state_based_action_happens_automatically_and_uses_no_stack():
     assert [card.name for card in p1.graveyard] == ["Doomed Bear"]
     assert game.stack == [], "the action never went on the stack"
 
+
+# ---------------------------------------------------------------------------
+# Rule 704.4 – Unlike triggered abilities, state-based actions pay no attention
+# to what happens during the resolution of a spell or ability.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("704.4", "603.2")
+def test_704_4_a_transient_zero_toughness_inside_a_resolution_kills_nothing(catalog_by_name):
+    """The rule's own worked example, played with the two cards that print it.
+
+    Maro's toughness is the number of cards in its controller's hand, and Wheel
+    of Fortune is "Each player discards their hand, **then** draws seven cards"
+    — one resolution with a moment in the middle where the hand is empty and
+    Maro is 0/0. CR 704.5f would bin it at any check made then; CR 704.4 says no
+    check is made until the spell has finished resolving, by which point Maro is
+    7/7 again.
+
+    The other half of the rule's sentence — "*unlike* triggered abilities" — is
+    read off the same board, and it is what makes this more than "nothing
+    happened": Lorescale Coatl's "whenever you draw a card" sees every one of
+    the seven mid-resolution draws (CR 603.2) and comes back with seven
+    counters. The trigger watched the inside of the resolution; the state-based
+    action did not.
+
+    The control at the end is what stops this passing by construction: the same
+    board with the hand actually empty, checked directly, does bin Maro.
+    """
+    from engine.named_counters import counters_on
+
+    filler = catalog_by_name["Grizzly Bears"]
+    maro = Permanent(card=catalog_by_name["Maro"])
+    coatl = Permanent(card=catalog_by_name["Lorescale Coatl"])
+    p1 = PlayerState(
+        name="P1",
+        battlefield=[maro, coatl],
+        hand=[catalog_by_name["Wheel of Fortune"], filler, filler],
+        library=[filler] * 20,
+    )
+    p2 = PlayerState(name="P2", library=[filler] * 20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game._settle()
+    assert (maro.effective_power, maro.effective_toughness) == (3, 3)
+
+    assert game.cast_from_hand(0, "Wheel of Fortune").supported, game.log
+    game._settle()
+
+    # The empty hand really happened inside the resolution: the discard is
+    # logged, and the draws that refilled the hand are logged after it.
+    discarded = next(i for i, line in enumerate(game.log) if "discarded their hand" in line)
+    drew = next(i for i, line in enumerate(game.log) if "drew 7 cards" in line)
+    assert discarded < drew, game.log
+
+    assert game.is_on_battlefield(maro), game.log
+    assert (maro.effective_power, maro.effective_toughness) == (7, 7)
+    assert [card.name for card in p1.graveyard].count("Maro") == 0
+    assert counters_on(coatl, "+1/+1") == 7, "the trigger saw every draw"
+
+    # The control: an empty hand *is* lethal to Maro the moment a check happens.
+    # Built with one card in hand so construction's own check leaves it alive,
+    # then emptied by hand — otherwise the control would prove only that a 0/0
+    # cannot be put onto the battlefield.
+    lone = Permanent(card=catalog_by_name["Maro"])
+    holder = PlayerState(name="P3", battlefield=[lone], hand=[filler], library=[filler] * 5)
+    control = Game(players=[holder, PlayerState(name="P4", library=[filler] * 5)])
+    control.enforce_mana_costs = False
+    assert control.is_on_battlefield(lone)
+
+    holder.hand.clear()
+
+    assert control.check_state_based_actions() is True
+    assert not control.is_on_battlefield(lone)
+    assert [card.name for card in holder.graveyard] == ["Maro"]

@@ -51,6 +51,16 @@ SCOPE: dict[str, str | tuple[str, ...]] = {
     )},
     # 2xx — Parts of a Card (only the parts Alpha-era cards have)
     **{s: "all" for s in ("200", "201", "202", "205", "207", "208")},
+    # 206 Expansion Symbol joins for exactly one rule. 206.1/206.2 are about the
+    # icon printed on a physical card and 206.4/206.5 are tournament legality —
+    # none of which a text engine has. 206.3 is different in kind: it is the
+    # errata that turned "the expansion symbol says Arabian Nights" into "the
+    # *name* was originally printed in Arabian Nights", and this engine answers
+    # it in four places off ``CardDefinition.original_printing`` for the three
+    # cards that ask (City in a Bottle 206.3a, Golgothian Sylex 206.3b,
+    # Apocalypse Chime 206.3c). It is also why cards/manifest.json is
+    # printing-ordered — ``original_printing`` is ``printings[0]``.
+    "206": ("206.3",),
     # 3xx — Card Types present in the pool (306 Planeswalkers joined with the
     # M21 measured set's loyalty work)
     **{s: "all" for s in ("300", "301", "302", "303", "304", "305", "306", "307")},
@@ -91,6 +101,14 @@ SCOPE: dict[str, str | tuple[str, ...]] = {
         "701.23",  # Search
         "701.24",  # Shuffle
         "701.26",  # Tap and Untap
+        # NOT 701.43 Exert, though `engine/` cites it nine times. Every one of
+        # those citations reaches for exert's *wording* — 701.43a's "not untap
+        # during your next untap step", and 701.43b's rule that the effects
+        # expire together — as the keyworded form of an effect the engine has
+        # without the keyword (Deep Spawn, Frost Breath, Homarid Warrior). No
+        # card in the pool exerts, nothing chooses to exert, and admitting the
+        # rule here would score a keyword action the engine does not perform.
+        # The citation is a cross-reference, not an implementation claim.
     ),
     "702": (  # keyword abilities the engine implements (pool + evergreens)
         "702.1",   # General
@@ -124,11 +142,23 @@ SCOPE: dict[str, str | tuple[str, ...]] = {
         "702.36",  # Fear
         "702.108", # Prowess
         "702.111", # Menace
+        # NOT 702.83 Exalted, for 701.43's reason: `engine/oracle.py` cites
+        # 702.83a because exalted is *defined* with the words Reckless Ogre
+        # prints ("whenever this creature attacks alone"), and that event is
+        # CR 506.5, which is tracked and covered. The keyword itself is on no
+        # card here and grants nothing.
     ),
     "703": "all",  # Turn-Based Actions
     "704": "all",  # State-Based Actions
     "705": "all",  # Flipping a Coin (ARN: Bottle of Suleiman, ...)
     "707": "all",  # Copying Objects (LEA: Vesuvan Doppelganger, ...)
+    # Handling Illegal Actions. Both rules are live: every refusal this engine
+    # returns is CR 733.1's reversal (``_activate_onto_stack`` and
+    # ``queue_from_hand`` check each cost where it is announced and pay it
+    # further down, and ``queue_permanent_ability`` carries a ledger for the one
+    # thing announced before legality is known), and a refusal is not a pass, so
+    # CR 733.2's player keeps priority and may redo the action legally.
+    "733": "all",
     # Ending Turns and Phases. Joined the scope with round 110's
     # "End the turn." (M21: Discontinuity); 724.2's end-the-*phase*
     # half has no card in the pool and shows as untested, which is the
@@ -153,8 +183,27 @@ SCOPE: dict[str, str | tuple[str, ...]] = {
 # and show as untested, which is the honest reading.
 EXCLUDED: dict[str, str] = {
     "104.6": "restarting the game (CR 727) — Karn Liberated is not in the pool",
+    "102.4": "“your team” — the engine has no teams, as 117.6 below",
     "117.6": "shared team turns option (CR 805) — the engine has no teams",
+    "502.2": "the day/night designation (CR 731) — the engine has neither, and no "
+             "card in the pool creates one",
     "903.13": "Commander Draft — a draft variant, no in-game behaviour",
+}
+
+# Rules `engine/` or `web/` **cite** but that are deliberately not tracked,
+# each with the reason. This is not EXCLUDED's list: those rules sit inside a
+# tracked section and are subtracted from its denominator. These sit outside
+# the scope entirely, and the entry exists because a citation looks like an
+# implementation claim to `scripts/rules_gaps.py`, which would otherwise ask
+# every run whether SCOPE should be widened to cover them. It should not: a
+# comment may point at the rule that gives a behaviour its *name* without the
+# engine performing that rule.
+CROSS_REFERENCED: dict[str, str] = {
+    "701.43": "exert's wording, cited for an untap-denial effect the engine has "
+              "without the keyword (Deep Spawn, Frost Breath, Homarid Warrior); "
+              "no card in the pool exerts",
+    "702.83": "exalted is defined with the words Reckless Ogre prints; the event "
+              "is CR 506.5, which is tracked, and the keyword is on no card here",
 }
 
 SECTION_RE = re.compile(r"^(\d{3})\.\s+(.+?)\s*$")

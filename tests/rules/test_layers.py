@@ -13,6 +13,7 @@ from engine.continuous import (
     Characteristics,
     ContinuousEffect,
     LAYER_ABILITY,
+    LAYER_COLOR,
     LAYER_PT,
     add_types,
     apply_layers,
@@ -113,6 +114,72 @@ def test_modifications_are_commutative_and_all_apply():
     ]
     apply_layers(effects, state)
     assert (state[1].power, state[1].toughness) == (4, 5)
+
+
+# ---------------------------------------------------------------------------
+# 613.3 — within layers 2–6, characteristic-defining abilities first
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("613.3", "613.7")
+def test_613_3_a_cda_applies_before_an_ordinary_effect_in_layer_five():
+    """"Within layers 2–6, apply effects from characteristic-defining abilities
+    first … then all other effects in timestamp order."
+
+    613.4 gives layer 7 a *sublayer* for CDAs, so the ordering there falls out of
+    the sublayer and ``from_cda`` is inert. Layers 2–6 have no sublayers, and
+    613.3 is the only thing that puts a CDA first — which makes it the half a
+    timestamp-only sort passes in silence. So the CDA here carries the **later**
+    timestamp: sorted on timestamps alone it would overwrite the lace instead of
+    being overwritten by it, and the creature would come out the wrong colour.
+    """
+    def is_green(char):
+        char.colors = {"G"}
+
+    def is_white(char):
+        char.colors = {"W"}
+
+    state = _state(o1=_creature(2, 2, colors={"B"}))
+    cda = ContinuousEffect(
+        layer=LAYER_COLOR, modify=is_green, applies_to=scope_only(1),
+        timestamp=9, from_cda=True, label="CDA: is green",
+    )
+    lace = ContinuousEffect(
+        layer=LAYER_COLOR, modify=is_white, applies_to=scope_only(1),
+        timestamp=1, label="becomes white",
+    )
+
+    apply_layers([lace, cda], state)
+
+    assert state[1].colors == {"W"}
+
+
+@pytest.mark.cr("613.3", "613.8a")
+def test_613_3_a_cda_in_layer_six_goes_first_rather_than_winning():
+    """The same ordering one layer over, and the consequence that makes it worth
+    stating: applying a CDA *first* is not the same as letting it win. A CDA
+    granting flying is applied ahead of the whole layer, so an ordinary "loses
+    flying" with any timestamp at all still takes it away — while an unrelated
+    grant beside it lands untouched.
+
+    613.8a's third clause is what keeps dependency out of this: an effect never
+    depends on a CDA unless both are, so nothing here can be promoted past the
+    order 613.3 states.
+    """
+    def has_flying(char):
+        char.abilities.add("flying")
+
+    state = _state(o1=_creature(2, 2))
+    cda = ContinuousEffect(
+        layer=LAYER_ABILITY, modify=has_flying, applies_to=scope_only(1),
+        timestamp=9, from_cda=True, label="CDA: has flying",
+    )
+    loses = remove_abilities(scope_only(1), ["flying"], timestamp=1, label="loses flying")
+    gains = grant_abilities(scope_only(1), ["trample"], timestamp=2, label="gains trample")
+
+    apply_layers([cda, loses, gains], state)
+
+    assert state[1].abilities == {"trample"}
 
 
 # ---------------------------------------------------------------------------

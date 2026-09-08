@@ -884,3 +884,61 @@ def test_a_narrowed_death_trigger_ignores_a_creature_outside_the_phrase():
     watcher, _ = _w1g4_death("Grizzly Bears")
 
     assert (watcher.effective_power, watcher.effective_toughness) == (2, 2)
+
+
+# --- CR 603.11: a static ability and the triggered ability linked to it, in
+# one printed paragraph, static first ---
+
+
+@pytest.mark.cr("603.11")
+def test_603_11_a_static_ability_and_its_linked_trigger_are_one_paragraph(catalog_by_name):
+    """"Some objects have a static ability that's linked to one or more
+    triggered abilities. These objects combine the abilities into one paragraph,
+    with the static ability first, followed by each triggered ability that's
+    linked to it."
+
+    Rowen is the rule's own example printed on a card: "Reveal the first card
+    you draw each turn. Whenever you reveal a basic land card **this way**, draw
+    a card." One paragraph, two abilities, and the compiler has to split it -
+    every other line of a card is one ability.
+
+    The **link** is what this asserts, and it is testable because a turn can
+    hold more than one draw. The draw step reveals the first card (the static
+    half) and the trigger pays for it with a second card; that second card is
+    also a basic land, and it does *not* trigger the ability again, because it
+    was never revealed "this way". A trigger wired to "a basic land was drawn"
+    rather than to its own static ability's reveal would draw the library.
+    """
+    card = catalog_by_name["Rowen"]
+    program = compile_card_oracle(card)
+
+    # One printed paragraph, the static sentence first (CR 603.11).
+    assert len(card.oracle_text.splitlines()) == 1, card.oracle_text
+    assert card.oracle_text.startswith("Reveal the first card you draw each turn.")
+    assert [
+        instruction.value for instruction in program.instructions
+        if instruction.kind == "derived_static_rule"
+    ] == ["draw_reveals"]
+    assert len(program.triggered_abilities) == 1
+    assert program.triggered_abilities[0].source_line.startswith(
+        "Whenever you reveal a basic land card this way"
+    )
+
+    plains, filler = catalog_by_name["Plains"], catalog_by_name["Grizzly Bears"]
+    rowen = Permanent(card=card)
+    drawer = PlayerState(
+        name="P1", battlefield=[rowen], library=[plains, plains] + [filler] * 5
+    )
+    game = Game(players=[drawer, PlayerState(name="P2", library=[filler] * 5)])
+    game.enforce_mana_costs = False
+    game.turn = 2
+    game.begin_turn_bookkeeping(0)
+    game.active_player_index = 0
+
+    game.resolve_draw_step(0, defer_priority=True)
+    game._settle()
+
+    assert [c.name for c in drawer.hand] == ["Plains", "Plains"], game.log
+    # Two basic lands drawn this turn and exactly one reveal, so exactly one
+    # trigger: the linked ability watches the static half's reveal, not the draw.
+    assert [event["cards"] for event in game.reveal_events] == [["Plains"]], game.log

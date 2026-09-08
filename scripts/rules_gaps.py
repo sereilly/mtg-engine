@@ -233,10 +233,22 @@ def print_report(top: int, section_filter: str | None) -> None:
     known = {r.number for s in sections.values() for r in s.rules.values()}
     outside = [(num, cnt) for num, cnt in rule_refs.most_common()
                if num in known and num not in tracked]
-    if outside:
+    # A citation is not an implementation claim, and `CROSS_REFERENCED` is where
+    # that has already been decided for a rule. Reported separately with its
+    # reason rather than mixed into the list that asks for a wider SCOPE, so the
+    # question is answered once instead of at every run.
+    explained = [(num, cnt) for num, cnt in outside if num in rp.CROSS_REFERENCED]
+    unexplained = [(num, cnt) for num, cnt in outside
+                   if num not in rp.CROSS_REFERENCED]
+    if unexplained:
         out("== Engine cites outside tracked scope (consider widening SCOPE) ==")
-        for num, cnt in outside[:10]:
+        for num, cnt in unexplained[:10]:
             out(f"  {num:<8} {cnt:>2} refs  {sections[num.split('.', 1)[0]].title}")
+        out("")
+    if explained:
+        out("== Cited outside scope on purpose (cross-reference, not a claim) ==")
+        for num, cnt in explained:
+            out(f"  {num:<8} {cnt:>2} refs  {rp.CROSS_REFERENCED[num]}")
         out("")
     phantom = [(num, cnt) for num, cnt in rule_refs.most_common() if num not in known]
     if phantom:

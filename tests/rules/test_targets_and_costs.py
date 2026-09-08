@@ -1900,3 +1900,115 @@ def test_109_2_a_bare_type_word_means_a_permanent_on_the_battlefield(catalog_by_
 
     assert offered == ["Mox Ruby"], offered
 
+
+# ---------------------------------------------------------------------------
+# Rule 115.3 - the same target can't be chosen twice for one instance of the
+# word "target"; several instances each get their own choice.
+# ---------------------------------------------------------------------------
+
+
+def _two_blockers_declared(set_pool):
+    """A real combat with Sorrow's Path untapped and two of the *defender's*
+    creatures blocking.
+
+    The Path is on the attacking side because it names "two target blocking
+    creatures controlled by the same **opponent**", so the blockers have to sit
+    across the table from the land. Everything is tough enough to survive the
+    activation's own 2 damage, which would otherwise renumber the combat maps
+    out from under the assertions.
+
+    Returns ``(game, path, first_blocker, second_blocker)``.
+    """
+    alpha = _perm(_mk_card(name="Alpha", type_line="Creature - Test", power=2, toughness=5))
+    beta = _perm(_mk_card(name="Beta", type_line="Creature - Test", power=3, toughness=5))
+    path = Permanent(card=set_pool("DRK")["Sorrow's Path"])
+    ex = Permanent(card=_mk_card(name="Ex", type_line="Creature - Test", power=1, toughness=4))
+    why = Permanent(card=_mk_card(name="Why", type_line="Creature - Test", power=1, toughness=5))
+    p1 = PlayerState(name="P1", battlefield=[alpha, beta, path], life=20)
+    p2 = PlayerState(name="P2", battlefield=[ex, why], life=20)
+    game = _two_player_game(p1, p2)
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # beginning of combat
+    game.advance_combat_phase()  # declare attackers
+    assert game.declare_attackers(0, [0, 1])[0], game.log
+    game.advance_combat_phase()  # declare blockers
+    assert game.declare_blockers(1, {0: 0, 1: 1})[0], game.log
+    return game, path, ex, why
+
+
+@pytest.mark.cr("115.3", "602.2b")
+def test_115_3_one_instance_of_target_cannot_name_the_same_object_twice(set_pool):
+    """"The same target can't be chosen multiple times for any one instance of
+    the word 'target'."
+
+    Sorrow's Path prints one instance, pluralised - "choose **two target**
+    blocking creatures controlled by the same opponent" - so one blocker named
+    for both is not an announcement this rule allows. CR 115.3 is the half of
+    that sentence CR 601.2c does *not* cover: this is an activated ability, and
+    the refusal has to come out of the role walk the activation gate uses rather
+    than out of the cast gate.
+
+    Refused with nothing paid (CR 602.2b), which is the half that matters on
+    this card in particular: its cost taps a land that then deals 2 damage to
+    its controller and to each creature they control, so an activation accepted
+    and then quietly no-opped would cost the activator a board.
+    """
+    game, path, ex, why = _two_blockers_declared(set_pool)
+
+    refused = game.activate_permanent_ability(
+        0, "Sorrow's Path", target_permanent_ids=[ex.permanent_id, ex.permanent_id],
+    )
+
+    assert not refused.supported, game.log
+    assert not path.tapped, "the cost was never paid"
+    assert game.players[0].life == 20, "nor its 2 damage dealt"
+    assert game.combat_blockers[1] == {0: [0], 1: [1]}, "the declared blocks stand"
+
+    # The control, on a fresh combat: the same announcement naming the two
+    # *different* blockers is one the rule allows, and it goes through.
+    game, path, ex, why = _two_blockers_declared(set_pool)
+
+    allowed = game.activate_permanent_ability(
+        0, "Sorrow's Path", target_permanent_ids=[ex.permanent_id, why.permanent_id],
+    )
+
+    assert allowed.supported, game.log
+
+
+@pytest.mark.cr("115.3")
+def test_115_3_two_instances_of_target_may_each_name_the_same_creature(catalog_by_name):
+    """"If the spell or ability uses the word 'target' in multiple places, the
+    same object or player can be chosen once for each instance of the word
+    'target'."
+
+    Cuombajj Witches prints two of them: "deals 1 damage to any target **and**
+    1 damage to any target of an opponent's choice". Two instances, two
+    choosers, and one creature is a legal answer to both - so it takes 2 damage
+    from a single activation rather than 1.
+
+    The opponent's instance is a queued decision rather than a second slot in
+    the announcement, which is why seat 1 has to be interactive here: a headless
+    seat takes the kind's deterministic default and never gets the chance to
+    name the creature the activator already named.
+    """
+    witches = _nosick(Permanent(card=catalog_by_name["Cuombajj Witches"]))
+    victim = Permanent(card=catalog_by_name["Hill Giant"])  # 3/3, so it survives
+    p1 = PlayerState(name="P1", battlefield=[witches], life=20)
+    p2 = PlayerState(name="P2", battlefield=[victim], life=20)
+    game = _two_player_game(p1, p2)
+    game.interactive_seats = {1}
+
+    assert game.activate_permanent_ability(
+        0, "Cuombajj Witches", target_permanent_ids=[victim.permanent_id],
+    ).supported, game.log
+    game.resolve_stack()
+
+    assert victim.damage_marked == 1, "the activator's instance"
+    pending = game.pending_opponent_damage
+    assert pending is not None and pending["chooser_index"] == 1, game.log
+
+    assert game.confirm_opponent_damage_choice(1, 1, 0) is True, game.log
+
+    assert victim.damage_marked == 2, "once for each instance of the word"
+    assert (p1.life, p2.life) == (20, 20), "neither instance went to a face"

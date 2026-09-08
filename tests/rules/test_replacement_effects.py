@@ -3,6 +3,8 @@
 Covers:
   614   — Replacement Effects
   614.1 — Definition and categories of replacement effects
+  614.2 — Replacement effects that apply to damage from a source (CR 609.7)
+  614.3 — Such effects last until used up or their duration expires
   614.4 — Replacement effects must exist before the event
   614.5 — A replacement effect doesn't invoke itself repeatedly
   614.6 — A replaced event never happens, at each destination a permanent
@@ -13,7 +15,9 @@ Covers:
   614.9 — Damage redirection effects
   614.10 — Skip effects are replacement effects
   614.10a — Two skip effects mean two occurrences are skipped
+  614.11 — Draw replacements apply even with an empty library
   614.12 — Replacement effects that modify how a permanent enters the battlefield
+  614.15 — Self-replacement effects
 """
 
 import pytest
@@ -1232,3 +1236,317 @@ def test_110_2_a_countered_card_put_onto_the_battlefield_changes_hands():
     (stolen,) = p1.battlefield
     assert game.controller_index_of(stolen) == 0
     assert game.owner_index_of(stolen) == 1
+
+
+# ---------------------------------------------------------------------------
+# 614.2 — "Some replacement effects apply to damage from a source. See rule
+# 609.7." CR 609.7a makes "a source of your choice" one *object*, chosen when
+# the effect is created; CR 609.7b makes the match a recheck at the moment the
+# damage would be dealt, and says in its last sentence that a shield which
+# replaces no damage is not used up.
+#
+# Nova Pentacle prints exactly that sentence as a redirection (CR 614.9), which
+# is what makes it a *replacement* keyed to a source rather than a CR 615
+# prevention shield.
+# ---------------------------------------------------------------------------
+
+
+def _chosen_source_board(set_pool):
+    """Nova Pentacle and a creature of its own on seat 0; on seat 1 the source
+    the Pentacle names and a second, identically-statted one it does not."""
+    from tests.helpers import _mk_creature_card
+
+    pentacle = Permanent(card=set_pool("LEG")["Nova Pentacle"])
+    taker = Permanent(card=_mk_creature_card("Ox", 1, 4))
+    named = Permanent(card=_mk_creature_card("Named Source", 2, 2))
+    other = Permanent(card=_mk_creature_card("Other Source", 2, 2))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[pentacle, taker]),
+        PlayerState(name="P2", battlefield=[named, other]),
+    ])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.players[0].mana_pool.update({"generic": 3})
+    armed = game.activate_permanent_ability(
+        0, "Nova Pentacle", source_seat=1, source_permanent_index=0
+    )
+    assert armed.supported, armed
+    return game, game.players[0], taker, named, other
+
+
+@pytest.mark.cr("614.2", "609.7a", "609.7b")
+def test_614_2_a_replacement_keyed_to_one_source_answers_that_source_alone(set_pool):
+    """CR 609.7a: "the effect will apply to the next damage dealt by that
+    permanent" — the record is matched against the source at the moment the
+    damage would be dealt, and a different permanent is not it. CR 609.7b's
+    closing sentence is the half that follows from that: "if for any reason
+    the shield ... replaces no damage, the shield isn't used up."
+
+    Both halves matter and only the second is invisible from the board: a
+    record spent by the wrong source leaves a player who paid {3} and tapped an
+    artifact with nothing, and the turn looks identical either way.
+    """
+    from engine.damage_redirects import redirects_on
+
+    game, p1, taker, named, other = _chosen_source_board(set_pool)
+
+    game._deal_damage_to_player(p1, 3, source=other)
+
+    assert p1.life == 17, "another source's damage is not this record's event"
+    assert taker.damage_marked == 0
+    assert [r.uses for r in redirects_on(p1)] == [1], "and did not use it up"
+
+    game._deal_damage_to_player(p1, 2, source=named)
+
+    assert p1.life == 17, "the chosen source's damage never reached the player"
+    assert taker.damage_marked == 2, "all of it moved to the creature"
+
+
+# ---------------------------------------------------------------------------
+# 614.3 — "There are no special restrictions on casting a spell or activating
+# an ability that generates a replacement effect. Such effects last until
+# they're used up or their duration has expired."
+#
+# Two clauses, two ways for one armed replacement to stop existing, and they
+# are not the same event: the first is spent by the thing it replaced, the
+# second by CR 514.2's cleanup with the replacement never having applied.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("614.3")
+def test_614_3_a_replacement_stops_existing_once_it_is_used_up(set_pool):
+    """"The **next time** a source of your choice would deal damage to you this
+    turn" — one instance, and the rest of the turn is ordinary."""
+    from engine.damage_redirects import redirects_on
+
+    game, p1, taker, named, _other = _chosen_source_board(set_pool)
+
+    game._deal_damage_to_player(p1, 2, source=named)
+    assert taker.damage_marked == 2
+    assert redirects_on(p1) == [], "used up by the event it replaced"
+
+    game._deal_damage_to_player(p1, 3, source=named)
+
+    assert p1.life == 17, "the same source's next damage is not replaced"
+    assert taker.damage_marked == 2
+
+
+@pytest.mark.cr("614.3", "514.2")
+def test_614_3_an_unused_replacement_stops_at_its_printed_duration(set_pool):
+    """The other clause: "…this turn" expires at the cleanup step whether or
+    not the replacement ever found an event, so the charge does not sit on the
+    player waiting for a source that will never deal damage again.
+
+    A duration held only by "used up" would make every unspent Pentacle
+    permanent, which nothing on the board would show until the damage arrived
+    several turns later.
+    """
+    from engine.damage_redirects import redirects_on
+
+    game, p1, taker, named, _other = _chosen_source_board(set_pool)
+    assert redirects_on(p1), "armed, and nothing has spent it"
+
+    game.resolve_cleanup_step(0)
+
+    assert redirects_on(p1) == [], "the duration expired with the turn"
+
+    game._deal_damage_to_player(p1, 2, source=named)
+
+    assert p1.life == 18, "so the damage is dealt to the player"
+    assert taker.damage_marked == 0
+
+
+# ---------------------------------------------------------------------------
+# 614.11 — "Some effects replace card draws. These effects are applied even if
+# no cards could be drawn because there are no cards in the affected player's
+# library."
+#
+# The bug class this rule exists to forbid is a draw seam that asks "can this
+# player draw?" before it asks "is this draw replaced?": with an empty library
+# the answer to the first is no, and every armed draw replacement in the pool
+# silently does nothing. `Game._draw_with_replacements` therefore runs the
+# CR 614 event first and the library operation second.
+# ---------------------------------------------------------------------------
+
+
+def _empty_library_draw_table(replacement, *, graveyard=(), hand=(), seat=1):
+    """The replacement's controller on seat 0 and the drawing player on *seat*,
+    whose library is empty. Two seats so that the pool's two draw replacements
+    can both be reached: Forbidden Crypt reads "you", Chains of Mephistopheles
+    reads "a player"."""
+    players = [PlayerState(name="P1"), PlayerState(name="P2")]
+    drawer = players[seat]
+    drawer.library = []
+    drawer.graveyard = list(graveyard)
+    drawer.hand = list(hand)
+    game = Game(players=players)
+    game.enforce_mana_costs = False
+    game._put_permanent_onto_battlefield(0, Permanent(card=replacement), None)
+    game._settle()
+    return game, drawer
+
+
+@pytest.mark.cr("614.11", "614.1a")
+def test_614_11_a_draw_replacement_applies_with_an_empty_library(set_pool):
+    """"If you would draw a card, return a card from your graveyard to your
+    hand instead." (Forbidden Crypt.)
+
+    The card that comes back is proof the replacement ran: an empty library
+    makes the *unreplaced* draw a no-op, so a seam that checked the library
+    first would leave the graveyard untouched and look exactly like a player
+    who drew nothing.
+    """
+    lea = set_pool("LEA")
+    game, drawer = _empty_library_draw_table(
+        set_pool("MIR")["Forbidden Crypt"], graveyard=[lea["Black Lotus"]], seat=0
+    )
+
+    drawn = game._draw_with_replacements(drawer, 1)
+
+    assert drawn == 0, "the draw was replaced, so no card was drawn"
+    assert [c.name for c in drawer.hand] == ["Black Lotus"]
+    assert drawer.graveyard == []
+    assert drawer.lost is False
+
+
+@pytest.mark.cr("614.11", "104.3e")
+def test_614_11_the_replacement_reaches_its_own_failure_clause(set_pool):
+    """"If you can't, you lose the game" is the same replacement's other
+    branch, and CR 614.11 is what puts a player with no library *and* no
+    graveyard on it. A draw seam that short-circuited on the empty library
+    would leave that player alive on a card that says they are not."""
+    game, drawer = _empty_library_draw_table(
+        set_pool("MIR")["Forbidden Crypt"], seat=0
+    )
+
+    game._draw_with_replacements(drawer, 1)
+
+    assert drawer.lost is True
+
+
+@pytest.mark.cr("614.11")
+def test_614_11_a_draw_replaced_by_a_discard_still_discards(set_pool):
+    """"If a player would draw a card except the first one they draw in each of
+    their draw steps, that player discards a card instead." (Chains of
+    Mephistopheles.)
+
+    The other shape of the same rule, and the one whose replacement belongs to
+    a different player from the drawer: the discard is owed even though the
+    draw it replaced could not have happened.
+    """
+    lea = set_pool("LEA")
+    game, drawer = _empty_library_draw_table(
+        set_pool("LEG")["Chains of Mephistopheles"],
+        hand=[lea["Black Lotus"], lea["Mox Pearl"]],
+    )
+
+    game._draw_with_replacements(drawer, 1)
+
+    assert [c.kind for c in game.pending_choices] == ["discard"], (
+        "the replacement applied and armed its discard"
+    )
+    assert game.confirm_discard(1, [0])
+    assert [c.name for c in drawer.graveyard] == ["Black Lotus"]
+    assert [c.name for c in drawer.hand] == ["Mox Pearl"]
+
+
+@pytest.mark.cr("614.11")
+def test_614_11_an_unreplaced_draw_from_an_empty_library_is_the_control(set_pool):
+    """CR 614.11's premise, pinned: on this board no cards *could* be drawn.
+    With no replacement armed the draw moves nothing — the loss for having
+    tried is CR 104.3c's state-based action and not part of this event — so
+    every card that moved in the three tests above was moved by the
+    replacement and none of it by the draw."""
+    lea = set_pool("LEA")
+    players = [PlayerState(name="P1"), PlayerState(name="P2")]
+    players[0].graveyard = [lea["Black Lotus"]]
+    game = Game(players=players)
+
+    drawn = game._draw_with_replacements(players[0], 1)
+
+    assert drawn == 0
+    assert players[0].hand == []
+    assert [c.name for c in players[0].graveyard] == ["Black Lotus"]
+
+
+# ---------------------------------------------------------------------------
+# 614.15 — self-replacement effects: "an effect of a resolving spell or ability
+# that replace[s] part or all of that spell or ability's own effect(s)", and
+# "when applying replacement effects to an event, self-replacement effects are
+# applied before other replacement effects".
+#
+# "You gain 4 life. If a creature died this turn, you gain 8 life instead."
+# (Life Goes On.) The second sentence is not a second effect and not a rider:
+# it replaces the first, so the two never both happen.
+# ---------------------------------------------------------------------------
+
+
+def _life_goes_on_table(set_pool, *, a_creature_died, lich=False, library=0):
+    from tests.helpers import _mk_creature_card
+
+    lea = set_pool("LEA")
+    p1 = PlayerState(
+        name="P1",
+        hand=[set_pool("M21")["Life Goes On"]],
+        library=[lea["Grizzly Bears"]] * library,
+        life=20,
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    if lich:
+        game._put_permanent_onto_battlefield(0, Permanent(card=lea["Lich"]), None)
+    if a_creature_died:
+        doomed = Permanent(card=_mk_creature_card("Doomed", 2, 2))
+        game._put_permanent_onto_battlefield(0, doomed, None)
+        game._settle()
+        game._permanent_to_graveyard(p1, doomed)
+        game.remove_from_battlefield(doomed)
+        assert game.creatures_died_this_turn == 1
+    game._settle()
+    return game, p1
+
+
+@pytest.mark.cr("614.15")
+def test_614_15_a_self_replacement_replaces_its_spells_own_effect(set_pool):
+    """8, not 12. The word is "instead", so the replaced effect never happens —
+    a reading that queued the conditional sentence as a second instruction
+    would gain both amounts and be invisible to every other instrument here,
+    because the card would still resolve, still gain life and still be
+    supported."""
+    game, p1 = _life_goes_on_table(set_pool, a_creature_died=True)
+
+    game.cast_from_hand(0, "Life Goes On")
+
+    assert p1.life == 28
+
+
+@pytest.mark.cr("614.15")
+def test_614_15_the_unreplaced_effect_is_what_the_spell_prints_first(set_pool):
+    """The other side of the same sentence, which is what stops the test above
+    passing on a card that always gains 8."""
+    game, p1 = _life_goes_on_table(set_pool, a_creature_died=False)
+
+    game.cast_from_hand(0, "Life Goes On")
+
+    assert p1.life == 24
+
+
+@pytest.mark.cr("614.15", "614.1a")
+def test_614_15_a_self_replacement_is_applied_before_other_replacements(set_pool):
+    """CR 614.15's last sentence, with the only pair in this pool that can show
+    it: Lich replaces a life gain with drawing that many cards, and the number
+    it is handed is the one Life Goes On's own self-replacement already
+    settled.
+
+    Eight cards is the whole assertion. Four would mean the continuous
+    replacement read the printed effect and the self-replacement was applied
+    after it — same card, same board, same log, and a strictly worse Lich.
+    """
+    game, p1 = _life_goes_on_table(
+        set_pool, a_creature_died=True, lich=True, library=12
+    )
+
+    game.cast_from_hand(0, "Life Goes On")
+
+    assert len(p1.hand) == 8, "the gain Lich replaced was already the replaced 8"
+    assert len(p1.library) == 4

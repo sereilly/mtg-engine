@@ -374,3 +374,166 @@ def test_604_3_a_counted_cda_refuses_a_noun_phrase_it_cannot_count():
     )
     assert keyworded is not None
     assert keyworded.payload["count_spec"]["filter"]["with_keywords"] == ["flying"]
+
+
+# ---------------------------------------------------------------------------
+# CR 208.2 — the printed star, and the two abilities that fill it in
+# ---------------------------------------------------------------------------
+#
+# 604.3 above is about the *ability*; 208.2 is about the **card**, which prints
+# a star where a number goes and names exactly two ways that star is answered:
+# a characteristic-defining ability (208.2a) or an as-it-enters replacement
+# effect (208.2b). Both live in the pool, so both are driven here rather than
+# reasoned about.
+
+
+@pytest.mark.cr("208.2", "208.2a")
+def test_208_2a_a_star_printed_creature_reads_its_pt_off_its_cda(catalog_by_name):
+    """"Rather than a fixed number, some creature cards have power and/or
+    toughness that includes a star (*)" — 208.2a's form, "[power or toughness]
+    is equal to …".
+
+    The star is not a number and must never be read as one: Nightmare's printed
+    power *is* the string, and every number it ever has comes from the ability.
+    Asserted in both directions — the count arriving, and the count moving when
+    a Swamp leaves — because a star silently read as 0 and a CDA that computes
+    once look identical from a single board.
+    """
+    nightmare = Permanent(card=catalog_by_name["Nightmare"])
+    assert nightmare.card.power == "*"
+    assert nightmare.card.toughness == "*"
+
+    swamps = [Permanent(card=catalog_by_name["Swamp"]) for _ in range(3)]
+    player = PlayerState(name="P1", battlefield=[nightmare] + swamps)
+    game = Game(players=[player, PlayerState(name="P2")])
+
+    game._refresh_dynamic_creatures()
+    assert (nightmare.effective_power, nightmare.effective_toughness) == (3, 3)
+
+    game.remove_from_battlefield(swamps[0])
+    game._refresh_dynamic_creatures()
+    assert (nightmare.effective_power, nightmare.effective_toughness) == (2, 2)
+
+
+@pytest.mark.cr("208.2", "208.2a")
+def test_208_2a_a_star_printed_with_an_addend_is_the_number_plus_the_count(
+    catalog_by_name,
+):
+    """Gaea's Avenger is printed ``1+*``, and the whole thing is the
+    characteristic-defining ability's business: 208.2a's "equal to …" is
+    "equal to 1 plus the number of artifacts your opponents control", so the 1
+    comes out of the *sentence* and not out of the corner of the card.
+
+    Which is why the addend is worth its own test beside the plain star: an
+    implementation that read "1+*" as a printed 1 and added the count would
+    agree with this on every board, and disagree the moment a card printed a
+    different addend. And "your opponents control" is asserted too — a count
+    taken on the wrong battlefield is a creature that is silently the wrong
+    size every time anything looks at it.
+    """
+    avenger = Permanent(card=catalog_by_name["Gaea's Avenger"])
+    assert avenger.card.power == "1+*"
+
+    mine = PlayerState(name="P1", battlefield=[avenger])
+    theirs = PlayerState(
+        name="P2",
+        battlefield=[
+            Permanent(card=catalog_by_name["Black Lotus"]),
+            Permanent(card=catalog_by_name["Mox Jet"]),
+        ],
+    )
+    game = Game(players=[mine, theirs])
+
+    game._refresh_dynamic_creatures()
+    assert (avenger.effective_power, avenger.effective_toughness) == (3, 3)
+
+    theirs.battlefield.append(Permanent(card=catalog_by_name["Mox Ruby"]))
+    game._refresh_dynamic_creatures()
+    assert (avenger.effective_power, avenger.effective_toughness) == (4, 4)
+
+    mine.battlefield.append(Permanent(card=catalog_by_name["Mox Pearl"]))
+    game._refresh_dynamic_creatures()
+    assert avenger.effective_power == 4, "an artifact *you* control is not counted"
+
+
+@pytest.mark.cr("208.2", "208.2a", "208.2b")
+def test_208_2_every_star_printed_creature_in_the_pool_is_one_of_the_two_forms():
+    """208.2 enumerates the star's answers and there are two of them, so a card
+    printing a star and carrying neither is a creature whose power and toughness
+    nothing defines — which no other instrument reports, because the compiler
+    calls such a card supported on its other lines and the P/T refresh simply
+    never reaches it.
+
+    Asked of the whole pool rather than of a list, so a set ingested later is
+    swept by construction. Both buckets are asserted non-empty as well: with the
+    dichotomy read off the pool, a bug that emptied one of them would otherwise
+    turn this into a test of the other.
+    """
+    from engine.card_loader import load_catalog
+    from engine.enter_effects import choosable_bodies
+
+    defining, entering = [], []
+    for card in load_catalog():
+        if "*" not in f"{card.power or ''}{card.toughness or ''}":
+            continue
+        kinds = {
+            instruction.kind
+            for instruction in compile_card_oracle(card).instructions
+        }
+        if "dynamic_pt_count" in kinds:
+            defining.append(card.name)
+        elif choosable_bodies(card.oracle_text or ""):
+            entering.append(card.name)
+        else:
+            raise AssertionError(
+                f"{card.name} prints {card.power}/{card.toughness} with neither "
+                "a characteristic-defining ability (CR 208.2a) nor an "
+                "as-it-enters body choice (CR 208.2b) behind it"
+            )
+
+    assert defining, "no 208.2a card in the pool — the sweep proves nothing"
+    assert entering, "no 208.2b card in the pool — the sweep proves nothing"
+
+
+@pytest.mark.cr("208.2", "208.2b", "614.1c")
+def test_208_2b_a_creature_enters_as_one_of_the_bodies_its_card_lists(
+    catalog_by_name,
+):
+    """"The card may have a static ability that creates a replacement effect
+    that sets the creature's power and toughness to one of a number of specific
+    values as it enters the battlefield … and may also list additional
+    characteristics."
+
+    Primal Clay, the pool's only one. The star is answered on the way in rather
+    than continuously, so all three assertions are about the same permanent at
+    different moments: the printed star, the body it entered on, and the body
+    its controller replaced that with. The default is the *first* body printed
+    and not the biggest, because a headless seat has to arrive somewhere and
+    picking "best" would be the engine choosing for the player.
+
+    "Additional characteristics" is the half that is easy to drop and quiet when
+    dropped: the third body is a 1/6 **Wall** with defender, and a Clay that took
+    the numbers without the type would sit there answering "no" to every card in
+    the pool that asks about Walls.
+    """
+    player = PlayerState(name="P1", hand=[catalog_by_name["Primal Clay"]])
+    game = Game(players=[player, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+
+    game.queue_from_hand(0, "Primal Clay")
+    game.resolve_top_of_stack()
+    clay = player.battlefield[-1]
+
+    assert clay.card.power == "*" and clay.card.toughness == "*"
+    assert (clay.effective_power, clay.effective_toughness) == (3, 3)
+    assert game.pending_choice_of("body_choice", 0) is not None, (
+        "two or more listed values is a choice, so it has to be asked"
+    )
+
+    assert game.confirm_enter_body_choice(0, 2)
+    game._settle()
+
+    assert (clay.effective_power, clay.effective_toughness) == (1, 6)
+    assert clay.has_keyword("defender")
+    assert clay.has_type("wall")

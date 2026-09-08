@@ -873,3 +873,92 @@ def test_208_3_a_noncreature_permanent_has_no_toughness_to_die_of(catalog_by_nam
 
     assert mox in p1.battlefield, "no toughness, so nothing for CR 704.5f to read"
 
+
+
+# ---------------------------------------------------------------------------
+# Rule 109.4 - only objects on the stack or on the battlefield have a
+# controller. 109.4b: a triggered ability waiting to be put on the stack is
+# controlled by whoever controlled its source at the time it triggered.
+# ---------------------------------------------------------------------------
+
+
+def _stolen_tarpan(catalog_by_name):
+    """Seat 1's Tarpan ("When this creature dies, you gain 1 life") on the
+    battlefield under seat 0's control.
+
+    A stolen permanent is what tells the two questions apart: owner and
+    controller are different seats, so an answer that quietly reads one for the
+    other is visible. The steal is a CR 613 layer 2 contribution
+    (``engine/control.change_control``), not a move between the lists - the
+    lists are the projection of it.
+
+    Returns ``(game, thief, owner, tarpan)``.
+    """
+    from engine.control import change_control
+
+    game, thief, owner = _duel()
+    tarpan = Permanent(card=catalog_by_name["Tarpan"])
+    owner.battlefield.append(tarpan)
+    game._sync_control()
+    change_control(tarpan, 0, source="test steal")
+    game._sync_control()
+    return game, thief, owner, tarpan
+
+
+@pytest.mark.cr("109.4", "108.3")
+def test_109_4_a_permanent_that_has_left_the_battlefield_has_no_controller(catalog_by_name):
+    """"Only objects on the stack or on the battlefield have a controller.
+    Objects that are neither on the stack nor on the battlefield aren't
+    controlled by any player."
+
+    ``Game.controller_index_of`` is where the engine answers it, and the answer
+    for a card that has left has to be **None**. The tempting wrong answer is
+    right there on the object: ``base_controller_index`` is kept precisely so an
+    *ended* control effect can revert (CR 613 layer 2), and a fall back to it
+    here would report a controller for a card sitting in a graveyard.
+
+    Ownership is the characteristic that does survive the zone change
+    (CR 108.3), and the two are asserted together: the stolen card goes to its
+    **owner's** graveyard, so "who controls it" is None while "whose card is it"
+    is still answerable.
+    """
+    game, thief, owner, tarpan = _stolen_tarpan(catalog_by_name)
+
+    assert game.controller_index_of(tarpan) == 0, "on the battlefield it has one"
+    assert game.owner_index_of(tarpan) == 1
+
+    tarpan.damage_marked = 99
+    game._settle()
+
+    assert not game.is_on_battlefield(tarpan)
+    assert game.controller_index_of(tarpan) is None
+    assert not game.controls(0, tarpan) and not game.controls(1, tarpan)
+    assert [card.name for card in owner.graveyard] == ["Tarpan"]
+    assert thief.graveyard == [], "CR 108.3: the owner's card, not the thief's"
+
+
+@pytest.mark.cr("109.4b", "109.5")
+def test_109_4b_a_trigger_belongs_to_who_controlled_its_source_when_it_triggered(catalog_by_name):
+    """"A triggered ability that has triggered but is waiting to be placed on
+    the stack is controlled by the player who controlled its source at the time
+    it triggered."
+
+    Tarpan's "when this creature dies, **you** gain 1 life" is the observable
+    end of it. The thief controlled the creature at the moment it died, so the
+    thief controls the ability and CR 109.5's "you" is the thief - even though
+    by the time the ability is on the stack its source is in the *owner's*
+    graveyard and, per CR 109.4 above, controlled by nobody at all.
+
+    The life total is the assertion rather than any stack field, because that is
+    the difference a wrong answer makes: reading the controller off the source
+    when the ability resolves would find no controller, and reading the owner
+    would gain the life for the wrong seat.
+    """
+    game, thief, owner, tarpan = _stolen_tarpan(catalog_by_name)
+    assert (thief.life, owner.life) == (20, 20)
+
+    tarpan.damage_marked = 99
+    game._settle()
+
+    assert thief.life == 21, game.log
+    assert owner.life == 20, "the owner's creature, the thief's trigger"

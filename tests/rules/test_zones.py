@@ -939,6 +939,110 @@ def test_113_6b_an_ability_saying_where_it_functions_functions_only_there():
 
 
 # ---------------------------------------------------------------------------
+# CR 404.3 — two or more cards reaching one graveyard at the same time
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("404.3", "404.1")
+def test_404_3_cards_arriving_at_once_land_as_one_block_on_top():
+    """"If an effect or rule puts two or more cards into the same graveyard at
+    the same time, the owner of those cards may arrange them in any order."
+
+    The rule hands the owner exactly **one** freedom, and everything it does not
+    hand over is what a test can hold the engine to: the block still goes on top
+    of whatever the pile already held (CR 404.1's "on top"), it is still one pile
+    afterwards, and it still holds every card that arrived. The arrangement
+    *inside* the block is the part any order is legal for, so it is the part not
+    asserted here.
+
+    Driven through a real "Destroy all creatures" rather than by appending,
+    because a mass removal is how three cards reach one graveyard at once and
+    the block is what that path has to produce. Read back through
+    ``engine/graveyard_order.py`` — the reader Nether Shadow's "with three or
+    more creature cards above it" asks — because "three cards arrived together"
+    is only observable as "three cards are above the one that was there".
+    """
+    from engine.card_loader import load_catalog
+    from engine.graveyard_order import cards_above, satisfies_above
+
+    catalog = {card.name: card for card in load_catalog()}
+    old = _mk_creature("Old Bones")
+    p1 = PlayerState(name="P1", hand=[catalog["Wrath of God"]])
+    p2 = PlayerState(
+        name="P2",
+        graveyard=[old],
+        battlefield=[
+            Permanent(card=_mk_creature("Alpha")),
+            Permanent(card=_mk_creature("Beta")),
+            Permanent(card=_mk_creature("Gamma")),
+        ],
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    assert game.cast_from_hand(0, "Wrath of God").supported
+    game.resolve_stack()
+    game.check_state_based_actions()
+
+    # Every card arrived, once, and the pile they joined is untouched beneath.
+    assert len(p2.graveyard) == 4
+    assert p2.graveyard[0] is old
+    assert sorted(card.name for card in cards_above(p2.graveyard, 0)) == [
+        "Alpha", "Beta", "Gamma",
+    ]
+    # …so the card at the bottom has three creature cards above it now, whatever
+    # order its owner arranged the three arrivals in.
+    assert satisfies_above(
+        p2.graveyard, 0,
+        {"card_type": "creature", "count": 3, "op": "ge", "directly": False},
+    )
+
+
+@pytest.mark.cr("404.3", "400.3")
+def test_404_3_the_arrangement_is_asked_once_per_graveyard():
+    """"…into **the same** graveyard…"
+
+    One destruction, two owners, two questions. CR 400.3 sends every card to its
+    own owner's graveyard, so a rule that puts six cards away at once never
+    produces one arrangement of six: it produces one block per pile, each above
+    only what that pile already held. A merged write would leave both counts
+    right and every card that reads the order wrong.
+    """
+    from engine.card_loader import load_catalog
+
+    catalog = {card.name: card for card in load_catalog()}
+    p1_bones, p2_bones = _mk_creature("P1 Bones"), _mk_creature("P2 Bones")
+    p1 = PlayerState(
+        name="P1",
+        hand=[catalog["Wrath of God"]],
+        graveyard=[p1_bones],
+        battlefield=[
+            Permanent(card=_mk_creature("Ay")),
+            Permanent(card=_mk_creature("Bee")),
+        ],
+    )
+    p2 = PlayerState(
+        name="P2",
+        graveyard=[p2_bones],
+        battlefield=[
+            Permanent(card=_mk_creature("Cee")),
+            Permanent(card=_mk_creature("Dee")),
+        ],
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    assert game.cast_from_hand(0, "Wrath of God").supported
+    game.resolve_stack()
+    game.check_state_based_actions()
+
+    assert p1.graveyard[0] is p1_bones
+    assert p2.graveyard[0] is p2_bones
+    assert {card.name for card in p1.graveyard[1:]} == {"Ay", "Bee", "Wrath of God"}
+    assert {card.name for card in p2.graveyard[1:]} == {"Cee", "Dee"}
+
+
+# ---------------------------------------------------------------------------
 # W1G4 (VIS): CR 402.2 with no maximum, for everybody
 # ---------------------------------------------------------------------------
 

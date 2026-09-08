@@ -166,6 +166,101 @@ def test_111_7_a_real_card_is_untouched_by_the_sweep():
 
 
 # ---------------------------------------------------------------------------
+# 111.9 — a legendary token, and the 704.5j above reading it
+#
+# The rule the legend rule needs answered about a token: 704.5j reads a
+# permanent's type line, and a token has no printed one — it has whatever the
+# sentence that created it said. So a supertype dropped while rendering that
+# sentence costs nothing visible until a second copy is on the battlefield.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.cr("111.9", "111.4")
+def test_111_9_create_name_a_dot_dot_dot_builds_the_token_the_sentence_lists():
+    """"Some effects instruct a player to create a legendary token. These may be
+    written "create [name], a . . ." and list characteristics for the token. This
+    is the same as an instruction to create a token with the listed
+    characteristics that has the given name."
+
+    Stangg is the pool's one printing of that form — "create Stangg Twin, a
+    legendary 3/4 red and green Human Warrior creature token" — and *every*
+    listed characteristic is asserted, because the sentence is the token's only
+    source for any of them. A supertype dropped on the way through is the one
+    that costs nothing visible until the test below.
+    """
+    from engine.card_loader import load_catalog
+
+    catalog = {card.name: card for card in load_catalog()}
+    p1 = PlayerState(name="P1", hand=[catalog["Stangg"]])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+
+    assert game.cast_from_hand(0, "Stangg").supported
+    game.resolve_stack()
+
+    twin = next(p for p in game.controlled_by(0) if p.card.name == "Stangg Twin")
+    assert twin.metadata.get("is_token") is True
+    assert twin.card.is_legendary
+    assert (twin.effective_power, twin.effective_toughness) == (3, 4)
+    assert set(twin.card.colors) == {"R", "G"}
+    assert twin.has_type("creature")
+    assert twin.has_type("human")
+    assert twin.has_type("warrior")
+
+
+@pytest.mark.cr("111.9", "704.5j", "111.7")
+def test_111_9_the_legendary_word_a_created_token_gets_is_the_one_the_legend_rule_reads():
+    """What the supertype above is *for*. 704.5j is asked of a permanent's type
+    line, and the token has one only because CR 111.9's sentence was rendered
+    into it — so a second Stangg Twin under the same controller is culled
+    exactly as a second legendary card would be, and (CR 111.7) the loser
+    ceases to exist rather than reaching a graveyard.
+
+    The second half is the control, and it is not decoration: a token pair built
+    the same way *without* the word survives, so this cannot pass on a legend
+    rule that happened to fire for some other reason.
+    """
+    from engine.card_loader import load_catalog
+    from engine.tokens import make_token_card
+
+    catalog = {card.name: card for card in load_catalog()}
+    p1 = PlayerState(name="P1", hand=[catalog["Stangg"]])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.cast_from_hand(0, "Stangg")
+    game.resolve_stack()
+    twin = next(p for p in game.controlled_by(0) if p.card.name == "Stangg Twin")
+
+    p1.battlefield.append(Permanent(card=twin.card, metadata={"is_token": True}))
+    game._sync_control()
+    game.check_state_based_actions()
+
+    twins = [p for p in game.controlled_by(0) if p.card.name == "Stangg Twin"]
+    assert len(twins) == 1, "the legend rule culled the duplicate"
+    assert all(card.name != "Stangg Twin" for card in p1.graveyard), (
+        "a culled token ceases to exist rather than reaching a graveyard (CR 111.7)"
+    )
+
+    # The control: the same pair with the supertype left off is legal.
+    plain = make_token_card(
+        name="Stangg Twin", power=3, toughness=4,
+        type_line="Creature - Human Warrior",
+    )
+    ordinary = PlayerState(
+        name="P3",
+        battlefield=[
+            Permanent(card=plain, metadata={"is_token": True}),
+            Permanent(card=plain, metadata={"is_token": True}),
+        ],
+    )
+    control_game = Game(players=[ordinary, PlayerState(name="P4")])
+    control_game.check_state_based_actions()
+
+    assert [p.card.name for p in control_game.controlled_by(0)] == [
+        "Stangg Twin", "Stangg Twin",
+    ]
+
+
+# ---------------------------------------------------------------------------
 # 111.10 — predefined tokens
 # ---------------------------------------------------------------------------
 
