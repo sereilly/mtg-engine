@@ -71,6 +71,7 @@ from .lowering import (
     _fused_two_target_pump,
     _fused_cost_repeated_destroys,
     _lower_fight,
+    _lower_delayed_destroy,
     _lower_destroy,
     _lower_draw,
     _lower_exile,
@@ -302,6 +303,15 @@ def lower_statement(
         # other, nested or not. Gated on `whole_effect` it refused Infinite
         # Authority, whose "destroy the other creature at end of combat" is the
         # first of a trigger's *two* sentences and so lowers under a `Sequence`.
+        # The `delay` branch is here rather than inside `_lower_destroy`
+        # because it is a dispatch question — "which family lowers this
+        # sentence?" — and the two families answering it must not import each
+        # other. It moved up at Urza's Saga's Phase 0, when the delayed forms
+        # went to `lowering/delayed.py`; see that module's own note.
+        if statement.delay:
+            return _lower_delayed_destroy(
+                statement, event, event_subject, produced
+            )
         return _lower_destroy(statement, event, event_subject, produced)
     # "…becomes blocked by a creature, put **that creature** on top of its
     # owner's library." (Elven Warhounds.) In the chain rather than the

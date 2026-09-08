@@ -238,7 +238,6 @@ from .destruction import (
     _DESTROY_ALL_KINDS,
     _BASIC_LAND_TYPES,
     _lower_destroy,
-    _lower_delayed_destroy,
 )
 from .control_changes import (
     _lower_bid_life_for_control,
@@ -348,6 +347,7 @@ from .stack import (
 from .delayed import (
     _lower_choose_target,
     _lower_create_delayed_trigger,
+    _lower_delayed_destroy,
     _lower_waive_shroud,
 )
 from .prohibitions import _lower_cant_be
