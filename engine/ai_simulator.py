@@ -520,6 +520,19 @@ def run_ai_simulation(
                 active_player = game.players[active]
                 opponent = game.players[1 - active]
 
+                # `Game.start_turn` is bookkeeping + untap + upkeep + draw, and
+                # this loop open-coded the last three. The omission froze every
+                # per-seat-turn record in every AI game: `seat_turn_counts` is
+                # written in exactly one place — inside the function skipped
+                # here — so Wiitigo's "since your last upkeep" read False
+                # forever and never grew a counter, Giant Turtle, Goblin Rock
+                # Sled and Tangle Kelp never saw "attacked during your last
+                # turn", and Wall of Dust and Oracle en-Vec never saw "during
+                # its controller's next turn". Every per-turn reset the function
+                # does — lands played, deaths this turn, expiring permissions —
+                # was missing here too. Found by W1G2 while building echo, which
+                # is keyed to that ordinal and is the reason it surfaced at all.
+                game.begin_turn_bookkeeping(active)
                 game.resolve_untap_step(active)
                 game.resolve_upkeep(active)
                 game.resolve_draw_step(active)

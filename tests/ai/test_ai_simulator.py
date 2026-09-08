@@ -251,3 +251,55 @@ def test_ancestral_recall_never_self_causes_library_loss():
             # Reset once we move past the immediate follow-up lines
             if stripped.startswith("G") or stripped.startswith("RESULT") or stripped == "":
                 prev_was_ancestral_cast = False
+
+
+# --- the simulator's turn loop is the whole of `start_turn`, not three of its four steps ---
+
+
+def test_the_simulator_advances_the_per_seat_turn_ordinal():
+    """``begin_turn_bookkeeping`` runs in an AI game (found at USG's wave 1).
+
+    ``Game.start_turn`` is bookkeeping + untap + upkeep + draw. The simulator's
+    loop open-coded the last three and omitted the first, so
+    ``Game.seat_turn_counts`` — written in exactly one place, inside that
+    function — stayed empty for the whole of every AI game and every
+    ``scripts/simulate_ai_games.py`` run.
+
+    Nothing crashed, which is why it survived: every reader of the ordinal
+    simply answered "0". **Wiitigo** ("blocked or been blocked since your last
+    upkeep") never grew a +1/+1 counter, **Giant Turtle**, **Goblin Rock Sled**
+    and **Tangle Kelp** never saw "attacked during your last turn", **Wall of
+    Dust** and **Oracle en-Vec** never saw "during its controller's next turn",
+    and every lock in ``engine/hand_locks.py`` compared against a frozen number.
+    All six are *shipped* cards.
+
+    Asserting the ordinal rather than any one card's behaviour: the ordinal is
+    what the omission actually broke, and a card assertion would need a seed
+    that deals that card.
+    """
+    from engine.card_loader import manifest_set_paths
+    import engine.ai_simulator as simulator
+
+    seen: dict[str, dict[int, int]] = {}
+    original = simulator.choose_cast_action
+
+    def _spy(game, active):
+        counts = dict(getattr(game, "seat_turn_counts", {}) or {})
+        if counts:
+            seen["counts"] = counts
+        return original(game, active)
+
+    simulator.choose_cast_action = _spy
+    try:
+        simulator.run_ai_simulation([LEA_PATH], games=1, max_turns=6, seed=7)
+    finally:
+        simulator.choose_cast_action = original
+
+    counts = seen.get("counts")
+    assert counts, (
+        "seat_turn_counts was empty for the whole simulation - "
+        "begin_turn_bookkeeping is not being called by the turn loop"
+    )
+    assert max(counts.values()) > 1, (
+        f"the per-seat turn ordinal never advanced past its first turn: {counts}"
+    )
