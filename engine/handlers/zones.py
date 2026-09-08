@@ -2687,10 +2687,19 @@ def return_all_matching(game: Game, instruction: OracleInstruction, context: Ora
                 f"{context.card.name}: nothing is attached to a permanent that is gone"
             )
             return True, "resolved"
+    # "…each creature **that player** controls with power greater than the
+    # number of cards in **their** hand." (Noetic Scales.) The seat the firing
+    # event froze (CR 603.10) — a different player on every upkeep, and never
+    # this artifact's controller except on their own turn. Read through the one
+    # reader of the printed phrase, so both narrowings that name it name the
+    # same player; None where nothing froze one, which the matcher answers by
+    # refusing the words rather than by widening the sweep to the table.
+    that_player = frozen_that_player_seat(game, context)
     matched = [
         perm for perm in game.all_permanents()
         if subject_matches(
             game, perm, swept, observer=observer, source=context.source_permanent,
+            that_player=that_player,
         )
         and (host_id is None or _was_attached_to(perm, host_id))
     ]

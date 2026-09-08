@@ -92,6 +92,15 @@ def _accept_cards_in_hand_bound(stream: TokenStream) -> str | None:
         return None
     if stream.accept_phrase("your", "hand"):
         return "you"
+    # "…each creature that player controls **with power greater than the number
+    # of cards in their hand**." (Noetic Scales.) The same bound over a
+    # different seat, which is the whole of what this function's docstring
+    # already promised: whose hand is returned rather than baked in. "Their"
+    # agrees with the subject the sentence has already named — "each creature
+    # **that player** controls" — so it is the seat the firing event froze, and
+    # the matcher refuses it wherever nothing froze one.
+    if stream.accept_phrase("their", "hand"):
+        return "that_player"
     stream.reset(mark)
     return None
 

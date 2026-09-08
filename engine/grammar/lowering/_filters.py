@@ -136,6 +136,16 @@ _PAYLOAD_HONOURED_FILTER_FIELDS = frozenset({
     # additionally needs is the ability's source, which that function takes.
     "tapped_to_pay_for_source_this_turn",
     "other_than_attached_host",
+    # "…with power **greater than the number of cards in their hand**"
+    # (Noetic Scales, Ensnaring Bridge). ``to_payload`` emits it
+    # unconditionally and ``subject_matches`` tests it — it is already in
+    # ``TESTABLE_SUBJECT_FILTER_KEYS`` — so it is honoured in exactly the sense
+    # ``power`` above is, and what it additionally needs is a *seat*, which
+    # that function takes. Left out, every lowering asking
+    # ``_restrictions_beyond`` refused a phrase the payload carries perfectly
+    # well: the same false refusal ``owner``, ``any_classes``, ``token_only``
+    # and ``subtype_match`` above were each added to end.
+    "power_greater_than_cards_in_hand",
     # "…**except for basic lands**" / "…**other than a basic land**" (Eye of
     # Singularity's two lines). ``to_payload`` emits it as
     # ``exclude_basic_lands`` and the pure matcher tests it off the printed type
