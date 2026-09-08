@@ -2316,19 +2316,37 @@ class PendingChoicesMixin:
         if not self._resolve_opponent_picks_revealed(choice, best):
             self.discard_pending_choice(choice)
 
-    def confirm_revealed_hand_pick(self, player_index: int, hand_index: int) -> bool:
+    def confirm_revealed_hand_pick(
+        self, player_index: int, hand_index: int | None = None
+    ) -> bool:
         return self.resolve_pending_choice(
             "revealed_hand_pick", player_index, hand_index=hand_index
         )
 
-    def _resolve_revealed_hand_pick(self, choice: PendingChoice, hand_index: int) -> bool:
+    def _resolve_revealed_hand_pick(self, choice: PendingChoice, hand_index) -> bool:
         """The caster's pick out of a revealed hand (Duress).
 
         The legal indices are re-checked against the record armed with the
         choice rather than trusted from the wire: a client offering the whole
         hand would otherwise turn "a noncreature, nonland card" into "any card",
         which is the same hole the search picker closed.
+
+        ``hand_index`` of None is the chooser **declining** — "choose **up to** X
+        cards from it" (Discordant Dirge), CR 601.2c's ceiling. Admitted only
+        where the card printed the words: a Duress that could be answered with
+        nothing is a spell that does not resolve, and the whole chain stops
+        rather than the one prompt, because the permission is about the printed
+        number and not about this pick.
         """
+        if hand_index is None:
+            if not choice.data.get("up_to"):
+                return False
+            self.discard_pending_choice(choice)
+            self.log.append(
+                f"{choice.data.get('card_name', 'An effect')}: "
+                f"{self.players[choice.player_index].name} chose no more cards"
+            )
+            return True
         if hand_index not in (choice.data.get("legal_indices") or []):
             return False
         victim_index = int(choice.data["victim_index"])
@@ -2398,6 +2416,11 @@ class PendingChoicesMixin:
             exclude_basic_lands=narrowing["exclude_basic_lands"],
             source_id=choice.data.get("source_id"),
             record=choice.data.get("record"),
+            # The printed "up to" survives every answer: the picks after the
+            # first are the same printed choice, so a chooser who could stop
+            # after one and not after two would be answering a card nobody
+            # printed.
+            up_to=bool(choice.data.get("up_to")),
         )
 
     def _record_revealed_hand_pick(
@@ -8533,7 +8556,14 @@ register_choice(
 
 register_choice(
     "revealed_hand_pick",
-    resolve=lambda game, choice, r: game._resolve_revealed_hand_pick(choice, r["hand_index"]),
+    # ``.get``, not ``[...]``: an answer with **no** index is the chooser
+    # declining, which "choose **up to** X cards from it" (Discordant Dirge)
+    # permits and every earlier printing does not. The resolver is what decides
+    # whether the words were printed; a subscript here would make the decline a
+    # KeyError before it could be judged.
+    resolve=lambda game, choice, r: game._resolve_revealed_hand_pick(
+        choice, r.get("hand_index")
+    ),
     default=lambda game, choice: game._default_revealed_hand_pick(choice),
     action="revealed_hand_pick_confirm",
     prompt_key="revealed_hand_pick",

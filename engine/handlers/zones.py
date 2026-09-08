@@ -3516,6 +3516,12 @@ def reveal_hand_and_choose(game: Game, instruction: OracleInstruction, context: 
         victim_index=victim_index,
         legal_indices=legal,
         remaining=wanted,
+        # "…choose **up to** X cards from it" (Discordant Dirge). CR 601.2c's
+        # ceiling, which is what lets the chooser stop before the number is
+        # reached. Carried onto every prompt of the chain by
+        # ``_rearm_revealed_hand_pick`` — the picks after the first are the same
+        # printed choice, so the permission has to survive each answer.
+        up_to=bool(instruction.payload.get("up_to")),
         # Carried so the picks after the first can recompute what is legal
         # against the hand as it then stands.
         exclude_types=exclude_types,

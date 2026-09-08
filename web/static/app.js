@@ -8245,6 +8245,21 @@ function renderRevealedHandPickModal(info) {
       });
     });
   }
+  // "…choose **up to** X cards from it" (Discordant Dirge). CR 601.2c's
+  // ceiling: the chooser may stop before the number is reached, so the way out
+  // is offered only where the card printed the words. Every earlier printing
+  // names exactly as many as it says and keeps a modal with no way out.
+  const done = document.getElementById("revealedHandPickDone");
+  if (done) {
+    const canStop = Boolean(info.up_to);
+    done.classList.toggle("hidden", !canStop);
+    done.onclick = canStop
+      ? async () => {
+          modal.classList.add("hidden");
+          await sendAction({ seat, action: "revealed_hand_pick_confirm" });
+        }
+      : null;
+  }
 }
 
 // The defending player's graveyard, with only the positions the printed noun
