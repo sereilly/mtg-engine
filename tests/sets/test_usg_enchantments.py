@@ -667,7 +667,7 @@ def test_the_cycle_does_not_re_animate_once_it_is_already_a_creature(set_pool):
 import pytest
 
 from engine import Game, PlayerState
-from engine.activation_zones import HAND
+from engine.activation_zones import BATTLEFIELD, HAND
 from engine.oracle import compile_card_oracle
 from engine.targeting import usable_activated_abilities
 
@@ -749,22 +749,31 @@ def test_w1g1_a_cycling_aura_is_supported_and_cycles(set_pool, name):
     assert len(holder.library) == 3
 
 
-def test_w1g1_veiled_serpent_cycles_but_its_trigger_is_still_unread(set_pool):
-    """Half a card, said out loud.
+def test_w1g1_veiled_serpent_is_whole_once_both_halves_land(set_pool):
+    """Half a card, said out loud — and then the other half arrived.
 
     Veiled Serpent's cycling line is W1G1's and its "becomes a 4/4 Serpent
-    creature with …" trigger is W1G3's. The rewrite makes the card report
-    *supported* — a card is supported when any of its lines is — while the
-    trigger it is famous for is still unimplemented. That is a real cost of
-    this change and it is asserted here rather than left to be discovered:
-    ``parse_coverage.py --set USG`` is the instrument that still sees it, and
-    this test fails the day the other half lands, which is when the claim below
-    stops being true.
+    creature with …" trigger is W1G3's. W1G1 wrote this test asserting the
+    *opposite* of what it asserts now: that the card reported `supported` off
+    its cycling line alone while the trigger it is famous for was still
+    unimplemented. A card is supported when **any** of its lines is, so nothing
+    else in the repo would have said so.
+
+    It was written to fail the day the other half landed, and at the wave-1
+    integration it did — which is the tripwire working rather than a
+    regression, and the reason the claim is now the whole card. Keep both
+    assertions: the cycling ability is offered **only from a hand** (CR 702.29a)
+    and the trigger lowers, so neither group's half can quietly rot without
+    this failing.
     """
     program = compile_card_oracle(set_pool("USG")["Veiled Serpent"])
     assert program.supported
     assert [a.source_line for a in usable_activated_abilities(program, zone=HAND)] == [
         "{2}, Discard this card: Draw a card."
     ]
+    assert not usable_activated_abilities(program, zone=BATTLEFIELD)
     assert program.triggered_abilities
-    assert all(not trig.supported for trig in program.triggered_abilities)
+    assert all(trig.supported for trig in program.triggered_abilities)
+    assert [t.instruction.kind for t in program.triggered_abilities] == [
+        "animate_self_indefinitely"
+    ]
