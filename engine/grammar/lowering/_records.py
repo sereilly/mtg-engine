@@ -102,6 +102,22 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # cannot answer: the two sets have changed hands, so neither printed seat
     # phrase names what the card means any more.
     "exchange_control_of_sets_until_eot": CONTROL_EXCHANGED_PERMANENTS,
+    # "…exchange control of this creature and up to one target creature an
+    # opponent controls. **If you don't or can't make an exchange**, sacrifice
+    # this creature." (Gilded Drake.) The same record from the chosen-slot
+    # exchange, and the same key deliberately: a reader asking "did an exchange
+    # happen?" is asking one question, and two keys would be one fact under two
+    # names — free to disagree the day either handler is rewritten.
+    #
+    # What reads it here is the *negation*: CR 701.12a makes the exchange
+    # atomic, so the record is written on the one path that completed it and on
+    # no other, and "you don't or can't" is exactly the absence of it. Every
+    # way the card can fail — no target chosen (the printed "up to one"), a
+    # target that has left, one that no longer answers "an opponent controls",
+    # a Guardian Beast on either side, both permanents under one seat — leaves
+    # nothing recorded, which is why the branch is one condition rather than
+    # five.
+    "exchange_control_of_targets": CONTROL_EXCHANGED_PERMANENTS,
     # "Count the number of permanents. **If the number** is odd, …" (Chaos
     # Moon.) The count is the whole of what the sentence does, and the only
     # place the two conditions behind it can read that number from — asking the

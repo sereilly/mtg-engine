@@ -85,6 +85,30 @@ def _grant_duration(node, duration) -> str:
     return key
 
 
+def _binds_a_recorded_permanent(subject, produced: frozenset[str]) -> bool:
+    """Whether *subject* is the "that creature" an earlier step of this same
+    effect recorded — the arm at the bottom of :func:`_lower_gain_keyword`.
+
+    Asked by the **undurated** branch far above that arm, which would otherwise
+    refuse the sentence before it could be reached. One predicate rather than
+    the condition written twice, so the two readings of the pronoun cannot come
+    apart: a gate that admitted a phrase the arm then refused would trade one
+    refusal message for another, and one that admitted more than the arm claims
+    would fall through to "unsupported keyword-grant subject" instead.
+
+    "That **token**" is deliberately not one of these: ``CREATED_TOKEN`` is not
+    a member of :data:`_RECORDED_PERMANENTS` and the token arm is asked first,
+    so a card printing both a token maker and (say) a tap would otherwise reach
+    that arm through a gate written for its neighbour.
+    """
+    return (
+        isinstance(subject, ast.TargetSpec)
+        and not _is_created_token(subject)
+        and subject.quantifier in ("that", "those")
+        and bool(produced & _RECORDED_PERMANENTS)
+    )
+
+
 def _lower_gain_keyword(
     node: ast.GainKeyword,
     event: str | None = None,
@@ -149,10 +173,12 @@ def _lower_gain_keyword(
     if node.duration.kind is None:
         # "…and that creature gains flying." (Cocoon's hatch, bound to the
         # enchanted creature by the rider that read it.) A one-shot grant with
-        # no stated duration lasts as long as the object (CR 611.2c's last
-        # bullet: no duration and no source dependence means it holds until
-        # the object leaves) — recorded on the *creature* through the layer-6
-        # write API, which is what lets it outlive the Aura that granted it.
+        # no stated duration lasts until the end of the game (CR 611.2a:
+        # "If no duration is stated, it lasts until the end of the game") —
+        # which on a permanent means until it leaves, since CR 400.7 makes
+        # what comes back a different object. Recorded on the *creature*
+        # through the layer-6 write API, which is what lets it outlive the
+        # Aura that granted it.
         if _is_enchanted(node.subject):
             leftover = _restrictions_beyond(
                 node.subject.filter, frozenset({"card_types", "is_enchanted"})
@@ -179,7 +205,7 @@ def _lower_gain_keyword(
             )
         # "{1}{R}: This creature … gains flying." (Goblin Ski Patrol.) The
         # keyword half of the same sentence the pump lowering admits one module
-        # over, and indefinite for the same CR 611.2b reason: a resolved
+        # over, and indefinite for the same CR 611.2a reason: a resolved
         # ability's grant with no printed duration is not the *static* ability's
         # continuous contribution the refusal below is about — that one is
         # refused a layer up, in `_lower_static_ability`.
@@ -204,7 +230,7 @@ def _lower_gain_keyword(
         # "Put a +1/+1 counter on target creature or **that creature gains
         # banding, first strike, or trample**." (Nature's Blessing, whose
         # reminder text says the effect "lasts indefinitely".) A *chosen*
-        # object's grant with no printed duration, which is CR 611.2b's
+        # object's grant with no printed duration, which is CR 611.2a's
         # indefinite one — the same reading the source branch above already
         # takes, and through the same channels: `grant_keyword` has always
         # meant "no sweep takes this away" by a ``None`` duration, and
@@ -215,7 +241,25 @@ def _lower_gain_keyword(
         # Everything past this point is the ordinary target path: the narrowing
         # is described for the picker, the keyword registry is asked, and a
         # keyword with no behaviour behind it still refuses.
-        if not _is_target(node.subject):
+        #
+        # "You may put a creature card from your hand onto the battlefield.
+        # **That creature gains haste.**" (Sneak Attack.) The *bound* spelling
+        # of the same indefinite grant, and it is admitted here only so the
+        # arm far below can claim it — the two arms are already written, one
+        # for the printed duration and one for the back-reference, and this
+        # branch was between them refusing every sentence that carried both.
+        # A grant with no printed duration lasts as long as the object
+        # (CR 611.2a), which is the reading the source and target branches
+        # above take; the permanent it names is the one an earlier step of this
+        # same resolution recorded, so nothing about *how long* changes with
+        # *which* permanent.
+        #
+        # Gated on a producer, exactly as that arm is: with nothing recorded in
+        # front of it the pronoun names no permanent, and the refusal below
+        # stays. "That **token**" is not admitted — `CREATED_TOKEN` is not one
+        # of these records, so the token arm goes on refusing an undurated
+        # grant rather than being widened by a gate written for its neighbour.
+        if not (_is_target(node.subject) or _binds_a_recorded_permanent(node.subject, produced)):
             reason = _durationless_reason(node.subject)
             if reason.startswith("continuous pump"):
                 reason = "continuous keyword grant needs the CR 613 layers engine"
@@ -614,7 +658,7 @@ def _lower_gain_ability_text(
     payload: dict[str, object] = {
         "abilities": tuple(node.abilities),
         # A grant with no printed duration lasts as long as the object
-        # (CR 611.2c's last bullet) — the same reading the durationless keyword
+        # (CR 611.2a) — the same reading the durationless keyword
         # grant above takes, and the reason the channel takes the sweep's name
         # rather than assuming one answer.
         "duration": _GRANT_DURATIONS.get(node.duration.kind),

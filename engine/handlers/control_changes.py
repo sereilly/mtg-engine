@@ -697,8 +697,26 @@ def exchange_control_of_targets(game: Game, instruction: OracleInstruction, cont
     card = context.card
     payload = instruction.payload
     targets = payload.get("targets") or {}
-    slot_filters = list(targets.get("filters") or [targets.get("filter") or {}] * 2)
-    chosen = resolve_target_slots(game, context, 2)
+    if payload.get("first") == "source":
+        # "Exchange control of **this creature** and up to one target creature
+        # an opponent controls." (Gilded Drake.) One chosen slot, not two: the
+        # first side is the ability's own source, which this resolution already
+        # holds, so it is put in front of the single answer rather than read out
+        # of a target list that has one entry in it.
+        #
+        # A source that has left names nothing, and the loop below reads that as
+        # "no part of the exchange happens" (CR 701.12a) through the very same
+        # ``is_on_battlefield`` test every other slot passes — which is also
+        # what makes the sentence behind this one fire.
+        slot_filters = [
+            dict(payload.get("first_filter") or {}), dict(targets.get("filter") or {}),
+        ]
+        chosen = [
+            context.source_permanent, *resolve_target_slots(game, context, 1),
+        ]
+    else:
+        slot_filters = list(targets.get("filters") or [targets.get("filter") or {}] * 2)
+        chosen = resolve_target_slots(game, context, 2)
     caster_index = game.players.index(context.caster)
 
     legal: list[Permanent] = []
@@ -759,7 +777,9 @@ def exchange_control_of_targets(game: Game, instruction: OracleInstruction, cont
     change_control(first, seat_of_second, source=card)
     change_control(second, seat_of_first, source=card)
     game._sync_control()
-    context.results["exchanged_permanents"] = [first.permanent_id, second.permanent_id]
+    context.results[CONTROL_EXCHANGED_PERMANENTS] = [
+        first.permanent_id, second.permanent_id,
+    ]
     game.log.append(
         f"{card.name}: {game.players[seat_of_first].name} and "
         f"{game.players[seat_of_second].name} exchanged control of "
