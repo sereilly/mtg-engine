@@ -119,6 +119,10 @@ class CombatRestriction:
 #   max_blockers_each_combat        phases/declare_blockers_step.declare_blockers
 #   cant_attack_unless_others_attack  phases/declare_attackers_step.declare_attackers
 #   cant_block_unless_others_block  phases/declare_blockers_step.declare_blockers
+#   cant_attack_unless_greater_power_attacks
+#                                   phases/declare_attackers_step.declaration_refusal
+#   cant_block_unless_greater_power_blocks
+#                                   phases/declare_blockers_step.declare_blockers
 _PATTERNS: tuple[tuple[re.Pattern[str], "str | tuple[str, ...]"], ...] = (
     (
         # "No more than two creatures can attack each combat." (Caverns of
@@ -308,6 +312,23 @@ _PATTERNS: tuple[tuple[re.Pattern[str], "str | tuple[str, ...]"], ...] = (
         "cant_attack_without_controlled_count",
     ),
     (re.compile(r"^this creature can't attack$"), "cant_attack"),
+    (
+        # "This creature can't attack or block **if an enchantment is on the
+        # battlefield**." (Wirecat.) One sentence, two prohibitions, one
+        # subject — ``CombatRestriction.also_kinds`` again, and here on the
+        # *self-referential* subject rather than on a plural one, which is why
+        # it is a row of its own rather than a reading of the board-wide pair
+        # above: those carry a noun phrase the two gates test against every
+        # creature, and this one is about the permanent printing it.
+        #
+        # No payload at all, and the qualifier is what makes the card playable:
+        # with an empty board the Cat attacks and blocks freely, and a row that
+        # dropped the clause would be a 2/2 for {4} that never fights. Both
+        # kinds are in ``CONDITIONAL_RESTRICTION_KINDS``, which is what the
+        # attachment is gated on.
+        re.compile(r"^this creature can't attack or block$"),
+        ("cant_attack", "cant_block"),
+    ),
     (
         # "This creature can only attack alone." CR 506.5, as a restriction on
         # the *declaration* rather than on the creature: it may attack only
@@ -1121,6 +1142,23 @@ _IF_ON_BATTLEFIELD = re.compile(
     r"on the battlefield$"
 )
 
+#: "…**if an enchantment is on the battlefield**." (Wirecat.) The qualifier
+#: above in the other printed word order — the noun in front of the verb rather
+#: than behind "there's" — and the same question in every other respect, so it
+#: builds the same condition rather than a second kind of one.
+#:
+#: Its own pattern rather than an alternation inside that one because the two
+#: place the noun on opposite sides of the copula, and a single regex reading
+#: both would have to make the head optional, which is how a pattern stops
+#: saying which sentence it matches. "Another" is captured here too, for that
+#: pattern's reason: it is CR 109.5's exclusion of the ability's own source, and
+#: a card printing "if another enchantment is on the battlefield" means
+#: something the article does not.
+_IF_NOUN_ON_BATTLEFIELD = re.compile(
+    r"^(?P<rest>.+?) if (?:(?P<other>another)|an?) (?P<board>.+) "
+    r"(?:is|are) on the battlefield$"
+)
+
 #: The kinds whose enforcement site **asks** about a condition. A qualifier
 #: attached to any other kind would be a restriction applied unconditionally —
 #: silently, and in the direction of doing more than the card says — so the line
@@ -1129,7 +1167,13 @@ _IF_ON_BATTLEFIELD = re.compile(
 #: match more sentences than it implements, and the ones it does not implement
 #: must refuse rather than drop a clause.
 CONDITIONAL_RESTRICTION_KINDS: frozenset[str] = frozenset(
-    {"cant_be_blocked_by", "cant_attack"}
+    # ``cant_block`` joined the set with Wirecat, and the *enforcement* moved
+    # with it: ``declare_blockers_step._can_block_attacker`` used to answer this
+    # kind with a bare membership test over the blocker's instruction kinds,
+    # which cannot see a condition at all — so listing it without changing that
+    # read would have grounded the Cat for the whole game on a clause that is
+    # only sometimes true. Listing a kind here is a claim that its reader asks.
+    {"cant_be_blocked_by", "cant_attack", "cant_block"}
 )
 
 
@@ -1259,6 +1303,11 @@ def combat_restriction_for(
         # did not match: a sentence carries one condition clause, and reading
         # both would let a card state two and have one enforced.
         shared = _IF_ON_BATTLEFIELD.match(normalized_line)
+        if shared is None:
+            # …and its other printed word order (Wirecat), tried only where the
+            # first did not match, for the same reason the first is tried only
+            # where the seat-scoped one did not: one sentence, one clause.
+            shared = _IF_NOUN_ON_BATTLEFIELD.match(normalized_line)
         if shared is not None:
             board = _printed_noun(shared.group("board"))
             if board is None:
@@ -1277,8 +1326,16 @@ def combat_restriction_for(
         match = pattern.match(normalized_line)
         if match is None:
             continue
-        if condition is not None and (
-            isinstance(kind, tuple) or kind not in CONDITIONAL_RESTRICTION_KINDS
+        # Every kind the row names has to be one whose enforcement site asks
+        # about a condition — including the second and third of a multi-kind
+        # row. A pair used to be refused outright, which was right while
+        # ``cant_block`` was asked as a bare kind test and is the wrong shape
+        # now that it is not: what makes a clause safe to attach is that its
+        # reader asks, and that is a question about each kind rather than about
+        # how many of them one sentence prints.
+        named_kinds = kind if isinstance(kind, tuple) else (kind,)
+        if condition is not None and not all(
+            each in CONDITIONAL_RESTRICTION_KINDS for each in named_kinds
         ):
             return None
         # Numeric captures reach handlers as ints: a payload whose type depends
@@ -1786,6 +1843,33 @@ def participation_cap(permanents, kind: str) -> int | None:
         if instruction.kind == wanted
     ]
     return min(caps) if caps else None
+
+def declaration_greater_power_required(permanent, kind: str) -> bool:
+    """Whether *permanent* may only *kind* alongside a creature that outpowers it.
+
+    "This creature can't attack unless a creature with greater power also
+    attacks." (Okk, and its blocking twin one line down.) The sibling of
+    :func:`declaration_company_required` beside it and the same CR 508.1c /
+    CR 509.1b question — a floor a creature puts on the declaration it joins,
+    which no per-creature predicate can answer because it is about who *else*
+    was declared.
+
+    A bool rather than a number because there is nothing to carry: the printed
+    clause names no count and no noun beyond "a creature", and the threshold it
+    compares against is this permanent's own power, which the caller reads live
+    (CR 613: power is computed, so a pumped Okk needs a bigger friend).
+
+    Read off ``effective_card`` like every other combat restriction here, so a
+    copy or a text change is answered without a second reader.
+    """
+    from .oracle import compile_card_oracle
+
+    wanted = f"cant_{kind}_unless_greater_power_{kind}s"
+    return any(
+        instruction.kind == wanted
+        for instruction in compile_card_oracle(permanent.effective_card).instructions
+    )
+
 
 def declaration_company_required(permanent, kind: str) -> int | None:
     """How many **other** creatures must *kind* alongside *permanent*, or None.

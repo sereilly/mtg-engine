@@ -14,6 +14,7 @@ from ..auras import attached_combat_restrictions, aura_restriction_active
 from ..combat_permissions import (ATTACK_AS_THOUGH_NO_DEFENDER,
                                   CANT_ATTACK_UNTIL_EOT)
 from ..combat_restrictions import (declaration_company_required,
+                                   declaration_greater_power_required,
                                    participation_cap,
                                    restriction_condition_holds)
 from ..mana_payment import mana_cost_label, plan_payment, untapped_mana_lands
@@ -1294,6 +1295,27 @@ class DeclareAttackersStepMixin:
                 return attacker, (
                     f"{attacker.card.name} needs at least {needed} other "
                     "attacking creature(s)"
+                )
+        # "…unless a creature with **greater power** also attacks." (Okk.) The
+        # same CR 508.1c question asked as a comparison rather than a count, so
+        # it is answered here beside its sibling and not in `can_attack`.
+        #
+        # Power is read live off both creatures rather than off their printed
+        # numbers: CR 613 computes it, so an Okk that has been pumped needs a
+        # bigger companion than one that has not, and a companion pumped in
+        # response qualifies. `is` rather than an index comparison, because the
+        # rule is about the *other* attackers and two 3/3s are not one another.
+        for attacker in declared_attackers:
+            if not declaration_greater_power_required(attacker, "attack"):
+                continue
+            if not any(
+                other is not attacker
+                and other.effective_power > attacker.effective_power
+                for other in declared_attackers
+            ):
+                return attacker, (
+                    f"{attacker.card.name} needs an attacking creature with "
+                    "greater power beside it"
                 )
         return None
 

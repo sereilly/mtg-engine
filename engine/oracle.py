@@ -4597,6 +4597,13 @@ _GRAMMAR_STATIC_CREATURE_KINDS = frozenset(
         # count is a parsed number, so the grammar reads it here.
         "cant_attack_unless_others_attack",
         "cant_block_unless_others_block",
+        # "…unless a creature with greater power also attacks/blocks." (Okk.)
+        # The same static property under a comparison rather than a count, and
+        # here for the same reason: the declaration reads the compiled
+        # instruction off the card, and without the row Okk came back "text too
+        # complex" with both of its lines grammar-clean.
+        "cant_attack_unless_greater_power_attacks",
+        "cant_block_unless_greater_power_blocks",
         # "As long as the top card of your graveyard is a creature card, this
         # creature has the full text of that card…" (Volrath's Shapeshifter.)
         # A CR 613 layer 1a contribution, derived from the zone on every read

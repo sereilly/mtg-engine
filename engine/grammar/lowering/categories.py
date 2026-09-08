@@ -713,6 +713,12 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # rather than itself (Flooded Woodlands, Reclamation).
     "creatures_cant_attack_unless_sacrifice": "combat_restrictions",
     "cant_block_unless_others_block": "combat_restrictions",
+    # "…unless a creature with greater power also attacks/blocks." (Okk.) The
+    # same CR 508.1c / 509.1b declaration-wide restriction asking a comparison
+    # instead of a count, so the same category and GRAMMAR_CATEGORIES is
+    # unchanged.
+    "cant_attack_unless_greater_power_attacks": "combat_restrictions",
+    "cant_block_unless_greater_power_blocks": "combat_restrictions",
     # "That creature can't attack during its controller's next turn." (Wall of
     # Dust's block trigger) — a one-shot stamp on the blocked creature, read
     # back by `can_attack` for exactly one of that controller's turns.

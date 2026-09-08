@@ -20,7 +20,10 @@ from ..combat_permissions import (ADDITIONAL_BLOCKS_UNTIL_EOT,
                                   MUST_BLOCK_UNTIL_EOT,
                                   CANT_BLOCK_ATTACKERS_UNTIL_EOT,
                                   CANT_BLOCK_UNTIL_EOT)
-from ..combat_restrictions import declaration_company_required, participation_cap
+from ..combat_restrictions import (declaration_company_required,
+                                  declaration_greater_power_required,
+                                  participation_cap,
+                                  restriction_condition_holds)
 from ..evasion_negation import negated_evasion_abilities
 from ..landwalk import LANDWALK, land_satisfies, landwalk_requirement
 from ..mana_payment import mana_cost_label, plan_payment, untapped_mana_lands
@@ -566,6 +569,36 @@ class DeclareBlockersStepMixin:
                         f"{blocker.card.name} needs at least {needed} other "
                         "blocking creature(s)"
                     )
+            # "…unless a creature with **greater power** also blocks." (Okk.)
+            # The comparison twin of the count above, and the same CR 509.1b
+            # declaration-wide question — so the same place, and the same
+            # exemption for a Camouflage resolution.
+            #
+            # Only *this seat's* declaration is compared, which is the one
+            # difference from the count above it: that one totals every
+            # defender's blockers because "at least two other creatures block"
+            # says nothing about whose, and this one has to hold two
+            # `Permanent` objects side by side to compare their power. A
+            # blocker declared under another defender's earlier declaration is
+            # not in `resolved_blockers` at all, so widening the scan would
+            # mean re-resolving a second seat's indices against a second
+            # board — a round of its own, and not one Okk needs: CR 509.1a
+            # gives every blocker one attacking creature to block, and this
+            # engine's combats have one defending player.
+            for blocker_idx in assignments:
+                blocker = resolved_blockers[blocker_idx]
+                if not declaration_greater_power_required(blocker, "block"):
+                    continue
+                if not any(
+                    resolved_blockers[other] is not blocker
+                    and resolved_blockers[other].effective_power
+                    > blocker.effective_power
+                    for other in assignments
+                ):
+                    return False, (
+                        f"{blocker.card.name} needs a blocking creature with "
+                        "greater power beside it"
+                    )
 
         # CR 509.1d-f: the total cost to block, locked in and paid before the
         # chosen creatures become blockers. Last of the legality checks and
@@ -907,8 +940,30 @@ class DeclareBlockersStepMixin:
         # Off the effective card, like every other read here: a Clone of a
         # creature that can't block can't block either (CR 707.2).
         blocker_program = compile_card_oracle(blocker.effective_card)
-        if "cant_block" in {i.kind for i in blocker_program.instructions}:
-            return False
+        # Read as an *instruction* rather than out of a kind set, exactly as the
+        # attack gate reads its twin and for the same reason: the clause can be
+        # qualified — "…**if an enchantment is on the battlefield**" (Wirecat) —
+        # and a kind-set membership test drops the condition and stops the
+        # creature blocking for good. Every printed clause separately, because
+        # CR 509.1b makes restrictions cumulative: one whose condition is false
+        # answers only itself.
+        for restriction in blocker_program.instructions:
+            if restriction.kind != "cant_block":
+                continue
+            if restriction_condition_holds(
+                self,
+                restriction.payload.get("condition"),
+                # CR 109.5: "you" inside the noun phrase is the seat whose
+                # ability this is, which is the blocker's controller. The
+                # defending player *is* that seat in this engine's combats, and
+                # is passed as such rather than assumed equal.
+                observer=self.controller_index_of(blocker),
+                defender=self.controller_index_of(blocker),
+                # "Another" is measured against the permanent whose line this
+                # is — the blocker itself.
+                source=blocker,
+            ):
+                return False
         # And the Aura-imposed half (Faith's Fetters).
         if aura_restriction_active(blocker, "cant_block"):
             return False
@@ -1113,7 +1168,6 @@ class DeclareBlockersStepMixin:
         from ..combat_restrictions import (
             granted_blocker_filters,
             granted_blocker_whitelists,
-            restriction_condition_holds,
         )
 
         for described in granted_blocker_filters(attacker):

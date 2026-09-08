@@ -139,6 +139,30 @@ def _parse_cant_attack_or_block(
         # The threshold is payload: "at least three" is the same restriction,
         # and spelling the number into the kind would make each printed count a
         # new kind and a new check.
+        # "This creature can't attack **unless a creature with greater power
+        # also attacks**." (Okk.) CR 508.1c again, and the same shape as the
+        # count below it: a restriction the *declaration* answers rather than
+        # the creature, because no per-creature predicate can see who else was
+        # declared.
+        #
+        # What differs is the question. The count below asks how many joined;
+        # this asks whether one of them is bigger, which is a comparison
+        # against this creature's own power and so cannot ride that kind's
+        # ``count`` payload. Its own kind for the reason ``cant_attack`` and
+        # ``cant_block`` are two: one kind answered by two different questions
+        # is a kind one of the answers gets wrong.
+        #
+        # Every word required, and "also" is the one that matters: it is what
+        # makes the other creature a *second* attacker rather than any creature
+        # on the board, and the whole card is the difference.
+        greater_mark = stream.mark()
+        if stream.accept_phrase(
+            "unless", "a", "creature", "with", "greater", "power", "also", "attacks"
+        ):
+            return ast.CombatRestriction(
+                subject, "cant_attack_unless_greater_power_attacks", ()
+            )
+        stream.reset(greater_mark)
         others_mark = stream.mark()
         if stream.accept_phrase("unless", "at", "least"):
             count = _accept_number(stream)
@@ -230,6 +254,19 @@ def _parse_cant_attack_or_block(
         # The blocking twin of the attack clause above, CR 509.1b's side of the
         # same rule, and read here before the two shapes below because it opens
         # on a word neither of them takes.
+        # "This creature can't block **unless a creature with greater power
+        # also blocks**." (Okk's second line.) CR 509.1b's side of the rule the
+        # attack branch above reads, and the same declaration-wide question:
+        # the creatures compared are the ones declared as blockers, which the
+        # blocker gate cannot see one pair at a time.
+        greater_block = stream.mark()
+        if stream.accept_phrase(
+            "unless", "a", "creature", "with", "greater", "power", "also", "blocks"
+        ):
+            return ast.CombatRestriction(
+                subject, "cant_block_unless_greater_power_blocks", ()
+            )
+        stream.reset(greater_block)
         block_others = stream.mark()
         if stream.accept_phrase("unless", "at", "least"):
             count = _accept_number(stream)
