@@ -15,6 +15,7 @@ from ..subject_filters import subject_matches
 from ..handlers.board_misc import LAND_TYPE_UNTIL_UNTAP
 from ..handlers.tapping import (SKIP_NEXT_UNTAP_SEAT,
                                 UNTAP_BLOCKED_WHILE_COUNTERS_KEY,
+                                UNTAP_LOCK_WHILE_PRESENT_KEY,
                                 UNTAP_LOCK_WHILE_TAPPED_KEY)
 from ..land_types import end_land_type_changes_from
 from ..control import LINKED_CONTROL_CONDITIONS
@@ -423,9 +424,21 @@ class UntapStepMixin:
             # restriction ends the moment the source untaps or leaves — there
             # is nothing here to clear, which is what makes a condition-ended
             # duration expressible at all.
+            # "…for as long as this creature remains **on the battlefield**."
+            # (Somnophore.) The same record on the same holder under its own
+            # key, and the *only* difference is the question asked of the
+            # holder: this one is not about whether it is tapped, so a
+            # Somnophore that taps to attack keeps its creature down. Read in
+            # one pass with its sibling because both are answered by walking
+            # the same board.
             if any(
-                holder.tapped
-                and holder.metadata.get(UNTAP_LOCK_WHILE_TAPPED_KEY) == permanent.permanent_id
+                (
+                    holder.tapped
+                    and holder.metadata.get(UNTAP_LOCK_WHILE_TAPPED_KEY)
+                    == permanent.permanent_id
+                )
+                or holder.metadata.get(UNTAP_LOCK_WHILE_PRESENT_KEY)
+                == permanent.permanent_id
                 for holder in self.all_permanents()
             ):
                 continue

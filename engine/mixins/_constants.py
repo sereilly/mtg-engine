@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from ..combat_assignment import ASSIGNS_NO_COMBAT_DAMAGE
+from ..combat_assignment import (ASSIGNS_NO_COMBAT_DAMAGE,
+                               MUST_ASSIGN_AS_UNBLOCKED)
 from ..cost_tap_records import TAPPED_TO_PAY_FOR
 from ..combat_permissions import (ADDITIONAL_BLOCKS_UNTIL_EOT,
                                   ATTACK_AS_THOUGH_NO_DEFENDER,
@@ -28,6 +29,12 @@ _EOT_METADATA_KEYS = (
     # "ever", and the trigger would reach back over the whole game.
     TAPPED_TO_PAY_FOR,
     "assign_combat_damage_as_unblocked_until_eot",
+    # "X target blocked creatures assign their combat damage **this turn**
+    # as though they weren't blocked." (Outmaneuver.) The mandatory twin
+    # of the offer above, swept beside it and at the same moment: a mark
+    # nothing cleared would send that creature's damage past its blockers
+    # for the rest of the game.
+    MUST_ASSIGN_AS_UNBLOCKED,
     "cant_be_blocked_until_eot",
     # "...can't be blocked **by Walls** this turn" (Tower of Coireall):
     # the narrowed twin of the flag above, a list of blocker classes rather

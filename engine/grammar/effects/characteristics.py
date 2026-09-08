@@ -644,6 +644,53 @@ def _parse_loses(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
             subject, (), _parse_duration(stream), chosen_ability=True,
         )
     stream.reset(it_mark)
+    # "…target creature **loses all abilities**…" (Humble, Soul Sculptor.)
+    # CR 613.1f's blanket removal, and the words are not a keyword list: read by
+    # ``_parse_keywords`` below the line died on "expected a keyword ability at
+    # 'all abilities'", a refusal naming a word the card does print and a
+    # category it does not belong to.
+    #
+    # Read after the counter branch above, which has already backtracked off
+    # this phrase on the missing word "counter" (its own comment says so), and
+    # before the keyword list, which is the only reader left. Both words are
+    # required: "loses all" alone names no set, and a card printing "loses all
+    # <something else>" is a sentence this has no reading for and must keep
+    # refusing.
+    all_mark = stream.mark()
+    if stream.accept_phrase("all", "abilities"):
+        all_duration = _parse_duration(stream)
+        stripped = ast.LoseKeyword(
+            subject, (), all_duration, all_abilities=True,
+        )
+        # "…loses all abilities **and has base power and toughness 0/1**."
+        # (Humble.) The same join the grant arm above makes with the same
+        # right-hand side and under the same duration rule — whichever half
+        # printed a window governs both — and it is read here for that arm's
+        # reason: a base P/T is not a word layer 6 holds, so it can be neither a
+        # member of a keyword list nor a second sentence, and left unread it is
+        # unconsumed text that takes the whole line down.
+        #
+        # "base" is checked before dispatching, exactly as that arm checks it:
+        # "loses all abilities and has flying" opens on the same two words and
+        # is a sentence this must not claim.
+        base_mark = stream.mark()
+        if (
+            stream.accept_word("and")
+            and stream.at_word("has", "have")
+            and stream.peek_word(1) == "base"
+        ):
+            base = _parse_has_base_pt(stream, subject)
+            if isinstance(base, ast.SetBasePT):
+                if all_duration.kind is None and base.duration.kind is not None:
+                    stripped = ast.LoseKeyword(
+                        subject, (), base.duration, all_abilities=True,
+                    )
+                elif base.duration.kind is None:
+                    base = dataclasses.replace(base, duration=all_duration)
+                return ast.Conjunction((stripped, base))
+        stream.reset(base_mark)
+        return stripped
+    stream.reset(all_mark)
     keywords = _parse_keywords(stream)
     duration = _parse_duration(stream)
     return ast.LoseKeyword(subject, keywords, duration)

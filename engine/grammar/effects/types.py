@@ -590,6 +590,19 @@ def _parse_become_creature(
     # already been consumed: the third spelling puts that clause *after* the
     # duration, so it has no sentence to find without one.
     until_eot = stream.accept_phrase("until", "end", "of", "turn")
+    # "…becomes a 3/6 Golem artifact creature **until end of combat**."
+    # (Jade Statue.) The third printed window, read beside the second
+    # rather than folded into it: a turn holds two combats and the two
+    # records are cleared by two different sweeps, which is the whole of
+    # why the card also prints "Activate only during combat".
+    #
+    # Tried only where the turn spelling did not match, because a sentence
+    # prints one window; both are absences of the other, and a sentence
+    # printing neither is still CR 611.2a's indefinite default.
+    until_eoc = (
+        False if until_eot
+        else stream.accept_phrase("until", "end", "of", "combat")
+    )
     if not in_addition:
         tail = stream.mark()
         stream.accept_punct(".")
@@ -641,6 +654,7 @@ def _parse_become_creature(
         0 if toughness is None else _pt_value(toughness),
         tuple(subtypes), tuple(keywords),
         tuple(card_types), tuple(colors), until_eot,
+        until_end_of_combat=until_eoc,
         replaces_types=not in_addition,
         pt_from_triggering_spell=pt_from_spell,
         protection_from_triggering_spell=protection_from_spell,

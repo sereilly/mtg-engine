@@ -211,6 +211,7 @@ from .stack import (
     WaiveShroud,
 )
 from .combat import (
+    AssignsCombatDamageAsUnblocked,
     AssignsNoCombatDamage,
     AttacksThisTurnIfAble,
     DestroyChosenThatDidntAttack,
@@ -332,6 +333,7 @@ Effect = Union[
     SacrificeUnlessPay, DestroyUnlessPay, DestroyEachUnlessPaid, DamageUnlessPay, Fight, LookAtHand, LookAtLibraryTop,
     CantBe, AttackAsThough, CombatRestriction, BlockCountGrant,
     AttackingDoesntTap,
+    AssignsCombatDamageAsUnblocked,
     AssignsNoCombatDamage,
     AttacksThisTurnIfAble,
     DestroyChosenThatDidntAttack,

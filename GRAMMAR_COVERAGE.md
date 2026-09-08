@@ -16,29 +16,43 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Set | Cards | Lines | Parsed | Lowered | Executed | Cards executing |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+<<<<<<< HEAD
 | LEA | 290 | 388 | 87.4% | 86.1% | 49.0% | 173 |
 | LEB | 292 | 389 | 87.4% | 86.1% | 49.1% | 174 |
 | 2ED | 292 | 389 | 87.4% | 86.1% | 49.1% | 174 |
 | ARN | 78 | 108 | 77.8% | 74.1% | 51.9% | 46 |
 | ATQ | 85 | 120 | 90.8% | 90.8% | 63.3% | 68 |
 | 3ED | 296 | 389 | 89.2% | 87.4% | 51.2% | 179 |
+=======
+| LEA | 290 | 388 | 87.9% | 85.8% | 48.7% | 172 |
+| LEB | 292 | 389 | 87.9% | 85.9% | 48.8% | 173 |
+| 2ED | 292 | 389 | 87.9% | 85.9% | 48.8% | 173 |
+| ARN | 78 | 108 | 77.8% | 74.1% | 51.9% | 46 |
+| ATQ | 85 | 120 | 90.8% | 90.8% | 63.3% | 68 |
+| 3ED | 296 | 389 | 89.7% | 87.1% | 50.9% | 178 |
+>>>>>>> usg-w2g4
 | LEG | 310 | 431 | 89.6% | 88.4% | 58.7% | 217 |
 | DRK | 119 | 167 | 96.4% | 96.4% | 73.7% | 101 |
 | FEM | 102 | 191 | 99.0% | 99.0% | 75.9% | 99 |
-| 4ED | 368 | 520 | 92.5% | 91.9% | 55.2% | 251 |
+| 4ED | 368 | 520 | 92.9% | 91.9% | 55.2% | 251 |
 | ICE | 373 | 601 | 89.9% | 89.4% | 63.4% | 301 |
 | HML | 115 | 189 | 93.7% | 93.7% | 65.1% | 93 |
 | ALL | 144 | 251 | 90.4% | 90.0% | 70.5% | 132 |
 | MIR | 335 | 545 | 93.4% | 93.2% | 63.9% | 281 |
 | VIS | 167 | 278 | 89.6% | 89.6% | 61.5% | 138 |
-| 5ED | 434 | 631 | 94.1% | 93.8% | 60.7% | 318 |
+| 5ED | 434 | 631 | 94.5% | 93.8% | 60.7% | 318 |
 | WTH | 167 | 249 | 88.4% | 88.4% | 64.7% | 140 |
-| TMP | 335 | 478 | 92.5% | 92.3% | 65.7% | 271 |
+| TMP | 335 | 478 | 92.7% | 92.3% | 65.7% | 271 |
 | STH | 143 | 215 | 88.4% | 88.4% | 62.8% | 124 |
 | EXO | 143 | 207 | 90.3% | 90.3% | 66.2% | 127 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
+<<<<<<< HEAD
 | USG *(measured)* | 335 | 486 | 77.6% | 74.9% | 52.3% | 216 |
 | **All (shipped)** | **4873** | **7239** | **90.5%** | **89.9%** | **60.1%** | **3644** |
+=======
+| USG *(measured)* | 335 | 486 | 78.0% | 74.5% | 52.1% | 214 |
+| **All (shipped)** | **4873** | **7239** | **90.7%** | **89.8%** | **60.0%** | **3640** |
+>>>>>>> usg-w2g4
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
 
@@ -50,18 +64,24 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
+<<<<<<< HEAD
 | 433 | 194 | expected a subject |  |
 | 118 | 63 | unrecognized effect verb |  |
 | 92 | 49 | unconsumed text |  |
+=======
+| 426 | 192 | expected a subject |  |
+| 117 | 62 | unrecognized effect verb |  |
+| 101 | 55 | unconsumed text |  |
+>>>>>>> usg-w2g4
 | 39 | 23 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
-| 16 | 15 | expected 'unless defending player controls' |  |
+| 15 | 14 | expected 'unless defending player controls' |  |
 | 13 | 8 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
-| 10 | 4 | expected what this creature can't block, or a duration |  |
+| 9 | 3 | expected what this creature can't block, or a duration |  |
 | 7 | 1 | no lowering for RawEffect |  |
-| 7 | 2 | expected who takes the redirected damage |  |
 | 6 | 1 | no handler for this battlefield entry |  |
-| 6 | 3 | expected a keyword ability |  |
+| 6 | 1 | a counted redirect off the source moves the damage onto one chosen target |  |
+| 6 | 1 | unsupported life-loss target 'owner' |  |
 | 6 | 6 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
 | 5 | 1 | expected 'card' |  |
 | 4 | 1 | the sacrifice prompt cannot test this restriction |  |
@@ -78,7 +98,11 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 ## Cards executing through the grammar
 
+<<<<<<< HEAD
 3644 cards, 4348 lines.
+=======
+3640 cards, 4344 lines.
+>>>>>>> usg-w2g4
 
 - **Abandon Hope**
   - `Look at target opponent's hand and choose X cards from it. That player discards those cards.`
@@ -2045,6 +2069,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `This creature can't attack unless you sacrifice a land. (This cost is paid as attackers are declared.)`
 - **Excavator**
   - `{T}, Sacrifice a basic land: Target creature gains landwalk of each of the land types of the sacrificed land until end of turn. (It can't be blocked as long as defending player controls a land of any of those types.)`
+- **Exhaustion**
+  - `Creatures and lands target opponent controls don't untap during their next untap step.`
 - **Exile**
   - `Exile target nonwhite attacking creature. You gain life equal to its toughness.`
 - **Exorcist**
@@ -2997,6 +3023,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Target creature gets +X/+0 until end of turn.`
   - `Target creature gets +X/+0 until end of turn.`
   - `Target creature gets +X/+0 until end of turn.`
+- **Humble**
+  - `Until end of turn, target creature loses all abilities and has base power and toughness 0/1.`
 - **Hungry Mist**
   - `At the beginning of your upkeep, sacrifice this creature unless you pay {G}{G}.`
   - `At the beginning of your upkeep, sacrifice this creature unless you pay {G}{G}.`
@@ -3248,6 +3276,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When you cast a spell, return this creature to its owner's hand.`
 - **Jacques le Vert**
   - `Green creatures you control get +0/+2.`
+- **Jade Statue**
+  - `{2}: This artifact becomes a 3/6 Golem artifact creature until end of combat. Activate only during combat.`
+  - `{2}: This artifact becomes a 3/6 Golem artifact creature until end of combat. Activate only during combat.`
+  - `{2}: This artifact becomes a 3/6 Golem artifact creature until end of combat. Activate only during combat.`
 - **Jagged Lightning**
   - `Jagged Lightning deals 3 damage to each of two target creatures.`
 - **Jalum Tome**
@@ -4383,6 +4415,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature deals damage to a player, that player discards a card.`
 - **Ogre Shaman**
   - `{2}, Discard a card at random: This creature deals 2 damage to any target.`
+- **Okk**
+  - `This creature can't attack unless a creature with greater power also attacks.`
+  - `This creature can't block unless a creature with greater power also blocks.`
 - **Omen of Fire**
   - `Return all Islands to their owners' hands. Each player sacrifices a Plains or a white permanent of their choice for each white permanent they control.`
 - **Onslaught**
@@ -4498,6 +4533,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Remove two carrion counters from this creature: This creature gets +1/+1 until end of turn.`
   - `At the beginning of each end step, if a creature died this turn, put a carrion counter on this creature.`
   - `Remove two carrion counters from this creature: This creature gets +1/+1 until end of turn.`
+- **Outmaneuver**
+  - `X target blocked creatures assign their combat damage this turn as though they weren't blocked.`
 - **Overrun**
   - `Creatures you control get +3/+3 and gain trample until end of turn. (Each of those creatures can deal excess combat damage to the player or planeswalker it's attacking.)`
 - **Ovinomancer**
@@ -4546,6 +4583,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{3}: This creature gains flying until end of turn.`
 - **Patchwork Gnomes**
   - `Discard a card: Regenerate this creature. (The next time this creature would be destroyed this turn, instead tap it, remove it from combat, and heal all damage on it.)`
+- **Path of Peace**
+  - `Destroy target creature. Its owner gains 4 life.`
 - **Paupers' Cage**
   - `At the beginning of each opponent's upkeep, if that player has two or fewer cards in hand, this artifact deals 2 damage to that player.`
 - **Pavel Maliki**
@@ -5900,6 +5939,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature attacks, it gets +1/+1 until end of turn.`
 - **Soltari Visionary**
   - `Whenever this creature deals damage to a player, destroy target enchantment that player controls.`
+- **Somnophore**
+  - `Whenever this creature deals damage to a player, tap target creature that player controls. That creature doesn't untap during its controller's untap step for as long as this creature remains on the battlefield.`
 - **Songs of the Damned**
   - `Add {B} for each creature card in your graveyard.`
 - **Songstitcher**
@@ -6264,6 +6305,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your draw step, you may draw two additional cards. If you do, choose two cards in your hand drawn this turn. For each of those cards, pay 4 life or put the card on top of your library.`
 - **Sylvan Paradise**
   - `One or more target creatures become green until end of turn.`
+- **Symbiosis**
+  - `Two target creatures each get +2/+2 until end of turn.`
 - **Syphon Soul**
   - `Syphon Soul deals 2 damage to each other player. You gain life equal to the damage dealt this way.`
 - **Tablet of Epityr**
@@ -7154,6 +7197,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{U}, {T}, Sacrifice this creature: Tap up to three target creatures without flying.`
 - **Wave of Terror**
   - `At the beginning of your draw step, destroy each creature with mana value equal to the number of age counters on this enchantment. They can't be regenerated.`
+- **Waylay**
+  - `Create three 2/2 white Knight creature tokens. Exile them at the beginning of the next cleanup step.`
 - **Wayward Soul**
   - `{U}: Put this creature on top of its owner's library.`
 - **Weakstone**

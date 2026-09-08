@@ -28,7 +28,8 @@ idiom every caller used to write is safe only while a pass cannot be
 interrupted.
 """
 
-from ..combat_assignment import combat_damage_assigned_by
+from ..combat_assignment import (MUST_ASSIGN_AS_UNBLOCKED,
+                                combat_damage_assigned_by)
 from ..damage_events import deal_damage, lifelink_life_gained
 from ..models import Permanent
 from ..resumption import run_resumable
@@ -46,6 +47,31 @@ class CombatDamageStepMixin:
         blockers = set(self._combat_blockers_for_attacker(attacker_idx))
         blockers.update(self.combat_band_blocks.get(attacker_idx, []))
         return sorted(blockers)
+
+    def _defender_assigns_attacker_damage(self, attacker_idx: int) -> bool:
+        """Whether the **defending** player divides this attacker's damage.
+
+        Two rules give the same answer, and this is the one reader both the
+        damage step and ``web/combat_prompts.py`` ask — the property
+        :meth:`_attacker_blocked_by_banding` below already documents about
+        itself, kept as one question now that a second rule reaches it: what a
+        player is offered to divide and what the step then honours must be one
+        set of attackers.
+
+        CR 702.22j is the band. CR 510.1a's "rather than the attacking player"
+        (Defensive Formation) is the other, and it is not a property of the
+        *blockers* at all — it is a permanent the defending player controls, so
+        it reaches every attacker aimed at that seat, banded or not.
+        """
+        if self._attacker_blocked_by_banding(attacker_idx):
+            return True
+        from ..combat_assignment import defender_assigns_all_damage
+
+        defending_index = self.combat_attackers.get(attacker_idx)
+        return (
+            isinstance(defending_index, int)
+            and defender_assigns_all_damage(self, defending_index)
+        )
 
     def _attacker_blocked_by_banding(self, attacker_idx: int) -> bool:
         """CR 702.22j: does the **defending** player divide this attacker's damage?
@@ -94,8 +120,10 @@ class CombatDamageStepMixin:
             attacker_idx = int(attacker_idx)
             if self.combat_attackers.get(attacker_idx) != defender_index:
                 return False, "that attacker isn't attacking this player"
-            if not self._attacker_blocked_by_banding(attacker_idx):
-                return False, "attacker is not blocked by a creature with banding"
+            if not self._defender_assigns_attacker_damage(attacker_idx):
+                return False, (
+                    "the attacking player assigns this attacker's damage"
+                )
             if not (0 <= attacker_idx < len(attacker_controller.battlefield)):
                 return False, "attacker index out of range"
             attacker = attacker_controller.battlefield[attacker_idx]
@@ -451,6 +479,17 @@ class CombatDamageStepMixin:
             ):
                 to_players.append((defending_index, power_left, attacker, attacked_walker_id))
                 continue
+            # "X target blocked creatures **assign their combat damage this
+            # turn as though they weren't blocked**." (Outmaneuver.) The same
+            # CR 510.1b rewrite with no "may" in front of it, so it is read
+            # *without* the escape the branch above carries: an explicit
+            # per-blocker assignment is how a player declines Garruk's offer,
+            # and this card gives them nothing to decline. Whatever the attacker
+            # asked for is discarded, which is the restriction doing what it
+            # says rather than what the attacker would prefer.
+            if blockers and attacker.metadata.get(MUST_ASSIGN_AS_UNBLOCKED):
+                to_players.append((defending_index, power_left, attacker, attacked_walker_id))
+                continue
             if not blockers:
                 # A creature that was declared blocked (e.g. its blocker died to
                 # first-strike damage) is still "blocked" — it cannot deal damage
@@ -462,7 +501,7 @@ class CombatDamageStepMixin:
 
             # CR 702.22j: when an attacker is blocked by a creature with banding, the
             # defending player (not the active player) assigns that attacker's damage.
-            if self._attacker_blocked_by_banding(attacker_idx) and attacker_idx in self.combat_banding_damage:
+            if self._defender_assigns_attacker_damage(attacker_idx) and attacker_idx in self.combat_banding_damage:
                 requested = self.combat_banding_damage[attacker_idx]
             else:
                 requested = attacker_damage.get(attacker_idx, {})

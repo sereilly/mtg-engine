@@ -46,7 +46,7 @@ from ...oracle_types import (CHOSEN_CREATURE_TYPE_THIS_WAY,
 from ._events import (ATTACHED_PERMANENT_CONTROLLER,
                       EXILED_SPELL_CONTROLLER,
                       EXILED_SPELL_RECORD,
-                      LAST_TARGET_CONTROLLER,
+                      LAST_TARGET_CONTROLLER, LAST_TARGET_OWNER,
                       EXILED_THIS_WAY,
                       _EVENT_SUBJECT_POWER_RECORD,
                       _EVENT_SUBJECT_TOUGHNESS_RECORD)
@@ -58,7 +58,8 @@ from ._events import (ATTACHED_PERMANENT_CONTROLLER,
 from ._record_keys import (CHOSEN_CAST_DAMAGE, CHOSEN_DAMAGE_SOURCE,
                            CONTROL_EXCHANGED_PERMANENTS,
                            CHOSEN_PERMANENT, CHOSEN_PLAYER, COUNTED_NUMBER,
-                           CREATED_TOKEN, DAMAGE_RECIPIENT, EXTRA_TURN_GRANTED,
+                           CREATED_TOKEN, CREATED_TOKENS,
+                           DAMAGE_RECIPIENT, EXTRA_TURN_GRANTED,
                            OTHER_CHOSEN_PERMANENT, PUT_FROM_HAND_PERMANENTS,
                            REMOVED_FROM_COMBAT_PERMANENTS,
                            _BASE_PT_SET_PERMANENTS, _COUNTERS_PLACED_THIS_WAY,
@@ -354,7 +355,7 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # a later sentence of the same effect can name it from — a token is a new
     # object with a fresh id (CR 400.7), so there is nothing about it to look
     # up by.
-    "create_token": CREATED_TOKEN,
+    "create_token": (CREATED_TOKEN, CREATED_TOKENS),
     # "Create a token that's a copy of that creature. **That token** gains
     # haste until end of turn." (Echo Chamber.) The copy maker records what it
     # made under the same key the token maker above it does, and for that
@@ -710,6 +711,10 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
         "its_mana_value", "destroyed_target", "destroyed_this_way",
         _EVENT_SUBJECT_POWER_RECORD, _EVENT_SUBJECT_TOUGHNESS_RECORD,
         LAST_TARGET_CONTROLLER,
+        # …and the victim's **owner** (Path of Peace). Its own key beside the
+        # controller because CR 108.3 and CR 109.5 answer differently for every
+        # stolen permanent, and the destroy step writes both at the same moment.
+        LAST_TARGET_OWNER,
         # "…equal to the number of artifacts **they controlled** that were put
         # into a graveyard this way." (Builder's Bane.) The same per-object
         # seat map the sweeps beside it write, read here as a per-seat tally

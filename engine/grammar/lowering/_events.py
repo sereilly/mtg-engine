@@ -34,7 +34,7 @@ from ...exiled_records import (EXILE_RECORD_KEY,
                                EXILED_SPELL_CONTROLLER_KEY)
 
 from ...oracle_types import (ATTACHED_PERMANENT_CONTROLLER,  # noqa: F401
-                             LAST_TARGET_CONTROLLER,
+                             LAST_TARGET_CONTROLLER, LAST_TARGET_OWNER,
                              EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS)
 from .. import ast
 from ..errors import LoweringError
@@ -49,6 +49,7 @@ from ._deaths import (DEAD_CHARACTERISTIC_EVENTS, DEAD_CHARACTERISTIC_RECORDS,
 from ._record_keys import (CHOSEN_CAST_DAMAGE,  # noqa: F401
                            CHOSEN_DAMAGE_SOURCE, CHOSEN_PERMANENT,
                            CHOSEN_PLAYER, COUNTED_NUMBER, CREATED_TOKEN,
+                           CREATED_TOKENS,
                            DAMAGE_RECIPIENT, EXTRA_TURN_GRANTED,
                            LOOP_BOUND_OBJECT, LOOP_BOUND_PLAYER,
                            OTHER_CHOSEN_PERMANENT, PUT_FROM_HAND_PERMANENTS,

@@ -112,6 +112,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # names rather than one the sentence does, so the same family.
     "swap_land_types_until_eot": "characteristics",
     "restrict_untap_while_source_tapped": "tapping",
+    # "…for as long as this creature remains **on the battlefield**."
+    # (Somnophore.) The same linked restriction ended by the other fact
+    # about the same source, so the same category and GRAMMAR_CATEGORIES is
+    # unchanged.
+    "restrict_untap_while_source_present": "tapping",
     # Its counter-conditioned sibling: "…doesn't untap during its controller's
     # untap step **for as long as it has a paralyzation counter on it**"
     # (Dread Wight). The condition is a fact about the restricted permanent
@@ -174,6 +179,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # The "pump" family, because what the sentence does is set a P/T — the
     # type change beside it is the layer bridge reading the same record.
     "animate_self_until_eot": "pump",
+    # "…becomes a 3/6 Golem artifact creature until end of combat."
+    # (Jade Statue.) The same animation over the third window, so the same
+    # category and GRAMMAR_CATEGORIES is unchanged.
+    "animate_self_until_end_of_combat": "pump",
     # "{6}: This land becomes a 3/3 Elemental artifact creature that's still a
     # land." (Stalking Stones.) The row above with no end to it (CR 611.2a), so
     # the same category for `animate_target_indefinitely`'s reason: what differs
@@ -217,6 +226,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "grant_self_ability_text": "pump",
     # The negative twin ("It loses indestructible until end of turn", Soul Sear).
     "remove_target_keyword_until_eot": "pump",
+    # "Until end of turn, target creature loses **all abilities** …" (Humble.)
+    # The same layer-6 removal over every ability rather than one named word, so
+    # the same category and GRAMMAR_CATEGORIES is unchanged.
+    "remove_target_abilities_until_eot": "pump",
     # The same removal aimed at the object the *trigger's event* was about
     # ("Whenever a creature attacks you, it loses flanking until end of
     # turn", Barbed Foliage). One family, because what differs is which
@@ -713,6 +726,12 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # rather than itself (Flooded Woodlands, Reclamation).
     "creatures_cant_attack_unless_sacrifice": "combat_restrictions",
     "cant_block_unless_others_block": "combat_restrictions",
+    # "…unless a creature with greater power also attacks/blocks." (Okk.) The
+    # same CR 508.1c / 509.1b declaration-wide restriction asking a comparison
+    # instead of a count, so the same category and GRAMMAR_CATEGORIES is
+    # unchanged.
+    "cant_attack_unless_greater_power_attacks": "combat_restrictions",
+    "cant_block_unless_greater_power_blocks": "combat_restrictions",
     # "That creature can't attack during its controller's next turn." (Wall of
     # Dust's block trigger) — a one-shot stamp on the blocked creature, read
     # back by `can_attack` for exactly one of that controller's turns.
@@ -756,6 +775,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # what the combat damage step does, so it files with the other CR 506/510
     # clauses.
     "assign_no_combat_damage_until_eot": "combat_restrictions",
+    # "X target blocked creatures assign their combat damage this turn as
+    # though they weren't blocked." (Outmaneuver.) The same CR 510.1
+    # rewrite in the other direction, so the same category and
+    # GRAMMAR_CATEGORIES is unchanged.
+    "assign_as_unblocked_until_eot": "combat_restrictions",
     "exempt_from_attack_tapping": "combat_restrictions",
     "remove_from_combat": "combat_restrictions",
     # "Target unblocked attacking creature becomes blocked." (Dazzling Beauty;

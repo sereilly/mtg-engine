@@ -34,7 +34,8 @@ from ...auras import controller_cast_ban
 from ...cast_restrictions import (check_cast_timing, chosen_name_ban,
                                   combat_play_ban,
                                   global_play_timing,
-                                  global_cast_ban, own_cast_ban)
+                                  global_cast_ban, own_cast_ban,
+                                  spell_cap_ban)
 from ...search_filters import card_has_type
 from ...cast_timing import (CAST_AT_INSTANT_SPEED, a_sorcery_could_be_cast,
                             sacrifices_at_cleanup_if_cast_at_instant_speed)
@@ -1015,6 +1016,20 @@ class SpellCastingMixin:
         # it is — which is why it sits beside them rather than in
         # `check_cast_timing`, whose whole table reads the *casting card's* own
         # printed clause.
+        # "Each player can't cast more than one spell each turn." (Arcane
+        # Laboratory.) The same CR 601.3a prohibition counting *casts* instead
+        # of naming a type, so it is asked of every battlefield beside the two
+        # bans above and binds the enchantment's own controller too. The tally
+        # it reads is appended to further down this function, which is what
+        # makes "more than one" mean "you have already cast one".
+        spell_cap = spell_cap_ban(self, caster_index)
+        if spell_cap is not None:
+            details = (
+                f"can't cast {card.name}: {spell_cap} caps this turn's spells"
+            )
+            self.log.append(details)
+            return SimulationResult(card.name, False, classification.effect_kind, details)
+
         wrong_turn = global_play_timing(self, caster_index)
         if wrong_turn is not None:
             details = (

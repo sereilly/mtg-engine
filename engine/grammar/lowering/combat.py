@@ -15,7 +15,7 @@ from ..errors import LoweringError
 from ._record_keys import CHOSEN_PLAYER
 from ._common import (
     _describe_several_targets, _describe_targets, _filter_payload,
-    _is_enchanted, _is_source, _REST_OF_TURN, RESTRICTION_TURNS,
+    _is_source, _REST_OF_TURN, RESTRICTION_TURNS,
     _names_several_targets, _restrictions_beyond, refuse_untestable,
 )
 from ._events import (
@@ -853,52 +853,6 @@ def _attack_tap_gate_filter(node: ast.AttackingDoesntTap) -> dict[str, object]:
             node=node,
         )
     return described
-
-
-def _lower_assigns_no_combat_damage(
-    node: ast.AssignsNoCombatDamage,
-) -> tuple[OracleInstruction, ...]:
-    """"This creature assigns no combat damage this turn." (Floral Spuzzem.)
-
-    The subject must be the effect's own source and the window must be the rest
-    of the turn, because those are the two things the record behind it can say:
-    it is a mark on one permanent, swept by the cleanup step with the rest of
-    the turn's marks. A sentence naming somebody else's creature, or a window
-    the sweep does not end, refuses rather than lowering onto a record that
-    would answer a different question.
-    """
-    # "…you may have **it** assign no combat damage this turn" on an Aura
-    # (Cloak of Confusion), where the pronoun was rebound to the permanent the
-    # Aura is attached to. The same mark on a different permanent, so the
-    # subject is payload rather than a second kind — and it is *which*
-    # permanent, not a filter: nothing here chooses.
-    if _is_enchanted(node.subject):
-        subject = "attached"
-    elif (
-        isinstance(node.subject, ast.TargetSpec)
-        and node.subject.quantifier == "that"
-    ):
-        # "…when **target creature you control** attacks and isn't blocked, **it**
-        # assigns no combat damage this turn" (Delif's Cone, Delif's Cube). The
-        # delay's opener chose the creature and `rebinding` pointed the pronoun
-        # at it (CR 603.7c), so the mark goes on the object the ability is
-        # *about* rather than on its source — which for the Cube is the artifact
-        # that armed it and is not a creature at all.
-        subject = "bound"
-    elif _is_source(node.subject):
-        subject = ""
-    else:
-        raise LoweringError(
-            "only the effect's own source or the permanent it is attached to "
-            "can be marked as assigning no combat damage", node=node,
-        )
-    if node.duration.kind not in _REST_OF_TURN:
-        raise LoweringError(
-            "an assigns-no-combat-damage mark lasts the rest of the turn and "
-            "nothing else ends it", node=node,
-        )
-    payload = {"subject": subject} if subject else {}
-    return (OracleInstruction("assign_no_combat_damage_until_eot", "", payload),)
 
 
 def _lower_choose_blocks_for_defenders(

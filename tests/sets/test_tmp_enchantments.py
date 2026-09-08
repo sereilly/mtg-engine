@@ -341,12 +341,32 @@ def test_w1g3_the_can_attack_or_block_row_refuses_a_self_reference():
     """`_printed_noun` answers ``{"type_filter": "creature"}`` for "this
     creature" and "enchanted creature" alike, so the row is anchored on the
     plural head noun — a `.+` subject would read a restriction printed about
-    one creature as a ban on every creature on the board."""
+    one creature as a ban on every creature on the board.
+
+    **The invariant is which kinds the sentence produces, not whether it is
+    read at all.** Urza's Saga's second wave gave "this creature can't attack
+    or block" a row of its own (Wirecat), so the self-reference is claimed now
+    — by ``cant_attack``/``cant_block``, the kinds each gate reads off *the
+    creature's own program*. What must never happen is what this guard was
+    written for: the plural row claiming it and producing
+    ``creatures_cant_attack``/``creatures_cant_block``, which are board scans
+    and would ground every creature in the game off one Cat.
+    """
     from engine.combat_restrictions import combat_restriction_for
 
-    assert combat_restriction_for("black creatures can't attack or block") is not None
-    assert combat_restriction_for("this creature can't attack or block") is None
-    assert combat_restriction_for("enchanted creature can't attack or block") is None
+    board_wide = combat_restriction_for("black creatures can't attack or block")
+    assert board_wide is not None
+    assert (board_wide.kind, board_wide.also_kinds) == (
+        "creatures_cant_attack", ("creatures_cant_block",)
+    )
+    for self_reference in (
+        "this creature can't attack or block",
+        "enchanted creature can't attack or block",
+    ):
+        read = combat_restriction_for(self_reference)
+        assert read is None or (read.kind, read.also_kinds) == (
+            "cant_attack", ("cant_block",)
+        ), self_reference
 
 
 # --- W1G4: triggered abilities the engine had never fired ---

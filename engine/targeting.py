@@ -1955,6 +1955,17 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     # so the kind looked covered while every "untap all X <seat> controls"
     # announced nothing at all.
     "untap_all_matching": _matching_sweep_spec,
+    # "Creatures and lands **target opponent** controls don't untap during
+    # their next untap step." (Exhaustion.) The third verb over the two rows
+    # above, and the same two halves of one payload: the noun phrase says which
+    # permanents, the ``controller`` key inside it says whose, and only the
+    # second is a choice (CR 115.4). ``_matching_sweep_spec`` rather than the
+    # bare seat reader, because this kind's *other* printing chooses an object
+    # instead ("Target creature doesn't untap during its controller's next
+    # untap step", Barl's Cage) and reaches the picker through the ordinary
+    # ``targets`` key — a row that answered only the seat would have taken that
+    # card's prompt away.
+    "skip_next_untap": _matching_sweep_spec,
     # Corrosion's rust counters: the same printed noun phrase as Simoon's, so
     # the same reader — what is being *chosen* is a seat, whatever the sweep
     # then does to that seat's permanents.

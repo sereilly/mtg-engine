@@ -311,3 +311,128 @@ def test_w2g3_reprocess_over_an_empty_board_draws_nothing(set_pool):
 
     assert game.pending_sacrifice_state() is None, "nothing to offer, nothing asked"
     assert alice.hand == []
+
+
+# --- W2G4: ownership, and a whole board held down for one step ---
+import pytest
+
+from engine import Game, PlayerState
+from engine.control import change_control
+from engine.models import Permanent
+
+from tests.helpers import resolve_stack as _g4e_resolve
+
+
+def _g4e_board(*, mine=(), theirs=(), hand0=(), life=20):
+    """Two seats, mana costs off, seat 0 active. Returns ``(game, s0, s1)`` and
+    ends on that tuple so no union can splice another helper onto it."""
+    g4e_seat0 = PlayerState(
+        name="G4-S1", battlefield=[Permanent(card=c) for c in mine],
+        hand=list(hand0), life=life,
+    )
+    g4e_seat1 = PlayerState(
+        name="G4-S2", battlefield=[Permanent(card=c) for c in theirs], life=life,
+    )
+    g4e_game = Game(players=[g4e_seat0, g4e_seat1])
+    g4e_game.enforce_mana_costs = False
+    g4e_game.active_player_index = 0
+    g4e_game._sync_control()
+    return g4e_game, g4e_seat0, g4e_seat1
+
+
+def _g4e_creature(name, power=2, toughness=2):
+    from tests.helpers import _mk_creature_card
+
+    return _mk_creature_card(name, power, toughness)
+
+
+def test_w2g4_path_of_peace_heals_the_owner_not_the_controller(set_pool):
+    """CR 108.3 and CR 109.5 are two questions, and they differ for every
+    permanent anybody has ever stolen. Read out of the controller record this
+    card heals the thief — which is who destroyed it."""
+    pool = set_pool("USG")
+    game, mine, theirs = _g4e_board(
+        theirs=[_g4e_creature("G4E Stolen")], hand0=[pool["Path of Peace"]],
+    )
+    stolen = theirs.battlefield[0]
+    # Seat 0 steals it, then destroys its own stolen creature.
+    change_control(stolen, 0, source="G4E theft")
+    game._sync_control()
+    assert game.controller_index_of(stolen) == 0
+    assert game.owner_index_of(stolen) == 1
+
+    assert game.cast_from_hand(
+        0, "Path of Peace", target_player_index=0,
+        target_permanent_index=0, target_permanent_ids=[stolen.permanent_id],
+    ).supported
+    _g4e_resolve(game)
+
+    assert not game.is_on_battlefield(stolen)
+    assert (mine.life, theirs.life) == (20, 24)
+
+
+def test_w2g4_its_owner_refuses_with_no_step_that_chose_an_object(set_pool):
+    """The possessive names the object an earlier step of the same effect acted
+    on. With no such step it names nobody, and defaulting to "target" would heal
+    whichever seat a targetless resolution happens to carry."""
+    from engine.grammar import compile_line
+
+    assert compile_line("Destroy target creature. Its owner gains 4 life.").usable
+    assert not compile_line("Its owner gains 4 life.").usable
+    # The possessive is still read as a *zone* owner everywhere it was.
+    assert compile_line("Return target creature to its owner's hand.").usable
+
+
+def test_w2g4_exhaustion_holds_both_types_on_one_seat_only(set_pool):
+    """"Creatures and lands **target opponent** controls" is a seat the spell
+    chose (CR 115.4), which no read of a permanent can supply. Refused rather
+    than supplied the sweep matched nothing and the spell resolved having held
+    nothing down; dropped, it would hold the caster's board too."""
+    pool = set_pool("USG")
+    game, mine, theirs = _g4e_board(
+        mine=[_g4e_creature("G4E Mine")],
+        theirs=[_g4e_creature("G4E Theirs"), set_pool("USG")["Forest"]],
+        hand0=[pool["Exhaustion"]],
+    )
+    for permanent in (*mine.battlefield, *theirs.battlefield):
+        permanent.tapped = True
+
+    assert game.cast_from_hand(0, "Exhaustion", target_player_index=1).supported
+    _g4e_resolve(game)
+
+    assert theirs.battlefield[0].metadata.get("skip_next_untap") == 1
+    assert theirs.battlefield[1].metadata.get("skip_next_untap") == 1
+    assert mine.battlefield[0].metadata.get("skip_next_untap") is None
+
+    game.active_player_index = 1
+    game.resolve_untap_step(1)
+    assert all(perm.tapped for perm in theirs.battlefield)
+    game.resolve_untap_step(1)
+    assert not any(perm.tapped for perm in theirs.battlefield)
+
+
+def test_w2g4_the_elided_possessive_names_the_same_untap_step(set_pool):
+    """"During **their next** untap step" and "during **their controller's**
+    next untap step" are one window: an untap step belongs to a player (CR 502),
+    and the only player "their" can name for a set of permanents is the one who
+    controls them. It is not read as "your", which picks a different step the
+    moment a permanent changes hands."""
+    from engine.grammar import compile_line
+
+    elided = compile_line(
+        "Creatures and lands target opponent controls don't untap during their "
+        "next untap step."
+    )
+    spelled = compile_line(
+        "Creatures and lands target opponent controls don't untap during their "
+        "controller's next untap step."
+    )
+    assert elided.usable and spelled.usable
+    assert [(i.kind, i.payload) for i in elided.instructions] == [
+        (i.kind, i.payload) for i in spelled.instructions
+    ]
+    seated = compile_line(
+        "This creature doesn't untap during your next untap step."
+    )
+    assert seated.usable
+    assert seated.instructions[0].payload.get("whose_untap_step") == "controller"

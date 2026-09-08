@@ -60,6 +60,20 @@ def _parse_doesnt_untap_next_step(
     if stream.accept_word("your"):
         return _parse_next_untap_steps(stream, subject, whose="you")
     stream.expect_word("their", "its")
+    # "…don't untap during **their next** untap step." (Exhaustion.) The same
+    # step with the possessive elided: an untap step belongs to a player
+    # (CR 502), and the only player "their" can name for a set of permanents is
+    # the one who controls them — which is what the three words below spell out
+    # and what ``whose="controller"`` already means to the lowering. So the
+    # elision is read as the phrase it elides rather than as a fourth kind of
+    # window.
+    #
+    # It is **not** read as "your", which is the other seat this production
+    # knows: that names the ability's controller and picks a different step the
+    # moment the permanent changes hands. Both spellings survive, and the
+    # printed word decides which.
+    if stream.at_word("next"):
+        return _parse_next_untap_steps(stream, subject, whose="controller")
     stream.expect_word("controller")
     stream.expect_word("'s")
     # "…untap step **for as long as this creature remains tapped**" (Phyrexian
@@ -98,8 +112,20 @@ def _parse_doesnt_untap_next_step(
         # `paragraphs.py` were tightened out of at the same time.
         if stream.accept_word(
             "creature", "artifact", "enchantment", "land", "permanent"
-        ) and stream.accept_phrase("remains", "tapped"):
-            return ast.DoesntUntapWhileSourceTapped(subject)
+        ):
+            if stream.accept_phrase("remains", "tapped"):
+                return ast.DoesntUntapWhileSourceTapped(subject)
+            # "…for as long as this creature remains **on the battlefield**."
+            # (Somnophore.) The second fact about the source that can end this
+            # restriction, and every word of it is required for the reason the
+            # noun above is: "remains" alone names no condition, and a tail
+            # accepted and dropped would be a lock that never ends.
+            if stream.accept_phrase(
+                "remains", "on", "the", "battlefield"
+            ):
+                return ast.DoesntUntapWhileSourceTapped(
+                    subject, while_on_battlefield=True
+                )
     stream.reset(linked)
     return _parse_next_untap_steps(stream, subject, whose="controller")
 

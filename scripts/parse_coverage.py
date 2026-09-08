@@ -74,7 +74,25 @@ from engine.cast_restrictions import (CAST_RESTRICTIONS,  # noqa: E402
                                       chosen_name_ban_line,
                                       global_cast_ban_line,
                                       global_play_timing_line)
+from engine.cast_restrictions import spell_cap_line  # noqa: E402
+from engine.combat_assignment import defender_assigns_line  # noqa: E402
 from engine.counter_conditions import uncounterable_line  # noqa: E402
+
+
+#: "Rather than the attacking player, you assign …" and the sentence behind it.
+#: One reader for both, because the second restates CR 510.1c and the first is
+#: the whole rule -- see the channel's own comment below.
+_DEFENDER_ASSIGNS_RESTATEMENT = (
+    "you can divide that creature's combat damage as you choose among any of "
+    "the creatures blocking it"
+)
+
+
+def defender_assigns_claims(sentence: str) -> bool:
+    return (
+        defender_assigns_line(sentence)
+        or sentence.strip().lower().rstrip(".") == _DEFENDER_ASSIGNS_RESTATEMENT
+    )
 from engine.special_actions import (permanent_special_action_sentence,  # noqa: E402
                                     special_action_line)
 from engine.cast_timing import (grants_flash,  # noqa: E402
@@ -338,6 +356,25 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # own channel, asking the reader that answers it.
     ("cast_restrictions.py (board-wide ban)",
      lambda s: global_cast_ban_line(s) is not None),
+    # "Each player can't cast more than one spell each turn." (Arcane
+    # Laboratory.) CR 601.3a counting casts rather than naming a type, enforced
+    # by `cast_restrictions.spell_cap_ban` from `mixins/stack/casting.py`. Its
+    # own channel beside the ban above, asking the reader that answers it.
+    ("cast_restrictions.py (per-turn spell cap)",
+     lambda s: spell_cap_line(s) is not None),
+    # "**Rather than the attacking player, you assign the combat damage of each
+    # creature attacking you.** You can divide that creature's combat damage as
+    # you choose among any of the creatures blocking it." (Defensive
+    # Formation.) CR 510.1a's assigner substituted, enforced by
+    # `phases/combat_damage_step._defender_assigns_attacker_damage`.
+    #
+    # **Both sentences, one channel.** The second says what the first *means* —
+    # CR 510.1c already lets whoever assigns divide the damage among the
+    # blockers — so it is claimed by the reader of the substitution rather than
+    # by a rule of its own, which is what a claim on a restatement is: the
+    # sentence has no separate implementation and inventing one would be a
+    # second reader of one printed rule.
+    ("combat_assignment.py (defender assigns)", defender_assigns_claims),
     # The *name*-keyed half of the same rule — "Spells with the chosen names
     # can't be cast and lands with the chosen names can't be played." (Null
     # Chamber.) Its own channel beside the type-keyed one for that channel's

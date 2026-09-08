@@ -17,6 +17,7 @@ from ._common import (recorded_permanent_ids,
 from .registry import effect_handler
 from ..keywords import grant_keyword
 from ..combat_assignment import (ASSIGNS_NO_COMBAT_DAMAGE,
+                                MUST_ASSIGN_AS_UNBLOCKED,
                                  BLOCKED_WITHOUT_BLOCKERS)
 from ..combat_permissions import (ADDITIONAL_BLOCKS_UNTIL_EOT,
                                   CAN_BLOCK_ANY_NUMBER_UNTIL_EOT,
@@ -1731,6 +1732,53 @@ def exempt_from_attack_tapping(
     game.log.append(
         f"attacking doesn't cause those creatures to tap this combat "
         f"({context.card.name if context.card is not None else 'an effect'})"
+    )
+    return True, "resolved"
+
+
+@effect_handler("assign_as_unblocked_until_eot")
+def assign_as_unblocked_until_eot(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """"X target blocked creatures assign their combat damage this turn as
+    though they weren't blocked." (Outmaneuver.)
+
+    One mark per chosen creature, read by the combat damage step and ended by
+    the cleanup sweep — the same shape ``assign_no_combat_damage_until_eot``
+    below uses, over chosen permanents rather than over the source.
+
+    Every named target still legal is marked and the rest of the effect still
+    happens (CR 608.2b), which is what ``resolve_target_permanents`` gives; a
+    target that has left is simply not marked. "Blocked" is re-checked here
+    because it is the printed noun phrase and CR 608.2b asks a target's
+    legality again at resolution — a creature whose blocker died to first-strike
+    damage is no longer blocked, and marking it would be the spell reaching a
+    creature it could not have named.
+    """
+    from ..subject_filters import subject_matches
+
+    filters = (instruction.payload.get("targets") or {}).get("filter") or {}
+    observer = (
+        game.players.index(context.caster)
+        if context.caster in game.players else None
+    )
+
+    def _legal(perm) -> bool:
+        return perm.is_creature and subject_matches(
+            game, perm, filters, observer=observer,
+            source=context.source_permanent,
+        )
+
+    chosen = resolve_target_permanents(game, context, predicate=_legal)
+    if not chosen:
+        game.log.append(f"{context.card.name}: no blocked creature to redirect")
+        return True, "resolved"
+    for creature in chosen:
+        creature.metadata[MUST_ASSIGN_AS_UNBLOCKED] = True
+    game.log.append(
+        ", ".join(perm.card.name for perm in chosen)
+        + " assign combat damage as though unblocked this turn "
+        + f"({context.card.name})"
     )
     return True, "resolved"
 

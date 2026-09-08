@@ -558,7 +558,15 @@ def collect_ability_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]
     # same grant whichever duration wrote it — the swept key and the indefinite
     # one (Mishra's Groundbreaker). Reading only the first is how a permanent
     # animation would arrive without the keywords its own sentence granted.
-    for _key in ("animate_until_end_of_turn", "animate_indefinitely"):
+    # …and the third (Jade Statue), for the reason the second is read here:
+    # what an animation contributes to its layer does not depend on when it
+    # ends. This key held a bare ``True`` until Jade Statue stopped being a
+    # card hook, so the Statue was a creature and not a **Golem**: a lord did
+    # not pump it and "destroy target Golem" missed it.
+    for _key in (
+        "animate_until_end_of_turn", "animate_indefinitely",
+        "animate_until_end_of_combat",
+    ):
         animation = perm.metadata.get(_key) or {}
         granted = animation.get("keywords") or ()
         if granted:
@@ -688,7 +696,7 @@ def collect_type_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
     effects: list[ContinuousEffect] = []
     meta = perm.metadata
 
-    if meta.get("land_animated") or meta.get("animate_until_end_of_combat"):
+    if meta.get("land_animated"):
         effects.append(
             add_types(only, card_types=["creature"], timestamp=0, label="animated")
         )
@@ -748,7 +756,15 @@ def collect_type_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
     # when it ends. The cleanup sweep clears the first key and never hears of
     # the second (``handlers/board_misc.ANIMATE_INDEFINITELY``), which is the
     # whole of the difference between them.
-    for _key in ("animate_until_end_of_turn", "animate_indefinitely"):
+    # …and the third (Jade Statue), for the reason the second is read here:
+    # what an animation contributes to its layer does not depend on when it
+    # ends. This key held a bare ``True`` until Jade Statue stopped being a
+    # card hook, so the Statue was a creature and not a **Golem**: a lord did
+    # not pump it and "destroy target Golem" missed it.
+    for _key in (
+        "animate_until_end_of_turn", "animate_indefinitely",
+        "animate_until_end_of_combat",
+    ):
         animation = meta.get(_key)
         if animation:
             # CR 205.1a where the sentence printed none of CR 205.1b's

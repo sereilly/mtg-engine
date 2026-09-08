@@ -18,7 +18,8 @@ from ..delayed_triggers import fire_delayed_triggers
 from ..exiled_records import EXILE_RECORD_KEY, live_records
 from ..keywords import (clear_granted_ability_lines,
                         clear_granted_keywords,
-                        clear_removed_ability_keywords)
+                        clear_removed_ability_keywords,
+                        clear_all_abilities_removals)
 from ..copies import RECOPY_EACH_UPKEEP, grants_ability
 from ..land_types import MIRE_COUNTER, end_land_type_change
 from ..layer_bridge import GAINED_TYPES
@@ -893,6 +894,9 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
             clear_granted_keywords(perm, "your_next_upkeep", seat=player_index)
             clear_granted_ability_lines(perm, "your_next_upkeep", seat=player_index)
             clear_removed_ability_keywords(
+                perm, "your_next_upkeep", seat=player_index
+            )
+            clear_all_abilities_removals(
                 perm, "your_next_upkeep", seat=player_index
             )
             # "**Until your next upkeep**, target permanent can't phase out."

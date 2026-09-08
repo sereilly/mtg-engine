@@ -2550,9 +2550,19 @@ class LegalityMixin:
             # a ground creature. All four paid the cost, resolved, and tapped
             # nothing, because the *handler* still reads the filter — which is
             # the shape that makes this silent.
+            # Every seat this gate can be given, exactly as the destroy branch
+            # above hands them down and for its stated reason: a seat-relative
+            # narrowing ``subject_matches`` cannot answer is one it **refuses**,
+            # and a refusal here is an empty picker — CR 603.3c then takes the
+            # ability off the stack for having no legal target. "That player
+            # controls" (Somnophore) is the seat the trigger's fire site froze
+            # and "defending player controls" is CR 506.2's; the caller is the
+            # only holder of either, so both travel rather than being
+            # re-derived.
             return subject_matches(
                 self, perm, instruction.payload,
                 observer=controller_index, source=source_permanent,
+                defending=defending, that_player=that_player,
             )
         if instruction.kind == "attach_source_to_target":
             # An equip ability (CR 702.6a). The picker's own_only flag has

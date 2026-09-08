@@ -195,6 +195,42 @@ def pump_target_creature_until_eot(game: Game, instruction: OracleInstruction, c
             defending=defending,
         )
 
+    # "**Two target creatures** each get +2/+2 until end of turn." (Symbiosis.)
+    # The several-target reading of this same instruction, and the same branch
+    # `grant_target_keyword_until_eot` takes for "X target creatures gain
+    # islandwalk": the printed count is read off the description, resolved
+    # against the announced X because a printed "X" is a string until the spell
+    # is cast, and every chosen permanent is pumped.
+    #
+    # Above the single-target read rather than beside it, because that one
+    # *falls back to scanning the battlefield* when the chosen target no longer
+    # answers — right for one target and wrong for several, which is exactly
+    # what `resolve_target_permanents` was written to say. Reached only from a
+    # description carrying a count above one, so every one-target payload ever
+    # written takes the path below unchanged.
+    printed_count = (instruction.payload.get("targets") or {}).get("count")
+    maximum = (
+        resolve_amount(printed_count, context.x_value)
+        if printed_count is not None else None
+    )
+    if isinstance(maximum, int) and maximum > 1:
+        until = str(instruction.payload.get("duration") or "end_of_turn")
+        chosen = resolve_target_permanents(game, context, predicate=_eligible)
+        if not chosen:
+            # Every named target may have become illegal since (CR 608.2b), and
+            # an "up to N" may legally have named none.
+            game.log.append(f"{card.name}: no valid creature targets")
+            return True, "resolved"
+        for creature in chosen[:maximum]:
+            apply_temp_pt_boost(creature, power_delta, toughness_delta, until=until)
+        game.log.append(
+            ", ".join(p.card.name for p in chosen[:maximum])
+            + f" each get {power_delta:+}/{toughness_delta:+} until "
+            + until.replace("_", " ")
+            + f" ({card.name})"
+        )
+        return True, "resolved"
+
     target_perm = resolve_target_permanent(
         game, context, predicate=_eligible, fallback_players=(target, caster)
     )
@@ -2106,6 +2142,55 @@ def remove_target_keyword_until_eot(game: Game, instruction: OracleInstruction, 
         _remove_one_keyword(target, keyword, duration="end_of_turn")
     game.log.append(
         f"{target.card.name} loses {' and '.join(keywords)} until end of turn ({card.name})"
+    )
+    return True, "resolved"
+
+
+@effect_handler("remove_target_abilities_until_eot")
+def remove_target_abilities_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Until end of turn, target creature **loses all abilities** and has base
+    power and toughness 0/1." (Humble; Soul Sculptor prints the clause behind a
+    type change.)
+
+    CR 613.1f's blanket removal aimed at one permanent, which is the half of
+    that rule the engine had no channel for: Humility and Titania's Song are
+    board-wide statics re-derived from a source on every recompute, and there is
+    no source here — the spell is in a graveyard the moment it has resolved.
+
+    So the record goes on the creature (``keywords.remove_all_abilities``) and
+    ``Permanent.effective_card`` reads it in the same fold that answers the
+    static. That is what makes one write reach all four consumers of "what does
+    it say?" — the layer-6 keyword set, the activated abilities the picker
+    enumerates off the compiled program, the triggered abilities the trigger
+    scan reads off the card, and the statics re-derived from its text.
+
+    **Layer 6 is timestamp-ordered (CR 613.3), so an ability granted after this
+    survives it**, which is the rule and not an accident of storage: the record
+    is a contribution rather than a rewrite, and the fold in ``effective_card``
+    applies it before the grants for exactly that reason.
+
+    The printed noun phrase is read through ``granted_target_legal``, the same
+    three questions the grant and the keyword removal beside it ask — a
+    fallback scan with no predicate is how Reality Anchor stripped shadow from a
+    Circle of Protection.
+    """
+    from ..keywords import remove_all_abilities
+
+    card = context.card
+    target = resolve_target_permanent(
+        game, context, predicate=granted_target_legal(game, instruction, context)
+    )
+    if target is None:
+        game.log.append(f"{card.name}: no valid target to strip")
+        return True, "resolved"
+    remove_all_abilities(target, duration="end_of_turn")
+    # Every characteristic this can move is computed rather than stored, but the
+    # derived channels are rebuilt from the board rather than on every read —
+    # a lord whose anthem the stripped creature was contributing has to stop
+    # contributing it now rather than at the next thing that happens to refresh.
+    game._refresh_dynamic_creatures()
+    game.log.append(
+        f"{target.card.name} loses all abilities until end of turn ({card.name})"
     )
     return True, "resolved"
 

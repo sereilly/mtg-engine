@@ -564,6 +564,30 @@ def parse_imperative(
         # without a binder fails **by name** rather than failing to parse.
         subject = _parse_that_object(stream) or parse_recipient(stream)
         if subject is None:
+            # "Create three 2/2 white Knight creature tokens. **Exile them** at
+            # the beginning of the next cleanup step." (Waylay.) The plural of
+            # "that token": the objects an earlier step of this same effect
+            # created, which no read of a permanent can identify — a token is a
+            # new object with a fresh id (CR 400.7), so the maker records the
+            # ids and this reads them back.
+            #
+            # Read **last**, only where every reader above has already refused,
+            # and that ordering is the whole safety of it. "Exile them" is
+            # printed by six other cards in the pool ("Search your library for
+            # three cards, **exile them**, then shuffle") where the word names
+            # a pile a search produced, and each of those sentences is claimed
+            # whole by its own production long before this line is reached. A
+            # reader placed in front of them would take the word and hand the
+            # search's cards to a token exile.
+            #
+            # ``"those"`` rather than ``"that"``, because the quantifier is
+            # what the lowering tells the two apart by: the singular addresses
+            # one recorded id and the plural addresses the list.
+            if stream.accept_word("them"):
+                subject = ast.TargetSpec(
+                    "those", ast.ObjectFilter(is_created_token=True)
+                )
+        if subject is None:
             raise stream.error("expected something to exile")
         # "Exile this creature **and target creature** without flying that's
         # attacking you." (Giant Trap Door Spider.) One verb over two noun

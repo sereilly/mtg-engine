@@ -28,6 +28,8 @@ instruction, the entry goes with it.
 from __future__ import annotations
 
 from ..auras import aura_continuous_claim
+from ..combat_assignment import (DEFENDER_ASSIGNS_CLAIM,
+                                 defender_assigns_line)
 from ..cast_restrictions import (CAST_RESTRICTIONS, COMBAT_PLAY_BAN_CLAIM,
                                  cast_absence_line,
                                  combat_play_ban_line,
@@ -38,6 +40,8 @@ from ..cast_restrictions import (CAST_RESTRICTIONS, COMBAT_PLAY_BAN_CLAIM,
                                  chosen_name_ban_line,
                                  OWN_CAST_BAN_CLAIM,
                                  own_cast_ban_line,
+                                 SPELL_CAP_CLAIM,
+                                 spell_cap_line,
                                  global_cast_ban_line,
                                  global_play_timing_line,
                                  GLOBAL_PLAY_TIMING_CLAIM)
@@ -155,6 +159,21 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # through the reader that enforces it, so the claim cannot outlive the ban.
     if own_cast_ban_line(normalized) is not None:
         return OWN_CAST_BAN_CLAIM
+
+    # engine/combat_assignment.py — CR 510.1a's assigner substituted for the
+    # defending player: "Rather than the attacking player, you assign the combat
+    # damage of each creature attacking you." (Defensive Formation.) Claimed
+    # through the reader the damage step enforces it with, so the claim cannot
+    # outlive the substitution.
+    if defender_assigns_line(normalized):
+        return DEFENDER_ASSIGNS_CLAIM
+
+    # engine/cast_restrictions.py — the same rule counting casts instead of
+    # naming a type: "Each player can't cast more than one spell each turn."
+    # (Arcane Laboratory.) Claimed through the reader that enforces it, so the
+    # claim cannot outlive the cap.
+    if spell_cap_line(normalized) is not None:
+        return SPELL_CAP_CLAIM
 
     # engine/cast_restrictions.py — the *name*-keyed half of the same rule:
     # "Spells with the chosen names can't be cast and lands with the chosen

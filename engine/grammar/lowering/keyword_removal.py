@@ -80,6 +80,45 @@ def _team_removal_payload(node: ast.LoseKeyword) -> dict[str, object] | None:
     return payload
 
 
+def _lower_lose_all_abilities(
+    node: ast.LoseKeyword,
+) -> tuple[OracleInstruction, ...]:
+    """"Until end of turn, **target creature loses all abilities** …" (Humble.)
+
+    CR 613.1f aimed at one permanent, which is the half of that rule this engine
+    did not have: the blanket removal existed only as a **board-wide static**
+    (Humility, Titania's Song — ``global_statics.removes_all_abilities``), and a
+    static has no channel for "this one creature, until end of turn".
+
+    Two refusals, and both are the shapes that already have owners:
+
+    * **No duration** is the printed static ("All creatures lose all
+      abilities"), which the global-statics table reads off the card's text and
+      re-derives on every recompute. Claiming it here would replace a
+      continuous effect with a one-shot stamp nothing re-derives, and a creature
+      entering after Humility resolved would keep its abilities.
+    * **A subject that is not a chosen target** is that same static's set, or a
+      pronoun this instruction cannot address. The removal writes a record onto
+      one permanent, so the sentence has to name one.
+    """
+    if node.duration.kind not in ("until_end_of_turn", "this_turn"):
+        raise LoweringError(
+            "a durationless blanket ability removal is a static ability "
+            "(engine/global_statics.py)",
+            node=node,
+        )
+    if not _is_target(node.subject):
+        raise LoweringError(
+            "the blanket ability removal reaches one chosen permanent",
+            node=node,
+        )
+    payload: dict[str, object] = {"duration": "end_of_turn"}
+    _describe_targets(payload, node.subject)
+    return (
+        OracleInstruction("remove_target_abilities_until_eot", "", payload),
+    )
+
+
 def _lower_lose_keyword(
     node: ast.LoseKeyword,
     event: str | None = None,
@@ -94,6 +133,8 @@ def _lower_lose_keyword(
     word whose behaviour is not built would report a removal of nothing.
     """
     _refuse_bare_chosen_ability(node)
+    if node.all_abilities:
+        return _lower_lose_all_abilities(node)
     for keyword in node.keywords:
         # Through the ability's *name*, so a keyword carrying a printed
         # argument is asked about the ability rather than about the argument:

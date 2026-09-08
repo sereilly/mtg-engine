@@ -4597,6 +4597,13 @@ _GRAMMAR_STATIC_CREATURE_KINDS = frozenset(
         # count is a parsed number, so the grammar reads it here.
         "cant_attack_unless_others_attack",
         "cant_block_unless_others_block",
+        # "…unless a creature with greater power also attacks/blocks." (Okk.)
+        # The same static property under a comparison rather than a count, and
+        # here for the same reason: the declaration reads the compiled
+        # instruction off the card, and without the row Okk came back "text too
+        # complex" with both of its lines grammar-clean.
+        "cant_attack_unless_greater_power_attacks",
+        "cant_block_unless_greater_power_blocks",
         # "As long as the top card of your graveyard is a creature card, this
         # creature has the full text of that card…" (Volrath's Shapeshifter.)
         # A CR 613 layer 1a contribution, derived from the zone on every read
@@ -6108,6 +6115,33 @@ def _derived_static_claims(
         for line in (oracle_text or "").splitlines()
     ):
         claims.append(OWN_CAST_BAN_CLAIM)
+    # "Each player can't cast more than one spell each turn." (Arcane
+    # Laboratory.) The same CR 601.3a prohibition counting casts rather than
+    # naming a type, read off the board at every cast — so there is no
+    # instruction, and the enchantment's whole text is this sentence, which
+    # means no claim is an unsupported card however well the cap works.
+    from .cast_restrictions import SPELL_CAP_CLAIM, spell_cap_line
+
+    if any(
+        spell_cap_line(line) is not None
+        for line in (oracle_text or "").splitlines()
+    ):
+        claims.append(SPELL_CAP_CLAIM)
+    # "Rather than the attacking player, you assign the combat damage of each
+    # creature attacking you." (Defensive Formation.) CR 510.1a's assigner
+    # substituted, read off the board by the combat damage step — so there is no
+    # instruction, and the enchantment's whole text is this sentence plus one
+    # restating CR 510.1c, which means no claim is an unsupported card however
+    # well the substitution works.
+    from .combat_assignment import (DEFENDER_ASSIGNS_CLAIM,
+                                    defender_assigns_line)
+
+    if any(
+        defender_assigns_line(sentence)
+        for line in (oracle_text or "").splitlines()
+        for sentence in line.split(". ")
+    ):
+        claims.append(DEFENDER_ASSIGNS_CLAIM)
     # "Players can't gain life." (Forsaken Wastes, CR 119.7.) The life-gain seam
     # asks this same table on every gain, so there is no instruction to produce
     # — and a permanent whose whole text is the sentence would report

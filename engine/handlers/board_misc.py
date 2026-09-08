@@ -19,6 +19,7 @@ from ..named_counters import counters_on, remove_counters
 from ..pt import pt_counter_key, set_base_pt
 from ..text_changes import LAND_TYPE_WORDS, change_color_word, change_land_word
 from ..tokens import (CHOSEN_TOKEN_RECORDS, CREATED_TOKEN_RESULT_KEY,
+                      CREATED_TOKENS_RESULT_KEY,
                      CREATED_WITH_PERMANENT_ID, default_token_name,
                      make_token_card, tokens_created_with)
 from ._common import (BLOCK_PAIR_SUBJECT, SUBJECT_FROM_TRIGGER,
@@ -923,6 +924,22 @@ ANIMATE_UNTIL_EOT = "animate_until_end_of_turn"
 #: thing a key list cannot do.
 ANIMATE_INDEFINITELY = "animate_indefinitely"
 
+#: The **third** window (Jade Statue), and a third key for the second
+#: one's reason: what separates the three is exactly which sweep can see
+#: them. This one is cleared by the end-of-combat step, which is not the
+#: cleanup step and matters because a turn may hold two combat phases
+#: (Relentless Assault) — a Statue animated in the first must be an inert
+#: artifact again for the second.
+#:
+#: The key's *name* is the one this engine has used since Jade Statue was a
+#: card hook, and the sweep that pops it is unchanged. What changed is what
+#: it holds: a bare ``True`` said only "it became something", so the layer
+#: bridge answered "creature" and nothing else — the Statue was not a
+#: **Golem**, so a Golem lord did not pump it and "destroy target Golem"
+#: missed it. It now holds the same record its two siblings do, which is
+#: what makes one layer-4 reader answer all three.
+ANIMATE_UNTIL_END_OF_COMBAT = "animate_until_end_of_combat"
+
 
 #: The payload keys an animation's *body* occupies. The sweep below hands
 #: everything else to ``subject_matches`` as the noun phrase it animates, so a
@@ -1375,18 +1392,26 @@ def change_land_type_until(game: Game, instruction: OracleInstruction, context: 
 
 @effect_handler("animate_self_until_end_of_combat")
 def animate_self_until_end_of_combat(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    card = context.card
-    source_permanent = context.source_permanent
-    if source_permanent is None:
-        return False, "ability not implemented"
-    set_base_pt(
-        source_permanent,
-        int(instruction.payload.get("power", 0)),
-        int(instruction.payload.get("toughness", 0)),
+    """"{2}: This artifact becomes a 3/6 Golem artifact creature **until end of
+    combat**." (Jade Statue.)
+
+    The third self-animation, through the one body its two siblings share — and
+    that is the whole of what this rewrite buys. It used to be a card hook
+    carrying ``power=3, toughness=6`` and a bare ``True`` flag: the Statue got a
+    size and the word "creature" and **no subtypes**, so it answered "no" to
+    "is this a Golem" while it was one. A Golem lord did not pump it and
+    "destroy target Golem" missed it.
+
+    The P/T goes on the **persistent** channel (``until_eot=False``), which is
+    the channel the end-of-combat sweep clears — the swept-at-cleanup one would
+    leave the body a step too long, and the Statue is only ever a creature
+    inside a combat.
+    """
+    return _animate_self(
+        game, instruction, context,
+        record_key=ANIMATE_UNTIL_END_OF_COMBAT, until_eot=False,
+        duration="until end of combat",
     )
-    source_permanent.metadata["animate_until_end_of_combat"] = True
-    game.log.append(f"{card.name} is animated until end of combat")
-    return True, "resolved"
 
 
 @effect_handler("become_copy_of_bound_permanent")
@@ -1774,6 +1799,13 @@ def create_token(game: Game, instruction: OracleInstruction, context: OracleExec
         # plural maker would be a card this engine has not met, and it would
         # arrive as one token addressed rather than as a silently wider effect.
         context.results[CREATED_TOKEN_RESULT_KEY] = token.permanent_id
+        # …and **all** of them, for the plural back-reference ("Exile
+        # them", Waylay). Appended per token rather than assigned at the
+        # end of the loop, so a sentence behind a maker that made some and
+        # then stopped still names the ones it made.
+        context.results.setdefault(CREATED_TOKENS_RESULT_KEY, []).append(
+            token.permanent_id
+        )
         if payload.get("attacking") and game.current_turn_phase == "combat":
             defending = (context.trigger_context or {}).get("trigger_defending_player_index")
             if not isinstance(defending, int):

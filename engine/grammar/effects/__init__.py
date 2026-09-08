@@ -216,13 +216,16 @@ from .stack import (
     _parse_x_spend_restriction,
     _parse_cost_x_definition,
 )
-from .combat import (
-    parse_block_count_grant,
-    _parse_assigns_no_combat_damage,
+from .requirements import (
     _parse_attacks_this_turn_if_able,
     _parse_destroy_chosen_that_didnt_attack,
     _parse_blocks_this_turn_if_able,
     _parse_force_chosen_creature_to_attack,
+)
+from .combat import (
+    parse_block_count_grant,
+    _parse_assigns_combat_damage_as_unblocked,
+    _parse_assigns_no_combat_damage,
     _parse_attacking_doesnt_tap,
     _parse_cant_attack_or_block,
     _CANT_BE_ACTIONS,
@@ -405,6 +408,7 @@ __all__ = [
     "parse_choose_card_type",
     "parse_land_type_swap",
     "parse_extra_land_plays",
+    "_parse_assigns_combat_damage_as_unblocked",
     "_parse_assigns_no_combat_damage",
     "_parse_attacks_this_turn_if_able",
     "_parse_destroy_chosen_that_didnt_attack",

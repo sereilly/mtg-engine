@@ -287,6 +287,11 @@ ACTIVATED_LABELS: dict[str, str] = {
     # — the report has one word for a permanent changing what it is.
     "set_card_types_self": "activated_pump",
     "animate_self_until_eot": "activated_pump",
+    # "…becomes a 3/6 Golem artifact creature **until end of combat**."
+    # (Jade Statue.) The same layer-4 change over the third window, so the
+    # same bucket — the report has one word for a permanent changing what it
+    # is, and the window is not what the word is about.
+    "animate_self_until_end_of_combat": "activated_pump",
     # Stalking Stones, the same sentence with no end to it. Same bucket — the
     # report has no word for a duration.
     "animate_self_indefinitely": "activated_pump",

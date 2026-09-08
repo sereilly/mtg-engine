@@ -682,7 +682,7 @@ LOWER_LAYERS = [
 # dispatcher alone and `_accept_spell_type_union` from `_parse_cast_permission`
 # alone, and neither calls anything left behind. Both moved byte-identically,
 # so no compiled program moves.
-EFFECT_FAMILIES = ["damage", "characteristics", "base_pt", "types", "board", "cards", "exile", "stack", "combat", "game", "mana", "library", "search", "reveal", "control_changes", "prevention", "damage_instances", "redirection", "damage_locks", "counters", "tapping", "attachments", "tokens", "returns", "text_changes", "destruction", "zones", "hand", "permissions"]
+EFFECT_FAMILIES = ["damage", "characteristics", "base_pt", "types", "board", "cards", "exile", "stack", "combat", "game", "mana", "library", "search", "reveal", "control_changes", "prevention", "damage_instances", "redirection", "damage_locks", "counters", "tapping", "attachments", "tokens", "returns", "text_changes", "destruction", "zones", "hand", "permissions", "requirements"]
 # `redirection` arrived on the parse side at Visions' first wave, a set after
 # the lowering side split it off `lowering/damage.py` — the mirror re-forming
 # rather than a new vocabulary, which is what this file asks a split to do.
@@ -891,6 +891,17 @@ LOWERING_FAMILIES = [
 # split off `effects/cards.py` at the guard on the CR 601.3 line), so it now
 # arrives from `EFFECT_FAMILIES` above and naming it twice would be a list
 # disagreeing with itself.
+# `requirements` is the third to make that journey, at Urza's Saga's second
+# wave. It was declared lowering-only at Tempest with the reason written down —
+# "the parse side keeps both productions in `effects/combat.py`, where each is
+# one branch of a verb table, and the guard fired on the lowerings" — and this
+# is what happens when the parse half crosses the guard too: `effects/combat.py`
+# went 27 lines past it on Okk's declaration comparison and Outmaneuver's
+# assignment rewrite, and the requirements were what left, taking the two
+# paragraph productions (Nettling Imp, Norritt, Arcum's Whistle) with them
+# because their middle sentence *is* the requirement. So it now arrives from
+# `EFFECT_FAMILIES` above and naming it twice would be a list disagreeing with
+# itself.
 ] + ["returns", "exile", "keywords",
     # `keyword_removal` is `keywords`' other half, split at Tempest's wave-3
     # integration when two groups' additions summed past the cap with neither
@@ -940,7 +951,6 @@ LOWERING_FAMILIES = [
      # use. Asymmetric like `zones`, `library` and `mana`: the parse side keeps
      # both productions in `effects/combat.py`, where each is one branch of a
      # verb table, and the guard fired on the lowerings.
-     "requirements",
      # `phasing` split off `lowering/board.py` at Visions' third wave, when two
      # groups' additions summed past the guard at **integration** — on nobody's
      # branch, for the third time in this one set. The line is CR 702.26's own: a
@@ -951,6 +961,18 @@ LOWERING_FAMILIES = [
      # puts a card on a library's bottom. Asymmetric like `zones`, `library`,
      # `redirection`, `delayed` and `prohibitions`: the parse half stays in
      # `effects/board.py` and the guard fired on the lowerings.
+     # `assignment` split off `lowering/combat.py` at Urza's Saga's second
+     # wave, the third time that module crossed the guard and the third time
+     # the line was drawn somewhere else first: `prohibitions` left on the
+     # printed voice, `requirements` on CR 506.3's pair of words, and this
+     # leaves on the boundary `engine/combat_assignment.py` has argued since
+     # Floral Spuzzem. How much combat damage a creature assigns, and to whom,
+     # is CR 510.1 — a turn-based action taken after the declarations are over
+     # — where everything left in `combat` lowers CR 506, 508 and 509: who may
+     # be declared, who must be, and who may not. Asymmetric like `zones`,
+     # `library` and `phasing` below it: the parse halves are two branches of
+     # the "assigns" verb table and the guard fired on the lowerings.
+     "assignment",
      "phasing",
      # `linked_exile` split off `lowering/exile.py` at Tempest's Phase 0, when
      # that module reached the guard a second time with three of the wave's
@@ -1150,6 +1172,14 @@ AST_FAMILIES = [
         # this a parse family fired on the productions; the node inventory
         # never crossed anything.
         "permissions",
+        # `requirements` is `permissions`' reason one family over:
+        # `AttacksThisTurnIfAble`, `BlocksThisTurnIfAble` and
+        # `DestroyChosenThatDidntAttack` are facts about a **combat** and live
+        # in `ast/combat.py` with every other one — the same nodes the
+        # restrictions build, which is the point, since CR 509.1c asks the two
+        # in one breath. The guard that made this a parse family fired on the
+        # productions; the node inventory never crossed anything.
+        "requirements",
         # `damage_instances` is `prevention`'s own reason, which is why it sits
         # beside it: `PreventDamage`, `RedirectDamage`, `ChooseDamageSource` and
         # `ChosenSourceNextDamage` are facts about a **damage event** and live

@@ -31,6 +31,28 @@ from __future__ import annotations
 #: "This creature assigns no combat damage this turn." (Floral Spuzzem.)
 ASSIGNS_NO_COMBAT_DAMAGE = "assigns_no_combat_damage_until_eot"
 
+#: "X target blocked creatures assign their combat damage this turn **as
+#: though they weren't blocked**." (Outmaneuver.) CR 510.1a's assignment to
+#: the blocking creatures replaced, for a turn, by CR 510.1b's assignment to
+#: the player being attacked.
+#:
+#: Named here beside the mark above because both are answers to "how does this
+#: creature assign?" and the combat damage step reads them at the same moment —
+#: but they are not the same answer and this one is not read by
+#: :func:`combat_damage_assigned_by`, because the *amount* is unchanged. What
+#: changes is where it goes, which only the step knows.
+#:
+#: **Its own key beside the "may" one** Garruk, Savage Herald grants
+#: (``assign_combat_damage_as_unblocked_until_eot``). The two look identical at
+#: the damage step and are not: that one is an offer, and the step answers it
+#: yes only where no explicit per-blocker assignment was given — which is how
+#: a player declines it. This is a *restriction*, so declining is exactly what
+#: must not be possible, and one key for both would make Outmaneuver optional
+#: for whoever bothered to assign.
+#:
+#: Swept with the turn by ``engine/mixins/_constants.py``.
+MUST_ASSIGN_AS_UNBLOCKED = "must_assign_combat_damage_as_unblocked_until_eot"
+
 #: "Target unblocked attacking creature **becomes blocked**." (Dazzling Beauty;
 #: CR 509.1h.) Named here rather than beside the combat maps because the maps
 #: record *who blocks whom*, and this is precisely the state CR 509.1h says a
@@ -45,6 +67,78 @@ ASSIGNS_NO_COMBAT_DAMAGE = "assigns_no_combat_damage_until_eot"
 #: combat phase (Relentless Assault), and a creature this blocked in the first
 #: one is a fresh attacker in the second.
 BLOCKED_WITHOUT_BLOCKERS = "blocked_without_blockers_this_combat"
+
+
+#: "**Rather than the attacking player, you assign the combat damage of each
+#: creature attacking you.** You can divide that creature's combat damage as
+#: you choose among any of the creatures blocking it." (Defensive Formation.)
+#:
+#: CR 510.1a names the attacking player as the one who divides a blocked
+#: creature's damage among its blockers; this substitutes the defending player,
+#: which is the same substitution CR 702.22j makes for a creature blocked by a
+#: band. So it is answered at the *same* seam and by the same reader — a second
+#: one would be the two-readers failure this module exists to prevent, with the
+#: prompt offering a division the damage step then ignored.
+#:
+#: The second printed sentence needs no code and is not a shortcut: CR 510.1c
+#: already lets whoever assigns divide the damage among the blockers however
+#: they choose. It says what the substitution *means*, for a player reading the
+#: card, and the substitution is the whole of what changes.
+#:
+#: Text-keyed rather than name-keyed because the sentence is a template: a card
+#: printing it about artifacts, or on an artifact instead of an enchantment,
+#: is this rule with nothing added.
+#: The claim name the support gate and ``engine/grammar/registries.py`` use for
+#: the rule below. Its own, for ``cast_restrictions.OWN_CAST_BAN_CLAIM``'s
+#: reason: every other claim in this engine says what a *card* may do, and this
+#: one says who makes a decision the rules otherwise give to somebody else.
+DEFENDER_ASSIGNS_CLAIM = "defender_assigns"
+
+_DEFENDER_ASSIGNS = (
+    "rather than the attacking player, you assign the combat damage of each "
+    "creature attacking you"
+)
+
+
+def defender_assigns_line(line: str) -> bool:
+    """Whether *line* substitutes CR 510.1a's assigner for the defending player.
+
+    One reader, three callers, the arrangement ``cast_restrictions``' board bans
+    have: ``engine/grammar/registries.py`` asks it so the printed line is
+    *claimed*, ``engine/oracle.py``'s support gate asks it so the card is
+    admitted on the strength of a rule that exists, and
+    ``phases/combat_damage_step`` asks it so the line is *enforced*. A
+    substitution claimed and not enforced is an enchantment that reports
+    supported while the attacking player goes on assigning.
+
+    The line is matched whole, the sentence after it included where the card
+    prints one: the second sentence restates CR 510.1c and adds nothing, so it
+    is stripped by the caller rather than read here.
+    """
+    return line.strip().lower().rstrip(".") == _DEFENDER_ASSIGNS
+
+
+def defender_assigns_all_damage(game, defender_index: int) -> bool:
+    """Whether *defender_index* assigns the damage of every creature attacking
+    them (Defensive Formation).
+
+    Their **own** battlefield only, which is the whole of what "you" means here
+    (CR 109.5): an opponent's copy of the card moves nobody else's assignment.
+
+    ``effective_card`` rather than the printed face, for the reason every other
+    text-keyed board scan in this engine reads it: what a permanent says is what
+    layer 1 and layer 3 have made of it (CR 707.2, CR 612.1).
+    """
+    if not (0 <= defender_index < len(game.players)):
+        return False
+    for seat, permanent in game.permanents_with_controller():
+        if seat != defender_index:
+            continue
+        for raw_line in (permanent.effective_card.oracle_text or "").splitlines():
+            for sentence in raw_line.split(". "):
+                if defender_assigns_line(sentence):
+                    return True
+    return False
 
 
 def combat_damage_assigned_by(permanent) -> int:

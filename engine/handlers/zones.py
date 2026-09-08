@@ -3210,6 +3210,29 @@ def exile_created_token(game: Game, instruction: OracleInstruction, context: Ora
     A token that is already gone exiles nothing (CR 608.2b, and CR 111.7 —
     a token that has left the battlefield has ceased to exist).
     """
+    # "Create three … tokens. **Exile them** at the beginning of the next
+    # cleanup step." (Waylay.) The plural of the same back-reference, reading
+    # the list the maker recorded beside the single id — out of the *frozen*
+    # scratchpad first, because this instruction is normally a delayed
+    # ability's and the resolution that made the tokens is long over
+    # (CR 608.2h). A token already gone exiles nothing (CR 111.7).
+    recorded_key = instruction.payload.get("permanents_from")
+    if recorded_key is not None:
+        ids = (context.trigger_context or {}).get(str(recorded_key))
+        if not isinstance(ids, (list, tuple)):
+            ids = context.results.get(str(recorded_key))
+        found = [
+            game.permanent_by_id(one)
+            for one in (ids or ())
+            if isinstance(one, int)
+        ]
+        gone = [perm for perm in found if perm is not None]
+        if not gone:
+            game.log.append(f"{context.card.name}: the tokens it named are gone")
+            return True, "resolved"
+        for perm in gone:
+            _exile_one_created_token(game, context, perm)
+        return True, "resolved"
     if instruction.payload.get("created_with_source"):
         made = tokens_created_with(game, context.source_permanent)
         # The phrase is singular. A permanent that made several would leave
@@ -3225,6 +3248,17 @@ def exile_created_token(game: Game, instruction: OracleInstruction, context: Ora
     if token is None:
         game.log.append(f"{context.card.name}: the token it named is gone")
         return True, "resolved"
+    _exile_one_created_token(game, context, token)
+    return True, "resolved"
+
+
+def _exile_one_created_token(game: Game, context: OracleExecutionContext, token) -> None:
+    """Send one recorded token where CR 111.7 and CR 400.3 send it.
+
+    One body because the plural branch above exiles several and a second copy
+    of the CR 111.7 test is a second chance for one of them to forget that a
+    token ceases to exist rather than going to exile.
+    """
     owner_index = game.owner_index_of(token)
     game.remove_from_battlefield(token)
     if not token.metadata.get("is_token", False) and owner_index is not None:
@@ -3234,7 +3268,6 @@ def exile_created_token(game: Game, instruction: OracleInstruction, context: Ora
         # that is not a token.
         game.players[owner_index].exile.append(token.card)
     game.log.append(f"{context.card.name} exiled {token.card.name}")
-    return True, "resolved"
 
 
 @effect_handler("exile_target_permanent")

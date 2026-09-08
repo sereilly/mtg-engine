@@ -157,8 +157,24 @@ class DoesntUntapWhileSourceTapped:
     used up at the *next* untap step; this one is continuous and ends on a
     condition — the source untapping — which may never coincide with an untap
     step at all.
+
+    **Which** fact about the source ends it is a field rather than a second
+    node, because it is the only thing the two printings disagree about:
+    "…for as long as this creature remains **on the battlefield**" (Somnophore)
+    is the same continuous restriction ended by the same object, read at the
+    same moment by the same untap step. Everything a node would carry — the
+    subject, the record on the source, the refusals — is identical.
+
+    That is the opposite call from :class:`DoesntUntapWhileCounter` beside it,
+    and deliberately: what ends *that* one is a fact about the **restricted**
+    permanent, so the record has to live somewhere else and survive the source
+    leaving. Here the source is still the holder either way.
     """
     subject: Recipient
+    #: True for "remains **on the battlefield**" (Somnophore), False for
+    #: "remains **tapped**" (Phyrexian Gremlins, Giant Oyster). Defaulted False
+    #: so every node built before this field existed means what it always did.
+    while_on_battlefield: bool = False
 
 
 @dataclass(frozen=True)

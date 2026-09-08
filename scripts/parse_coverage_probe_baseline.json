@@ -93,6 +93,13 @@
   ]
  },
  {
+  "card": "Apes of Rath",
+  "clause": "it doesn't untap during its controller's next untap step",
+  "ignored": [
+   "controller's"
+  ]
+ },
+ {
   "card": "Apocalypse",
   "clause": "exile all permanents. you discard your hand",
   "ignored": [
@@ -153,6 +160,13 @@
   "clause": "baki's curse deals 2 damage to each creature for each aura attached to that creature",
   "ignored": [
    "baki's"
+  ]
+ },
+ {
+  "card": "Barl's Cage",
+  "clause": "target creature doesn't untap during its controller's next untap step",
+  "ignored": [
+   "controller's"
   ]
  },
  {
@@ -503,6 +517,13 @@
   ]
  },
  {
+  "card": "Elvish Hunter",
+  "clause": "target creature doesn't untap during its controller's next untap step",
+  "ignored": [
+   "controller's"
+  ]
+ },
+ {
   "card": "Energy Vortex",
   "clause": "this enchantment deals 3 damage to that player unless they pay {1} for each vortex counter on this enchantment",
   "ignored": [
@@ -637,6 +658,13 @@
   "clause": "this creature deals damage to any target equal to half the sacrificed creature's power, rounded down",
   "ignored": [
    "down"
+  ]
+ },
+ {
+  "card": "Frost Breath",
+  "clause": "tap up to two target creatures. those creatures don't untap during their controller's next untap step",
+  "ignored": [
+   "controller's"
   ]
  },
  {
@@ -954,7 +982,8 @@
   "clause": "tap all creatures that blocked this creature this turn. they don't untap during their controller's next untap step",
   "ignored": [
    "all",
-   "creature"
+   "creature",
+   "controller's"
   ]
  },
  {
@@ -1003,10 +1032,24 @@
   ]
  },
  {
+  "card": "Labyrinth Minotaur",
+  "clause": "that creature doesn't untap during its controller's next untap step",
+  "ignored": [
+   "controller's"
+  ]
+ },
+ {
   "card": "Land's Edge",
   "clause": "if the discarded card was a land card, this enchantment deals 2 damage to target player or planeswalker",
   "ignored": [
    "card,"
+  ]
+ },
+ {
+  "card": "Lead Golem",
+  "clause": "it doesn't untap during its controller's next untap step",
+  "ignored": [
+   "controller's"
   ]
  },
  {
@@ -1725,7 +1768,8 @@
   "ignored": [
    "all",
    "each",
-   "each"
+   "each",
+   "controller's"
   ]
  },
  {
@@ -1799,6 +1843,13 @@
   "ignored": [
    "or",
    "all"
+  ]
+ },
+ {
+  "card": "Telekinesis",
+  "clause": "tap target creature. prevent all combat damage that would be dealt by that creature this turn. it doesn't untap during its controller's next two untap steps",
+  "ignored": [
+   "controller's"
   ]
  },
  {
@@ -2121,6 +2172,13 @@
   "clause": "destroy all creatures that aren't enchanted. they can't be regenerated",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Winter's Night",
+  "clause": "that player adds one mana of any type that land produced. that land doesn't untap during its controller's next untap step",
+  "ignored": [
+   "controller's"
   ]
  },
  {

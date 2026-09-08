@@ -17,7 +17,8 @@ from ..models import Permanent
 from ..auras import clear_ignored_restrictions
 from ..keywords import (clear_granted_ability_lines,
                         clear_granted_keywords,
-                        clear_removed_ability_keywords)
+                        clear_removed_ability_keywords,
+                        clear_all_abilities_removals)
 from ..control import end_until_eot_control_changes
 from ..handlers.board_misc import LAND_TYPE_UNTIL_EOT
 from ..handlers.control_changes import TAP_WHEN_CONTROL_LOST
@@ -249,6 +250,12 @@ class CleanupStepMixin:
                 # Beside its two siblings, because a grant and a removal that
                 # share a printed duration have to end at one moment.
                 clear_removed_ability_keywords(permanent, "end_of_turn")
+                # "**Until end of turn**, target creature loses all
+                # abilities …" (Humble.) The fourth removal channel, swept
+                # beside the third and at the same moment: a blanket that
+                # outlived its window would leave a vanilla creature for the
+                # rest of the game.
+                clear_all_abilities_removals(permanent, "end_of_turn")
                 # CR 116.2d's suspension: "…to ignore this effect **until end
                 # of turn**" (Volrath's Curse). The same printed duration in a
                 # fourth channel, swept beside the other three because a
