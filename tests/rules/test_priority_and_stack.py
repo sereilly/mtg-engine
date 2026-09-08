@@ -268,9 +268,11 @@ def test_117_5_state_based_actions_performed_before_priority():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.cr("405.1")
+@pytest.mark.cr("405.1", "112.1")
 def test_405_1_casting_puts_the_physical_card_on_the_stack():
-    """When a spell is cast, the card itself is put on the stack (405.1)."""
+    """When a spell is cast, the card itself is put on the stack (405.1) — which
+    is also CR 112.1's sentence from the other side ("a spell is a card on the
+    stack ... moved to the top of the stack from the zone it was in")."""
     bolt = _mk_card("Bolt", "Instant", "Bolt deals 3 damage to any target.")
     p1 = PlayerState(name="P1", hand=[bolt])
     p2 = PlayerState(name="P2")
@@ -790,3 +792,71 @@ def test_704_3_and_117_3b_apply_when_the_held_resolution_finishes():
     assert p2.lost is True
     assert game.priority_player_index == game.active_player_index == 0
     assert game.priority_pass_count == 0
+
+
+@pytest.mark.cr("112.1", "112.1a")
+def test_112_1_the_spell_and_the_permanent_it_becomes_are_the_same_card():
+    """CR 112.1 makes the spell the card itself; CR 112.1a makes its
+    characteristics the card's. The consequence worth its own test is that the
+    identity survives the *whole* journey — hand, stack, battlefield — because
+    everything that holds a reference across a resolution (a copy effect, a
+    "becomes the target" trigger, a cost modifier already applied) is holding
+    that object.
+
+    By ``is`` rather than by name: a second object with the right name passes
+    every characteristic check and is still the wrong one.
+    """
+    from engine.card_loader import load_catalog
+
+    catalog = {card.name: card for card in load_catalog()}
+    bears = catalog["Grizzly Bears"]
+    p1 = PlayerState(name="P1", hand=[bears])
+    game = _game_in_main_phase(p1, PlayerState(name="P2"))
+
+    game.queue_from_hand(0, "Grizzly Bears")
+
+    assert p1.hand == [], "the card left the zone it was in"
+    assert game.stack[0].card is bears, "the spell is the card, not a copy"
+
+    game.resolve_stack()
+
+    assert game.stack == []
+    assert p1.battlefield[0].card is bears, "and the permanent is still that card"
+
+
+@pytest.mark.cr("109.1", "405.2")
+def test_109_1_two_copies_of_one_card_on_the_stack_are_two_objects():
+    """"An object is an ability on the stack, a card, a copy of a card, a token,
+    a spell, a permanent, or an emblem."
+
+    A *spell* is an object; the card it is, is another. So two copies of one
+    card cast in succession are **two spells**, and the fact that the loader
+    dedupes by ``oracle_id`` — making both stack items share one
+    ``CardDefinition`` — must not collapse them into one.
+
+    That shared card object is the trap. Anything identifying a spell by its
+    card, or by name, finds the wrong one of the two; only the stack object
+    tells them apart. Countering the top one has to leave the other exactly
+    where it was (CR 405.2's order).
+    """
+    from engine.card_loader import load_catalog
+
+    catalog = {card.name: card for card in load_catalog()}
+    bears = catalog["Grizzly Bears"]
+    p1 = PlayerState(name="P1", hand=[bears, bears])
+    game = _game_in_main_phase(p1, PlayerState(name="P2"))
+
+    game.queue_from_hand(0, "Grizzly Bears")
+    game.queue_from_hand(0, "Grizzly Bears")
+
+    assert len(game.stack) == 2, "two spells"
+    first, second = game.stack
+    assert first is not second, "two objects"
+    assert first.card is second.card, "…of one card"
+
+    game.resolve_stack()
+
+    assert len(p1.battlefield) == 2, "and each resolved into its own permanent"
+    assert p1.battlefield[0] is not p1.battlefield[1]
+    assert len({perm.permanent_id for perm in p1.battlefield}) == 2
+

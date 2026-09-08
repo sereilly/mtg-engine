@@ -816,3 +816,64 @@ def test_601_2b_an_additional_cost_may_name_its_payment_by_colour():
         "As an additional cost to cast this spell, sacrifice a permanent."
     )
     assert unnarrowed is not None and unnarrowed.sacrifice_filter == {}
+
+
+@pytest.mark.cr("202.4", "202.3")
+def test_202_4_an_additional_cost_is_not_part_of_the_mana_cost():
+    """"Any additional cost listed in an object’s rules text ... isn’t part of
+    the mana cost."
+
+    Goblin Grenade costs {R} and sacrifices a Goblin. The sacrifice is a cost
+    the caster pays (CR 601.2h) and is **not** in the mana cost, so the card’s
+    mana value stays 1 — which matters wherever mana value is read rather than
+    paid: a "converted mana cost 2 or less" filter, an X count, a cost
+    reduction.
+
+    Asserted against every "as an additional cost" card in the pool rather than
+    one example, because the failure this guards is a parser folding the extra
+    cost into the cost it computed, and that would show up on whichever card
+    happened to be parsed that way.
+    """
+    from engine.card_loader import load_catalog
+    from engine.oracle import compile_card_oracle
+
+    checked = 0
+    for card in load_catalog():
+        text = (card.oracle_text or "").lower()
+        if "as an additional cost" not in text:
+            continue
+        if not compile_card_oracle(card).supported:
+            continue
+        checked += 1
+        # The mana value is the printed symbols’ total and nothing else
+        # (CR 202.3), so it agrees with the mana cost the card was printed with.
+        assert card.cmc == _symbol_total(card.mana_cost), card.name
+
+    assert checked >= 5, f"expected several such cards in the pool, saw {checked}"
+
+    # And directly, on the card the rule is easiest to see on: the engine reads
+    # the sacrifice as its own AdditionalCost and leaves {R} as the mana cost.
+    # A reader that folded the two would either raise the mana value or drop the
+    # sacrifice, and both stay visible here.
+    from engine.cast_costs import additional_costs
+
+    grenade = next(c for c in load_catalog() if c.name == "Goblin Grenade")
+    assert grenade.mana_cost == "{R}"
+    assert grenade.cmc == 1.0
+    assert additional_costs(grenade), "the sacrifice is recorded, separately"
+
+
+def _symbol_total(mana_cost: str) -> float:
+    """The mana value of *mana_cost* (CR 202.3): generic + one per coloured pip."""
+    import re
+
+    total = 0
+    for symbol in re.findall(r"\{([^}]+)\}", mana_cost or ""):
+        if symbol.isdigit():
+            total += int(symbol)
+        elif symbol == "X":
+            continue
+        else:
+            total += 1
+    return float(total)
+

@@ -21,6 +21,10 @@ tested together is that each has a *printed* answer and a *derived* one:
   without the card type moving (CR 205.3i); and a supertype survives a type
   change and is never granted by a subtype (CR 205.4b/c — a Tundra given the
   Swamp land type is still a nonbasic land).
+* **Text box** (CR 207) is the part with no game function at all: reminder text
+  and ability words are printed words the engine must *not* read as rules.
+* **Power/toughness** (CR 208) is a characteristic only a creature has — a
+  noncreature permanent has none, which is why a 0 there cannot kill it.
 * **Name** (CR 201) is here for the same reason: a card that prints its own name
   is talking about *that object* (CR 201.5), and the engine has to tell that
   apart from the same word used as a creature type. Aurochs prints both in one
@@ -794,4 +798,78 @@ def test_a_legendary_card_may_name_itself_by_its_short_name(catalog_by_name):
         "ugin, the spirit dragon", "ugin")
     assert _self_name_forms("Rubinia Soulsinger") == ("rubinia soulsinger",)
     assert _self_name_forms(None) == ()
+
+
+@pytest.mark.cr("207.2", "305.6")
+def test_207_2_a_basic_lands_whole_text_box_has_no_game_function(catalog_by_name):
+    """"The text box may also contain italicized text that has no game function."
+
+    A basic land’s printed text is *entirely* that: "({T}: Add {W}.)", in
+    parentheses, reminder text for an ability the card does not have. The
+    ability comes from CR 305.6, off the land type.
+
+    So the compiled program must be **empty** — no instruction, no activated
+    ability, no static line — while the land still taps for mana. An engine that
+    read the reminder text as an ability would give every basic a second,
+    duplicate mana ability and nothing would look wrong on the board.
+    """
+    for name, symbol in (("Plains", "W"), ("Swamp", "B")):
+        card = catalog_by_name[name]
+        assert card.oracle_text.startswith("("), card.oracle_text
+
+        program = compile_card_oracle(card)
+
+        assert program.instructions == ()
+        assert program.activated_abilities == ()
+        assert program.triggered_abilities == ()
+        assert program.static_lines == ()
+        # …and the mana still comes out, from the land type rather than the text.
+        assert Permanent(card=card).basic_land_mana == (symbol,)
+
+
+@pytest.mark.cr("207.2c")
+def test_207_2c_an_ability_word_is_dropped_before_the_line_is_read(catalog_by_name):
+    """An ability word (CR 207.2c) is italic flavour in front of a real ability:
+    it groups cards for a player’s eye and means nothing to the rules.
+
+    Makeshift Battalion is the pool’s one card printing one. The word has to be
+    dropped by **both** front ends — the oracle compiler and the grammar — or the
+    trigger reads as an unrecognised line, so the observable is that the ability
+    compiles at all.
+    """
+    from engine.oracle_types import strip_ability_word
+
+    card = catalog_by_name["Makeshift Battalion"]
+    line = next(
+        l for l in card.oracle_text.splitlines() if "Battalion" in l
+    )
+
+    assert strip_ability_word(line).startswith("Whenever")
+    assert strip_ability_word(line) != line
+    assert compile_card_oracle(card).triggered_abilities, card.oracle_text
+
+
+@pytest.mark.cr("208.3", "704.5f")
+def test_208_3_a_noncreature_permanent_has_no_toughness_to_die_of(catalog_by_name):
+    """"A noncreature permanent has no power or toughness."
+
+    The engine answers 0 for both, which is the representable value — so the
+    rule is not "the accessor returns None", it is that **nothing reads those
+    zeroes as a creature’s**. CR 704.5f puts a creature with toughness 0 into
+    the graveyard; a Mox sits at 0 forever.
+
+    Asserted against a real 0-toughness creature in the same sweep, because a
+    state-based check that never fired would pass the Mox half too.
+    """
+    game, p1, _p2 = _duel()
+    mox = Permanent(card=catalog_by_name["Mox Ruby"])
+    p1.battlefield.append(mox)
+    game._settle()
+
+    assert mox.is_creature is False
+    assert (mox.effective_power, mox.effective_toughness) == (0, 0)
+
+    game.check_state_based_actions()
+
+    assert mox in p1.battlefield, "no toughness, so nothing for CR 704.5f to read"
 

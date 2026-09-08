@@ -670,7 +670,7 @@ def _controller_cast_filter(
     # "…a spell that's white, blue, black, or red" (Quirion Dryad): the
     # colour list arrives as condition payload, the raw captured phrase; the
     # trigger fires only when the cast spell shares at least one listed
-    # colour (CR 105.4 — an "or" list of qualities is a union).
+    # colour (CR 105.2b — a multicoloured object *is* each of its colours).
     cast_colors = trig.condition.payload.get("cast_colors")
     if cast_colors:
         wanted = {
@@ -696,7 +696,8 @@ def _controller_cast_filter(
     # line — a substring match would let "Dog" answer for a "Dogpile", and would
     # answer for a card *type* word too, which is the row above's job.
     # "an **instant or sorcery** spell" — a printed union, so any of the listed
-    # types answers it (CR 105.4's reading of an "or" list). Its own key because
+    # types answers it (CR 205.2b — an object with several card types satisfies
+    # an effect applying to any of them). Its own key because
     # the single-type row above tests "this one" and a union tests "any of
     # these", and folding them would make one of the two silently wrong.
     cast_types = trig.condition.payload.get("cast_types")

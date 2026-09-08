@@ -217,3 +217,64 @@ def test_119_5_setting_a_life_total_upward_is_a_gain_and_is_banned():
 
     assert game.players[0].life == 5, "the rise is a gain, and gains are banned"
     assert game.players[1].life == 10, "the fall is not a gain"
+
+
+@pytest.mark.cr("119.3", "614.1")
+def test_119_3_a_gain_adjusts_the_total_by_what_actually_landed():
+    """"If an effect causes a player to gain life ... that player’s life total
+    is adjusted accordingly."
+
+    "Accordingly" is doing work: CR 614 can change the number on its way in, so
+    the amount the effect *named* and the amount that *landed* are two different
+    numbers. ``_gain_life`` is the one seam every gain passes through, and it
+    adds to the per-turn tally after the replacements — so a card reading "you
+    gained N life this turn" sees what arrived rather than what was offered.
+    """
+    game = _game()
+    player = game.players[0]
+    assert player.life == 20
+
+    game._gain_life(player, 5)
+
+    assert player.life == 25
+    assert player.life_gained_this_turn == 5
+
+    # A second gain accumulates rather than replacing the record.
+    game._gain_life(player, 3)
+
+    assert player.life == 28
+    assert player.life_gained_this_turn == 8
+
+
+@pytest.mark.cr("119.3", "120.3")
+def test_119_3_losing_life_adjusts_the_total_and_is_not_damage():
+    """The other direction of the same rule, and the distinction that makes it
+    worth a test: **losing life is not damage** (CR 120.3). Damage is dealt to a
+    player and *then* causes life loss; a "you lose N life" instruction adjusts
+    the total directly, so nothing that contends with damage — a prevention
+    shield, a redirection — is asked at all.
+
+    The total is also not clamped at zero. A player at 3 who loses 8 is at -5,
+    and it is the state-based action asked separately that ends the game; a
+    clamp would be invisible in an ordinary game and wrong for everything
+    reading the total afterwards.
+    """
+    from engine.game_types import OracleExecutionContext
+    from engine.handlers.registry import EFFECT_HANDLERS
+    from engine.oracle import OracleInstruction
+
+    game = _game()
+    player = game.players[0]
+    player.life = 3
+    player.damage_prevention_pool = 99  # would absorb 99 damage; this is not damage
+
+    instruction = OracleInstruction(
+        kind="target_loses_life",
+        payload={"amount": 8, "recipient": "caster"},
+    )
+    context = OracleExecutionContext(
+        caster=player, target=player, card=_enchantment("Drain", ""),
+    )
+    EFFECT_HANDLERS["target_loses_life"](game, instruction, context)
+
+    assert player.life == -5, "adjusted accordingly, not clamped and not prevented"

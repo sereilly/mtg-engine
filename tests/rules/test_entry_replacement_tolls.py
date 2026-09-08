@@ -188,3 +188,34 @@ def test_an_extra_land_play_can_be_granted_to_every_player(pool):
     game.lands_played_this_turn[1] = 1
 
     assert game._may_play_another_land(1)
+
+
+@pytest.mark.cr("101.3", "614.12a")
+def test_101_3_a_toll_nobody_can_pay_is_ignored_and_the_land_never_enters(pool):
+    """"Any part of an instruction that’s impossible to perform is ignored."
+
+    Lake of the Dead prints the toll as an **order**, not an offer — "sacrifice
+    a Swamp instead", not "you may sacrifice a Swamp". So a player with no Swamp
+    is not *declining*; they are being told to do something impossible, and
+    CR 101.3 is what makes the card’s own "if you don’t" branch reachable at
+    all. Without that rule the sentence would simply be stuck.
+
+    Both directions, because the interesting failure is one-sided: an engine
+    that treated the toll as optional would also send the Lake to the graveyard
+    here, and only the paying board tells the two apart.
+    """
+    game, p1 = _game(pool)
+    lake = Permanent(card=pool["Lake of the Dead"])
+
+    game._put_permanent_onto_battlefield(0, lake, None)
+
+    assert [perm.card.name for perm in p1.battlefield] == []
+    assert [card.name for card in p1.graveyard] == ["Lake of the Dead"]
+
+    # …and with a Swamp the same instruction *is* possible, so it happens.
+    game2, p2 = _game(pool, "Swamp")
+    game2._put_permanent_onto_battlefield(0, Permanent(card=pool["Lake of the Dead"]), None)
+
+    assert [perm.card.name for perm in p2.battlefield] == ["Lake of the Dead"]
+    assert [card.name for card in p2.graveyard] == ["Swamp"]
+

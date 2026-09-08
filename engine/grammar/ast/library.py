@@ -562,7 +562,7 @@ class PutLibraryTopIntoHand:
     **Not a draw**, and that is the whole reason it is a node. CR 121.1 defines
     drawing as putting the top card of a library into a hand, but an effect
     that *says* those words rather than the word "draw" is not a draw: no draw
-    trigger sees it and no draw replacement applies to it (CR 121.3). Lowered
+    trigger sees it and no draw replacement applies to it (CR 121.5). Lowered
     onto ``Draw`` this card would ring every "whenever you draw a card" on the
     board and be stopped by every draw replacement, which is a different card.
 

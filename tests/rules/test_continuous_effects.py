@@ -1358,3 +1358,63 @@ def test_an_animation_with_no_retention_clause_replaces_the_printed_types():
     assert not compile_line(
         "Until end of turn, this creature becomes a 2/1 Construct artifact creature."
     ).instructions
+
+
+# ---------------------------------------------------------------------------
+# CR 613.11 — continuous effects that change the *rules*, not any object
+# ---------------------------------------------------------------------------
+
+
+def _catalog_board(*names, seat=0):
+    """A two-seat game with *names* on *seat*'s battlefield, out of the pool."""
+    from engine.card_loader import load_catalog
+
+    catalog = {card.name: card for card in load_catalog()}
+    seats = [PlayerState(name="P1"), PlayerState(name="P2")]
+    seats[seat].battlefield = [Permanent(card=catalog[n]) for n in names]
+    game = Game(players=seats)
+    game.enforce_mana_costs = False
+    game._sync_control()
+    return game, seats, catalog
+
+
+@pytest.mark.cr("613.11")
+def test_613_11_a_maximum_hand_size_effect_changes_a_rule_not_an_object():
+    """"Some continuous effects affect game rules rather than objects. For
+    example, effects may modify a player’s maximum hand size..."
+
+    The rule names this example itself, and the pool prints it both ways:
+    Spellbook *removes* the maximum, Recycle *sets* it to two. Neither touches a
+    permanent, so there is no object whose characteristics could carry the
+    answer — which is why these are applied after the layers rather than in one.
+
+    The opponent is asserted unchanged in both cases: the printed word is "you",
+    and a rules modification with no seat attached would silently apply to
+    everyone.
+    """
+    from engine.hand_size import maximum_hand_size
+
+    removed, _seats, _cat = _catalog_board("Spellbook")
+    assert maximum_hand_size(removed, 0) is None, "no maximum at all"
+    assert maximum_hand_size(removed, 1) == 7, "the opponent keeps theirs"
+
+    lowered, _seats, _cat = _catalog_board("Recycle")
+    assert maximum_hand_size(lowered, 0) == 2
+    assert maximum_hand_size(lowered, 1) == 7
+
+
+@pytest.mark.cr("613.11", "508.1a")
+def test_613_11_a_must_attack_requirement_is_the_rules_other_named_example():
+    """"...or say that a creature must attack this turn if able."
+
+    CR 613.11’s second printed example, and Juggernaut is the pool’s plainest
+    printing of it. The requirement is a rule about the declaration step
+    (CR 508.1a), not a characteristic of the creature — nothing on the
+    Juggernaut changes — so it is read where the declaration is made.
+    """
+    game, seats, catalog = _catalog_board("Juggernaut", "Grizzly Bears")
+    juggernaut, bears = seats[0].battlefield
+
+    assert game._must_attack_if_able(juggernaut) is True
+    assert game._must_attack_if_able(bears) is False
+

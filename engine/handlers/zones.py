@@ -5999,7 +5999,7 @@ def put_library_top_into_hand(game: Game, instruction: OracleInstruction, contex
     **Not a draw**, and that is the whole of why it is its own handler.
     CR 121.1 defines a draw as putting the top card of a library into a hand,
     but an effect that spells those words instead of saying "draw" is not one
-    (CR 121.3): no "whenever you draw a card" trigger sees it, and no draw
+    (CR 121.5): no "whenever you draw a card" trigger sees it, and no draw
     replacement applies. Routed through ``_draw_with_replacements`` this card
     would ring every draw trigger on the board and be stopped by every draw
     replacement, which is a different card.

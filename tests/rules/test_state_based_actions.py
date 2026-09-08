@@ -1074,3 +1074,45 @@ def test_704_5p_still_unattaches_a_permanent_that_is_no_kind_of_attachment():
 
     assert plain.metadata.get("attached_to") is None, game.log
     assert plain in p1.battlefield, "704.5p leaves it on the battlefield"
+
+
+@pytest.mark.cr("704.1", "704.2")
+def test_704_1_a_state_based_action_happens_automatically_and_uses_no_stack():
+    """"State-based actions are game actions that happen automatically whenever
+    certain conditions ... are met. State-based actions don’t use the stack."
+    (CR 704.1.) "...checked throughout the game and are not controlled by any
+    player." (CR 704.2.)
+
+    Three claims, and each is a way an implementation goes wrong:
+
+    * **Automatic** — nobody activates it, so the creature dies from the check
+      alone, with no ability queued and nobody passing priority.
+    * **No stack** — the stack is empty before and after. A death put on the
+      stack could be responded to, which is the whole difference between a
+      state-based action and a triggered one.
+    * **Not controlled by any player** — the creature belongs to seat 0 and no
+      seat is asked; the check takes no player argument at all.
+
+    Lethal damage is marked *after* the game is built, because construction
+    settles the board and a creature made lethal beforehand would already be
+    gone — which would pass this test while proving nothing about when the
+    check runs.
+    """
+    bears = Permanent(card=_mk_creature("Doomed Bear", 2, 2))
+    p1 = PlayerState(name="P1", battlefield=[bears])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game._sync_control()
+    assert [perm.card.name for perm in p1.battlefield] == ["Doomed Bear"]
+
+    bears.damage_marked = 99
+
+    assert p1.battlefield == [bears], "still there until the check runs"
+    assert game.stack == []
+
+    changed = game.check_state_based_actions()
+
+    assert changed is True
+    assert p1.battlefield == []
+    assert [card.name for card in p1.graveyard] == ["Doomed Bear"]
+    assert game.stack == [], "the action never went on the stack"
+

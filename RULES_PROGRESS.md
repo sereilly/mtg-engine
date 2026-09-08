@@ -5,12 +5,12 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**371 / 616 tracked rules covered (60%)** — 2294 tests, 0 unannotated.
+**391 / 616 tracked rules covered (63%)** — 2317 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
-| [100. General](#100-general) | 0/7 | 0% |
-| [101. The Magic Golden Rules](#101-the-magic-golden-rules) | 3/4 | 75% |
+| [100. General](#100-general) | 4/7 | 57% |
+| [101. The Magic Golden Rules](#101-the-magic-golden-rules) | 4/4 | 100% |
 | [102. Players](#102-players) | 3/4 | 75% |
 | [103. Starting the Game](#103-starting-the-game) | 4/8 | 50% |
 | [104. Ending the Game](#104-ending-the-game) | 5/5 | 100% |
@@ -18,31 +18,31 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [106. Mana](#106-mana) | 7/13 | 53% |
 | [107. Numbers and Symbols](#107-numbers-and-symbols) | 5/18 | 27% |
 | [108. Cards](#108-cards) | 2/6 | 33% |
-| [109. Objects](#109-objects) | 1/5 | 20% |
-| [110. Permanents](#110-permanents) | 2/5 | 40% |
+| [109. Objects](#109-objects) | 3/5 | 60% |
+| [110. Permanents](#110-permanents) | 5/5 | 100% |
 | [111. Tokens](#111-tokens) | 5/13 | 38% |
-| [112. Spells](#112-spells) | 0/4 | 0% |
+| [112. Spells](#112-spells) | 1/4 | 25% |
 | [113. Abilities](#113-abilities) | 3/12 | 25% |
 | [114. Emblems](#114-emblems) | 5/5 | 100% |
 | [115. Targets](#115-targets) | 8/10 | 80% |
 | [116. Special Actions](#116-special-actions) | 3/3 | 100% |
 | [117. Timing and Priority](#117-timing-and-priority) | 6/6 | 100% |
 | [118. Costs](#118-costs) | 10/14 | 71% |
-| [119. Life](#119-life) | 4/10 | 40% |
+| [119. Life](#119-life) | 5/10 | 50% |
 | [120. Damage](#120-damage) | 5/10 | 50% |
-| [121. Drawing a Card](#121-drawing-a-card) | 4/9 | 44% |
+| [121. Drawing a Card](#121-drawing-a-card) | 5/9 | 55% |
 | [122. Counters](#122-counters) | 5/9 | 55% |
 | [200. General](#200-general) | 0/3 | 0% |
 | [201. Name](#201-name) | 2/6 | 33% |
-| [202. Mana Cost and Color](#202-mana-cost-and-color) | 3/4 | 75% |
+| [202. Mana Cost and Color](#202-mana-cost-and-color) | 4/4 | 100% |
 | [205. Type Line](#205-type-line) | 4/4 | 100% |
-| [207. Text Box](#207-text-box) | 0/5 | 0% |
-| [208. Power/Toughness](#208-powertoughness) | 1/5 | 20% |
+| [207. Text Box](#207-text-box) | 1/5 | 20% |
+| [208. Power/Toughness](#208-powertoughness) | 2/5 | 40% |
 | [300. General](#300-general) | 0/2 | 0% |
 | [301. Artifacts](#301-artifacts) | 1/7 | 14% |
 | [302. Creatures](#302-creatures) | 1/7 | 14% |
 | [303. Enchantments](#303-enchantments) | 7/7 | 100% |
-| [304. Instants](#304-instants) | 0/5 | 0% |
+| [304. Instants](#304-instants) | 1/5 | 20% |
 | [305. Lands](#305-lands) | 4/9 | 44% |
 | [306. Planeswalkers](#306-planeswalkers) | 9/9 | 100% |
 | [307. Sorceries](#307-sorceries) | 1/5 | 20% |
@@ -82,7 +82,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [610. One-Shot Effects](#610-one-shot-effects) | 2/5 | 40% |
 | [611. Continuous Effects](#611-continuous-effects) | 3/3 | 100% |
 | [612. Text-Changing Effects](#612-text-changing-effects) | 3/10 | 30% |
-| [613. Interaction of Continuous Effects](#613-interaction-of-continuous-effects) | 9/11 | 81% |
+| [613. Interaction of Continuous Effects](#613-interaction-of-continuous-effects) | 10/11 | 90% |
 | [614. Replacement Effects](#614-replacement-effects) | 11/17 | 64% |
 | [615. Prevention Effects](#615-prevention-effects) | 7/13 | 53% |
 | [616. Interaction of Replacement and/or Prevention Effects](#616-interaction-of-replacement-andor-prevention-effects) | 2/2 | 100% |
@@ -90,7 +90,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [701. Keyword Actions](#701-keyword-actions) | 19/19 | 100% |
 | [702. Keyword Abilities](#702-keyword-abilities) | 31/31 | 100% |
 | [703. Turn-Based Actions](#703-turn-based-actions) | 0/4 | 0% |
-| [704. State-Based Actions](#704-state-based-actions) | 5/8 | 62% |
+| [704. State-Based Actions](#704-state-based-actions) | 7/8 | 87% |
 | [705. Flipping a Coin](#705-flipping-a-coin) | 2/3 | 66% |
 | [707. Copying Objects](#707-copying-objects) | 6/14 | 42% |
 | [724. Ending Turns and Phases](#724-ending-turns-and-phases) | 1/2 | 50% |
@@ -104,18 +104,18 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 100. General
 
 - [ ] **100.1** These Magic rules apply to any Magic game with two or more players, including two-player games an...
-- [ ] **100.2** To play, each player needs their own deck of traditional Magic cards, small items to represent an...
+- [x] **100.2** To play, each player needs their own deck of traditional Magic cards, small items to represent an... *(1 tests, subrules a)*
 - [ ] **100.3** Some cards require coins or traditional dice. Some casual variants require additional items, such...
-- [ ] **100.4** Each player may also have a sideboard, which is a group of additional cards the player may use to...
-- [ ] **100.5** If a deck must contain at least a certain number of cards, that number is referred to as a minimu...
+- [x] **100.4** Each player may also have a sideboard, which is a group of additional cards the player may use to... *(2 tests, subrules a)*
+- [x] **100.5** If a deck must contain at least a certain number of cards, that number is referred to as a minimu... *(1 tests)*
 - [ ] **100.6** Most Magic tournaments (organized play activities where players compete against other players to ...
-- [ ] **100.7** Certain cards are intended for casual play and may have features and text that aren’t covered by ...
+- [x] **100.7** Certain cards are intended for casual play and may have features and text that aren’t covered by ... *(1 tests)*
 
 ### 101. The Magic Golden Rules
 
 - [x] **101.1** Whenever a card’s text directly contradicts these rules, the card takes precedence. The card over... *(1 tests)*
 - [x] **101.2** When a rule or effect allows or directs something to happen, and another effect states that it ca... *(2 tests)*
-- [ ] **101.3** Any part of an instruction that’s impossible to perform is ignored. (In many cases the card will ...
+- [x] **101.3** Any part of an instruction that’s impossible to perform is ignored. (In many cases the card will ... *(1 tests)*
 - [x] **101.4** If multiple players would make choices and/or take actions at the same time, the active player (t... *(2 tests)*
 
 ### 102. Players
@@ -200,8 +200,8 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 109. Objects
 
-- [ ] **109.1** An object is an ability on the stack, a card, a copy of a card, a token, a spell, a permanent, or...
-- [ ] **109.2** If a spell or ability uses a description of an object that includes a card type or subtype, but d...
+- [x] **109.1** An object is an ability on the stack, a card, a copy of a card, a token, a spell, a permanent, or... *(1 tests)*
+- [x] **109.2** If a spell or ability uses a description of an object that includes a card type or subtype, but d... *(1 tests)*
 - [ ] **109.3** An object’s characteristics are name, mana cost, color, color indicator, card type, subtype, supe...
 - [ ] **109.4** Only objects on the stack or on the battlefield have a controller. Objects that are neither on th...
 - [x] **109.5** The words “you” and “your” on an object refer to the object’s controller, its would-be controller... *(20 tests)*
@@ -210,9 +210,9 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **110.1** A permanent is a card or token on the battlefield. A permanent remains on the battlefield indefin... *(1 tests)*
 - [x] **110.2** A permanent’s owner is the same as the owner of the card that represents it (unless it’s a token;... *(1 tests)*
-- [ ] **110.3** A nontoken permanent’s characteristics are the same as those printed on its card, as modified by ...
-- [ ] **110.4** There are six permanent types: artifact, battle, creature, enchantment, land, and planeswalker. I...
-- [ ] **110.5** A permanent’s status is its physical state. There are four status categories, each of which has t...
+- [x] **110.3** A nontoken permanent’s characteristics are the same as those printed on its card, as modified by ... *(1 tests)*
+- [x] **110.4** There are six permanent types: artifact, battle, creature, enchantment, land, and planeswalker. I... *(2 tests, subrules a)*
+- [x] **110.5** A permanent’s status is its physical state. There are four status categories, each of which has t... *(5 tests, subrules abd)*
 
 ### 111. Tokens
 
@@ -232,7 +232,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 112. Spells
 
-- [ ] **112.1** A spell is a card on the stack. As the first step of being cast (see rule 601, “Casting Spells”),...
+- [x] **112.1** A spell is a card on the stack. As the first step of being cast (see rule 601, “Casting Spells”),... *(3 tests, subrules a)*
 - [ ] **112.2** A spell’s owner is the same as the owner of the card that represents it, unless it’s a copy. In t...
 - [ ] **112.3** A noncopy spell’s characteristics are the same as those printed on its card, as modified by any c...
 - [ ] **112.4** If an effect of a resolving spell or ability changes any characteristics of a permanent spell, th...
@@ -262,7 +262,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 115. Targets
 
-- [x] **115.1** Some spells and abilities require their controller to choose one or more targets for them. The ta... *(24 tests, subrules abcd)*
+- [x] **115.1** Some spells and abilities require their controller to choose one or more targets for them. The ta... *(25 tests, subrules abcd)*
 - [x] **115.2** Only permanents are legal targets for spells and abilities, unless a spell or ability (a) specifi... *(3 tests)*
 - [ ] **115.3** The same target can’t be chosen multiple times for any one instance of the word “target” on a spe...
 - [x] **115.4** Some spells and abilities that refer to damage require “any target,” “another target,” “two targe... *(6 tests)*
@@ -309,7 +309,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [ ] **119.1** Each player begins the game with a starting life total of 20. Some variant games have different s...
 - [ ] **119.2** Damage dealt to a player normally causes that player to lose that much life. See rule 120.3.
-- [ ] **119.3** If an effect causes a player to gain life or lose life, that player’s life total is adjusted acco...
+- [x] **119.3** If an effect causes a player to gain life or lose life, that player’s life total is adjusted acco... *(2 tests)*
 - [x] **119.4** If a cost or effect allows a player to pay an amount of life greater than 0, the player may do so... *(13 tests, subrules b)*
 - [x] **119.5** If an effect sets a player’s life total to a specific number, the player gains or loses the neces... *(5 tests)*
 - [ ] **119.6** If a player has 0 or less life, that player loses the game as a state-based action. See rule 704.
@@ -322,7 +322,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **120.1** Objects can deal damage to battles, creatures, planeswalkers, and players. This is generally detr... *(1 tests, subrules a)*
 - [ ] **120.2** Any object can deal damage.
-- [x] **120.3** Damage may have one or more of the following results, depending on whether the recipient of the d... *(7 tests, subrules acf)*
+- [x] **120.3** Damage may have one or more of the following results, depending on whether the recipient of the d... *(8 tests, subrules acf)*
 - [x] **120.4** Damage is processed in a four-part sequence. *(13 tests, subrules bc)*
 - [ ] **120.5** Damage dealt to a creature, planeswalker, or battle doesn’t destroy it. Likewise, the source of t...
 - [ ] **120.6** Damage marked on a creature remains until the cleanup step, even if that permanent stops being a ...
@@ -333,11 +333,11 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 121. Drawing a Card
 
-- [x] **121.1** A player draws a card by putting the top card of their library into their hand. This is done as a... *(5 tests)*
+- [x] **121.1** A player draws a card by putting the top card of their library into their hand. This is done as a... *(6 tests)*
 - [x] **121.2** Cards may only be drawn one at a time. If a player is instructed to draw multiple cards, that pla... *(4 tests, subrules a)*
 - [ ] **121.3** If there are no cards in a player’s library and an effect offers that player the choice to draw a...
 - [x] **121.4** A player who attempts to draw a card from a library with no cards in it loses the game the next t... *(4 tests)*
-- [ ] **121.5** If an effect moves cards from a player’s library to that player’s hand without using the word “dr...
+- [x] **121.5** If an effect moves cards from a player’s library to that player’s hand without using the word “dr... *(1 tests)*
 - [x] **121.6** Some effects replace card draws. *(1 tests)*
 - [ ] **121.7** Some replacement effects and prevention effects result in one or more card draws. In such a case,...
 - [ ] **121.8** If a spell or ability causes a card to be drawn while another spell is being cast, the drawn card...
@@ -374,8 +374,8 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **202.1** A card’s mana cost is indicated by mana symbols near the top of the card. (See rule 107.4.) On mo... *(3 tests, subrules ab)*
 - [x] **202.2** An object is the color or colors of the mana symbols in its mana cost, regardless of the color of... *(2 tests)*
-- [x] **202.3** The mana value of an object is a number equal to the total amount of mana in its mana cost, regar... *(9 tests, subrules a)*
-- [ ] **202.4** Any additional cost listed in an object’s rules text or imposed by an effect isn’t part of the ma...
+- [x] **202.3** The mana value of an object is a number equal to the total amount of mana in its mana cost, regar... *(10 tests, subrules a)*
+- [x] **202.4** Any additional cost listed in an object’s rules text or imposed by an effect isn’t part of the ma... *(1 tests)*
 
 ### 205. Type Line
 
@@ -387,7 +387,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 207. Text Box
 
 - [ ] **207.1** The text box is printed on the lower half of the card. It usually contains rules text defining th...
-- [ ] **207.2** The text box may also contain italicized text that has no game function.
+- [x] **207.2** The text box may also contain italicized text that has no game function. *(2 tests, subrules c)*
 - [ ] **207.3** Some cards have decorative icons in the background of their text boxes. For example, a guild icon...
 - [ ] **207.4** The chaos symbol appears in the text box of each plane card to the left of a triggered ability th...
 - [ ] **207.5** One card (Cryptic Spires) has a set of symbols below the text box that represent each color and a...
@@ -396,7 +396,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **208.1** A creature card has two numbers separated by a slash printed in its lower right corner. The first... *(1 tests)*
 - [ ] **208.2** Rather than a fixed number, some creature cards have power and/or toughness that includes a star ...
-- [ ] **208.3** A noncreature permanent has no power or toughness, even if it’s a card with a power and toughness...
+- [x] **208.3** A noncreature permanent has no power or toughness, even if it’s a card with a power and toughness... *(1 tests)*
 - [ ] **208.4** Some effects refer to a creature’s “base power,” “base toughness,” or “base power and toughness.”
 - [ ] **208.5** If a creature somehow has no value for its power, its power is 0. The same is true for toughness.
 
@@ -441,7 +441,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **304.2** When an instant spell resolves, the actions stated in its rules text are followed. Then it’s put ...
 - [ ] **304.3** Instant subtypes are always a single word and are listed after a long dash: “Instant — Arcane.” E...
 - [ ] **304.4** Instants can’t enter the battlefield. If an instant would enter the battlefield, it remains in it...
-- [ ] **304.5** If text states that a player may do something “any time they could cast an instant” or “only as a...
+- [x] **304.5** If text states that a player may do something “any time they could cast an instant” or “only as a... *(1 tests)*
 
 ### 305. Lands
 
@@ -450,7 +450,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **305.3** A player can’t play a land, for any reason, if it isn’t their turn. Ignore any part of an effect ...
 - [ ] **305.4** Effects may also allow players to “put” lands onto the battlefield. This isn’t the same as “playi...
 - [ ] **305.5** Land subtypes are always a single word and are listed after a long dash. Land subtypes are also c...
-- [x] **305.6** The basic land types are Plains, Island, Swamp, Mountain, and Forest. If an object uses the words... *(2 tests)*
+- [x] **305.6** The basic land types are Plains, Island, Swamp, Mountain, and Forest. If an object uses the words... *(3 tests)*
 - [x] **305.7** If an effect sets a land’s subtype to one or more of the basic land types, the land no longer has... *(23 tests)*
 - [ ] **305.8** Any land with the supertype “basic” is a basic land. Any land that doesn’t have this supertype is...
 - [ ] **305.9** If an object is both a land and another card type, it can be played only as a land. It can’t be c...
@@ -523,7 +523,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 405. Stack
 
 - [x] **405.1** When a spell is cast, the physical card is put on the stack (see rule 601.2a). When an ability is... *(2 tests)*
-- [x] **405.2** The stack keeps track of the order that spells and/or abilities were added to it. Each time an ob... *(1 tests)*
+- [x] **405.2** The stack keeps track of the order that spells and/or abilities were added to it. Each time an ob... *(2 tests)*
 - [x] **405.3** If an effect puts two or more objects on the stack at the same time, those controlled by the acti... *(3 tests)*
 - [x] **405.4** Each spell has all the characteristics of the card associated with it. Each activated or triggere... *(2 tests)*
 - [x] **405.5** When all players pass in succession, the top (last-added) spell or ability on the stack resolves.... *(2 tests)*
@@ -615,7 +615,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 508. Declare Attackers Step
 
-- [x] **508.1** First, the active player declares attackers. This turn-based action doesn’t use the stack. To dec... *(39 tests, subrules abcdfgk)*
+- [x] **508.1** First, the active player declares attackers. This turn-based action doesn’t use the stack. To dec... *(40 tests, subrules abcdfgk)*
 - [x] **508.2** Second, the active player gets priority. (See rule 117, “Timing and Priority.”) *(2 tests)*
 - [ ] **508.3** Triggered abilities that trigger on attackers being declared may have different trigger conditions.
 - [ ] **508.4** If a creature is put onto the battlefield attacking, its controller chooses which defending playe...
@@ -675,7 +675,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **602.2** To activate an ability is to put it onto the stack and pay its costs, so that it will eventually ... *(34 tests, subrules ab)*
 - [ ] **602.3** Some abilities specify that one of their controller’s opponents does something the controller wou...
 - [ ] **602.4** Activating an ability that alters costs won’t affect spells and abilities that are already on the...
-- [x] **602.5** A player can’t begin to activate an ability that’s prohibited from being activated. *(38 tests, subrules ac)*
+- [x] **602.5** A player can’t begin to activate an ability that’s prohibited from being activated. *(39 tests, subrules ace)*
 
 ### 603. Handling Triggered Abilities
 
@@ -706,7 +706,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **605.1** Some activated abilities and some triggered abilities are mana abilities, which are subject to sp... *(10 tests, subrules ab)*
 - [x] **605.2** A mana ability remains a mana ability even if the game state doesn’t allow it to produce mana. *(1 tests)*
-- [x] **605.3** Activating an activated mana ability follows the rules for activating any other activated ability... *(11 tests, subrules abc)*
+- [x] **605.3** Activating an activated mana ability follows the rules for activating any other activated ability... *(12 tests, subrules abc)*
 - [x] **605.4** Triggered mana abilities follow all the rules for other triggered abilities (see rule 603, “Handl... *(6 tests, subrules a)*
 - [x] **605.5** Abilities that don’t meet the criteria specified in rules 605.1a–b and spells aren’t mana abilities. *(3 tests, subrules ab)*
 
@@ -772,7 +772,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 613. Interaction of Continuous Effects
 
-- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(99 tests, subrules abcdefg)*
+- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(100 tests, subrules abcdefg)*
 - [x] **613.2** Within layer 1, apply effects in a series of sublayers in the order described below. Within each ... *(17 tests, subrules ac)*
 - [ ] **613.3** Within layers 2–6, apply effects from characteristic-defining abilities first (see rule 604.3), t...
 - [x] **613.4** Within layer 7, apply effects in a series of sublayers in the order described below. Within each ... *(73 tests, subrules abcd)*
@@ -782,11 +782,11 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **613.8** Within a layer or sublayer, determining which order effects are applied in is sometimes done usin... *(8 tests, subrules abc)*
 - [x] **613.9** One continuous effect can override another. Sometimes the results of one effect determine whether... *(6 tests)*
 - [x] **613.10** Some continuous effects affect players rather than objects. For example, an effect might give a p... *(1 tests)*
-- [ ] **613.11** Some continuous effects affect game rules rather than objects. For example, effects may modify a ...
+- [x] **613.11** Some continuous effects affect game rules rather than objects. For example, effects may modify a ... *(2 tests)*
 
 ### 614. Replacement Effects
 
-- [x] **614.1** Some continuous effects are replacement effects. Like prevention effects (see rule 615), replacem... *(41 tests, subrules abcd)*
+- [x] **614.1** Some continuous effects are replacement effects. Like prevention effects (see rule 615), replacem... *(42 tests, subrules abcd)*
 - [ ] **614.2** Some replacement effects apply to damage from a source. See rule 609.7.
 - [ ] **614.3** There are no special restrictions on casting a spell or activating an ability that generates a re...
 - [x] **614.4** Replacement effects must exist before the appropriate event occurs—they can’t “go back in time” a... *(2 tests)*
@@ -797,7 +797,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **614.9** Some effects replace damage dealt to one battle, creature, planeswalker, or player with the same ... *(13 tests)*
 - [x] **614.10** An effect that causes a player to skip an event, step, phase, or turn is a replacement effect. “S... *(6 tests, subrules a)*
 - [ ] **614.11** Some effects replace card draws. These effects are applied even if no cards could be drawn becaus...
-- [x] **614.12** Some replacement effects modify how a permanent enters the battlefield. (See rules 614.1c–d.) Suc... *(6 tests, subrules a)*
+- [x] **614.12** Some replacement effects modify how a permanent enters the battlefield. (See rules 614.1c–d.) Suc... *(7 tests, subrules a)*
 - [x] **614.13** An effect that modifies how a permanent enters the battlefield may cause other objects to change ... *(1 tests, subrules a)*
 - [ ] **614.14** An object may have one ability printed on it that generates a replacement effect which causes one...
 - [ ] **614.15** Some replacement effects are not continuous effects. Rather, they are an effect of a resolving sp...
@@ -908,11 +908,11 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 704. State-Based Actions
 
-- [ ] **704.1** State-based actions are game actions that happen automatically whenever certain conditions (liste...
-- [ ] **704.2** State-based actions are checked throughout the game and are not controlled by any player.
+- [x] **704.1** State-based actions are game actions that happen automatically whenever certain conditions (liste... *(1 tests)*
+- [x] **704.2** State-based actions are checked throughout the game and are not controlled by any player. *(1 tests)*
 - [x] **704.3** Whenever a player would get priority (see rule 117, “Timing and Priority”), the game checks for a... *(4 tests)*
 - [ ] **704.4** Unlike triggered abilities, state-based actions pay no attention to what happens during the resol...
-- [x] **704.5** The state-based actions are as follows: *(92 tests, subrules abcdefghijkmnpqrsy)*
+- [x] **704.5** The state-based actions are as follows: *(93 tests, subrules abcdefghijkmnpqrsy)*
 - [x] **704.6** Some variant games include additional state-based actions that aren’t normally applicable: *(3 tests, subrules cd)*
 - [x] **704.7** If multiple state-based actions would have the same result at the same time, a single replacement... *(1 tests)*
 - [x] **704.8** If a state-based action results in a permanent leaving the battlefield at the same time other sta... *(1 tests)*

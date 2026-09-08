@@ -31,9 +31,11 @@ from ._common import (
 )
 
 #: The printed noun phrases a graveyard-to-battlefield return may name.
-#: CR 110.4a's four permanent types, because the instruction puts the card onto
-#: the battlefield and only a permanent card can be there — an instant card
-#: named here would be a sentence with no legal outcome, so it refuses rather
+#: Four of CR 110.4a's six permanent card types (there is no battle and no
+#: planeswalker return template in the pool), because the instruction puts the
+#: card onto the battlefield and only a permanent card can be there — an
+#: instant card named here would be a sentence with no legal outcome, so it
+#: refuses rather
 #: than lowering to a move that finds nothing.
 #:
 #: The empty tuple is deliberately **absent**: Regrowth's untyped "target card"
@@ -478,7 +480,7 @@ def _lower_return_to_zone(
                 )
             # Which *kind* of card comes back is the sentence's own word, so it
             # travels as payload the way the colour narrowing below does.
-            # Restricted to the four permanent types (CR 110.4a) because the
+            # Restricted to four of CR 110.4a's six permanent card types because the
             # instruction puts the card **onto the battlefield**: an instant
             # card returned there is CR 111.1's nothing, and a phrase naming
             # one is a card this engine has not got. Regrowth's untyped "target

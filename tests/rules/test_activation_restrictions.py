@@ -687,3 +687,44 @@ def test_602_5_activate_only_if_this_permanent_entered_this_turn():
         assert result.supported is expected, result.details
         # Refused *before* any cost is paid: the Forest is still there.
         assert (len(p1.battlefield) == 1) is expected
+
+
+@pytest.mark.cr("304.5", "602.5e", "605.3a")
+def test_304_5_activate_only_as_an_instant_means_only_that_you_have_priority():
+    """"If text states that a player may do something ‘any time they could cast
+    an instant’ or ‘only as an instant,’ it means only that the player must have
+    priority."
+
+    Which sounds like a tautology until Lion’s Eye Diamond. CR 605.3a gives an
+    activated **mana** ability three windows: whenever its controller has
+    priority, whenever they are paying for a spell or ability, and whenever a
+    rule or effect asks for a mana payment. The last two are windows in which
+    *nobody* has priority, and "Activate only as an instant" removes them —
+    which is the whole card: the hand is discarded in response to something,
+    never after a spell is announced and its cost is being paid.
+
+    So the predicate has to ask CR 304.5’s own question rather than return True.
+    One that returned True would be a restriction the engine merely believes
+    another rule covers, and it would stop covering it the day a mana-payment
+    window opens.
+    """
+    from engine.activation_restrictions import _as_an_instant
+
+    catalog = {card.name: card for card in load_catalog()}
+    diamond = Permanent(card=catalog["Lion's Eye Diamond"])
+    p1 = PlayerState(name="P1", battlefield=[diamond])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game._sync_control()
+
+    game.start_priority_window(0)
+    assert _as_an_instant(game, 0, diamond) is True
+    assert _as_an_instant(game, 1, diamond) is False, "the other seat has no priority"
+
+    # No priority window open at all — the shape of CR 605.3a's other two
+    # windows, in which a mana ability may normally still be activated.
+    game.priority_player_index = None
+    assert _as_an_instant(game, 0, diamond) is False, (
+        "a mana-payment window is not a priority window (CR 605.3a)"
+    )
+

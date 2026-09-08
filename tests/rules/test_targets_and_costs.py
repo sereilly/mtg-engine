@@ -1862,3 +1862,41 @@ def test_115_1_an_any_target_ability_named_by_id_alone_hits_the_creature(set_poo
 
     assert victim.metadata.get("was_dealt_damage_this_turn"), game.log
     assert p2.life == 20, game.log
+
+
+@pytest.mark.cr("109.2", "115.1")
+def test_109_2_a_bare_type_word_means_a_permanent_on_the_battlefield(catalog_by_name):
+    """"...includes a card type or subtype, but doesn’t refer to a specific zone
+    or include the word ‘card,’ ‘spell,’ ‘source,’ or ‘scheme,’ it means a
+    permanent of that card type ... on the battlefield."
+
+    Shatter says "Destroy target **artifact**" — no zone, no "card". So the
+    Moxen in hand and in the graveyard are not targets, however plainly they are
+    artifacts, and the picker must offer exactly the one on the battlefield.
+
+    The picker rather than the resolution: CR 109.2 is what scopes the noun
+    phrase at announcement (CR 115.1), so a reading that only narrowed at
+    resolution would still let a player choose a card in their hand.
+    """
+    from engine.oracle import compile_card_oracle
+    from engine.targeting import derive_cast_spec
+
+    shatter = catalog_by_name["Shatter"]
+    on_battlefield = Permanent(card=catalog_by_name["Mox Ruby"])
+    p1 = PlayerState(
+        name="P1",
+        hand=[catalog_by_name["Mox Pearl"]],
+        graveyard=[catalog_by_name["Mox Sapphire"]],
+        battlefield=[on_battlefield],
+    )
+    game = _two_player_game(p1, PlayerState(name="P2"))
+
+    spec = dict(derive_cast_spec(shatter, compile_card_oracle(shatter)) or {})
+    kind = spec.pop("kind")
+    offered = [
+        entry["name"]
+        for entry in game.enumerate_targets_for_kind(0, shatter, kind, **spec)
+    ]
+
+    assert offered == ["Mox Ruby"], offered
+

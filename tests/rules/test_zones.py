@@ -1048,3 +1048,174 @@ def test_406_2_a_card_leaving_one_seats_exile_leaves_only_that_pile():
 
     assert p1.exile == []
     assert [card.name for card in p2.exile] == ["Shared Bear"]
+
+
+# ---------------------------------------------------------------------------
+# CR 110.4 / 110.5 — what may be a permanent, and the status it has once it is
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("110.4a", "110.4")
+def test_110_4a_only_a_permanent_card_can_be_returned_to_the_battlefield():
+    """"The term ‘permanent card’ ... means an artifact, battle, creature,
+    enchantment, land, or planeswalker card."
+
+    A "return target <type> card from your graveyard **to the battlefield**"
+    sentence can only name one of those: an instant card put onto the
+    battlefield is CR 111.1's nothing. So the lowering admits the permanent
+    types and refuses the rest, rather than lowering to a move that finds
+    nothing at resolution.
+
+    The pool's return templates cover four of the six — there is no battle and
+    no planeswalker return printed in it — which is a fact about the cards, not
+    about the rule.
+    """
+    from engine.grammar.lowering.returns import _REANIMABLE_CARD_TYPES
+
+    named = {word for phrase in _REANIMABLE_CARD_TYPES for word in phrase}
+    permanent_card_types = {
+        "artifact", "battle", "creature", "enchantment", "land", "planeswalker",
+    }
+
+    assert named <= permanent_card_types, named
+    assert "instant" not in named
+    assert "sorcery" not in named
+
+
+@pytest.mark.cr("110.5b", "110.5", "110.5a")
+def test_110_5b_a_permanent_enters_untapped_unless_something_says_otherwise():
+    """"Permanents enter the battlefield untapped ... unless a spell or ability
+    says otherwise."
+
+    The default and the exception through the same entry path: an ordinary
+    creature arrives untapped, and Nevinyrral's Disk ("This artifact enters
+    tapped") arrives tapped because its own text says so.
+
+    Status is not a characteristic (CR 110.5a), so neither answer is read off
+    the card at the moment it is asked — the entry path stamps it, which is why
+    both have to be exercised through that path rather than by constructing a
+    ``Permanent`` with the flag already set.
+    """
+    from engine.card_loader import load_catalog
+
+    catalog = {card.name: card for card in load_catalog()}
+    p1 = PlayerState(name="P1")
+    game = Game(players=[p1, PlayerState(name="P2")])
+
+    ordinary = Permanent(card=_mk_creature("Plain Bear"))
+    game._put_permanent_onto_battlefield(0, ordinary, None)
+
+    assert ordinary.tapped is False, "the CR 110.5b default"
+
+    disk = Permanent(card=catalog["Nevinyrral's Disk"])
+    game._put_permanent_onto_battlefield(0, disk, None)
+
+    assert disk.tapped is True, "its own text is the 'unless'"
+    assert ordinary.tapped is False, "and it changed nothing else"
+
+
+@pytest.mark.cr("110.5d", "110.5")
+def test_110_5d_only_permanents_have_status():
+    """"Only permanents have status. Cards not on the battlefield do not ...
+    cards not on the battlefield are neither tapped nor untapped."
+
+    So a tapped creature that dies does not arrive in the graveyard "tapped"
+    waiting to come back that way: the graveyard holds a ``CardDefinition``,
+    which has nowhere to put a status, and the permanent that carried one is
+    gone. CR 400.7 makes the thing that returns a new object, and CR 110.5b then
+    gives it the default.
+    """
+    creature = Permanent(card=_mk_creature("Doomed Bear"))
+    creature.tapped = True
+    p1 = PlayerState(name="P1", battlefield=[creature])
+    game = Game(players=[p1, PlayerState(name="P2")])
+
+    game.remove_from_battlefield(creature)
+    p1.graveyard.append(creature.card)
+
+    assert not hasattr(p1.graveyard[0], "tapped"), "a card has no status to carry"
+
+    returned = Permanent(card=p1.graveyard[0])
+    game._put_permanent_onto_battlefield(0, returned, None)
+
+    assert returned.tapped is False, "a new object, untapped by CR 110.5b"
+
+
+@pytest.mark.cr("121.5", "121.1")
+def test_121_5_moving_cards_to_a_hand_without_the_word_draw_is_not_a_draw():
+    """"If an effect moves cards from a player’s library to that player’s hand
+    without using the word ‘draw,’ the player has not drawn those cards. This
+    makes a difference for abilities that trigger on drawing cards and effects
+    that replace card draws, as well as if the player’s library is empty."
+
+    Scroll Rack says "Put that many cards from the top of your library into your
+    hand" — CR 121.1’s definition of a draw, spelled out instead of named. It is
+    still not a draw, which is why it is its own instruction kind: routed
+    through the draw seam it would ring every "whenever you draw a card" on the
+    board and be stopped by every draw replacement, and that is a different
+    card.
+
+    The observable is the per-turn draw tally, which every draw the engine
+    performs increments: the cards arrive in hand and the tally does not move.
+    """
+    from engine.card_loader import load_catalog
+    from engine.game_types import OracleExecutionContext
+    from engine.handlers.registry import EFFECT_HANDLERS
+    from engine.oracle import OracleInstruction
+
+    catalog = {card.name: card for card in load_catalog()}
+    p1 = PlayerState(name="P1", library=_library(["A", "B", "C"]))
+    game = Game(players=[p1, PlayerState(name="P2")])
+    before = p1.cards_drawn_this_turn
+
+    EFFECT_HANDLERS["put_library_top_into_hand"](
+        game,
+        OracleInstruction(kind="put_library_top_into_hand", payload={"amount": 2}),
+        OracleExecutionContext(
+            caster=p1, target=p1, card=catalog["Scroll Rack"],
+        ),
+    )
+
+    assert [c.name for c in p1.hand] == ["A", "B"], "the cards did arrive"
+    assert len(p1.library) == 1
+    assert p1.cards_drawn_this_turn == before, "and none of them was drawn"
+
+
+@pytest.mark.cr("110.3", "613.1")
+def test_110_3_a_permanents_characteristics_are_its_cards_as_modified():
+    """"A nontoken permanent’s characteristics are the same as those printed on
+    its card, as modified by any continuous effects."
+
+    The premise the whole layer system rests on, and the one this engine states
+    as an invariant rather than a convention: every characteristic is
+    **computed** from the printed card plus the effects in play, never stored.
+    So with nothing in play the computed answer equals the printed one, and with
+    an effect in play it equals the printed one as modified — with the card
+    itself never rewritten, which is what lets the effect end.
+
+    Gravity Sphere is the modifier here because it *removes* rather than adds:
+    a permanent whose printed keyword is gone still has it printed, and an
+    implementation that edited the card to make it go would have nowhere to put
+    it back.
+    """
+    from engine.card_loader import load_catalog
+
+    catalog = {card.name: card for card in load_catalog()}
+    flyer = Permanent(card=catalog["Serra Angel"])
+    p1 = PlayerState(name="P1", battlefield=[flyer])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game._sync_control()
+    game._settle()
+
+    assert "flying" in [k.lower() for k in flyer.card.keywords]
+    assert flyer.has_keyword("flying") is True, "printed, and nothing modifies it"
+
+    p1.battlefield.append(Permanent(card=catalog["Gravity Sphere"]))
+    game._sync_control()
+    game._settle()
+
+    assert flyer.has_keyword("flying") is False, "as modified by a continuous effect"
+    assert "flying" in [k.lower() for k in flyer.card.keywords], (
+        "the printed card is untouched — the effect is applied, not written in"
+    )
+
