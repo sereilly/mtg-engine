@@ -37,7 +37,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | STH | 143 | 215 | 88.4% | 88.4% | 62.8% | 124 |
 | EXO | 143 | 207 | 90.3% | 90.3% | 66.2% | 127 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| USG *(measured)* | 335 | 486 | 79.6% | 77.0% | 54.1% | 224 |
+| USG *(measured)* | 335 | 486 | 81.9% | 79.8% | 56.0% | 233 |
 | **All (shipped)** | **4873** | **7239** | **90.7%** | **89.9%** | **60.1%** | **3647** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -50,9 +50,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 425 | 191 | expected a subject |  |
+| 419 | 185 | expected a subject |  |
 | 116 | 61 | unrecognized effect verb |  |
-| 93 | 49 | unconsumed text |  |
+| 90 | 46 | unconsumed text |  |
 | 39 | 23 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 15 | 14 | expected 'unless defending player controls' |  |
@@ -298,6 +298,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Prevent the next 3 damage that would be dealt to target creature this turn.`
 - **Anointed Chorister**
   - `{4}{W}: This creature gets +3/+3 until end of turn.`
+- **Antagonism**
+  - `At the beginning of each player's end step, this enchantment deals 2 damage to that player unless one of their opponents was dealt damage this turn.`
 - **Anvil of Bogardan**
   - `At the beginning of each player's draw step, that player draws an additional card, then discards a card.`
 - **Apathy**
@@ -311,6 +313,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Apprentice Wizard**
   - `{U}, {T}: Add {C}{C}{C}.`
   - `{U}, {T}: Add {C}{C}{C}.`
+- **Arc Lightning**
+  - `Arc Lightning deals 3 damage divided as you choose among one, two, or three targets.`
 - **Arcades Sabboth**
   - `At the beginning of your upkeep, sacrifice Arcades Sabboth unless you pay {G}{W}{U}.`
   - `Each untapped creature you control gets +0/+2 as long as it's not attacking.`
@@ -828,6 +832,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this creature enters, sacrifice it unless you return two Forests you control to their owner's hand.`
 - **Bullwhip**
   - `{2}, {T}: This artifact deals 1 damage to target creature. That creature attacks this turn if able.`
+- **Bulwark**
+  - `At the beginning of your upkeep, this enchantment deals X damage to target opponent, where X is the number of cards in your hand minus the number of cards in that player's hand.`
 - **Burgeoning**
   - `Whenever an opponent plays a land, you may put a land card from your hand onto the battlefield.`
 - **Buried Alive**
@@ -1631,6 +1637,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Dismiss**
   - `Counter target spell.`
   - `Draw a card.`
+- **Disorder**
+  - `Disorder deals 2 damage to each white creature and each player who controls a white creature.`
 - **Disrupt**
   - `Counter target instant or sorcery spell unless its controller pays {1}.`
   - `Draw a card.`
@@ -1880,6 +1888,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Electric Eel**
   - `When this creature enters, it deals 1 damage to you.`
   - `{R}{R}: This creature gets +2/+0 until end of turn and deals 1 damage to you.`
+- **Electryte**
+  - `Whenever this creature deals combat damage to defending player, it deals damage equal to its power to each blocking creature.`
 - **Elemental Augury**
   - `{3}: Look at the top three cards of target player's library, then put them back in any order.`
 - **Elephant Graveyard**
@@ -1965,6 +1975,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Energy Bolt**
   - `• Energy Bolt deals X damage to target player or planeswalker.`
   - `• Target player gains X life.`
+- **Energy Field**
+  - `When a card is put into your graveyard from anywhere, sacrifice this enchantment.`
 - **Energy Tap**
   - `Tap target untapped creature you control. If you do, add an amount of {C} equal to that creature's mana value.`
   - `Tap target untapped creature you control. If you do, add an amount of {C} equal to that creature's mana value.`
@@ -2250,6 +2262,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Destroy all Plains.`
 - **Fledgling Djinn**
   - `At the beginning of your upkeep, this creature deals 1 damage to you.`
+- **Flesh Reaver**
+  - `Whenever this creature deals damage to a creature or opponent, this creature deals that much damage to you.`
 - **Flickering Ward**
   - `{W}: Return this Aura to its owner's hand.`
 - **Fling**
@@ -5060,6 +5074,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Remove any number of charge counters from this artifact: Add {R}, then add an additional {R} for each charge counter removed this way.`
 - **Red Scarab**
   - `Enchanted creature gets +2/+2 as long as an opponent controls a red permanent.`
+- **Redeem**
+  - `Prevent all damage that would be dealt this turn to up to two target creatures.`
 - **Reef Pirates**
   - `Whenever this creature deals damage to an opponent, that player mills a card.`
   - `Whenever this creature deals damage to an opponent, that player mills a card.`
@@ -5152,6 +5168,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Choose two target creatures controlled by the same opponent. That player chooses and sacrifices one of those creatures. Put a -1/-1 counter on the other.`
 - **Retribution of the Meek**
   - `Destroy all creatures with power 4 or greater. They can't be regenerated.`
+- **Retromancer**
+  - `Whenever this creature becomes the target of a spell or ability, this creature deals 3 damage to that spell or ability's controller.`
 - **Return to Nature**
   - `• Destroy target artifact.`
   - `• Destroy target enchantment.`
