@@ -45,11 +45,12 @@ from ._sweeps import (
     lower_each_matching_damage,
     refuse_unswept_multiplier,
 )
+from ._seats import _stamp_recipient_control, _stamp_recipient_deed
 from ._common import (
     _describe_several_targets, _names_several_targets, _amount_payload,
     card_divided_each_description,
     _filter_payload, _is_enchanted, _is_source, _is_you, _targets_payload,
-    player_deed_payload, testable_filter_payload
+    testable_filter_payload,
 )
 from ._events import (DAMAGED_PERMANENT_CONTROLLER, damage_trigger_names_damaged_end, _chosen_cast_amount, _EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_OBJECTS, _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER, LOOP_BOUND_PLAYER, SWEPT_CONTROLLER_SEATS, _back_reference_payload, _RECORDED_PERMANENTS)
 from ._conjuncts import lower_damage_conjunction, lower_split_recipients
@@ -124,47 +125,6 @@ def _lower_halved_damage(
 #: ``handlers/damage.deal_damage``, on the single creature it resolved.
 _RIDER_READING_KINDS = frozenset({"deal_damage"})
 
-
-
-def _stamp_recipient_deed(payload: dict, recipient, node) -> None:
-    """"…deals 2 damage to **each player who sacrificed a Plains this way**."
-    (Desolation.)
-
-    The seat narrowing the recipient printed, carried to the handler that loops
-    the seats. Its own two lines rather than a branch inside each arm because
-    both seat-set recipients take it identically — what the clause narrows is
-    *which of the loop's seats*, and the loop is the only difference between
-    the two arms.
-
-    ``player_deed_payload`` raises on a clause it cannot express, which is the
-    behaviour this call wants: an unenforced narrowing is a card that damages
-    every player, and a card that refuses to compile says so.
-    """
-    deed = player_deed_payload(recipient, node)
-    if deed is not None:
-        payload["recipient_did"] = deed
-
-def _stamp_recipient_control(payload: dict, recipient, node) -> None:
-    """"…to **each player who controls a white creature**." (Disorder.)
-
-    The board narrowing the recipient printed, carried to the handler that
-    loops the seats — the twin of :func:`_stamp_recipient_deed` beside it, and
-    beside it for its reason: both seat-set recipients take it identically, and
-    what the clause narrows is *which of the loop's seats*.
-
-    Every key of the phrase must be one ``subject_matches`` can test, because a
-    narrowing the matcher drops here is a card that damages every player at the
-    table — the direction this whole family refuses in.
-    """
-    described = getattr(recipient, "controls", None)
-    if described is None:
-        return
-    payload["recipient_controls"] = testable_filter_payload(
-        described,
-        refusal="the seat narrowing cannot test this restriction",
-        node=node,
-        require_narrowing=False,
-    )
 
 
 def _lower_damage(

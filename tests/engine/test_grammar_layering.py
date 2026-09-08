@@ -1709,6 +1709,15 @@ FAMILY_SHARED = {
     # not an argument against it: the alternative was `life` importing `game`
     # or a second copy of a three-row seat table, and a seat table that
     # disagrees with itself lands an effect on the wrong player.
+    #
+    # It grew the *other* half of the same subject at USG's second wave, when
+    # Disorder's "each player who controls a white creature" took `damage` to
+    # fifteen lines under the guard: a recipient key says which seats a sentence
+    # acts on and a narrowing says which **of those**, both read off the same
+    # `ast.PlayerRef`, and the two stampers that carry one had no other home
+    # they could share. Third-party imports were the price and they are
+    # downward: `_common` for the two payload readers, which is where every
+    # other floor here reaches.
     "_seats",
     # `_records` split out of `categories` when *that* module crossed the guard:
     # it carried two registries with two different keys — which family a kind
