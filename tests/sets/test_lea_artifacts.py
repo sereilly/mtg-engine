@@ -1369,3 +1369,52 @@ class TestArtifactCards:
 
         assert result.supported
         assert p2.life == 19
+
+
+# --- W2G4 (Urza's Saga wave 2): the Golem the animation had dropped ---
+#
+# Jade Statue lived on a name-keyed hook carrying `power=3, toughness=6` and a
+# bare `True` flag, so the layer bridge answered "creature" and nothing else.
+# The hook is retired: "until end of combat" is a duration the grammar reads
+# now, and the animation goes through the same body its two siblings use.
+import pytest as _w2g4_pytest
+
+from engine.oracle import compile_card_oracle as _w2g4_compile
+
+
+def test_w2g4_jade_statue_is_a_golem_while_it_is_a_creature(all_cards):
+    """A Golem lord did not pump it and "destroy target Golem" missed it, for as
+    long as the record said only that it had become *something*."""
+    statue = _get(all_cards, "Jade Statue")
+    p1 = PlayerState(name="W2G4-P1", battlefield=[Permanent(card=statue)])
+    p2 = PlayerState(name="W2G4-P2")
+    game = Game(players=[p1, p2])
+    game._set_phase_and_step("combat", "beginning_of_combat")
+
+    assert game.activate_permanent_ability(
+        0, "Jade Statue", target_player_index=1
+    ).supported
+    animated = p1.battlefield[0]
+
+    assert animated.is_creature
+    assert animated.has_type("golem"), "the subtype the hook never carried"
+    assert animated.has_type("artifact"), "CR 205.1b: still an artifact"
+    assert (animated.effective_power, animated.effective_toughness) == (3, 6)
+
+    game.end_combat()
+    assert not animated.is_creature
+    assert not animated.has_type("golem")
+
+
+def test_w2g4_jade_statues_line_is_read_by_the_grammar_and_not_a_hook(all_cards):
+    """The entry is gone rather than dead: `tests/engine/test_card_lines.py`
+    fails on a hook whose line a production has taken over, and this is the
+    direction this repo counts."""
+    from engine.card_hooks import CARD_LINE_INSTRUCTIONS
+
+    assert "Jade Statue" not in CARD_LINE_INSTRUCTIONS
+    program = _w2g4_compile(_get(all_cards, "Jade Statue"))
+    assert program.supported
+    ability = program.activated_abilities[0]
+    assert ability.instruction.kind == "animate_self_until_end_of_combat"
+    assert ability.instruction.payload["subtypes"] == ["golem"]

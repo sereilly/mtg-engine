@@ -428,3 +428,208 @@ def test_w1g5_carrion_beetles_exiles_three_cards_from_one_graveyard(set_pool):
     assert len(p2.exile) == 3
     assert len(p2.graveyard) == 1
     assert not game.pending_choices, "one pile with legal cards is not a decision"
+
+
+# --- W2G4: what a permanent may not do, and the durations that end it ---
+import pytest
+
+from engine import Game, PlayerState
+from engine.combat_restrictions import combat_restriction_for
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle, normalize_creature_line
+
+from tests.helpers import resolve_stack as _g4b_resolve
+
+
+def _g4b_board(*, mine=(), theirs=(), hand0=(), life=20):
+    """A two-seat game with mana costs off and control synced, seat 0 active.
+
+    Returns ``(game, seat0, seat1)`` and ends on that tuple, so no mechanical
+    union can splice another group's helper body onto this signature.
+    """
+    g4b_seat0 = PlayerState(
+        name="G4-A", battlefield=[Permanent(card=c) for c in mine],
+        hand=list(hand0), life=life,
+    )
+    g4b_seat1 = PlayerState(
+        name="G4-B", battlefield=[Permanent(card=c) for c in theirs], life=life,
+    )
+    g4b_game = Game(players=[g4b_seat0, g4b_seat1])
+    g4b_game.enforce_mana_costs = False
+    g4b_game.active_player_index = 0
+    g4b_game._sync_control()
+    return g4b_game, g4b_seat0, g4b_seat1
+
+
+def _g4b_creature(name, power=2, toughness=2):
+    from tests.helpers import _mk_creature_card
+
+    return _mk_creature_card(name, power, toughness)
+
+
+def test_w2g4_okk_needs_a_bigger_attacker_beside_it(set_pool):
+    """CR 508.1c asks its restrictions of the **declaration**, which is why no
+    per-creature predicate can answer this one: what makes Okk's attack legal is
+    a fact about who else was declared."""
+    pool = set_pool("USG")
+    game, mine, _ = _g4b_board(
+        mine=[pool["Okk"], _g4b_creature("G4B Small", 2, 2),
+              _g4b_creature("G4B Big", 6, 6)],
+    )
+    okk, small, big = mine.battlefield
+    assert okk.effective_power == 4
+
+    def refusal(declared):
+        found = game.attack_declaration_refusal(declared)
+        return None if found is None else found[1]
+
+    assert refusal([okk]) is not None
+    assert refusal([okk, small]) is not None, "2/2 is not greater power than 4"
+    assert refusal([okk, big]) is None
+    # …and the companion alone is unrestricted.
+    assert refusal([small]) is None
+
+
+def test_w2g4_okk_reads_power_live_rather_than_off_the_printed_number(set_pool):
+    """CR 613 computes power, so a companion pumped in response qualifies and a
+    pumped Okk needs a bigger one. Reading the printed 4 would make both wrong
+    in the direction of letting the attack through."""
+    from engine.pt import add_pt_modifier
+
+    pool = set_pool("USG")
+    game, mine, _ = _g4b_board(
+        mine=[pool["Okk"], _g4b_creature("G4B Peer", 4, 4)],
+    )
+    okk, peer = mine.battlefield
+
+    assert game.attack_declaration_refusal([okk, peer]) is not None
+    add_pt_modifier(peer, 1, 0)
+    assert game.attack_declaration_refusal([okk, peer]) is None
+
+
+def test_w2g4_okk_needs_a_bigger_blocker_beside_it(set_pool):
+    """CR 509.1b's side of the same rule, asked where the block declaration is
+    assembled."""
+    pool = set_pool("USG")
+    game, mine, theirs = _g4b_board(
+        mine=[_g4b_creature("G4B Attacker", 1, 1)],
+        theirs=[pool["Okk"], _g4b_creature("G4B Wall", 0, 6),
+                _g4b_creature("G4B Ogre", 6, 6)],
+    )
+    game.current_turn_phase = "combat"
+    game.current_step = "declare_attackers"
+    assert game.declare_attackers(0, {0: 1})[0]
+    game.current_step = "declare_blockers"
+
+    alone, why = game.declare_blockers(1, {0: 0})
+    assert not alone and "greater power" in why
+    game.combat_blockers = {}
+    assert game.declare_blockers(1, {0: 0, 2: 0})[0]
+
+
+def test_w2g4_wirecat_fights_on_an_empty_board_and_not_otherwise(set_pool):
+    """The qualifier is the whole card. Read as an unconditional restriction the
+    Cat is a 2/2 for {4} that never attacks and never blocks; the clause dropped
+    the other way, it is a 2/2 for {4} with no drawback at all."""
+    pool = set_pool("USG")
+    game, mine, theirs = _g4b_board(
+        mine=[pool["Wirecat"]], theirs=[_g4b_creature("G4B Bear")],
+    )
+    cat = mine.battlefield[0]
+    attacker = theirs.battlefield[0]
+
+    assert game.can_attack(cat, 1)
+    assert game._can_block_attacker(cat, attacker)
+
+    # CR 403.1 makes the battlefield a shared zone, so an *opponent's*
+    # enchantment grounds the Cat too.
+    theirs.battlefield.append(Permanent(card=pool["Bedlam"]))
+    game._sync_control()
+    assert not game.can_attack(cat, 1)
+    assert not game._can_block_attacker(cat, attacker)
+
+
+def test_w2g4_wirecats_clause_reaches_both_halves_of_its_sentence(set_pool):
+    """One sentence, two prohibitions, one condition — the ``also_kinds`` shape.
+    A row that produced only the attack half would leave the Cat blocking with
+    an enchantment out, which is half a card."""
+    read = combat_restriction_for(
+        normalize_creature_line(set_pool("USG")["Wirecat"].oracle_text)
+    )
+    assert read is not None
+    assert (read.kind, read.also_kinds) == ("cant_attack", ("cant_block",))
+    assert read.payload["condition"] == {
+        "who": "anyone", "subject": {"type_filter": "enchantment"},
+    }
+
+
+def test_w2g4_a_qualified_restriction_still_refuses_where_nothing_asks(set_pool):
+    """The gate the row above passes is per **kind**, not per sentence: a clause
+    attached to a kind whose enforcement site never looks at one would be a
+    restriction applied unconditionally, which is the silent direction."""
+    assert combat_restriction_for(
+        "this creature attacks each combat if able if an enchantment is on the "
+        "battlefield"
+    ) is None
+    assert combat_restriction_for(
+        "this creature attacks each combat if able"
+    ) is not None
+
+
+def test_w2g4_somnophore_holds_its_creature_only_while_it_is_there(set_pool):
+    """"For as long as this creature remains on the battlefield" is not a step
+    boundary and not "while tapped": the Somnophore attacks (and taps) with the
+    lock still on, and the lock ends the moment it leaves."""
+    pool = set_pool("USG")
+    game, mine, theirs = _g4b_board(
+        mine=[pool["Somnophore"]], theirs=[_g4b_creature("G4B Victim")],
+    )
+    somno = mine.battlefield[0]
+    victim = theirs.battlefield[0]
+    victim.tapped = True
+
+    game.current_turn_phase = "combat"
+    game.current_step = "declare_attackers"
+    assert game.declare_attackers(0, {0: 1})[0]
+    game.current_step = "declare_blockers"
+    game.declare_blockers(1, {})
+    game.current_step = "combat_damage"
+    game.resolve_all_combat_damage(0)
+    for item in game.stack:
+        item.target = theirs
+        item.target_permanent_index = 0
+        item.target_permanent_id = victim.permanent_id
+    _g4b_resolve(game)
+
+    assert victim.tapped, "the trigger taps what it names"
+    assert somno.metadata["untap_lock_while_present"] == victim.permanent_id
+
+    game.active_player_index = 1
+    game.resolve_untap_step(1)
+    assert victim.tapped, "the Somnophore is still there, tapped or not"
+
+    game.remove_from_battlefield(somno)
+    game.resolve_untap_step(1)
+    assert not victim.tapped, "the lock ends with its holder"
+
+
+def test_w2g4_the_tap_picker_narrows_to_the_seat_the_trigger_froze(set_pool):
+    """Somnophore's target is "target creature **that player** controls", and
+    the seat is one only the firing event knows (CR 603.10). Refused rather than
+    supplied, the picker offered nothing and CR 603.3c took the whole ability off
+    the stack — which is what it did until this seat was handed down."""
+    pool = set_pool("USG")
+    game, mine, theirs = _g4b_board(
+        mine=[pool["Somnophore"], _g4b_creature("G4B Mine")],
+        theirs=[_g4b_creature("G4B Theirs")],
+    )
+    program = compile_card_oracle(pool["Somnophore"])
+    spec = {"kind": "creature", "that_player_only": True, "that_player_index": 1}
+    offered = game._enumerate_targets(
+        0, pool["Somnophore"], spec, for_cast=False,
+        ability_instruction=program.triggered_abilities[0].instruction,
+        source_permanent=mine.battlefield[0],
+        ability_source=mine.battlefield[0],
+        triggered=True,
+    )
+    assert [entry["name"] for entry in offered] == ["G4B Theirs"]

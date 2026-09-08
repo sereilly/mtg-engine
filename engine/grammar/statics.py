@@ -168,6 +168,20 @@ def _lower_lord_effects(
             # grant above and the same layer, so the same vocabulary gates it:
             # a word the engine does not implement would be a removal of
             # nothing, reported as a working board-wide static.
+            #
+            # "All creatures lose **all abilities**" is not that sentence and
+            # must not fall through it: this branch reads a *list of words*, so
+            # a blanket removal arrives carrying none and the assembly below
+            # produces a +0/+0 anthem — a card compiling clean and doing
+            # nothing. CR 613.1f's blanket is `engine/global_statics.py`'s
+            # (Humility, Titania's Song), re-derived from the board on every
+            # recompute, and a refusal here is what leaves it there.
+            if effect.all_abilities:
+                raise LoweringError(
+                    "a board-wide blanket ability removal is "
+                    "engine/global_statics.py's, not a lord buff",
+                    node=node,
+                )
             for keyword in effect.keywords:
                 if keyword not in grantable_keywords():
                     raise LoweringError(

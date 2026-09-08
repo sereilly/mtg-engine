@@ -78,3 +78,205 @@ def test_w1g1_a_cycling_instant_is_discarded_for_a_card(set_pool, name):
     assert [c.name for c in player.hand] == [name]      # the card drawn
     assert len(player.library) == 3
     assert [p.card.name for p in game.players[1].battlefield] == opponent_board
+
+
+# --- W2G4: durations, taking abilities away, and who damage goes to ---
+import pytest
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+
+from tests.helpers import resolve_stack as _g4d_resolve
+
+
+def _g4d_board(*, mine=(), theirs=(), hand0=(), life=20):
+    """Two seats, mana costs off, seat 0 active. Returns ``(game, s0, s1)`` and
+    ends on that tuple so no union can splice another helper onto it."""
+    g4d_seat0 = PlayerState(
+        name="G4-I1", battlefield=[Permanent(card=c) for c in mine],
+        hand=list(hand0), life=life,
+    )
+    g4d_seat1 = PlayerState(
+        name="G4-I2", battlefield=[Permanent(card=c) for c in theirs], life=life,
+    )
+    g4d_game = Game(players=[g4d_seat0, g4d_seat1])
+    g4d_game.enforce_mana_costs = False
+    g4d_game.active_player_index = 0
+    g4d_game._sync_control()
+    return g4d_game, g4d_seat0, g4d_seat1
+
+
+def _g4d_creature(name, power=2, toughness=2, text=""):
+    from tests.helpers import _mk_creature_card
+
+    return _mk_creature_card(name, power, toughness, text)
+
+
+def test_w2g4_symbiosis_pumps_both_creatures_it_named(set_pool):
+    """Two chosen objects, one boost. Lowered through the one-target handler the
+    second choice would be collected and dropped — the shape
+    ``_names_several_targets`` was written to refuse everywhere it is not opted
+    into."""
+    pool = set_pool("USG")
+    game, mine, _ = _g4d_board(
+        mine=[_g4d_creature("G4D One"), _g4d_creature("G4D Two")],
+        hand0=[pool["Symbiosis"]],
+    )
+    one, two = mine.battlefield
+
+    assert game.cast_from_hand(
+        0, "Symbiosis", target_player_index=0,
+        target_permanent_index=[0, 1],
+        target_permanent_ids=[one.permanent_id, two.permanent_id],
+    ).supported
+    _g4d_resolve(game)
+
+    assert (one.effective_power, one.effective_toughness) == (4, 4)
+    assert (two.effective_power, two.effective_toughness) == (4, 4)
+
+
+def test_w2g4_the_distributive_each_says_nothing_the_count_did_not(set_pool):
+    """"Two target creatures **each** get +2/+2" and "two target creatures get
+    +2/+2" are one sentence; the word is consumed at the subject rather than in
+    every verb's production, because it can precede any of them."""
+    from engine.grammar import compile_line
+
+    with_each = compile_line("Two target creatures each get +2/+2 until end of turn.")
+    without = compile_line("Two target creatures get +2/+2 until end of turn.")
+    assert with_each.usable and without.usable
+    assert [(i.kind, i.payload) for i in with_each.instructions] == [
+        (i.kind, i.payload) for i in without.instructions
+    ]
+    # …and the word is not a quantifier this can eat off a singular subject.
+    assert not compile_line("Target creature each gets +2/+2 until end of turn.").parsed
+
+
+def test_w2g4_humble_takes_every_ability_and_gives_them_back_at_cleanup(set_pool):
+    """CR 613.1f aimed at one permanent, which the engine had only as a
+    board-wide static. The record is a contribution rather than a rewrite: the
+    creature's own text is untouched, and the cleanup sweep is the whole of the
+    duration."""
+    pool = set_pool("USG")
+    angel = _g4d_creature("G4D Angel", 4, 4, "Flying")
+    game, mine, theirs = _g4d_board(theirs=[angel], hand0=[pool["Humble"]])
+    victim = theirs.battlefield[0]
+
+    assert game._has_keyword(victim, "flying")
+    assert game.cast_from_hand(
+        0, "Humble", target_player_index=1,
+        target_permanent_index=0, target_permanent_ids=[victim.permanent_id],
+    ).supported
+    _g4d_resolve(game)
+    game._refresh_dynamic_creatures()
+
+    assert (victim.effective_power, victim.effective_toughness) == (0, 1)
+    assert not game._has_keyword(victim, "flying")
+    assert victim.effective_card.oracle_text == ""
+    assert victim.card.oracle_text == "Flying", "the printed card is not rewritten"
+
+    game.resolve_cleanup_step(0)
+    game._refresh_dynamic_creatures()
+    assert (victim.effective_power, victim.effective_toughness) == (4, 4)
+    assert game._has_keyword(victim, "flying")
+
+
+def test_w2g4_the_blanket_removal_reaches_a_triggered_ability_too(set_pool):
+    """Layer 6 drops the *keyword* set, and that is a third of an ability: a
+    triggered one is read off the card at the trigger scan. Both go through
+    ``Permanent.effective_card``, which is why one write reaches all of them."""
+    pool = set_pool("USG")
+    watcher = _g4d_creature(
+        "G4D Watcher", 2, 2, "When this creature dies, you draw a card.",
+    )
+    game, mine, theirs = _g4d_board(theirs=[watcher], hand0=[pool["Humble"]])
+    victim = theirs.battlefield[0]
+
+    assert compile_card_oracle(victim.effective_card).triggered_abilities
+    assert game.cast_from_hand(
+        0, "Humble", target_player_index=1,
+        target_permanent_index=0, target_permanent_ids=[victim.permanent_id],
+    ).supported
+    _g4d_resolve(game)
+
+    assert not compile_card_oracle(victim.effective_card).triggered_abilities
+
+
+def test_w2g4_a_durationless_blanket_removal_still_refuses(set_pool):
+    """"All creatures lose all abilities" is a *static* ability the global-statics
+    table re-derives from the board on every recompute. Claimed here it would
+    become a one-shot stamp, and a creature entering afterwards would keep its
+    abilities."""
+    from engine.grammar import compile_line
+
+    assert compile_line(
+        "Target creature loses all abilities until end of turn."
+    ).usable
+    assert not compile_line("All creatures lose all abilities.").usable
+
+
+def test_w2g4_outmaneuver_sends_a_blocked_creature_past_its_blocker(set_pool):
+    """CR 510.1a's assignment to the blockers replaced by CR 510.1b's to the
+    player, for the creatures the spell chose — and **mandatorily**: the
+    attacker's controller has nothing to decline, which is the difference from
+    the "you may" grant the same flag family carries."""
+    pool = set_pool("USG")
+    game, mine, theirs = _g4d_board(
+        mine=[_g4d_creature("G4D Raider", 2, 2)],
+        theirs=[_g4d_creature("G4D Wall", 0, 8)],
+        hand0=[pool["Outmaneuver"]],
+    )
+    raider = mine.battlefield[0]
+    wall = theirs.battlefield[0]
+    game.current_turn_phase = "combat"
+    game.current_step = "declare_attackers"
+    assert game.declare_attackers(0, {0: 1})[0]
+    game.current_step = "declare_blockers"
+    assert game.declare_blockers(1, {0: 0})[0]
+
+    assert game.cast_from_hand(
+        0, "Outmaneuver", x_value=1, target_player_index=0,
+        target_permanent_index=[0], target_permanent_ids=[raider.permanent_id],
+    ).supported
+    _g4d_resolve(game)
+
+    game.current_step = "combat_damage"
+    game.resolve_all_combat_damage(0)
+    assert theirs.life == 18
+    assert wall.damage_marked == 0
+
+
+def test_w2g4_waylay_exiles_all_three_of_the_tokens_it_made(set_pool):
+    """"Exile **them**" names every token this resolution created, which no read
+    of a permanent can identify (CR 400.7). The singular record holds one id, so
+    a plural sentence reading it would exile one Knight and leave two."""
+    pool = set_pool("USG")
+    game, mine, _ = _g4d_board(hand0=[pool["Waylay"]])
+
+    assert game.cast_from_hand(0, "Waylay").supported
+    _g4d_resolve(game)
+    assert [p.card.name for p in mine.battlefield] == ["Knight Token"] * 3
+
+    game.resolve_cleanup_step(0)
+    assert mine.battlefield == []
+    # CR 111.7: a token ceases to exist rather than going to exile.
+    assert mine.exile == []
+
+
+def test_w2g4_the_plural_token_reference_refuses_without_a_maker(set_pool):
+    """The gate is the producer, exactly as the singular's is: with no token
+    maker in front of it the word names nothing, and an exile that silently
+    found nothing is a card reporting itself supported and doing nothing."""
+    from engine.grammar import compile_line
+
+    assert compile_line(
+        "Create three 2/2 white Knight creature tokens. Exile them at the "
+        "beginning of the next cleanup step."
+    ).usable
+    assert not compile_line(
+        "Exile them at the beginning of the next cleanup step."
+    ).usable
+    # …and the six cards that print the word about a *search* keep their own
+    # reading, because the pronoun is read only where everything else refused.
+    searched = compile_line("Search your library for three cards, exile them, then shuffle.")
+    assert [i.kind for i in searched.instructions] == ["search_and_exile_matching"]

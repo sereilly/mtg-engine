@@ -1173,3 +1173,139 @@ def test_w1g5_every_usg_hollow_card_now_carries_an_instruction(set_pool):
         parts = list(program.activated_abilities) + list(program.triggered_abilities)
         hollow = [part.source_line for part in parts if part.instruction is None]
         assert not hollow, "%s still has an instruction-less part: %s" % (name, hollow)
+
+
+# --- W2G4: board-wide prohibitions, and who assigns combat damage ---
+import pytest
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+
+from tests.helpers import resolve_stack as _g4c_resolve
+
+
+def _g4c_board(*, mine=(), theirs=(), hand0=(), life=20):
+    """Two seats, mana costs off, seat 0 active. Returns ``(game, s0, s1)`` and
+    ends on that tuple so no union can splice another helper onto it."""
+    g4c_seat0 = PlayerState(
+        name="G4-E1", battlefield=[Permanent(card=c) for c in mine],
+        hand=list(hand0), life=life,
+    )
+    g4c_seat1 = PlayerState(
+        name="G4-E2", battlefield=[Permanent(card=c) for c in theirs], life=life,
+    )
+    g4c_game = Game(players=[g4c_seat0, g4c_seat1])
+    g4c_game.enforce_mana_costs = False
+    g4c_game.active_player_index = 0
+    g4c_game._sync_control()
+    return g4c_game, g4c_seat0, g4c_seat1
+
+
+def _g4c_creature(name, power=2, toughness=2):
+    from tests.helpers import _mk_creature_card
+
+    return _mk_creature_card(name, power, toughness)
+
+
+def test_w2g4_bedlam_stops_every_block_including_its_controllers(set_pool):
+    """"Creatures can't block" names nobody, so it binds the enchantment's own
+    controller too (CR 109.5 has nothing to narrow). The enforcement site has
+    scanned for this kind since Katabatic Winds; nothing had ever printed the
+    blocking half on its own, so the row that produces it was the missing half."""
+    pool = set_pool("USG")
+    game, mine, theirs = _g4c_board(
+        mine=[pool["Bedlam"], _g4c_creature("G4C Mine")],
+        theirs=[_g4c_creature("G4C Theirs")],
+    )
+    my_creature = mine.battlefield[1]
+    their_creature = theirs.battlefield[0]
+
+    assert not game._can_block_attacker(their_creature, my_creature)
+    assert not game._can_block_attacker(my_creature, their_creature)
+    # …and attacking is untouched: this is the blocking half alone.
+    assert game.can_attack(my_creature, 1)
+
+
+def test_w2g4_arcane_laboratory_caps_each_seat_separately(set_pool):
+    """CR 601.3a restricts the player who is *casting*, so the tally is that
+    seat's own. One shared count would let an opponent's first spell spend
+    everybody's allowance."""
+    pool = set_pool("USG")
+    shock = set_pool("M21")["Shock"]
+    game, mine, theirs = _g4c_board(mine=[pool["Arcane Laboratory"]])
+    mine.hand.extend([shock, shock])
+    theirs.hand.extend([shock, shock])
+
+    assert game.cast_from_hand(0, "Shock", target_player_index=1).supported
+    refused = game.cast_from_hand(0, "Shock", target_player_index=1)
+    assert not refused.supported and "Arcane Laboratory" in refused.details
+    # The opponent has cast nothing yet, so their first is still legal — and the
+    # enchantment binds them too, so their second is not.
+    assert game.cast_from_hand(1, "Shock", target_player_index=0).supported
+    assert not game.cast_from_hand(1, "Shock", target_player_index=0).supported
+
+
+def test_w2g4_the_cap_is_claimed_by_the_reader_that_enforces_it(set_pool):
+    """A restriction claimed and not enforced is an enchantment that reports
+    supported while everybody keeps casting, so the claim and the gate ask one
+    function — and the number is payload, not part of the rule."""
+    from engine.cast_restrictions import spell_cap_line
+
+    card = set_pool("USG")["Arcane Laboratory"]
+    assert compile_card_oracle(card).supported
+    assert spell_cap_line(card.oracle_text) == 1
+    assert spell_cap_line("Each player can't cast more than three spells each turn.") == 3
+    assert spell_cap_line("Each player can't cast more than a spell each turn.") is None
+    assert spell_cap_line("Creature spells can't be cast.") is None
+
+
+def test_w2g4_defensive_formation_moves_the_assignment_to_the_defender(set_pool):
+    """CR 510.1a names the *attacking* player as the one who divides a blocked
+    creature's damage; this substitutes the defending player, which is the same
+    substitution CR 702.22j makes for a band — so it is answered at the same
+    seam, and what the prompt offers and what the damage step honours cannot
+    disagree."""
+    pool = set_pool("USG")
+    game, mine, theirs = _g4c_board(
+        mine=[_g4c_creature("G4C Attacker", 2, 2)],
+        theirs=[pool["Defensive Formation"],
+                _g4c_creature("G4C Wall A", 0, 8),
+                _g4c_creature("G4C Wall B", 0, 8)],
+    )
+    game.current_turn_phase = "combat"
+    game.current_step = "declare_attackers"
+    assert game.declare_attackers(0, {0: 1})[0]
+    game.current_step = "declare_blockers"
+    assert game.declare_blockers(1, {1: 0, 2: 0})[0]
+
+    assert game._defender_assigns_attacker_damage(0)
+    assert game.assign_banding_combat_damage(1, {0: {1: 2, 2: 0}})[0]
+    game.current_step = "combat_damage"
+    game.resolve_all_combat_damage(0)
+
+    wall_a, wall_b = theirs.battlefield[1], theirs.battlefield[2]
+    assert (wall_a.damage_marked, wall_b.damage_marked) == (2, 0)
+
+
+def test_w2g4_the_substitution_is_the_defenders_own_and_not_an_opponents(set_pool):
+    """"You" is CR 109.5's seat: an opponent's copy of the card moves nobody
+    else's assignment, and a reader that scanned every battlefield would hand
+    the division to whoever happened to own one."""
+    from engine.combat_assignment import defender_assigns_all_damage
+
+    pool = set_pool("USG")
+    game, mine, theirs = _g4c_board(
+        mine=[pool["Defensive Formation"], _g4c_creature("G4C Attacker")],
+        theirs=[_g4c_creature("G4C Blocker A", 0, 8),
+                _g4c_creature("G4C Blocker B", 0, 8)],
+    )
+    assert defender_assigns_all_damage(game, 0)
+    assert not defender_assigns_all_damage(game, 1)
+
+    game.current_turn_phase = "combat"
+    game.current_step = "declare_attackers"
+    assert game.declare_attackers(0, {1: 1})[0]
+    game.current_step = "declare_blockers"
+    assert game.declare_blockers(1, {0: 1, 1: 1})[0]
+    assert not game._defender_assigns_attacker_damage(1)
