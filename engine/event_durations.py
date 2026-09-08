@@ -131,6 +131,27 @@ def clear_set_card_types(perm: "Permanent", duration: str) -> bool:
     return False
 
 
+def holds_window(perm: "Permanent", duration: str) -> bool:
+    """Whether *perm* carries any record whose window is *duration*.
+
+    The five channels an event-ended window can be written on, asked in one
+    place. It reads the same ``duration`` key each sweep compares, so "is there
+    anything to end?" and "end it" cannot disagree about where a record lives —
+    a channel added to one and not the other would be a window that reported
+    nothing to do and then left an effect running.
+    """
+    from .keywords import (ABILITY_EFFECTS, ALL_ABILITIES_REMOVED,
+                           GRANTED_ABILITY_LINES, REMOVED_ABILITY_LINES)
+
+    for key in (ABILITY_EFFECTS, GRANTED_ABILITY_LINES, REMOVED_ABILITY_LINES,
+                ALL_ABILITIES_REMOVED):
+        for entry in perm.metadata.get(key) or ():
+            if entry.get("duration") == duration:
+                return True
+    record = perm.metadata.get(SET_CARD_TYPES)
+    return bool(record) and record.get("duration") == duration
+
+
 def end_event_durations(game, announcement: str, *, card) -> list[str]:
     """End every window a *card* being announced closes; the kinds that ended.
 
@@ -150,12 +171,22 @@ def end_event_durations(game, announcement: str, *, card) -> list[str]:
         if window.announcement != announcement or not window.closes_on(card):
             continue
         for perm in game.all_permanents():
+            if not holds_window(perm, kind):
+                # Asked before anything is cleared, and it is what keeps the
+                # cost of this call proportional to the effects that exist
+                # rather than to the board: every creature spell cast in every
+                # game reaches here, and on almost all of them there is nothing
+                # to end. It is also what makes ``ended`` mean "something
+                # actually came back", so the recompute below runs when a
+                # characteristic moved and not once per creature spell.
+                continue
             clear_granted_keywords(perm, kind)
             clear_granted_ability_lines(perm, kind)
             clear_removed_ability_keywords(perm, kind)
             clear_all_abilities_removals(perm, kind)
             clear_set_card_types(perm, kind)
-        ended.append(kind)
+            if kind not in ended:
+                ended.append(kind)
     if ended:
         # The layer-4 and layer-6 reads are computed, but the derived channels
         # (a lord's buff, an animated land's size) are rebuilt from the board

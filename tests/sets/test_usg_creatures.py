@@ -1205,3 +1205,143 @@ def test_w2g2_serra_avatar_shuffles_back_from_a_mill_too(set_pool):
 
     assert [c.name for c in alice.library].count("Serra Avatar") == 1
     assert not alice.graveyard
+
+
+# --- W3G1: Soul Sculptor — a window that ends on an event ---
+import pytest
+
+from engine import Game, PlayerState
+from engine.card_loader import load_cards, manifest_set_paths
+from engine.grammar import parse_line
+from engine.grammar.errors import LoweringError
+from engine.grammar.lower import lower_ability
+from engine.layer_bridge import computed_types
+from engine.models import Permanent
+
+from tests.helpers import resolve_stack
+
+
+def _w3g1_pool() -> dict:
+    """Every card in the manifest, keyed by name.
+
+    Soul Sculptor's target and the spell that ends its window are ordinary
+    cards from earlier sets — the card under test is USG's, and what it points
+    at deliberately is not.
+    """
+    pool: dict = {}
+    for path in manifest_set_paths(include_measured=True):
+        for card in load_cards([path]):
+            pool.setdefault(card.name, card)
+    return pool
+
+
+def _w3g1_sculpted(set_pool, victim_name: str = "Serra Angel", hand=()):
+    """A game where seat 0's Soul Sculptor has already resolved on seat 1's
+    creature. Returns the game, the two seats and the victim."""
+    pool = _w3g1_pool()
+    sculptor = Permanent(card=set_pool("USG")["Soul Sculptor"])
+    victim = Permanent(card=pool[victim_name])
+    alice = PlayerState(name="A", battlefield=[sculptor])
+    bob = PlayerState(name="B", battlefield=[victim],
+                      hand=[pool[name] for name in hand])
+    game = Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    sculptor.metadata["summoning_sickness_turn"] = -99
+    game.activate_permanent_ability(
+        0, "Soul Sculptor", permanent_index=0,
+        target_player_index=1, target_permanent_index=0,
+    )
+    resolve_stack(game)
+    return game, alice, bob, victim
+
+
+def test_w3g1_soul_sculptor_replaces_the_type_and_strips_the_abilities(set_pool):
+    """Both halves of one sentence land on the same permanent.
+
+    The ability-removal half is the one that used to be dropped: its own
+    predicate re-asked "is the target a creature?" *after* the type change one
+    step earlier had said no, so the card reported resolved and stripped
+    nothing (CR 608.2b checks a target once, not once per lowered step).
+    """
+    game, _alice, _bob, victim = _w3g1_sculpted(set_pool)
+
+    card_types, subtypes = computed_types(victim)
+    assert card_types == {"enchantment"}
+    assert "angel" not in subtypes
+    assert not victim.is_creature
+    assert victim.effective_card.oracle_text == ""
+    assert not game._has_keyword(victim, "flying")
+
+
+def test_w3g1_soul_sculptor_window_outlives_the_turn(set_pool):
+    """The cleanup step ends "until end of turn" and this is not one.
+
+    The failure this rules out is the tidy-up one — a sweep that took every
+    record it did not recognise would give the creature back at the first
+    cleanup, which is a card that reads "until end of turn" and is not.
+    """
+    game, _alice, _bob, victim = _w3g1_sculpted(set_pool)
+
+    game.resolve_cleanup_step(0)
+    game.resolve_cleanup_step(1)
+
+    assert computed_types(victim)[0] == {"enchantment"}
+    assert victim.effective_card.oracle_text == ""
+
+
+def test_w3g1_soul_sculptor_window_ignores_a_noncreature_spell(set_pool):
+    """"…until a player casts a **creature** spell" — the narrowing is real."""
+    game, _alice, bob, victim = _w3g1_sculpted(set_pool, hand=("Lightning Bolt",))
+
+    game.cast_from_hand(1, "Lightning Bolt", target_player_index=0)
+    resolve_stack(game)
+
+    assert computed_types(victim)[0] == {"enchantment"}
+    assert victim.effective_card.oracle_text == ""
+
+
+def test_w3g1_soul_sculptor_window_ends_on_a_creature_spell(set_pool):
+    """Both halves come back together, because both were written with the
+    window the sentence printed once at its end."""
+    game, _alice, bob, victim = _w3g1_sculpted(set_pool, hand=("Grizzly Bears",))
+
+    game.cast_from_hand(1, "Grizzly Bears")
+
+    card_types, subtypes = computed_types(victim)
+    assert card_types == {"creature"}
+    assert "angel" in subtypes
+    assert game._has_keyword(victim, "flying")
+    resolve_stack(game)
+
+
+def test_w3g1_the_printed_window_reaches_both_halves_of_the_sentence():
+    """The duration is printed once, at the end, and belongs to the whole
+    sentence — so the type change carries it as well as the removal.
+
+    Asserted on the compiled program rather than only in a game: a dropped
+    duration on the *first* half is silent, and what it produces is a creature
+    that gets its abilities back and stays an enchantment forever.
+    """
+    line = ("Target creature becomes an enchantment and loses all abilities "
+            "until a player casts a creature spell.")
+    kinds = {
+        instruction.kind: instruction.payload.get("duration")
+        for instruction in lower_ability(parse_line(line))
+    }
+    assert kinds == {
+        "set_card_types_target": "until_a_player_casts_a_creature_spell",
+        "remove_target_abilities_until_eot": "until_a_player_casts_a_creature_spell",
+    }
+
+
+@pytest.mark.parametrize("window", ["until end of turn", "until your next turn"])
+def test_w3g1_a_type_replacement_refuses_a_window_nothing_ends(window):
+    """A duration is legal because something sweeps it, never because it parsed.
+
+    No turn-step sweep clears the CR 205.1a replacement channel — the gained
+    *type* sweeps do not touch it — so these two refuse by name rather than
+    compiling into a permanent that never turns back.
+    """
+    line = f"Target creature becomes an enchantment {window}."
+    with pytest.raises(LoweringError, match="no sweep ends a card-type replacement"):
+        lower_ability(parse_line(line))

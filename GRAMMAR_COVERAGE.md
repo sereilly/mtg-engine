@@ -37,7 +37,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | STH | 143 | 215 | 88.4% | 88.4% | 62.8% | 124 |
 | EXO | 143 | 207 | 90.3% | 90.3% | 66.2% | 127 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| USG *(measured)* | 335 | 486 | 86.0% | 85.8% | 61.5% | 259 |
+| USG *(measured)* | 335 | 486 | 86.4% | 86.2% | 61.9% | 261 |
 | **All (shipped)** | **4873** | **7239** | **90.7%** | **90.0%** | **60.1%** | **3649** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -52,7 +52,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ---: | ---: | --- | --- |
 | 406 | 174 | expected a subject |  |
 | 115 | 60 | unrecognized effect verb |  |
-| 87 | 43 | unconsumed text |  |
+| 86 | 42 | unconsumed text |  |
 | 39 | 23 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 15 | 14 | expected 'unless defending player controls' |  |
@@ -73,8 +73,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 1 | expected 'the number of' in a where-clause |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
-| 2 | 2 | expected 'a' |  |
 | 1 | 1 | expected what to gain control of |  |
+| 1 | 1 | the source-class shield is armed on its controller, not on a chosen recipient |  |
 
 ## Cards executing through the grammar
 
@@ -6017,6 +6017,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Soul Rend**
   - `Destroy target creature if it's white. A creature destroyed this way can't be regenerated.`
   - `Draw a card at the beginning of the next turn's upkeep.`
+- **Soul Sculptor**
+  - `{1}{W}, {T}: Target creature becomes an enchantment and loses all abilities until a player casts a creature spell.`
 - **Soul Sear**
   - `Soul Sear deals 5 damage to target creature or planeswalker. That permanent loses indestructible until end of turn.`
 - **Soul Shepherd**
@@ -6805,6 +6807,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Destroy target Wall. It can't be regenerated.`
 - **Turn to Slag**
   - `Turn to Slag deals 5 damage to target creature. Destroy all Equipment attached to that creature.`
+- **Turnabout**
+  - `Choose artifact, creature, or land. Tap all untapped permanents of the chosen type target player controls, or untap all tapped permanents of that type that player controls.`
 - **Turret Ogre**
   - `When this creature enters, if you control another creature with power 4 or greater, this creature deals 2 damage to each opponent.`
 - **Twiddle**
