@@ -216,7 +216,7 @@ def superlative_extreme(candidates: list, superlative: dict) -> list:
     """*candidates* narrowed to those tied at the printed extreme.
 
     Returns the whole tie rather than one permanent, because *which* of them is
-    the card's next sentence to say (CR 101.4) — ``only_on_tie`` above turns the
+    the card's next sentence to say (CR 608.2d) — ``only_on_tie`` above turns the
     single-candidate case into a recorded answer and the rest into a prompt.
 
     A characteristic nothing reads leaves the set alone rather than emptying it

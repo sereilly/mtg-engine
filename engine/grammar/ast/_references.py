@@ -71,7 +71,7 @@ class Superlative:
     node: a comparison is answered by looking at one object, and a superlative
     cannot be — "least" is a fact about the *set*, and no permanent knows
     whether another one is smaller. That is also why the phrase always arrives
-    with a tie-break sentence behind it (CR 101.4): a printed superlative that
+    with a tie-break sentence behind it (CR 608.2d): a printed superlative that
     named several would otherwise have no reading.
 
     Both words travel as data for the reason every other printed word in this

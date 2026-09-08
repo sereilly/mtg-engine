@@ -89,7 +89,8 @@ def superlative_pick(
                 "characteristic": superlative.characteristic,
             },
             # "**If two or more** creatures are tied for least toughness, you
-            # choose one of them." CR 101.4's tie-break, and the reason the
+            # choose one of them." CR 608.2d's choice — announced while the effect
+            # is applied, because the card offers it there — and the reason the
             # prompt is conditional: with one candidate the card names it
             # outright, so asking would put a question with one answer to the
             # controller every upkeep.

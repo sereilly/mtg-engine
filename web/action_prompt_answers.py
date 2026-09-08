@@ -601,6 +601,16 @@ def _action_color_set_choice_confirm(session, req, seat_type):
     if not ok:
         raise HTTPException(status_code=400, detail="that colour choice is not open")
 
+@action_handler("mana_color_choice_confirm")
+def _action_mana_color_choice_confirm(session, req, seat_type):
+    # "Add N mana of any one color" resolving with nobody having named one.
+    # The engine re-checks the symbol against the colours the clause offered,
+    # so a stale or invented answer is refused rather than clamped.
+    if req.mana_color is None:
+        raise HTTPException(status_code=400, detail="mana_color is required")
+    if not session.game.confirm_mana_color_choice(req.seat, req.mana_color):
+        raise HTTPException(status_code=400, detail="that colour is not on offer")
+
 @action_handler("revealed_draw_buyout_confirm")
 def _action_revealed_draw_buyout_confirm(session, req, seat_type):
     # Zur's Weirding: "Then any other player may pay 2 life." One offer at a

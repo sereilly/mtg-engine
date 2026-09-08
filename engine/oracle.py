@@ -1720,6 +1720,20 @@ AT_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("main_phase_first_each",
      r"at the beginning of each (?:(?P<main_phase_scope>opponent|player)'s )?"
      r"(?:first|precombat) main phase"),
+    # "At the beginning of **each of your main phases**" (Carpet of Flowers).
+    # CR 505.1's two main phases, both of them, on the controller's own turn —
+    # so it is neither of the rows above: `main_phase_first` fires once and only
+    # precombat, and `main_phase_first_each` fires precombat on everybody's
+    # turn. A third kind because the *dispatch* is what reads the difference,
+    # which is the reason `upkeep_self`/`upkeep_each` and
+    # `draw_step_self`/`draw_step_each` are two kinds each.
+    #
+    # Ordered here rather than above them because none of the three is a prefix
+    # of another ("each of your" and "each player's" diverge on the second
+    # word), so the placement is documentation and the specific-before-generic
+    # rule holds anyway.
+    ("main_phase_each_yours",
+     r"at the beginning of each of your main phases"),
     # "Your end step" is a *scope* narrowing, exactly like combat's below and
     # upkeep_self/upkeep_each above: it fires only on its controller's own end
     # step where the bare form fires on everyone's. A separate kind because the

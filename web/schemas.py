@@ -91,6 +91,7 @@ ActionKind = Literal[
     "discard_unless_pay_life_confirm",
     "revealed_draw_buyout_confirm",
     "color_set_choice_confirm",
+    "mana_color_choice_confirm",
     "land_type_confirm",
     "number_choice_confirm",
     "bid_life_confirm",

@@ -2329,3 +2329,175 @@ def test_w2g2_a_replaced_arrival_fires_planar_void_at_all(set_pool):
     assert not game.stack, "nothing arrived, so nothing triggered"
     assert not alice.graveyard
     assert [c.name for c in alice.exile] == ["Yawgmoth's Will", "Gamble"]
+
+
+# --- W3G3: Carpet of Flowers — a per-main-phase trigger and its mana record ---
+import pytest
+
+from engine import Game, PlayerState
+from engine.game_types import Permanent
+
+
+def _g3c_carpet_board(set_pool, *, islands=3, interactive=()):
+    """Seat 0 has the Carpet; seat 1 has *islands* Islands."""
+    pool = set_pool("USG")
+    lea = set_pool("LEA")
+    carpet = Permanent(card=pool["Carpet of Flowers"])
+    game = Game(players=[
+        PlayerState(name="P0", battlefield=[carpet]),
+        PlayerState(name="P1",
+                    battlefield=[Permanent(card=lea["Island"]) for _ in range(islands)]),
+    ])
+    game.active_player_index = 0
+    game.interactive_seats = set(interactive)
+    return game, carpet
+
+
+def _g3c_settle(game):
+    """Resolve the trigger and answer the prompts a non-interactive seat owes.
+
+    Not `resolve_stack`: the offer this trigger arms does not block the stack,
+    so the stack empties with the decision still owed.
+    """
+    while game.stack and game.resolve_top_of_stack():
+        pass
+    game.auto_resolve_pending_choices()
+
+
+def _g3c_pool(game, seat=0):
+    return {sym: n for sym, n in game.players[seat].mana_pool.items() if n}
+
+
+def test_w3g3_carpet_adds_one_mana_per_opponent_island(set_pool):
+    """"…add X mana of any one color, where X is the number of Islands target
+    opponent controls." The count is the *opponent's* board, not this seat's."""
+    game, _ = _g3c_carpet_board(set_pool, islands=3)
+
+    game._enter_main_phase(precombat=True)
+    _g3c_settle(game)
+
+    assert sum(_g3c_pool(game).values()) == 3
+
+
+def test_w3g3_carpet_fires_at_both_main_phases_but_adds_once(set_pool):
+    """CR 505.1's two main phases are two firings; "if you haven't added mana
+    with this ability this turn" is what makes only the first of them pay.
+
+    The record is read twice (CR 603.4 checks an intervening-if when the trigger
+    would fire and again at resolution), and it must not move between them.
+    """
+    game, carpet = _g3c_carpet_board(set_pool, islands=2)
+
+    game._enter_main_phase(precombat=True)
+    _g3c_settle(game)
+    assert sum(_g3c_pool(game).values()) == 2
+
+    game.players[0].mana_pool.update({sym: 0 for sym in game.players[0].mana_pool})
+    game._enter_main_phase(precombat=False)
+    _g3c_settle(game)
+
+    assert _g3c_pool(game) == {}
+    assert not game.stack
+
+
+def test_w3g3_carpet_pays_again_on_the_next_turn(set_pool):
+    """"This turn" is a turn stamp, so a new turn is a fresh record with nothing
+    to clear."""
+    game, _ = _g3c_carpet_board(set_pool, islands=2)
+
+    game._enter_main_phase(precombat=True)
+    _g3c_settle(game)
+    game.players[0].mana_pool.update({sym: 0 for sym in game.players[0].mana_pool})
+
+    game.turn += 1
+    game._enter_main_phase(precombat=True)
+    _g3c_settle(game)
+
+    assert sum(_g3c_pool(game).values()) == 2
+
+
+def test_w3g3_carpet_is_silent_on_an_opponents_turn(set_pool):
+    """"Each of **your** main phases" — a main phase belongs to the active
+    player, so an opponent's is not one of them."""
+    game, _ = _g3c_carpet_board(set_pool, islands=2)
+    game.turn += 1
+    game.active_player_index = 1
+
+    game._enter_main_phase(precombat=True)
+    _g3c_settle(game)
+
+    assert _g3c_pool(game) == {}
+
+
+def test_w3g3_carpet_asks_an_interactive_seat_which_colour(set_pool):
+    """"Add X mana of **any one color**" is CR 106.1b's choice, and a triggered
+    ability carries no announcement to make it — so it is a prompt at
+    resolution. Before this it fell through to a hard-coded green.
+    """
+    game, carpet = _g3c_carpet_board(set_pool, islands=2, interactive=(0,))
+
+    game._enter_main_phase(precombat=True)
+    while game.stack and game.resolve_top_of_stack():
+        pass
+
+    assert [c.kind for c in game.pending_choices] == ["optional_pay"]
+    assert game.confirm_optional_pay(0, "Carpet of Flowers", accept=True)
+
+    choice = game.pending_choices[0]
+    assert choice.kind == "mana_color_choice"
+    assert choice.data["colors"] == ["W", "U", "B", "R", "G"]
+    assert choice.data["amount"] == 2
+    assert _g3c_pool(game) == {}          # nothing until the colour is named
+
+    assert game.confirm_mana_color_choice(0, "U") is True
+    assert _g3c_pool(game) == {"U": 2}
+
+
+def test_w3g3_a_colour_off_the_offer_is_refused_not_clamped(set_pool):
+    """Idiom 9: the answer is re-checked against the list the picker was given,
+    so a stale or invented colour is refused rather than rounded to a legal
+    one."""
+    game, _ = _g3c_carpet_board(set_pool, islands=1, interactive=(0,))
+
+    game._enter_main_phase(precombat=True)
+    while game.stack and game.resolve_top_of_stack():
+        pass
+    game.confirm_optional_pay(0, "Carpet of Flowers", accept=True)
+
+    assert game.confirm_mana_color_choice(0, "purple") is False
+    assert _g3c_pool(game) == {}
+    assert game.pending_choices
+
+
+def test_w3g3_carpet_with_no_opponent_island_adds_nothing(set_pool):
+    """X is zero, so the offer produces no mana — and writes no record, which is
+    what lets the postcombat firing still be a real offer."""
+    game, carpet = _g3c_carpet_board(set_pool, islands=0)
+
+    game._enter_main_phase(precombat=True)
+    _g3c_settle(game)
+
+    assert _g3c_pool(game) == {}
+    from engine.mana_ability_records import MANA_ADDED_MARK
+    assert not carpet.metadata.get(MANA_ADDED_MARK)
+
+
+@pytest.mark.parametrize("precombat", [True, False])
+def test_w3g3_the_condition_is_checked_before_the_trigger_goes_on_the_stack(
+    set_pool, precombat
+):
+    """CR 603.4: a gated trigger whose condition is false **does not trigger**.
+
+    It is not an ability that resolves to nothing — it holds no priority and
+    nothing in response sees it — so the check lives at the fire site as well as
+    at resolution.
+    """
+    from engine.mana_ability_records import (MANA_ADDED_WITH_THIS_ABILITY,
+                                             note_mana_added)
+
+    game, carpet = _g3c_carpet_board(set_pool, islands=3)
+    note_mana_added(game, carpet, MANA_ADDED_WITH_THIS_ABILITY)
+
+    game._enter_main_phase(precombat=precombat)
+
+    assert not game.stack

@@ -442,6 +442,13 @@ _AT_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
      ("the", "beginning", "of", "each", "player", "'s", "precombat", "main", "phase")),
     ("main_phase_first_each",
      ("the", "beginning", "of", "each", "opponent", "'s", "first", "main", "phase")),
+    # "each of your main phases" (Carpet of Flowers) — CR 505.1's *both* main
+    # phases, on the controller's own turn. Its own kind for the reason the two
+    # rows above are two: the dispatcher is what reads the difference, and a
+    # scope present on one side of the pipeline and absent on the other compiles
+    # the card supported and fires it on the wrong event (round 7).
+    ("main_phase_each_yours",
+     ("the", "beginning", "of", "each", "of", "your", "main", "phases")),
     # "Your" is a scope narrowing and so a separate kind, the same pair the
     # oracle regex table carries: a condition narrowed on one side of the
     # pipeline and not the other compiles the card supported and fires it on the

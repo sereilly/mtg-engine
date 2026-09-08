@@ -63,7 +63,7 @@ def _attach_superlative_tie_break(
     """``If two or more <type>s are tied for <extreme> <characteristic>, you
     choose one of them.`` (Purging Scythe, Drop of Honey.)
 
-    CR 101.4's tie-break, and it contributes **no step**: the sentence in front
+    CR 608.2d's choice, and it contributes **no step**: the sentence in front
     of it already lowers to a ``choose_permanent`` carrying ``only_on_tie``, so
     what these words say is exactly what that instruction does. A step of its
     own would be a second prompt for one decision.

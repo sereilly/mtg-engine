@@ -1102,6 +1102,25 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             return used == wanted
         return used >= wanted
 
+    if kind == "mana_added_with_this_ability":
+        # "…**if you haven't added mana with this ability this turn**, …"
+        # (Carpet of Flowers.) CR 603.4 asks this twice — once as the trigger
+        # would fire and once as it resolves — and the note it reads is written
+        # by ``add_mana_from_text`` at the one moment mana is actually added, so
+        # the two checks read the same fact and a trigger that added mana in the
+        # precombat main phase does not fire again in the postcombat one.
+        #
+        # A source that has left the battlefield (CR 400.7) has no note, and the
+        # negated clause therefore reads **true** — which is the card: an
+        # enchantment that is gone adds nothing, and the ability is removed from
+        # the stack for having no source long before this matters.
+        from ..mana_ability_records import added_mana_this_turn
+
+        added = added_mana_this_turn(
+            game, context.source_permanent, str(payload.get("record", ""))
+        )
+        return (not added) if payload.get("negated", True) else added
+
     if kind == "returned_to_hand_this_turn":
         # "a permanent was put into your hand from the battlefield this turn"
         # (Barrin). "Your" is the ability's controller; the bounce paths feed

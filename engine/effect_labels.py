@@ -1104,6 +1104,11 @@ TRIGGERED_LABELS_BY_CONDITION: dict[tuple[str, str], str] = {
     ("end_step", "may"): "triggered_end_step",
     ("end_step_self", "may"): "triggered_end_step",
     ("main_phase_first", "may"): "triggered_main_phase",
+    # "At the beginning of each of your main phases, … **you may** add X mana
+    # of any one color." (Carpet of Flowers.) The same pair one condition over:
+    # the wrapper says nothing about what the offer does, so the condition is
+    # what names the bucket.
+    ("main_phase_each_yours", "may"): "triggered_main_phase",
     ("permanent_becomes_untapped", "may"): "triggered_untap",
     ("self_becomes_target", "may"): "triggered_targeted",
     # Riddleform, once its animation trigger compiled (round 137). The

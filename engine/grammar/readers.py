@@ -71,7 +71,7 @@ def _identifies_one_object(filt: "ast.ObjectFilter") -> bool:
     comparison instead: "the creature with the least toughness" picks the end of
     a range, which names one object on almost every board and several on the
     rest — which is exactly why every card printing the phrase prints a
-    tie-break sentence behind it (CR 101.4). The article is honest either way,
+    tie-break sentence behind it (CR 608.2d). The article is honest either way,
     and what resolves the remainder is the prompt the lowering arms rather than
     anything this predicate can see.
 

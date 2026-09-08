@@ -44,6 +44,7 @@ from .records import (AdditionalCostWasPaid, AttackedOrBlockedThisCombat,
                       InABlockSinceLastUpkeep, ItHappened, ItWas,
                       LifeGainedThisTurn, MilledThisWay, PaidCost,
                       ReturnedToHandThisTurn, RevealedCardIs,
+                      ManaAddedWithThisAbility,
                       SacrificedThisWay, SourceAbilityActivations,
                       StartedTheTurnState, TappedThisWay)
 
@@ -607,6 +608,7 @@ Condition = Union[
     ReturnedToHandThisTurn,
     RevealedCardIs,
     SacrificedThisWay,
+    ManaAddedWithThisAbility,
     SourceAbilityActivations,
     StartedTheTurnState,
     TappedThisWay,

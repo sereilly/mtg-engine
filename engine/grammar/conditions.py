@@ -25,8 +25,10 @@ from .bounds import parse_comparison
 from .nouns import parse_object_filter
 from .readers import accept_source_reference, accept_source_reference_spec
 from .references import parse_player_ref, parse_target_spec
+from .seats import accept_life_total_of
 from .phrases import _parse_duration, _parse_keywords
-from .condition_clauses import (_accept_counter_condition,
+from .condition_clauses import (accept_mana_added_with_this_ability,
+                               _accept_counter_condition,
                                 _accept_record_condition,
                                 _parse_blockers_of_bound_creature,
                                 _parse_self_in_graveyard_above)
@@ -68,33 +70,6 @@ _DAMAGE_HISTORY_RECIPIENTS: tuple[tuple[tuple[str, ...], str], ...] = (
     (("a", "player"), "a player"),
     (("you",), "you"),
 )
-
-
-def _parse_life_total_of(stream: TokenStream) -> "ast.PlayerRef | None":
-    """``<player>'s life total`` — one operand of a life comparison.
-
-    Both spellings of the possessive, for the reason the zone-count clause
-    below carries both: "your" is a determiner ``parse_player_ref`` does not
-    read at all, and "target player's" is that reader plus an apostrophe. A
-    fragment rather than an arm of the clause above it because the sentence
-    prints it twice, and two copies would be two answers to which seats a life
-    comparison may name.
-
-    Returns None with the cursor where it was, so the caller can rewind the
-    whole clause rather than the half it consumed.
-    """
-    mark = stream.mark()
-    if stream.accept_word("your"):
-        who: "ast.PlayerRef | None" = ast.PlayerRef("you")
-    else:
-        who = parse_player_ref(stream)
-        if who is None or not stream.accept_word("'s"):
-            stream.reset(mark)
-            return None
-    if not stream.accept_phrase("life", "total"):
-        stream.reset(mark)
-        return None
-    return who
 
 
 def _parse_condition(stream: TokenStream) -> ast.Condition:
@@ -222,6 +197,16 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
         return ast.AdditionalCostWasPaid()
     stream.reset(mark)
 
+    # "**you haven't added mana with this ability this turn**" (Carpet of
+    # Flowers). Read before the flip branch below, which opens on the same
+    # "you" and resets cleanly either way, and read as a *record* rather than
+    # a board state for the reason `ast.ManaAddedWithThisAbility` gives: the
+    # mana pool empties at every step (CR 500.4), so nothing but the ability's
+    # own note can answer which ability produced anything.
+    mana_added = accept_mana_added_with_this_ability(stream)
+    if mana_added is not None:
+        return mana_added
+
     # "you win the flip" / "you lose the flip" (CR 705.2). Read before the
     # player reference below, which would consume the "you" and then reset — and
     # read as a *back-reference* rather than a board state, because the answer is
@@ -278,9 +263,9 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
     # either way.
     diff_mark = stream.mark()
     if stream.accept_phrase("the", "difference", "between"):
-        first = _parse_life_total_of(stream)
+        first = accept_life_total_of(stream)
         if first is not None and stream.accept_word("and"):
-            second = _parse_life_total_of(stream)
+            second = accept_life_total_of(stream)
             if second is not None and stream.accept_word("is"):
                 comparison = parse_comparison(stream)
                 return ast.LifeTotalDifference(first, second, comparison)

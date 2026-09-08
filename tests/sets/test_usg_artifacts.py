@@ -711,3 +711,187 @@ def test_w2g2_lifeline_stays_silent_with_no_other_creature(set_pool):
 
     assert [c.name for c in game.players[1].graveyard] == ["Serra Zealot"]
     assert not list(game.controlled_by(1))
+
+
+# --- W3G3: Purging Scythe — a superlative recipient and its tie-break ---
+from engine import Game, PlayerState
+from engine.game_types import Permanent
+from tests.helpers import resolve_stack
+
+
+def _g3_board(set_pool, *, mine=(), theirs=(), interactive=()):
+    """A two-seat board with Purging Scythe on seat 0.
+
+    `resolve_upkeep` puts the trigger on the stack and resolves it as far as the
+    pick, so a caller inspecting the prompt must not then call `resolve_stack` —
+    that answers it with the default and takes the choice away.
+    """
+    pool = set_pool("USG")
+    lea = set_pool("LEA")
+    scythe = Permanent(card=pool["Purging Scythe"])
+    seat0 = [scythe] + [Permanent(card=lea[name]) for name in mine]
+    seat1 = [Permanent(card=lea[name]) for name in theirs]
+    game = Game(players=[
+        PlayerState(name="P0", battlefield=seat0),
+        PlayerState(name="P1", battlefield=seat1),
+    ])
+    game.interactive_seats = set(interactive)
+    return game, scythe
+
+
+def test_w3g3_purging_scythe_damages_the_least_toughness_creature(set_pool):
+    """"…deals 2 damage to the creature with the least toughness." The whole
+    board is the set, not this seat's half — and a 1/1 dies while a 3/3 does
+    not."""
+    game, _ = _g3_board(set_pool, mine=["Hill Giant"], theirs=["Scryb Sprites"])
+    sprite = game.players[1].battlefield[0]
+    giant = game.players[0].battlefield[1]
+
+    game.resolve_upkeep(0)
+    resolve_stack(game)
+    game._settle()
+
+    assert [c.name for c in game.players[1].graveyard] == ["Scryb Sprites"]
+    assert sprite not in game.players[1].battlefield
+    assert giant in game.players[0].battlefield
+    assert giant.damage_marked == 0
+
+
+def test_w3g3_purging_scythe_is_damage_not_destruction(set_pool):
+    """Two damage, not a kill: a 2/3 survives with the damage marked on it.
+
+    The difference from Drop of Honey, which prints the same noun phrase under
+    "destroy", and the reason the pick is a step both verbs read rather than a
+    handler either of them owns.
+    """
+    game, _ = _g3_board(set_pool, theirs=["Gray Ogre"])   # 2/2
+    ogre = game.players[1].battlefield[0]
+
+    game.resolve_upkeep(0)
+    resolve_stack(game)
+    game._settle()
+
+    assert ogre not in game.players[1].battlefield   # 2 damage on a 2/2
+    game2, _ = _g3_board(set_pool, theirs=["Hill Giant"])   # 3/3
+    giant = game2.players[1].battlefield[0]
+    game2.resolve_upkeep(0)
+    resolve_stack(game2)
+    game2._settle()
+    assert giant in game2.players[1].battlefield
+    assert giant.damage_marked == 2
+
+
+def test_w3g3_purging_scythe_tie_prompts_its_controller(set_pool):
+    """"If two or more creatures are tied for least toughness, you choose one of
+    them." The generic ``permanent_choice`` prompt — the tie-break sentence
+    lowers to no instruction of its own, because ``only_on_tie`` on the pick in
+    front of it already is the sentence."""
+    game, _ = _g3_board(
+        set_pool, mine=["Scryb Sprites"], theirs=["Benalish Hero"],
+        interactive=(0,),
+    )
+    mine = game.players[0].battlefield[1]
+    theirs = game.players[1].battlefield[0]
+
+    game.resolve_upkeep(0)
+
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [
+        ("permanent_choice", 0)
+    ]
+    offered = game.live_permanent_choices(game.pending_choices[0])
+    assert {p.card.name for p in offered} == {"Scryb Sprites", "Benalish Hero"}
+    # Nothing is damaged until the controller picks.
+    assert mine.damage_marked == 0 and theirs.damage_marked == 0
+
+    assert game.confirm_permanent_choice(0, theirs.permanent_id) is True
+    game._settle()
+    assert theirs not in game.players[1].battlefield
+    assert mine in game.players[0].battlefield
+
+
+def test_w3g3_purging_scythe_refuses_a_creature_not_tied(set_pool):
+    """A creature outside the tie is not an answer, and the prompt stays."""
+    game, _ = _g3_board(
+        set_pool, mine=["Scryb Sprites"], theirs=["Benalish Hero", "Hill Giant"],
+        interactive=(0,),
+    )
+    giant = game.players[1].battlefield[1]
+
+    game.resolve_upkeep(0)
+
+    assert game.pending_choices
+    assert game.confirm_permanent_choice(0, giant.permanent_id) is False
+    assert giant in game.players[1].battlefield
+    assert game.pending_choices
+
+
+def test_w3g3_purging_scythe_with_no_creature_does_nothing(set_pool):
+    """An empty board is a step that asked for nothing, not a crash."""
+    game, scythe = _g3_board(set_pool)
+
+    game.resolve_upkeep(0)
+    resolve_stack(game)
+    game._settle()
+
+    assert scythe in game.players[0].battlefield
+    assert not game.pending_choices
+
+
+def test_w3g3_superlative_reads_the_computed_toughness(set_pool):
+    """CR 613: the extreme is asked *now*. A -1/-1 on the bigger creature makes
+    it the smallest, and the pick follows the layer accessor rather than the
+    printed number."""
+    game, _ = _g3_board(set_pool, mine=["Hill Giant"], theirs=["Gray Ogre"])
+    giant = game.players[0].battlefield[1]     # 3/3
+    ogre = game.players[1].battlefield[0]      # 2/2
+    giant.toughness_bonus -= 2                 # now 3/1, the least toughness
+
+    game.resolve_upkeep(0)
+    resolve_stack(game)
+    game._settle()
+
+    assert giant not in game.players[0].battlefield
+    assert ogre in game.players[1].battlefield
+
+
+def test_w3g3_a_superlative_the_matcher_cannot_test_refuses(set_pool):
+    """The payload key is deliberately outside ``TESTABLE_SUBJECT_FILTER_KEYS``.
+
+    A sweep handed the same noun phrase must **refuse** rather than drop the
+    word and burn the whole board — the failure the key set exists to prevent.
+    """
+    import pytest
+
+    from engine.grammar import parse_line
+    from engine.grammar.errors import LoweringError
+    from engine.grammar.lower import lower_ability
+
+    with pytest.raises(LoweringError):
+        lower_ability(parse_line(
+            "this artifact deals 2 damage to each creature with the least toughness"
+        ))
+
+
+def test_w3g3_a_tie_break_after_the_wrong_sentence_refuses(set_pool):
+    """The rider is guarded on the sentence in front of it.
+
+    A tie-break naming a different characteristic than the pick, or standing
+    behind a sentence that picks nothing, fails the whole line loudly instead of
+    being consumed and dropped.
+    """
+    import pytest
+
+    from engine.grammar import parse_line
+    from engine.grammar.errors import GrammarError
+
+    with pytest.raises(GrammarError):
+        parse_line(
+            "this artifact deals 2 damage to the creature with the least "
+            "toughness. if two or more creatures are tied for least power, "
+            "you choose one of them"
+        )
+    with pytest.raises(GrammarError):
+        parse_line(
+            "this artifact deals 2 damage to target creature. if two or more "
+            "creatures are tied for least toughness, you choose one of them"
+        )

@@ -474,8 +474,8 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
                 stream.accept_punct(".")
                 continue
             # "If two or more creatures are tied for least toughness, you
-            # choose one of them." (Purging Scythe, Drop of Honey.) CR 101.4's
-            # tie-break on the superlative the sentence in front of it picked
+            # choose one of them." (Purging Scythe, Drop of Honey.) CR 608.2d's
+            # choice on the superlative the sentence in front of it picked
             # by — no step of its own, because that sentence's own
             # ``choose_permanent`` already carries ``only_on_tie``. Read before
             # `Otherwise` and after the four "repeat" riders for the reason

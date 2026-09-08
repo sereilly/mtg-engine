@@ -998,6 +998,27 @@ def _color_set_choice(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("mana_color_choice")
+def _mana_color_choice(ctx: PromptContext, choices: list) -> dict:
+    """"Add N mana of any one color" (Carpet of Flowers, Sanctum of Fruitful
+    Harvest), resolving with nobody having named a colour.
+
+    ``colors`` is the set the *clause* offers, read off the arming rather than
+    assumed to be the five colours of CR 106.1b's six mana types: "any color
+    that a land an opponent controls
+    could produce" was narrowed when the ability began resolving, and a picker
+    showing a colour the answer path would refuse is the drift idiom 9 is about.
+    """
+    data = choices[0].data
+    return {
+        "player_index": choices[0].player_index,
+        "card_name": data.get("card_name", ""),
+        "amount": int(data.get("amount", 0) or 0),
+        "colors": [str(c).upper() for c in (data.get("colors") or ())],
+        "default_color": data.get("default_color"),
+    }
+
+
 @prompt_renderer("revealed_draw_buyout")
 def _revealed_draw_buyout(ctx: PromptContext, choices: list) -> dict:
     """Zur's Weirding: "Then any other player may pay 2 life."

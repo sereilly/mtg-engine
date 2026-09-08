@@ -711,8 +711,8 @@ HANDLER_CLAIMS: dict[str, tuple[str, ...]] = {
         "if you pay, this enchantment deals damage equal to the number of wind counters on it to each creature and each player",
     ),
     # "If two or more creatures are tied for least toughness, you choose one of
-    # them." (Purging Scythe; Drop of Honey prints it with power.) CR 101.4's
-    # tie-break on the superlative the sentence in front of it picked by, and
+    # them." (Purging Scythe; Drop of Honey prints it with power.) CR 608.2d's
+    # choice on the superlative the sentence in front of it picked by, and
     # the whole of what it says is what ``choose_permanent`` already does with
     # ``only_on_tie``: one candidate records itself, two or more prompt the
     # seat the pick was armed on. So the sentence is a rider that lowers to no

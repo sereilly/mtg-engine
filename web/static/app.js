@@ -2531,6 +2531,17 @@ function getColorSetChoiceInfo(state = currentState) {
   return info;
 }
 
+// "Add N mana of any one color" (Carpet of Flowers, Sanctum of Fruitful
+// Harvest) resolving with nobody having named a colour. One colour for the
+// whole clause, so the picker chooses rather than toggles.
+function getManaColorChoiceInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.mana_color_choice;
+  if (!info) return null;
+  if (info.player_index !== seat) return null;
+  return info;
+}
+
 // Zur's Weirding: "If a player would draw a card, they reveal it instead. Then
 // any other player may pay 2 life." The offer goes round every other seat in
 // turn order and the first to pay bins the card.
@@ -5086,6 +5097,43 @@ function applyColorSetChoicePrompt(info) {
       mana_colors: chosen,
     });
   };
+}
+
+// "Add N mana of any one color": pick the colour the mana is added as.
+function applyManaColorChoicePrompt(info) {
+  const panel = q("activationPanel");
+  const steps = q("promptSteps");
+  const okBtn = q("promptOkBtn");
+
+  panel.classList.remove("hidden");
+  q("promptCustomRow").classList.add("hidden");
+  q("promptCancelBtn").classList.add("hidden");
+  q("promptCancelBtn").disabled = true;
+  okBtn.classList.add("hidden");
+
+  const amount = Number(info.amount || 0);
+  q("promptTitle").textContent = "Choose a Color";
+  q("promptBody").textContent =
+    `${info.card_name || "An ability"}: add ${amount} mana of any one color.`;
+  steps.innerHTML =
+    `<div class="prompt-choice-row">` +
+    (info.colors || [])
+      .map(
+        (c) =>
+          `<button type="button" class="prompt-choice-btn" ` +
+          `data-mana-color="${escapeHtml(c)}">${escapeHtml(c)}</button>`
+      )
+      .join("") +
+    `</div>`;
+  steps.querySelectorAll("[data-mana-color]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await sendAction({
+        seat,
+        action: "mana_color_choice_confirm",
+        mana_color: btn.dataset.manaColor,
+      });
+    });
+  });
 }
 
 // Zur's Weirding: the card the drawing player is about to draw is face up on
@@ -9360,6 +9408,12 @@ function renderActivationPrompt() {
   const colorSetChoiceInfo = getColorSetChoiceInfo();
   if (colorSetChoiceInfo) {
     applyColorSetChoicePrompt(colorSetChoiceInfo);
+    return;
+  }
+
+  const manaColorChoiceInfo = getManaColorChoiceInfo();
+  if (manaColorChoiceInfo) {
+    applyManaColorChoicePrompt(manaColorChoiceInfo);
     return;
   }
 
