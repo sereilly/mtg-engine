@@ -274,14 +274,24 @@ def _look_top_pick(ctx: PromptContext, choices: list) -> dict:
     # caster answers, and a renderer reading the answering seat would show the
     # chooser their own library and then exile a card out of somebody else's.
     pile_seat = ctx.game.look_top_pile_index(choice)
-    caster = ctx.game.players[pile_seat]
-    top_count = min(int(choice.data.get("top_count", 0)), len(caster.library))
+    # `pile_owner`, not `caster`: the two are the same seat on twelve of the
+    # thirteen cards that reach here and are *different* on Sealed Fate, which
+    # is the whole reason `look_top_pile_index` exists. The name below used to
+    # be `caster` and the line under it read `owner.library` — a `NameError`
+    # sitting in a function body, waiting for its line to run. It ran the day a
+    # hand-activated Waker of Waves could reach the browser, and it 500s
+    # `GET /state` for all thirteen: Orcish Librarian, Diabolic Vision, Browse,
+    # Lim-Dul's Vault, Ashnod's Cylix, Ancestral Memories, Preferred Selection,
+    # Sealed Fate, Impulse, Ancestral Knowledge, See the Truth, Waker of Waves
+    # and Garruk's Harbinger.
+    pile_owner = ctx.game.players[pile_seat]
+    top_count = min(int(choice.data.get("top_count", 0)), len(pile_owner.library))
     return {
         "caster_seat": choice.player_index,
         "pile_seat": pile_seat,
         "top_count": top_count,
         "card_name": choice.data.get("card_name", ""),
-        "cards": [ctx.serialize_card(card) for card in owner.library[:top_count]],
+        "cards": [ctx.serialize_card(card) for card in pile_owner.library[:top_count]],
     }
 
 

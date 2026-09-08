@@ -18397,11 +18397,13 @@ function renderHandAbilities(state, hasPriority) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "secondary-btn";
-    // The printed line, which for a cycling card is "Cycling {2}" — the server
-    // walks the printed text through the same rewrite the compiler does, so the
-    // client never has to know the keyword.
-    button.textContent = `${entry.text || "Activate"}: ${entry.name}`;
-    button.title = "An ability activated from your hand (CR 113.6).";
+    // The cost clause as *printed*, which for a cycling card is "Cycling {2}" —
+    // the server walks the printed text through the same rewrite the compiler
+    // does, so the client never has to know the keyword. The whole line is the
+    // tooltip; a button wide enough for Waker of Waves' sentence would be wider
+    // than the phase rail.
+    button.textContent = `${entry.cost_text || "Activate"}: ${entry.name}`;
+    button.title = entry.text || "An ability activated from your hand (CR 113.6).";
     button.disabled = entry.payable === false;
     button.addEventListener("click", () => {
       // `hand_index` says which copy: two copies of a card in a hand are the

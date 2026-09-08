@@ -28,6 +28,8 @@ from fastapi.testclient import TestClient
 from web.app import app, store
 from web.runtime import CARD_BY_NAME
 
+from ..helpers import resolve_stack
+
 client = TestClient(app)
 
 _APP_JS = Path(__file__).resolve().parents[2] / "web" / "static" / "app.js"
@@ -66,6 +68,11 @@ def test_the_state_offers_the_hand_ability_with_the_line_as_printed():
         "{1}{U}, Discard this card: Look at the top two cards of your library. "
         "Put one of them into your hand and the other into your graveyard."
     )
+    # The button is named by the *price*, not the sentence — a control wide
+    # enough for Waker of Waves' whole line would be wider than the phase rail,
+    # and the half a player chooses by is what it costs. On a cycling card this
+    # is the printed keyword line itself, "Cycling {2}".
+    assert entry["cost_text"] == "{1}{U}, Discard this card"
     assert entry["payable"] is True
 
 
@@ -149,5 +156,43 @@ def test_the_button_body_carries_every_field_the_handler_reads():
     body = match.group(0)
 
     assert '"activate_hand"' in body
+    assert "entry.cost_text" in body
     for field in ("seat,", "card_name:", "hand_index:", "ability_index:"):
         assert field in body, field
+
+
+def test_the_look_top_prompt_renders_after_a_hand_activation():
+    """A `NameError` in `web/prompts.py` that no path could reach until now.
+
+    `_look_top_pick` read `owner.library` and nothing bound `owner`, so
+    `GET /state` answered 500 the moment a `look_top_pick` prompt was owed to a
+    browser viewer. Thirteen shipped cards produce that prompt (Orcish
+    Librarian, Diabolic Vision, Browse, Lim-Dûl's Vault, Ashnod's Cylix,
+    Ancestral Memories, Preferred Selection, Sealed Fate, Impulse, Ancestral
+    Knowledge, See the Truth, Waker of Waves, Garruk's Harbinger) and every one
+    of them crashed the poll — a missing name in a function body waits for its
+    line to run, and this one was found by driving the app rather than by any
+    test.
+
+    Waker of Waves is the one that found it, because activating it from hand is
+    the route this file adds and there was no way to reach it before.
+    """
+    sid, game, waker = _session_holding_waker(mana=3)
+    state = client.get(f"/api/sessions/{sid}/state?seat=0").json()
+    entry = next(e for e in state["hand_abilities"] if e["name"] == "Waker of Waves")
+
+    assert client.post(f"/api/sessions/{sid}/action", json={
+        "seat": 0, "action": "activate_hand", "card_name": entry["name"],
+        "hand_index": entry["hand_index"], "ability_index": entry["ability_index"],
+    }).status_code == 200
+    # The ability is on the stack; the prompt is armed as it resolves.
+    resolve_stack(game)
+
+    response = client.get(f"/api/sessions/{sid}/state?seat=0")
+
+    assert response.status_code == 200, response.text
+    prompt = response.json()["look_top_pick"]
+    assert prompt is not None
+    assert prompt["top_count"] == 2
+    assert len(prompt["cards"]) == 2
+    assert prompt["pile_seat"] == 0

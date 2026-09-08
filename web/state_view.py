@@ -37,6 +37,7 @@ was missing.
 from __future__ import annotations
 
 import json
+import re
 
 from dataclasses import dataclass
 
@@ -375,6 +376,26 @@ def _compute_playable_hand_indices(session: Session, player_index: int) -> list[
     ]
 
 
+_ABILITY_REMINDER = re.compile(r"\([^)]*\)")
+
+
+def _ability_cost_text(printed_line: str) -> str:
+    """The cost clause of a printed ability line — what the button is named by.
+
+    "Cycling {2} ({2}, Discard this card: Draw a card.)" is the whole of what a
+    cycling card prints, and "{1}{U}, Discard this card: Look at the top two
+    cards of your library. Put one of them into your hand and the other into
+    your graveyard." is the whole of Waker of Waves' — neither fits on a button.
+    The half a player is choosing by is the price, so the reminder text goes and
+    what is left before the first colon is the label. A keyword line has no
+    colon once its reminder is stripped and is already the price, so it survives
+    whole ("Cycling {2}").
+    """
+    stripped = " ".join(_ABILITY_REMINDER.sub("", printed_line or "").split()).strip()
+    head, sep, _tail = stripped.partition(": ")
+    return (head if sep else stripped).rstrip(".")
+
+
 def _printed_ability_line(card, ability) -> str:
     """The printed line *ability* was compiled from, or its compiled text.
 
@@ -436,6 +457,9 @@ def _compute_hand_abilities(session: Session, player_index: int) -> list[dict]:
                 # rather than by pattern-matching the expansion's English —
                 # the move ``oracle._printed_line_for`` makes for equip.
                 "text": _printed_ability_line(card, ability),
+                # What the button is named by: the price, not the whole
+                # sentence. The full line stays in `text` for the tooltip.
+                "cost_text": _ability_cost_text(_printed_ability_line(card, ability)),
                 "payable": payable,
             })
     return entries
