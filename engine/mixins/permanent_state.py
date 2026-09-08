@@ -6,6 +6,7 @@ from dataclasses import replace
 
 from ..enter_effects import (
     ENTERED_BATTLEFIELD_TURN,
+    LIFE_PAID_AS_ENTERED,
     entry_exile_requirement,
     entry_sacrifice_requirement,
     sacrifice_any_number_on_enter,
@@ -173,11 +174,11 @@ def _count_dynamic_pt(
         # characteristics at all (CR 613.1) — the same reason Wood Elemental's
         # tally rides the permanent rather than being recounted here.
         return int(permanent.metadata.get(str(what)) or 0)
-    if what == "life_paid_as_entered":
+    if what == LIFE_PAID_AS_ENTERED:
         # Nameless Race: the life was paid as the creature entered (CR 614.1c)
         # and nothing on a board records it, so it rides the permanent the same
         # way Wood Elemental's sacrifice count does.
-        return int(permanent.metadata.get("life_paid_as_entered") or 0)
+        return int(permanent.metadata.get(LIFE_PAID_AS_ENTERED) or 0)
     if what == "chosen_number":
         # Shapeshifter: the value is a number a player chose, not a tally of
         # anything, so it answers before the battlefield loop rather than inside
@@ -789,7 +790,7 @@ class PermanentStateMixin:
             capped = pay_any_life_on_enter(raw_line, permanent.effective_card.name)
             if capped is None:
                 continue
-            permanent.metadata["life_paid_as_entered"] = 0
+            permanent.metadata[LIFE_PAID_AS_ENTERED] = 0
             maximum = self._nameless_race_cap(caster_index, capped)
             if maximum > 0:
                 self.arm_pending_choice(

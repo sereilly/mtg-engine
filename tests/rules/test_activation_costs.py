@@ -523,3 +523,146 @@ def test_602_2b_an_attached_cost_with_no_host_activates_nothing():
     assert not result.supported
     assert [p.card.name for p in p1.battlefield] == ["Betrothed of Fire"]
     assert game.stack == []
+
+import dataclasses
+
+
+# --- W1G5: CR 601.2c's count and CR 601.2d's division, asked of an ability ---
+#
+# The two announcement steps CR 602.2b routes an activation through that the
+# activation path had no gate for at all. Both were found the same way the two
+# at the top of this file were: a card that reports ``supported`` and does
+# something other than what it prints.
+from engine.models import Permanent as _W1G5Permanent
+from engine.named_counters import add_counters as _w1g5_add_counters
+from tests.helpers import _mk_creature_card as _w1g5_creature
+from tests.helpers import resolve_stack as _w1g5_resolve
+
+
+def _w1g5_duel():
+    """A duel with a seat each, ending on its own name so no union can splice
+    another helper's body onto this signature."""
+    p1, p2 = PlayerState(name="W1G5A"), PlayerState(name="W1G5B")
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    return game, p1, p2
+
+
+def _w1g5_onto(game, seat, card):
+    permanent = _W1G5Permanent(card=card)
+    game._put_permanent_onto_battlefield(seat, permanent, None)
+    game._sync_control()
+    return permanent
+
+
+@pytest.mark.cr("601.2c", "602.2b")
+def test_601_2c_an_abilitys_up_to_x_ceiling_is_the_number_its_text_defines(set_pool):
+    """"Once the number of targets the spell has is determined, that number
+    doesn't change" (CR 601.2c) — and for "up to X target …" the ceiling is X.
+
+    CR 602.2b routes an activation through CR 601.2b–i, so the count is settled
+    at CR 601.2c with the source still on the battlefield: a sacrifice cost is
+    not paid until CR 601.2h. Vile Requiem's X is not announced by the player
+    either, it is defined by the card's own where-clause off a board the game
+    can read.
+
+    An unenforced ceiling is the failure a printed restriction exists to
+    prevent: not a crash and not a missing ability, but an ability that works
+    more often than the card allows, in the player's favour and silently.
+    """
+    game, _p1, p2 = _w1g5_duel()
+    requiem = _w1g5_onto(game, 0, set_pool("USG")["Vile Requiem"])
+    victims = [
+        _w1g5_onto(game, 1, dataclasses.replace(
+            _w1g5_creature("W1G5 W%d" % i, 1, 1), colors=("W",)
+        ))
+        for i in range(3)
+    ]
+    _w1g5_add_counters(requiem, "verse", 2)
+
+    over = game.activate_permanent_ability(
+        0, "Vile Requiem",
+        target_permanent_ids=[victim.permanent_id for victim in victims],
+    )
+    assert not over.supported, "three targets for a ceiling of two"
+    assert p2.graveyard == [], "an illegal announcement destroys nothing"
+
+    within = game.activate_permanent_ability(
+        0, "Vile Requiem",
+        target_permanent_ids=[victim.permanent_id for victim in victims[:2]],
+    )
+    assert within.supported
+    _w1g5_resolve(game)
+    assert len(p2.graveyard) == 2
+
+
+@pytest.mark.cr("601.2d", "602.2b")
+def test_601_2d_an_abilitys_division_must_total_what_it_divides(set_pool):
+    """"If the spell requires the player to divide or distribute an effect …
+    the player announces the division. Each of these targets must receive at
+    least one" (CR 601.2d), reached by an **ability** through CR 602.2b.
+
+    Serra's Hymn is the pool's first activated ability that divides anything, so
+    this gate existed on the cast path alone. Asked at announcement rather than
+    at resolution for CR 601.2e's reason: an illegal proposal returns the game
+    to the moment before it, and a division judged later would already have
+    eaten the enchantment.
+    """
+    game, p1, _p2 = _w1g5_duel()
+    hymn = _w1g5_onto(game, 0, set_pool("USG")["Serra's Hymn"])
+    bear = _w1g5_onto(game, 0, _w1g5_creature("W1G5 Bear", 4, 4))
+    _w1g5_add_counters(hymn, "verse", 4)
+    bear_slot = p1.battlefield.index(bear)
+
+    too_much = game.activate_permanent_ability(
+        0, "Serra's Hymn", divided_targets=[(0, None, 3), (0, bear_slot, 2)],
+    )
+    assert not too_much.supported, "5 announced where the text defines 4"
+    assert hymn in p1.battlefield, "CR 601.2e pays nothing for an illegal proposal"
+
+    zero_share = game.activate_permanent_ability(
+        0, "Serra's Hymn", divided_targets=[(0, None, 4), (0, bear_slot, 0)],
+    )
+    assert not zero_share.supported, "each target must receive at least one"
+    assert hymn in p1.battlefield
+
+    exact = game.activate_permanent_ability(
+        0, "Serra's Hymn", divided_targets=[(0, None, 3), (0, bear_slot, 1)],
+    )
+    assert exact.supported
+    _w1g5_resolve(game)
+    assert p1.damage_prevention_pool == 3
+    assert bear.damage_prevention_pool == 1
+
+
+@pytest.mark.cr("601.2c", "601.2h")
+def test_601_2c_a_divided_announcement_is_read_before_the_cost_moves_the_board(
+    set_pool,
+):
+    """The gap between CR 601.2c and CR 601.2h, which is what the top of this
+    file is about — here on a *divided* announcement.
+
+    Serra's Hymn sacrifices its own source to pay for itself, so every
+    battlefield slot after the enchantment shifts down before the ability
+    reaches the stack. An announcement resolved to permanents at the push
+    therefore names a board one permanent shorter: the creature announced at the
+    slot behind the Hymn is resolved to whatever slid into it, and to nothing at
+    all when it was the last. The shares are stamped onto ids at CR 601.2c
+    instead, where the index and the board still agree.
+    """
+    game, p1, _p2 = _w1g5_duel()
+    hymn = _w1g5_onto(game, 0, set_pool("USG")["Serra's Hymn"])
+    bear = _w1g5_onto(game, 0, _w1g5_creature("W1G5 Bear", 4, 4))
+    _w1g5_add_counters(hymn, "verse", 3)
+    assert p1.battlefield.index(hymn) < p1.battlefield.index(bear)
+
+    assert game.activate_permanent_ability(
+        0, "Serra's Hymn",
+        divided_targets=[(0, None, 1), (0, p1.battlefield.index(bear), 2)],
+    ).supported
+    _w1g5_resolve(game)
+
+    assert hymn not in p1.battlefield, "the cost took it"
+    assert bear.damage_prevention_pool == 2, (
+        "the creature named behind the sacrificed source still got its share"
+    )

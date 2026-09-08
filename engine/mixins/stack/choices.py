@@ -29,6 +29,7 @@ from ...handlers._common import apply_temp_pt_boost, permanent_matches_filter
 from ...grammar.lowering._events import EVENT_SUBJECT_PLAYER
 from ...grammar.phrases import BASIC_LAND_WORDS
 from ...continuous import next_timestamp
+from ...enter_effects import LIFE_PAID_AS_ENTERED
 from ...land_types import CHOSEN_LAND_TYPES, change_land_type
 from ...linked_exile import link_exiled_card, shuffle_linked_pile
 from ...models import CardDefinition, Permanent
@@ -3144,7 +3145,7 @@ class PendingChoicesMixin:
                 # not losing life, so this must not go through the life-loss
                 # seam and fire a "whenever you lose life" trigger.
                 self.players[choice.player_index].life -= value
-                permanent.metadata["life_paid_as_entered"] = value
+                permanent.metadata[LIFE_PAID_AS_ENTERED] = value
                 self.log.append(
                     f"{choice.data.get('card_name')}: paid {value} life"
                 )

@@ -24,3 +24,141 @@ Cards come from `set_pool("USG")` / `set_cards("USG")` — never a new
 never a bare `while game.stack:` loop — that spins forever once a seat is owed
 a prompt.
 """
+
+
+# --- W1G5: the two artifacts that reported supported and did nothing ---
+from engine import Game, PlayerState
+from engine.enter_effects import LIFE_PAID_AS_ENTERED
+from engine.models import Permanent
+from engine.named_counters import add_counters
+from tests.helpers import _mk_creature_card, resolve_stack
+
+
+def _g5a_game(*, interactive=()):
+    """Two seats, no mana enforcement, and which of them answers prompts.
+
+    Prefixed and ending on ``return game, p1, p2`` for the reason SET_PLAYBOOK.md
+    gives: a helper whose last lines match another group's is spliced by a
+    mechanical union onto the wrong signature.
+    """
+    p1, p2 = PlayerState(name="G5A"), PlayerState(name="G5B")
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    return game, p1, p2
+
+
+def _g5a_put(game, seat, card):
+    permanent = Permanent(card=card)
+    game._put_permanent_onto_battlefield(seat, permanent, None)
+    game._sync_control()
+    return permanent
+
+
+def test_w1g5_phyrexian_processor_makes_a_token_the_size_of_the_life_it_ate(set_pool):
+    """{4}, {T}: Create an X/X black Phyrexian Minion creature token, where X is
+    the life paid as this artifact entered.
+
+    Not a count of anything and not a recompute: the number was chosen once as
+    a CR 614.1c entry replacement, and every activation afterwards reads the
+    same one.
+    """
+    game, p1, _p2 = _g5a_game(interactive=(0,))
+    processor = _g5a_put(game, 0, set_pool("USG")["Phyrexian Processor"])
+    assert game.confirm_number_choice(0, 4), "the entry payment is announced"
+    assert p1.life == 16
+    assert processor.metadata[LIFE_PAID_AS_ENTERED] == 4
+
+    assert game.activate_permanent_ability(0, "Phyrexian Processor").supported
+    resolve_stack(game)
+    tokens = [
+        permanent for permanent in p1.battlefield
+        if permanent.metadata.get("is_token")
+    ]
+    assert len(tokens) == 1
+    assert (tokens[0].effective_power, tokens[0].effective_toughness) == (4, 4)
+    assert "Phyrexian Minion" in tokens[0].card.type_line
+
+
+def test_w1g5_phyrexian_processor_keeps_reading_the_same_number(set_pool):
+    """Two activations, one entry payment: the value is fixed as the permanent
+    entered, so nothing here recomputes it and the second Minion is the size of
+    the first."""
+    game, p1, _p2 = _g5a_game(interactive=(0,))
+    processor = _g5a_put(game, 0, set_pool("USG")["Phyrexian Processor"])
+    game.confirm_number_choice(0, 3)
+
+    for _ in range(2):
+        processor.tapped = False
+        game.activate_permanent_ability(0, "Phyrexian Processor")
+        resolve_stack(game)
+    tokens = [
+        permanent for permanent in p1.battlefield
+        if permanent.metadata.get("is_token")
+    ]
+    assert len(tokens) == 2
+    assert all(
+        (token.effective_power, token.effective_toughness) == (3, 3)
+        for token in tokens
+    )
+
+
+def test_w1g5_smokestack_sacrifices_one_permanent_per_soot_counter(set_pool):
+    """At the beginning of each player's upkeep, that player sacrifices a
+    permanent of their choice for each soot counter on this artifact.
+
+    The count sits on the *source*, so it is the same number whoever the upkeep
+    belongs to — read per-payer it would be counted on a permanent that payer
+    does not control and answer zero every time.
+    """
+    game, _p1, p2 = _g5a_game()
+    stack = _g5a_put(game, 0, set_pool("USG")["Smokestack"])
+    for i in range(4):
+        _g5a_put(game, 1, _mk_creature_card("G5 B%d" % i, 1, 1))
+    add_counters(stack, "soot", 2)
+
+    game.active_player_index = 1
+    game.resolve_upkeep(1)
+    resolve_stack(game)
+
+    assert len(p2.battlefield) == 2
+    assert len(p2.graveyard) == 2
+
+
+def test_w1g5_smokestack_with_no_soot_counters_asks_for_nothing(set_pool):
+    """CR 608.2's "as much as possible" at zero: a seat that owes none is not
+    prompted, which is the difference between a Smokestack that has just arrived
+    and one that has been ticking."""
+    game, _p1, p2 = _g5a_game(interactive=(1,))
+    _g5a_put(game, 0, set_pool("USG")["Smokestack"])
+    _g5a_put(game, 1, _mk_creature_card("G5 B0", 1, 1))
+
+    game.active_player_index = 1
+    game.resolve_upkeep(1)
+    resolve_stack(game)
+
+    assert not [c for c in game.pending_choices if c.kind == "sacrifice"]
+    assert len(p2.battlefield) == 1
+
+
+def test_w1g5_smokestack_makes_the_upkeep_player_choose(set_pool):
+    """"…that player sacrifices a permanent **of their choice**": the prompt is
+    owed by the seat whose upkeep it is, not by the artifact's controller, and
+    the game waits while it is owed."""
+    game, _p1, p2 = _g5a_game(interactive=(1,))
+    stack = _g5a_put(game, 0, set_pool("USG")["Smokestack"])
+    for i in range(3):
+        _g5a_put(game, 1, _mk_creature_card("G5 B%d" % i, 1, 1))
+    add_counters(stack, "soot", 2)
+
+    game.active_player_index = 1
+    # No resolve_stack here on purpose: it answers whatever blocks the stack
+    # through the registry's own default, which is precisely the prompt this
+    # test is about — the helper would settle it out from under the assertions.
+    game.resolve_upkeep(1)
+
+    owed = [c for c in game.pending_choices if c.kind == "sacrifice"]
+    assert len(owed) == 1
+    assert owed[0].player_index == 1, "the upkeep player, not the controller"
+    assert owed[0].data["count"] == 2
+    assert len(p2.battlefield) == 3, "nothing goes until the choice is answered"
