@@ -30,6 +30,7 @@ from .nouns import parse_object_filter
 from .references import parse_target_spec
 from .phrases import (
     _accept_number,
+    _identifies_one_object,
     parse_subject_filter_at,
 )
 from .stream import TokenStream
@@ -520,10 +521,21 @@ def _parse_matched_event(
     caused = stream.accept_phrase(
         "a", "spell", "or", "ability", "an", "opponent", "controls", "causes"
     )
+    # "When **the** creature put onto the battlefield with this enchantment
+    # dies" (Diabolic Servitude). The definite article beside the indefinite
+    # ones, read for ``phrases.parse_subject_filter_at``'s reason and under its
+    # guard: "the" names one described object, so the description behind it has
+    # to identify one. A bare "the creature" would otherwise read as "a
+    # creature" and the trigger would watch every creature on the table.
+    definite = bool(stream.accept_word("the")) if not stream.at_word(
+        "a", "an"
+    ) else False
     stream.accept_word("a", "an")
     try:
         dying = parse_object_filter(stream)
     except GrammarError:
+        dying = None
+    if definite and (dying is None or not _identifies_one_object(dying)):
         dying = None
     # "…is put into **a**/**your**/**an opponent's** graveyard from the
     # battlefield". Whose graveyard is a narrowing on the condition, which

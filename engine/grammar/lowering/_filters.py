@@ -204,6 +204,19 @@ _PAYLOAD_HONOURED_FILTER_FIELDS = frozenset({
     # permanent (`_source_relative_bound_holds` answers False), which is the
     # direction that cannot widen an effect.
     "characteristic_vs_source",
+    # "…creature **put onto the battlefield with this enchantment**" (Diabolic
+    # Servitude). ``to_payload`` emits it whenever it is set and
+    # ``subject_matches`` answers it off the record the reanimation stamped, so
+    # it is honoured on ``banded_with_source``'s footing: what it additionally
+    # needs is the ability's own source, and that function takes one.
+    #
+    # Listed here rather than named in one lowering's allow-set — the way
+    # ``created_with_source`` beside it is — because the phrase's first reader
+    # is a **trigger condition**'s ``_subject`` group, and that path asks
+    # ``_restrictions_beyond`` against this set alone: left out, the condition
+    # refuses whole and the card compiles with no trigger at all, which is the
+    # false refusal Roots of Life and No Quarter each paid one comment up.
+    "put_onto_battlefield_by_source",
 })
 
 

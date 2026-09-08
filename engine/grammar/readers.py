@@ -44,6 +44,21 @@ _SELF_NOUNS = frozenset({
 
 
 
+#: The ``ObjectFilter`` fields that make a phrase name **one** object rather
+#: than a class of them, for the definite article above.
+#:
+#: Each is a relation to a permanent the ability's own source acted on, held as
+#: a record on the object — so at most one permanent on the table answers it.
+#: A phrase carrying none of them describes a *kind*, and "the creature" read as
+#: "a creature" is a trigger on every creature in play.
+_IDENTIFYING_FILTER_FIELDS = ("put_onto_battlefield_by_source", "created_with_source")
+
+
+def _identifies_one_object(filt: "ast.ObjectFilter") -> bool:
+    """Whether *filt* names one object rather than a class."""
+    return any(getattr(filt, field, False) for field in _IDENTIFYING_FILTER_FIELDS)
+
+
 def accept_source_reference(stream: TokenStream) -> bool:
     """Consume a reference to the ability's own source — "it", "this", or
     "this <noun the card calls itself>" — and say whether one was there.

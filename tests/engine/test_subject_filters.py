@@ -693,6 +693,9 @@ _COVERED_ELSEWHERE = {
     # --- STH W1G2 ---
     "power_greater_than_cards_in_hand":
         "test_sth_w1g2_a_power_bound_counts_the_observer_s_hand",
+    # --- USG W1G5 ---
+    "put_onto_battlefield_by_source":
+        "test_usg_w1g5_put_onto_the_battlefield_with_names_one_reanimation",
 }
 
 
@@ -2189,3 +2192,53 @@ def test_sth_w1g2_a_power_bound_counts_the_observer_s_hand(pool):
     assert not subject_matches(game, ogre, described, observer=0), "at the bound"
     add_pt_modifier(ogre, 1, 0)
     assert subject_matches(game, ogre, described, observer=0), "pumped over it"
+
+
+# --- USG W1G5: the reanimation record a printed phrase names ---
+def test_usg_w1g5_put_onto_the_battlefield_with_names_one_reanimation(pool):
+    """"…the creature **put onto the battlefield with this enchantment**"
+    (Diabolic Servitude; Necromancy prints it as its enchant clause).
+
+    Its own demonstration rather than a row in ``_REJECTIONS`` for
+    ``created_with_source``'s reason one test up: the table builds a bare
+    permanent and the rejection here is about a *record* two otherwise identical
+    creatures differ by. The reanimation stamps its own ``permanent_id`` on what
+    it returned, because the ability's target was a card in a graveyard and
+    CR 400.7 makes the arrival a new object with no history on the board.
+
+    The last assertion is the one that matters: with no source the answer is no.
+    A caller that dropped the narrowing instead would exile every creature on
+    the table when the enchantment left.
+    """
+    from engine.auras import PUT_ONTO_BATTLEFIELD_BY
+
+    servitude = Permanent(card=pool["Grizzly Bears"])
+    other = Permanent(card=pool["Grizzly Bears"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[servitude, other]),
+        PlayerState(name="P2"),
+    ])
+    game.start_turn(0)
+
+    mine = Permanent(
+        card=pool["Grizzly Bears"],
+        metadata={PUT_ONTO_BATTLEFIELD_BY: servitude.permanent_id},
+    )
+    theirs = Permanent(
+        card=pool["Grizzly Bears"],
+        metadata={PUT_ONTO_BATTLEFIELD_BY: other.permanent_id},
+    )
+    arrived_alone = Permanent(card=pool["Grizzly Bears"])
+
+    described = {"type_filter": "creature", "put_onto_battlefield_by_source": True}
+    assert subject_matches(game, mine, described, source=servitude)
+    assert not subject_matches(game, theirs, described, source=servitude), (
+        "a look-alike another enchantment reanimated is not this one's creature"
+    )
+    assert not subject_matches(game, arrived_alone, described, source=servitude), (
+        "a creature nothing recorded reanimating was not put onto the "
+        "battlefield with this enchantment"
+    )
+    assert not subject_matches(game, mine, described), (
+        "with no source there is nothing the record is relative to"
+    )

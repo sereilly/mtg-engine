@@ -55,6 +55,7 @@ from .. import ast
 from ..errors import LoweringError
 from ._common import (_filter_payload, _is_created_token, _is_source,
                       _restrictions_beyond)
+from ._deaths import BOUND_CARD_EVENTS
 from ._delays import _BOUND_OBJECT_DELAYED_EVENTS
 from ._events import (_RECORDED_PERMANENTS, CREATED_TOKEN,
                       damage_trigger_names_damaged_end)
@@ -214,6 +215,34 @@ def lower_pronoun_exile(
         if node.duration.kind is not None or node.counters:
             raise LoweringError(
                 "a bound card's exile carries no duration or counters", node=node
+            )
+        return (OracleInstruction("exile_bound_card", "", {}),)
+    # "When the creature put onto the battlefield with this enchantment dies,
+    # **exile it** and return this enchantment to its owner's hand." (Diabolic
+    # Servitude.) The same card in the same graveyard as the branch above, under
+    # a *printed* death trigger rather than a delayed one — so the pronoun is
+    # not the source at all: ``rebinding`` has already bound it to the object
+    # the firing event was about, which is why ``_is_source`` is False here and
+    # the branch above cannot see it.
+    #
+    # Gated on ``BOUND_CARD_EVENTS`` — ``lowering/_deaths.py``'s table of the
+    # fire sites that actually record the dying card — rather than on the one
+    # event this card prints, because that table is the claim this reading
+    # depends on and a second list of events would be free to disagree with it.
+    #
+    # Without this the sentence fell to the source reading below and lowered to
+    # ``exile_self``: the enchantment exiling *itself* when the creature it
+    # reanimated died, which is Whippoorwill's bug one comment up, in a card
+    # that reports supported either way.
+    if (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "it"
+        and not _is_source(subject)
+        and event in BOUND_CARD_EVENTS
+    ):
+        if node.duration.kind is not None or node.counters:
+            raise LoweringError(
+                "a dead card's exile carries no duration or counters", node=node
             )
         return (OracleInstruction("exile_bound_card", "", {}),)
     # "Exile it." / "Exile this creature." (Archfiend's Vessel.) The ability's

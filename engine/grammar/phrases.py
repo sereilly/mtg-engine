@@ -28,6 +28,9 @@ from .amounts import (accept_counter_kind, accept_counters_on_event_subject,
 from .errors import GrammarError
 from .lexer import GToken, NUMBER, PUNCT, tokenize
 from .nouns import _STATE_ADJECTIVES, parse_object_filter
+# Re-exported under the name this module's callers already use — the
+# arrangement `readers` documents for the fragments it holds.
+from .readers import _identifies_one_object  # noqa: F401
 # The price fragments, re-exported so every existing caller keeps its import
 # — the arrangement `readers` already has one layer down.
 from .prices import (_accept_conjoined_life_cost,  # noqa: F401
@@ -413,15 +416,35 @@ def parse_subject_filter_at(
     # behind ("another **Rogue you control**"), which the noun parser quantifies
     # as the sweep "all"; without "another" the article has to be printed.
     another = bool(stream.accept_word("another"))
+    # "When **the** creature put onto the battlefield with this enchantment
+    # dies" (Diabolic Servitude). The definite article, which names *one*
+    # described object where "a" names any — the same reading
+    # ``references.parse_recipient`` gives "the token", and for that phrase's
+    # reason: a durable record on the object is what says which one.
+    #
+    # Consumed here rather than admitted as a quantifier, because the noun
+    # parser refuses "the" outright in this position and the phrase behind it
+    # reads exactly as the indefinite one does. **Guarded**, and the guard is
+    # the whole of what makes it safe: the description that follows must
+    # actually identify something, so a bare "the creature" refuses rather than
+    # becoming "a creature" and firing a trigger on every creature on the
+    # table. That widening is the one failure this function's docstring is
+    # about.
+    definite = not another and bool(stream.accept_word("the"))
     try:
         spec = parse_target_spec(stream)
     except GrammarError:
         stream.reset(mark)
         return None
-    if spec is None or spec.quantifier != ("all" if (another or plural) else "a"):
+    wanted = "all" if (another or plural or definite) else "a"
+    if spec is None or spec.quantifier != wanted:
+        stream.reset(mark)
+        return None
+    if definite and not _identifies_one_object(spec.filter):
         stream.reset(mark)
         return None
     return replace(spec.filter, other_than_source=True) if another else spec.filter
+
 
 
 def accept_or_planeswalker(

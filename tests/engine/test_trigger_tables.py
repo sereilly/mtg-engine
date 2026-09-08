@@ -41,7 +41,15 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     # (Tablet of Epityr). Its own kind rather than a widening of land_dies,
     # which keeps its dedicated dispatcher and Dingus Egg's damage shape.
     "permanent_dies": (
-        "whenever an artifact you control is put into a graveyard from the battlefield"
+        "whenever an artifact you control is put into a graveyard from the battlefield",
+        # The **when** table's row, and it is in that table because the printed
+        # word is "when": "when the creature put onto the battlefield with this
+        # enchantment dies" (Diabolic Servitude). A death the source watches
+        # rather than its own, so it is this kind and not `dies` — matched by
+        # that row's `.+` it fired when the *enchantment* went to the graveyard.
+        # The definite article is what keeps it off the bare row's other cards,
+        # and the description behind it is what says which object it names.
+        "when the creature put onto the battlefield with this enchantment dies",
     ),
     # Both printed spellings, because the kind is in both tables: "whenever" for
     # an Equipment (Malefic Scythe) and "when" for an Aura (Creature Bond). One
