@@ -599,6 +599,47 @@ def _is_self_reference(recipient: ast.Recipient) -> bool:
     )
 
 
+def _parse_assigns_combat_damage_as_unblocked(
+    stream: TokenStream, subject: ast.Recipient
+) -> "ast.AssignsCombatDamageAsUnblocked | None":
+    """``<subject> assign their combat damage <duration> as though they weren't
+    blocked.`` (Outmaneuver.)
+
+    The mirror of :func:`_parse_assigns_no_combat_damage` beside it — the
+    refusal that function's docstring promised to leave room for, arriving with
+    the card that prints it — and read *before* it for no reason but that both
+    open on the same verb; the two diverge on the next word and neither can
+    swallow the other.
+
+    Both printed numbers of the pronoun, because the sentence prints one per
+    subject: "their … they weren't" for a plural subject and "its … it weren't"
+    for a singular one are the same rewrite, and a production that read only one
+    would refuse the other on a word that means nothing to the rule.
+
+    The duration is printed **between** the object and the "as though" clause
+    ("assign their combat damage **this turn** as though …"), which is where
+    this card puts it and why the duration is read there rather than at the end.
+    Returns None with the cursor untouched for any other reading of "assign".
+    """
+    mark = stream.mark()
+    if not stream.accept_word("assigns", "assign"):
+        return None
+    if not (
+        stream.accept_phrase("their", "combat", "damage")
+        or stream.accept_phrase("its", "combat", "damage")
+    ):
+        stream.reset(mark)
+        return None
+    duration = _parse_duration(stream)
+    if not (
+        stream.accept_phrase("as", "though", "they", "weren't", "blocked")
+        or stream.accept_phrase("as", "though", "it", "weren't", "blocked")
+    ):
+        stream.reset(mark)
+        return None
+    return ast.AssignsCombatDamageAsUnblocked(subject, duration)
+
+
 def _parse_assigns_no_combat_damage(
     stream: TokenStream, subject: ast.Recipient
 ) -> "ast.AssignsNoCombatDamage | None":

@@ -218,6 +218,7 @@ from .stack import (
 )
 from .combat import (
     parse_block_count_grant,
+    _parse_assigns_combat_damage_as_unblocked,
     _parse_assigns_no_combat_damage,
     _parse_attacks_this_turn_if_able,
     _parse_destroy_chosen_that_didnt_attack,
@@ -405,6 +406,7 @@ __all__ = [
     "parse_choose_card_type",
     "parse_land_type_swap",
     "parse_extra_land_plays",
+    "_parse_assigns_combat_damage_as_unblocked",
     "_parse_assigns_no_combat_damage",
     "_parse_attacks_this_turn_if_able",
     "_parse_destroy_chosen_that_didnt_attack",

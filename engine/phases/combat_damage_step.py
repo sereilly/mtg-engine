@@ -28,7 +28,8 @@ idiom every caller used to write is safe only while a pass cannot be
 interrupted.
 """
 
-from ..combat_assignment import combat_damage_assigned_by
+from ..combat_assignment import (MUST_ASSIGN_AS_UNBLOCKED,
+                                combat_damage_assigned_by)
 from ..damage_events import deal_damage, lifelink_life_gained
 from ..models import Permanent
 from ..resumption import run_resumable
@@ -449,6 +450,17 @@ class CombatDamageStepMixin:
                 and attacker.metadata.get("assign_combat_damage_as_unblocked_until_eot")
                 and not attacker_damage.get(attacker_idx)
             ):
+                to_players.append((defending_index, power_left, attacker, attacked_walker_id))
+                continue
+            # "X target blocked creatures **assign their combat damage this
+            # turn as though they weren't blocked**." (Outmaneuver.) The same
+            # CR 510.1b rewrite with no "may" in front of it, so it is read
+            # *without* the escape the branch above carries: an explicit
+            # per-blocker assignment is how a player declines Garruk's offer,
+            # and this card gives them nothing to decline. Whatever the attacker
+            # asked for is discarded, which is the restriction doing what it
+            # says rather than what the attacker would prefer.
+            if blockers and attacker.metadata.get(MUST_ASSIGN_AS_UNBLOCKED):
                 to_players.append((defending_index, power_left, attacker, attacked_walker_id))
                 continue
             if not blockers:

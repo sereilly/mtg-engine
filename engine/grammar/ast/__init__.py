@@ -362,6 +362,7 @@ from .stack import (
     WaiveShroud,
 )
 from .combat import (
+    AssignsCombatDamageAsUnblocked,
     AssignsNoCombatDamage,
     AttacksThisTurnIfAble,
     DestroyChosenThatDidntAttack,
@@ -753,6 +754,7 @@ __all__ = [
     "ChooseBlocksForDefenders",
     "ReassignBlockersBetweenAttackers",
     "AttackAsThough",
+    "AssignsCombatDamageAsUnblocked",
     "AssignsNoCombatDamage",
     "AttacksThisTurnIfAble",
     "DestroyChosenThatDidntAttack",

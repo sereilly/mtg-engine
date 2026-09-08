@@ -56,6 +56,7 @@ from .effects import (
     parse_cant_cast_spell_types,
     parse_cant_play_lands,
     _parse_gain_control,
+    _parse_assigns_combat_damage_as_unblocked,
     _parse_assigns_no_combat_damage,
     _parse_becomes_blocked,
     _parse_becomes,
@@ -333,6 +334,17 @@ def parse_subject_verb(
         # with the word keeps its own refusal rather than failing on words this
         # production expected.
         if token.text in ("assigns", "assign"):
+            # "X target blocked creatures **assign their combat damage this
+            # turn as though they weren't blocked**." (Outmaneuver.) Tried in
+            # front of the "assigns no combat damage" reader beside it because
+            # both open on the verb and diverge on the next word; each is
+            # non-consuming on refusal, so neither can take the other's
+            # sentence or replace its refusal.
+            as_unblocked = _parse_assigns_combat_damage_as_unblocked(
+                stream, source_spec
+            )
+            if as_unblocked is not None:
+                return as_unblocked
             no_damage = _parse_assigns_no_combat_damage(stream, source_spec)
             if no_damage is not None:
                 return no_damage

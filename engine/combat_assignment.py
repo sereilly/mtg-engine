@@ -31,6 +31,28 @@ from __future__ import annotations
 #: "This creature assigns no combat damage this turn." (Floral Spuzzem.)
 ASSIGNS_NO_COMBAT_DAMAGE = "assigns_no_combat_damage_until_eot"
 
+#: "X target blocked creatures assign their combat damage this turn **as
+#: though they weren't blocked**." (Outmaneuver.) CR 510.1a's assignment to
+#: the blocking creatures replaced, for a turn, by CR 510.1b's assignment to
+#: the player being attacked.
+#:
+#: Named here beside the mark above because both are answers to "how does this
+#: creature assign?" and the combat damage step reads them at the same moment —
+#: but they are not the same answer and this one is not read by
+#: :func:`combat_damage_assigned_by`, because the *amount* is unchanged. What
+#: changes is where it goes, which only the step knows.
+#:
+#: **Its own key beside the "may" one** Garruk, Savage Herald grants
+#: (``assign_combat_damage_as_unblocked_until_eot``). The two look identical at
+#: the damage step and are not: that one is an offer, and the step answers it
+#: yes only where no explicit per-blocker assignment was given — which is how
+#: a player declines it. This is a *restriction*, so declining is exactly what
+#: must not be possible, and one key for both would make Outmaneuver optional
+#: for whoever bothered to assign.
+#:
+#: Swept with the turn by ``engine/mixins/_constants.py``.
+MUST_ASSIGN_AS_UNBLOCKED = "must_assign_combat_damage_as_unblocked_until_eot"
+
 #: "Target unblocked attacking creature **becomes blocked**." (Dazzling Beauty;
 #: CR 509.1h.) Named here rather than beside the combat maps because the maps
 #: record *who blocks whom*, and this is precisely the state CR 509.1h says a

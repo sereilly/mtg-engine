@@ -214,6 +214,34 @@ class AttackingDoesntTap:
 
 
 @dataclass(frozen=True)
+class AssignsCombatDamageAsUnblocked:
+    """``<subject> assign their combat damage <duration> as though they weren't
+    blocked.`` (Outmaneuver.)
+
+    CR 510.1a's "assign to the blocking creatures" replaced, for the creatures
+    the sentence names, by CR 510.1b's "assign to the player being attacked" —
+    which is a *change to how the assignment is made*, not a removal of it, and
+    so its own node beside :class:`AssignsNoCombatDamage` rather than a flag on
+    that one. The two are opposites: one assigns nothing anywhere, the other
+    assigns everything somewhere else.
+
+    **Not the same sentence as the grant.** "You may have this creature assign
+    its combat damage as though it weren't blocked" (Garruk, Savage Herald's
+    -7) is an *option* the attacker's controller takes at the damage step; this
+    is a fact about the creature that the step reads with nobody consulted, so
+    the two reach the damage step on two records. Folding them would let
+    Outmaneuver's chosen creatures be declined out of, which is the direction
+    every restriction in this engine refuses in.
+
+    The duration is carried for :class:`AssignsNoCombatDamage`'s reason: "this
+    turn" and "this combat" are the same rewrite over different windows.
+    """
+
+    subject: Recipient
+    duration: Duration = field(default_factory=Duration)
+
+
+@dataclass(frozen=True)
 class AssignsNoCombatDamage:
     """``<subject> assigns no combat damage <duration>.`` (Floral Spuzzem.)
 

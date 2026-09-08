@@ -855,6 +855,45 @@ def _attack_tap_gate_filter(node: ast.AttackingDoesntTap) -> dict[str, object]:
     return described
 
 
+def _lower_assigns_combat_damage_as_unblocked(
+    node: "ast.AssignsCombatDamageAsUnblocked",
+) -> tuple[OracleInstruction, ...]:
+    """"X target blocked creatures assign their combat damage this turn as
+    though they weren't blocked." (Outmaneuver.)
+
+    A mark on each chosen creature, swept with the turn — the same shape the
+    "assigns no combat damage" lowering below produces, and the same two
+    refusals for the same reason: a window the sweep does not end, or a subject
+    the mark cannot be written onto, would be a record answering a different
+    question from the one the card asks.
+
+    The subject is a **chosen** one here rather than the source, which is the
+    one difference: the card is a spell that names its creatures, so the
+    description is carried and the handler resolves it. The count may be an
+    announced X, which the several-target description already spells as the
+    string ``"x"``.
+    """
+    if node.duration.kind not in _REST_OF_TURN:
+        raise LoweringError(
+            "an assign-as-though-unblocked mark lasts the rest of the turn "
+            "and nothing else ends it", node=node,
+        )
+    payload: dict[str, object] = {}
+    if _names_several_targets(node.subject):
+        assert isinstance(node.subject, ast.TargetSpec)
+        _describe_several_targets(payload, node.subject)
+    elif _is_target(node.subject):
+        _describe_targets(payload, node.subject)
+    else:
+        raise LoweringError(
+            "the assign-as-though-unblocked mark reaches the creatures the "
+            "spell chooses", node=node,
+        )
+    return (
+        OracleInstruction("assign_as_unblocked_until_eot", "", payload),
+    )
+
+
 def _lower_assigns_no_combat_damage(
     node: ast.AssignsNoCombatDamage,
 ) -> tuple[OracleInstruction, ...]:

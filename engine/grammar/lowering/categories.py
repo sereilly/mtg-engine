@@ -766,6 +766,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # what the combat damage step does, so it files with the other CR 506/510
     # clauses.
     "assign_no_combat_damage_until_eot": "combat_restrictions",
+    # "X target blocked creatures assign their combat damage this turn as
+    # though they weren't blocked." (Outmaneuver.) The same CR 510.1
+    # rewrite in the other direction, so the same category and
+    # GRAMMAR_CATEGORIES is unchanged.
+    "assign_as_unblocked_until_eot": "combat_restrictions",
     "exempt_from_attack_tapping": "combat_restrictions",
     "remove_from_combat": "combat_restrictions",
     # "Target unblocked attacking creature becomes blocked." (Dazzling Beauty;
