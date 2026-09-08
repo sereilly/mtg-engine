@@ -699,6 +699,67 @@ before citing it.**
     (`All Slivers have "…"`) is compiled from a string inside a payload, and
     none of the five instruments reads inside it (TMP). When a set prints the
     shape, sweep the quoted lines by hand and give one a game.
+43. **The asymmetric gate: a question asked on one of the paths that must ask
+    it.** Six of these were found during Urza's Saga, by five independent
+    groups, and every one was found by *a card* rather than by an instrument.
+    They are one class and the class has a shape worth stating:
+
+    > A rules question — a predicate, a narrowing, a fact only the caller can
+    > supply — has **more than one site that must ask it**, because the engine
+    > has more than one route to the same rules moment. The relation between
+    > those sites exists only in the author's head. One site asks; its twin does
+    > not; nothing relates them, so nothing notices.
+
+    What makes it its own class rather than "a bug" is the *evidence profile*.
+    The correct code is present and provably correct where it is, so no test of
+    the implemented site fails. No compiled program moves, so `oracle_diff` is
+    blind. The line is claimed — by the site that does ask — so `parse_coverage`
+    is blind. An instruction was produced, so `--hollow-lines` is blind. The
+    failure is silent in both directions: **fails open** (a restriction enforced
+    by nothing, wrong in the player's favour) or **fails closed** (a narrowing
+    refused for want of an argument, so the card does nothing and says
+    "found nothing to damage").
+
+    The six, with the pair in each:
+
+    - a non-creature permanent's own death (W1G4) — the `dies` enqueue inside
+      `if permanent.is_creature:`, where CR 700.4 is about a permanent;
+    - `max_targets` on the **cast** gate and not on the **activation** gate
+      (W1G5) — Vile Requiem with one verse counter destroyed three creatures;
+    - `_sweep_kind` dropping narrowings its own two sibling lowerings refuse
+      (W2G1) — a fused damage sweep burning a larger board than the card
+      prints;
+    - the **damage dealer** passed as the permanent on one arm of
+      `handlers/damage.py` and as the printed card on eleven others (W3G5) —
+      twenty shipped permanents whose lifelink gained nothing;
+    - the **defending seat** handed to `subject_matches` by two handlers and by
+      neither of the three others that meet the same printed phrase (W3G5) —
+      Sidar Jabari, Jangling Automaton and Scalding Salamander all dead;
+    - CR 603.4's intervening-'if' checked at five hand-written fire sites and
+      at neither of the two seams every other fire site funnels through (W3G5).
+
+    **The instrument.** `scripts/unasked_narrowings.py` asks the question for
+    one pair — the fail-closed half, which is the tractable one. It joins a
+    census of the pool (for each instruction kind, which argument-requiring
+    narrowings do the compiled payloads carry) against a static read of
+    `engine/` (for each `@effect_handler` kind, which keyword arguments does
+    anything within two hops hand to `subject_matches`). Validated
+    retrospectively: run against the pre-round engine it names all three of the
+    dead cards above and nothing else that this round found; run after, those
+    three are gone. Advisory, like `rules_gaps.py` — eleven standing findings
+    today, most of them handlers that answer a printed "that player" themselves
+    before calling the matcher, which a static read cannot see.
+
+    **The half it does not cover, and the cheapest next step.** The other pair
+    shape — one *rules moment* enforced at N unrelated sites — has no shared
+    helper to instrument. It does have a marker: `engine/` cites the CR rule at
+    every site that enforces it. CR 603.4 is cited from **24 files**. Extend
+    `scripts/rules_gaps.py`, which already reads every CR citation in
+    `engine/`+`web/`, to rank rules by *how many files cite them with no shared
+    call between those files* — a rule with five copies of its check is a rule
+    four of them will drift from. That is an advisory in a file that already
+    exists, and it is the version of "which predicates are asked on one of a
+    pair of paths?" that does not need a new instrument at all.
 
 ---
 
