@@ -47,3 +47,5 @@ logs/
 
 # Wave worktrees for parallel set rounds (SET_PLAYBOOK.md) — never source.
 .worktrees/
+.scratch/
+.oracle_diff/
