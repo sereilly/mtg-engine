@@ -2547,7 +2547,16 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
         "count"
     ) != "x" else 0
     if shared is not None:
-        count = evaluate_count(game, context.caster, shared)
+        # The source travels with the spec, because one of the shapes it can
+        # carry is a pile of counters sitting on the ability's own permanent —
+        # "…sacrifices a permanent of their choice **for each soot counter on
+        # this artifact**" (Smokestack). ``evaluate_count`` answers that key
+        # off the source it is handed and reads zero off the ``None`` it used
+        # to get here, which for Smokestack is a card that has never asked for
+        # anything.
+        count = evaluate_count(
+            game, context.caster, shared, source=context.source_permanent
+        )
     # "Sacrifice two Swamps. **If you can't**, …" (Infernal Denizen.) Whether
     # the sacrifice could be performed at all, recorded here rather than after
     # the prompt: an interactive seat answers a queued choice long after this
