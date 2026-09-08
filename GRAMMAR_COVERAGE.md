@@ -16,21 +16,12 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Set | Cards | Lines | Parsed | Lowered | Executed | Cards executing |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-<<<<<<< HEAD
-| LEA | 290 | 388 | 87.4% | 86.1% | 49.0% | 173 |
-| LEB | 292 | 389 | 87.4% | 86.1% | 49.1% | 174 |
-| 2ED | 292 | 389 | 87.4% | 86.1% | 49.1% | 174 |
+| LEA | 290 | 388 | 88.1% | 86.3% | 49.2% | 174 |
+| LEB | 292 | 389 | 88.2% | 86.4% | 49.4% | 175 |
+| 2ED | 292 | 389 | 88.2% | 86.4% | 49.4% | 175 |
 | ARN | 78 | 108 | 77.8% | 74.1% | 51.9% | 46 |
 | ATQ | 85 | 120 | 90.8% | 90.8% | 63.3% | 68 |
-| 3ED | 296 | 389 | 89.2% | 87.4% | 51.2% | 179 |
-=======
-| LEA | 290 | 388 | 87.9% | 85.8% | 48.7% | 172 |
-| LEB | 292 | 389 | 87.9% | 85.9% | 48.8% | 173 |
-| 2ED | 292 | 389 | 87.9% | 85.9% | 48.8% | 173 |
-| ARN | 78 | 108 | 77.8% | 74.1% | 51.9% | 46 |
-| ATQ | 85 | 120 | 90.8% | 90.8% | 63.3% | 68 |
-| 3ED | 296 | 389 | 89.7% | 87.1% | 50.9% | 178 |
->>>>>>> usg-w2g4
+| 3ED | 296 | 389 | 89.7% | 87.4% | 51.2% | 179 |
 | LEG | 310 | 431 | 89.6% | 88.4% | 58.7% | 217 |
 | DRK | 119 | 167 | 96.4% | 96.4% | 73.7% | 101 |
 | FEM | 102 | 191 | 99.0% | 99.0% | 75.9% | 99 |
@@ -46,13 +37,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | STH | 143 | 215 | 88.4% | 88.4% | 62.8% | 124 |
 | EXO | 143 | 207 | 90.3% | 90.3% | 66.2% | 127 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-<<<<<<< HEAD
-| USG *(measured)* | 335 | 486 | 77.6% | 74.9% | 52.3% | 216 |
-| **All (shipped)** | **4873** | **7239** | **90.5%** | **89.9%** | **60.1%** | **3644** |
-=======
-| USG *(measured)* | 335 | 486 | 78.0% | 74.5% | 52.1% | 214 |
-| **All (shipped)** | **4873** | **7239** | **90.7%** | **89.8%** | **60.0%** | **3640** |
->>>>>>> usg-w2g4
+| USG *(measured)* | 335 | 486 | 79.6% | 77.0% | 54.1% | 224 |
+| **All (shipped)** | **4873** | **7239** | **90.7%** | **89.9%** | **60.1%** | **3647** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
 
@@ -64,15 +50,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-<<<<<<< HEAD
-| 433 | 194 | expected a subject |  |
-| 118 | 63 | unrecognized effect verb |  |
-| 92 | 49 | unconsumed text |  |
-=======
-| 426 | 192 | expected a subject |  |
-| 117 | 62 | unrecognized effect verb |  |
-| 101 | 55 | unconsumed text |  |
->>>>>>> usg-w2g4
+| 425 | 191 | expected a subject |  |
+| 116 | 61 | unrecognized effect verb |  |
+| 93 | 49 | unconsumed text |  |
 | 39 | 23 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 15 | 14 | expected 'unless defending player controls' |  |
@@ -94,15 +74,11 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 1 | expected 'the number of' in a where-clause |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
-| 2 | 2 | expected 'be' |  |
+| 2 | 2 | no cost path charges a narrowed sacrifice |  |
 
 ## Cards executing through the grammar
 
-<<<<<<< HEAD
-3644 cards, 4348 lines.
-=======
-3640 cards, 4344 lines.
->>>>>>> usg-w2g4
+3647 cards, 4351 lines.
 
 - **Abandon Hope**
   - `Look at target opponent's hand and choose X cards from it. That player discards those cards.`
