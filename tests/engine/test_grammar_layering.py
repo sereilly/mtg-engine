@@ -327,6 +327,20 @@ PARSE_LAYERS = [
     # object parser the unshared-colour clause reads, and below `triggers`,
     # which asks it and is never imported back.
     "trigger_casts",
+    # CR 120.4b's damage event and both its ends — who dealt it and who took
+    # it. The fifth split off `triggers` and the fifth along a line the family
+    # already had: one production reading one event, whose phrase tables are
+    # already a module further down. It went when Flesh Reaver's recipient
+    # union ("a creature **or opponent**") took `triggers` two lines past the
+    # guard below, and it is where the next damage-recipient spelling lands —
+    # which is the reason for cutting here rather than shaving the comment that
+    # crossed the line. Above `phrases`, whose subject-filter reader both ends
+    # of the event use, and below `triggers`, which asks it and is never
+    # imported back. No mirror name to reuse: `lowering/damage.py` is a whole
+    # family about the *effect* a sentence performs, and this reads the
+    # condition that fires one — the split `trigger_casts` already made against
+    # `lowering/cards.py`.
+    "trigger_damage",
     # The trigger tables and the productions that read them. Split out of
     # `phrases` when Antiquities' trigger work pushed that module past the
     # thousand-line guard below — above `phrases`, whose shared fragments it
@@ -1725,6 +1739,15 @@ FAMILY_SHARED = {
     # not an argument against it: the alternative was `life` importing `game`
     # or a second copy of a three-row seat table, and a seat table that
     # disagrees with itself lands an effect on the wrong player.
+    #
+    # It grew the *other* half of the same subject at USG's second wave, when
+    # Disorder's "each player who controls a white creature" took `damage` to
+    # fifteen lines under the guard: a recipient key says which seats a sentence
+    # acts on and a narrowing says which **of those**, both read off the same
+    # `ast.PlayerRef`, and the two stampers that carry one had no other home
+    # they could share. Third-party imports were the price and they are
+    # downward: `_common` for the two payload readers, which is where every
+    # other floor here reaches.
     "_seats",
     # `_records` split out of `categories` when *that* module crossed the guard:
     # it carried two registries with two different keys — which family a kind

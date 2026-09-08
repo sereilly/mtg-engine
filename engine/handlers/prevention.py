@@ -28,8 +28,10 @@ from ..shields import (
 )
 from ..divided_damage import DIVIDED_TARGETS, EVENLY, divide, divided_entry
 from ..next_damage import (DAMAGE_DOUBLED_NEXT, DAMAGE_PREVENTED_NEXT, arm)
-from ._common import (divided_target_permanent, recorded_permanent_ids, attached_host, bound_permanent, resolve_amount,
-                      resolve_target_permanent)
+from ._common import (divided_target_permanent, names_a_target_list,
+                      recorded_permanent_ids, attached_host, bound_permanent,
+                      resolve_amount, resolve_target_permanent,
+                      resolve_target_permanents)
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -997,6 +999,26 @@ def prevent_damage_to_target_until_eot(game: Game, instruction: OracleInstructio
             shielded += 1
         if not shielded:
             game.log.append(f"{context.card.name}: nothing was left to shield")
+        return True, "resolved"
+    # "Prevent all damage that would be dealt this turn to **up to two target
+    # creatures**." (Redeem.) The same shield armed once per chosen recipient,
+    # which is why it is this instruction with a several-target description
+    # rather than a second kind — the branch above already arms a set, and the
+    # only difference is where the set came from (a record an earlier step
+    # wrote, against a list the caster named at announcement).
+    #
+    # Resolved strictly, never through the singular reader's fallback scan: a
+    # per-slot fallback would shield whichever creature the scan reached first
+    # for a choice the caster made once, and an empty list is a legal outcome of
+    # "up to two" rather than an error (CR 601.2c, CR 608.2b).
+    if names_a_target_list(instruction):
+        chosen = resolve_target_permanents(
+            game, context, predicate=lambda p: p.is_creature,
+        )
+        for permanent in chosen:
+            arm(permanent)
+        if not chosen:
+            game.log.append(f"{context.card.name}: no creature to shield")
         return True, "resolved"
     # Through the innermost binding, so a shield printed inside a loop is armed
     # on the creature the iteration is on rather than on the first of the

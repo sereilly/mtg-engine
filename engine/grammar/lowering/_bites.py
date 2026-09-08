@@ -37,6 +37,7 @@ from ._common import (
     _is_source,
     _is_target,
     _restrictions_beyond,
+    testable_filter_payload,
 )
 from ._events import (_DAMAGED_PERMANENTS, _EVENT_SUBJECT_CONTROLLERS,
                       _EVENT_SUBJECT_OBJECTS, _RECORDED_PERMANENTS)
@@ -180,6 +181,49 @@ def lower_bite(
         payload: dict[str, object] = {"amount_from_source_power": True}
         _describe_targets(payload, node.recipients[0])
         return (OracleInstruction("deal_damage", "", payload),)
+    # "…it deals damage equal to its power to **each blocking creature**."
+    # (Electryte.) The same bite over a *described set* instead of one object:
+    # nothing is targeted and nobody picks, so it lands on the sweep handler
+    # (`lowering/_sweeps.py`'s kind) with the amount read at resolution rather
+    # than baked in — which is the whole reason it cannot simply go through that
+    # module, whose two sweeps refuse a computed amount outright.
+    #
+    # Creatures only, checked here for the reason `_sweeps` checks it: CR 120.1a
+    # says damage cannot be dealt to an object that is not a battle, a creature
+    # or a planeswalker, so a sweep written over "each permanent" would mark
+    # damage nothing could ever read. And every key of the printed noun phrase
+    # must be one `subject_matches` tests, because a narrowing the matcher drops
+    # burns a strictly larger board than the card prints.
+    sweep = node.recipients[0] if len(node.recipients) == 1 else None
+    if (
+        isinstance(node.amount, ast.ThatMuch)
+        and node.amount.source == "its_power"
+        and not node.amount.bonus
+        and node.source is not None
+        and _is_source(node.source)
+        and node.riders == ast.DamageRiders()
+        and node.per_each is None
+        and isinstance(sweep, ast.TargetSpec)
+        and not sweep.targeted
+        and sweep.quantifier in ("all", "each")
+    ):
+        if sweep.filter.card_types != ("creature",):
+            raise LoweringError(
+                "only a creature sweep is bitten by the printed noun phrase",
+                node=node,
+            )
+        described = testable_filter_payload(
+            sweep.filter,
+            refusal="the bite sweep cannot test this restriction",
+            node=node,
+            require_narrowing=False,
+        )
+        return (
+            OracleInstruction(
+                "deal_damage_each_matching", "",
+                {"amount_from_source_power": True, "filter": described},
+            ),
+        )
     # "…**it** deals damage equal to its power to **any target of their
     # choice**." (Pandemonium.) The bitten end is CR 115.4's union rather than a
     # permanent, which is why it is its own branch and not a filter on the one

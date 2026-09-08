@@ -1558,3 +1558,201 @@ def test_w2g4_the_substitution_is_the_defenders_own_and_not_an_opponents(set_poo
     game.current_step = "declare_blockers"
     assert game.declare_blockers(1, {0: 1, 1: 1})[0]
     assert not game._defender_assigns_attacker_damage(1)
+
+
+# --- W2G1: the static damage-modifiers, and the two seat-narrowed triggers ---
+from engine import Game as _G1Game, PlayerState as _G1PlayerState  # noqa: E402
+from engine.damage_events import deal_damage as _g1e_deal  # noqa: E402
+from engine.models import Permanent as _G1ePermanent  # noqa: E402
+from engine.oracle import compile_card_oracle as _g1e_compile  # noqa: E402
+from engine.game_types import OracleExecutionContext as _G1eContext  # noqa: E402
+
+from tests.helpers import resolve_stack as _g1e_resolve  # noqa: E402
+
+
+def _g1e_board(pool, mine=(), theirs=(), life=(20, 20), hands=(0, 0)):
+    """Two seats with sized hands. Ends on the control sync, which is this
+    block's own helper tail."""
+    game = _G1Game(players=[
+        _G1PlayerState(name="G1eA", battlefield=list(mine), life=life[0],
+                       hand=[pool["Remote Isle"]] * hands[0],
+                       library=[pool["Remote Isle"]] * 8),
+        _G1PlayerState(name="G1eB", battlefield=list(theirs), life=life[1],
+                       hand=[pool["Remote Isle"]] * hands[1],
+                       library=[pool["Remote Isle"]] * 8),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game._sync_control()
+    return game
+
+
+def test_w2g1_worship_floors_life_only_while_a_creature_is_there(set_pool):
+    """"If you control a creature, damage that would reduce your life total to
+    less than 1 reduces it to 1 instead."
+
+    Ali from Cairo's sentence with CR 611.2's condition in front of it, and the
+    condition is the whole test: the old reader was a *substring* test over the
+    controller's permanents, and Worship's line contains Ali from Cairo's
+    constant whole — so a Worship on an empty board would have floored the life
+    total of a player who controls nothing.
+
+    Both numbers are asserted, because the effect is CR 120.4c: the damage is
+    *dealt* in full and only its result is capped, which is what lifelink and
+    every "deals damage" trigger read.
+    """
+    pool = set_pool("USG")
+    worship = _G1ePermanent(card=pool["Worship"])
+    game = _g1e_board(pool, mine=[worship], life=(5, 20))
+    bare = _g1e_deal(game, {"recipient": game.players[0], "amount": 9, "source": None})
+    assert (bare.dealt, bare.result) == (9, 9), "no creature, no floor"
+
+    worship = _G1ePermanent(card=pool["Worship"])
+    creature = _G1ePermanent(card=pool["Coral Merfolk"])
+    game = _g1e_board(pool, mine=[worship, creature], life=(5, 20))
+    held = _g1e_deal(game, {"recipient": game.players[0], "amount": 9, "source": None})
+    assert held.dealt == 9, "CR 120.4b: the damage is dealt in full"
+    assert held.result == 4, "CR 120.4c: only the life lost is capped, at 1 life"
+
+
+def test_w2g1_sulfuric_vapors_adds_a_point_to_a_red_spell(set_pool):
+    """"If a red spell would deal damage to a permanent or player, it deals that
+    much damage plus 1 to that permanent or player instead."
+
+    Benevolent Unicorn's sentence one word apart, so the two are one signed
+    delta rather than twins. Two claims are tested: the addition, and the colour
+    — a green spell's damage is untouched, which is what keeps the narrowing from
+    being read and dropped.
+    """
+    pool = set_pool("USG")
+    vapors = _G1ePermanent(card=pool["Sulfuric Vapors"])
+    game = _g1e_board(pool, mine=[vapors])
+    game.players[0].hand.append(pool["Heat Ray"])
+    target = _G1ePermanent(card=pool["Blanchwood Treefolk"])
+    game._put_permanent_onto_battlefield(1, target, None)
+    game._sync_control()
+
+    assert game.cast_from_hand(
+        0, "Heat Ray", target_permanent_ids=[target.permanent_id], x_value=2
+    ).supported
+    _g1e_resolve(game)
+    assert target.damage_marked == 3, "a red spell's 2 becomes 3"
+
+
+def test_w2g1_the_damage_delta_reads_both_printed_directions():
+    """The matcher's own test, which the board cannot give: the sign is the
+    printed word, and the two halves of the sentence must name the **same**
+    recipients — a card reducing damage to a permanent and dealing the reduced
+    amount to a creature is not this effect and stays unclaimed."""
+    from engine.replacements import source_damage_delta
+
+    assert source_damage_delta(
+        "If a spell would deal damage to a permanent or player, it deals that "
+        "much damage minus 1 to that permanent or player instead."
+    ) == ("spell", -1)
+    assert source_damage_delta(
+        "If a red spell would deal damage to a permanent or player, it deals "
+        "that much damage plus 1 to that permanent or player instead."
+    ) == ("red spell", 1)
+    assert source_damage_delta(
+        "If a spell would deal damage to a permanent or player, it deals that "
+        "much damage plus 1 to that creature or player instead."
+    ) is None
+
+
+def test_w2g1_energy_field_shields_only_foreign_sources(set_pool):
+    """"Prevent all damage that would be dealt to you by sources you don't
+    control."
+
+    Glacial Chasm's blanket with a *relation* on it rather than a class of
+    object: CR 109.5 gives a source a controller, and the clause compares that
+    seat with the protected one. Dropped, the Field would shield its controller
+    from their own Flesh Reaver.
+    """
+    pool = set_pool("USG")
+    field = _G1ePermanent(card=pool["Energy Field"])
+    mine = _G1ePermanent(card=pool["Coral Merfolk"])
+    theirs = _G1ePermanent(card=pool["Coral Merfolk"])
+    game = _g1e_board(pool, mine=[field, mine], theirs=[theirs])
+
+    foreign = _g1e_deal(game, {"recipient": game.players[0], "amount": 3, "source": theirs})
+    own = _g1e_deal(game, {"recipient": game.players[0], "amount": 3, "source": mine})
+    assert foreign.dealt == 0, "a source they don't control is prevented"
+    assert own.dealt == 3, "their own source is not"
+
+
+def test_w2g1_energy_field_breaks_on_a_card_reaching_its_own_graveyard(set_pool):
+    """"When a card is put into your graveyard from anywhere, sacrifice this
+    enchantment."
+
+    The card reported *supported* the moment its prevention line was claimed,
+    with this trigger doing nothing at all — a card is supported when any of its
+    lines is. "Your" is the watching permanent's controller and never the card's
+    owner, so an opponent's own mill must not break it.
+    """
+    pool = set_pool("USG")
+    field = _G1ePermanent(card=pool["Energy Field"])
+    game = _g1e_board(pool, mine=[field])
+
+    game.put_card_into_graveyard(game.players[1], pool["Remote Isle"])
+    _g1e_resolve(game)
+    assert game.is_on_battlefield(field), "an opponent's graveyard is not yours"
+
+    game.put_card_into_graveyard(game.players[0], pool["Remote Isle"])
+    _g1e_resolve(game)
+    assert not game.is_on_battlefield(field), "a card reaching your graveyard breaks it"
+
+
+def test_w2g1_bulwark_deals_the_difference_between_two_hands(set_pool):
+    """"…deals X damage to target opponent, where X is the number of cards in
+    your hand minus the number of cards in that player's hand."
+
+    The first printed difference of two *counts*. Clamped at zero (CR 107.1b):
+    a smaller hand deals no damage rather than healing the opponent, and CR 120.8
+    makes a source that would deal 0 deal none at all.
+    """
+    pool = set_pool("USG")
+    for mine, theirs, expected in ((5, 2, 3), (2, 5, 0), (3, 3, 0)):
+        bulwark = _G1ePermanent(card=pool["Bulwark"])
+        game = _g1e_board(pool, mine=[bulwark], hands=(mine, theirs))
+        trig = _g1e_compile(bulwark.card).triggered_abilities[0]
+        game._execute_oracle_instruction(trig.instruction, _G1eContext(
+            card=bulwark.card, caster=game.players[0], target=game.players[1],
+            source_permanent=bulwark,
+        ))
+        assert game.players[1].life == 20 - expected, (mine, theirs, game.log)
+
+
+def test_w2g1_antagonism_spares_a_player_whose_opponent_was_hurt(set_pool):
+    """"…deals 2 damage to that player unless one of their opponents was dealt
+    damage this turn."
+
+    The first "unless" in the pool that is a *fact* rather than a price, and the
+    first condition read off the turn's damage ledger for a seat. Never a life
+    total: a life total is the turn's net, so a player dealt 4 who gained 4 has
+    been dealt damage and lost no life.
+
+    The third case is the one that makes the clause narrow rather than merely
+    present: damage dealt to the *end-step player themselves* is not damage to
+    one of their opponents, so the enchantment still fires.
+    """
+    pool = set_pool("USG")
+
+    def _run(hurt_seat, subject_seat):
+        antagonism = _G1ePermanent(card=pool["Antagonism"])
+        game = _g1e_board(pool, mine=[antagonism])
+        if hurt_seat is not None:
+            game._deal_damage_to_player(game.players[hurt_seat], 1, source=antagonism)
+        trig = _g1e_compile(antagonism.card).triggered_abilities[0]
+        game._execute_oracle_instruction(trig.instruction, _G1eContext(
+            card=antagonism.card, caster=game.players[0],
+            target=game.players[subject_seat], source_permanent=antagonism,
+            trigger_context={"event_subject_player": subject_seat},
+        ))
+        return [p.life for p in game.players]
+
+    assert _run(None, 0) == [18, 20], "nobody hurt: the end-step player takes 2"
+    assert _run(1, 0) == [20, 19], "their opponent was hurt: no damage"
+    assert _run(0, 0) == [17, 20], (
+        "the player's own damage is not one of their opponents'"
+    )

@@ -27,7 +27,7 @@ from engine import Game as _w2g3c_Game, PlayerState as _w2g3c_PlayerState  # noq
 from engine.card_loader import (load_cards as _w2g3c_load,  # noqa: E402
                                 manifest_set_path as _w2g3c_path)
 from engine.models import Permanent as _w2g3c_Permanent  # noqa: E402
-from engine.replacements import (source_damage_reduction  # noqa: E402
+from engine.replacements import (source_damage_delta  # noqa: E402
                                  as _w2g3c_reduction)
 
 from tests.helpers import _damage_dealt as _w2g3c_dealt  # noqa: E402
@@ -141,7 +141,7 @@ def test_w2g3_the_reduction_reads_its_own_sentence(set_pool):
     assert _w2g3c_reduction(
         "If a spell would deal damage to a permanent or player, it deals that "
         "much damage minus 1 to that permanent or player instead."
-    ) == ("spell", 1)
+    ) == ("spell", -1)
     assert _w2g3c_reduction(
         "If a spell would deal damage to a permanent or player, it deals that "
         "much damage minus 1 to that creature or player instead."

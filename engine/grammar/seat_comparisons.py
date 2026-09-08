@@ -200,6 +200,47 @@ def _accept_quantity(
     return dataclasses.replace(filt, zone=zone, is_card=True)
 
 
+def accept_player_control(stream: TokenStream, parse_filter):
+    """``who controls <noun phrase>`` at the cursor, or None.
+
+    "…deals 2 damage to each white creature and **each player who controls a
+    white creature**." (Disorder.) The *presence* member of this module's
+    family: the comparison below asks how a seat's count stands against another
+    seat's, and this asks only whether the seat controls anything the printed
+    phrase names.
+
+    Its own reader rather than a comparison with a margin of one, for the reason
+    that one states about itself — every word of a comparison is required and
+    nothing is defaulted, and this clause prints neither a direction nor a
+    reference seat. Tried **after** the comparison by every caller, because
+    "who controls" is a strict prefix of "who controls more creatures than they
+    do" and reading it first would leave the comparison's tail stranded.
+
+    Non-consuming on refusal, like every reader here, so a caller that does not
+    find the clause still owes the rest of its line to full-token consumption.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("who"):
+        return None
+    if not stream.accept_word("controls"):
+        stream.reset(mark)
+        return None
+    # The article, stripped here for ``postmodifiers``' reason one layer up: the
+    # noun parser reads what comes *after* a quantifier.
+    stream.accept_word("a", "an")
+    try:
+        described = parse_filter(stream)
+    except GrammarError:
+        described = None
+    if described is None or described == ast.ObjectFilter():
+        # A phrase that narrows nothing says only that the seat controls *a
+        # permanent*, which every player with a board already does — so it is
+        # not this clause and the words go back.
+        stream.reset(mark)
+        return None
+    return described
+
+
 def accept_player_comparison(
     stream: TokenStream, parse_filter,
 ) -> "ast.PlayerComparison | None":

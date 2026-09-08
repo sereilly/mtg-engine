@@ -11,6 +11,7 @@ from ._common import (recorded_permanent_ids,
     resolve_own_combatant,
     resolve_role_permanent,
     resolve_target_permanent,
+    names_a_target_list as _names_a_list,
     resolve_target_permanents,
     roles_still_legal,
 )
@@ -1321,26 +1322,6 @@ def grant_unblockable_to_target(game: Game, instruction: OracleInstruction, cont
         perm.permanent_id for perm in chosen
     ]
     return True, "resolved"
-
-
-def _names_a_list(instruction: OracleInstruction) -> bool:
-    """Whether the instruction's target description names more than one slot.
-
-    Read off the description the lowering wrote rather than off the choices the
-    resolution happens to carry: a two-target ability whose player named one
-    creature is still a two-target ability, and deciding by what arrived would
-    make the strict multi-slot resolution silently fall back to the forgiving
-    single-slot one.
-    """
-    targets = instruction.payload.get("targets")
-    if not isinstance(targets, dict):
-        return False
-    count = targets.get("count")
-    return (
-        count == "x"
-        or (isinstance(count, int) and count > 1)
-        or bool(targets.get("unbounded"))
-    )
 
 
 @effect_handler("target_cant_block_until_eot")

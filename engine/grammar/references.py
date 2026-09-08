@@ -253,37 +253,31 @@ def parse_player_ref(stream: TokenStream) -> ast.PlayerRef | None:
         # word is not in `_GENERIC_NOUNS` — that set is what a *noun phrase* may
         # head, and admitting it there would let "an ability" be parsed as a set
         # of objects the matcher cannot test.
-        if noun is not None and (
-            _singular(noun) in CARD_TYPES
-            or _singular(noun) in _GENERIC_NOUNS
-            or _singular(noun) in ALL_SUBTYPES
-            or _singular(noun) == "ability"
-        ):
+        if _heads_a_possessive(noun):
             stream.advance()
-            if stream.accept_word("'s"):
-                # "that **creature's or spell's** controller" (Justice). The
-                # event named *one* object — a red creature or a red spell —
-                # and English prints the possessive once per noun, so the
-                # alternation is two spellings of one referent rather than two
-                # referents. Whichever half the event was, the seat is the same
-                # one, which is why every branch below returns the same
-                # ``PlayerRef``. A loop rather than a second `or` clause: a
-                # third noun would be the same sentence again.
-                while stream.at_word("or"):
-                    alternative = stream.mark()
+            # "that **creature's or spell's** controller" (Justice) / "that
+            # **spell or ability's** controller" (Retromancer). The event named
+            # *one* object, so the alternation is two spellings of one referent
+            # and every branch below returns the same ``PlayerRef``. A loop
+            # rather than a second `or` clause: a third noun is this sentence
+            # again. English writes the possessive on every noun or on the last
+            # alone, and both cards are printed — so the marker is optional per
+            # noun and required *somewhere*, which is what keeps "that creature
+            # or player", a disjunction of two different referents that other
+            # productions read, out of this production.
+            saw_possessive = stream.accept_word("'s")
+            while stream.at_word("or"):
+                alternative = stream.mark()
+                stream.advance()
+                other = stream.peek_word()
+                if _heads_a_possessive(other):
                     stream.advance()
-                    other = stream.peek_word()
-                    if other is not None and (
-                        _singular(other) in CARD_TYPES
-                        or _singular(other) in _GENERIC_NOUNS
-                        or _singular(other) in ALL_SUBTYPES
-                        or _singular(other) == "ability"
-                    ):
-                        stream.advance()
-                        if stream.accept_word("'s"):
-                            continue
-                    stream.reset(alternative)
-                    break
+                    if stream.accept_word("'s"):
+                        saw_possessive = True
+                        continue
+                stream.reset(alternative)
+                break
+            if saw_possessive:
                 if stream.accept_word("controller"):
                     return ast.PlayerRef("that_player")
                 # "…under the control of **that creature's owner**"
@@ -297,6 +291,26 @@ def parse_player_ref(stream: TokenStream) -> ast.PlayerRef | None:
 
     stream.reset(mark)
     return None
+
+
+def _heads_a_possessive(noun: str | None) -> bool:
+    """Whether *noun* can head a "…'s controller/owner" phrase.
+
+    One reader rather than the same four-way disjunction spelled twice, which
+    is what let a head noun and its alternatives drift while looking identical.
+    ``ability`` is listed here and not in ``_GENERIC_NOUNS`` because an ability
+    on the stack is an object with a controller (CR 113.7a) and no card, and
+    that set is what a *noun phrase* may head (Ayesha Tanaka).
+    """
+    if noun is None:
+        return False
+    singular = _singular(noun)
+    return (
+        singular in CARD_TYPES
+        or singular in _GENERIC_NOUNS
+        or singular in ALL_SUBTYPES
+        or singular == "ability"
+    )
 
 
 def _at_counted_target(stream: TokenStream) -> bool:

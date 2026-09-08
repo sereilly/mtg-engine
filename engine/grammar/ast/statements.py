@@ -378,6 +378,16 @@ class Conditional:
     condition: Condition
     then: "Statement"
     otherwise: "Statement | None" = None
+    # "…deals 2 damage to that player **unless** one of their opponents was
+    # dealt damage this turn." (Antagonism.) The printed word that inverts which
+    # branch the effect is on, and a flag rather than a negation wrapped round
+    # the condition because negation is not something every condition node
+    # carries — the lowering swaps the branches instead, which is one place and
+    # works for the whole vocabulary.
+    #
+    # ``otherwise`` is never set beside it: an "unless" puts the body on the
+    # false branch, and that branch is exactly what ``otherwise`` means.
+    negated: bool = False
 
 
 @dataclass(frozen=True)

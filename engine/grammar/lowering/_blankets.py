@@ -30,6 +30,7 @@ from ..errors import LoweringError
 from ._common import (
     _REST_OF_COMBAT,
     _REST_OF_TURN,
+    _describe_several_targets,
     _describe_targets,
     _filter_payload,
     _is_source,
@@ -324,7 +325,12 @@ def _lower_prevent_all(
         # branch below reads the record the untap wrote and arms one shield per
         # permanent — the *same* shield, several times, which is what makes it
         # this instruction with a payload key rather than a second kind.
-        and node.to.quantifier in ("it", "target", "that", "those")
+        # "…to **up to two target creatures**." (Redeem.) A *list* of chosen
+        # recipients rather than one, which is the same shield armed several
+        # times — so it joins this branch with a several-target description
+        # rather than becoming a second kind, exactly as "those creatures"
+        # below does for the list an earlier step recorded.
+        and node.to.quantifier in ("it", "target", "that", "those", "up_to")
         and (node.dealt_by is None or node.to_and_by)
     ):
         if node.duration.kind not in _REST_OF_TURN + _REST_OF_COMBAT:
@@ -390,7 +396,7 @@ def _lower_prevent_all(
                 "a bound object carries no narrowing the shield could honour",
                 node=node,
             )
-        if node.to.quantifier == "target":
+        if node.to.quantifier in ("target", "up_to"):
             # The handler's predicate is `is_creature` and nothing else, so a
             # shield printed over a player or over a narrowed noun phrase would
             # arm on the wrong object — or on none — while the card reported as
@@ -403,7 +409,18 @@ def _lower_prevent_all(
                     "creature",
                     node=node,
                 )
-            _describe_targets(payload, node.to)
+            if node.to.quantifier == "up_to":
+                # "…to **up to two** target creatures" (Redeem). CR 601.2c's
+                # variable target count, and an **opt-in** on this call site:
+                # `_describe_several_targets` is what tells the picker to
+                # collect a list and the handler to resolve one, and the
+                # handler below reads the same description back through
+                # `names_a_target_list`. Described with the ordinary reader
+                # instead, the picker would offer one creature and the printed
+                # "up to two" would be a word nothing carried.
+                _describe_several_targets(payload, node.to)
+            else:
+                _describe_targets(payload, node.to)
         return (
             OracleInstruction(
                 "prevent_damage_to_target_until_eot", "", payload,

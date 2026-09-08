@@ -43,6 +43,7 @@ from .trigger_subjects import (
     _parse_named_subject_tap_event,
 )
 from .trigger_casts import _parse_cast_event
+from .trigger_damage import _parse_damage_dealt_event
 from .trigger_tables import (
     _WHENEVER_EVENTS,
     _BARE_BOARD_WIDE_BLOCK_EVENTS,
@@ -50,7 +51,6 @@ from .trigger_tables import (
     _FILTERED_EVENTS,
     _SUBJECT_LED_EVENTS,
     _AT_EVENTS,
-    _DAMAGE_RECIPIENTS,
     _DAMAGER_NOUNS,
 )
 
@@ -91,123 +91,6 @@ def accept_event_phrase(stream: TokenStream, phrase: tuple[str, ...]) -> bool:
             return False
         index += 1
     return True
-
-
-def _parse_damage_dealt_event(
-    stream: TokenStream, word: str
-) -> ast.TriggerEvent | None:
-    """"Whenever <someone> deals [combat|noncombat] damage [to <someone>]" —
-    CR 120.4b's event, whoever dealt it and whoever took it.
-
-    One production for what was five phrase-table entries and two subject-led
-    ones, because they are one event asked with different narrowings. Both are
-    read here and carried on the node: the damager (the source itself, the
-    permanent this Aura enchants, any source a player controls, or a noun
-    phrase) and the recipient. `engine/oracle.py`'s table names the same groups,
-    and `engine/damage_events.py` announces the event once for all of them.
-
-    Tried before the phrase table, whose remaining entries would claim these
-    lines' prefixes, and before the subject-led table, which reads a noun phrase
-    speculatively and would take "a creature you control with deathtouch" for an
-    attack trigger's subject.
-    """
-    mark = stream.mark()
-    subject: ast.ObjectFilter | None = None
-    narrowings: tuple[tuple[str, ast.ObjectFilter], ...] = ()
-    if stream.at_kind(SELF) or stream.at_word("this"):
-        stream.advance()
-        if not stream.at_kind(SELF):
-            stream.accept_word(*_DAMAGER_NOUNS)
-        subject = ast.ObjectFilter(is_source=True)
-    elif stream.accept_word("enchanted"):
-        if stream.peek_word() is None:
-            stream.reset(mark)
-            return None
-        stream.advance()
-        subject = ast.ObjectFilter(is_enchanted=True)
-    elif stream.accept_phrase("a", "source", "you", "control"):
-        # "A source you control" is a *seat*, not a set of permanents: a spell
-        # is a source too, and no ObjectFilter can name one. The narrowing rides
-        # the controller field, which is what the dispatcher reads.
-        subject = ast.ObjectFilter(controller="you")
-    else:
-        subject = parse_subject_filter_at(stream)
-        if subject is None:
-            stream.reset(mark)
-            return None
-        # "…a red creature **or spell** deals damage" (Justice). One object
-        # under two nouns; the union narrows the *condition* rather than this
-        # node (the division of labour the graveyard clause below states), so
-        # all that is owed here is consuming the words — left on the stream the
-        # line fails full-token consumption and the card loses the ability.
-        spell_union = stream.mark()
-        if not (stream.accept_word("or") and stream.accept_word("spell")):
-            stream.reset(spell_union)
-    if not stream.accept_word("deals"):
-        stream.reset(mark)
-        return None
-    stream.accept_word("combat", "noncombat")
-    if not stream.accept_word("damage"):
-        stream.reset(mark)
-        return None
-    if stream.accept_word("to"):
-        for phrase, _recipient in _DAMAGE_RECIPIENTS:
-            if stream.accept_phrase(*phrase):
-                break
-        else:
-            # "…deals damage **to a creature**" (Bellowing Fiend). A recipient
-            # that is an object rather than a seat: every phrase in the table
-            # above names a player or a planeswalker, so a noun phrase has no
-            # entry there and cannot get one — the table is fixed words and this
-            # is anything the noun parser reads.
-            #
-            # Carried under the same ``damaged`` stem the union below uses, so
-            # the two front ends describe one narrowing one way
-            # (``test_a_narrowed_trigger_reads_the_same_subject_on_both_sides``).
-            # Returned here rather than falling through, because the union
-            # clause below is about a *second* half this branch has already
-            # consumed the whole of.
-            #
-            # A phrase the noun parser refuses still refuses the line, which is
-            # the lock this else-branch has always been: a recipient consumed as
-            # nothing is a trigger firing on every damage event in the game.
-            damaged_only = parse_subject_filter_at(stream)
-            if damaged_only is None:
-                stream.reset(mark)
-                return None
-            return ast.TriggerEvent(
-                "damage_dealt", word, subject=subject,
-                narrowings=(("damaged", damaged_only),),
-            )
-        # "…deals damage to **you or a white creature you control**"
-        # (Mangara's Equity). A seat word and a noun phrase naming one
-        # recipient between them: the table above matched the seat, and the
-        # object half is read here. Left on the stream it fails full-token
-        # consumption and the card loses the whole ability, which is what it
-        # did.
-        #
-        # **Carried, not merely consumed**, which is where this differs from
-        # Justice's "or spell" above: that word narrows nothing the noun parser
-        # reads, and this is a whole printed phrase. `engine/oracle.py`'s table
-        # delimits it as a `damaged_subject` group, so the grammar records it
-        # under the same stem — a phrase one front end consumed and the other
-        # tested is a card whose two halves watch different sets, which is
-        # exactly what `test_a_narrowed_trigger_reads_the_same_subject_on_both_sides`
-        # is there to catch.
-        #
-        # All-or-nothing, so "…to you or an opponent" — a union of two seats,
-        # which the condition table does not name — rewinds and leaves the line
-        # refusing rather than silently dropping the second half.
-        union = stream.mark()
-        if stream.accept_word("or"):
-            damaged = parse_subject_filter_at(stream)
-            if damaged is None:
-                stream.reset(union)
-            else:
-                narrowings = (("damaged", damaged),)
-    return ast.TriggerEvent(
-        "damage_dealt", word, subject=subject, narrowings=narrowings
-    )
 
 
 def _accept_land_tapped_for_mana_by_a_player(
@@ -878,6 +761,17 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
             return ast.TriggerEvent(
                 "self_put_into_graveyard_from_library", "when"
             )
+        # "When **a card is put into your graveyard from anywhere**" (Energy
+        # Field). The row above with any card for its object and every zone for
+        # its source — a permanent watching its controller's graveyard rather
+        # than a card watching itself. Read on this front end too, for the
+        # reason every condition around it is: a condition only one of them
+        # sees leaves the other refusing the effect behind it.
+        if stream.accept_phrase(
+            "a", "card", "is", "put", "into", "your", "graveyard",
+            "from", "anywhere",
+        ):
+            return ast.TriggerEvent("card_put_into_graveyard", "when")
         # "When you control **no Islands** / **no Forests**, sacrifice this
         # creature." (Sea Serpent, Island Fish Jasconius; Gorilla Pack in Ice
         # Age.) The negative twin of `controls_matching_permanent` below, and

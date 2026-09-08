@@ -374,7 +374,12 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      # That is exactly what it did — Mangara's Equity's third sentence compiled
      # to nothing at all.
      r"(?P<damage_recipient>a player or planeswalker|a player"
-     r"|an opponent|a planeswalker|you)"
+     # "…to **defending player**" (Electryte). CR 506.2's seat, printed with no
+     # article — the one recipient word naming a relation to the *combat*
+     # rather than to the ability's controller. Beside the others here because
+     # it is a fixed word like them, and tested in `events.py` against the
+     # attack declaration.
+     r"|an opponent|a planeswalker|defending player|you)"
      # "…deals damage **to a creature**" (Bellowing Fiend). A recipient that is
      # an *object*: none of the fixed words above can say it, because every one
      # of them names a player or a planeswalker. Delimited as a `damaged_subject`
@@ -394,7 +399,21 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      # still reaches here — the fixed branch matches "you", the comma bound
      # then fails, and the alternation backtracks into this one.
      r"|(?:(?P<damage_recipient_seat>you|an opponent) or )?"
-     r"(?P<damaged_subject>an? [^,]+)"
+     # "…deals damage to **a creature or opponent**" (Flesh Reaver). The same
+     # union with the two halves printed the other way round, and English drops
+     # the second article when it does — so the seat word is a bare one here
+     # and the noun phrase is lazy, letting the suffix take the last "or …"
+     # only when that word really is a seat. A colour disjunction inside the
+     # phrase ("a green or white creature") never reaches it: the alternation
+     # below names seats and nothing else, so the lookahead fails and the lazy
+     # phrase simply grows.
+     #
+     # A second group name rather than a second use of the one above, because
+     # Python forbids repeating one — `events.py` folds the two spellings back
+     # into a single seat before testing, so the word order is not a second
+     # answer to "whose damage was this".
+     r"(?P<damaged_subject>an? [^,]+?)"
+     r"(?: or (?P<damage_recipient_seat_after>opponent|you))?"
      r"))?(?=,|$)"),
     # "…blocks **or becomes blocked by** a non-Wall creature" (Thicket Basilisk,
     # Cockatrice), "…by a green or white creature" (Abomination), "…by a
@@ -1463,6 +1482,15 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # swallow any line ending in the word.
     ("self_put_into_graveyard_from_library",
      r"when this card is put into your graveyard from your library"),
+    # "When **a card** is put into your graveyard **from anywhere**, sacrifice
+    # this enchantment." (Energy Field.) Not the row above and not a death:
+    # the object is any card, the destination is the watcher's own graveyard,
+    # and "from anywhere" names every source zone there is — which is exactly
+    # the seam ``Game.put_card_into_graveyard`` was built to be (CR 903.9b's
+    # argument, one zone over). Above the bare "dies" row for that row's stated
+    # reason: its ``.+`` would otherwise swallow this clause whole.
+    ("card_put_into_graveyard",
+     r"when a card is put into your graveyard from anywhere"),
     # "When this creature dies **during combat**, …" (Mongrel Pack). CR 506.1's
     # phase, asked of the death rather than of the creature: the same death, in
     # a different part of the turn, is a different card. The marker is an empty

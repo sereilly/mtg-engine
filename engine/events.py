@@ -366,6 +366,24 @@ def _moved_card_only_filter(
     return False
 
 
+@event_filter("card_put_into_graveyard")
+def _card_into_your_graveyard_filter(
+    game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event
+) -> bool:
+    """"When a card is put into **your** graveyard from anywhere, sacrifice
+    this enchantment." (Energy Field.)
+
+    "Your" is the watching permanent's controller (CR 109.5), never the card's
+    owner and never the seat that caused the move — an opponent milling their
+    own library must not break the Field, and the same card going to *its*
+    controller's graveyard must, however it got there.
+
+    Read through the control seam, so a Field somebody has taken control of
+    watches **their** graveyard from the moment they take it (CR 613 layer 2).
+    """
+    return game.controller_index_of(permanent) == event.payload.get("owner_index")
+
+
 @event_filter("you_play_card")
 def _controller_played_card_filter(
     game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event
@@ -950,19 +968,47 @@ def _nonmana_ability_activated_filter(
 # walker half already read — plus the observing permanent's seat, because
 # "you" and "an opponent" are CR 109.5 questions about the trigger's own
 # controller.
+#: What each printed recipient word means, tested against the event's recipient
+#: and the seat that took the damage.
+#:
+#: Every row takes the *game* as well, and only one row reads it — "defending
+#: player" is the one word here that names a relation to the **combat** rather
+#: than to the ability's controller, and no fact carried on the event can
+#: answer it. A widened signature rather than a second table or a parked
+#: reference: five rows ignoring an argument is cheaper than two tables that can
+#: disagree about which words this engine tests.
 _DAMAGE_RECIPIENT_TESTS = {
-    "a player": lambda recipient, seat, observer: _is_player(recipient),
-    "an opponent": lambda recipient, seat, observer: (
+    "a player": lambda game, recipient, seat, observer: _is_player(recipient),
+    "an opponent": lambda game, recipient, seat, observer: (
         _is_player(recipient) and seat != observer
     ),
-    "you": lambda recipient, seat, observer: (
+    "you": lambda game, recipient, seat, observer: (
         _is_player(recipient) and seat == observer
     ),
-    "a planeswalker": lambda recipient, seat, observer: _is_walker(recipient),
-    "a player or planeswalker": lambda recipient, seat, observer: (
+    "a planeswalker": lambda game, recipient, seat, observer: _is_walker(recipient),
+    "a player or planeswalker": lambda game, recipient, seat, observer: (
         _is_player(recipient) or _is_walker(recipient)
     ),
+    # "…deals combat damage to **defending player**" (Electryte). CR 506.2: the
+    # player the attack was declared against. Deliberately not a spelling of
+    # "an opponent" — in a multiplayer game an attacker's controller has
+    # opponents who are not defending this combat, and the printed word names
+    # exactly the one who is. Outside combat there is no such seat and the word
+    # matches nothing, which is the honest answer for a condition that also
+    # requires combat damage.
+    "defending player": lambda game, recipient, seat, observer: (
+        _is_player(recipient)
+        and seat is not None
+        and seat == getattr(game, "combat_defending_player_index", None)
+    ),
 }
+
+
+#: The bare seat words a recipient union may end with, mapped to the spelling
+#: :data:`_DAMAGE_RECIPIENT_TESTS` is keyed by. "a creature **or opponent**"
+#: (Flesh Reaver) is "an opponent" with the article left out because the phrase
+#: in front of it already carried one.
+_SUFFIX_SEAT_WORDS = {"opponent": "an opponent", "you": "you"}
 
 
 def _is_player(recipient) -> bool:
@@ -1068,9 +1114,19 @@ def _damage_dealt_filter(
     # is what keeps a union payload from falling through to "no narrowing" and
     # firing on every point of damage in the game.
     union_seat = payload.get("damage_recipient_seat")
+    if union_seat is None:
+        # "…to a creature **or opponent**" (Flesh Reaver). The seat half printed
+        # after the noun phrase, where English drops its article — folded to the
+        # spelling the seat-first arm produces so both word orders reach the one
+        # test below rather than growing a second branch that could disagree.
+        union_seat = _SUFFIX_SEAT_WORDS.get(
+            payload.get("damage_recipient_seat_after")
+        )
     if union_seat is not None:
         if _is_player(recipient):
-            return bool(_DAMAGE_RECIPIENT_TESTS[union_seat](recipient, seat, observer))
+            return bool(
+                _DAMAGE_RECIPIENT_TESTS[union_seat](game, recipient, seat, observer)
+            )
         return trigger_subject_matches(
             game, trig, "damaged", recipient, observer=observer, source=permanent,
         )
@@ -1094,7 +1150,7 @@ def _damage_dealt_filter(
                 observer=observer, source=permanent,
             )
         return True
-    return bool(test(recipient, seat, observer))
+    return bool(test(game, recipient, seat, observer))
 
 
 @event_filter("counters_put_on_creature")

@@ -228,6 +228,12 @@ def _accept_record_condition(stream: TokenStream) -> "ast.Condition | None":
     the parser cannot see the sentence in front of it, and every node here is
     refused downstream unless a step of the same effect declared the producer.
     """
+    # "…unless **one of their opponents was dealt damage this turn**"
+    # (Antagonism). Probed first because it opens on "one", which no other
+    # branch here reads, and it refuses without consuming like all of them.
+    seat_damage = _accept_seat_damage_record(stream)
+    if seat_damage is not None:
+        return seat_damage
     # "if this permanent **came under your control since the beginning of your
     # last upkeep**" — CR 702.30a, the whole of what echo adds to a sentence
     # this grammar already read (``engine/echo.py`` rewrites the keyword line
@@ -573,6 +579,50 @@ def _accept_record_condition(stream: TokenStream) -> "ast.Condition | None":
         _parse_duration(stream)
         return ast.ReturnedToHandThisTurn()
     return None
+
+
+#: Whose opponents "one of <possessive> opponents" names, as the referent the
+#: lowering resolves. "Their" is the seat the firing event was about (CR 603.10,
+#: frozen by the fire site); "your" is the ability's controller (CR 109.5). A
+#: table rather than one printed word, because the two spellings are the same
+#: sentence about two different seats and welding either in would make the other
+#: unprintable.
+_OPPONENT_POSSESSIVES: dict[str, str] = {
+    "their": "that_player",
+    "your": "you",
+}
+
+
+def _accept_seat_damage_record(stream: TokenStream) -> "ast.Condition | None":
+    """``one of <their|your> opponents was dealt damage this turn`` — or None.
+
+    "…this enchantment deals 2 damage to that player **unless one of their
+    opponents was dealt damage this turn**." (Antagonism.)
+
+    A record clause like every other in this reader: no board read answers it,
+    because a life total is the turn's net and a player dealt 4 who then gained
+    4 has still been dealt damage. ``engine/damage_ledger.py`` is what keeps it.
+
+    Non-consuming on refusal, so the dispatcher's next branch keeps its say.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("one", "of"):
+        return None
+    referent = _OPPONENT_POSSESSIVES.get(stream.peek_word() or "")
+    if referent is None:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    if not stream.accept_word("opponents"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("was", "dealt", "damage", "this", "turn"):
+        # The seat class is read and the record is not: some other sentence
+        # about the same players, which this must leave whole rather than
+        # consume half of.
+        stream.reset(mark)
+        return None
+    return ast.SeatWasDealtDamageThisTurn(referent)
 
 
 def _accept_exiled_object_reference(stream: TokenStream) -> bool:

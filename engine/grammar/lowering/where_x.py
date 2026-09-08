@@ -153,6 +153,28 @@ def lower_where_x(
     # expresses, so it falls to the refusal below rather than being read as its
     # own negation.
     plus = 0
+    # "…where X is the number of cards in your hand **minus the number of cards
+    # in that player's hand**." (Bulwark.) A count taken off a count, which no
+    # key above can say: ``plus`` is a printed constant and the two sides here
+    # are both quantities read at resolution. So the right-hand count becomes a
+    # nested spec the evaluator takes and subtracts, clamped at zero where every
+    # other quantity in this engine is (CR 107.1b: no card prints a negative
+    # amount, and a hand smaller than the opponent's deals no damage rather than
+    # healing them).
+    #
+    # Read before the constant arm below, which would otherwise see a `Minus`
+    # whose right side is not `Fixed`, leave it alone, and fall through to
+    # "only a count can define X in a where-clause".
+    subtracted: dict | None = None
+    if (
+        isinstance(definition, ast.Minus)
+        and isinstance(definition.left, ast.CountOf)
+        and isinstance(definition.right, ast.CountOf)
+    ):
+        subtracted = count_spec(
+            _count_filter_for(definition.right.filter, inner, node, event), node
+        )
+        definition = definition.left
     if isinstance(definition, (ast.Plus, ast.Minus)):
         sign = -1 if isinstance(definition, ast.Minus) else 1
         left, right = definition.left, definition.right
@@ -174,6 +196,8 @@ def lower_where_x(
                       multiplier=factor)
     if plus:
         spec["plus"] = plus
+    if subtracted is not None:
+        spec["minus_count"] = subtracted
     if node.as_cast:
         # And **whose** board, which is the half a cast-time count has to settle
         # that a resolution-time one does not. At the announcement nothing has

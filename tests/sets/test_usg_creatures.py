@@ -712,3 +712,144 @@ def test_w2g4_the_tap_picker_narrows_to_the_seat_the_trigger_froze(set_pool):
         triggered=True,
     )
     assert [entry["name"] for entry in offered] == ["G4B Theirs"]
+
+
+# --- W2G1: the damage path — dealing it, preventing it, replacing it ---
+from engine import Game, PlayerState  # noqa: E402
+from engine.damage_events import deal_damage as _g1_deal  # noqa: E402
+from engine.models import Permanent as _G1Permanent  # noqa: E402
+
+from tests.helpers import resolve_stack as _g1_resolve  # noqa: E402
+
+
+def _g1_board(pool, mine=(), theirs=(), life=(20, 20)):
+    """Two seats, control synced, nothing enforced. Ends on the sync so no
+    other block's helper tail matches this one."""
+    game = Game(players=[
+        PlayerState(name="G1A", battlefield=list(mine), life=life[0],
+                    library=[pool["Remote Isle"]] * 8),
+        PlayerState(name="G1B", battlefield=list(theirs), life=life[1],
+                    library=[pool["Remote Isle"]] * 8),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game._sync_control()
+    return game
+
+
+def test_w2g1_fog_bank_shields_both_ends_of_combat_damage(set_pool):
+    """"Prevent all combat damage that would be dealt to and dealt by this
+    creature."
+
+    The static form of the two-way shield ten other cards *resolve* onto a
+    creature, printed about the creature itself. Both directions and the printed
+    word "combat" are separate claims and each is tested: a shield answering only
+    one end would make Fog Bank either unkillable or harmless rather than both,
+    and one that ignored "combat" would stop a burn spell the card says nothing
+    about.
+    """
+    pool = set_pool("USG")
+    fog = _G1Permanent(card=pool["Fog Bank"])
+    other = _G1Permanent(card=pool["Coral Merfolk"])
+    game = _g1_board(pool, mine=[fog], theirs=[other])
+
+    to_it = _g1_deal(game, {"recipient": fog, "amount": 2, "source": other, "combat": True})
+    by_it = _g1_deal(game, {"recipient": other, "amount": 2, "source": fog, "combat": True})
+    burn = _g1_deal(game, {"recipient": fog, "amount": 2, "source": other, "combat": False})
+
+    assert to_it.dealt == 0, "combat damage dealt to it is prevented"
+    assert by_it.dealt == 0, "combat damage dealt by it is prevented"
+    assert burn.dealt == 2, "the printed word is 'combat'; a burn spell still lands"
+
+
+def test_w2g1_flesh_reaver_bites_its_own_controller(set_pool):
+    """"Whenever this creature deals damage to a creature or opponent, this
+    creature deals that much damage to you."
+
+    The recipient union printed the other way round from Mangara's Equity, with
+    the article on the noun and the seat word bare. Both halves are tested, and
+    so is the seat the union does **not** name: damage to the Reaver's own
+    controller is neither a creature nor one of their opponents, so it must not
+    fire — a trigger that did would double every point.
+    """
+    pool = set_pool("USG")
+    reaver = _G1Permanent(card=pool["Flesh Reaver"])
+    game = _g1_board(pool, mine=[reaver])
+    _g1_deal(game, {"recipient": game.players[1], "amount": 4, "source": reaver})
+    _g1_resolve(game)
+    assert game.players[0].life == 16, "4 to an opponent is 4 back to you"
+
+    reaver = _G1Permanent(card=pool["Flesh Reaver"])
+    victim = _G1Permanent(card=pool["Coral Merfolk"])
+    game = _g1_board(pool, mine=[reaver], theirs=[victim])
+    _g1_deal(game, {"recipient": victim, "amount": 2, "source": reaver})
+    _g1_resolve(game)
+    assert game.players[0].life == 18, "a creature is the other half of the union"
+
+    reaver = _G1Permanent(card=pool["Flesh Reaver"])
+    game = _g1_board(pool, mine=[reaver])
+    _g1_deal(game, {"recipient": game.players[0], "amount": 3, "source": reaver})
+    _g1_resolve(game)
+    assert game.players[0].life == 20, (
+        "its own controller is neither a creature nor one of their opponents"
+    )
+
+
+def test_w2g1_electryte_bites_the_blockers_with_its_power(set_pool):
+    """"Whenever this creature deals combat damage to defending player, it deals
+    damage equal to its power to each blocking creature."
+
+    Three claims, three assertions. The amount is a *read* of the dealer at
+    resolution (CR 613's computed power); the set is the printed noun phrase and
+    not every creature; and the condition names combat damage, so a ping from the
+    same creature to the same seat fires nothing.
+    """
+    pool = set_pool("USG")
+    electryte = _G1Permanent(card=pool["Electryte"])
+    blocker = _G1Permanent(card=pool["Blanchwood Treefolk"])
+    idle = _G1Permanent(card=pool["Blanchwood Treefolk"])
+    game = _g1_board(pool, mine=[electryte], theirs=[blocker, idle])
+    game.combat_defending_player_index = 1
+    blocker.blocking_attacker_index = 0
+
+    _g1_deal(game, {"recipient": game.players[1], "amount": 3,
+                    "source": electryte, "combat": True})
+    _g1_resolve(game)
+
+    assert electryte.effective_power == 3
+    assert blocker.damage_marked == 3, "the amount is the dealer's power"
+    assert idle.damage_marked == 0, "the phrase says 'blocking', and it is tested"
+
+    quiet = _G1Permanent(card=pool["Electryte"])
+    bystander = _G1Permanent(card=pool["Blanchwood Treefolk"])
+    game = _g1_board(pool, mine=[quiet], theirs=[bystander])
+    game.combat_defending_player_index = 1
+    bystander.blocking_attacker_index = 0
+    _g1_deal(game, {"recipient": game.players[1], "amount": 3,
+                    "source": quiet, "combat": False})
+    _g1_resolve(game)
+    assert bystander.damage_marked == 0, "the condition says combat damage"
+
+
+def test_w2g1_retromancer_burns_whoever_pointed_at_it(set_pool):
+    """"Whenever this creature becomes the target of a spell or ability, this
+    creature deals 3 damage to that spell or ability's controller."
+
+    The referent is the seat that announced the targeting object (CR 109.5),
+    frozen by the fire site — not the Retromancer's controller and not whoever
+    happens to be resolving. Heat Ray still resolves, which is what makes the
+    seat readable at all: by then the spell has left the stack (CR 603.10) and
+    only the frozen record answers.
+    """
+    pool = set_pool("USG")
+    retro = _G1Permanent(card=pool["Retromancer"])
+    game = _g1_board(pool, mine=[retro])
+    game.players[1].hand.append(pool["Heat Ray"])
+
+    assert game.cast_from_hand(
+        1, "Heat Ray", target_permanent_ids=[retro.permanent_id], x_value=1
+    ).supported
+    _g1_resolve(game)
+
+    assert game.players[1].life == 17, "the spell's controller takes the 3"
+    assert game.players[0].life == 20, "and the Retromancer's does not"

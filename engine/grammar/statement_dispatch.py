@@ -801,12 +801,23 @@ def lower_statement(
 
     if isinstance(statement, ast.Conditional):
         then = lower_statement(statement.then, produced, event=event, event_subject=event_subject, whole_effect=False)
-        if _guard_is_the_arms_own_precondition(statement.condition, then):
+        if not statement.negated and _guard_is_the_arms_own_precondition(
+            statement.condition, then
+        ):
             return then
         otherwise = (
             lower_statement(statement.otherwise, produced, event=event, event_subject=event_subject, whole_effect=False)
             if statement.otherwise else ()
         )
+        if statement.negated:
+            # "<body> **unless** <condition>" (Antagonism). The body is what
+            # happens when the condition does *not* hold, which is exactly the
+            # false branch — so the two are swapped here rather than by a
+            # negation each condition node would have to carry. The
+            # precondition shortcut above is skipped for the same reason: it
+            # answers "this guard is the arm's own precondition", which is a
+            # statement about the *true* branch.
+            then, otherwise = otherwise, then
         return (
             OracleInstruction(
                 "if_then", "",

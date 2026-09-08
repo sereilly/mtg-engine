@@ -135,6 +135,27 @@ def count_from_payload(
     (Alpine Houndmaster) excludes it, and `permanent_matches_filter` cannot —
     that is an identity comparison, not a property of a permanent.
     """
+    # "…where X is the number of cards in your hand **minus the number of cards
+    # in that player's hand**." (Bulwark.) A whole second count taken off this
+    # one, which is why it is a nested spec rather than another scalar key on
+    # this one: both sides are read at resolution, with their own zones and
+    # their own owners, and this function is the only thing that can read
+    # either.
+    #
+    # Taken at the top, over the *finished* left-hand value, so every branch
+    # below — a board scan, a payment record, a scratchpad read — is subtracted
+    # from without knowing it can be. Clamped at zero where every quantity in
+    # this engine is (CR 107.1b): a hand smaller than the opponent's deals no
+    # damage rather than healing them.
+    subtracted = spec.get("minus_count")
+    if isinstance(subtracted, dict):
+        whole = dict(spec)
+        whole.pop("minus_count")
+        return max(0, count_from_payload(
+            game, context, whole, instruction, source=source,
+        ) - count_from_payload(
+            game, context, subtracted, instruction, source=source,
+        ))
     # "…where X is **its** mana value" — a characteristic of one named object
     # rather than a count of a set, so it is answered here, where the context
     # knows which object the sentence named. `evaluate_count` is owner-scoped
@@ -2262,6 +2283,31 @@ def divided_target_permanent(game: "Game", entry):
     return game.permanent_at(seat, index)
 
 
+def names_a_target_list(instruction) -> bool:
+    """Whether *instruction*'s target description names more than one slot.
+
+    Read off the description the lowering wrote rather than off the choices the
+    resolution happens to carry: a two-target ability whose player named one
+    creature is still a two-target ability, and deciding by what arrived would
+    make the strict multi-slot resolution below silently fall back to the
+    forgiving single-slot one.
+
+    Here rather than in one handler family, because it is the question every
+    caller of :func:`resolve_target_permanents` has to answer first and a second
+    family now asks it (``handlers/prevention.py``'s Redeem). It is a *floor*,
+    not a family: it reads a payload and nothing else.
+    """
+    targets = instruction.payload.get("targets")
+    if not isinstance(targets, dict):
+        return False
+    count = targets.get("count")
+    return (
+        count == "x"
+        or (isinstance(count, int) and count > 1)
+        or bool(targets.get("unbounded"))
+    )
+
+
 def resolve_target_permanents(
     game: Game,
     context: OracleExecutionContext,
@@ -2371,6 +2417,38 @@ def _as_slots(chosen: object) -> list:
     if isinstance(chosen, list):
         return list(chosen)
     return [] if chosen is None else [chosen]
+
+
+def seats_controlling(game, seats, described) -> list:
+    """*seats*, narrowed to the ones controlling something *described* names.
+
+    "…deals 2 damage to each white creature and **each player who controls a
+    white creature**." (Disorder.) The board twin of
+    :func:`seats_matching_deed` below, and beside it because both answer the
+    same question — which of a loop's seats does the printed relative clause
+    name — off two different kinds of evidence: a record for that one, a
+    battlefield for this one.
+
+    Through the control seam, so a permanent somebody has taken control of
+    counts for the seat that controls it now (CR 613 layer 2) rather than for
+    its owner. The observer handed to the matcher is the **candidate seat**:
+    the phrase is about what *that* player controls, not about the ability's
+    controller, so "a creature you control" inside such a clause would mean the
+    candidate's own — which is what the words say.
+
+    ``None`` is no clause printed, which leaves the list exactly as it was.
+    """
+    from ..subject_filters import subject_matches
+
+    if not described:
+        return list(seats)
+    return [
+        seat for seat in seats
+        if any(
+            subject_matches(game, perm, described, observer=seat)
+            for perm in game.controlled_by(seat)
+        )
+    ]
 
 
 def seats_matching_deed(game, context, seats, deed) -> list:

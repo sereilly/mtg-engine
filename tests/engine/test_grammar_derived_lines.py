@@ -308,3 +308,73 @@ def test_a_derived_line_is_a_whole_line_or_nothing():
     assert derived_instruction_for_line("All Mountains are Plains.")[0] == "land_types"
     assert derived_instruction_for_line("All Mountains are Plains and you gain 2 life") is None
     assert derived_instruction_for_line("All Wombats are Plains") is None
+
+
+# --- W2G1: a fused damage sweep may not be handed a word its name cannot say ---
+import pytest as _g1p  # noqa: E402
+
+from engine.grammar import ast as _g1_ast  # noqa: E402
+from engine.grammar.lowering._sweeps import (  # noqa: E402
+    _SWEEP_NARROWINGS as _G1_SWEEP_NARROWINGS,
+    _sweep_kind as _g1_sweep_kind,
+)
+
+
+def _g1_each(**filter_fields):
+    return _g1_ast.TargetSpec(
+        quantifier="each", filter=_g1_ast.ObjectFilter(**filter_fields)
+    )
+
+
+_G1_EACH_PLAYER = _g1_ast.PlayerRef("each_player")
+
+
+def test_w2g1_a_fused_sweep_is_declined_for_a_narrowing_its_name_cannot_carry():
+    """The three fused damage sweeps carry **no filter payload** — the narrowing
+    is the kind's own name — so a printed word outside it would be read here and
+    then dropped, and the card would burn a strictly larger board than it says.
+
+    Disorder is what made that visible: "each **white** creature and each player
+    who controls a white creature" fused to
+    ``deal_damage_each_creature_and_player`` and lost the colour. The
+    fall-through is not a refusal — ``lower_split_recipients`` carries the
+    narrowing as payload — so the check costs no card anything.
+    """
+    plain = (_g1_each(card_types=("creature",)), _G1_EACH_PLAYER)
+    assert _g1_sweep_kind(plain) == "deal_damage_each_creature_and_player"
+
+    coloured = (
+        _g1_each(card_types=("creature",), colors=("W",)),
+        _G1_EACH_PLAYER,
+    )
+    assert _g1_sweep_kind(coloured) is None, (
+        "the fused kind cannot say 'white', so it must not be chosen"
+    )
+
+
+def test_w2g1_a_fused_sweep_is_declined_for_a_narrowed_seat_set():
+    """The same rule on the other recipient. Every fused kind hits *every*
+    player, so a printed relative clause on the seats ("each player **who
+    controls a white creature**") has nowhere to ride and would be dropped."""
+    narrowed = _g1_ast.PlayerRef(
+        "each_player", controls=_g1_ast.ObjectFilter(card_types=("creature",))
+    )
+    assert _g1_sweep_kind(
+        (_g1_each(card_types=("creature",)), narrowed)
+    ) is None
+
+
+@_g1p.mark.parametrize("kind,fields", sorted(_G1_SWEEP_NARROWINGS.items()))
+def test_w2g1_every_fused_sweep_names_real_filter_fields(kind, fields):
+    """Each row lists the ``ObjectFilter`` fields that kind's *name* carries.
+
+    A row naming a field the filter does not have would be a word nothing
+    compares, which is the same silent widening the rows exist to stop — so the
+    table is checked against the dataclass rather than against itself. Every row
+    claims ``card_types`` because all four kinds are creature sweeps.
+    """
+    import dataclasses
+
+    real = {f.name for f in dataclasses.fields(_g1_ast.ObjectFilter())}
+    assert "card_types" in fields, kind
+    assert fields <= real, sorted(fields - real)

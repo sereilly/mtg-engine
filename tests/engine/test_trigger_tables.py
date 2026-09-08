@@ -339,6 +339,8 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     "self_cast": "when you cast this spell",
     "self_put_into_graveyard_from_library":
         "when this card is put into your graveyard from your library",
+    "card_put_into_graveyard":
+        "when a card is put into your graveyard from anywhere",
     # `no_lands` is gone: "when you control no lands" is
     # `controls_no_matching` with a land filter, which is the same sentence
     # with the noun read rather than welded into the kind.

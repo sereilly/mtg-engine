@@ -984,6 +984,14 @@ class GameHelpersMixin:
                 self, "self_put_into_graveyard_from_library",
                 subject=card, owner_index=seat,
             )
+        # "When a card is put into your graveyard **from anywhere**" (Energy
+        # Field). Announced here and nowhere else, for the reason this seam
+        # exists at all: a death, a discard, a mill, a sacrifice and a spell
+        # finishing on the stack are one event with twenty-six spellings, and a
+        # fire site per spelling is twenty-five places to forget it. Unscoped by
+        # source zone, which is what "from anywhere" says; whose graveyard it
+        # is rides as the seat and is tested by the watcher's own filter.
+        emit(self, "card_put_into_graveyard", subject=card, owner_index=seat)
         return True
 
     def _leaving_battlefield_replaced(self, permanent, owner, destination: str) -> bool:

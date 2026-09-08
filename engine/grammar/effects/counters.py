@@ -16,6 +16,7 @@ import dataclasses
 
 from .. import ast
 from ..amounts import parse_amount
+from ..bounds import accept_target_bound
 from ..records import (_parse_for_each_history, _parse_for_each_this_way,
                        scaled_by_recorded_count)
 from ..errors import GrammarError
@@ -25,7 +26,7 @@ from ..references import parse_recipient
 from ..stream import TokenStream
 from ..vocabulary import CARD_TYPES, COLOR_WORDS
 from ..nouns import parse_object_filter
-from ..phrases import (_accept_number, _expect_counter_kind, _parse_for_each,
+from ..phrases import (_expect_counter_kind, _parse_for_each,
                        accept_graveyard_position,
                        is_pt_counter, parse_pair_ordinal_subject,
                        _parse_that_object)
@@ -482,7 +483,7 @@ def _parse_distribute_counters(stream: TokenStream) -> ast.PutCounter | None:
     if stream.accept_phrase("any", "number", "of"):
         bound = None
     else:
-        bound = _accept_target_bound(stream)
+        bound = accept_target_bound(stream)
         if bound is None:
             stream.reset(mark)
             return None
@@ -495,33 +496,6 @@ def _parse_distribute_counters(stream: TokenStream) -> ast.PutCounter | None:
     return ast.PutCounter(
         subject, counter.text, count, distributed=True,
     )
-
-
-def _accept_target_bound(stream: TokenStream) -> int | None:
-    """``one or two`` / ``one, two, or three`` — the ceiling it names.
-
-    CR 601.2c's variable target count, printed as an enumeration rather than as
-    a range. The enumeration must run ``1, 2, … n`` with nothing skipped and
-    nothing repeated: a card printing "one or three" would mean something this
-    returns no room to say, and answering ``3`` for it would let the caster
-    name two. Nothing consumed when the words are not an enumeration, so the
-    caller can reset and refuse the line whole.
-    """
-    mark = stream.mark()
-    numbers: list[int] = []
-    while True:
-        stream.accept_punct(",")
-        stream.accept_word("or")
-        value = _accept_number(stream)
-        if value is None:
-            break
-        numbers.append(value)
-        if not (stream.at_punct(",") or stream.at_word("or")):
-            break
-    if numbers != list(range(1, len(numbers) + 1)) or len(numbers) < 2:
-        stream.reset(mark)
-        return None
-    return numbers[-1]
 
 
 def _parse_move_counter(stream: TokenStream) -> "ast.MoveCounter | None":

@@ -306,3 +306,52 @@ def test_w2g3_noetic_scales_spares_a_creature_under_the_bound(set_pool):
 
     assert [c.name for c in bob.hand] == ["BH0"]
     assert len(list(game.controlled_by(1))) == 1
+
+
+# --- W2G1: Urza's Armor, a static prevention of a fixed number of points ---
+from engine import Game as _G1aGame, PlayerState as _G1aPlayerState  # noqa: E402
+from engine.damage_events import deal_damage as _g1a_deal  # noqa: E402
+from engine.models import Permanent as _G1aPermanent  # noqa: E402
+
+
+def _g1a_board(pool, mine=()):
+    """One seat holding the artifact, one without. Ends on the control sync,
+    this block's own helper tail."""
+    game = _G1aGame(players=[
+        _G1aPlayerState(name="G1aA", battlefield=list(mine),
+                        library=[pool["Remote Isle"]] * 8),
+        _G1aPlayerState(name="G1aB", library=[pool["Remote Isle"]] * 8),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game._sync_control()
+    return game
+
+
+def test_w2g1_urzas_armor_shaves_one_point_from_every_event(set_pool):
+    """"If a source would deal damage to you, prevent 1 of that damage."
+
+    A **prevention** (CR 615.1: the printed verb is "prevent") and not a
+    replacement, and a *static* one — never used up, so it applies to every
+    event for as long as the artifact is there. Three claims: the point comes
+    off, a 1-damage source deals nothing at all (CR 120.8), and "to you" is the
+    Armor's controller, so an opponent's face is untouched.
+    """
+    pool = set_pool("USG")
+    armor = _G1aPermanent(card=pool["Urza's Armor"])
+    game = _g1a_board(pool, mine=[armor])
+
+    assert _g1a_deal(game, {"recipient": game.players[0], "amount": 3,
+                            "source": None}).dealt == 2
+    assert _g1a_deal(game, {"recipient": game.players[0], "amount": 1,
+                            "source": None}).dealt == 0, (
+        "CR 120.8: a source that would deal 0 damage deals none at all"
+    )
+    assert _g1a_deal(game, {"recipient": game.players[0], "amount": 3,
+                            "source": None}).dealt == 2, (
+        "a static prevention is never used up"
+    )
+    assert _g1a_deal(game, {"recipient": game.players[1], "amount": 3,
+                            "source": None}).dealt == 3, (
+        "'to you' is the Armor's controller"
+    )

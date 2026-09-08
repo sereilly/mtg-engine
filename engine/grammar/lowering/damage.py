@@ -45,11 +45,12 @@ from ._sweeps import (
     lower_each_matching_damage,
     refuse_unswept_multiplier,
 )
+from ._seats import _stamp_recipient_control, _stamp_recipient_deed
 from ._common import (
     _describe_several_targets, _names_several_targets, _amount_payload,
     card_divided_each_description,
     _filter_payload, _is_enchanted, _is_source, _is_you, _targets_payload,
-    player_deed_payload, testable_filter_payload
+    testable_filter_payload,
 )
 from ._events import (DAMAGED_PERMANENT_CONTROLLER, damage_trigger_names_damaged_end, _chosen_cast_amount, _EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_OBJECTS, _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER, LOOP_BOUND_PLAYER, SWEPT_CONTROLLER_SEATS, _back_reference_payload, _RECORDED_PERMANENTS)
 from ._conjuncts import lower_damage_conjunction, lower_split_recipients
@@ -126,24 +127,6 @@ _RIDER_READING_KINDS = frozenset({"deal_damage"})
 
 
 
-def _stamp_recipient_deed(payload: dict, recipient, node) -> None:
-    """"…deals 2 damage to **each player who sacrificed a Plains this way**."
-    (Desolation.)
-
-    The seat narrowing the recipient printed, carried to the handler that loops
-    the seats. Its own two lines rather than a branch inside each arm because
-    both seat-set recipients take it identically — what the clause narrows is
-    *which of the loop's seats*, and the loop is the only difference between
-    the two arms.
-
-    ``player_deed_payload`` raises on a clause it cannot express, which is the
-    behaviour this call wants: an unenforced narrowing is a card that damages
-    every player, and a card that refuses to compile says so.
-    """
-    deed = player_deed_payload(recipient, node)
-    if deed is not None:
-        payload["recipient_did"] = deed
-
 def _lower_damage(
     node: ast.DealDamage,
     event: str | None = None,
@@ -193,6 +176,20 @@ def _lower_damage(
         raise LoweringError(
             "no damage handler carries the printed can't-be-prevented lock here",
             node=node,
+        )
+    # "…to each player **who controls a white creature**." (Disorder.) The same
+    # post-condition the riders above get, for the same reason and in the same
+    # place: only two arms carry the clause, and a recipient that printed one
+    # and reached any other arm would be a sentence damaging every player. A
+    # branch added later gets the check for free.
+    if any(
+        getattr(recipient, "controls", None) is not None
+        for recipient in node.recipients
+    ) and not any(
+        instruction.payload.get("recipient_controls") for instruction in lowered
+    ):
+        raise LoweringError(
+            "no damage handler carries the printed seat narrowing here", node=node
         )
     lowered = _with_attached_dealer(node, lowered)
     return lowered
@@ -551,6 +548,16 @@ def _lower_damage_shape(
                     node=node,
                 )
             described["filter"] = narrowing
+        # "…among **one, two, or three** targets." (Arc Lightning.) CR 601.2c's
+        # printed ceiling on a count the caster still chooses, carried under the
+        # same ``max_targets`` key every other picker spec uses — the client,
+        # `legality.py`'s cast gate and `divided_damage.division_refusal` all
+        # already read it, and the last of those has cited Arc Lightning's
+        # spelling in its docstring since Contagion arrived. A `None` here is
+        # "among any number of", which is a different sentence rather than a
+        # ceiling of infinity.
+        if isinstance(recipient, ast.TargetSpec) and recipient.max_count is not None:
+            described["max_targets"] = recipient.max_count
         payload["targets"] = described
         return (OracleInstruction("deal_damage", "", payload),)
 
@@ -669,12 +676,14 @@ def _lower_damage_shape(
         # the hole had never been dealt through.
         payload["recipient"] = "each_player"
         _stamp_recipient_deed(payload, recipient, node)
+        _stamp_recipient_control(payload, recipient, node)
     elif isinstance(recipient, ast.PlayerRef) and recipient.kind == "each_opponent":
         # "…deals 2 damage to each opponent" (Storm Caller). The handler loops
         # the caster's living opponents through the same player-damage path a
         # single face takes, so shields and replacements see each event.
         payload["recipient"] = "each_opponent"
         _stamp_recipient_deed(payload, recipient, node)
+        _stamp_recipient_control(payload, recipient, node)
     elif isinstance(recipient, ast.PlayerRef) and recipient.kind in (
         # "target opponent" joins the chosen-player forms: the damage handler
         # takes the seat off the resolution context either way, and the

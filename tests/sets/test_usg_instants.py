@@ -376,3 +376,63 @@ def test_w2g4_the_plural_token_reference_refuses_without_a_maker(set_pool):
     # reading, because the pronoun is read only where everything else refused.
     searched = compile_line("Search your library for three cards, exile them, then shuffle.")
     assert [i.kind for i in searched.instructions] == ["search_and_exile_matching"]
+
+
+# --- W2G1: Redeem's shield over up to two creatures ---
+from engine import Game as _G1iGame, PlayerState as _G1iPlayerState  # noqa: E402
+from engine.damage_events import deal_damage as _g1i_deal  # noqa: E402
+from engine.models import Permanent as _G1iPermanent  # noqa: E402
+from engine.oracle import compile_card_oracle as _g1i_compile  # noqa: E402
+from engine.game_types import OracleExecutionContext as _G1iContext  # noqa: E402
+from engine.targeting import derive_cast_spec as _g1i_spec  # noqa: E402
+
+
+def _g1i_board(pool, mine=()):
+    """One seat with a board and a USG library. Ends on the control sync, this
+    block's own helper tail."""
+    game = _G1iGame(players=[
+        _G1iPlayerState(name="G1iA", battlefield=list(mine),
+                        library=[pool["Remote Isle"]] * 8),
+        _G1iPlayerState(name="G1iB", library=[pool["Remote Isle"]] * 8),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game._sync_control()
+    return game
+
+
+def test_w2g1_redeem_shields_both_chosen_creatures(set_pool):
+    """"Prevent all damage that would be dealt this turn to up to two target
+    creatures."
+
+    One shield armed once per chosen recipient — the branch the handler already
+    had for Energy Arc's recorded set, reached from a list the caster named
+    instead. Four claims: the picker's ceiling, both chosen creatures, the one
+    nobody chose, and the direction (this shield covers damage dealt *to* them
+    and leaves their own alone).
+    """
+    pool = set_pool("USG")
+    a = _G1iPermanent(card=pool["Coral Merfolk"])
+    b = _G1iPermanent(card=pool["Coral Merfolk"])
+    c = _G1iPermanent(card=pool["Coral Merfolk"])
+    game = _g1i_board(pool, mine=[a, b, c])
+
+    card = pool["Redeem"]
+    program = _g1i_compile(card)
+    assert _g1i_spec(card, program) == {"kind": "creature", "max_targets": 2}
+
+    context = _G1iContext(
+        card=card, caster=game.players[0], target=game.players[0],
+        target_permanent_id=[a.permanent_id, b.permanent_id],
+    )
+    for instruction in program.instructions:
+        game._execute_oracle_instruction(instruction, context)
+
+    assert _g1i_deal(game, {"recipient": a, "amount": 3, "source": None}).dealt == 0
+    assert _g1i_deal(game, {"recipient": b, "amount": 3, "source": None,
+                            "combat": True}).dealt == 0
+    assert _g1i_deal(game, {"recipient": c, "amount": 3, "source": None}).dealt == 3
+    assert _g1i_deal(game, {"recipient": c, "amount": 1, "source": a,
+                            "combat": True}).dealt == 1, (
+        "the shield is one-way: it prevents damage dealt to them, not by them"
+    )

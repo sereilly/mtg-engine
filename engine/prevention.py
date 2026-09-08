@@ -143,6 +143,15 @@ SUBJECT_BLANKET = 26
 # blanket, beside the other two and for the same reason: no charges, so applying
 # it costs its recipient nothing.
 TARGETING_BLANKET = 27
+# "If a source would deal damage to you, prevent 1 of that damage."
+# (Urza's Armor.) A permanent's own static prevention of a *fixed number of
+# points*, which is a shape neither band above nor below it has: it is partial
+# like Forcefield's cap and free like a blanket. It sits here, at the bottom of
+# the free band, for the blanket band's own argument — applying it costs its
+# controller nothing, so letting it go first keeps a consumable from being spent
+# on a point that was never going to land. Behind the blankets themselves,
+# because an event a blanket takes whole leaves this one nothing to shave.
+STATIC_POINTS = 40
 SOURCE_CAP = 100  # Forcefield against a chosen attacker
 # "…prevent half that damage, rounded down" (Dark Sphere) against a chosen
 # source. Beside Forcefield's cap and for the same reason the note above gives:
@@ -405,38 +414,84 @@ def _shield_lifetime(entry) -> str:
     payload carry two elements and mean the rest of the turn."""
     return str(entry[2]) if len(entry) > 2 else SHIELD_END_OF_TURN
 
-#: The Aura form (Gaseous Form, Demonic Torment). Not a marker at all - it is
-#: read off the attached Aura's own text at the moment damage would be dealt,
-#: so the shield ends when the Aura leaves with nothing having to clear it.
-#: The same shape ``_source_type_shielded_by`` uses one screen down.
-_ATTACHED_COMBAT_SHIELD_RE = re.compile(
+#: The **static** form, printed on the permanent the shield covers rather than
+#: resolved onto one. Two subjects and one sentence: an Aura or Equipment names
+#: what it is attached to (Gaseous Form, Demonic Torment) and a creature names
+#: **itself** (Fog Bank). Not a marker at all in either case — it is read off
+#: the text at the moment damage would be dealt, so the shield ends when the
+#: Aura leaves or the creature does, with nothing having to clear it. The same
+#: shape ``_source_type_shielded_by`` uses one screen down, and its same two
+#: readers: that pattern is likewise printed with "this" and with "enchanted".
+#:
+#: One pattern with the subject captured, and **two** readers over it rather
+#: than one permissive matcher, for `prevent_all_from_source_type`'s reason
+#: exactly: an Aura is itself a permanent, so a single reader would have
+#: Gaseous Form shielding *itself* from combat damage — a card nobody printed.
+_STATIC_COMBAT_SHIELD_RE = re.compile(
     r"^prevent all combat damage that would be dealt "
     r"(?P<direction>to and dealt by|to|by) "
-    r"(?:enchanted|equipped) (?:artifact )?creature$"
+    r"(?P<subject>this|enchanted|equipped) (?:artifact )?creature$"
 )
 
 
-def attached_combat_shield_direction(line: str) -> str | None:
-    """Which end of a combat damage event one printed Aura line shields, or None.
-
-    One matcher, asked by the interceptor below and by ``engine/auras.py``'s
-    support gate, so what is claimed and what is carried out are one rule.
-    """
-    match = _ATTACHED_COMBAT_SHIELD_RE.match(
+def _static_combat_shield_match(line: str):
+    return _STATIC_COMBAT_SHIELD_RE.match(
         " ".join(line.strip().lower().rstrip(".").split())
     )
-    if match is None:
-        return None
+
+
+def _shield_direction_from_match(match) -> str:
     printed = match.group("direction")
     return COMBAT_SHIELD_BOTH if printed == "to and dealt by" else printed
 
 
-def _attached_combat_shield(perm) -> str | None:
-    """The direction an Aura attached to *perm* shields it in, if any."""
-    from .auras import auras_attached_to
+def attached_combat_shield_direction(line: str) -> str | None:
+    """Which end of a combat damage event one printed **Aura** line shields, or
+    None.
 
+    One matcher, asked by the interceptor below and by ``engine/auras.py``'s
+    support gate, so what is claimed and what is carried out are one rule.
+    """
+    match = _static_combat_shield_match(line)
+    if match is None or match.group("subject") == "this":
+        return None
+    return _shield_direction_from_match(match)
+
+
+def self_combat_shield_direction(line: str) -> str | None:
+    """The same answer for the form a creature prints about **itself** (Fog
+    Bank: "Prevent all combat damage that would be dealt to and dealt by this
+    creature").
+
+    Exported for ``prevention_claims_line``, which is what admits a creature
+    whose only ability is this one: the sentence has no duration and never
+    resolves, so nothing in the compiled program can stand for it.
+    """
+    match = _static_combat_shield_match(line)
+    if match is None or match.group("subject") != "this":
+        return None
+    return _shield_direction_from_match(match)
+
+
+def _attached_combat_shield(perm) -> str | None:
+    """The direction an Aura attached to *perm* — or *perm*'s own text —
+    shields it in, if any.
+
+    Both readings answer here rather than at two call sites, because they are
+    one question with two places the sentence can be printed: the same read
+    ``_source_type_shielded_by`` makes of a damaged permanent's own text and of
+    what is attached to it. The permanent's own line is asked **first**, since
+    it is the cheaper read and neither can be true of the same object.
+    """
     if not hasattr(perm, "metadata"):
         return None
+    from .auras import auras_attached_to
+
+    own = getattr(perm, "effective_card", None) or getattr(perm, "card", None)
+    for line in (getattr(own, "oracle_text", "") or "").splitlines():
+        direction = self_combat_shield_direction(line)
+        if direction is not None:
+            return direction
     for aura in auras_attached_to(perm):
         for line in (aura.effective_card.oracle_text or "").splitlines():
             direction = attached_combat_shield_direction(line)
@@ -456,9 +511,11 @@ def _shield_directions(perm, *, combat: bool) -> frozenset[str]:
     Accepts None and non-permanent damage sources (a spell's
     ``CardDefinition``), which carry no shield at all.
     """
-    metadata = getattr(perm, "metadata", None)
-    if not metadata:
-        return frozenset()
+    # Not an early return on an empty ``metadata``, which is what it used to
+    # be: the **static** form below is read off printed text and a creature
+    # that has never been marked with anything carries an empty dict, so a
+    # Fog Bank fresh on the battlefield answered "no shield at all".
+    metadata = getattr(perm, "metadata", None) or {}
     directions: set[str] = set()
     for entry in metadata.get(_COMBAT_SHIELD_DIRECTION_KEY) or ():
         direction, combat_only = entry[0], entry[1]
@@ -1744,6 +1801,87 @@ def _prevent_all_from_source_type(game, event: dict) -> PreventionOutcome | None
     return PreventionOutcome(prevented=event["amount"])
 
 
+#: "If a source would deal damage to you, prevent **1** of that damage."
+#: (Urza's Armor.) The sibling of ``_PREVENT_AND_COUNT_RE`` above, one clause
+#: apart: Nine Lives prevents the whole instance and charges a counter for it,
+#: this one shaves a fixed number of points and charges nothing. The number is
+#: payload, the way every parameter in this file is — a card printing "prevent 2
+#: of that damage" needs no code here.
+#:
+#: A **prevention** (CR 615) and not a replacement, which the printed verb
+#: settles: CR 615.1 says a prevention effect is one that uses the word
+#: "prevent". Written as a CR 614 replacement it would still arrive at the right
+#: life total and would report the wrong thing to everything that asks how much
+#: damage was prevented.
+_PREVENT_N_OF_DAMAGE_RE = re.compile(
+    r"^if a source would deal damage to you, prevent (?P<points>\d+) of that "
+    r"damage$"
+)
+
+
+def prevent_n_of_damage(line: str) -> int | None:
+    """How many points *line* shaves off each event, or None if it is not that
+    line. One matcher, asked by the interceptor below and by the claim reader,
+    so what is prevented and what is claimed cannot drift."""
+    match = _PREVENT_N_OF_DAMAGE_RE.match(
+        " ".join(line.strip().lower().rstrip(".").split())
+    )
+    return int(match.group("points")) if match else None
+
+
+def _static_points_prevented(game, event: dict) -> int:
+    """How many points every such line on the recipient's board shaves off this
+    event. Pure — nothing is spent, because nothing here is a charge.
+
+    **Summed** across the battlefield, for ``replacements._spell_damage_delta``'s
+    reason exactly: CR 616.1 would apply two Armors as two effects in an order
+    the affected player picks, subtraction commutes, and one candidate per
+    registration is the model ``apply_in_order`` has. Clamped to the event, so
+    two Armors against 1 damage prevent 1 and not 2.
+
+    "To **you**" is the Armor's controller (CR 109.5), which is why the scan is
+    over the recipient's own battlefield: an opponent's Armor does nothing for
+    the player being burned.
+    """
+    recipient = event["recipient"]
+    amount = event["amount"]
+    if amount <= 0 or not isinstance(recipient, PlayerState):
+        return 0
+    seat = game.players.index(recipient) if recipient in game.players else None
+    if seat is None:
+        return 0
+    total = 0
+    for permanent in game.controlled_by(seat):
+        for line in (permanent.effective_card.oracle_text or "").splitlines():
+            points = prevent_n_of_damage(line)
+            if points is not None:
+                total += points
+    return min(total, amount)
+
+
+def _applies_static_points(game, event: dict) -> bool:
+    return _static_points_prevented(game, event) > 0
+
+
+@prevention_effect(STATIC_POINTS, applies=_applies_static_points)
+def _prevent_static_points(game, event: dict) -> PreventionOutcome | None:
+    """Urza's Armor: "If a source would deal damage to you, prevent 1 of that
+    damage."
+
+    Every event, from every source, for as long as the permanent printing it is
+    on the battlefield — and never used up, which is what makes it a static
+    prevention rather than CR 615.7's pool. Nothing is spent and nothing is
+    recorded: the next event asks the board again, so the shield ends with the
+    permanent (CR 611.2) rather than needing a sweep.
+    """
+    prevented = _static_points_prevented(game, event)
+    game.log.append(
+        f"{event['recipient'].name} prevented {prevented} of "
+        f"{event['amount']} damage (Urza's Armor)"
+    )
+    return PreventionOutcome(prevented=prevented)
+
+
 def _static_prevention_source(game, event: dict):
     """The recipient's own permanent whose static prevention covers this event,
     with the counter it charges — or None.
@@ -1886,8 +2024,16 @@ def _remove_counter_per_damage(game, event: dict) -> PreventionOutcome | None:
 #: reads and this must not claim. Claiming the line here takes it away from
 #: those productions entirely (``engine/grammar/registries.py``), so the anchor
 #: is what keeps the two sentences apart.
+#: The trailing source narrowing (Energy Field: "…**by sources you don't
+#: control**"). Payload, because it is the one clause that separates two cards
+#: printing the same blanket — and a *relation* rather than a description of the
+#: source object, so it cannot ride ``_SOURCE_CLASSES`` beside the card types:
+#: CR 109.5 gives a source a controller, and the clause compares that seat with
+#: the protected one. A blanket that dropped it would shield its controller from
+#: their own Flesh Reaver, which is a strictly larger card.
 _PREVENT_ALL_TO_CONTROLLER_RE = re.compile(
-    r"^prevent all (?P<combat>combat )?damage that would be dealt to you$"
+    r"^prevent all (?P<combat>combat )?damage that would be dealt to you"
+    r"(?P<foreign> by sources you don't control)?$"
 )
 
 
@@ -1902,17 +2048,26 @@ def prevent_all_to_controller(line: str) -> dict | None:
     )
     if match is None:
         return None
-    return {"combat_only": bool(match.group("combat"))}
+    return {
+        "combat_only": bool(match.group("combat")),
+        "foreign_sources_only": bool(match.group("foreign")),
+    }
 
 
 def _controller_blanket_for(game, event: dict) -> dict | None:
-    """The blanket shielding this player, read off their own battlefield. Pure.
+    """The blanket shielding this player *against this event*, read off their
+    own battlefield. Pure.
 
     A player has no text of their own, so the line is found on the permanents
     they control — the same read ``_source_type_shielded_by`` makes of a
     damaged permanent, one relation out. Through the control seam rather than a
     battlefield list, so a Glacial Chasm somebody else has taken control of
     shields *them*.
+
+    The source narrowing is tested here rather than in the applicability
+    predicate below, so a board holding a narrow blanket that does not cover
+    this event goes on looking for a wide one instead of answering with the
+    first line it found.
     """
     recipient = event["recipient"]
     if not isinstance(recipient, PlayerState):
@@ -1923,8 +2078,17 @@ def _controller_blanket_for(game, event: dict) -> dict | None:
     for permanent in game.controlled_by(seat):
         for line in permanent.effective_card.oracle_text.splitlines():
             described = prevent_all_to_controller(line)
-            if described is not None:
-                return described
+            if described is None:
+                continue
+            if described["foreign_sources_only"] and (
+                # "…by sources **you don't control**" (Energy Field). CR 109.5's
+                # seat, derived once inside ``deal_damage`` and read here rather
+                # than re-derived — a source with no controller at all (a
+                # turn-based action) is one nobody controls, so it is covered.
+                event.get("source_seat") == seat
+            ):
+                continue
+            return described
     return None
 
 
@@ -1946,9 +2110,14 @@ def _prevent_all_to_controller(game, event: dict) -> PreventionOutcome | None:
     event asks the board again, which is what makes the shield end with the
     permanent (CR 611.2) rather than needing a sweep.
     """
+    described = _controller_blanket_for(game, event) or {}
     game.log.append(
         f"{event['recipient'].name} prevented {event['amount']} damage "
-        "(all damage that would be dealt to them)"
+        + (
+            "(all damage from sources they don't control)"
+            if described.get("foreign_sources_only")
+            else "(all damage that would be dealt to them)"
+        )
     )
     return PreventionOutcome(prevented=event["amount"])
 
@@ -2227,10 +2396,12 @@ def prevention_claims_line(line: str) -> bool:
     """
     return (
         prevent_and_count_kind(line) is not None
+        or prevent_n_of_damage(line) is not None
         or per_damage_counter_kind(line) is not None
         or prevent_all_from_source_type(line) is not None
         or attached_prevent_all_from_source_type(line) is not None
         or attached_combat_shield_direction(line) is not None
+        or self_combat_shield_direction(line) is not None
         or prevent_all_to_controller(line) is not None
         or prevent_all_to_matching(line) is not None
         or prevent_all_from_spell_class(line) is not None

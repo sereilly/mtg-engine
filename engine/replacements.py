@@ -149,7 +149,7 @@ DAMAGE_SOURCE_CAP = 5  # Forethought Amulet
 # The same kind of effect as the cap above — CR 120.4b, the damage *dealt* —
 # and beside it for the same reasons, one slot later only because a card
 # printing both would want the cap applied to the printed number first.
-DAMAGE_SOURCE_REDUCTION = 6  # Benevolent Unicorn
+DAMAGE_SOURCE_DELTA = 6  # Benevolent Unicorn, Sulfuric Vapors
 
 # "For each 1 damage that would be dealt to you until your next upkeep, you
 # remove an echo counter from this enchantment instead." (Soul Echo.) A
@@ -603,6 +603,89 @@ def _draw_instead_of_life_gain(game, payload: dict) -> ReplacementOutcome | None
     return ReplacementOutcome(replaced=True)
 
 
+#: "**If you control a creature,** damage that would reduce your life total to
+#: less than 1 reduces it to 1 instead." (Worship.) Ali from Cairo's sentence
+#: with CR 611.2's condition in front of it, and the condition is **payload**
+#: for the reason every parameter in this file is: a card printing another noun
+#: phrase in the same clause is the same effect.
+#:
+#: Anchored at both ends, so the condition cannot be read as optional decoration
+#: on a line that does not carry one — and read as a *line* rather than through
+#: ``_player_controls_text``, which is a substring test. That distinction is the
+#: whole card: Worship's text contains Ali from Cairo's constant, so a substring
+#: reader answers yes for a Worship on an empty board and floors the life total
+#: of a player who controls nothing, which is precisely the game Worship is
+#: printed not to give.
+_DAMAGE_LIFE_FLOOR_RE = re.compile(
+    r"^(?:if you control (?P<condition>[^,]+), )?"
+    + re.escape(DAMAGE_LIFE_FLOOR_TEXT)
+    + r"$"
+)
+
+
+def damage_life_floor_condition(line: str) -> dict | None:
+    """What *line* requires before it floors its controller's life, or None when
+    it is not that line at all.
+
+    ``{}`` — empty and therefore falsy, but **not** None — is the unconditional
+    printing (Ali from Cairo, Sustaining Spirit). Callers must test ``is None``.
+
+    One matcher, asked by the interceptor below and by
+    :func:`replacement_claims_line`, so what is floored and what is claimed
+    cannot drift.
+    """
+    match = _DAMAGE_LIFE_FLOOR_RE.match(
+        " ".join((line or "").strip().lower().rstrip(".").split())
+    )
+    if match is None:
+        return None
+    phrase = match.group("condition")
+    if phrase is None:
+        return {}
+    # The grammar's own noun-phrase reader, lazily imported because the
+    # grammar's parse claim imports this module. A phrase it cannot read
+    # answers None, which leaves the card unsupported rather than flooring
+    # unconditionally — a condition dropped is an effect strictly wider than
+    # the card prints.
+    from .grammar import subject_filter_payload
+
+    filt = subject_filter_payload(phrase)
+    if filt is None:
+        return None
+    return {"condition": {"kind": "controls", "who": "you", "filter": filt}}
+
+
+def _life_floor_holder(game, player):
+    """The permanent whose printed floor covers *player* right now, or None.
+
+    Scanned over the seat's own battlefield, because the printed sentence says
+    "**your** life total" (CR 109.5): an opponent's Worship does nothing for the
+    player being burned. Through the control seam rather than a battlefield
+    list, so a Worship somebody has taken control of floors *them*.
+
+    Rechecked on every event rather than latched, for ``_condition_holds``'
+    reason one file over: the creature the clause counts may leave, and a floor
+    that outlived its condition is one the card does not print.
+    """
+    seat = game.players.index(player) if player in game.players else None
+    if seat is None:
+        return None
+    from .static_bonuses import conditional_static_holds
+
+    for permanent in game.controlled_by(seat):
+        for line in (permanent.effective_card.oracle_text or "").splitlines():
+            described = damage_life_floor_condition(line)
+            if described is None:
+                continue
+            condition = described.get("condition")
+            if condition is not None and not conditional_static_holds(
+                game, seat, permanent, condition
+            ):
+                continue
+            return permanent
+    return None
+
+
 def _floored_amount(game, payload: dict) -> int | None:
     """How much life this damage would still cost once the floor applies, or
     None when the floor has nothing to do. Shared by the predicate and the
@@ -610,7 +693,9 @@ def _floored_amount(game, payload: dict) -> int | None:
     answer."""
     recipient = payload["recipient"]
     amount = payload["amount"]
-    if amount <= 0 or not game._player_controls_text(recipient, DAMAGE_LIFE_FLOOR_TEXT):
+    if amount <= 0 or not hasattr(recipient, "life"):
+        return None
+    if _life_floor_holder(game, recipient) is None:
         return None
     floor_amount = max(0, recipient.life - 1)
     return None if floor_amount >= amount else floor_amount
@@ -760,50 +845,66 @@ def _cap_damage_from_source_class(game, payload: dict) -> ReplacementOutcome | N
 
 #: "If a **spell** would deal damage to a permanent or player, it deals that
 #: much damage minus **1** to that permanent or player instead." (Benevolent
-#: Unicorn.) The source class and the reduction are payload, exactly as the cap
-#: above has them: a card printing "minus 2", or naming a narrower class of
-#: source, is this same sentence.
+#: Unicorn.) "…that much damage **plus 1**…", for a **red spell** (Sulfuric
+#: Vapors). The source class, the direction and the number of points are all
+#: payload, exactly as the cap above has them: a card printing "minus 2", or
+#: naming a narrower class of source, is this same sentence.
+#:
+#: The **direction** is payload for that same reason and no other — "plus" and
+#: "minus" are one sentence one word apart, and a second pattern for the second
+#: word would be a second answer to "how much does this event become". Signed
+#: and summed, which is what makes a Unicorn and a Vapors on one board right in
+#: either CR 616.1 order: addition commutes, and the clamp at zero is reached
+#: only from below.
 #:
 #: The recipient phrase is **not** payload and is spelled out twice with a
 #: backreference, because the two halves of the sentence have to name the same
 #: thing: a card reducing damage to a permanent and then dealing the reduced
 #: amount to a *player* is not this effect, and matching the two independently
 #: would read it as though it were.
-_SOURCE_DAMAGE_REDUCTION = re.compile(
+_SOURCE_DAMAGE_DELTA = re.compile(
     r"^if an? (?P<source_class>[a-z ]+?) would deal damage to a "
     r"(?P<recipients>permanent or player|creature or player), it deals that "
-    r"much damage minus (?P<reduction>\d+) to that (?P=recipients) instead$"
+    r"much damage (?P<direction>minus|plus) (?P<points>\d+) to that "
+    r"(?P=recipients) instead$"
 )
 
 
-def source_damage_reduction(line: str) -> tuple[str, int] | None:
-    """``(source class, points removed)`` *line* takes off, or None.
+def source_damage_delta(line: str) -> tuple[str, int] | None:
+    """``(source class, signed points)`` *line* moves the event by, or None.
+
+    Negative for the printed word "minus" and positive for "plus", so the two
+    printings are one number rather than two branches — the sign *is* the word.
 
     One matcher, asked by the interceptors below and by
-    :func:`replacement_claims_line`, so what is reduced and what is claimed
+    :func:`replacement_claims_line`, so what is changed and what is claimed
     cannot drift — the arrangement ``source_damage_cap`` above already has.
 
     The class is checked against :func:`_source_answers_class` at fire time
     rather than here, so a class that reader cannot answer leaves the effect
     inert rather than unclaimed. That is the opposite of the cap's rule one
-    function up, and deliberately: this pattern's class is a *whole word* the
-    card prints ("a spell"), not a list of card types to be split, so a class
-    nobody reads is a typo in this file rather than a card the pool prints.
+    function up, and deliberately: this pattern's class is a printed *phrase*
+    ("a spell", "a red spell"), not a list of card types to be split, so a
+    class nobody reads is a typo in this file rather than a card the pool
+    prints.
     """
-    match = _SOURCE_DAMAGE_REDUCTION.match(
+    match = _SOURCE_DAMAGE_DELTA.match(
         " ".join((line or "").strip().lower().rstrip(".").split())
     )
     if match is None:
         return None
-    return match.group("source_class"), int(match.group("reduction"))
+    points = int(match.group("points"))
+    return match.group("source_class"), (
+        -points if match.group("direction") == "minus" else points
+    )
 
 
-def _spell_damage_reduction(game, payload: dict) -> int:
-    """How many points every such line on the board takes off this event.
+def _spell_damage_delta(game, payload: dict) -> int:
+    """How many points every such line on the board moves this event by.
 
     **Summed** across the battlefield rather than applied one permanent at a
     time. CR 616.1 would apply two Unicorns as two replacements in an order the
-    affected player picks, and subtraction commutes — so the number is the same
+    affected player picks, and addition commutes — so the number is the same
     either way, and one candidate per registration is the model
     ``apply_in_order`` has ("an effect applies once per event"). A second
     candidate per permanent would be a change to that model for no change in
@@ -811,7 +912,8 @@ def _spell_damage_reduction(game, payload: dict) -> int:
 
     Every battlefield, unlike the cap beside it: the printed sentence names no
     controller at all, so an opponent's Unicorn softens a burn spell aimed at
-    its own controller exactly as it softens one aimed at anybody.
+    its own controller exactly as it softens one aimed at anybody — and an
+    opponent's Sulfuric Vapors sharpens it.
     """
     amount = payload.get("amount") or 0
     if amount <= 0:
@@ -819,7 +921,7 @@ def _spell_damage_reduction(game, payload: dict) -> int:
     total = 0
     for permanent in game.all_permanents():
         for line in (permanent.effective_card.oracle_text or "").splitlines():
-            read = source_damage_reduction(line)
+            read = source_damage_delta(line)
             if read is None:
                 continue
             source_class, points = read
@@ -829,42 +931,45 @@ def _spell_damage_reduction(game, payload: dict) -> int:
     return total
 
 
-def _applies_spell_damage_reduction(game, payload: dict) -> bool:
-    return _spell_damage_reduction(game, payload) > 0
+def _applies_spell_damage_delta(game, payload: dict) -> bool:
+    return _spell_damage_delta(game, payload) != 0
 
 
 @replacement_effect(
-    "damage_to_player", DAMAGE_SOURCE_REDUCTION,
-    applies=_applies_spell_damage_reduction,
+    "damage_to_player", DAMAGE_SOURCE_DELTA,
+    applies=_applies_spell_damage_delta,
 )
 @replacement_effect(
-    "damage_to_creature", DAMAGE_SOURCE_REDUCTION,
-    applies=_applies_spell_damage_reduction,
+    "damage_to_creature", DAMAGE_SOURCE_DELTA,
+    applies=_applies_spell_damage_delta,
 )
-def _reduce_spell_damage(game, payload: dict) -> ReplacementOutcome | None:
+def _shift_spell_damage(game, payload: dict) -> ReplacementOutcome | None:
     """Benevolent Unicorn: "If a spell would deal damage to a permanent or
     player, it deals that much damage minus 1 to that permanent or player
-    instead."
+    instead." Sulfuric Vapors: the same sentence with "plus 1", for a red spell.
 
     A **replacement** and not a prevention shield, and the difference is the
     whole card. A shield absorbs points and reports damage prevented; this
     changes the number the source would deal (CR 120.4b), so a 1-damage spell
     reduced to 0 is a source that deals no damage at all (CR 120.8) — nothing is
     dealt, nothing is marked, and no "deals damage" trigger fires. Written as a
-    shield it would have prevented 1 of 1 and *still* announced an event.
+    shield it would have prevented 1 of 1 and *still* announced an event. The
+    other direction has no shield form at all, which is the second reason these
+    are one interceptor rather than two: a card that *adds* damage is a
+    replacement or it is nothing.
 
     One interceptor on both recipient kinds, because "a permanent or player" is
     one sentence and a second copy is two answers to it.
     """
-    removed = _spell_damage_reduction(game, payload)
-    reduced = max(0, int(payload["amount"]) - removed)
+    delta = _spell_damage_delta(game, payload)
+    shifted = max(0, int(payload["amount"]) + delta)
     recipient = payload["recipient"]
     game.log.append(
         f"{getattr(recipient, 'name', None) or recipient.card.name} takes "
-        f"{reduced} damage instead of {payload['amount']} (spell damage reduced "
-        f"by {removed})"
+        f"{shifted} damage instead of {payload['amount']} (spell damage "
+        f"{'reduced by' if delta < 0 else 'increased by'} {abs(delta)})"
     )
-    return ReplacementOutcome(new_amount=reduced)
+    return ReplacementOutcome(new_amount=shifted)
 
 
 def _match_group(pattern, line: str, group: str) -> str | None:
@@ -873,7 +978,27 @@ def _match_group(pattern, line: str, group: str) -> str | None:
 
 
 def _source_answers_class(game, source, source_class: str) -> bool:
-    """Whether *source* is in the class a redirect or a reduction names."""
+    """Whether *source* is in the class a redirect or a delta names.
+
+    A leading **colour word** is peeled off first and tested through
+    ``damage_source_colors`` — the one reader every shield in this engine asks
+    — so "a **red** spell" (Sulfuric Vapors) is "a spell" with a recorded
+    property rather than a class of its own. Peeled rather than listed, because
+    the noun behind it is untouched: a card printing "a blue spell" or "a green
+    creature" needs no entry here.
+
+    The colour is rechecked at damage time along with the class, which is what
+    CR 615.9 asks of a recorded property and what a Vapors deserves: a spell
+    recoloured on the stack is red or not when its damage would be dealt.
+    """
+    from .damage_source_colors import damage_source_colors
+    from .grammar.vocabulary import COLOR_WORDS
+
+    word, _, rest = source_class.partition(" ")
+    if rest and word in COLOR_WORDS:
+        if COLOR_WORDS[word] not in damage_source_colors(game, source):
+            return False
+        source_class = rest
     if source_class == "unblocked creatures":
         return _unblocked_attacker(source)
     if source_class == "spell":
@@ -3954,6 +4079,9 @@ REPLACEMENT_LINES: tuple[tuple[str, str], ...] = (
     # _draw_instead_of_life_gain (Lich): the phrase is the whole line.
     (LIFE_GAIN_TO_DRAW_TEXT, ""),
     # _floor_life_at_one (Ali from Cairo): the phrase is the whole line.
+    # Worship prints the same sentence behind "if you control a creature," and
+    # is matched by shape below rather than listed here, because the condition
+    # is payload.
     (DAMAGE_LIFE_FLOOR_TEXT, ""),
     # _top_of_library_instead_of_graveyard (Library of Leng). The constant the
     # interceptor probes for stops at "...on top of your library instead"; the
@@ -4038,6 +4166,14 @@ def replacement_claims_line(line: str) -> bool:
     normalized = line.strip().lower().rstrip(".")
     if any(normalized == phrase + tail for phrase, tail in REPLACEMENT_LINES):
         return True
+    # "**If you control a creature,** damage that would reduce your life total
+    # to less than 1 reduces it to 1 instead." (Worship.) Matched by shape
+    # rather than listed as a constant, because the condition is payload — and
+    # asked of the same reader the interceptor uses, so a noun phrase it cannot
+    # read leaves the line unclaimed rather than admitted with the condition
+    # silently dropped.
+    if damage_life_floor_condition(normalized) is not None:
+        return True
     # "As long as this creature is untapped, all damage … is dealt to this
     # creature instead" (Veteran Bodyguard, Martyrs of Korlis). Matched by
     # shape rather than listed as a constant, because the source class is
@@ -4078,9 +4214,10 @@ def replacement_claims_line(line: str) -> bool:
     if source_damage_cap(normalized) is not None:
         return True
     # "If a spell would deal damage to a permanent or player, it deals that much
-    # damage minus 1 …" (Benevolent Unicorn), the same arrangement again — the
-    # source class and the number of points are payload.
-    if source_damage_reduction(normalized) is not None:
+    # damage minus 1 …" (Benevolent Unicorn) / "…plus 1…" for a red spell
+    # (Sulfuric Vapors), the same arrangement again — the source class, the
+    # direction and the number of points are payload.
+    if source_damage_delta(normalized) is not None:
         return True
     # "If a land is tapped for mana, it produces {B} instead of any other
     # type." (Infernal Darkness, Ritual of Subdual.) "If tapped for mana,
