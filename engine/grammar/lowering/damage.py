@@ -203,7 +203,7 @@ def _with_attached_dealer(
     The printed subject of a damage sentence, which this module had never read:
     every branch of :func:`_lower_damage_shape` builds its payload from the
     *recipients* and the amount, so an Aura's own ability dealt the damage as
-    the **Aura**. CR 119.3 makes that the wrong source — protection from the
+    the **Aura**. CR 120.7 makes that the wrong source — protection from the
     host's colour would not have stopped it and protection from the Aura's
     would, which is the rule backwards — and the log said so out loud.
 

@@ -458,7 +458,7 @@ def test_a_search_whose_pile_comes_back_still_takes_the_maximum(catalog_by_name)
         assert exiled_search_pile_comes_back(catalog_by_name[name]), name
 
 
-# --- W2G2: damage sized by a creature's own power (CR 119.3) ---
+# --- W2G2: damage sized by a creature's own power (CR 120.7) ---
 
 from engine import Game, PlayerState
 from engine.models import Permanent
@@ -486,7 +486,7 @@ def _w2g2_spell_board(spell, p0_creatures, p1_creatures):
 def test_w2g2_repentance_makes_a_creature_kill_itself(set_pool):
     """``Target creature deals damage to itself equal to its power.``
 
-    CR 119.3: the damage is dealt **by the creature**, so the source is the
+    CR 120.7: the damage is dealt **by the creature**, so the source is the
     permanent and not the sorcery — which is what makes a bite different from
     the generic damage instruction and why it is its own kind.
     """

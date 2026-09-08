@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from ..oracle_types import TAPPED_THIS_WAY_OBJECTS, X_FROM_COUNT
 from ._common import (recorded_permanent_ids, 
     block_pair_permanents,
+    defending_player_seat,
     frozen_that_player_seat,
     permanent_matches_filter,
     resolve_amount,
@@ -348,12 +349,18 @@ def _tap_or_untap_all_matching(
         if context.target is not None and context.target in game.players
         else None
     )
+    # "Untap all creatures **defending player controls**" (Jangling Automaton).
+    # The third resolution that could meet CR 506.2's phrase and asked nothing
+    # for it — so the matcher refused the word and this sweep matched the empty
+    # set, which the log reported as "nothing to tap or untap" rather than as a
+    # failure. Same reader as the damage sweep and the two target pickers.
     matched = [
         perm for perm in game.all_permanents()
         if subject_matches(
             game, perm, described,
             observer=observer, source=context.source_permanent,
             targeted_player=targeted_seat,
+            defending=defending_player_seat(game, context),
         )
     ]
     changed = []
@@ -513,6 +520,15 @@ def tap_target_permanent(game: Game, instruction: OracleInstruction, context: Or
         # player some earlier sentence fixed — so it is resolved here, where the
         # context is, through the one reader of the printed phrase.
         that_player = frozen_that_player_seat(game, context)
+        # "Tap target creature **defending player controls**" (Sidar Jabari).
+        # CR 506.2's seat, one record over from "that player" and read the same
+        # way — off the trigger's frozen context first, the live combat second
+        # (`defending_player_seat`). This branch asked for neither, so
+        # `subject_matches` refused the word for the reason it refuses every
+        # seat it is not given: the ability announced a target and then found
+        # "no valid permanent to tap", every time, on the only card in the pool
+        # that prints the phrase with this verb.
+        defending = defending_player_seat(game, context)
         perm = resolve_target_permanent(
             game,
             context,
@@ -520,6 +536,7 @@ def tap_target_permanent(game: Game, instruction: OracleInstruction, context: Or
                 game, p, described, observer=observer,
                 source=context.source_permanent,
                 that_player=that_player,
+                defending=defending,
             ),
             fallback_players=(target, caster),
             fallback_on_invalid_choice=False,

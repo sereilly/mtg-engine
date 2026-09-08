@@ -22,7 +22,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..oracle_types import CONTROL_EXCHANGED_PERMANENTS, LAST_TARGET_CONTROLLER
-from ._common import (recorded_permanent_ids, one_recorded_permanent_id, attached_host, frozen_that_player_seat,
+from ._common import (recorded_permanent_ids, one_recorded_permanent_id, attached_host,
+                      defending_player_seat, frozen_that_player_seat,
                       permanent_matches_filter,
                       resolve_target_permanent,
                       resolve_target_slots)
@@ -171,16 +172,9 @@ def gain_control_until_eot(game: Game, instruction: OracleInstruction, context: 
     from ..subject_filters import subject_matches
 
     observer = game.players.index(context.caster)
-    # "target artifact **defending player controls**" (Kukemssa Pirates). The
-    # seat the trigger's announcement froze if there is one (CR 603.10), and
-    # otherwise the live combat's — the same two-step reader every other
-    # resolution that can meet the phrase already uses. A seat this cannot
-    # answer refuses the phrase, which offers nothing rather than everything.
-    defending = (context.trigger_context or {}).get(
-        "trigger_defending_player_index"
-    )
-    if not isinstance(defending, int):
-        defending = game.defending_player_index_now()
+    # "target artifact **defending player controls**" (Kukemssa Pirates),
+    # through the one reader of the phrase (CR 506.2/603.10).
+    defending = defending_player_seat(game, context)
     target = resolve_target_permanent(
         game, context,
         predicate=lambda perm: subject_matches(

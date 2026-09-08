@@ -1153,6 +1153,89 @@ def apply_temp_pt_boost(
     add_pt_modifier(perm, power, toughness, until=until)
 
 
+def defending_player_seat(game: "Game", context: "OracleExecutionContext") -> int | None:
+    """The seat a printed "defending player controls" names here (CR 506.2).
+
+    Two steps, in this order, and both of them are the rule rather than a
+    fallback chain:
+
+    * the seat the trigger's announcement **froze** (CR 603.10). A trigger
+      names the combat it fired in, and by the time it resolves that combat may
+      be over — or, in a multi-defender game (CR 802), a different attacker's
+      defender may be the live answer. ``trigger_defending_player_index`` is
+      the key every combat fire site stamps;
+    * otherwise the live combat's (``defending_player_index_now``), because a
+      *spell* printing the phrase is resolving inside the combat it names, and
+      outside a combat phase there is no defending player at all — so the
+      phrase matches nothing rather than matching a seat.
+
+    None is a real answer and ``subject_matches`` refuses the word when it gets
+    one, which is the direction that offers nothing rather than the whole table.
+
+    Here rather than at each reader because there were **two** copies of it
+    already (``handlers/pump`` for Yare, ``handlers/control_changes`` for
+    Kukemssa Pirates) and three resolutions that meet the same phrase and asked
+    nothing at all — so the narrowing rode the payload the whole way and was
+    then not tested. Two of those were live: Sidar Jabari's "tap target
+    creature defending player controls" refused every candidate and logged "no
+    valid permanent to tap", and Jangling Automaton's "untap all creatures
+    defending player controls" swept an empty set every time it attacked.
+    """
+    frozen = (context.trigger_context or {}).get("trigger_defending_player_index")
+    if isinstance(frozen, int):
+        return frozen
+    return game.defending_player_index_now()
+
+
+def damage_dealer(context: "OracleExecutionContext"):
+    """The object a resolving effect deals its damage **as** (CR 120.7).
+
+    CR 608.2h says it in one sentence: "If an ability states that an object does
+    something, it's the object as it exists — or as it most recently existed
+    — that does it, **not the ability**." CR 120.7 then makes that object the
+    source of the damage, and CR 113.7a is why the ability outliving its source
+    changes nothing.
+
+    So a permanent's activated or triggered ability deals damage as the
+    *permanent*, never as the card the ability is printed on.
+    ``context.card`` is the card as printed: one immutable object handed out
+    once per copy by the deck builder, shared by every copy in the process and
+    controlled by nobody. Four readers ask the source what it is, and the
+    printed card answers none of them —
+
+    * lifelink (CR 702.15b) reads a keyword off the source, and
+      ``damage_events.lifelink_life_gained`` returns 0 for anything with no
+      ``has_keyword``;
+    * a "deals damage" trigger narrowed by ``damager_self`` or by a noun phrase
+      compares the source *by identity* against a permanent
+      (``events.py``), and a card matches nothing;
+    * ``_announce`` publishes ``event_subject_permanent_id`` only for a source
+      with an id, so "…deals that much damage to **that creature**" cannot name
+      the dealer;
+    * ``damage_events.DAMAGED_THIS_GAME`` is kept *on the source permanent*, so
+      a card-sourced event writes no record at all.
+
+    A spell is its own source (CR 109.5) and has no permanent — which is
+    exactly what ``source_permanent is None`` says, and so is a trigger that
+    fired from a graveyard (``events.graveyard_trigger_events`` sets it None on
+    purpose). Both fall through to the card, which is the truth for them and
+    the behaviour every spell in the pool already had.
+
+    A permanent that has **left** still answers: Shard Phoenix sacrifices
+    itself to pay for the ability that sweeps and Floodgate's whole trigger is
+    its own departure. CR 608.2h reads such a source's last known information,
+    which is the detached ``Permanent`` — not the printed card.
+
+    The seat is *not* this question. ``damage_events.damage_source_seat``
+    already derives it for a card source by falling through to
+    ``Game.resolving_seats``, which is why "a source you control" was right
+    while everything above was wrong: one of the four readers had its own
+    answer and the other three did not.
+    """
+    source_permanent = context.source_permanent
+    return source_permanent if source_permanent is not None else context.card
+
+
 def apply_damage_to_creature(
     game: Game,
     perm: Permanent,

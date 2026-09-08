@@ -393,7 +393,35 @@ class StackResolutionMixin:
         instruction = item.ability_instruction
         if instruction is None or modal_trigger_modes(instruction):
             return
-        if item.target_permanent_id is not None or item.target_stack_item is not None:
+        if item.target_stack_item is not None:
+            return
+        # A stamped target means the event made the choice — **unless what the
+        # fire site stamped is the ability's own source**. The two combat fire
+        # sites that announce a permanent's trigger about itself thread the
+        # permanent's own controller and slot through ``target_player_index`` /
+        # ``target_permanent_index`` so that ``resolve_own_combatant`` can find
+        # it again (Mijae Djinn removes *itself* from combat, Ydwen Efreet
+        # *itself* from the block). That is a reference, not a choice, and this
+        # method could not tell the two apart: three shipped cards printing
+        # "target" had CR 603.3d's choice skipped and resolved against the
+        # attacker or blocker instead. Sidar Jabari found nothing to tap
+        # (its "defending player controls" narrowing correctly refused itself),
+        # Seasoned Marshal tapped **itself**, and Elite Javelineer dealt its 1
+        # damage to **itself**.
+        #
+        # ``announces_a_target`` is the second half and the safe direction: it
+        # is the lowering's own record that the printed line said the word, so
+        # a trigger the same fire site announces about an object the *event*
+        # named — Mindbender Spores' "put four fungus counters on **that
+        # creature**" — keeps the reference it has always had. Asked only in
+        # this branch, never as a general gate: for an unstamped trigger the
+        # record is evidence rather than proof, and a False there would take a
+        # real target away (Man-o'-War's bounce answers False today).
+        if item.target_permanent_id is not None and not (
+            item.source_permanent is not None
+            and item.target_permanent_id == item.source_permanent.permanent_id
+            and announces_a_target(instruction)
+        ):
             return
         spec = derive_instruction_spec([instruction])
         if spec is None:

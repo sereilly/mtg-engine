@@ -13,7 +13,8 @@ from ..models import Permanent
 from ..named_counters import counters_on
 from ..resumption import run_resumable
 from ._common import (divided_target_permanent, recorded_permanent_ids, 
-    apply_damage_to_creature, apply_temp_pt_boost, attached_host, evaluate_count,
+    apply_damage_to_creature, apply_temp_pt_boost, attached_host,
+    damage_dealer, defending_player_seat, evaluate_count,
     flip_coin,
     frozen_that_player_seat, per_recipient_amount, permanent_matches_filter,
     resolve_amount,
@@ -94,7 +95,7 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
     # ``biter: "attached"`` — "**Enchanted creature** deals 1 damage to target
     # creature with flying" (Dizzying Gaze). The same key
     # ``source_bites_target`` has read since Farrel's Mantle and for the same
-    # reason: CR 113.7a leaves the ability the Aura's and CR 119.3 makes the
+    # reason: CR 113.7a leaves the ability the Aura's and CR 120.7 makes the
     # *host* the damage's source, so only the dealer moves. Read here rather
     # than at each of this handler's dozen `source=` call sites, because the
     # source is chosen once and spent everywhere.
@@ -279,7 +280,7 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
             game.log.append(f"{card.name}: nothing to deal damage to")
             return True, "resolved"
         for perm in chosen:
-            apply_damage_to_creature(game, perm, damage, card)
+            apply_damage_to_creature(game, perm, damage, source_permanent or card)
         return True, "resolved"
     # "…to target creature or planeswalker **that player** controls."
     # (Chandra's Incinerator.) "That player" is a referent the *event* picked —
@@ -310,7 +311,7 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         if perm is None:
             game.log.append(f"{card.name}: nothing of theirs to damage")
             return True, "resolved"
-        apply_damage_to_creature(game, perm, damage, card)
+        apply_damage_to_creature(game, perm, damage, source_permanent or card)
         return True, "resolved"
     # "…and N damage to you": a second damage instruction in the same sequence
     # aimed at the source's controller rather than the spell's target. Reads the
@@ -709,7 +710,7 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
             if target_perm is None:
                 face = game.players[seat]
                 game._deal_damage_to_player(
-                    face, share, source=card, asks=True,
+                    face, share, source=source_permanent or card, asks=True,
                     then=lambda dealt: game.log.append(
                         f"{card.name} dealt {dealt} damage to {face.name}"
                     ),
@@ -912,7 +913,7 @@ def simulacrum_redirect(game: Game, instruction: OracleInstruction, context: Ora
         return True, "resolved"
 
     apply_damage_to_creature(
-        game, target_perm, amount, card,
+        game, target_perm, amount, damage_dealer(context),
         log_message=lambda dealt: (
             f"{card.name} dealt {dealt} damage to {target_perm.card.name} and {caster.name} gained {amount} life"
         ),
@@ -951,7 +952,7 @@ def _sweep_amount(instruction: OracleInstruction, context: OracleExecutionContex
 def deal_damage_each_creature_and_player(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     card = context.card
     amount = _sweep_amount(instruction, context)
-    _mass_damage_players_and_creatures(game, card, amount, lambda perm: True)
+    _mass_damage_players_and_creatures(game, damage_dealer(context), amount, lambda perm: True)
     game.log.append(f"{card.name} dealt {amount} damage to each creature and each player")
     return True, "resolved"
 
@@ -969,20 +970,20 @@ def deal_damage_and_self_damage(game: Game, instruction: OracleInstruction, cont
     )
     if target_perm is not None:
         game._mark_damage_on_permanent(
-            target_perm, amount, source=card,
+            target_perm, amount, source=damage_dealer(context),
             then=lambda dealt: game.log.append(
                 f"{card.name} dealt {dealt} damage to {target_perm.card.name}"
             ),
         )
     else:
         game._deal_damage_to_player(
-            target, amount, source=card,
+            target, amount, source=damage_dealer(context),
             then=lambda damage: game.log.append(
                 f"{card.name} dealt {damage} damage to {target.name}"
             ),
         )
     game._deal_damage_to_player(
-        caster, self_damage, source=card,
+        caster, self_damage, source=damage_dealer(context),
         then=lambda dealt: game.log.append(
             f"{card.name} dealt {dealt} damage to {caster.name} (self-damage)"
         ),
@@ -997,7 +998,7 @@ def _has_flying(perm: Permanent) -> bool:
     return perm.has_keyword("flying")
 
 
-def _mass_damage_players_and_creatures(game: Game, card, damage: int, creature_predicate) -> None:
+def _mass_damage_players_and_creatures(game: Game, source, damage: int, creature_predicate) -> None:
     """Earthquake/Hurricane sweep: damage every player, then every creature
     passing the predicate, then destroy the lethally damaged as one SBA batch.
 
@@ -1010,18 +1011,20 @@ def _mass_damage_players_and_creatures(game: Game, card, damage: int, creature_p
     one on the stack per creature dealt to, and the state-based sweep that kills
     them still runs once, after."""
     for player in game.players:
-        game._deal_damage_to_player(player, damage, source=card)
+        game._deal_damage_to_player(player, damage, source=source)
     for player in game.players:
         for perm in list(player.battlefield):
             if perm.is_creature and creature_predicate(perm):
-                apply_damage_to_creature(game, perm, damage, card)
+                apply_damage_to_creature(game, perm, damage, source)
 
 
 @effect_handler("earthquake_damage")
 def earthquake_damage(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     card = context.card
     damage = _sweep_amount(instruction, context)
-    _mass_damage_players_and_creatures(game, card, damage, lambda perm: not _has_flying(perm))
+    _mass_damage_players_and_creatures(
+        game, damage_dealer(context), damage, lambda perm: not _has_flying(perm)
+    )
     game.log.append(f"{card.name} dealt {damage} earthquake damage to each non-flying creature and each player")
     return True, "resolved"
 
@@ -1030,7 +1033,7 @@ def earthquake_damage(game: Game, instruction: OracleInstruction, context: Oracl
 def hurricane_damage(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     card = context.card
     damage = _sweep_amount(instruction, context)
-    _mass_damage_players_and_creatures(game, card, damage, _has_flying)
+    _mass_damage_players_and_creatures(game, damage_dealer(context), damage, _has_flying)
     game.log.append(f"{card.name} dealt {damage} hurricane damage to each flying creature and each player")
     return True, "resolved"
 
@@ -1071,7 +1074,7 @@ def deal_damage_to_random_creatures(
                 game.become_tapped(perm)
 
         apply_damage_to_creature(
-            game, perm, amount, card,
+            game, perm, amount, damage_dealer(context),
             log_message=lambda dealt: (
                 f"{card.name} landed on {perm.card.name} and dealt {dealt} damage"
             ),
@@ -1096,7 +1099,7 @@ def deal_damage_each_attacking_creature(
     for player in game.players:
         for perm in list(player.battlefield):
             if perm.is_creature and perm.attacking:
-                apply_damage_to_creature(game, perm, damage, card)
+                apply_damage_to_creature(game, perm, damage, damage_dealer(context))
                 struck += 1
     game.log.append(f"{card.name} dealt {damage} damage to each of {struck} attacking creatures")
     return True, "resolved"
@@ -1143,9 +1146,9 @@ def coin_flip_damage_loop(
             f"{'heads' if opponent_heads else 'tails'}"
         )
         if not caster_heads:
-            game._deal_damage_to_player(caster, damage, source=card)
+            game._deal_damage_to_player(caster, damage, source=damage_dealer(context))
         if not opponent_heads:
-            game._deal_damage_to_player(opponent, damage, source=card)
+            game._deal_damage_to_player(opponent, damage, source=damage_dealer(context))
         if caster_heads and opponent_heads:
             break
     game.log.append(f"{card.name}: both coins came up heads after {rounds} flip(s)")
@@ -1238,7 +1241,7 @@ def deal_damage_to_recorded_permanents(
             observer=observer, source=context.source_permanent,
         ):
             continue
-        apply_damage_to_creature(game, permanent, damage, card)
+        apply_damage_to_creature(game, permanent, damage, damage_dealer(context))
         struck.append(permanent.card.name)
     game.log.append(
         f"{card.name} dealt {damage} damage to {', '.join(struck)}"
@@ -1497,7 +1500,7 @@ def source_bites_target(game, instruction, context):
         source = attached_host(game, source)
     elif instruction.payload.get("biter") == "event_subject":
         # ``biter: "event_subject"`` — the object the firing event was about
-        # deals the damage (Pandemonium's entering creature). CR 119.3: the
+        # deals the damage (Pandemonium's entering creature). CR 120.7: the
         # damage is the *creature's*, not the enchantment's, so the dealer moves
         # and the ability stays where it is, exactly as it does for an Aura one
         # branch up. Read by the stable id the fire site froze (CR 400.7 — the
@@ -1826,7 +1829,7 @@ def target_bites_itself(game, instruction, context):
     """"Target creature deals damage to itself equal to its power."
     (Repentance.)
 
-    CR 119.3: the damage is dealt **by the creature**, so the source is the
+    CR 120.7: the damage is dealt **by the creature**, so the source is the
     permanent itself and not the sorcery — which is what makes a creature with
     protection from its own colour, or one whose damage lifelinks, answer the
     way the card reads. The amount is ``effective_power``, CR 613's computed
@@ -2653,6 +2656,18 @@ def deal_damage_each_matching(
         if instruction.payload.get("amount_from_source_power")
         else None
     )
+    # And the dealer is the permanent whatever the amount was read off
+    # (CR 120.7). This used to be ``card`` for every branch but the bite above,
+    # so twelve permanents — Pestilence's neighbours in the pool: Fire Ants,
+    # Shard Phoenix, Subterranean Spirit, Downdraft, Cinder Giant, Crater
+    # Hellion, Floodgate, Goblin Shrine, Goblin Swine-Rider, Heart of Bogardan,
+    # Scalding Salamander, Sorrow's Path — swept the board as their printed
+    # card. Nothing crashed and nothing was missing: a lifelinking Fire Ants
+    # gained no life, a "whenever this creature deals damage" trigger did not
+    # fire, and the source kept no record of what it had damaged.
+    # ``damage_dealer`` is the one answer; see its docstring for the four
+    # readers.
+    dealer = damage_dealer(context)
     if instruction.payload.get("amount_from_source_power"):
         damage = max(0, biter.effective_power) if biter is not None else 0
     else:
@@ -2684,11 +2699,21 @@ def deal_damage_each_matching(
         chosen = game.permanent_by_id(context.target_permanent_id)
         if chosen is not None:
             targeted = game.controller_index_of(chosen)
+    # "…each creature without flying **defending player** controls" (Scalding
+    # Salamander). CR 506.2's seat, and the one word in this sentence that no
+    # read of the board can answer at resolution: by then the combat the
+    # trigger fired in may be over. The fire site froze it (CR 603.10) and every
+    # other handler in the pool reads it off the trigger context under this
+    # name; this one never asked, so `subject_matches` refused the word — the
+    # direction that narrows to nothing — and Exodus's Salamander logged "found
+    # nothing to damage" every time its only ability resolved.
+    defending = defending_player_seat(game, context)
     struck = []
     for perm in list(game.all_permanents()):
         if not subject_matches(
             game, perm, described, observer=observer,
             source=context.source_permanent, targeted_player=targeted,
+            defending=defending,
         ):
             continue
         dealt = damage
@@ -2700,13 +2725,11 @@ def deal_damage_each_matching(
             # not dealt to.
             if dealt <= 0:
                 continue
-        # The **dealer** for a bite is the permanent (CR 119.3): lifelink, "a
-        # source you control" and a "deals damage" trigger all read it, and the
-        # printed `CardDefinition` every other sweep passes is shared by every
-        # copy in the process and answers none of them. Only where the sentence
-        # made the source the dealer — every other sweep here keeps the card it
-        # has always passed.
-        apply_damage_to_creature(game, perm, dealt, biter if biter is not None else card)
+        # The dealer is the permanent (CR 120.7) — for the bite because the
+        # sentence made the source the dealer, and for every other branch
+        # because the rule does. ``dealer`` already folds a spell back to its
+        # printed card, so Pyroclasm is unchanged.
+        apply_damage_to_creature(game, perm, dealt, biter if biter is not None else dealer)
         struck.append(f"{perm.card.name} ({dealt})" if per_recipient else perm.card.name)
     if not struck:
         game.log.append(f"{card.name} found nothing to damage")

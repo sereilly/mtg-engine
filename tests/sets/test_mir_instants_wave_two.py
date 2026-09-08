@@ -112,7 +112,7 @@ def test_shallow_grave_takes_the_last_creature_card_added(set_pool):
 #
 # Three sentences and three different questions. The tap chooses the target;
 # the bite reads the creature the tap recorded, and deals *the creature's*
-# damage (CR 119.3) rather than the spell's; the prevention is the shipped
+# damage (CR 120.7) rather than the spell's; the prevention is the shipped
 # to-and-by shield Maze of Ith already prints.
 #
 # "That player" has its antecedent in the **timing clause**, which is a

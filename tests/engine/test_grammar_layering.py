@@ -1741,7 +1741,7 @@ FAMILY_SHARED = {
     # branches had already drawn: everything left in `damage` computes a
     # **quantity** and hands it to the generic `deal_damage`, whose source is
     # the spell or the ability, while a bite reads one object's power at
-    # resolution and makes *that object* the source of the damage (CR 119.3) —
+    # resolution and makes *that object* the source of the damage (CR 120.7) —
     # which is why each is its own instruction kind rather than an amount key.
     # A floor for `_amounts`' reason exactly: `damage` reads it and it reads
     # nothing back.
