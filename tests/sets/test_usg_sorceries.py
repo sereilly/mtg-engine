@@ -154,3 +154,47 @@ def test_w2g2_gamble_leaves_a_second_card_alone(set_pool):
     game._settle()
 
     assert len(alice.hand) == 1
+
+
+def test_w2g2_exhume_gives_every_seat_its_own_pick(set_pool):
+    """"Each player puts a creature card from their graveyard onto the
+    battlefield."
+
+    Two prompts, one per seat, each over that seat's own pile — and the seat
+    that answers is not the seat that cast the spell, which is the half a
+    reanimation resolving one target could not express. The opponent's creature
+    must arrive on the opponent's side.
+    """
+    pool = set_pool("USG")
+    game, alice, bob = _g2s_cast(set_pool, "Exhume")
+    alice.graveyard = [pool["Serra Zealot"]]
+    bob.graveyard = [pool["Shivan Hellkite"]]
+
+    game.cast_from_hand(0, "Exhume")
+
+    owed = [c.player_index for c in game.pending_choices if c.kind == "search_library"]
+    assert sorted(owed) == [0, 1]
+
+    for seat in (0, 1):
+        assert game.resolve_pending_choice(
+            "search_library", seat, library_index=0, zone="graveyard"
+        )
+    game._settle()
+
+    assert [p.card.name for p in game.controlled_by(0)] == ["Serra Zealot"]
+    assert [p.card.name for p in game.controlled_by(1)] == ["Shivan Hellkite"]
+
+
+def test_w2g2_exhume_asks_nobody_over_an_empty_graveyard(set_pool):
+    """A prompt over a pile with no creature card in it is a decision with one
+    answer, and arming it would stop the game to ask it. CR 608.2's "as much as
+    possible": the seat with nothing puts nothing."""
+    pool = set_pool("USG")
+    game, alice, bob = _g2s_cast(set_pool, "Exhume")
+    alice.graveyard = [pool["Serra Zealot"]]
+    bob.graveyard = [pool["Gamble"]]
+
+    game.cast_from_hand(0, "Exhume")
+
+    owed = [c.player_index for c in game.pending_choices if c.kind == "search_library"]
+    assert owed == [0]

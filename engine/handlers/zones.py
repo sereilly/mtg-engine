@@ -4191,6 +4191,70 @@ def mill_target_player(game: Game, instruction: OracleInstruction, context: Orac
     return True, "resolved"
 
 
+@effect_handler("each_player_reanimates")
+def each_player_reanimates(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Each player puts a creature card from their graveyard onto the
+    battlefield." (Exhume.)
+
+    One pick per seat, out of that seat's own graveyard and onto that seat's own
+    battlefield — which is why it arms a prompt per player rather than resolving
+    a target: nothing is announced (CR 115.1), there is nothing for targeting to
+    protect in a public zone, and the seat that chooses is not the seat that
+    cast the spell. The same ``search_library`` prompt Reincarnation's graveyard
+    pick already uses, with the two seats named on it, so one picker, one AI
+    policy and one re-check serve every reading of "a card from a graveyard".
+
+    Offered in CR 101.4's order — the active player first — and only to a seat
+    whose graveyard actually holds one: a prompt over an empty pile is a
+    decision with one answer, and arming it would stop the game to ask it
+    (``ChoiceSpec.holds_priority``). A seat that cannot puts nothing, which is
+    CR 608.2's "as much as possible".
+
+    ``up_to`` is deliberately off. The sentence is not an offer: a player who
+    has a creature card in their graveyard puts one onto the battlefield.
+    """
+    card_type = str(instruction.payload.get("card_type", "any"))
+    total = len(game.players)
+    active = game.active_player_index or 0
+    seats = sorted(
+        (i for i, p in enumerate(game.players) if not p.lost),
+        key=lambda i: ((i - active) % total, i),
+    )
+    armed = 0
+    for seat in seats:
+        player = game.players[seat]
+        if not any(
+            card_has_type(card, card_type) if card_type != "any" else True
+            for card in player.graveyard
+        ):
+            game.log.append(f"{player.name} has no {card_type} card to return")
+            continue
+        game.arm_pending_choice(
+            "search_library", seat,
+            zone_seat=seat,
+            battlefield_seat=seat,
+            count=1,
+            card_type=card_type,
+            zones=("graveyard",),
+            restrictions={},
+            destination="battlefield",
+            destinations=[],
+            tapped=[],
+            card_name=context.card.name if context.card is not None else "",
+            enters_tapped=False,
+            untap_found_if=None,
+            up_to=False,
+            exile_rest=False,
+            reveal=False,
+            record=context.results,
+            record_key=None,
+        )
+        armed += 1
+    if not armed:
+        game.log.append(f"{context.card.name}: no graveyard holds one")
+    return True, "resolved"
+
+
 @effect_handler("separate_library_top_into_piles")
 def separate_library_top_into_piles(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Phyrexian Portal, all three of its sentences.

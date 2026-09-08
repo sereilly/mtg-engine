@@ -522,6 +522,14 @@ class PutOntoBattlefield:
     #: only reader that has the whole printed line in view —
     #: ``rebinding.bind_recorded_card``.
     bound_card_from: str | None = None
+    #: "**Each player** puts a creature card from their graveyard onto the
+    #: battlefield." (Exhume.) The seat that performs the move, printed in
+    #: front of the verb — the same field ``ReturnToZone`` carries for the same
+    #: reason, and absent for every imperative, where CR 608.2c makes the
+    #: subject the ability's controller. It is not a narrowing on the target:
+    #: "their graveyard" says which pile and this says who chooses out of it,
+    #: and the lowering checks the two against each other.
+    actor: "PlayerRef | None" = None
 
 
 @dataclass(frozen=True)
