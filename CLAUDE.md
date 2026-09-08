@@ -246,6 +246,7 @@ python scripts/set_progress.py        # regenerate SET_PROGRESS.md (per-set impl
 python scripts/check_all.py           # every CI guard check, in ci.yml's order, one summary table (--freshness adds the tracker regenerations + a clean-tree check)
 python scripts/rules_progress.py      # regenerate RULES_PROGRESS.md (CR test-coverage tracker); --check fails on unannotated tests
 python scripts/rules_gaps.py          # rank untested CR rules by engine citations + section momentum; also flags stale CR citations in engine/web (advisory, stdout only)
+python scripts/unasked_narrowings.py  # printed narrowings whose handler never supplies the seat `subject_matches` needs — the fail-closed half of the asymmetric-gate class (advisory; --check to fail)
 python scripts/behaviour_classes.py   # regenerate BEHAVIOUR_CLASSES.md (behavioural-equivalence tracker); --check fails on drift, --accept re-snapshots; --set <CODE> prints which existing classes that set's cards land in (stdout only)
 python scripts/parse_coverage.py      # regenerate PARSE_COVERAGE.md (oracle-text parse-coverage tracker); --check fails on unclaimed text; --set <CODE> prints that set's per-card claims/unclaimed (stdout only)
 python scripts/grammar_coverage.py    # regenerate GRAMMAR_COVERAGE.md (how much of the pool the parser reads); --check fails on regression, --accept re-snapshots floors; --set <CODE> prints that set's row (stdout only)

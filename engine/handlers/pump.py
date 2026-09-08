@@ -9,6 +9,7 @@ from ._common import (divided_target_permanent, recorded_permanent_ids,
     bound_permanent,
     block_pair_permanents,
     attached_host,
+    defending_player_seat,
     frozen_that_player_seat,
     permanent_matches_filter,
     resolve_amount,
@@ -178,16 +179,9 @@ def pump_target_creature_until_eot(game: Game, instruction: OracleInstruction, c
         # green creature on the table. One reader, with CR 109.5's observer and
         # the ability's own source, is what keeps the list the picker offers
         # and the set this shrinks the same list.
-        # "target creature **defending player controls**" (Yare). The seat the
-        # trigger's announcement froze if there is one (CR 603.10), and
-        # otherwise the live combat's — a spell is resolving inside the combat
-        # it names, and outside combat there is no defending player at all
-        # (CR 506.2), which makes the phrase match nothing.
-        defending = (context.trigger_context or {}).get(
-            "trigger_defending_player_index"
-        )
-        if not isinstance(defending, int):
-            defending = game.defending_player_index_now()
+        # "target creature **defending player controls**" (Yare), through the
+        # one reader of the phrase (CR 506.2/603.10).
+        defending = defending_player_seat(game, context)
         return subject_matches(
             game, perm, filters,
             observer=game.players.index(caster),

@@ -5,6 +5,7 @@ import re
 
 from ..ante import is_ante_card
 from ..card_hooks import UNTAPPED_ARTIFACT_PROTECTORS
+from ..control import base_controller
 from ..auras import aura_restriction_active
 from ..auras import attached_subject_triggers
 from ..damage_events import EVENT_LOCK, damage_source_seat, deal_damage, lifelink_life_gained
@@ -610,13 +611,22 @@ class EffectsMixin:
         mid-resolution), and `controller_index_of` answers None for a permanent
         on no battlefield. `base_controller_index` is never rewritten, so it is
         the right answer rather than a guess.
+
+        Through ``control.base_controller``, which is where that value lives:
+        it is a **metadata key**, not an attribute, so the ``getattr`` that
+        stood here answered None for every permanent there has ever been and
+        the fallback this docstring describes never once ran. Shard Phoenix is
+        the card that shows it — it sacrifices itself to pay for the ability
+        that sweeps, so by resolution its controller is only knowable from the
+        record, and a lifelinking Phoenix gained nothing at all. Same reader as
+        ``damage_events.damage_source_seat``, one file over, which had it right.
         """
         gained = lifelink_life_gained(source, dealt)
         if gained <= 0:
             return
         seat = self.controller_index_of(source)
-        if seat is None:
-            seat = getattr(source, "base_controller_index", None)
+        if seat is None and isinstance(source, Permanent):
+            seat = base_controller(source)
         if seat is None or not (0 <= seat < len(self.players)):
             return
         self._gain_life(self.players[seat], gained, source_name="lifelink")

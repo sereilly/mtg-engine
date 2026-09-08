@@ -7,8 +7,8 @@ already drew. Everything left in `damage` computes a **quantity** — a printed
 number, a count of a board, a record of an earlier step — and hands it to the
 generic ``deal_damage``, whose source is the spell or the ability. A bite reads
 one object's **power** at resolution (CR 613's computed value, not the printed
-one) and that object is the *dealer*: CR 119.3's damage is dealt by the
-creature, so lifelink, "a source you control" and "damage dealt by a creature"
+one) and that object is the *dealer*: CR 120.7's source of damage is the
+object that dealt it, so the creature is, so lifelink, "a source you control" and "damage dealt by a creature"
 all answer differently from the generic kind. That is why each of these is its
 own instruction rather than an amount key.
 

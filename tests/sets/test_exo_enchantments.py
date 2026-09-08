@@ -1317,7 +1317,7 @@ def test_w2g2_pandemonium_asks_the_entering_creatures_controller(set_pool):
 
 
 def test_w2g2_pandemonium_bites_with_the_creature_not_the_enchantment(set_pool):
-    """CR 119.3: the *creature* deals the damage, so the amount is its power.
+    """CR 120.7: the *creature* deals the damage, so the amount is its power.
 
     Pandemonium is a 0-power enchantment. Routed through the bite's default
     biter — the ability's own source — the card compiles, resolves, logs
@@ -1463,7 +1463,7 @@ def _p4_board(set_pool):
 def test_dizzying_gaze_damage_comes_from_the_enchanted_creature(set_pool):
     """"**Enchanted creature** deals 1 damage to target creature with flying."
 
-    CR 119.3: the source of the damage is the object the card names, and here
+    CR 120.7: the source of the damage is the object the card names, and here
     that is the host rather than the Aura. Found by
     ``scripts/parse_coverage.py``'s deletion probe at the promotion gate —
     deleting the word "enchanted" left the compiled program *identical*, which

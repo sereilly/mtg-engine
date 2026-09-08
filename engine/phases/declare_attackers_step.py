@@ -1354,7 +1354,7 @@ class DeclareAttackersStepMixin:
             for trig in matching_triggers(
                 permanent.effective_card, condition_kinds={"one_or_more_attack"}
             ):
-                self._stack_push(
+                pushed = self._stack_push(
                     StackItem(
                         card=permanent.card,
                         caster_index=controller_index,
@@ -1367,7 +1367,14 @@ class DeclareAttackersStepMixin:
                         ability_text=trig.source_line,
                     )
                 )
-                self.log.append(f"{permanent.card.name} triggered on attack (added to stack)")
+                # Only if it actually went on: CR 603.4 can refuse the push
+                # (``trigger_condition_holds``), and a line saying "added to
+                # stack" under one saying it didn't trigger is a record
+                # contradicting itself.
+                if pushed is not None:
+                    self.log.append(
+                        f"{permanent.card.name} triggered on attack (added to stack)"
+                    )
 
     def _fire_creature_attacks_triggers(self, controller_index: int, attacker_indices: list[int]) -> None:
         """Put each attacker's own "whenever this creature attacks" triggers on
@@ -1406,7 +1413,7 @@ class DeclareAttackersStepMixin:
                 # one moment.
                 if "attacks_alone" in trig.condition.payload and len(attacker_indices) != 1:
                     continue
-                self._stack_push(
+                pushed = self._stack_push(
                     StackItem(
                         card=permanent.card,
                         caster_index=controller_index,
@@ -1434,7 +1441,10 @@ class DeclareAttackersStepMixin:
                         },
                     )
                 )
-                self.log.append(f"{permanent.card.name} triggered on attack (added to stack)")
+                if pushed is not None:
+                    self.log.append(
+                        f"{permanent.card.name} triggered on attack (added to stack)"
+                    )
             # "Whenever **enchanted creature** attacks or blocks" (Imprison),
             # "**When enchanted creature attacks**" (Contempt). The same events,
             # watched by something attached to the attacker rather than by the

@@ -1907,7 +1907,7 @@ class DeclareBlockersStepMixin:
                     ]
                     firing_contexts = _threshold_firings(trig, admitted)
                 for firing_context in firing_contexts:
-                    self._stack_push(
+                    pushed = self._stack_push(
                         StackItem(
                             card=source.card,
                             caster_index=source_seat,
@@ -1924,7 +1924,14 @@ class DeclareBlockersStepMixin:
                             trigger_context=firing_context,
                         )
                     )
-                    self.log.append(f"{source.card.name} triggered on block (added to stack)")
+                    # Only if it actually went on: CR 603.4 can refuse the
+                    # push (``trigger_condition_holds``), and a line saying
+                    # "added to stack" under one saying it didn't trigger is a
+                    # record contradicting itself.
+                    if pushed is not None:
+                        self.log.append(
+                            f"{source.card.name} triggered on block (added to stack)"
+                        )
             # "…whenever **this creature** blocks or becomes blocked by a
             # creature this combat, …" (Goblin Flotilla). The delayed spelling
             # of the joined block event, which belongs to no permanent's

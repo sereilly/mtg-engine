@@ -269,6 +269,89 @@ class StackResolutionMixin:
                 )
             )
 
+    def _ability_execution_context(self, item: StackItem) -> OracleExecutionContext:
+        """The context an ability on the stack runs in.
+
+        One builder because CR 603.4 asks its condition **twice** — once as the
+        ability triggers (:meth:`trigger_condition_holds`, from ``_stack_push``)
+        and once as it resolves — and the two answers have to be about the same
+        reading of the same object. A second construction here would be two
+        contexts that can disagree about what "you" and "that creature" mean,
+        which is exactly the shape of bug the rule's own wording invites: it is
+        the *same* condition, asked at two moments.
+        """
+        target_idx = (
+            item.target_player_index
+            if item.target_player_index is not None
+            else self._default_opposing_seat(item.caster_index)
+        )
+        return OracleExecutionContext(
+            caster=self.players[item.caster_index],
+            target=self.players[target_idx],
+            card=item.card,
+            target_permanent_index=item.target_permanent_index,
+            target_permanent_id=item.target_permanent_id,
+            x_value=item.x_value,
+            source_permanent=item.source_permanent,
+            ability_text=item.ability_text,
+            stack_target=item.target_stack_item,
+            trigger_context=item.trigger_context,
+            choices=item.choices,
+            # CR 603.7d: a delayed ability resolves with the scratchpad
+            # its creating effect had, because the step that recorded
+            # what "that creature" names ran a turn ago. Empty for every
+            # other trigger, which is the scratchpad they already had.
+            results=dict(item.captured_results),
+        )
+
+    def trigger_condition_holds(self, item: StackItem) -> bool:
+        """CR 603.4's **first** check: does this ability trigger at all?
+
+        "When/Whenever/At [trigger event], **if [condition]**, [effect]" is
+        asked when the trigger event occurs, and the ability "triggers only if
+        it is [true]; otherwise it does nothing" — it never reaches the stack.
+        The rule then asks the same condition again on resolution, which is the
+        read in ``_resolve_ability``.
+
+        Only that second half existed, which made the outcome right for the
+        wrong reason: a false condition produced an ability that went on the
+        stack, sat there and then removed itself. That is observable rather
+        than untidy — the object can be countered, every player has to pass
+        priority on it, and anything watching for an ability being put onto the
+        stack sees one that never triggered. Spectral Bears and Wall of
+        Caltrops are the two it is easiest to watch happen on.
+
+        Asked at ``_stack_push``, which is *the* one place an object goes on
+        the stack, rather than at a fire site: five fire sites (the upkeep,
+        draw and end steps, and the two delayed-trigger scans) had each grown
+        their own copy of the check and the rest had none — which is why Chrome
+        Replicator's entry trigger correctly never announced while Spectral
+        Bears' attack trigger always did. The seam is the only place the next
+        fire site cannot forget.
+
+        Scoped by the **payload key**, which is a trigger's alone: no activated
+        ability and no spell instruction in the pool carries ``intervening_if``
+        because the grammar lowers it only under a trigger, so the presence of
+        the key is itself the discriminator and no second list of kinds is
+        needed. A **copy** is exempt (CR 707.10: copying an ability on the
+        stack is not that ability triggering, so 603.4's first check either has
+        already happened or never applied).
+        """
+        if item is None or item.is_copy:
+            return True
+        instruction = item.ability_instruction
+        if instruction is None:
+            return True
+        gate = (instruction.payload or {}).get("intervening_if")
+        if gate is None:
+            return True
+        if evaluate_condition(self, self._ability_execution_context(item), gate):
+            return True
+        self.log.append(
+            f"{item.card.name} didn't trigger: its condition wasn't met (CR 603.4)"
+        )
+        return False
+
     def _choose_trigger_mode(
         self, item: StackItem, *, targets_already_chosen: bool = False
     ) -> None:
@@ -393,7 +476,35 @@ class StackResolutionMixin:
         instruction = item.ability_instruction
         if instruction is None or modal_trigger_modes(instruction):
             return
-        if item.target_permanent_id is not None or item.target_stack_item is not None:
+        if item.target_stack_item is not None:
+            return
+        # A stamped target means the event made the choice — **unless what the
+        # fire site stamped is the ability's own source**. The two combat fire
+        # sites that announce a permanent's trigger about itself thread the
+        # permanent's own controller and slot through ``target_player_index`` /
+        # ``target_permanent_index`` so that ``resolve_own_combatant`` can find
+        # it again (Mijae Djinn removes *itself* from combat, Ydwen Efreet
+        # *itself* from the block). That is a reference, not a choice, and this
+        # method could not tell the two apart: three shipped cards printing
+        # "target" had CR 603.3d's choice skipped and resolved against the
+        # attacker or blocker instead. Sidar Jabari found nothing to tap
+        # (its "defending player controls" narrowing correctly refused itself),
+        # Seasoned Marshal tapped **itself**, and Elite Javelineer dealt its 1
+        # damage to **itself**.
+        #
+        # ``announces_a_target`` is the second half and the safe direction: it
+        # is the lowering's own record that the printed line said the word, so
+        # a trigger the same fire site announces about an object the *event*
+        # named — Mindbender Spores' "put four fungus counters on **that
+        # creature**" — keeps the reference it has always had. Asked only in
+        # this branch, never as a general gate: for an unstamped trigger the
+        # record is evidence rather than proof, and a False there would take a
+        # real target away (Man-o'-War's bounce answers False today).
+        if item.target_permanent_id is not None and not (
+            item.source_permanent is not None
+            and item.target_permanent_id == item.source_permanent.permanent_id
+            and announces_a_target(instruction)
+        ):
             return
         spec = derive_instruction_spec([instruction])
         if spec is None:
@@ -904,41 +1015,13 @@ class StackResolutionMixin:
                 self._log_ability_outcome(item, True, "")
             return
         if item.ability_instruction is not None:
-            caster = self.players[item.caster_index]
-            target_idx = (
-                item.target_player_index
-                if item.target_player_index is not None
-                else self._default_opposing_seat(item.caster_index)
-            )
-            target = self.players[target_idx]
-            context = OracleExecutionContext(
-                caster=caster,
-                target=target,
-                card=item.card,
-                target_permanent_index=item.target_permanent_index,
-                target_permanent_id=item.target_permanent_id,
-                x_value=item.x_value,
-                source_permanent=item.source_permanent,
-                ability_text=item.ability_text,
-                stack_target=item.target_stack_item,
-                trigger_context=item.trigger_context,
-                choices=item.choices,
-                # CR 603.7d: a delayed ability resolves with the scratchpad
-                # its creating effect had, because the step that recorded
-                # what "that creature" names ran a turn ago. Empty for every
-                # other trigger, which is the scratchpad they already had.
-                results=dict(item.captured_results),
-            )
-            # CR 603.4: an intervening-if is checked *again* as the ability
-            # resolves, and the ability does nothing if it is false. The grammar
-            # has lowered that condition onto the payload since it learned to
-            # parse one and nothing read it — so a conditional trigger would
-            # have fired unconditionally, which is the silent wrongness the
-            # compiler comment claims to have fixed one layer earlier. This is
-            # the read. No card in the shipped pool produces the key (the
-            # conditional triggers there are gated at their fire site instead),
-            # so nothing changes behaviour today; it is armed for the first card
-            # that needs it.
+            context = self._ability_execution_context(item)
+            # CR 603.4's **second** check: an intervening-if is asked again as
+            # the ability resolves, and the ability is removed from the stack
+            # and does nothing if it is false. 102 supported cards compile the
+            # key; the comment that stood here said no card in the shipped pool
+            # did, which was the reason the rule's *first* check went unbuilt
+            # for as long as it did.
             gate = (item.ability_instruction.payload or {}).get("intervening_if")
             if gate is not None and not evaluate_condition(self, context, gate):
                 self.log.append(
