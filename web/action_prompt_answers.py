@@ -1358,20 +1358,6 @@ def _action_loyalty_recipient_confirm(session, req, seat_type):
     if not session.game.confirm_loyalty_recipient(req.seat, req.target_permanent_id):
         raise HTTPException(status_code=400, detail="invalid loyalty-counter recipient")
 
-@action_handler("least_power_choice_confirm")
-def _action_least_power_choice_confirm(session, req, seat_type):
-    # Drop of Honey: the controller picks which of the creatures tied for
-    # least power is destroyed (target_seat + target_permanent_index).
-    pending = session.game.pending_least_power_choice
-    if pending is None or pending.get("controller_index") != req.seat:
-        raise HTTPException(status_code=400, detail="no least-power choice is pending for you")
-    if req.target_seat is None or req.target_permanent_index is None:
-        raise HTTPException(status_code=400, detail="target_seat and target_permanent_index are required")
-    if not session.game.confirm_least_power_choice(
-        req.seat, req.target_seat, req.target_permanent_index
-    ):
-        raise HTTPException(status_code=400, detail="invalid creature choice")
-
 @action_handler("player_choice_confirm")
 def _action_player_choice_confirm(session, req, seat_type):
     # Backdraft: "Choose a player who cast one or more sorcery spells this

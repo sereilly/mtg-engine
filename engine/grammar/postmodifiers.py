@@ -36,31 +36,22 @@ from typing import Callable
 from . import ast
 from .amounts import (accept_counter_kind, accept_counters_on_it_bound,
                       accept_source_counter_bound)
-from .bounds import (accept_comparative_characteristic,
-                     accept_source_relative_comparison, parse_comparison)
+from .bounds import (accept_cards_in_hand_bound,
+                     accept_comparative_characteristic,
+                     accept_source_relative_comparison, accept_superlative,
+                     parse_comparison)
 from .errors import GrammarError
 from .histories import accept_history_relation, accept_relative_clause_history
 from .lexer import PT, SELF
 from .names import accept_name_comparison, accept_original_expansion, parse_card_name
 from .readers import (_SELF_NOUNS, _accept_back_referenced_controller,
-                      _parse_keyword_list, accept_source_reference)
+                      _parse_keyword_list, _protection_quality,
+                      accept_source_reference)
 from .seat_relations import accept_seat_relation
 from .stream import TokenStream
 from .zones import accept_zone_scope
 from .vocabulary import singular as _singular
 
-
-def _protection_quality(word: str):
-    """The quality a protection clause's word names, or None.
-
-    Late-bound through a one-line wrapper because ``engine/keywords.py`` sits
-    *above* the grammar in the import order — the same inversion this file's
-    docstring describes for ``parse_object_filter``, taken for a leaf instead
-    of for a production.
-    """
-    from ..keywords import protection_quality
-
-    return protection_quality(word)
 
 # "…attached to that creature" / "…attached to it" — the trailing clause naming
 # what an Aura or Equipment is on, and the referent each consumer resolves.
@@ -68,41 +59,6 @@ def _protection_quality(word: str):
 # relation dropped, and a dropped relation on a sweep takes the whole board.
 _ATTACHED_TO_REFERENTS = {("that", "creature"): "target", ("it",): "source"}
 
-
-
-def _accept_cards_in_hand_bound(stream: TokenStream) -> str | None:
-    """``greater than the number of cards in your hand`` (Ensnaring Bridge).
-
-    A bound off a **hidden zone**, which is what separates it from the two
-    counter bounds beside it: no board holds the number, so neither the pure
-    matcher nor a source-relative read can answer it — only a caller holding
-    the seat can. Whose hand is returned rather than baked in, so a card
-    printing "an opponent's hand" is data here and a matcher branch there.
-
-    Read *before* ``parse_comparison``, whose "N or greater" shape opens on a
-    quantity and would refuse these words with "expected a quantity" — a
-    refusal naming the one thing the phrase does not contain. Declines without
-    consuming, so every other bound keeps the reading it has.
-    """
-    mark = stream.mark()
-    if not stream.accept_phrase(
-        "greater", "than", "the", "number", "of", "cards", "in",
-    ):
-        stream.reset(mark)
-        return None
-    if stream.accept_phrase("your", "hand"):
-        return "you"
-    # "…each creature that player controls **with power greater than the number
-    # of cards in their hand**." (Noetic Scales.) The same bound over a
-    # different seat, which is the whole of what this function's docstring
-    # already promised: whose hand is returned rather than baked in. "Their"
-    # agrees with the subject the sentence has already named — "each creature
-    # **that player** controls" — so it is the seat the firing event froze, and
-    # the matcher refuses it wherever nothing froze one.
-    if stream.accept_phrase("their", "hand"):
-        return "that_player"
-    stream.reset(mark)
-    return None
 
 
 def _parse_postmodifiers(
@@ -466,6 +422,17 @@ def _parse_postmodifiers(
             # characteristic and is tried before the branches that expect the
             # characteristic first. Declines without consuming, so every other
             # "with …" phrase keeps its own reading.
+            # "…**with the least toughness**" (Purging Scythe), "…**with the
+            # greatest mana value**" (Tariff, Juxtapose). Read before every
+            # bound below because it opens on the article rather than on a
+            # characteristic, and because what it names is not a bound at all:
+            # a superlative picks one object out of the set the rest of the
+            # phrase describes, so the payload key it emits is one no matcher
+            # answers (see ``ast.Superlative``). Declines without consuming.
+            superlative = accept_superlative(stream)
+            if superlative is not None:
+                d.superlative = superlative
+                continue
             comparative = accept_comparative_characteristic(stream)
             if comparative is not None:
                 d.characteristic_vs_source = comparative
@@ -496,7 +463,7 @@ def _parse_postmodifiers(
                 if source_counters is not None:
                     d.power_at_most_source_counters = source_counters
                     continue
-                hand_bound = _accept_cards_in_hand_bound(stream)
+                hand_bound = accept_cards_in_hand_bound(stream)
                 if hand_bound is not None:
                     d.power_greater_than_cards_in_hand = hand_bound
                     continue

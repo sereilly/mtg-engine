@@ -1843,6 +1843,14 @@ def test_jihad_interactive_prompt_confirms_color_and_opponent(arn_by_name, all_c
 # ===========================================================================
 
 def test_drop_of_honey_tie_prompts_human_controller(arn_by_name, all_cards):
+    """The tie-break is the generic ``permanent_choice`` prompt now.
+
+    Drop of Honey's name-keyed hook was retired at Urza's Saga: the sentence is
+    a superlative noun phrase the grammar reads, so the tie is
+    ``choose_permanent``'s ``only_on_tie`` rather than a prompt kind of this
+    card's own. Purging Scythe prints the same sentence with toughness for
+    power, which is why the hook stopped meeting its own bar.
+    """
     honey = Permanent(card=arn_by_name["Drop of Honey"])
     own_sprite = Permanent(card=_get(all_cards, "Scryb Sprites"))   # 1/1
     enemy_hero = Permanent(card=_get(all_cards, "Benalish Hero"))   # 1/1
@@ -1851,20 +1859,27 @@ def test_drop_of_honey_tie_prompts_human_controller(arn_by_name, all_cards):
     game = Game(players=[p1, p2])
     game.interactive_seats = {0}
 
+    # ``resolve_upkeep`` puts the trigger on the stack and resolves it as far
+    # as the pick; ``resolve_stack`` would answer the prompt with its default
+    # and take the choice away from the test.
     game.resolve_upkeep(0)
 
-    pending = game.pending_least_power_choice
-    assert pending is not None
-    assert pending["controller_index"] == 0
-    assert {c["name"] for c in pending["candidates"]} == {"Scryb Sprites", "Benalish Hero"}
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [
+        ("permanent_choice", 0)
+    ]
+    choice = game.pending_choices[0]
+    assert {p.card.name for p in game.live_permanent_choices(choice)} == {
+        "Scryb Sprites", "Benalish Hero"
+    }
     # Nothing is destroyed until the controller picks.
     assert own_sprite in p1.battlefield and enemy_hero in p2.battlefield
 
-    assert game.confirm_least_power_choice(0, 1, 0) is True
+    assert game.confirm_permanent_choice(0, enemy_hero.permanent_id) is True
+    game._settle()
     assert enemy_hero not in p2.battlefield
     assert any(c.name == "Benalish Hero" for c in p2.graveyard)
     assert own_sprite in p1.battlefield
-    assert game.pending_least_power_choice is None
+    assert not game.pending_choices
 
 
 def test_drop_of_honey_tie_rejects_non_candidate_choice(arn_by_name, all_cards):
@@ -1879,11 +1894,11 @@ def test_drop_of_honey_tie_rejects_non_candidate_choice(arn_by_name, all_cards):
 
     game.resolve_upkeep(0)
 
-    assert game.pending_least_power_choice is not None
+    assert game.pending_choices
     # The 3/3 is not tied for least power — an illegal pick is refused.
-    assert game.confirm_least_power_choice(0, 1, 1) is False
+    assert game.confirm_permanent_choice(0, giant.permanent_id) is False
     assert giant in p2.battlefield
-    assert game.pending_least_power_choice is not None
+    assert game.pending_choices
 
 
 # ===========================================================================

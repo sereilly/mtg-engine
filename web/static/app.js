@@ -2674,14 +2674,6 @@ function getEntryExileInfo(state = currentState) {
   return info;
 }
 
-// Drop of Honey: the tie-break choice among creatures tied for least power.
-function getLeastPowerChoiceInfo(state = currentState) {
-  if (!state || seat === null) return null;
-  const info = state.least_power_choice;
-  if (!info || !Array.isArray(info.candidates) || info.candidates.length === 0) return null;
-  return info;
-}
-
 // Backdraft: "Choose a player who cast one or more sorcery spells this turn."
 function getPlayerChoiceInfo(state = currentState) {
   if (!state || seat === null) return null;
@@ -3426,22 +3418,6 @@ function getPromptBoardTargeting(state = currentState) {
         submitPromptAction(payload);
       },
       invalidHint: "Choose one of the highlighted opponents.",
-    });
-  }
-
-  // Drop of Honey: which of the creatures tied for least power is destroyed.
-  const leastPowerChoiceInfo = getLeastPowerChoiceInfo(state);
-  if (leastPowerChoiceInfo) {
-    return promptTargeting({
-      permanentKeys: (leastPowerChoiceInfo.candidates || []).map((c) => `${c.seat}-${c.index}`),
-      onPermanent: (targetSeat, idx) =>
-        submitPromptAction({
-          seat,
-          action: "least_power_choice_confirm",
-          target_seat: targetSeat,
-          target_permanent_index: idx,
-        }),
-      invalidHint: "Only the creatures tied for least power can be chosen.",
     });
   }
 
@@ -6001,32 +5977,6 @@ function applyEnterChoicePrompt(info) {
     });
   });
 }
-
-// Drop of Honey: pick which of the creatures tied for least power is destroyed.
-function applyLeastPowerChoicePrompt(info) {
-  const panel = q("activationPanel");
-  const title = q("promptTitle");
-  const body = q("promptBody");
-  const steps = q("promptSteps");
-  const cancelBtn = q("promptCancelBtn");
-  const okBtn = q("promptOkBtn");
-  const customRow = q("promptCustomRow");
-  const customOkBtn = q("promptCustomOkBtn");
-
-  panel.classList.remove("hidden");
-  okBtn.classList.add("hidden");
-  customRow.classList.add("hidden");
-  cancelBtn.classList.add("hidden");
-  cancelBtn.disabled = true;
-  customOkBtn.disabled = true;
-
-  const cardName = info.card_name || "Drop of Honey";
-  title.textContent = "Choose a creature to destroy";
-  body.textContent = `${cardName}: these creatures are tied for least power — choose which one is destroyed.`;
-  // The tied creatures are highlighted on the battlefield; clicking one picks it.
-  steps.innerHTML = "<div>Action: click one of the highlighted creatures on the battlefield.</div>";
-}
-
 
 function applyLoyaltyRecipientPrompt(info) {
   const panel = q("activationPanel");
@@ -9530,12 +9480,6 @@ function renderActivationPrompt() {
   const retargetChoiceInfo = getRetargetChoiceInfo();
   if (retargetChoiceInfo) {
     applyRetargetChoicePrompt(retargetChoiceInfo);
-    return;
-  }
-
-  const leastPowerChoiceInfo = getLeastPowerChoiceInfo();
-  if (leastPowerChoiceInfo) {
-    applyLeastPowerChoicePrompt(leastPowerChoiceInfo);
     return;
   }
 
@@ -16557,7 +16501,7 @@ function renderBoard(state) {
       }
     }
     // A prompt that picks permanents off the board (forced sacrifice, Balance,
-    // Drop of Honey, …) highlights every legal permanent as a target and marks
+    // a superlative tie-break, …) highlights every legal permanent as a target and marks
     // the ones picked so far as selected.
     const boardTargeting = activePromptBoardTargeting(state);
     let targetingKeys = getTargetablePermanentKeysForPrompt();

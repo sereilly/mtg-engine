@@ -24,6 +24,19 @@ re-export what it defines. The callers name this module directly instead, and
 No mirror on the lowering side, and deliberately: a bound is read off the node
 by whichever family carries it (``ObjectFilter.power``, ``ast.GainLife
 .capped_by``), so there is no lowering module of its own to fork.
+
+**Two more shapes arrived at Urza's Saga**, and both are this module's subject
+rather than a widening of it. :func:`accept_cards_in_hand_bound` is a
+comparison whose right-hand side is a *hidden zone* — it came up from
+`postmodifiers`, where it sat because a filter was its first caller, exactly as
+``parse_comparison`` once did. :func:`accept_superlative` is the third shape
+beside the comparison and the cap: not a threshold and not a ceiling but an
+**extreme**, the end of a range, which is a statement about a set rather than
+about any one member of it. It is here rather than in `readers` because the
+sentence that reads it back ("…tied for least toughness") is a *bound* on the
+same quantity by the same words, and one reader for both is what stops the noun
+phrase and its tie-break sentence disagreeing about which characteristic was
+printed.
 """
 
 from __future__ import annotations
@@ -314,3 +327,95 @@ __all__ = [
     "accept_target_bound",
     "accept_source_relative_comparison", "parse_comparison",
 ]
+
+
+def accept_cards_in_hand_bound(stream: TokenStream) -> str | None:
+    """``greater than the number of cards in your hand`` (Ensnaring Bridge).
+
+    A bound off a **hidden zone**, which is what separates it from the two
+    counter bounds beside it: no board holds the number, so neither the pure
+    matcher nor a source-relative read can answer it — only a caller holding
+    the seat can. Whose hand is returned rather than baked in, so a card
+    printing "an opponent's hand" is data here and a matcher branch there.
+
+    Read *before* ``parse_comparison``, whose "N or greater" shape opens on a
+    quantity and would refuse these words with "expected a quantity" — a
+    refusal naming the one thing the phrase does not contain. Declines without
+    consuming, so every other bound keeps the reading it has.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase(
+        "greater", "than", "the", "number", "of", "cards", "in",
+    ):
+        stream.reset(mark)
+        return None
+    if stream.accept_phrase("your", "hand"):
+        return "you"
+    # "…each creature that player controls **with power greater than the number
+    # of cards in their hand**." (Noetic Scales.) The same bound over a
+    # different seat, which is the whole of what this function's docstring
+    # already promised: whose hand is returned rather than baked in. "Their"
+    # agrees with the subject the sentence has already named — "each creature
+    # **that player** controls" — so it is the seat the firing event froze, and
+    # the matcher refuses it wherever nothing froze one.
+    if stream.accept_phrase("their", "hand"):
+        return "that_player"
+    stream.reset(mark)
+    return None
+
+
+#: The two printed extremes and the three printed characteristics, as the words
+#: a card spells them. A table rather than a branch because the whole content of
+#: this reader is which two words were printed: Purging Scythe prints "least
+#: toughness", Drop of Honey "least power", Tariff and Juxtapose "greatest mana
+#: value", and a card printing "greatest toughness" needs no code at all.
+_EXTREME_WORDS = ("least", "greatest")
+
+#: The characteristic word, as one or two tokens, mapped to the name
+#: ``handlers/permanent_choices`` reads it back under. "Mana value" is two words
+#: and has to be tried first for ``parse_comparison``'s standing reason: a
+#: single-word probe would take "mana" and strand "value".
+_SUPERLATIVE_CHARACTERISTICS = (
+    (("mana", "value"), "mana_value"),
+    (("power",), "power"),
+    (("toughness",), "toughness"),
+)
+
+
+def accept_superlative(
+    stream: TokenStream, *, article: bool = True
+) -> "ast.Superlative | None":
+    """``[the] least|greatest power|toughness|mana value``, or None.
+
+    "…the creature with **the least toughness**" (Purging Scythe) prints the
+    article; "…are tied for **least toughness**", the tie-break sentence behind
+    it, does not. One reader for both, because the two sentences of that card
+    have to agree about which characteristic was named — read by two productions
+    they could disagree, and a card whose tie-break named a *different*
+    characteristic would be admitted with the mismatch silently resolved in
+    favour of whichever was read first.
+
+    Declines without consuming, so every other "with …" phrase keeps its own
+    reading — the discipline every probe in ``postmodifiers`` follows.
+    """
+    mark = stream.mark()
+    if article and not stream.accept_word("the"):
+        stream.reset(mark)
+        return None
+    extreme = None
+    for word in _EXTREME_WORDS:
+        if stream.accept_word(word):
+            extreme = word
+            break
+    if extreme is None:
+        stream.reset(mark)
+        return None
+    for words, name in _SUPERLATIVE_CHARACTERISTICS:
+        if stream.accept_phrase(*words):
+            return ast.Superlative(extreme, name)
+    # An extreme over a characteristic nothing can read is not this phrase.
+    # Refusing without consuming is what makes the line fail loudly at whatever
+    # reads it next, rather than describing a set by the half of the phrase
+    # this reader happened to understand.
+    stream.reset(mark)
+    return None

@@ -37,6 +37,7 @@ from ._counted_damage import (
 )
 
 from ._bites import lower_bite
+from ._superlatives import superlative_pick
 
 from ._sweeps import (
     _sweep_kind,
@@ -495,6 +496,36 @@ def _lower_damage_shape(
         )
 
     recipient = node.recipients[0]
+    # "…deals 2 damage to **the creature with the least toughness**" (Purging
+    # Scythe). The recipient is not chosen and not described: it is the end of a
+    # range, so the sentence becomes the pick and then the damage, and the
+    # damage reads what the pick recorded through the ``permanents_from``
+    # channel every other bound permanent travels
+    # (``deal_damage_to_recorded_permanents``, which Winter Blast's "those
+    # creatures" already reaches).
+    #
+    # Read *before* the payload below because none of the shapes it assembles
+    # apply: the recorded-permanents handler takes a printed number and a
+    # filter, and every computed amount and every rider would be built here and
+    # then dropped. They refuse instead.
+    pick = superlative_pick(recipient, node=node, verb="damage")
+    if pick is not None:
+        step, key = pick
+        if back_reference or bonus or node.riders.divided:
+            raise LoweringError(
+                "a superlative recipient cannot carry a computed damage "
+                "amount or a division",
+                node=node,
+            )
+        return (
+            OracleInstruction("sequence", "", {"steps": (
+                step,
+                OracleInstruction(
+                    "deal_damage_to_recorded_permanents", "",
+                    {"amount": amount, "permanents_from": key, "filter": {}},
+                ),
+            )}),
+        )
     payload: dict[str, object] = (
         dict(back_reference) if back_reference else {"amount": amount}
     )

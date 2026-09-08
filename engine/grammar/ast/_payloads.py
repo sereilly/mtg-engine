@@ -355,4 +355,23 @@ def object_filter_payload(self: "ObjectFilter") -> dict[str, object]:
         payload["supertypes"] = list(self.supertypes)
     if self.excluded_supertypes:
         payload["exclude_supertypes"] = list(self.excluded_supertypes)
+    # "…the creature with the **least toughness**" (Purging Scythe). Always
+    # emitted when set, like ``characteristic_vs_source`` above and for the
+    # opposite half of that field's reason: there is no "literal only" fallback,
+    # and a set field with no key is exactly what ``dropped_narrowings``
+    # refuses.
+    #
+    # The key is deliberately one **no matcher answers**. A superlative is a
+    # fact about the set (see ``ast.Superlative``), so
+    # ``TESTABLE_SUBJECT_FILTER_KEYS`` leaves it out on purpose and every gate
+    # built on that set refuses the phrase by name. The two lowerings written
+    # for it strip the field first and carry the selection as the *prompt's*
+    # own payload — which is the same shape ``their_choice`` and ``controller``
+    # take one family over, and for the same reason: what picks one object out
+    # of a set is a question for the chooser, not for the candidate.
+    if self.superlative is not None:
+        payload["superlative"] = {
+            "extreme": self.superlative.extreme,
+            "characteristic": self.superlative.characteristic,
+        }
     return payload

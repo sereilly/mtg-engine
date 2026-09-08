@@ -2057,15 +2057,6 @@ def _keep_permanents(ctx: PromptContext, choices: list) -> dict:
     }
 
 
-@prompt_renderer("least_power_choice")
-def _least_power_choice(ctx: PromptContext, choices: list) -> dict:
-    data = choices[0].data
-    return {
-        "card_name": data["card_name"],
-        "candidates": [dict(entry) for entry in data["candidates"]],
-    }
-
-
 @prompt_renderer("player_choice")
 def _player_choice(ctx: PromptContext, choices: list) -> dict:
     """Backdraft: "Choose a player who cast one or more sorcery spells this

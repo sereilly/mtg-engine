@@ -30,10 +30,95 @@ from .rebinding import statement_bound_target as _statement_bound_target
 from .phrases import _accept_number
 from .statements import _parse_condition, parse_statement
 from .stream import TokenStream
+from .bounds import accept_superlative
 from .vocabulary import CARD_TYPES
+from .vocabulary import singular as _singular
 
 
 # Sentinel: the rider was folded into the previous step, nothing to append.
+
+
+
+def _superlative_of(step: ast.Statement):
+    """The superlative the sentence *step* picks by, or None.
+
+    One reader for both verbs, because the tie-break sentence behind them is
+    word-for-word the same and the guard it needs is "was the sentence in front
+    of me the pick this describes?". A second copy per family is two answers to
+    that question.
+    """
+    spec = None
+    if isinstance(step, ast.Destroy):
+        spec = step.subject
+    elif isinstance(step, ast.DealDamage) and len(step.recipients) == 1:
+        spec = step.recipients[0]
+    if isinstance(spec, ast.TargetSpec):
+        return spec.filter
+    return None
+
+
+def _attach_superlative_tie_break(
+    stream: TokenStream, steps: list[ast.Statement]
+) -> bool:
+    """``If two or more <type>s are tied for <extreme> <characteristic>, you
+    choose one of them.`` (Purging Scythe, Drop of Honey.)
+
+    CR 101.4's tie-break, and it contributes **no step**: the sentence in front
+    of it already lowers to a ``choose_permanent`` carrying ``only_on_tie``, so
+    what these words say is exactly what that instruction does. A step of its
+    own would be a second prompt for one decision.
+
+    That is the whole reason it is a rider rather than a sentence. Read alone it
+    names nothing — "them" is a set only the previous sentence describes — which
+    is this module's own definition of the word.
+
+    **Guarded on the sentence in front of it, and on three of its words.** The
+    previous step must be a pick by *this* superlative, the printed noun must be
+    the one that pick describes, and the chooser must be "you" — the seat the
+    pick's prompt is armed on. A printing whose halves disagreed would otherwise
+    be admitted with the disagreement resolved in favour of whichever sentence
+    was read first, which is the ``_parse_pay_or_sacrifice_greatest_mana_value``
+    check made across two sentences instead of inside one.
+
+    Refuses without consuming, so an ordinary "If two or more …" conditional
+    keeps its own reading.
+    """
+    if not steps:
+        return False
+    mark = stream.mark()
+    if not stream.accept_phrase("if", "two", "or", "more"):
+        stream.reset(mark)
+        return False
+    noun = stream.peek_word()
+    if noun is None or _singular(noun) not in CARD_TYPES:
+        stream.reset(mark)
+        return False
+    stream.advance()
+    if not stream.accept_phrase("are", "tied", "for"):
+        stream.reset(mark)
+        return False
+    superlative = accept_superlative(stream, article=False)
+    if superlative is None:
+        stream.reset(mark)
+        return False
+    stream.accept_punct(",")
+    # "**you** choose one of them" — the ability's controller, which is the seat
+    # the pick's prompt is armed on. Any other chooser names a player the
+    # instruction in front of this one was not built for, and consuming the
+    # words would silently give the pick to the wrong seat.
+    if not stream.accept_phrase("you", "choose", "one", "of", "them"):
+        stream.reset(mark)
+        return False
+    filt = _superlative_of(steps[-1])
+    if (
+        filt is None
+        or filt.superlative != superlative
+        or filt.card_types != (_singular(noun),)
+    ):
+        stream.reset(mark)
+        return False
+    stream.accept_punct(".")
+    return True
 
 
 def _parse_exile_instead_rider(

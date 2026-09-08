@@ -529,10 +529,6 @@ class PendingChoicesMixin:
         return self._choice_view("body_choice", "controller_index")
 
     @property
-    def pending_least_power_choice(self) -> dict | None:
-        return self._choice_view("least_power_choice", "controller_index")
-
-    @property
     def pending_optional_pays(self) -> list[dict]:
         return [
             {**choice.data, "player_index": choice.player_index}
@@ -9672,18 +9668,6 @@ register_choice(
     default_at_arm=True,
     # Nothing later in the same resolution reads the answer: the counter is the
     # last thing the ability does.
-)
-
-register_choice(
-    "least_power_choice",
-    resolve=lambda game, choice, r: game._resolve_least_power_choice(
-        choice, r["target_seat"], r["target_permanent_index"]
-    ),
-    default=lambda game, choice: game._default_least_power_choice(choice),
-    action="least_power_choice_confirm",
-    prompt_key="least_power_choice",
-    blocked_detail="choose which creature tied for least power is destroyed before other actions",
-    default_at_arm=True,
 )
 
 # Replacement effects that suspend on a decision (CR 614) keep their own queue —

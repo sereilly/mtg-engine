@@ -784,67 +784,6 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         # has to sacrifice something — fall back to the first land.
         return self._force_sacrifice_first_land(controller, source) if chosen is not None else None
 
-    def _destroy_least_power_creature(self, owner, victim, card_name: str, chosen: bool = False) -> None:
-        """Drop of Honey's kill (CR 701.8, "it can't be regenerated")."""
-        self.remove_from_battlefield(victim)
-        self._permanent_to_graveyard(owner, victim)
-        how = "least power, controller's choice" if chosen else "least power"
-        self.log.append(
-            f"{card_name} destroyed {victim.card.name} ({how}; it can't be regenerated)"
-        )
-
-    def _live_least_power_candidates(self, choice) -> list:
-        """The tied creatures still on a battlefield — a candidate can die to
-        something else while the prompt waits."""
-        return [
-            perm
-            for perm in (choice.data.get("_candidate_perms") or [])
-            if self.is_on_battlefield(perm)
-        ]
-
-    def confirm_least_power_choice(
-        self, player_index: int, target_seat: int, target_permanent_index: int
-    ) -> bool:
-        """Resolve a pending Drop of Honey tie-break: destroy the creature the
-        controller chose among those tied for least power."""
-        return self.resolve_pending_choice(
-            "least_power_choice", player_index,
-            target_seat=target_seat, target_permanent_index=target_permanent_index,
-        )
-
-    def _resolve_least_power_choice(
-        self, choice, target_seat: int, target_permanent_index: int
-    ) -> bool:
-        """If every stored candidate has meanwhile left the battlefield, the
-        prompt clears with nothing to destroy."""
-        live = self._live_least_power_candidates(choice)
-        if not live:
-            self.discard_pending_choice(choice)
-            self.log.append(f"{choice.data['card_name']}: no tied creature remains to destroy")
-            return True
-        if not (0 <= target_seat < len(self.players)):
-            return False
-        owner = self.players[target_seat]
-        if not (0 <= target_permanent_index < len(owner.battlefield)):
-            return False
-        victim = owner.battlefield[target_permanent_index]
-        if not any(victim is perm for perm in live):
-            return False
-        self.discard_pending_choice(choice)
-        self._destroy_least_power_creature(owner, victim, choice.data["card_name"], chosen=True)
-        self.check_state_based_actions()
-        return True
-
-    def _default_least_power_choice(self, choice) -> None:
-        """Break the tie by battlefield scan order — the first tied creature."""
-        self.discard_pending_choice(choice)
-        live = self._live_least_power_candidates(choice)
-        if not live:
-            return
-        victim = live[0]
-        owner = self.players[self.controller_index_of(victim)]
-        self._destroy_least_power_creature(owner, victim, choice.data["card_name"])
-
     def resolve_upkeep(self, player_index: int, human_choices: dict[str, bool] | None = None, optional_choices: dict[str, bool] | None = None, defer_priority: bool = False, mana_prevention: dict[str, int] | None = None, sacrifice_choices: dict[str, int] | None = None, trigger_targets: dict[str, tuple[int, int]] | None = None) -> None:
         phase = "beginning"
         step = "upkeep"

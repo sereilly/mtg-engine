@@ -129,7 +129,6 @@ ActionKind = Literal[
     "land_type_swap_confirm",
     "body_choice_confirm",
     "entry_exile_confirm",
-    "least_power_choice_confirm",
     "player_choice_confirm",
     "cast_choice_confirm",
     "retarget_choice_confirm",

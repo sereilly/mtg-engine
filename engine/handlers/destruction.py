@@ -1774,7 +1774,12 @@ def each_player_pays_or_sacrifices_greatest(
                     "filter": {"type_filter": card_type},
                     "controlled_by": seat,
                     "chooser": seat,
-                    "greatest_mana_value": True,
+                    # CR 202.3's "greatest mana value", as the two payload words
+                    # ``ast.Superlative`` gives every printed superlative. It was
+                    # ``greatest_mana_value: True`` — one corner of the phrase
+                    # spelled into a flag of its own, which a card printing
+                    # "least toughness" could not reuse.
+                    "superlative": {"extreme": "greatest", "characteristic": "mana_value"},
                     "only_on_tie": True,
                     "prompt": (
                         f"Choose which {card_type} with the greatest mana value "

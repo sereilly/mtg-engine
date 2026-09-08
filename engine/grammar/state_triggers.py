@@ -20,8 +20,11 @@ the readers a fragment production needs.
 
 from __future__ import annotations
 
+import dataclasses
+
 from . import ast
 from .lexer import NUMBER, SELF
+from .phrases import parse_subject_filter_at
 from .readers import accept_source_reference
 from .stream import TokenStream
 from .vocabulary import KEYWORD_ABILITIES, NUMBER_WORDS
@@ -140,12 +143,42 @@ def _parse_state_trigger_event(
     state_mark = stream.mark()
     if stream.accept_phrase("there", "are"):
         # "When there are **no lands on the battlefield**, sacrifice this
-        # enchantment." (Mana Vortex.) CR 603.8 again, asked about every
+        # enchantment." (Mana Vortex.) "When there are **no creatures on the
+        # battlefield**, …" (Drop of Honey.) CR 603.8 again, asked about every
         # battlefield rather than about the source's controller — a different
         # set and so a different kind, since a Mana Vortex whose controller has
         # run out of lands stays while an opponent has one.
-        if stream.accept_phrase("no", "lands", "on", "the", "battlefield"):
-            return ast.TriggerEvent("no_lands_anywhere", word)
+        #
+        # The noun is carried rather than dropped, which is the opposite of
+        # what the threshold and the keyword above do — and the difference is
+        # that this one is a **subject**. `engine/oracle.py`'s row reads it as
+        # an `absent_subjects` group and `_resolve_subject_groups` turns it into
+        # the payload the dispatcher tests, so a phrase only one front end read
+        # would be a card whose two halves watch different sets. That equality
+        # is asserted (`test_a_narrowed_trigger_reads_the_same_subject_on_both
+        # _sides`), which is what makes it cheaper to read the noun here than
+        # to argue that dropping it is safe.
+        absent_mark = stream.mark()
+        if stream.accept_word("no"):
+            # Plural, because "no" counts: the card prints "no **lands**", never
+            # "no a land", so the counted-position quantifier is the one to
+            # admit — the same reading `controls_no_matching` takes of the same
+            # word one production up.
+            described = parse_subject_filter_at(stream, plural=True)
+            # The noun parser reads "on the battlefield" itself, as CR 403.1's
+            # shared zone — and here that is the *kind*, not a narrowing: this
+            # condition asks about every battlefield and its name says so. So
+            # the scope is required (a card printing "when there are no
+            # creatures" alone is a different sentence and refuses) and then
+            # stripped, which is also what keeps the phrase this front end
+            # carries identical to the one `engine/oracle.py`'s row reads out of
+            # its `absent_subjects` group.
+            if described is not None and described.on_the_battlefield:
+                return ast.TriggerEvent(
+                    "no_permanents_anywhere", word,
+                    subject=dataclasses.replace(described, on_the_battlefield=False),
+                )
+        stream.reset(absent_mark)
         count = stream.peek_word()
         if count in NUMBER_WORDS:
             stream.advance()
