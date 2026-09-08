@@ -529,6 +529,47 @@ def _lower_destroy(
             OracleInstruction("destroy_target_permanent", "", chosen_payload),
         )
 
+    # "Whenever enchanted creature deals damage to a creature, destroy **the
+    # other creature**." (Venomous Fangs.) English's "other" contrasts with the
+    # nearest antecedent noun phrase, and a damage event has exactly two objects
+    # -- the trigger's own condition named the damager, so the word names the one
+    # that took it. Which is the same object "that <noun>" names under this
+    # event, and it rides the same instruction and the same
+    # ``target_permanent_id`` the fire site stamps.
+    #
+    # A branch of its own rather than a second word on the "that" guard below,
+    # because that guard opens onto four readings this word does not have: the
+    # attachment record, the two delayed-agent tables and the event subject. "The
+    # other" under a *delayed* ability is Infinite Authority's, and
+    # ``lowering/delayed.py`` already reads it there.
+    #
+    # Gated on ``_EVENT_SUBJECT_DESTROY_EVENTS`` exactly as that branch is, and
+    # for its reason: under any other event there is no second object for the
+    # word to contrast with, and a destroy reading an unstamped id would resolve
+    # nothing while the card reported supported.
+    if spec.quantifier == "other":
+        if event not in _EVENT_SUBJECT_DESTROY_EVENTS:
+            raise LoweringError(
+                "\"the other creature\" names the second object of the firing "
+                "event, and this event announces only one",
+                node=node,
+            )
+        if _restrictions_beyond(filt, frozenset({"card_types"})):
+            # The noun restates the object the event already named; a narrowing
+            # on top of it would be a second choice the sentence never offers,
+            # and dropped it would destroy a permanent the card did not name.
+            raise LoweringError(
+                "\"the other creature\" carries no narrowing the destroy could "
+                "honour",
+                node=node,
+            )
+        other_payload = _filter_payload(filt)
+        if node.no_regen:
+            other_payload["bypass_regeneration"] = True
+        return (
+            OracleInstruction("destroy_target_permanent", "", other_payload),
+        )
+
     # "…destroy **that planeswalker**." (Hooded Blightfang.) "That" is not a
     # target the card ever asked for — it is the object the trigger's event was
     # about, which the fire site stamps onto the stack item by permanent id. So

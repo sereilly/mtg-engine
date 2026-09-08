@@ -529,6 +529,18 @@ class LegalityMixin:
             return False
         if perm.metadata.get("cant_be_blocked_until_eot"):
             return True
+        # "Enchanted creature can't be blocked." (Cloak of Mists.) The attached
+        # channel, asked beside the printed one below because the blocker gate
+        # asks both -- and this predicate exists to agree with that gate. A
+        # creature it will refuse every blocker on and this does not tag is the
+        # UI promising a block the step then rejects.
+        from .auras import attached_combat_restrictions
+
+        if any(
+            restriction.kind == "cant_be_blocked"
+            for restriction in attached_combat_restrictions(perm)
+        ):
+            return True
         seat = self.controller_index_of(perm)
         return any(
             i.kind == "cant_be_blocked"
@@ -2708,6 +2720,16 @@ class LegalityMixin:
             if perm.card.primary_type != "land":
                 return False
             if casting_aura and _cant_be_enchanted_by_auras(perm):
+                return False
+            # "Enchant **Swamp**" (Spreading Algae). The subtype half of
+            # CR 702.5's [quality] on a land clause, narrowing the same land
+            # picker the bare noun builds — and asked of `has_type`, which is
+            # CR 613 layer 4 and the same reading `land_filter` above and
+            # `exclude_swamp` below already take: CR 305.7 makes a Swamp turned
+            # into an Island stop being one, so it stops being offered here and
+            # the CR 704.5m sweep bins an Aura already sitting on it.
+            enchant_land_type = spec.get("enchant_land_type")
+            if enchant_land_type and not perm.has_type(enchant_land_type):
                 return False
             if spec.get("exclude_swamp"):
                 # Same CR 305.7 point: a Swamp turned into an Island is no

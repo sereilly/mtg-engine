@@ -23,16 +23,16 @@ from ...oracle_types import OracleInstruction
 from ...subject_filters import object_only_filter
 from .. import ast
 from ..errors import LoweringError
-from ..phrases import PAIR_ORDINALS, is_pt_counter
+from ..phrases import is_pt_counter
 from ._common import (
-    PRIMARY_TARGET_ROLE, _amount_payload, _describe_several_targets,
+    PRIMARY_TARGET_ROLE, _amount_payload,
     _describe_targets, _filter_payload, divided_target_description,
     _is_enchanted, _is_source, _is_target, _names_several_targets,
     _restrictions_beyond, describe_target_roles, refuse_untestable
 )
-from ._amounts import recorded_count_spec
 from ._records import counts_prevented_damage, names_the_shielded_object
 from ._sweeps import lower_counter_sweep
+from ._plus_one_counters import lower_plus_one_placement
 from ._counter_stores import lower_loyalty_counters
 from ._events import (CHOSEN_PERMANENT, OTHER_CHOSEN_PERMANENT, EVENT_SUBJECT_CONTROLLER, _EVENT_SUBJECT_OBJECTS, binds_block_pair, _REANIMATED_PERMANENTS, _RECORDED_PERMANENTS)
 from ._delays import (_BOUND_OBJECT_DELAYED_EVENTS)
@@ -65,53 +65,19 @@ def _amount_value(amount) -> int:
     return amount.value if isinstance(amount, ast.Fixed) else 0
 
 
-def _lower_recorded_count_placement(
-    node: ast.PutCounter, produced: frozenset[str]
-) -> tuple[OracleInstruction, ...]:
-    """"…put **that many** +1/+1 counters on this creature" (Tetravus), and
-    "For each card discarded this way, put **two** +1/+1 counters on this
-    creature" (Mind Maggots).
-
-    One branch because it is one printed idea — a placement whose number an
-    earlier step of the same resolution produced — and **two channels**, because
-    the two sentences say different things about *which* record.
-
-    A bare "that many" names nothing (:class:`ast.ThatMuch` carries ``None`` to
-    say so), so it keeps the ``trigger_count`` key it has always had: its one
-    printing is Tetravus, whose exile step writes exactly that.
-
-    A "this way" clause **names its producer**, and the name was being thrown
-    away — every ``ThatMuch`` reached this branch and left as ``trigger_count``,
-    a key no discard, no destroy and no tap ever writes. Latent rather than live
-    until now (Tetravus was the only card here and its record really is that
-    key), and the failure it was holding is the quiet one: a counter placement
-    that resolves, reports itself done and places **zero**. So a named record
-    goes through ``recorded_count_spec`` onto the ``x_from_count`` channel this
-    same handler already reads for Discordant Spirit — the number is taken by
-    one evaluator (``count_from_payload``), which is also what carries the
-    printed multiplier without a payload key of its own.
-    """
-    spec = recorded_count_spec(node.count, produced, node)
-    if spec is None:
-        if isinstance(node.count, ast.Times):
-            # A factor over something that is not a recorded count — nothing
-            # prints it, and reading it as the bare "that many" below would
-            # place a fraction of what the card says.
-            raise LoweringError(
-                "a multiplied count has no recorded producer to read", node=node
-            )
-        return (
-            OracleInstruction(
-                "add_counter_to_self", "",
-                {"power": 1, "toughness": 1, "count": "trigger_count"},
-            ),
-        )
-    return (
-        OracleInstruction(
-            "add_counter_to_self", "",
-            {"power": 1, "toughness": 1, "count": "x", "x_from_count": spec},
-        ),
-    )
+#: The trigger heads whose sentence is *about* the enchanted permanent, so a
+#: bare "that creature" in the effect names it. Both are conditions an Aura
+#: prints about its own host: the upkeep of that host's controller (Unstable
+#: Mutation, Takklemaggot) and a death the host caused (Vampiric Embrace).
+#:
+#: A set rather than a bare comparison because the second entry proved the first
+#: was a list of one: under any event *not* here the words name a permanent
+#: nobody recorded, and the branch below must keep refusing rather than reading
+#: the source's attachment on faith.
+_ATTACHED_COUNTER_TRIGGERS: frozenset[str] = frozenset({
+    "upkeep_enchanted_controller",
+    "creature_dealt_damage_by_attached_dies",
+})
 
 
 def _lower_put_counter(
@@ -388,12 +354,28 @@ def _lower_put_counter(
     # with the counter baked into its *name*, reached by a card-name hook that
     # spelled out "-1/-1", so Takklemaggot's one-word-different sentence had
     # nowhere to go.
+    #
+    # "Whenever a creature dealt damage by enchanted creature this turn dies,
+    # put a +1/+1 counter on **that creature**." (Vampiric Embrace.) The second
+    # trigger head that binds the enchanted creature, and the word points at it
+    # for the same reason it does above: English's "that" takes the nearest
+    # antecedent noun phrase, which is "enchanted creature".
+    #
+    # Reading it as the creature that *died* is the alternative, and it is not a
+    # close call. Sengir Vampire prints this exact ability on the creature
+    # itself and puts the counter on **this** creature; this Aura is that card
+    # granted, so the word names the same permanent. And the other reading is
+    # not merely different, it is inert: CR 122.1a does let a +X/+Y counter sit
+    # on a creature card outside the battlefield, but CR 400.7 makes the card
+    # that returns a new object with no memory of it, so nothing that counter
+    # modified is ever read — a card that reports supported and does nothing,
+    # which is the failure this whole package is arranged to make loud.
     if (
         is_pt_counter(node.counter)
         and not node.up_to
         and isinstance(node.subject, ast.TargetSpec)
         and node.subject.quantifier == "that"
-        and event == "upkeep_enchanted_controller"
+        and event in _ATTACHED_COUNTER_TRIGGERS
     ):
         if node.subject.filter != ast.ObjectFilter(card_types=("creature",)):
             raise LoweringError(
@@ -852,133 +834,11 @@ def _lower_put_counter(
         and not node.distributed
     ):
         return lower_counter_sweep(node)
-    if node.counter != "+1/+1" or node.up_to:
-        raise LoweringError(f"no handler for {node.counter} counters", node=node)
-    if isinstance(node.count, (ast.ThatMuch, ast.Times)) and _is_source(node.subject):
-        return _lower_recorded_count_placement(node, produced)
-    if isinstance(node.count, ast.DamageDealtThisTurn) and _is_source(node.subject):
-        # "…put a +1/+1 counter on this creature **for each 1 damage dealt to
-        # you this turn**." (Discordant Spirit.) The turn's damage ledger rather
-        # than the resolution scratchpad the branch above reads, and it reaches
-        # the same handler through the channel every computed amount in this
-        # engine already uses: ``x_from_count`` defines the X, and ``count``
-        # spends it. So the number is taken by ``count_from_payload`` — one
-        # evaluator — instead of by a second reader written for this card.
-        return (
-            OracleInstruction(
-                "add_counter_to_self", "",
-                {
-                    "power": 1, "toughness": 1, "count": "x",
-                    "x_from_count": {
-                        "damage_ledger": {
-                            "recipient": node.count.recipient,
-                            "source_name": node.count.source_name,
-                            "others_only": node.count.others_only,
-                            "base": 0,
-                        },
-                    },
-                },
-            ),
-        )
-    if isinstance(node.count, ast.CountOfDeaths) and _is_source(node.subject):
-        # "…put a +1/+1 counter on ~ **for each creature put into your graveyard
-        # from the battlefield this turn**." (Asmira, Holy Avenger.) The turn's
-        # per-seat death tally, reached through the same `x_from_count` channel
-        # as the ledger branch above and answered by the same `count_from_payload`
-        # `history` key `_lower_where_x_deaths` already spends.
-        #
-        # Only the bare creature filter, and that refusal is
-        # `_lower_where_x_deaths`'s word for word: the tally counts creatures
-        # and nothing narrower, so a narrowing admitted here would be counted as
-        # if it were not there — a counter placed more often than the card says.
-        filt = node.count.filter
-        if (
-            filt.to_payload() != {"type_filter": "creature"}
-            or filt.zone != "battlefield"
-        ):
-            raise LoweringError(
-                "the death tracker counts creatures and cannot be narrowed",
-                node=node,
-            )
-        return (
-            OracleInstruction(
-                "add_counter_to_self", "",
-                {
-                    "power": 1, "toughness": 1, "count": "x",
-                    "x_from_count": {"history": f"creatures_{node.count.scope}"},
-                },
-            ),
-        )
-    if not isinstance(node.count, ast.Fixed) or node.count.value != 1:
-        raise LoweringError("variable counter counts have no handler", node=node)
-    if _is_source(node.subject):
-        return (
-            OracleInstruction("add_counter_to_self", "", {"power": 1, "toughness": 1}),
-        )
-    # "…put a +1/+1 counter on **the first** creature." (Infinite Authority.)
-    # One member of the pair a block trigger bound, named by position. Nothing
-    # is chosen: the ids were frozen when the earlier step of this same effect
-    # armed the destruction, and `produced` is what proves that step ran — the
-    # phrase names nothing on its own, and an unbound pair member would send the
-    # counter to whatever the stack item happened to be pointing at.
-    if (
-        isinstance(node.subject, ast.TargetSpec)
-        and node.subject.quantifier in PAIR_ORDINALS
-    ):
-        if node.subject.quantifier != "first":
-            # "the other creature" under this producer is the one the earlier
-            # step marked for destruction; a counter on it is a sentence no card
-            # prints and nothing here would carry out.
-            raise LoweringError(
-                "only the trigger's own creature takes a counter this way",
-                node=node,
-            )
-        if "end_of_combat_destruction" not in produced:
-            raise LoweringError(
-                "a pair member with no earlier step in this effect that bound "
-                "a pair", node=node,
-            )
-        if node.subject.filter.to_payload() != {"type_filter": "creature"}:
-            raise LoweringError(
-                "a bound pair member names what the trigger bound and cannot "
-                "be narrowed further", node=node,
-            )
-        return (
-            OracleInstruction(
-                "add_counter_to_target", "",
-                {
-                    "power": 1, "toughness": 1,
-                    "pair_member": node.subject.quantifier,
-                    "produced_by": "end_of_combat_destruction",
-                },
-            ),
-        )
-    if _names_several_targets(node.subject):
-        # "Put a +1/+1 counter on each of up to two target creatures" (Basri's
-        # Aegis, Basri's Acolyte). Same instruction as the single-target form —
-        # the effect is identical and only the number of targets differs, which
-        # is payload — but described with `_describe_several_targets`, the
-        # opt-in that tells the handler to resolve a list and the picker to
-        # collect up to that many.
-        assert isinstance(node.subject, ast.TargetSpec)
-        several: dict[str, object] = {"power": 1, "toughness": 1}
-        _describe_several_targets(several, node.subject)
-        return (OracleInstruction("add_counter_to_target", "", several),)
-    if _is_target(node.subject):
-        # "Put a +1/+1 counter on target creature [you control]." The kind
-        # predates this lowering: Dwarven Weaponsmith's hook has always emitted
-        # it, so the grammar joins the same handler rather than minting a
-        # second name for the same effect.
-        assert isinstance(node.subject, ast.TargetSpec)
-        payload: dict[str, object] = {"power": 1, "toughness": 1}
-        # "…, then double the number of +1/+1 counters on that creature."
-        # (Invigorating Surge.) Payload on the same instruction, because the
-        # doubling is about the creature this one just chose — a second
-        # instruction would have to re-find it, and "that creature" names no
-        # target of its own. Emitted only when printed, so every payload
-        # written before it is byte-identical.
-        if node.then_double:
-            payload["then_double"] = True
-        _describe_targets(payload, node.subject)
-        return (OracleInstruction("add_counter_to_target", "", payload),)
-    raise LoweringError("counters on a non-source subject", node=node)
+    # Everything past here is a **+1/+1** placement, and what is left to
+    # decide is how many and on what. That is a different question from
+    # every branch above — which counter the sentence names, or which
+    # earlier step bound its subject — and it is the seam this file already
+    # drew for itself with the gate at the top of that run. Handed down
+    # rather than returned to the caller, so the printed-specificity order
+    # stays one list in one place and this function keeps one exit.
+    return lower_plus_one_placement(node, produced)

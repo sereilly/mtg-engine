@@ -986,7 +986,16 @@ class DeclareBlockersStepMixin:
         attacker_program = compile_card_oracle(attacker.effective_card)
         attacker_kinds = {i.kind for i in attacker_program.instructions}
 
-        if "cant_be_blocked" in attacker_kinds:
+        if "cant_be_blocked" in attacker_kinds or any(
+            # "Enchanted creature can't be blocked." (Cloak of Mists.) The
+            # attached channel of the same restriction, asked beside the
+            # attacker's own program for the reason `cant_block` above is asked
+            # both ways: the sentence is one rule, and a reader that knew only
+            # the printed half would enforce it for Phantom Warrior and not for
+            # the creature an Aura made unblockable.
+            restriction.kind == "cant_be_blocked"
+            for restriction in attached_combat_restrictions(attacker)
+        ):
             return False
 
         # "This creature can't be blocked **as long as it's attacking alone**."

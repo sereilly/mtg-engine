@@ -369,6 +369,66 @@ def class_redirects(game, recipient) -> list[DamageRedirect]:
     return found
 
 
+def attached_static_redirects(game, recipient) -> list[DamageRedirect]:
+    """The redirections an attached permanent's **static** text gives *recipient*.
+
+    "All damage that would be dealt to you is dealt to enchanted creature
+    instead." (Pariah.) Every other record in this module is *armed* — something
+    resolved and put it on an object, and a turn-step sweep takes it off again.
+    This one is not: it is an Aura's static ability, so it exists exactly while
+    the Aura is attached, and deriving it here on each event is what makes
+    removal free (``engine/auras.py``: the Aura ceasing to be attached is the
+    whole of the removal, and there is no remembered delta). The same shape
+    ``prevention._attached_combat_shield`` has, one module over.
+
+    "You" is CR 109.5's controller of the **Aura**, which is why the scan is
+    over the permanents *recipient* controls rather than over the battlefield
+    the host sits on: an opponent may control the enchanted creature, and Pariah
+    on their creature still moves your damage onto it.
+
+    A player only. Every printed sentence in this family protects a player, and
+    the derived record's new recipient is a permanent — so a permanent recipient
+    is outside this scan rather than inside it, which is also what keeps the
+    hand-off from recursing: the damage moved onto the host asks this function
+    about a permanent and gets nothing.
+
+    ``live_recipient`` still decides whether the record does anything: an Aura
+    whose host has left, or stopped being a creature, is CR 614.9's effect that
+    does nothing, and that rule is already written once for every record here.
+    """
+    if _is_permanent(recipient):
+        return []
+    seat = next(
+        (i for i, player in enumerate(game.players) if player is recipient), None
+    )
+    if seat is None:
+        return []
+    # Late, and inside the function, for `class_redirects`' reason: this module
+    # is what a redirect *is*, and reading an Aura's printed text is a question
+    # about the engine's objects.
+    from .auras import aura_redirects_all_damage
+
+    found: list[DamageRedirect] = []
+    for aura in game.controlled_by(seat):
+        host = aura.metadata.get("attached_to")
+        if host is None:
+            continue
+        # ``effective_card`` rather than the printed face, like every other text
+        # read in this engine: a Clone of Pariah carries the sentence (CR 707.2)
+        # and a Pariah whose text was changed does not.
+        if not any(
+            aura_redirects_all_damage(line)
+            for line in (aura.effective_card.oracle_text or "").splitlines()
+        ):
+            continue
+        found.append(
+            DamageRedirect(
+                new_recipient=host, source_name=aura.card.name,
+            )
+        )
+    return found
+
+
 def source_class_matches(game, redirect: DamageRedirect, source) -> bool:
     """Whether an incoming damage *source* is in the class this record watches.
 
@@ -412,7 +472,15 @@ def applicable_redirect(
         if r.recipients is None and not r.any_recipient
     ]
     for redirect in (
-        own + class_redirects(game, recipient) + resolving_object_redirects(game)
+        # The derived records come after the armed ones for the reason the
+        # oldest armed record wins above: a static Aura has been there since it
+        # attached, but nothing in this pool contends with it, and taking the
+        # armed record first keeps a one-shot "the next 1 damage" from being
+        # stranded behind a blanket redirect that would have moved the event
+        # anyway. When a second contender is printed it wants CR 616.1e's choice
+        # put to the affected player, not a different order here.
+        own + attached_static_redirects(game, recipient)
+        + class_redirects(game, recipient) + resolving_object_redirects(game)
         + source_keyed_redirects(game)
     ):
         if redirect.spent or redirect.applying:

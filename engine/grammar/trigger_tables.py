@@ -22,7 +22,20 @@ from . import ast
 #: the generated table below. Moved above ``_WHENEVER_EVENTS`` when that table
 #: grew a row set built from it; it was always pure data and its position in
 #: the file was incidental.
-_DAMAGER_NOUNS = ("creature", "artifact", "enchantment", "land", "permanent")
+#:
+#: **"aura" is one of them**, and its absence was the whole of six Urza's
+#: Saga cards. A card names itself by whatever noun it likes (CR 109.5), and
+#: the two sibling tables that answer the same question -- ``readers._SELF_NOUNS``
+#: and ``delay_openers._SELF_TYPE_WORDS``, whose comment already claims to be
+#: "the same set ``triggers.py`` reads after 'this'" -- both carried the word
+#: while this one did not. "When **this Aura** is put into a graveyard from the
+#: battlefield" therefore fell past the long-dies loop to the *subject-led*
+#: death reader, which named a different event (``permanent_dies``, watching
+#: every permanent that matches a filter) than ``engine/oracle.py`` did -- and
+#: the engine dispatches on that one.
+_DAMAGER_NOUNS = (
+    "creature", "artifact", "enchantment", "land", "aura", "permanent",
+)
 
 #: "Whenever this <permanent> becomes the target of a spell [or ability]
 #: [an opponent controls | you control]" — Warden of the Woods, and Forsaken
@@ -82,6 +95,16 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # would claim the shorter reading and strand the rest of the clause.
     ("creature_dealt_damage_by_self_dies",
      ("a", "creature", "dealt", "damage", "by", "this", "creature", "this", "turn", "dies")),
+    # The attached spelling of the row above (Vampiric Embrace), and its own
+    # kind for the reason `engine/oracle.py`'s twin row states: the fire site
+    # reaches the observer by a different route. Both attachment words, because
+    # CR 301.5f makes them one rule.
+    ("creature_dealt_damage_by_attached_dies",
+     ("a", "creature", "dealt", "damage", "by", "enchanted", "creature",
+      "this", "turn", "dies")),
+    ("creature_dealt_damage_by_attached_dies",
+     ("a", "creature", "dealt", "damage", "by", "equipped", "creature",
+      "this", "turn", "dies")),
     ("creature_dies", ("a", "creature", "dies")),
     # "Whenever you discard a card" (Necropotence) and "whenever an opponent
     # discards a card" (Megrim). One event, two printed seats — the narrowing

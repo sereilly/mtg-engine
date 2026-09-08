@@ -51,31 +51,64 @@ from ._common import (
 
 
 
-def _returns_itself_to_the_battlefield(node: "ast.ReturnToZone", subject) -> bool:
-    """Whether "return **it** to the battlefield under <seat>'s control" names
-    the ability's *own* card rather than the firing event's object.
+def _returns_its_own_source(node: "ast.ReturnToZone", subject) -> bool:
+    """Whether "return **it**" names the ability's *own* card rather than the
+    firing event's object.
 
-    "When this creature dies, return it to the battlefield under its owner's
-    control …" (Ivory Gargoyle). ``parse_recipient`` reads a bare "it" as the
-    ability's source, and on a self-dies trigger that is exactly what it means —
-    but the bound-object branch below claims every "it" first and then refuses,
-    because a self-dies event records no card. So the shape is recognised here
-    and falls through to the self-return branch further down, which is the one
-    that can read it.
+    ``parse_recipient`` reads a bare "it" as the ability's source, and under a
+    trigger whose own subject *is* that source ("When **this Aura** is put into
+    a graveyard from the battlefield, ...") that is exactly what it means. The
+    bound-object branch below claims every "it" first, though, so the shape has
+    to be recognised in front of it and fall through to the self-return branches
+    further down, which are the ones that can read it.
 
-    Narrow on purpose. Storm Cauldron's bound "return it" goes to a *hand* and
-    Puppet Master's names a card, so neither is reachable; and the controller
-    phrase is required because the self-return branch demands one anyway
-    (CR 110.2's default is the ability's controller, and a sentence that does
-    not say which seat is one this engine will not guess for).
+    Two readings, one per branch below that takes this pronoun, each spelled out
+    rather than collapsed into a bare ``is_source`` test so that a *third*
+    spelling refuses loudly instead of arriving at whichever branch happens to
+    claim it:
+
+    * "When this creature dies, return it to the battlefield under its owner's
+      control ..." (Ivory Gargoyle), which
+      :func:`return_source_card_to_battlefield` performs. The controller phrase
+      is required because that branch demands one anyway (CR 110.2's default is
+      the ability's controller, and a sentence that does not say which seat is
+      one this engine will not guess for).
+    * "When this Aura is put into a graveyard from the battlefield, return it to
+      **its owner's** hand." (Brilliant Halo and its five Urza's Saga
+      siblings), which :func:`return_source_card_to_owners_hand` performs --
+      reaching whichever zone the card is actually in, the graveyard CR 704.5m
+      left it in or the battlefield when nothing has swept yet.
+
+    The bound-card branch is not merely unable to read the second; it would read
+    it **wrongly**, which is why this is a fall-through and not a widening of
+    that branch's honoured set. ``permanent_dies`` is in ``BOUND_CARD_EVENTS``
+    and its fire site does stamp ``dead_card``, so admitting ``is_source`` there
+    compiles a card that appears to work -- right up to a resolution where the
+    Aura is still on the battlefield, which the graveyard-only handler cannot
+    see and cannot remove. The two branches are told apart by which object the
+    sentence names, and this one names the source.
+
+    Narrow on purpose in the other direction too. Storm Cauldron's bound "return
+    it" goes to a hand and Puppet Master's names a card, so neither is
+    reachable; and "...to **your** hand" is deliberately absent, because that
+    spelling lowers to ``return_self_from_graveyard``, which searches one seat's
+    graveyard alone -- a different reading, which no card in the pool prints
+    under a self-event.
     """
-    return (
-        subject.quantifier == "it"
-        and subject.filter.is_source
-        and node.from_zone is None
-        and node.to.name == "battlefield"
+    if subject.quantifier != "it" or not subject.filter.is_source:
+        return False
+    if node.from_zone is not None:
+        return False
+    if (
+        node.to.name == "battlefield"
         and node.to.owner is None
         and node.under_control_of is not None
+    ):
+        return True
+    return (
+        node.to.name == "hand"
+        and node.to.owner is not None
+        and node.to.owner.kind == "owner"
     )
 
 
@@ -112,7 +145,7 @@ def lower_untargeted_return(
         isinstance(subject, ast.TargetSpec)
         and subject.quantifier in ("that", "it")
         and (subject.filter.is_card or subject.quantifier == "it")
-        and not _returns_itself_to_the_battlefield(node, subject)
+        and not _returns_its_own_source(node, subject)
         # An *attached* trigger's "it" names the Aura's host, not a card this
         # event recorded, so it falls past to the two readings that find it.
         and not _is_attached_host_pronoun(subject)

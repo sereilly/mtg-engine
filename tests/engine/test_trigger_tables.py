@@ -126,6 +126,12 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
         "whenever this creature is dealt combat damage",
     ),
     "creature_dealt_damage_by_self_dies": "whenever a creature dealt damage by this creature this turn dies",
+    # W1G4 (USG): the attached spelling of the row above (Vampiric Embrace).
+    # Its own kind because the fire site reaches the observer by a different
+    # route -- the damagers are compared against what the observer is
+    # attached to, not against the observer.
+    "creature_dealt_damage_by_attached_dies":
+        "whenever a creature dealt damage by enchanted creature this turn dies",
     # One kind, four printed subjects: a quantified class (Lifetap), the
     # source itself (City of Brass), the permanent this one is attached to
     # (Spirit Shackle) and that same subject with the one-shot trigger word

@@ -341,7 +341,7 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # into the effect clause.
     ("damage_dealt",
      r"whenever (?:"
-     r"(?P<damager_self>this (?:creature|artifact|enchantment|land|permanent))"
+     r"(?P<damager_self>this (?:creature|artifact|enchantment|land|aura|permanent))"
      r"|(?P<damager_attached>enchanted (?:creature|artifact|enchantment|land|permanent))"
      r"|a source (?P<damager_controller>you) control"
      # "…a red creature **or spell** deals damage" (Justice). One object, two
@@ -750,6 +750,23 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("creature_dealt_damage",
      r"whenever (?P<damaged_subject>an? [^,]+) is dealt damage"),
     ("creature_dealt_damage_by_self_dies",  r"whenever a creature dealt damage by this creature this turn dies"),
+    # "Whenever a creature dealt damage by **enchanted creature** this turn
+    # dies, put a +1/+1 counter on that creature." (Vampiric Embrace.) Sengir
+    # Vampire's condition read off an attachment instead of off the ability's
+    # own permanent -- which is a different *observer relationship*, not a
+    # narrowing of the same one, exactly as `attached_creature_dies` is a
+    # different kind from `creature_dies` and for the same reason: the fire site
+    # finds the observer by a different route (`_fire_creature_dies_triggers`
+    # compares the damagers against the observer for the row above and against
+    # what the observer is attached to for this one), and a kind is what a fire
+    # site dispatches on.
+    #
+    # Both attachment words (CR 301.5f): an Equipment printing the sentence is
+    # the same rule, and the row that reads only one of them is the drift this
+    # file's other comments keep naming.
+    ("creature_dealt_damage_by_attached_dies",
+     r"whenever a creature dealt damage by (?:enchanted|equipped) creature "
+     r"this turn dies"),
     # "Whenever this creature becomes the target of a spell or ability an
     # opponent controls" (Warden of the Woods). Whose spell it must be is a
     # named group, so "you control" and the unnarrowed form are the same
@@ -783,7 +800,7 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      r"|an ability)"
      r"(?: (?P<targeting_controller>an opponent controls|you control))?"),
     ("self_becomes_target",
-     r"whenever this (?:creature|artifact|enchantment|land|permanent) becomes "
+     r"whenever this (?:creature|artifact|enchantment|land|aura|permanent) becomes "
      r"the target of (?P<targeted_by>a spell or ability|an aura spell|a spell"
      r"|an ability)"
      r"(?: (?P<targeting_controller>an opponent controls|you control))?"),
@@ -1418,7 +1435,7 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # graveyard, so "a" and "your" name the same pile for a card its controller
     # owns, and the noun is the source either way.
     ("dies",
-     r"when this (?:creature|artifact|enchantment|land|permanent) is put into "
+     r"when this (?:creature|artifact|enchantment|land|aura|permanent) is put into "
      r"(?:a|your) graveyard from the battlefield"),
     # "When **this card** is put into your graveyard **from your library**"
     # (Gaea's Blessing). Not a death and not this table's `dies` row: the

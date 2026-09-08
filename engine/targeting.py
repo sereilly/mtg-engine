@@ -55,6 +55,7 @@ from .oracle_types import _COLOR_WORD_TO_SYMBOL
 #: asks whose board the count names, and :func:`cast_time_count_spec`, which
 #: asks whether it is taken at the announcement.
 _X_FROM_COUNT = "x_from_count"
+from .grammar.vocabulary import LAND_TYPES as _LAND_TYPES
 from .subject_filters import filter_head_noun, unimplemented_filter_keywords
 
 # "Enchant creature", "Enchant land", ... — but NOT "Enchant creature card in a
@@ -72,8 +73,23 @@ from .subject_filters import filter_head_noun, unimplemented_filter_keywords
 # instead means the tenth combination costs nothing, which is how "artifact an
 # opponent controls" (Relic Bind — the only card in the pool printing it)
 # arrived without a second entry.
+#: A printed **land subtype** is one of these nouns, not a fifth composing
+#: half: "Enchant Swamp" (Spreading Algae) names a different noun the way
+#: "Enchant Wall" already does, rather than qualifying "land". Read out of
+#: ``data/vocabulary/land_types.json`` rather than spelled here, for the reason
+#: CLAUDE.md gives about every type list in this engine - and because the
+#: matcher behind it (``has_type``, CR 613 layer 4) answers for every member
+#: with one line, so the eighteenth subtype costs exactly what the first did.
+#:
+#: Longest first inside the alternation, which is first-match: a subtype that
+#: is a prefix of another would otherwise consume it and leave the tail to fail
+#: the whole-line anchor - the trap the seat clauses sprang once already (see
+#: the note above about "creature you control").
+_ENCHANT_LAND_SUBTYPES: tuple[str, ...] = tuple(
+    sorted(_LAND_TYPES, key=len, reverse=True)
+)
 _ENCHANT_NOUNS = ("creature", "land", "artifact", "enchantment", "wall",
-                  "permanent")
+                  "permanent") + _ENCHANT_LAND_SUBTYPES
 #: A printed **negated** noun ("Enchant non-Wall creature", Aggression). The
 #: exclusion is enforced by `mixins/stack/casting.aura_enchant_noun`, which
 #: reads the whole printed subject; what the picker needs from it is the head
@@ -324,6 +340,18 @@ _ENCHANT_NOUN_TO_SPEC: dict[str, dict] = {
     # general picker with no narrowing at all - and the one enchant clause
     # whose spec needs no flag, because there is nothing to exclude.
     "permanent": {"kind": "permanent"},
+    # "Enchant Swamp" (Spreading Algae). The land picker plus the subtype, in
+    # exactly the shape ``enchant_wall`` above takes: the *kind* is what the
+    # candidate list is built from and the flag is what narrows it, so the
+    # hosts offered and the hosts ``permanent_matches_enchant_noun`` allows are
+    # one reading. Both ends ask ``has_type`` (CR 613 layer 4), which is what
+    # makes a Swamp turned into an Island by Phantasmal Terrain stop being a
+    # legal host - and the CR 704.5m sweep then bins the Aura, exactly as it
+    # already does for the keyword and colour halves.
+    **{
+        subtype: {"kind": "land", "enchant_land_type": subtype}
+        for subtype in _ENCHANT_LAND_SUBTYPES
+    },
 }
 
 # The seat half of the clause as the picker's own flag. It is a seat test, not

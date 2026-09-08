@@ -37,7 +37,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | STH | 143 | 215 | 88.4% | 88.4% | 62.8% | 124 |
 | EXO | 143 | 207 | 90.3% | 90.3% | 66.2% | 127 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| USG *(measured)* | 335 | 486 | 70.6% | 64.0% | 42.4% | 182 |
+| USG *(measured)* | 335 | 486 | 70.8% | 66.5% | 44.2% | 188 |
 | **All (shipped)** | **4873** | **7239** | **90.5%** | **89.8%** | **60.0%** | **3637** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -50,7 +50,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 451 | 212 | expected a subject |  |
+| 450 | 211 | expected a subject |  |
 | 119 | 64 | unrecognized effect verb |  |
 | 102 | 57 | unconsumed text |  |
 | 41 | 25 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -58,12 +58,11 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 16 | 15 | expected 'unless defending player controls' |  |
 | 13 | 8 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
 | 10 | 4 | expected what this creature can't block, or a duration |  |
-| 8 | 2 | no lowering for RawEffect |  |
+| 7 | 1 | no lowering for RawEffect |  |
 | 7 | 2 | expected who takes the redirected damage |  |
 | 6 | 1 | no handler for this battlefield entry |  |
 | 6 | 3 | expected a keyword ability |  |
 | 6 | 6 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
-| 6 | 1 | the bound-card return does not honour 'is_source' |  |
 | 5 | 1 | expected 'card' |  |
 | 5 | 2 | no whole-hand discard handler for 'each_player' |  |
 | 4 | 1 | the sacrifice prompt cannot test this restriction |  |
@@ -75,6 +74,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 3 | 3 | unrecognized "can't be" restriction |  |
 | 3 | 3 | expected 'a' |  |
 | 3 | 3 | expected a colour or a creature body after 'becomes' |  |
+| 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 
 ## Cards executing through the grammar
 
@@ -782,6 +782,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your end step, create a 0/1 black Thrull creature token.`
 - **Briar Shield**
   - `Sacrifice this Aura: Enchanted creature gets +3/+3 until end of turn.`
+- **Brilliant Halo**
+  - `When this Aura is put into a graveyard from the battlefield, return it to its owner's hand.`
 - **Brine Hag**
   - `When this creature dies, change the base power and toughness of all creatures that dealt damage to it this turn to 0/2. (This effect lasts indefinitely.)`
 - **Brine Shaman**
@@ -1529,6 +1531,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of each end step, each player who tapped a land for mana this turn sacrifices a land of their choice. This enchantment deals 2 damage to each player who sacrificed a Plains this way.`
 - **Desperate Gambit**
   - `Choose a source you control and flip a coin. If you win the flip, the next time that source would deal damage this turn, it deals double that damage instead. If you lose the flip, the next time it would deal damage this turn, prevent that damage.`
+- **Despondency**
+  - `When this Aura is put into a graveyard from the battlefield, return it to its owner's hand.`
 - **Despotic Scepter**
   - `{T}: Destroy target permanent you own. It can't be regenerated.`
 - **Destructive Tampering**
@@ -2147,6 +2151,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Fiery Justice deals 5 damage divided as you choose among any number of targets. Target opponent gains 5 life.`
 - **Fiery Mantle**
   - `{R}: Enchanted creature gets +1/+0 until end of turn.`
+  - `When this Aura is put into a graveyard from the battlefield, return it to its owner's hand.`
 - **Fighting Chance**
   - `For each blocking creature, flip a coin. If you win the flip, prevent all combat damage that would be dealt by that creature this turn.`
 - **Final Fortune**
@@ -2336,6 +2341,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Wall creatures you control get +1/+0 and have banding. (Any creatures with banding, and up to one without, can attack in a band. Bands are blocked as a group. If any creatures with banding you control are blocking or being blocked by a creature, you divide that creature's combat damage, not its controller, among any of the creatures it's being blocked by or is blocking.)`
 - **Fortitude**
   - `Sacrifice a Forest: Regenerate enchanted creature.`
+  - `When this Aura is put into a graveyard from the battlefield, return it to its owner's hand.`
 - **Foul Familiar**
   - `{B}, Pay 1 life: Return this creature to its owner's hand.`
 - **Foul Imp**
@@ -3528,6 +3534,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever a player casts a blue spell, you may pay {3}. If you do, untap target permanent.`
 - **Lat-Nam's Legacy**
   - `Shuffle a card from your hand into your library. If you do, draw two cards at the beginning of the next turn's upkeep.`
+- **Launch**
+  - `When this Aura is put into a graveyard from the battlefield, return it to its owner's hand.`
 - **Lava Burst**
   - `Lava Burst deals X damage to any target. If Lava Burst would deal damage to a creature, that damage can't be prevented or dealt instead to another permanent or player.`
 - **Lava Hounds**
@@ -6006,6 +6014,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this enchantment leaves the battlefield, remove all fungus counters from all creatures.`
 - **Spreading Algae**
   - `When enchanted land becomes tapped, destroy it.`
+  - `When this Aura is put into a graveyard from the battlefield, return it to its owner's hand.`
 - **Squandered Resources**
   - `Sacrifice a land: Add one mana of any type the sacrificed land could produce.`
 - **Squee's Toy**
@@ -6788,6 +6797,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{B}: This creature gets +1/+0 until end of turn. Activate no more than twice each turn.`
 - **Vampire Hounds**
   - `Discard a creature card: This creature gets +2/+2 until end of turn.`
+- **Vampiric Embrace**
+  - `Whenever a creature dealt damage by enchanted creature this turn dies, put a +1/+1 counter on that creature.`
 - **Vampiric Tutor**
   - `Search your library for a card, then shuffle and put that card on top. You lose 2 life.`
 - **Vampirism**
@@ -6820,6 +6831,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever enchanted creature blocks or becomes blocked by a non-Wall creature, destroy the other creature at end of combat.`
 - **Venomous Breath**
   - `Choose target creature. At this turn's next end of combat, destroy all creatures that blocked or were blocked by it this turn.`
+- **Venomous Fangs**
+  - `Whenever enchanted creature deals damage to a creature, destroy the other creature.`
 - **Ventifact Bottle**
   - `{X}{1}, {T}: Put X charge counters on this artifact. Activate only as a sorcery.`
   - `At the beginning of your first main phase, if this artifact has a charge counter on it, tap it and remove all charge counters from it. Add {C} for each charge counter removed this way.`
@@ -6979,6 +6992,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{R}: This creature gets +1/+0 until end of turn.`
   - `{R}: This creature gets +1/+0 until end of turn.`
   - `{R}: This creature gets +1/+0 until end of turn.`
+- **Wall of Junk**
+  - `When this creature blocks, return it to its owner's hand at end of combat. (Return it only if it's on the battlefield.)`
 - **Wall of Kelp**
   - `{U}{U}, {T}: Create a 0/1 blue Plant Wall creature token with defender named Kelp.`
 - **Wall of Lava**
