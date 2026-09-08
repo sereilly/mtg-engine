@@ -627,3 +627,65 @@ def test_priest_of_titania_counts_only_elves(set_pool, catalog_by_name):
     resolve_stack(game)
 
     assert game.players[0].mana_pool.get("G") == 1, "the Priest itself"
+
+
+# --- W2G5: Wild Dogs — the life leader takes the creature ---
+def _g5d_run(set_pool, life_a, life_b):
+    """One upkeep with Wild Dogs on seat 0 and the given life totals."""
+    alice, bob = PlayerState(name="Alice"), PlayerState(name="Bob")
+    game = Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    dogs = Permanent(card=set_pool("USG")["Wild Dogs"])
+    game._put_permanent_onto_battlefield(0, dogs, None)
+    alice.life, bob.life = life_a, life_b
+    game.active_player_index = 0
+    game.resolve_upkeep(0)
+    resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    resolve_stack(game)
+    return game.controller_index_of(dogs)
+
+
+def test_wild_dogs_walk_to_whoever_is_ahead(set_pool):
+    """"At the beginning of your upkeep, if a player has more life than each
+    other player, the player with the most life gains control of this
+    creature."
+
+    The trigger is on **your** upkeep and the seat it names is nobody the
+    trigger froze — it is read off the life totals — so a reading that took the
+    frozen seat would leave the Dogs where they are for ever.
+    """
+    assert _g5d_run(set_pool, 20, 25) == 1, "the opponent is ahead"
+    assert _g5d_run(set_pool, 25, 20) == 0, "and stay put when you are"
+
+
+def test_wild_dogs_stay_put_on_a_tie(set_pool):
+    """A tie names nobody: "more life than each other player" is strict and
+    CR 104.3b's superlative has no answer when two seats are level. The gate
+    and the hand-over ask the *same* reader, so they cannot disagree about it.
+    """
+    assert _g5d_run(set_pool, 20, 20) == 0
+
+
+def test_ghazban_ogre_keeps_working_with_its_hook_retired(catalog_by_name):
+    """The production took a name-keyed hook over.
+
+    Ghazban Ogre printed Wild Dogs' sentence exactly and was implemented as a
+    ``CARD_LINE_INSTRUCTIONS`` entry plus an upkeep-registry handler; both are
+    gone. This is the card the retirement owes a behaviour check — the guard in
+    ``tests/engine/test_card_lines.py`` only proves the entry was dead.
+    """
+    alice, bob = PlayerState(name="Alice"), PlayerState(name="Bob")
+    game = Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    ogre = Permanent(card=catalog_by_name["Ghazb\u00e1n Ogre"])
+    game._put_permanent_onto_battlefield(0, ogre, None)
+    alice.life, bob.life = 18, 22
+
+    game.active_player_index = 0
+    game.resolve_upkeep(0)
+    resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    resolve_stack(game)
+
+    assert game.controller_index_of(ogre) == 1

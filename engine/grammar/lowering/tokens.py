@@ -22,7 +22,8 @@ from ...oracle_types import OracleInstruction
 from ...tokens import default_token_name
 from .. import ast
 from ..errors import LoweringError
-from ._events import _back_reference_payload
+from ._events import (EVENT_SUBJECT_PLAYER, _EVENT_SUBJECT_PLAYERS,
+                      _back_reference_payload)
 from ._record_keys import _RECORDED_PERMANENTS
 from ._amounts import count_spec
 from ._common import (
@@ -269,6 +270,26 @@ def _lower_create_token(
             payload["targets"] = {
                 "quantifier": "target", "kind": "player", "opponents_only": True,
             }
+        elif node.recipient_players == "that_player":
+            # "At the beginning of each player's upkeep, …**the player**
+            # creates a 1/1 green Saproling creature token." (Greener
+            # Pastures.) Nobody chose this seat — it is the one the firing
+            # event was about, frozen into the trigger's context (CR 603.10) by
+            # the upkeep step — so the handler is told to read the record
+            # rather than ``context.target``, which under a trigger that chose
+            # nothing is whatever the resolution happened to be carrying.
+            #
+            # The same key the mill, the draw and the damage already read for
+            # the identical two words, and gated on the event for their stated
+            # reason: with nothing frozen, "that player" names a seat the card
+            # never did.
+            #
+            # Mogg Infestation prints the same words on a *spell*, where the
+            # seat really is the resolution's own target — so the record is
+            # stamped only under an event that froze one, and that card's
+            # payload is unchanged.
+            if event in _EVENT_SUBJECT_PLAYERS:
+                payload["recipient_seat_record"] = EVENT_SUBJECT_PLAYER
     count = _stamp_token_count(payload, node, produced)
     # "…that are tapped and attacking" (Basri Ket): entry state the handler
     # stamps as the tokens arrive.

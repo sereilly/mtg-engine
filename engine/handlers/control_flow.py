@@ -108,6 +108,32 @@ def _compare_count(count: int, op: str, wanted: int | None) -> bool:
     return False
 
 
+def most_life_seat(game: Game) -> "int | None":
+    """The seat strictly ahead of every other living one, or None on a tie.
+
+    "…**the player with the most life** gains control of this creature." (Wild
+    Dogs, whose intervening-if asks the same question one clause earlier.) One
+    reader for both, so the gate and the hand-over cannot disagree about
+    whether there is a leader — read apart, the trigger could fire on a board
+    where the effect then found nobody to name.
+
+    A tie names nobody, and that is the printed reading: "more life than each
+    other player" is strict, and CR 104.3b's "the player with the most life"
+    has no answer when two are level. Players who have lost are not in the
+    comparison (CR 800.4a).
+    """
+    living = [
+        (index, player)
+        for index, player in enumerate(game.players)
+        if not player.lost
+    ]
+    if not living:
+        return None
+    best = max(int(player.life) for _index, player in living)
+    leaders = [index for index, player in living if int(player.life) == best]
+    return leaders[0] if len(leaders) == 1 else None
+
+
 def _condition_player(game: Game, context: OracleExecutionContext, whose):
     """The single seat a condition's ``player`` word names, or None.
 
@@ -393,6 +419,30 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         # "if an opponent controls more creatures than you" (Garruk,
         # Unleashed's −2): the bound is the asker's own matching count, and
         # "an opponent" means any single opponent beating it.
+        # "if **that player** controls more lands than **each other player**"
+        # (Greener Pastures). The superlative: the asked seat must beat every
+        # other living one. Its own branch beside "more_than_you" rather than a
+        # flag on it, because the two compare different sets — that one asks
+        # whether *any* opponent beats the caster, this asks whether *one named
+        # seat* beats all the rest — and reading either as the other is the
+        # card answering about the wrong players.
+        #
+        # `players` above is already the seat the clause named (the trigger's
+        # frozen "that player", or the caster). A tie fails: "more than" is
+        # strict, which is what leaves the card idle on a mirrored board.
+        if op == "more_than_each_other_player":
+            if len(players) != 1:
+                return False
+            asked = players[0]
+            return all(
+                sum(
+                    1
+                    for permanent in game.controlled_by(other)
+                    if permanent_matches_filter(permanent, filters)
+                ) < count
+                for other in game.players
+                if other is not asked and not other.lost
+            )
         if op == "more_than_you":
             filters = payload.get("filter") or {}
             own = sum(
@@ -662,6 +712,13 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         # pile, and `getattr(player, "life")` returning an int where the branch
         # above expects a list is the kind of near-miss that answers rather than
         # failing.
+        # "if **a player** has more life than each other player" (Wild Dogs).
+        # A superlative over an existential seat: is *anybody* strictly ahead
+        # of everybody else? Answered before the single-seat read below,
+        # because there is no seat to read — and strictly, so a tie says no,
+        # which is what leaves the Dogs where they are on a level board.
+        if str(payload.get("op", "")) == "more_than_each_other_player":
+            return most_life_seat(game) is not None
         player = _condition_player(game, context, payload.get("player"))
         if player is None:
             return False

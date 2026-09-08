@@ -354,6 +354,24 @@ def give_control_of_source_to_player(game: Game, instruction: OracleInstruction,
         recipient = context.caster
     elif who in ("target_opponent", "target_player"):
         recipient = context.target
+    elif who == "most_life":
+        # "…**the player with the most life** gains control of this creature."
+        # (Wild Dogs.) Nobody chose and nothing froze this seat — it is read
+        # off the life totals as the ability resolves, through the same reader
+        # the card's own intervening-if asks one clause earlier, so the trigger
+        # cannot fire on a board where this then finds nobody.
+        #
+        # A tie names nobody and the creature stays put, which is the printed
+        # reading: CR 104.3b's superlative has no answer when two seats are
+        # level, and handing it to the controller instead would be the ability
+        # doing the opposite of what it says.
+        from .control_flow import most_life_seat
+
+        seat = most_life_seat(game)
+        if seat is None:
+            game.log.append(f"{context.card.name}: no player has the most life")
+            return True, "resolved"
+        recipient = game.players[seat]
     elif who == "chosen":
         # "**An opponent** gains control of this land …" (Rainbow Vale.) The
         # seat the ``choose_opponent`` step in front of this one announced

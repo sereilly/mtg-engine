@@ -327,8 +327,29 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
     # openers are a player reference and this one is settled by the word after
     # it.
     have_mark = stream.mark()
-    counted = parse_player_ref(stream)
+    # "if **a player** has more life than each other player" (Wild Dogs). An
+    # existential rather than a reference: nobody chose this seat and no event
+    # froze it, and the clause is asking whether *some* player is ahead. Read
+    # here rather than in `parse_player_ref`, and deliberately: "a player" in a
+    # subject position would be a sentence nobody can perform ("a player draws
+    # a card" is not printed), so admitting the words generally would let one
+    # into every effect the grammar reads.
+    any_player = stream.accept_phrase("a", "player")
+    counted = ast.PlayerRef("any_player") if any_player else parse_player_ref(stream)
     if counted is not None and stream.accept_word("has", "have"):
+        # "if **a player has more life than each other player**" (Wild Dogs).
+        # A superlative rather than a bound: the seat must beat every other
+        # one, and the phrase names no number for `parse_comparison` to read.
+        # The same op the controls clause below carries for the identical
+        # printed tail, so one word means one thing on both sides of "has".
+        #
+        # Strictly more, so a tie fails — which is the whole of what keeps Wild
+        # Dogs still on a level board.
+        if stream.accept_phrase("more", "life", "than", "each", "other", "player"):
+            return ast.PlayerLifeIs(
+                counted,
+                ast.Comparison("more_than_each_other_player", ast.Fixed(0)),
+            )
         comparison = parse_comparison(stream)
         if stream.accept_word("life"):
             return ast.PlayerLifeIs(counted, comparison)
@@ -351,8 +372,29 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
             # it is an op of its own rather than a number to compare with.
             if stream.accept_word("more"):
                 filt = parse_object_filter(stream)
+                # "if that player controls more lands than **each other
+                # player**" (Greener Pastures). A *superlative*: the seat must
+                # beat every other one, where "than you" beside it names a
+                # single rival. Two ops rather than one with a payload flag,
+                # because the two answer different questions of different sets
+                # — "than you" is a comparison against the asker's own count,
+                # and this is a comparison against all the rest — and a reader
+                # that had learned only one would answer the other on the
+                # wrong seats.
+                #
+                # Strictly more, and a tie therefore fails: "more … than each
+                # other player" is not satisfied by an equal count, which is
+                # what makes the card do nothing on a mirrored board.
+                if stream.accept_phrase("than", "each", "other", "player"):
+                    return ast.Controls(
+                        player, filt,
+                        ast.Comparison("more_than_each_other_player", ast.Fixed(0)),
+                    )
                 if not stream.accept_phrase("than", "you"):
-                    raise stream.error("expected 'than you' after the count")
+                    raise stream.error(
+                        "expected 'than you' or 'than each other player' after "
+                        "the count"
+                    )
                 return ast.Controls(player, filt, ast.Comparison("more_than_you", ast.Fixed(0)))
             negated = bool(stream.accept_word("no")) or verb_negated
             # "you control **a** Swamp". The article carries no meaning of its

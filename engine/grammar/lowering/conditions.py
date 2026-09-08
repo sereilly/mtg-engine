@@ -460,6 +460,24 @@ def _lower_condition(
             raise LoweringError(
                 "a life gate compares against a printed number", node=condition
             )
+        # "if **a player** has more life than each other player" (Wild Dogs).
+        # The seat is an existential, not a reference — `_condition_seat` has
+        # no pronoun to resolve — and the comparison is a superlative with no
+        # printed number, so both halves ride as their own words and the
+        # evaluator reads them together. Only under the superlative: "a player
+        # has 5 or less life" would be a different card and nothing prints it.
+        if condition.player.kind == "any_player":
+            if condition.comparison.op != "more_than_each_other_player":
+                raise LoweringError(
+                    "an existential life gate is only read as a superlative",
+                    node=condition,
+                )
+            return {
+                "kind": "player_life",
+                "player": "any_player",
+                "op": condition.comparison.op,
+                "value": bound.value,
+            }
         return {
             "kind": "player_life",
             "player": _condition_seat(condition, condition.player, event, "life gate"),

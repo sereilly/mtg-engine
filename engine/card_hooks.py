@@ -270,11 +270,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
             _line('change_target_land_type', 'activated_landtype',
                 land_type='forest'),
     },
-    'Ghazbán Ogre': {
-        "at the beginning of your upkeep, if a player has more life than each "
-        "other player, the player with the most life gains control of this creature":
-            _line("upkeep_most_life_gains_control", "upkeep_effect"),
-    },
     # The first sentence is an ordinary numeric shield the grammar can read; the
     # rest of the line grants an activatable emblem, which is ON_SELF_RESOLVED
     # above. Claiming only the shield would drop the emblem silently, so the

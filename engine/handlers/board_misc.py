@@ -1719,12 +1719,32 @@ def create_token(game: Game, instruction: OracleInstruction, context: OracleExec
         # the ``targets`` description the lowering writes, not this lookup. This
         # used to be two branches, the second of them unreachable behind the
         # first, so the ``lost`` check it carried was never run.
-        chosen = context.target
-        recipients = (
-            [game.players.index(chosen)]
-            if chosen is not None and chosen in game.players and not chosen.lost
-            else []
-        )
+        # "…**the player** creates a 1/1 green Saproling creature token."
+        # (Greener Pastures.) Under a trigger that chose nobody the seat is the
+        # one the firing event was about, frozen by the fire site (CR 603.10) —
+        # ``context.target`` there is whatever the resolution was carrying,
+        # which for an each-player upkeep is the wrong player half the time.
+        # The key is stamped by the lowering only where an event really froze
+        # a seat, so a *spell* printing the same two words (Mogg Infestation)
+        # still reads its own target below.
+        record = payload.get("recipient_seat_record")
+        if record is not None:
+            seat = (context.trigger_context or {}).get(str(record))
+            recipients = (
+                [seat]
+                if isinstance(seat, int)
+                and 0 <= seat < len(game.players)
+                and not game.players[seat].lost
+                else []
+            )
+        else:
+            chosen = context.target
+            recipients = (
+                [game.players.index(chosen)]
+                if chosen is not None and chosen in game.players
+                and not chosen.lost
+                else []
+            )
     elif who == "each_player":
         recipients = [i for i, p in enumerate(game.players) if not p.lost]
     for seat in recipients:

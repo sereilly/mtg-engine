@@ -211,6 +211,14 @@ _TOKEN_RECIPIENT_PREFIXES: tuple[tuple[tuple[str, ...], str], ...] = (
     # resolution's own target. A row here rather than a fourth branch, because
     # what differs from the three above is one string.
     (("that", "player"), "that_player"),
+    # "…**the player** creates a 1/1 green Saproling creature token."
+    # (Greener Pastures.) The definite article back-refers to the seat the
+    # sentence in front of it named, which is what `that_player` means to every
+    # consumer downstream — the same alias `references.parse_player_ref` has
+    # read since Wand of Ith, so the two positions read one word one way. A row
+    # rather than a branch, for the reason the row above it is one: what
+    # differs from its neighbours is a string.
+    (("the", "player"), "that_player"),
 )
 
 

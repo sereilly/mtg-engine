@@ -753,33 +753,6 @@ class UpkeepEffectsMixin:
             f"{controller.name}'s next upkeep"
         )
 
-    @upkeep_effect("upkeep_self", "upkeep_most_life_gains_control")
-    def _on__upkeep_self__upkeep_most_life_gains_control(self, ctx: UpkeepContext) -> None:
-        controller = ctx.controller
-        permanent = ctx.permanent
-        # Ghazbân Ogre: control passes to whichever player has
-        # STRICTLY more life than every other (a tie for the
-        # lead means no change). Living players only (CR
-        # 800.4a: a player who's left the game has no life
-        # total to compare).
-        living = [p for p in self.players if not p.lost]
-        sole_leader = None
-        if living:
-            top_life = max(p.life for p in living)
-            leaders = [p for p in living if p.life == top_life]
-            if len(leaders) == 1:
-                sole_leader = leaders[0]
-        if sole_leader is not None and sole_leader is not controller:
-            # A resolving ability's control change lasts indefinitely (CR
-            # 611.2b), so it is a layer-2 contribution from the Ogre itself.
-            # Re-recording on a later upkeep replaces it with a fresh
-            # timestamp, which is how the lead moving from one player to
-            # another is expressed without anyone tracking a previous value.
-            self.take_control(permanent, sole_leader, source=permanent)
-            self.log.append(
-                f"{sole_leader.name} gains control of {permanent.card.name} (most life)"
-            )
-
     @upkeep_effect("upkeep_self", "upkeep_destroy_least_power_creature")
     def _on__upkeep_self__upkeep_destroy_least_power_creature(self, ctx: UpkeepContext) -> None:
         controller = ctx.controller

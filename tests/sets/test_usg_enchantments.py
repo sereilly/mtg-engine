@@ -1386,3 +1386,73 @@ def test_lingering_mirage_makes_the_land_an_island(set_pool, catalog_by_name):
     assert not forest.has_type("forest"), "CR 305.7 replaces the subtype"
     game.tap_land_for_mana(1, "Forest", permanent_id=forest.permanent_id)
     assert bob.mana_pool.get("U") == 1
+
+
+# --- W2G5: Greener Pastures — a superlative across every seat ---
+def _g5p_upkeep(game, seat):
+    game.active_player_index = seat
+    game.resolve_upkeep(seat)
+    resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    resolve_stack(game)
+
+
+def _g5p_saprolings(game, seat):
+    return sum(1 for p in game.controlled_by(seat) if "Saproling" in p.card.name)
+
+
+def _g5p_board(set_pool, catalog_by_name, mine, theirs):
+    """Greener Pastures on seat 0, with *mine* / *theirs* lands beside it."""
+    game, _alice, _bob = _g5c_two_seats()
+    game._put_permanent_onto_battlefield(
+        0, Permanent(card=set_pool("USG")["Greener Pastures"]), None
+    )
+    for _ in range(mine):
+        game._put_permanent_onto_battlefield(
+            0, Permanent(card=catalog_by_name["Forest"]), None
+        )
+    for _ in range(theirs):
+        game._put_permanent_onto_battlefield(
+            1, Permanent(card=catalog_by_name["Island"]), None
+        )
+    return game
+
+
+def test_greener_pastures_pays_whichever_seat_leads_on_lands(
+    set_pool, catalog_by_name
+):
+    """"At the beginning of each player's upkeep, if that player controls more
+    lands than each other player, the player creates a 1/1 green Saproling
+    creature token."
+
+    Two independent gaps met on this card and only one of them was the
+    superlative: the *token* also went to the wrong seat, because "that player"
+    read ``context.target`` — whatever the resolution was carrying — where the
+    seat is the one the upkeep froze (CR 603.10).
+
+    The enchantment is on seat 0 throughout and the *opponent* is the one that
+    gets the token in the second board, which is what the wrong reading could
+    not produce.
+    """
+    game = _g5p_board(set_pool, catalog_by_name, mine=3, theirs=1)
+    for seat in (0, 1):
+        _g5p_upkeep(game, seat)
+    assert (_g5p_saprolings(game, 0), _g5p_saprolings(game, 1)) == (1, 0)
+
+    game = _g5p_board(set_pool, catalog_by_name, mine=1, theirs=3)
+    for seat in (0, 1):
+        _g5p_upkeep(game, seat)
+    assert (_g5p_saprolings(game, 0), _g5p_saprolings(game, 1)) == (0, 1)
+
+
+def test_greener_pastures_is_silent_on_a_level_board(set_pool, catalog_by_name):
+    """"More … than each other player" is strict, so a tie is nobody's lead.
+
+    The control the two boards above need: a superlative read as ">=" would
+    hand a token to *both* seats every turn, which is a different card.
+    """
+    game = _g5p_board(set_pool, catalog_by_name, mine=2, theirs=2)
+    for seat in (0, 1):
+        _g5p_upkeep(game, seat)
+
+    assert (_g5p_saprolings(game, 0), _g5p_saprolings(game, 1)) == (0, 0)

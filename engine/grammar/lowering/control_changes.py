@@ -226,7 +226,14 @@ def _lower_offered_steal(
 #: sentence refuses.
 _EVENT_GAINERS = frozenset({"that_player", "they"})
 
-_NAMED_GAINERS = frozenset({"target_opponent", "target_player", "you"})
+#: "…**the player with the most life** gains control of this creature." (Wild
+#: Dogs.) A seat the *board* names rather than one a player chose, which is why
+#: it is in this set at all: like the three beside it, it is resolved by the
+#: time the instruction runs — the handler asks the life totals — where a
+#: ``_CHOSEN_GAINERS`` entry has to stop and ask somebody first.
+_NAMED_GAINERS = frozenset({
+    "target_opponent", "target_player", "you", "most_life",
+})
 
 #: The seats a control change may be handed to by a phrase that names **no**
 #: particular player — "**An opponent** gains control of this land" (Rainbow
