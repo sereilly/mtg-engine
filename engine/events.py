@@ -217,9 +217,23 @@ def cast_trigger_events(game: Game, event: Event) -> list[dict]:
 #: (Gaea's Blessing) can only ever be about the object that moved, so there is
 #: nothing for a card to declare and nothing for a second reader to disagree
 #: with.
-_MOVED_CARD_CONDITIONS: frozenset[str] = frozenset(
-    {"self_put_into_graveyard_from_library"}
-)
+#: Keyed by **event kind**, because the two are not always the same word. A
+#: card whose condition names a move nothing else watches announces itself under
+#: a kind of its own (``self_put_into_graveyard_from_library``); where a
+#: board-wide condition already announces the same move, the moved card rides
+#: that one announcement rather than a second — Serra Avatar's "when this
+#: creature is put into a graveyard **from anywhere**" and Planar Void's
+#: "whenever another card is put into a graveyard from anywhere" are one event
+#: asked from two places, and two emits would split one move's triggers across
+#: two batches where CR 603.3b puts simultaneous triggers on together.
+_MOVED_CARD_CONDITIONS: dict[str, frozenset[str]] = {
+    "self_put_into_graveyard_from_library": frozenset(
+        {"self_put_into_graveyard_from_library"}
+    ),
+    "card_put_into_graveyard": frozenset(
+        {"self_put_into_graveyard_from_anywhere"}
+    ),
+}
 
 
 def moved_card_trigger_events(game: Game, event: Event) -> list[dict]:
@@ -237,7 +251,8 @@ def moved_card_trigger_events(game: Game, event: Event) -> list[dict]:
     owner, so "shuffle **your** graveyard into **your** library" is that
     player's.
     """
-    if event.kind not in _MOVED_CARD_CONDITIONS:
+    conditions = _MOVED_CARD_CONDITIONS.get(event.kind)
+    if conditions is None:
         return []
     from .trigger_utils import matching_triggers
 
@@ -255,7 +270,7 @@ def moved_card_trigger_events(game: Game, event: Event) -> list[dict]:
             "ability_text": trig.source_line,
             "trigger_context": dict(event.payload) or None,
         }
-        for trig in matching_triggers(card, condition_kinds={event.kind})
+        for trig in matching_triggers(card, condition_kinds=conditions)
         if trig.instruction is not None
     ]
 
@@ -364,6 +379,28 @@ def _moved_card_only_filter(
     that one is scoped to the object that moved.
     """
     return False
+
+
+@event_filter("card_put_into_graveyard")
+def _another_card_filter(
+    game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event
+) -> bool:
+    """"Whenever **another** card is put into a graveyard from anywhere."
+    (Planar Void.)
+
+    CR 109.5's "another": the ability's own source is excluded and nothing else
+    is. Enforced here rather than as a filter payload because the comparison is
+    between the *event's* object and the observing permanent — a question no
+    read of the moved card alone can answer.
+
+    By ``CardDefinition`` identity, which is the identity this engine has: a
+    deck repeats one immutable definition per copy, so a second Planar Void
+    milled while the first is on the battlefield is skipped. That is the wrong
+    half of a rare pair and it is the half chosen deliberately — the other
+    reading has Planar Void exiling itself as it dies, which is the one case the
+    printed word forbids.
+    """
+    return event.subject is not permanent.card
 
 
 @event_filter("you_play_card")

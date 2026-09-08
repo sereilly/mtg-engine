@@ -339,6 +339,15 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     "self_cast": "when you cast this spell",
     "self_put_into_graveyard_from_library":
         "when this card is put into your graveyard from your library",
+    # Serra Avatar. One zone wider than the row above and deliberately not the
+    # death reading — CR 700.4 makes dying "from the battlefield", so an Avatar
+    # milled or discarded never dies and this condition still fires.
+    "self_put_into_graveyard_from_anywhere":
+        "when this creature is put into a graveyard from anywhere",
+    # Planar Void. The board-wide half of the same move: a *card*, out of no
+    # named zone, into anybody's pile.
+    "card_put_into_graveyard":
+        "whenever another card is put into a graveyard from anywhere",
     # `no_lands` is gone: "when you control no lands" is
     # `controls_no_matching` with a land filter, which is the same sentence
     # with the noun read rather than welded into the kind.

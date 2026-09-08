@@ -221,3 +221,68 @@ def test_w1g5_smokestack_makes_the_upkeep_player_choose(set_pool):
     assert owed[0].player_index == 1, "the upkeep player, not the controller"
     assert owed[0].data["count"] == 2
     assert len(p2.battlefield) == 3, "nothing goes until the choice is answered"
+
+
+# --- W2G2: the graveyard as a zone — Whetstone, Crystal Chimes, Citanul Flute, Lifeline ---
+import pytest
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+from tests.helpers import resolve_stack
+
+
+def _g2_board(set_pool, name, *, seat=0):
+    """Seat *seat* controls *name*, untapped and free to activate. W2G2's own."""
+    alice, bob = PlayerState(name="G2-A"), PlayerState(name="G2-B")
+    game = Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    perm = Permanent(card=set_pool("USG")[name])
+    game._put_permanent_onto_battlefield(seat, perm, None)
+    perm.metadata["summoning_sickness_turn"] = -99
+    return game, perm
+
+
+def test_w2g2_whetstone_mills_every_seat_not_a_target(set_pool):
+    """"{3}: Each player mills two cards."
+
+    Both libraries are asserted, and they start at different sizes: a mill that
+    fell through to ``context.target`` would empty one pile twice as fast and a
+    single-library assertion would not notice.
+    """
+    game, _ = _g2_board(set_pool, "Whetstone")
+    filler = set_pool("USG")["Sanctum Custodian"]
+    game.players[0].library = [filler] * 6
+    game.players[1].library = [filler] * 9
+
+    game.activate_permanent_ability(0, "Whetstone")
+    resolve_stack(game)
+
+    assert len(game.players[0].library) == 4
+    assert len(game.players[1].library) == 7
+    assert len(game.players[0].graveyard) == 2
+    assert len(game.players[1].graveyard) == 2
+
+
+def test_w2g2_crystal_chimes_returns_only_enchantments_and_only_yours(set_pool):
+    """"{3}, {T}, Sacrifice this artifact: Return all enchantment cards from
+    your graveyard to your hand."
+
+    Three assertions the card would pass with one of its narrowings dropped:
+    the creature card stays put (the type filter reaches the sweep), the
+    opponent's enchantment stays put (the sweep is one seat's), and the Chimes
+    itself is in the graveyard afterwards (the sacrifice cost was paid).
+    """
+    pool = set_pool("USG")
+    game, chimes = _g2_board(set_pool, "Crystal Chimes")
+    mine, theirs = game.players
+    mine.graveyard = [pool["Sanctum Custodian"], pool["Rune of Protection: Red"]]
+    theirs.graveyard = [pool["Rune of Protection: Red"]]
+
+    game.activate_permanent_ability(0, "Crystal Chimes")
+    resolve_stack(game)
+
+    assert [c.name for c in mine.hand] == ["Rune of Protection: Red"]
+    assert [c.name for c in mine.graveyard] == ["Sanctum Custodian", "Crystal Chimes"]
+    assert [c.name for c in theirs.graveyard] == ["Rune of Protection: Red"]
+    assert not game.is_on_battlefield(chimes)

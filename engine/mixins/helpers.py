@@ -984,6 +984,23 @@ class GameHelpersMixin:
                 self, "self_put_into_graveyard_from_library",
                 subject=card, owner_index=seat,
             )
+        # "Whenever another card is put into a graveyard **from anywhere**"
+        # (Planar Void), "when this creature is put into a graveyard from
+        # anywhere" (Serra Avatar). The unnarrowed announcement of the move this
+        # seam *is*, which is why it is here and unconditional: "from anywhere"
+        # has no single fire site — a death, a discard, a mill, a sacrifice and
+        # a spell finishing on the stack are all this event — and that is the
+        # reason CR 903.9b gave this seam to the replacement one screen up.
+        #
+        # The card rides as ``dead_card`` as well as ``subject``, because that
+        # is the one channel "that card" already reads (`lowering/_deaths.py`'s
+        # BOUND_CARD_EVENTS, `exile_bound_card`). A second key for the same
+        # referent is how one printed phrase ends up with two answers.
+        emit(
+            self, "card_put_into_graveyard",
+            subject=card, owner_index=seat, dead_card=card,
+            graveyard_from_zone=from_zone,
+        )
         return True
 
     def _leaving_battlefield_replaced(self, permanent, owner, destination: str) -> bool:

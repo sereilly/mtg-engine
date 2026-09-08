@@ -878,6 +878,26 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
             return ast.TriggerEvent(
                 "self_put_into_graveyard_from_library", "when"
             )
+        # "When **this creature is put into a graveyard from anywhere**"
+        # (Serra Avatar). CR 113.6k again, one zone wider: "from anywhere" is
+        # every zone the card can be in, so it is watched off the card and not
+        # off a battlefield — and it is deliberately *not* the death reading,
+        # since CR 700.4 makes dying "from the battlefield" and an Avatar milled
+        # or discarded never dies. Read on this front end for the reason the
+        # library row above it is.
+        #
+        # The noun is read rather than fixed: a card names itself by whatever
+        # word it likes (CR 109.5), and "card" belongs beside the permanent
+        # nouns because a sentence about a move out of any zone is a sentence
+        # about a card.
+        for noun in (*_DAMAGER_NOUNS, "card"):
+            if accept_event_phrase(stream, (
+                "this", noun, "is", "put", "into", "a", "graveyard",
+                "from", "anywhere",
+            )):
+                return ast.TriggerEvent(
+                    "self_put_into_graveyard_from_anywhere", "when"
+                )
         # "When you control **no Islands** / **no Forests**, sacrifice this
         # creature." (Sea Serpent, Island Fish Jasconius; Gorilla Pack in Ice
         # Age.) The negative twin of `controls_matching_permanent` below, and

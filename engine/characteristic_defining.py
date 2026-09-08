@@ -222,6 +222,30 @@ _DEFINED_HALF: dict[str, str | None] = {
 }
 
 
+def _life_total_count(match: re.Match) -> dict[str, object]:
+    """"Serra Avatar's power and toughness are each equal to **your life
+    total**." (CR 604.3.)
+
+    Every other row here tallies a set of objects; this one reads a number the
+    game already keeps, so it travels the ``board_count`` spec
+    ``evaluate_count`` answers rather than the battlefield counter — the same
+    spec ``lowering/_amounts`` writes for "damage equal to that player's life
+    total", so one printed phrase is one number wherever it appears.
+
+    The seat is the ability's controller and is left off the spec on purpose:
+    the CR 604.3 recompute hands the evaluator the *controlling* player
+    (``permanent_state``'s refresh loop reads the control seam for it), which is
+    exactly who "you" is (CR 109.5). Naming it would be a second answer, and a
+    stolen Avatar would then read the thief's life total or the owner's
+    depending on which answer won.
+    """
+    payload: dict[str, object] = {"count_spec": {"board_count": "their_life"}}
+    half = _DEFINED_HALF[match.group("half")]
+    if half is not None:
+        payload["defines"] = half
+    return payload
+
+
 def _counted_noun_phrase(match: re.Match) -> dict[str, object] | None:
     """"…equal to **1 plus the number of green creatures on the battlefield**."
     (An-Havva Constable; Aysen Crusader prints the same shape over both halves
@@ -656,6 +680,17 @@ _PATTERNS: tuple[tuple[re.Pattern[str], object], ...] = (
             r"(?P<counted>.+)$"
         ),
         _counted_noun_phrase,
+    ),
+    (
+        # Serra Avatar. Not "the number of" anything — a life total is a number
+        # the game keeps rather than a pile to scan — so it sits outside the
+        # general row above rather than inside it, and the three defined halves
+        # are the same table every other row reads.
+        re.compile(
+            rf"^{_SUBJECT} (?P<half>power and toughness are each|power is|"
+            r"toughness is) equal to your life total$"
+        ),
+        _life_total_count,
     ),
 )
 

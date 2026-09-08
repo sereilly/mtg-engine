@@ -1173,3 +1173,67 @@ def test_w1g5_every_usg_hollow_card_now_carries_an_instruction(set_pool):
         parts = list(program.activated_abilities) + list(program.triggered_abilities)
         hollow = [part.source_line for part in parts if part.instruction is None]
         assert not hollow, "%s still has an instruction-less part: %s" % (name, hollow)
+
+
+# --- W2G2: Planar Void — every card that reaches a graveyard is exiled ---
+import pytest
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+from tests.helpers import resolve_stack
+
+
+def _g2e_void(set_pool, *, seat=0):
+    """Seat *seat* controls Planar Void. W2G2's own enchantment-block helper."""
+    alice, bob = PlayerState(name="G2E-A"), PlayerState(name="G2E-B")
+    game = Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    void = Permanent(card=set_pool("USG")["Planar Void"])
+    game._put_permanent_onto_battlefield(seat, void, None)
+    return game, alice, bob, void
+
+
+def test_w2g2_planar_void_exiles_a_card_milled_out_of_a_library(set_pool):
+    """"Whenever another card is put into a graveyard from anywhere, exile that
+    card."
+
+    A mill is the half a death-shaped reading would miss: the card was never a
+    permanent, so nothing on any battlefield could have watched it leave.
+    """
+    game, alice, _, _ = _g2e_void(set_pool)
+    filler = set_pool("USG")["Sanctum Custodian"]
+    alice.library = [filler, filler]
+
+    game.put_card_into_graveyard(alice, alice.library.pop(0), from_zone="library")
+    resolve_stack(game)
+
+    assert not alice.graveyard
+    assert [c.name for c in alice.exile] == ["Sanctum Custodian"]
+
+
+def test_w2g2_planar_void_reaches_the_other_seat_s_graveyard_too(set_pool):
+    """"**a** graveyard", not "your graveyard" — the pile is anybody's, which
+    is the narrowing Forbidden Crypt's sentence has and this one does not."""
+    game, _, bob, _ = _g2e_void(set_pool)
+    filler = set_pool("USG")["Sanctum Custodian"]
+
+    game.put_card_into_graveyard(bob, filler)
+    resolve_stack(game)
+
+    assert not bob.graveyard
+    assert [c.name for c in bob.exile] == ["Sanctum Custodian"]
+
+
+def test_w2g2_planar_void_exiles_a_creature_that_died(set_pool):
+    """The death half, through the same seam — and the Void itself stays on the
+    battlefield, which is what "another card" buys."""
+    game, alice, _, void = _g2e_void(set_pool)
+    victim = Permanent(card=set_pool("USG")["Sanctum Custodian"])
+    game._put_permanent_onto_battlefield(0, victim, None)
+
+    game._permanent_to_graveyard(alice, victim)
+    resolve_stack(game)
+
+    assert not alice.graveyard
+    assert [c.name for c in alice.exile] == ["Sanctum Custodian"]
+    assert game.is_on_battlefield(void)

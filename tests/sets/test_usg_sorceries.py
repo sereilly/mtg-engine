@@ -69,3 +69,47 @@ def test_w1g1_a_cycling_sorcery_is_discarded_for_a_card(set_pool, name):
     assert [c.name for c in player.graveyard] == [name]
     assert len(player.library) == 3
     assert player.life == life_before
+
+
+# --- W2G2: the graveyard as a zone — Planar Birth, Exhume, Gamble, Yawgmoth's Will ---
+import pytest
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+from tests.helpers import resolve_stack
+
+
+def _g2s_cast(set_pool, name, *, seat=0):
+    """Two seats, *name* in *seat*'s hand, costs off. W2G2's own sorcery helper."""
+    alice, bob = PlayerState(name="G2S-A"), PlayerState(name="G2S-B")
+    alice.hand = [set_pool("USG")[name]] if seat == 0 else []
+    bob.hand = [set_pool("USG")[name]] if seat == 1 else []
+    game = Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    return game, alice, bob
+
+
+def test_w2g2_planar_birth_returns_every_seat_s_basics_tapped(set_pool):
+    """"Return all basic land cards from all graveyards to the battlefield
+    tapped under their owners' control."
+
+    Four claims, one per printed word: *all graveyards* (the opponent's pile is
+    swept too), *basic* (the nonbasic land stays put), *tapped*, and *their
+    owners'* (each land arrives on its own owner's side, not the caster's).
+    """
+    pool = set_pool("USG")
+    game, alice, bob = _g2s_cast(set_pool, "Planar Birth")
+    alice.graveyard = [pool["Plains"], pool["Gaea's Cradle"]]
+    bob.graveyard = [pool["Swamp"]]
+
+    game.cast_from_hand(0, "Planar Birth")
+    resolve_stack(game)
+
+    mine = [p.card.name for p in game.controlled_by(0)]
+    theirs = [p.card.name for p in game.controlled_by(1)]
+    assert mine == ["Plains"]
+    assert theirs == ["Swamp"]
+    assert all(p.tapped for p in game.all_permanents())
+    assert [c.name for c in alice.graveyard] == ["Gaea's Cradle", "Planar Birth"]
+    assert not bob.graveyard

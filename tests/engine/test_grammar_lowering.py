@@ -4054,14 +4054,30 @@ def test_a_mill_names_its_miller_on_the_payload(line, recipient):
 
 
 def test_a_mill_whose_miller_no_handler_names_still_refuses():
-    """"Each player mills a card" would compile cleanly onto the handler and
+    """"Its controller mills a card" would compile cleanly onto the handler and
     mill whoever happened to be targeted, so it refuses by name rather than
-    guessing — the reason this lowering refused everything to begin with."""
-    result = compile_line("Each player mills a card.", card_name="Test")
+    guessing — the reason this lowering refused everything to begin with.
+
+    The example used to be "each player", which is now a miller the handler
+    *does* name (Whetstone) — so the test moved to the next seat nothing reads
+    rather than being deleted. What it guards is the refusal, not the phrase.
+    """
+    result = compile_line("Its controller mills a card.", card_name="Test")
 
     assert result.parsed
     assert not result.lowered
     assert "cannot mill" in result.failure_reason
+
+
+def test_each_player_mills_reaches_the_set_of_seats():
+    """"{3}: **Each player** mills two cards." (Whetstone.) The same
+    ``recipient`` key every other "who does this happen to" rides, so the
+    handler loops over the seats rather than milling a target nobody chose."""
+    result = compile_line("Each player mills two cards.", card_name="Test")
+
+    assert result.lowered, result.failure_reason
+    assert result.instructions[0].kind == "mill_target_player"
+    assert result.instructions[0].payload["recipient"] == "each_player"
 
 
 # ---------------------------------------------------------------------------
