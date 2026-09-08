@@ -785,3 +785,33 @@ def _lower_exile_cost_sacrifices(
     decided.
     """
     return (OracleInstruction("exile_cost_sacrifices", "", {}),)
+
+
+def _lower_exile_graveyard_arrivals_this_turn(
+    node: ast.ExileGraveyardArrivalsThisTurn,
+) -> tuple[OracleInstruction, ...]:
+    """"If a card would be put into your graveyard from anywhere this turn,
+    exile that card instead." (Yawgmoth's Will.)
+
+    CR 614 for a window rather than for as long as a permanent is on the
+    battlefield, so what the effect leaves behind is a per-seat record the
+    interceptor reads — the same shape Disintegrate's "if it would die this
+    turn, exile it instead" already has, one object wider: a marker a handler
+    stamps and a pure predicate asks.
+
+    Only the caster's own graveyard. "An opponent's" and "a" are printed on
+    permanents (Leyline of the Void, Rest in Peace) whose static reading
+    already implements them, and no card in the pool creates either from an
+    effect — so admitting them here would arm a record the interceptor's
+    seat comparison has no answer for, which is a replacement applying to the
+    wrong pile rather than to none.
+    """
+    if node.whose != "you":
+        raise LoweringError(
+            "an effect arms this replacement over its own controller's "
+            f"graveyard, not {node.whose!r}'s",
+            node=node,
+        )
+    return (
+        OracleInstruction("exile_graveyard_arrivals_this_turn", "", {}),
+    )

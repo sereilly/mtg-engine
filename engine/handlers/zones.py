@@ -4198,6 +4198,33 @@ def mill_target_player(game: Game, instruction: OracleInstruction, context: Orac
     return True, "resolved"
 
 
+@effect_handler("exile_graveyard_arrivals_this_turn")
+def exile_graveyard_arrivals_this_turn(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"If a card would be put into your graveyard from anywhere this turn,
+    exile that card instead." (Yawgmoth's Will.)
+
+    CR 614 for a window. The marker goes on the seat and the interceptor in
+    ``engine/replacements.py`` reads it — the arrangement Disintegrate's
+    "if it would die this turn" already has on a permanent, one object wider —
+    because a sorcery is on no battlefield when the replacement is meant to
+    apply, and the static reading of the same sentence works by scanning
+    battlefields for the text.
+
+    The seat is the spell's controller: "your graveyard" is CR 109.5's, and the
+    lowering refuses every other printed scope rather than arming a record whose
+    seat the interceptor could not answer.
+
+    Swept with the rest of the turn (``turn_management``'s cleanup loop), which
+    is CR 514.2 and the same place every other "this turn" record forgets.
+    """
+    context.caster.exile_cards_bound_for_graveyard_this_turn = True
+    game.log.append(
+        f"{context.caster.name}'s cards will be exiled instead of going to "
+        "their graveyard this turn"
+    )
+    return True, "resolved"
+
+
 @effect_handler("choose_target_cards")
 def choose_target_cards(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Choose two target creature cards in your graveyard." (Victimize.)

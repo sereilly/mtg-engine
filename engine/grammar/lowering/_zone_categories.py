@@ -334,6 +334,7 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     "return_all_cards_from_graveyard": "zones",
     "each_player_takes_from_graveyard": "zones",
     "reanimate_announced_cards": "zones",
+    "exile_graveyard_arrivals_this_turn": "zones",
     "return_creature_from_graveyard_to_hand": "zones",
     # "…return a card from your graveyard to your hand **for each card
     # discarded this way**." (Recall.) The same zone change, counted by an

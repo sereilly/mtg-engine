@@ -3716,8 +3716,26 @@ def _graveyard_exile_source(game, payload: dict):
     return None
 
 
+def _graveyard_exile_armed_by_effect(payload: dict) -> bool:
+    """Whether an *effect* armed this seat's graveyard exile for the turn.
+
+    "If a card would be put into your graveyard from anywhere **this turn**,
+    exile that card instead." (Yawgmoth's Will.) The unbounded spelling above
+    is a static ability and is read off a permanent's text; a sorcery is on no
+    battlefield when the replacement is meant to apply, so the effect leaves the
+    marker and this asks for it. Pure, like every applicability predicate here.
+    """
+    player = payload.get("player")
+    return bool(
+        getattr(player, "exile_cards_bound_for_graveyard_this_turn", False)
+    )
+
+
 def _applies_graveyard_exile(game, payload: dict) -> bool:
-    return _graveyard_exile_source(game, payload) is not None
+    return (
+        _graveyard_exile_source(game, payload) is not None
+        or _graveyard_exile_armed_by_effect(payload)
+    )
 
 
 @replacement_effect(

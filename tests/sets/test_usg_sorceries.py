@@ -298,3 +298,117 @@ def test_w2g2_victimize_returns_nothing_with_no_creature_to_sacrifice(set_pool):
     assert [c.name for c in alice.graveyard] == [
         "Serra Zealot", "Shivan Hellkite", "Victimize",
     ]
+
+
+def test_w2g2_yawgmoths_will_opens_the_graveyard_to_lands_and_spells(set_pool):
+    """"Until end of turn, you may play lands and cast spells from your
+    graveyard."
+
+    Both halves, because "play" is the word that covers both (CR 305.1 plays a
+    land, CR 601.2 casts a spell) and a grant read as "cast" alone would offer
+    the sorcery and refuse the land. The opponent's pile is the control: the
+    permission is one seat's.
+    """
+    from engine.cast_permissions import playable_from_zones
+
+    pool = set_pool("USG")
+    game, alice, bob = _g2s_cast(set_pool, "Yawgmoth's Will")
+    alice.graveyard = [pool["Gamble"], pool["Plains"]]
+    bob.graveyard = [pool["Gamble"]]
+
+    game.cast_from_hand(0, "Yawgmoth's Will")
+    resolve_stack(game)
+
+    offered = {
+        (entry["owner_seat"], entry["name"])
+        for entry in playable_from_zones(game, 0)
+    }
+    assert offered == {(0, "Gamble"), (0, "Plains")}
+    assert not playable_from_zones(game, 1)
+
+
+def test_w2g2_yawgmoths_will_exiles_what_would_reach_your_graveyard(set_pool):
+    """"If a card would be put into your graveyard from anywhere this turn,
+    exile that card instead."
+
+    CR 614, and the seat is real: the caster's card is exiled and the
+    opponent's still reaches their graveyard. The spell itself is the third
+    assertion — it is a card put into its controller's graveyard, so its own
+    replacement catches it (CR 608.2n happens while the effect is still on).
+    """
+    pool = set_pool("USG")
+    game, alice, bob = _g2s_cast(set_pool, "Yawgmoth's Will")
+
+    game.cast_from_hand(0, "Yawgmoth's Will")
+    resolve_stack(game)
+
+    assert alice.exile_cards_bound_for_graveyard_this_turn
+    assert [c.name for c in alice.exile] == ["Yawgmoth's Will"]
+    assert not alice.graveyard
+
+    game.put_card_into_graveyard(alice, pool["Gamble"])
+    game.put_card_into_graveyard(bob, pool["Gamble"])
+
+    assert [c.name for c in alice.exile] == ["Yawgmoth's Will", "Gamble"]
+    assert not alice.graveyard
+    assert [c.name for c in bob.graveyard] == ["Gamble"]
+
+
+def test_w2g2_yawgmoths_will_forgets_at_the_turn_boundary(set_pool):
+    """"This turn" is the window. Both halves end at cleanup (CR 514.2), and the
+    replacement is the one that would be silently permanent if nothing swept
+    it — a card whose graveyard never fills again is a different game."""
+    from engine.cast_permissions import playable_from_zones
+
+    pool = set_pool("USG")
+    game, alice, _ = _g2s_cast(set_pool, "Yawgmoth's Will")
+    alice.graveyard = [pool["Gamble"]]
+
+    game.cast_from_hand(0, "Yawgmoth's Will")
+    resolve_stack(game)
+    assert playable_from_zones(game, 0)
+
+    # Two sweeps, because the two halves forget in two places: the permission
+    # at CR 514.2's cleanup, and the per-seat record with every other "this
+    # turn" record as the next turn's bookkeeping runs. The replacement is
+    # therefore still armed *during* the cleanup step, which is what CR 514.2
+    # says — a card discarded to hand size is still exiled.
+    game.resolve_cleanup_step(0)
+    assert alice.exile_cards_bound_for_graveyard_this_turn
+    assert not playable_from_zones(game, 0)
+
+    game.begin_turn_bookkeeping(1)
+    assert not alice.exile_cards_bound_for_graveyard_this_turn
+
+
+def test_w2g2_yawgmoths_will_actually_plays_the_land_and_casts_the_spell(set_pool):
+    """The Rock Hydra half of the permission: both halves are driven rather
+    than read off a list.
+
+    And the two lines meet at the end — the sorcery cast out of the graveyard
+    does not go back to it, because the *other* line is still on (CR 608.2n
+    puts a resolving spell's card into its owner's graveyard, and this turn
+    that is an exile).
+    """
+    pool = set_pool("USG")
+    game, alice, _ = _g2s_cast(set_pool, "Yawgmoth's Will")
+    alice.graveyard = [pool["Gamble"], pool["Plains"]]
+    alice.library = [pool["Serra Zealot"]] * 3
+    game.active_player_index = 0
+
+    game.cast_from_hand(0, "Yawgmoth's Will")
+    resolve_stack(game)
+
+    assert game.cast_from_hand(0, "Plains", from_zone="graveyard").supported
+    assert [p.card.name for p in game.controlled_by(0)] == ["Plains"]
+
+    assert game.cast_from_hand(0, "Gamble", from_zone="graveyard").supported
+    assert game.resolve_pending_choice(
+        "search_library", 0, library_index=0, zone="library"
+    )
+    game._settle()
+
+    assert not alice.graveyard
+    assert sorted(c.name for c in alice.exile) == [
+        "Gamble", "Serra Zealot", "Yawgmoth's Will",
+    ]

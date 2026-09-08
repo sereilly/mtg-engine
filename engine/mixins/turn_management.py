@@ -334,6 +334,7 @@ class TurnManagementMixin:
             player.creatures_died_under_your_control_this_turn = 0
             player.creatures_put_into_your_graveyard_this_turn = 0
             player.cards_put_into_your_graveyard_from_battlefield_this_turn = []
+            player.exile_cards_bound_for_graveyard_this_turn = False
             player.spells_cast_this_turn = []
             player.attacked_this_turn = False
             # Desolation's window is the turn, exactly as the attack record

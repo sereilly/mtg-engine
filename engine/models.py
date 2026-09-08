@@ -943,6 +943,14 @@ class PlayerState:
     cards_put_into_your_graveyard_from_battlefield_this_turn: list = field(
         default_factory=list
     )
+    # "If a card would be put into your graveyard from anywhere **this turn**,
+    # exile that card instead." (Yawgmoth's Will.) CR 614 for a window, so what
+    # the spell leaves behind is this marker and the interceptor in
+    # `engine/replacements.py` reads it — the same arrangement Disintegrate's
+    # `exile_if_dies_this_turn` has on a permanent, one object wider. On the
+    # seat rather than on the game because the printed scope is a seat's own
+    # pile, and a game-wide flag could not say whose. Reset with the turn.
+    exile_cards_bound_for_graveyard_this_turn: bool = False
     # Whether this seat declared an attacker this turn (CR 508.1). On the seat
     # rather than derived from the board, because a player who attacked and
     # then lost the attacker still attacked this turn — reading
