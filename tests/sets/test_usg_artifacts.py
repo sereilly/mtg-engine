@@ -224,11 +224,8 @@ def test_w1g5_smokestack_makes_the_upkeep_player_choose(set_pool):
 
 
 # --- W2G2: the graveyard as a zone — Whetstone, Crystal Chimes, Citanul Flute, Lifeline ---
-import pytest
-
 from engine import Game, PlayerState
 from engine.models import Permanent
-from engine.oracle import compile_card_oracle
 from tests.helpers import resolve_stack
 
 
