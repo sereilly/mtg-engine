@@ -1339,7 +1339,7 @@ def restrict_untap_while_counter(game: Game, instruction: OracleInstruction, con
     step **for as long as it has a paralyzation counter on it**." (Dread
     Wight.)
 
-    A continuous effect with no end date (CR 611.2b), so nothing clears it: the
+    A continuous effect with no end date (CR 611.2a), so nothing clears it: the
     untap step re-asks the condition every turn and the restriction lapses of
     itself when the last counter comes off — which is what the ability the same
     card grants is for. That is why the counter's *name* is recorded rather

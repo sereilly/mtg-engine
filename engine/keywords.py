@@ -240,10 +240,10 @@ def protection_quality(word: str) -> tuple[str, str] | None:
 #: of combat" ran on through the second main phase and the whole of the
 #: opponent's turn, "until your next turn" ended a step early, and the lowering
 #: had no table to refuse against — it passed ``until_eot=True`` and lost the
-#: word. ``None`` — no printed duration — lasts as long as the object
-#: (CR 611.2c) and appears in no sweep.
+#: word. ``None`` — no printed duration — lasts until the end of the game
+#: (CR 611.2a's second sentence) and appears in no sweep.
 #: …and the windows that end on an **event** instead of at a turn step
-#: (CR 611.2b, `engine/event_durations.py`): "until a player casts a creature
+#: (CR 611.2a, `engine/event_durations.py`): "until a player casts a creature
 #: spell" (Soul Sculptor). Folded in rather than listed again, because that
 #: module *is* their sweep — this table's whole content is "a duration with
 #: something behind it", so a row added there becomes legal here for the reason
@@ -432,7 +432,9 @@ def clear_derived_grants(perm: Permanent) -> None:
 #: reason: a duration is implemented by *having a sweep*, not by having a word,
 #: so the lowering can refuse a printed duration by asking this table instead of
 #: by carrying a list of its own. ``None`` — no printed duration — lasts as long
-#: as the object (CR 611.2c) and appears in no sweep.
+#: as the object (CR 611.3b: a static ability's effect "applies at all times
+#: that the permanent generating it is on the battlefield") and appears in no
+#: sweep.
 GRANTED_ABILITY_DURATIONS: frozenset[str] = KEYWORD_GRANT_DURATIONS
 
 
@@ -527,7 +529,7 @@ def derived_removals(perm: Permanent) -> tuple[str, ...]:
 def add_derived_ability_line(perm: Permanent, line: str) -> None:
     """Layer 6: *perm* says *line* for as long as the source keeps granting it.
 
-    Deduplicated on the sentence, because CR 611.2c makes two lords printing the
+    Deduplicated on the sentence, because CR 611.3a makes two lords printing the
     same quoted ability two grants of one sentence and the compiler would build
     two identical abilities out of a repeat — two rows in the UI's ability list,
     two entries the activation index has to tell apart, and nothing gained.

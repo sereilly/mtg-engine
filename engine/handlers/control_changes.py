@@ -328,7 +328,7 @@ def give_control_of_source_to_player(game: Game, instruction: OracleInstruction,
     The mirror of every steal in this file: the source hands *itself* over
     rather than taking something. Same mechanism — one CR 613 layer-2
     contribution through ``take_control``, with the permanent as its own source
-    — and no lifetime at all (CR 611.2b), so nothing sweeps it back. Chaos Lord
+    — and no lifetime at all (CR 611.2a), so nothing sweeps it back. Chaos Lord
     fires this every upkeep, and re-recording replaces the previous
     contribution and takes a fresh timestamp, which is what lets the creature
     keep moving between seats turn after turn.

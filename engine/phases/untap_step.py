@@ -407,7 +407,7 @@ class UntapStepMixin:
             # long as it has a paralyzation counter on it**." (Dread Wight.)
             # The condition is a fact about this permanent, so the record
             # travels with it — and it is the counter's *name* rather than a
-            # flag, because the restriction has no end date (CR 611.2b) and
+            # flag, because the restriction has no end date (CR 611.2a) and
             # lapses of itself the moment the last such counter comes off.
             # Nothing clears it; this read is the whole enforcement.
             if any(

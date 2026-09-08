@@ -67,7 +67,7 @@ def _lower_doesnt_untap_while_counter(
     step **for as long as it has a paralyzation counter on it**." (Dread
     Wight.)
 
-    A continuous effect with no end date (CR 611.2b): it stops applying when
+    A continuous effect with no end date (CR 611.2a): it stops applying when
     the permanent stops carrying the counter, which is a fact the untap step
     re-asks every turn rather than a marker anything clears. So the counter's
     name is the whole payload beside the set, and the very ability the same

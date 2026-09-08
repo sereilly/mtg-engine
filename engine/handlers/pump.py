@@ -104,7 +104,7 @@ def pump_self(game: Game, instruction: OracleInstruction, context: OracleExecuti
     if instruction.payload.get("toughness_negative"):
         toughness_delta = -toughness_delta
     # "…gets +2/+0 …" with no duration printed (Goblin Ski Patrol) is CR
-    # 611.2b's modification that lasts indefinitely — the *persistent* layer-7c
+    # 611.2a's modification that lasts indefinitely — the *persistent* layer-7c
     # channel, the one a +1/+1 counter writes to, rather than a boost some
     # sweep takes back. Named in the payload rather than inferred from its
     # absence: every payload written before this key means end of turn, which

@@ -58,7 +58,7 @@ PUMP_INSTRUCTION_CATEGORIES: dict[str, str] = {
     "animate_target_until_eot": "pump",
     # "Target land becomes a 3/3 artifact creature that's still a land. (This
     # effect lasts indefinitely.)" (Mishra's Groundbreaker.) The same record on
-    # the same permanent with no end to it (CR 611.2b), so the same category:
+    # the same permanent with no end to it (CR 611.2a), so the same category:
     # what differs is the duration, not what the sentence does.
     "animate_target_indefinitely": "pump",
     # "Forests you control become 2/3 creatures until end of turn." (Thelonite

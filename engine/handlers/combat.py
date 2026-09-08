@@ -1574,7 +1574,7 @@ def grant_banding_to_target(game: Game, instruction: OracleInstruction, context:
     lifetime = grant_lifetime(game, instruction, context)
     grant_keyword(target_creature, "banding", **lifetime)
     # The duration the *card* printed, not the one this handler was written for.
-    # Nature's Blessing's grant has none at all (CR 611.2b: it lasts as long as
+    # Nature's Blessing's grant has none at all (CR 611.2a: it lasts as long as
     # the creature does), and a log line that says "until end of turn" over an
     # indefinite grant is the kind of second copy of a fact that survives long
     # after the fact stops being true.
