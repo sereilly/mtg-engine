@@ -711,3 +711,225 @@ def test_w2g2_lifeline_stays_silent_with_no_other_creature(set_pool):
 
     assert [c.name for c in game.players[1].graveyard] == ["Serra Zealot"]
     assert not list(game.controlled_by(1))
+
+
+# --- W3G4: Temporal Aperture — a compound duration over the top of a library ---
+import pytest
+
+from engine import Game, PlayerState
+from engine.cast_permissions import permission_for as _g4_permission_for
+from engine.cast_permissions import playable_from_zones as _g4_playable
+from engine.grammar import parse_line as _g4_parse_line
+from engine.grammar.errors import GrammarError as _g4_GrammarError
+from engine.library_top import (
+    REVEALED_TEXT as _G4_REVEALED_TEXT,
+    reveal_grants_on as _g4_grants,
+    top_is_public as _g4_public,
+)
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle as _g4_compile
+from tests.helpers import resolve_stack as _g4_resolve
+
+
+def _g4_table(set_pool, library):
+    """A board with Temporal Aperture out and *library* stacked under seat 0.
+
+    The library is set rather than dealt because the ability shuffles: the test
+    wants to know what the reveal recorded, and a shuffle over one card gives
+    the same answer every seed.
+    """
+    game = Game([PlayerState("A"), PlayerState("B")])
+    game.enforce_mana_costs = False
+    game.players[0].battlefield.append(Permanent(set_pool("USG")["Temporal Aperture"]))
+    game._sync_control()
+    game.players[0].library = list(library)
+    game.players[1].library = list(library)
+    return game
+
+
+def _g4_fire(game):
+    """Activate the Aperture and let it resolve. Returns the revealed card."""
+    game.activate_permanent_ability(0, "Temporal Aperture", ability_index=0)
+    _g4_resolve(game)
+    return game.players[0].library[0]
+
+
+def test_w3g4_temporal_aperture_is_supported_as_four_steps(set_pool):
+    """The whole printed ability, and each half of it in the payload.
+
+    Both sentences: the shuffle-then-reveal sequence (whose "the top card" has
+    no possessive, because the clause in front of it named the library), and
+    the two grants under one pair of durations.
+    """
+    program = _g4_compile(set_pool("USG")["Temporal Aperture"])
+
+    assert program.supported
+    ability = program.activated_abilities[0]
+    steps = ability.instruction.payload["steps"]
+    assert [step.kind for step in steps] == [
+        "shuffle_library",
+        "reveal_top_of_library",
+        "grant_top_of_library_revealed",
+        "grant_cast_permission",
+    ]
+    # CR 611.2a's moment on both grants, and CR 611.2b's state on the one whose
+    # reader can express it: the permission names the card *and* where it has to
+    # stay, and the reveal record re-asks the same question of its own card.
+    assert steps[2].payload == {"cards_from": "revealed_card", "duration": "end_of_turn"}
+    assert steps[3].payload == {
+        "zone": "library", "mode": "play", "cards_from": "revealed_card",
+        "position": "top", "free": True, "duration": "end_of_turn",
+    }
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        # The bare sentence is Conspicuous Snoop's static, claimed off a
+        # permanent's printed line by engine/library_top.py. A production that
+        # read it would take the claim away and leave that card unsupported, so
+        # the grammar must refuse it — parsed-but-unlowered is still parsed.
+        "Play with the top card of your library revealed.",
+        # …and with only the swept half of the duration, which is a permission
+        # that would outlive the card it is about.
+        "Until end of turn, play with the top card of your library revealed.",
+    ],
+)
+def test_w3g4_the_reveal_grant_is_unreachable_without_its_linked_clause(line):
+    with pytest.raises(_g4_GrammarError):
+        _g4_parse_line(line)
+
+
+def test_w3g4_conspicuous_snoops_static_still_claims_its_line(catalog_by_name):
+    """The other end of the refusal above, asserted on the card itself: adding a
+    way to *grant* the permission must not disturb the card that prints it."""
+    assert _g4_compile(catalog_by_name["Conspicuous Snoop"]).supported
+
+
+def test_w3g4_a_card_merely_naming_the_phrase_reveals_nothing(set_pool):
+    """The Aperture's own text contains "play with the top card of your library
+    revealed" — inside its activated ability. Read as a substring of the
+    permanent's text, which is how ``top_is_public`` used to ask, the artifact
+    revealed its controller's top card from the moment it entered and for ever:
+    a permission an effect has to grant, mistaken for a static the card had.
+    """
+    pool = set_pool("USG")
+    game = _g4_table(set_pool, [pool["Gaea's Cradle"]])
+
+    assert _G4_REVEALED_TEXT in pool["Temporal Aperture"].oracle_text.lower()
+    assert not _g4_public(game, 0)
+
+
+def test_w3g4_the_grant_reveals_the_top_card_to_everyone_but_only_this_seat(set_pool):
+    pool = set_pool("USG")
+    game = _g4_table(set_pool, [pool["Gaea's Cradle"]])
+
+    revealed = _g4_fire(game)
+
+    assert revealed.name == "Gaea's Cradle"
+    assert _g4_public(game, 0)
+    # "**your** library" (CR 109.5): the opponent's deck is untouched, even
+    # though the same card object sits on top of it.
+    assert not _g4_public(game, 1)
+
+
+def test_w3g4_the_revealed_card_may_be_played_for_free_off_the_library(set_pool):
+    """The Rock Hydra test: the permission is spent, not merely held.
+
+    ``cast_from_hand(..., from_zone="library")`` used to raise "cannot cast from
+    'library'" — the permission seam has answered for the library since
+    Conspicuous Snoop landed in M21 and no path could ever spend what it granted.
+    """
+    pool = set_pool("USG")
+    game = _g4_table(set_pool, [pool["Serra Zealot"], pool["Gaea's Cradle"]])
+
+    revealed = _g4_fire(game)
+    assert revealed.name in ("Serra Zealot", "Gaea's Cradle")
+
+    offered = _g4_playable(game, 0)
+    assert [(e["zone"], e["index"], e["name"], e["free"]) for e in offered] == [
+        ("library", 0, revealed.name, True)
+    ]
+
+    result = game.cast_from_hand(0, revealed.name, from_zone="library")
+    _g4_resolve(game)
+
+    assert result.supported, result.details
+    assert revealed.name in [perm.card.name for perm in game.controlled_by(0)]
+    assert revealed not in game.players[0].library
+
+
+def test_w3g4_the_permission_covers_the_named_card_and_not_the_next_one(set_pool):
+    """"…you may play **that card**" — the one the reveal recorded. The card
+    behind it in the library is not covered, and neither is the card that
+    becomes the top once the first one leaves."""
+    pool = set_pool("USG")
+    game = _g4_table(set_pool, [pool["Serra Zealot"], pool["Gaea's Cradle"]])
+
+    revealed = _g4_fire(game)
+    second = game.players[0].library[1]
+
+    assert _g4_permission_for(game, 0, revealed, "library") is not None
+    assert _g4_permission_for(game, 0, second, "library") is None
+
+
+def test_w3g4_both_grants_end_when_the_card_leaves_the_top(set_pool):
+    """CR 611.2b's half of the duration, and it is the *state* rather than a
+    moment: nothing sweeps here — drawing the card makes the condition false and
+    every reader of both records asks it again."""
+    pool = set_pool("USG")
+    game = _g4_table(set_pool, [pool["Serra Zealot"], pool["Gaea's Cradle"]])
+
+    revealed = _g4_fire(game)
+    assert _g4_public(game, 0)
+
+    game.players[0].draw()
+
+    assert not _g4_public(game, 0)
+    assert _g4_permission_for(game, 0, revealed, "library") is None
+    assert _g4_playable(game, 0) == []
+
+
+def test_w3g4_a_card_pushed_off_the_top_ends_the_grant_without_leaving_the_zone(set_pool):
+    """The half a zone-membership check cannot answer. ``_covers`` already
+    refuses a card that has left the granted zone, which is what
+    ``while_exiled`` rests on — but this card is still in the library and the
+    printed clause says "on **top** of", so the position is what ends it."""
+    pool = set_pool("USG")
+    game = _g4_table(set_pool, [pool["Serra Zealot"]])
+
+    revealed = _g4_fire(game)
+    game.players[0].library.insert(0, pool["Gaea's Cradle"])
+
+    assert revealed in game.players[0].library
+    assert not _g4_public(game, 0)
+    assert _g4_permission_for(game, 0, revealed, "library") is None
+
+
+def test_w3g4_the_swept_half_of_the_duration_ends_at_cleanup(set_pool):
+    """CR 611.2a/514.2, with the card still sitting on top — so the only thing
+    that can have ended either grant is the cleanup sweep."""
+    pool = set_pool("USG")
+    game = _g4_table(set_pool, [pool["Serra Zealot"]])
+
+    revealed = _g4_fire(game)
+    game.resolve_cleanup_step(0)
+
+    assert game.players[0].library[0] is revealed
+    assert not _g4_public(game, 0)
+    assert not _g4_grants(game.players[0])
+    assert _g4_permission_for(game, 0, revealed, "library") is None
+
+
+def test_w3g4_an_empty_library_grants_nothing(set_pool):
+    """CR 611.2b: a "for as long as" duration that never starts does nothing.
+    The reveal records no card, so neither grant has anything to be about — and
+    a grant with no card is one that could never end."""
+    game = _g4_table(set_pool, [])
+
+    game.activate_permanent_ability(0, "Temporal Aperture", ability_index=0)
+    _g4_resolve(game)
+
+    assert not _g4_grants(game.players[0])
+    assert not _g4_public(game, 0)
+    assert game.cast_permissions == []

@@ -181,6 +181,12 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     "look_top_exile_random": "zones",
     "search_and_exile_matching": "zones",
     "grant_cast_permission": "zones",
+    # "Play with the top card of your library revealed" granted by an effect
+    # (Temporal Aperture). Beside the permission above rather than in a family
+    # of its own: what it opens is a hidden zone, and CR 400.2's answer to "who
+    # may see the top of this library" is the same question CR 601.3 asks about
+    # playing it — which is why one module answers both.
+    "grant_top_of_library_revealed": "zones",
     "grant_look_at_exiled_cards": "zones",
     # The planeswalker block's one-shot zone movers (M21 loyalty abilities).
     "each_player_discards_a_card": "zones",

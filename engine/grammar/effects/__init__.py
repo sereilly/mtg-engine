@@ -169,7 +169,8 @@ from .cards import (
 # the name `lowering/permissions.py` has carried since Alliances. The two names
 # it took keep their addresses: this package re-exports flat, so no caller
 # learns where the split fell.
-from .permissions import _parse_cast_permission
+from .permissions import (_parse_cast_permission,
+                          _parse_play_with_top_revealed)
 # A hand emptying onto a library, split off `cards` at the size guard. The three
 # names it took keep their addresses: this package re-exports flat, so no caller
 # learns where the split fell.
@@ -348,6 +349,7 @@ __all__ = [
     "_parse_add_mana",
     "_parse_note_mana_spent",
     "_parse_cast_permission",
+    "_parse_play_with_top_revealed",
     "_parse_exile_bound_card",
     "parse_exile_graveyard_arrivals_this_turn",
     "_parse_bin_unplayed_exiled_card",

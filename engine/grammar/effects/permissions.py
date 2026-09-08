@@ -26,6 +26,7 @@ category names the migration family a *kind* belongs to, and no kind changed
 hands.
 """
 
+from ...library_top import REVEALED_TEXT
 from .. import ast
 from ..phrases import _parse_duration, _parse_zone
 from ..references import parse_player_ref, parse_target_spec
@@ -200,9 +201,20 @@ def _parse_cast_permission(stream: TokenStream) -> ast.Statement | None:
         # before it exiled.
         or (mode == "look" and stream.accept_word("it"))
     ):
+        # "…**without paying its mana cost**." (Temporal Aperture.) CR 118.9's
+        # waiver over a named card, which is the same ``free`` flag the blanket
+        # hand waiver below already sets — and required to be read here rather
+        # than left as unconsumed text, because a permission that dropped the
+        # words would make the player pay for a card the effect gave away.
+        # Singular, and beside the plural spelling for the referent's own
+        # reason: what differs is the number of cards named, not the rule.
+        free = mode != "look" and bool(
+            stream.accept_phrase("without", "paying", "its", "mana", "cost")
+            or stream.accept_phrase("without", "paying", "their", "mana", "costs")
+        )
         _trailing_duration()
         return ast.CastPermission(
-            mode=mode, what="exiled_this_way", grantee=grantee,
+            mode=mode, what="exiled_this_way", grantee=grantee, free=free,
             until_end_of_turn=until_eot,
             until_source_grants_again=regrant,
             until_your_next_upkeep=next_upkeep,
@@ -306,3 +318,56 @@ def _parse_cast_permission(stream: TokenStream) -> ast.Statement | None:
         )
     stream.reset(mark)
     return None
+
+
+#: "Play with the top card of your library revealed", in the tokens the grammar
+#: reads it in — **derived from the implementing module's own sentence**
+#: (``engine/library_top.REVEALED_TEXT``) rather than spelled again here.
+#:
+#: One printed sentence, two front ends: a permanent printing it is a static
+#: ``library_top`` reads off that permanent's text and this production never
+#: sees, and an ability *granting* it is this production. A second literal is
+#: how the two come to disagree, and the direction it disagrees in is a card
+#: the support gate claims and the parser refuses.
+_TOP_REVEALED_PHRASE = tuple(REVEALED_TEXT.split())
+
+
+def _parse_play_with_top_revealed(
+    stream: TokenStream,
+) -> "ast.PlayWithTopRevealed | None":
+    """``Play with the top card of your library revealed.`` — the permission as
+    an **effect** rather than as a permanent's static ability.
+
+    CR 400.2 makes the top card a public object. Conspicuous Snoop and Field of
+    Dreams print the same words as statics, and ``engine/library_top.py`` reads
+    those off the permanent for as long as it is there; nothing could *grant*
+    the permission until this production existed, because the grammar refused
+    the sentence outright ("expected a subject") — the verb is "play", whose
+    object is a zone rather than anything a noun reader can take.
+
+    A bare imperative, so its subject is the effect's controller (CR 608.1),
+    which is also what the printed "your" says. The durations arrive from the
+    clauses in front of the sentence — ``_distribute_duration`` fills the
+    swept one and ``_link_leading_duration`` the re-asked one — and the
+    lowering refuses a grant that ended up with neither, because an unbounded
+    reveal is a different card.
+
+    **Reached from one caller and deliberately not from the sentence reader.**
+    ``sentence_clauses._parse_leading_linked_duration`` calls it after
+    consuming "for as long as that card remains on top of your library,", and
+    nothing else does. The rule is ``_parse_play_with_hand_revealed``'s, one
+    zone over: the bare sentence is a *static* another module claims off a
+    permanent's printed line (``library_top.library_top_line``), and a
+    production the ordinary reader could reach would parse Conspicuous Snoop's
+    line and take that claim away — parsed-but-unlowered is still parsed.
+    Behind a clause that has already been consumed, the words can only be a
+    grant.
+
+    Refuses without consuming even so, so a caller that mis-guesses gets its
+    own refusal rather than this one's.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase(*_TOP_REVEALED_PHRASE):
+        stream.reset(mark)
+        return None
+    return ast.PlayWithTopRevealed(ast.PlayerRef("you"))

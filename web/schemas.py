@@ -499,7 +499,11 @@ class GameActionRequest(BaseModel):
     # Casting from outside the hand (engine/cast_permissions.py): which zone
     # the named card is cast or played from. Absent means the hand, so every
     # existing client is unchanged.
-    from_zone: Literal["hand", "graveyard", "exile", "command"] | None = None
+    # "library" is the top card and only ever the top card: CR 601.3
+    # permissions over a library are all about the card on top (Conspicuous
+    # Snoop's Goblins, Radha's lands, Temporal Aperture's revealed card), and
+    # `engine/cast_permissions.playable_from_zones` offers exactly that one.
+    from_zone: Literal["hand", "graveyard", "exile", "command", "library"] | None = None
     # A cost waiver ("cast spells from your hand without paying their mana
     # costs"): true to use it. Absent lets the engine apply it automatically
     # to spells without {X} in their cost (a waived X is 0, CR 107.3b).

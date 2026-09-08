@@ -556,3 +556,130 @@ def test_a_per_seat_prohibition_does_not_outlive_its_turn():
     assert game.nonmana_activations_forbidden_this_turn == set()
 
 # --- end W2G5 ---
+
+
+# ---------------------------------------------------------------------------
+# A **compound** duration: a swept moment and a re-asked state (W3G4)
+# ---------------------------------------------------------------------------
+#
+# "Until end of turn, for as long as that card remains on top of your library,
+# … you may play that card without paying its mana cost." (Temporal Aperture.)
+# CR 611.2a states a moment and CR 611.2b states a condition, on one effect —
+# the first sentence in this pool to state both.
+#
+# The engine needs no new representation for that, and these tests are what
+# says so: a *moment* is swept (``expire_end_of_turn``) and a *state* is
+# re-asked on every read (``_covers``), so the two are answered at different
+# times and neither can be a special case of the other. What was missing was a
+# way to spell the second condition, not a way to hold two of them.
+
+from engine.cast_permissions import expire_end_of_turn as _w3g4_expire_eot
+from engine.cast_permissions import playable_from_zones as _w3g4_playable
+from engine.oracle import compile_card_oracle as _w3g4_compile
+
+_W3G4_LIBRARY_CARDS = [
+    _w2g5_spell("First", "Instant"),
+    _w2g5_spell("Second", "Instant"),
+    _w2g5_spell("Third", "Instant"),
+]
+
+
+def _w3g4_granted_top_permission():
+    """A seat holding "play the top card of your library, until end of turn,
+    for as long as it stays on top" over the first card of a three-card deck."""
+    game = Game(players=[PlayerState(name="P0"), PlayerState(name="P1")])
+    game.enforce_mana_costs = False
+    first, second, third = _W3G4_LIBRARY_CARDS
+    game.players[0].library = [first, second, third]
+    grant_permission(
+        game, player_index=0, zone="library", mode="play", cards=[first],
+        position="top", free=True, duration="end_of_turn",
+        source_name="a compound duration",
+    )
+    return game, first, second
+
+
+@pytest.mark.cr("611.2a", "611.2b", "601.3")
+def test_a_stated_moment_and_a_stated_state_are_both_honoured():
+    """Neither half alone is the effect. While both hold the permission is
+    live; this is the control the two ending tests below are read against."""
+    game, first, _second = _w3g4_granted_top_permission()
+
+    assert permission_for(game, 0, first, "library") is not None
+
+
+@pytest.mark.cr("611.2b", "401.5")
+def test_the_state_half_ends_the_permission_with_nothing_sweeping():
+    """CR 611.2b's "for as long as" clause, over the object CR 401.5 names.
+
+    The card never leaves the library — another card is simply put in front of
+    it — so no zone-membership check can see this, and no sweep runs between the
+    two reads. The position is the whole of what ends it, and which end "top"
+    means is the *zone's* answer: a library's first card, where CR 404.1 puts a
+    graveyard's on the pile's other end."""
+    game, first, second = _w3g4_granted_top_permission()
+
+    game.players[0].library.remove(second)
+    game.players[0].library.insert(0, second)
+
+    assert first in game.players[0].library
+    assert permission_for(game, 0, first, "library") is None
+
+
+@pytest.mark.cr("611.2a", "514.2")
+def test_the_moment_half_ends_the_permission_with_the_state_still_true():
+    """The mirror. The card is still the library's first, so the only thing
+    that can have ended the grant is CR 514.2's cleanup sweep — which is why
+    the two halves are stored in two fields and not contested in one."""
+    game, first, _second = _w3g4_granted_top_permission()
+
+    _w3g4_expire_eot(game)
+
+    assert game.players[0].library[0] is first
+    assert permission_for(game, 0, first, "library") is None
+
+
+@pytest.mark.cr("601.3", "400.2")
+def test_a_library_permission_offers_only_its_own_seats_top_card():
+    """CR 601.3's permission is offered through the one seam the web layer
+    reads. A library is hidden (CR 400.2), so the offer is the seat's own first
+    card and nothing else — the rest of the deck is not a pile a viewer may be
+    shown, however many cards a grant might cover."""
+    game, first, _second = _w3g4_granted_top_permission()
+    game.players[1].library = list(_W3G4_LIBRARY_CARDS)
+
+    offered = _w3g4_playable(game, 0)
+
+    assert [(e["zone"], e["index"], e["name"], e["free"]) for e in offered] == [
+        ("library", 0, first.name, True)
+    ]
+    assert _w3g4_playable(game, 1) == []
+
+
+@pytest.mark.cr("118.9", "601.3")
+def test_a_cost_waiver_an_exiled_cards_grant_cannot_carry_refuses_the_line():
+    """The refusal that keeps the new phrase honest.
+
+    "…without paying its mana cost" became readable behind "that card" for
+    Temporal Aperture, and "that card" is also how an *exiled-cards* permission
+    names its pile. That arm's payload has nowhere to put a waiver, so a card
+    printing one would be a permission with CR 118.9 quietly dropped — the
+    player paying for a spell the effect gave away. It refuses by name instead.
+    """
+    def _card(effect: str) -> CardDefinition:
+        return CardDefinition(
+            name=f"Test Waiver {len(effect)}", mana_cost="{2}", cmc=2.0,
+            type_line="Sorcery",
+            oracle_text=f"Exile the top card of your library. {effect}",
+            colors=(), color_identity=(), keywords=(), produced_mana=(), raw={},
+        )
+
+    honoured = "Until end of turn, you may play that card."
+    dropped = "Until end of turn, you may play that card without paying its mana cost."
+
+    # The pair is the assertion: the waiver is the only difference between the
+    # sentence the engine carries out and the one it declines.
+    assert _w3g4_compile(_card(honoured)).supported
+    assert not _w3g4_compile(_card(dropped)).supported
+
+# --- end W3G4 ---

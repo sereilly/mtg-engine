@@ -6577,6 +6577,58 @@ _PERMISSION_DURATION_WORDS = {
 }
 
 
+@effect_handler("grant_top_of_library_revealed")
+def grant_top_of_library_revealed(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Until end of turn, for as long as that card remains on top of your
+    library, **play with the top card of your library revealed**." (Temporal
+    Aperture.)
+
+    CR 400.2: the top card becomes a public object. ``engine/library_top.py``
+    holds the record and answers the question for every reader — the web
+    payload's ``library_top`` face among them — so this handler does nothing
+    but arm it.
+
+    A grant per resolution rather than one the card keeps: activating the
+    artifact twice in a turn reveals whichever card the *second* shuffle turned
+    up, and the first record simply stops holding the moment its own card is no
+    longer first (CR 611.2b). Nothing has to retire it, which is the whole
+    reason the state half of the duration needs no sweep.
+    """
+    from ..library_top import END_OF_TURN, TopRevealGrant, add_reveal_grant
+
+    payload = instruction.payload
+    source_name = context.card.name if context.card is not None else ""
+    revealed = context.results.get(str(payload.get("cards_from") or ""))
+    if revealed is None:
+        # The reveal in front of this step found an empty library, so there is
+        # no card the "for as long as" clause could be about — and a grant with
+        # nothing to be about is one that could never end (CR 611.2b's "if the
+        # duration never starts, the effect does nothing").
+        game.log.append(f"{source_name}: nothing was revealed, so nothing is shown")
+        return True, "resolved"
+    lifetime = str(payload.get("duration") or "")
+    if lifetime != END_OF_TURN:
+        # The lowering admits only "until end of turn", and this is the reason
+        # rather than a second copy of that rule: END_OF_TURN is the one
+        # lifetime the cleanup sweep clears, so a record arriving with any other
+        # would be a reveal nothing ever ends. Refused out loud here rather than
+        # stored and forgotten.
+        game.log.append(
+            f"{source_name}: no sweep ends a top-of-library reveal that lasts "
+            f"{lifetime or 'indefinitely'}"
+        )
+        return True, "resolved"
+    add_reveal_grant(
+        context.caster,
+        TopRevealGrant(card=revealed, lifetime=lifetime, source_name=source_name),
+    )
+    game.log.append(
+        f"{context.caster.name} plays with the top card of their library "
+        f"revealed for as long as {revealed.name} remains on top"
+    )
+    return True, "resolved"
+
+
 @effect_handler("grant_cast_permission")
 def grant_cast_permission(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """A cast-or-play permission (CR 601.3) over cards in a named zone —
@@ -6651,6 +6703,43 @@ def grant_cast_permission(game: Game, instruction: OracleInstruction, context: O
             f"{grantee.name} may {payload.get('mode', 'cast')} "
             f"{', '.join(card.name for card in cards)} from exile"
             + _PERMISSION_DURATION_WORDS.get(duration, "")
+        )
+        return True, "resolved"
+
+    if payload.get("cards_from") == "revealed_card":
+        # "Shuffle your library, then reveal the top card. Until end of turn,
+        # for as long as that card remains on top of your library, … you may
+        # play that card without paying its mana cost." (Temporal Aperture.)
+        #
+        # The card is the one the reveal in front of this step recorded, not
+        # whatever is on top now: nothing has moved, but reading the library
+        # again would be a second answer to a question one step already
+        # answered, and the two come apart the moment a card printing this
+        # sentence draws first.
+        #
+        # ``position="top"`` is the *other half of the printed duration* rather
+        # than a narrowing — see ``cast_permissions.CastPermission.position``.
+        # It is what makes the grant end when the card stops being on top, and
+        # dropping it would leave the card playable from anywhere in the
+        # library for the rest of the turn.
+        revealed = context.results.get("revealed_card")
+        if revealed is None:
+            game.log.append(
+                f"{source_name}: nothing was revealed, so there is nothing to permit"
+            )
+            return True, "resolved"
+        grant_permission(
+            game, player_index=grantee_index, zone="library",
+            mode=payload.get("mode", "play"), cards=[revealed],
+            position=payload.get("position"), free=bool(payload.get("free")),
+            duration=duration, source_name=source_name,
+            source_permanent_id=game.permanent_id_of(context.source_permanent),
+        )
+        game.log.append(
+            f"{grantee.name} may play {revealed.name} from the top of their "
+            f"library"
+            + _PERMISSION_DURATION_WORDS.get(duration, "")
+            + " for as long as it remains on top"
         )
         return True, "resolved"
 

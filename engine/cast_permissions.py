@@ -102,6 +102,15 @@ class CastPermission:
     #: Leaving it off for a card that prints the phrase is not a smaller
     #: permission but a strictly larger one: the entire graveyard becomes
     #: castable.
+    #:
+    #: **It is also half of a compound duration**, and that is not a second
+    #: meaning. "Until end of turn, **for as long as that card remains on top
+    #: of your library**, … you may play that card without paying its mana
+    #: cost." (Temporal Aperture.) CR 611.2a's moment is ``duration`` and the
+    #: cleanup sweep ends it; CR 611.2b's state is this field, re-asked by
+    #: :func:`_covers` on every read — which is what "remains on top" says, in
+    #: exactly as many words. The two compose because nothing has to schedule
+    #: the second, the same way ``while_exiled`` needs no sweep.
     position: str | None = None
 
     @property
@@ -160,11 +169,20 @@ def _covers(game, permission: CastPermission, card, zone: str, *, as_land: bool)
         # CR 400.5 keeps a graveyard ordered, and this engine keeps the top as
         # the *end* of the list: every path that bins a card appends
         # (``handlers/zones.graveyard_top_to_library`` states the same
-        # convention). Compared by identity, because a deck repeats one
-        # immutable ``CardDefinition`` per copy and a value test would answer
-        # "yes" for a second copy sitting anywhere in the pile.
+        # convention). A library is the other way round: its top is
+        # ``library[0]``, which is what every draw, mill and reveal in this
+        # engine reads — so which end "top" names is the *zone's* answer and
+        # not this field's. Spelled as one expression rather than two rows, because the
+        # field means one thing ("the pile's first card, from wherever that
+        # pile is counted") and only the counting differs.
+        #
+        # Compared by identity, because a deck repeats one immutable
+        # ``CardDefinition`` per copy and a value test would answer "yes" for a
+        # second copy sitting anywhere in the pile.
         pile = _zone_cards(game, permission)
-        if not pile or pile[-1] is not card:
+        if not pile:
+            return False
+        if (pile[0] if permission.zone == "library" else pile[-1]) is not card:
             return False
     if permission.cards is not None:
         # Identity, not name: the grant covers the copies it named, one use
@@ -437,9 +455,23 @@ def playable_from_zones(game, player_index: int) -> list[dict]:
     seats = [player_index] + [
         seat for seat in range(len(game.players)) if seat != player_index
     ]
-    for zone in ("graveyard", "exile"):
+    # The library joins them at Urza's Saga, and only ever at index 0: CR 601.3
+    # permissions over a library are all about its *top* card (Conspicuous
+    # Snoop's Goblins, Radha's lands, Temporal Aperture's revealed card), and
+    # offering the rest would be listing a hidden zone to its owner. It was
+    # absent entirely, which is why ``permission_for``'s library branch — live
+    # since M21 — had no consumer at all and no card was ever offered from
+    # there.
+    for zone in ("graveyard", "exile", "library"):
         for owner_seat in seats:
-            for index, card in enumerate(getattr(game.players[owner_seat], zone)):
+            pile = getattr(game.players[owner_seat], zone)
+            if zone == "library":
+                # Its own seat's top card and nobody else's: a library is a
+                # hidden zone (CR 400.2), so an entry for another player's
+                # would name a card the viewer may not see even when no
+                # permission covers it.
+                pile = pile[:1] if owner_seat == player_index else []
+            for index, card in enumerate(pile):
                 as_land = card.primary_type == "land"
                 permission = permission_for(
                     game, player_index, card, zone, as_land=as_land

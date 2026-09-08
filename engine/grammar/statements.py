@@ -59,6 +59,7 @@ from .effects.stack import _parse_conditional_retarget
 
 
 from .sentence_clauses import (
+    accept_shuffle_sequence_tail,
     _accept_alternative_sweep,
     _accept_graded_toll_outcomes,
     _distribute_duration,
@@ -421,7 +422,7 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     # that name the pile that moves.
     bare_shuffle = _parse_shuffle_library(stream)
     if bare_shuffle is not None:
-        return bare_shuffle
+        return accept_shuffle_sequence_tail(bare_shuffle, stream, parse_statement)
     # "Choose two target blocked attacking creatures. If each of those
     # creatures could be blocked by …" (General Jarkeld.) A whole paragraph,
     # read before every other production that opens with "choose": the counted

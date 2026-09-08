@@ -197,3 +197,73 @@ def test_an_illegal_pick_rejects_the_whole_answer():
     )
     assert resp.status_code == 200, resp.text
     assert _state(sid)["search_exile"] is None
+
+
+# --- W3G4: the top of a library is a third zone the seam opens ---
+
+
+def test_w3g4_a_library_grant_is_offered_and_casts_through_the_api():
+    """CR 601.3 over a hidden zone (CR 400.2).
+
+    ``permission_for`` has answered for ``zone="library"`` since Conspicuous
+    Snoop landed with M21, and nothing could act on the answer: the state
+    payload never listed a library entry, the wire's ``from_zone`` had no such
+    literal, and the engine's cast path raised "cannot cast from 'library'".
+    Temporal Aperture is the card that needed all three.
+    """
+    sid, session, game = _session()
+    top = _mk_card("Test Comet")
+    game.players[0].library = [top, _mk_card("Test Filler")]
+
+    assert _state(sid)["castable_from_zones"] == []
+    grant_permission(
+        game, player_index=0, zone="library", mode="play", cards=[top],
+        position="top", free=True, duration="end_of_turn",
+        source_name="Test Aperture",
+    )
+
+    assert _state(sid)["castable_from_zones"] == [
+        {"zone": "library", "index": 0, "name": "Test Comet", "free": True,
+         "source": "Test Aperture", "owner_seat": 0}
+    ]
+    # A library is hidden, so the offer is the viewer's own top card and
+    # nothing else — the opponent's deck is not listed even for a viewer who
+    # holds a grant, and the opponent sees no entry of their own.
+    assert _state(sid, seat=1)["castable_from_zones"] == []
+
+    resp = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "cast", "card_name": "Test Comet",
+              "from_zone": "library"},
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert game.stack and game.stack[-1].card.name == "Test Comet"
+    assert game.stack[-1].cast_from_zone == "library"
+    assert [c.name for c in game.players[0].library] == ["Test Filler"]
+
+
+def test_w3g4_a_library_cast_below_the_top_card_is_a_400():
+    """The refusal that keeps the wire from being a deck search. The grant is
+    real and covers a real card — it is simply not the card on top any more, so
+    the engine says no and the API says why."""
+    sid, session, game = _session()
+    buried = _mk_card("Test Comet")
+    game.players[0].library = [_mk_card("Test Filler"), buried]
+    grant_permission(
+        game, player_index=0, zone="library", mode="play", cards=[buried],
+        position="top", free=True, duration="end_of_turn",
+        source_name="Test Aperture",
+    )
+
+    assert _state(sid)["castable_from_zones"] == []
+    resp = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "cast", "card_name": "Test Comet",
+              "from_zone": "library"},
+    )
+
+    assert resp.status_code == 400
+    assert "top of your library" in resp.json()["detail"]
+
+# --- end W3G4 ---

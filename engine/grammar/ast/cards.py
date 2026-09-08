@@ -493,6 +493,19 @@ class CastPermission:
     #: names a moment, and reading it as the nearest moment the engine already
     #: sweeps is a permission that ends somewhere the card does not say.
     until_your_next_turn: bool = False
+    #: **The second half of a compound duration** (CR 611.2b): the condition
+    #: that has to keep holding, as the name the record is read back under
+    #: ("…**for as long as that card remains on top of your library**",
+    #: Temporal Aperture). ``sentence_clauses.LINKED_WHILE_REVEALED_CARD_ON_TOP``
+    #: is the only value today.
+    #:
+    #: Its own field beside the five booleans above rather than a sixth of
+    #: them, and that is the whole distinction: each of those names a *moment*
+    #: something sweeps at, and exactly one of them may be set, because a
+    #: permission cannot end at two moments. This names a *state* something
+    #: re-asks, so it is answered at a different time and composes with any one
+    #: of them — which is what makes the printed pair readable at all.
+    linked_duration: str | None = None
     free: bool = False
     # "If that spell would be put into your graveyard, exile it instead." —
     # attached by the rider parser, so a wording carrying it cannot shed it.
