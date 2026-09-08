@@ -24,3 +24,48 @@ Cards come from `set_pool("USG")` / `set_cards("USG")` — never a new
 never a bare `while game.stack:` loop — that spins forever once a seat is owed
 a prompt.
 """
+
+
+# --- W1G1: cycling (CR 702.29) ---
+import pytest
+
+from engine import Game, PlayerState
+from engine.activation_zones import HAND
+from engine.oracle import compile_card_oracle
+from engine.targeting import usable_activated_abilities
+
+from tests.helpers import resolve_stack
+
+#: The three sorceries with cycling. All three reported supported before the
+#: rewrite, with the keyword unclaimed — see the instants file for why that is
+#: the interesting half.
+_G1_CYCLING_SORCERIES = ("Lay Waste", "Hush", "Rejuvenate")
+
+
+def _g1_sorcery_game(card, *, library=4):
+    """Seat 0 holds *card* over a library of copies of it. Named for this block."""
+    player = PlayerState(name="G1-S", hand=[card], library=[card] * library)
+    return Game(players=[player, PlayerState(name="G1-T")]), player
+
+
+@pytest.mark.parametrize("name", _G1_CYCLING_SORCERIES)
+def test_w1g1_a_cycling_sorcery_is_discarded_for_a_card(set_pool, name):
+    """Rejuvenate is the one to read: cycled, it gains no life. A rewrite that
+    let the spell's own line resolve would be invisible on the other two."""
+    card = set_pool("USG")[name]
+    program = compile_card_oracle(card)
+    assert program.supported, program.reason
+    assert [a.source_line for a in usable_activated_abilities(program, zone=HAND)] == [
+        "{2}, Discard this card: Draw a card."
+    ]
+
+    game, player = _g1_sorcery_game(card)
+    game.enforce_mana_costs = False
+    life_before = player.life
+
+    assert game.activate_from_hand(0, name).supported
+    resolve_stack(game)
+
+    assert [c.name for c in player.graveyard] == [name]
+    assert len(player.library) == 3
+    assert player.life == life_before

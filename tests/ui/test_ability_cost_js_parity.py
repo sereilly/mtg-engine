@@ -40,8 +40,39 @@ from pathlib import Path
 
 import pytest
 
+from engine.activation_zones import HAND, ability_functions_from
 from engine.card_loader import load_catalog
 from engine.oracle import compile_card_oracle
+
+
+def _menu_abilities(card):
+    """The compiled abilities a **permanent's** ability menu should list.
+
+    CR 113.6: an ability that functions from a hand — cycling (CR 702.29a),
+    Waker of Waves — is not one of the permanent's, so it is not in the list
+    ``usable_activated_abilities`` gives the server and must not be in the list
+    the client numbers. The client answers the same question from the printed
+    cost (``abilityFunctionsOnBattlefield``); this is the engine's side of that
+    pair.
+
+    Deliberately narrower than ``usable_activated_abilities``: that also drops
+    an ability the compiler could not read, and the client legitimately still
+    lists those (66 cards in the measured pool). What is asserted here is the
+    zone, which is the half both sides can answer from the printed line.
+
+    The **graveyard** half of CR 113.6 is not asserted, and that is a known gap
+    rather than an oversight: six shipped cards (Ashen Ghoul, Whiteout, Hammer
+    of Bogardan, Necrosavant, Carrionette, Shard Phoenix) print an ability the
+    engine now keeps off the battlefield and the client still offers there. The
+    client cannot tell without a third reading of CR 113.6m in JavaScript; the
+    server refuses the activation, so the cost is a dead menu entry rather than
+    a rule broken.
+    """
+    return [
+        ability
+        for ability in compile_card_oracle(card).activated_abilities
+        if ability_functions_from(ability) != HAND
+    ]
 
 REPO = Path(__file__).resolve().parents[2]
 APP_JS = REPO / "web" / "static" / "app.js"
@@ -66,9 +97,11 @@ function grab(name) {
   return src.slice(i, end + 2);
 }
 const pieces = ["activatedAbilityText", "activationColonIndex", "expandEquipLine",
+  "expandCyclingLine", "abilityFunctionsOnBattlefield",
   "getActivatedAbilityCost", "getActivatedAbilityOptions", "isPlaneswalkerCard",
   "loyaltyCostOf"].map(grab).join("\n");
-const re = src.slice(src.indexOf("const EQUIP_LINE_RE"), src.indexOf("function expandEquipLine"));
+const re = src.slice(src.indexOf("const EQUIP_LINE_RE"), src.indexOf("function expandEquipLine"))
+  + src.slice(src.indexOf("const CYCLING_LINE_RE"), src.indexOf("function expandCyclingLine"));
 const lo = src.slice(src.indexOf("const LOYALTY_COST_RE"), src.indexOf("function isPlaneswalkerCard"));
 eval(re + lo + pieces + ";globalThis.T={getActivatedAbilityCost,getActivatedAbilityOptions}");
 const cards = JSON.parse(fs.readFileSync(process.argv[3], "utf8"));
@@ -146,10 +179,10 @@ def test_the_client_lists_the_same_abilities_the_compiler_does(js_readings):
     """
     cards, js = js_readings
     dropped = [
-        (card.name, [a.source_line for a in compile_card_oracle(card).activated_abilities],
+        (card.name, [a.source_line for a in _menu_abilities(card)],
          js[card.name]["options"])
         for card in cards
-        if len(compile_card_oracle(card).activated_abilities) != len(js[card.name]["options"])
+        if len(_menu_abilities(card)) != len(js[card.name]["options"])
     ]
     assert not dropped, (
         "the client's ability list is a different length from the compiler's, "
@@ -162,8 +195,7 @@ def test_every_ability_both_sides_list_has_the_same_cost(js_readings):
     cards, js = js_readings
     disagreements = []
     for card in cards:
-        program = compile_card_oracle(card)
-        engine = list(program.activated_abilities)
+        engine = _menu_abilities(card)
         client = js[card.name]["options"]
         for index, (ability, cost) in enumerate(zip(engine, client)):
             if ability.cost.is_loyalty:

@@ -6,7 +6,8 @@ from pathlib import Path
 from typing import Sequence
 import random
 
-from .ai_policy import choose_activation_action, choose_cast_action
+from .ai_policy import (choose_activation_action, choose_cast_action,
+                        choose_hand_activation_action)
 from .card_loader import load_cards
 from .game import Game
 from .oracle import compile_card_oracle
@@ -617,6 +618,41 @@ def run_ai_simulation(
                     report.log_lines.append(
                         f"G{game_index} T{turn} {active_player.name} "
                         f"activate {activation_action.permanent_name} -> {result.details}"
+                    )
+
+                # An ability activated from the seat's **hand** (CR 113.6j) —
+                # cycling. A separate pass rather than a branch above, because
+                # `activate_from_hand` takes neither a permanent nor a target;
+                # after the battlefield pass, so the lands it plans against are
+                # the ones nothing else wanted.
+                hand_activation = (
+                    None if game.is_game_over()
+                    else choose_hand_activation_action(game, active)
+                )
+                if hand_activation is not None:
+                    for permanent_index in hand_activation.land_tap_indices:
+                        # Through the seam: the two loops above this one predate
+                        # the id migration and are held by a ratchet, so a third
+                        # open-coded slot read would raise the baseline for a
+                        # line that never needed one.
+                        permanent = game.permanent_at(active, permanent_index)
+                        if permanent is None:
+                            continue
+                        game.tap_land_for_mana(
+                            active, permanent.card.name, permanent_index=permanent_index
+                        )
+                    result = game.activate_from_hand(
+                        active,
+                        hand_activation.card_name,
+                        ability_index=hand_activation.ability_index,
+                        hand_index=hand_activation.hand_index,
+                    )
+                    _resolve_pending_choices(game)
+                    report.interaction_count += 1
+                    report.log_lines.append(
+                        f"G{game_index} T{turn} {active_player.name} "
+                        f"activate {hand_activation.card_name} from hand "
+                        f"-> {result.details}"
                     )
 
                 new_logs = game.log[log_cursor:]

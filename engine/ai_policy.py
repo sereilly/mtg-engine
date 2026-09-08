@@ -39,8 +39,10 @@ from .oracle import OracleInstruction, compile_card_oracle
 from .oracle_types import cost_target_count, x_spend_colors_from_text
 from .search_filters import search_matches, searched_seat
 from .subject_filters import subject_matches
+from .activation_zones import HAND
 from .targeting import (bounce_subject_filter, derive_activation_spec,
-                        derive_cast_spec, spec_roles)
+                        derive_cast_spec, spec_roles,
+                        usable_activated_abilities)
 
 _MANA_SYMBOLS = ("W", "U", "B", "R", "G", "C")
 
@@ -96,6 +98,30 @@ class ActivationAction:
     # whose handlers pick for themselves, which is every other one this policy
     # activates today.
     target_permanent_index: int | None = None
+
+
+@dataclass(frozen=True)
+class HandActivationAction:
+    """An ability activated from a card **in the seat's hand** (CR 113.6j).
+
+    Cycling (CR 702.29a) is why this exists: 34 of Urza's Saga's cards compile
+    to "[Cost], Discard this card: Draw a card.", and every one of them is a
+    card an AI seat holds and never plays. A seat with no way to reach the hand
+    is a seat doing nothing with a third of the set — the same shape a refused
+    cast makes, but quieter, because nothing is even proposed.
+
+    A separate action from :class:`ActivationAction` rather than a nullable
+    field on it, because the two are executed by different engine entry points
+    (``activate_from_hand`` takes no permanent, no target and no summoning
+    sickness) and every existing reader of ``ActivationAction`` would have had
+    to learn which shape it was holding.
+    """
+
+    card_name: str
+    hand_index: int
+    ability_index: int
+    land_tap_indices: tuple[int, ...]
+    score: float
 
 
 def choose_attack_target(game: Game, player_index: int) -> int:
@@ -364,7 +390,14 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
             continue
 
         program = compile_card_oracle(permanent.card)
-        ability = next((item for item in program.activated_abilities if item.supported and item.instruction is not None), None)
+        # The shared reader, not a third copy of its predicate: it carries
+        # CR 113.6's zone read, so a cycling creature's "{2}, Discard this card:
+        # Draw a card." is not on this list at all. Open-coded, the policy
+        # proposed it every main phase and the engine ran it — a free repeatable
+        # draw for a card that was never discarded, on eight of Urza's Saga's
+        # creatures. It is also the list `activation_target_spec` narrows by,
+        # which the `ability_index=0` below already assumes.
+        ability = next(iter(usable_activated_abilities(program)), None)
         if ability is None or ability.instruction is None:
             continue
 
@@ -533,6 +566,80 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
         if best is None or candidate.score > best.score:
             best = candidate
 
+    return best
+
+
+def choose_hand_activation_action(
+    game: Game, player_index: int
+) -> HandActivationAction | None:
+    """The best ability this seat can activate from its **hand**, or None.
+
+    Cycling, and whatever else prints a cost payable only from a hand
+    (CR 113.6j). Which abilities those are is not decided here — it is
+    ``usable_activated_abilities(program, zone=HAND)``, the same reader
+    ``Game.activate_from_hand`` gates on and the same one that keeps the ability
+    off a permanent's list — so this policy names no card and no keyword.
+
+    Called **after** the seat's cast for the turn, so the untapped lands the
+    payment is planned against are the mana the cast did not want: a seat
+    cycles with what is left over rather than instead of playing its spell.
+
+    One action per call, like :func:`choose_activation_action`, and the tie-break
+    is hand order — the seat cycles once a priority pass rather than emptying
+    its hand in a loop, and a seeded run reproduces exactly.
+    """
+    player = game.players[player_index]
+    best: HandActivationAction | None = None
+    for hand_index, card in enumerate(player.hand):
+        program = compile_card_oracle(card)
+        from_hand = usable_activated_abilities(program, zone=HAND)
+        if not from_hand:
+            continue
+        ability = from_hand[0]
+        if ability.instruction is None:
+            continue
+
+        # A mana ability activated for its own sake empties at the end of the
+        # step; the same floor `choose_activation_action` keeps one zone over.
+        if is_mana_ability(ability.instruction):
+            continue
+
+        # Any cost beyond mana and the discard the zone read is derived from is
+        # a trade this policy cannot price — the same honest floor the
+        # battlefield loop takes, and derived from the compiled cost so it
+        # names no card.
+        cost = ability.cost
+        if (
+            cost.sacrifice_filter is not None
+            or cost.discard_cards
+            or cost.pay_life
+            or cost.exile_top_of_library
+        ):
+            continue
+
+        land_taps: tuple[int, ...] = ()
+        required = dict(cost.mana)
+        if game.enforce_mana_costs and any(required.values()):
+            plan = _plan_taps_for_cost(player, required)
+            if plan is None:
+                continue
+            land_taps = tuple(plan)
+
+        # The seat is the target: nothing activatable from a hand in the pool
+        # aims anywhere else, and an ability that did would be refused at
+        # announcement rather than aimed by this policy.
+        score = _score_activation(game, player_index, ability.instruction, player_index)
+        if score <= 0.0:
+            continue
+        candidate = HandActivationAction(
+            card_name=card.name,
+            hand_index=hand_index,
+            ability_index=0,
+            land_tap_indices=land_taps,
+            score=score,
+        )
+        if best is None or candidate.score > best.score:
+            best = candidate
     return best
 
 

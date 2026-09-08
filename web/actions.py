@@ -398,6 +398,46 @@ def _action_activate(session, req, seat_type):
         session.game.note_priority_action_taken(req.seat)
 
 
+@action_handler("activate_hand", human_only=HUMAN_ONLY)
+def _action_activate_hand(session, req, seat_type):
+    """CR 113.6j — activate an ability of a card in the seat's own **hand**.
+
+    Cycling (CR 702.29a) is what makes this a route rather than a curiosity: 34
+    of Urza's Saga's cards compile to "[Cost], Discard this card: Draw a card.",
+    and until this existed the browser had no gesture that could reach any of
+    them. ``Game.activate_from_hand`` has been in the engine since M21's Waker
+    of Waves, unreachable from the app for the whole time.
+
+    ``ability_index`` indexes the hand-activatable abilities — the same list
+    ``state.hand_abilities`` is built from, so the index the client sends back
+    names the ability the button was labelled with. ``hand_index`` says *which
+    copy*, because two copies of a card in a hand are the same immutable
+    ``CardDefinition`` and a name alone would activate whichever came first.
+    """
+    if req.card_name is None and req.hand_index is None:
+        raise HTTPException(
+            status_code=400, detail="card_name or hand_index is required"
+        )
+    hand = session.game.players[req.seat].hand
+    hand_index = req.hand_index
+    if hand_index is not None and not 0 <= hand_index < len(hand):
+        raise HTTPException(status_code=400, detail="card not in hand")
+    card_name = req.card_name
+    if card_name is None:
+        card_name = hand[hand_index].name
+    if not session.game.has_priority(req.seat):
+        raise HTTPException(status_code=400, detail="you do not currently have priority")
+    result = session.game.activate_from_hand(
+        req.seat,
+        card_name,
+        ability_index=req.ability_index if req.ability_index is not None else 0,
+        hand_index=hand_index,
+    )
+    if not result.supported:
+        raise HTTPException(status_code=400, detail=result.details)
+    session.game.note_priority_action_taken(req.seat)
+
+
 @action_handler("activate_emblem")
 def _action_activate_emblem(session, req, seat_type):
     if not session.game.has_priority(req.seat):

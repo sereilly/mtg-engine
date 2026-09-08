@@ -9,6 +9,14 @@ GameMode = Literal["human_vs_ai", "ai_vs_ai", "human_vs_human", "free_for_all"]
 ActionKind = Literal[
     "cast",
     "activate",
+    # CR 113.6j — an activated ability of a card in the seat's **hand**
+    # (cycling, CR 702.29a). A separate kind rather than a flag on "activate",
+    # because the engine reaches it through a separate entry point
+    # (``Game.activate_from_hand``) that takes no permanent: a nullable
+    # permanent threaded through the activate handler would make every
+    # controller, summoning-sickness and tap read in it a question about
+    # nothing.
+    "activate_hand",
     "activate_emblem",
     "channel_mana",
     "special_action",

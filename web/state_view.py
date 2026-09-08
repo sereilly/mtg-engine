@@ -37,6 +37,7 @@ was missing.
 from __future__ import annotations
 
 import json
+import re
 
 from dataclasses import dataclass
 
@@ -48,7 +49,10 @@ from engine.special_actions import (available_permanent_special_actions,
 from engine.cast_timing import casts_at_instant_speed
 from engine.classifier import classify_card
 from engine.models import PlayerState
+from engine.activation_zones import HAND
+from engine.cycling import expand_cycling_line
 from engine.oracle import compile_card_oracle
+from engine.targeting import usable_activated_abilities
 
 from .prompts import PromptContext, render_prompts
 from .session_store import Session
@@ -370,6 +374,95 @@ def _compute_playable_hand_indices(session: Session, player_index: int) -> list[
         if i not in locked
         and _card_castable_now(session, player_index, card, window, hand_index=i)
     ]
+
+
+_ABILITY_REMINDER = re.compile(r"\([^)]*\)")
+
+
+def _ability_cost_text(printed_line: str) -> str:
+    """The cost clause of a printed ability line — what the button is named by.
+
+    "Cycling {2} ({2}, Discard this card: Draw a card.)" is the whole of what a
+    cycling card prints, and "{1}{U}, Discard this card: Look at the top two
+    cards of your library. Put one of them into your hand and the other into
+    your graveyard." is the whole of Waker of Waves' — neither fits on a button.
+    The half a player is choosing by is the price, so the reminder text goes and
+    what is left before the first colon is the label. A keyword line has no
+    colon once its reminder is stripped and is already the price, so it survives
+    whole ("Cycling {2}").
+    """
+    stripped = " ".join(_ABILITY_REMINDER.sub("", printed_line or "").split()).strip()
+    head, sep, _tail = stripped.partition(": ")
+    return (head if sep else stripped).rstrip(".")
+
+
+def _printed_ability_line(card, ability) -> str:
+    """The printed line *ability* was compiled from, or its compiled text.
+
+    An ability's ``source_line`` is what the compiler read, which for a cycling
+    keyword is the CR 702.29a expansion rather than "Cycling {2}". The button
+    names the card as printed, so the printed line is walked through the same
+    rewrite and compared — never matched against the expansion's English.
+    """
+    wanted = (ability.source_line or "").strip()
+    for line in (card.oracle_text or "").split("\n"):
+        if (expand_cycling_line(line) or line).strip() == wanted:
+            return line.strip()
+    return wanted
+
+
+def _compute_hand_abilities(session: Session, player_index: int) -> list[dict]:
+    """The activated abilities *player_index* may use from their **hand**.
+
+    Cycling (CR 702.29a) and every other ability CR 113.6j puts in a hand,
+    one entry per (hand card, ability). Read off
+    ``usable_activated_abilities(program, zone=HAND)`` — the same list
+    ``Game.activate_from_hand`` indexes with the ``ability_index`` these entries
+    carry, so the button and the action name the same ability by construction.
+
+    **This list is why the mechanic is reachable at all.** The engine has been
+    able to activate an ability from a hand since Waker of Waves shipped, and
+    the browser had no gesture for it: no hand card carries the affordance
+    (clicking one is a cast) and no action kind existed. A supported card no
+    player can use is the Roots class, and Urza's Saga lands 34 more of them on
+    it.
+
+    ``payable`` is the same question the castable-hand highlight asks — the
+    pool plus what the untapped lands could add — because a button offered on a
+    board that cannot pay for it is a button that does nothing. It is a flag
+    rather than a filter so the affordance is *visible* while unaffordable,
+    which is what a cycling card in an opening hand should look like.
+    """
+    game = session.game
+    player = game.players[player_index]
+    window = _casting_window(session, player_index)
+    entries: list[dict] = []
+    for hand_index, card in enumerate(player.hand):
+        program = compile_card_oracle(card)
+        for ability_index, ability in enumerate(
+            usable_activated_abilities(program, zone=HAND)
+        ):
+            payable = True
+            if game.enforce_mana_costs and any(ability.cost.mana.values()):
+                payable = window is not None and _can_afford_with_pool(
+                    window.potential_pool, dict(ability.cost.mana), player
+                )
+            entries.append({
+                "hand_index": hand_index,
+                "ability_index": ability_index,
+                "name": card.name,
+                # The line as **printed**, not as the compiler rewrote it: a
+                # cycling card says "Cycling {2}" and the button should too.
+                # Found by walking the printed lines through the same rewrite
+                # rather than by pattern-matching the expansion's English —
+                # the move ``oracle._printed_line_for`` makes for equip.
+                "text": _printed_ability_line(card, ability),
+                # What the button is named by: the price, not the whole
+                # sentence. The full line stays in `text` for the tooltip.
+                "cost_text": _ability_cost_text(_printed_ability_line(card, ability)),
+                "payable": payable,
+            })
+    return entries
 
 
 def _compute_playable_command_indices(session: Session, player_index: int) -> list[int]:
@@ -702,6 +795,18 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         # question is "what may I do without the stack?" and the answer does
         # not change shape with the zone — each entry names either a
         # `hand_index` or a `permanent_id`.
+        # CR 113.6j: an activated ability whose cost can only be paid from a
+        # hand — cycling (CR 702.29a), Waker of Waves. Beside the special
+        # actions above and for the same reason they are there: a hand card
+        # carries no affordance but "cast", so an ability activated from one
+        # needs a control of its own. Unlike them it *does* use the stack; what
+        # it shares is the zone. Empty for a spectator — an activation belongs
+        # to a seat.
+        "hand_abilities": (
+            _compute_hand_abilities(session, viewer_seat)
+            if viewer_seat is not None
+            else []
+        ),
         "special_actions": (
             available_special_actions(session.game, viewer_seat)
             + available_permanent_special_actions(session.game, viewer_seat)

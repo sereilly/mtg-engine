@@ -1564,6 +1564,45 @@ function expandEquipLine(line) {
   return `${m[2]}: Attach this permanent to target ${noun} you control. Activate only as a sorcery.`;
 }
 
+// CR 702.29a: "Cycling [cost]" *means* "[Cost], Discard this card: Draw a
+// card." The compiler rewrites the printed line before it classifies anything
+// (`engine/cycling.py`), so the client has to read the same sentence or the two
+// are looking at different cards — the reason `expandEquipLine` above exists,
+// arriving with a second keyword.
+//
+// Left unrewritten the damage is not that the ability goes unlisted: the
+// printed line is "Cycling {2} ({2}, Discard this card: Draw a card.)" and the
+// generic splitter finds the colon **inside the reminder text**, so the cost
+// reads as "Cycling {2} ({2}, Discard this card" and the auto-tap flow collects
+// {2}{2}. That is the Equipment bug this pair of functions was written for.
+const CYCLING_LINE_RE = /^cycling\s+((?:\{[^{}]+\})+)$/i;
+
+function expandCyclingLine(line) {
+  const stripped = line.replace(/\([^)]*\)/g, "").replace(/\s+/g, " ").trim().replace(/\.$/, "");
+  const m = stripped.match(CYCLING_LINE_RE);
+  // Typecycling (CR 702.29e) searches a library rather than drawing; it fails
+  // this pattern and stays unrewritten, exactly as the engine leaves it, so the
+  // card is refused rather than read as though it printed the draw.
+  if (!m) return null;
+  return `${m[1]}, Discard this card: Draw a card.`;
+}
+
+// CR 113.6j — an ability whose cost cannot be paid while the object is on the
+// battlefield does not function there. "Discard this card" is that cost
+// (CR 701.9a: a discard moves a card out of a **hand**), so an ability naming
+// it belongs to `state.hand_abilities` and not to a permanent's ability menu.
+//
+// The engine derives the same answer from the compiled cost
+// (`engine/activation_zones.py`), and `usable_activated_abilities` is the list
+// the server indexes with the `ability_index` this menu sends back — so an
+// option listed here that the server has filtered out is not merely a dead
+// button: it renumbers every option after it. Waker of Waves has been offered
+// on the battlefield since M21 shipped, and Urza's Saga's six cycling lands
+// would each have offered a second, mis-priced option under their mana ability.
+function abilityFunctionsOnBattlefield(costHalf) {
+  return !/\bdiscard this card\b/i.test(costHalf || "");
+}
+
 function hasActivatedAbility(card) {
   if (!card || typeof card === "string") return false;
   const text = activatedAbilityText(card);
@@ -10556,7 +10595,7 @@ function getActivatedAbilityOptions(card) {
   for (let li = 0; li < lines.length; li++) {
     // An equip keyword line is the activated ability CR 702.6a says it is;
     // read it in its expanded form so it takes its place in the index.
-    const line = expandEquipLine(lines[li]) || lines[li];
+    const line = expandEquipLine(lines[li]) || expandCyclingLine(lines[li]) || lines[li];
     const trimmed = line.trim();
     // A loyalty cost is counters rather than mana, so it is recognised by its
     // own pattern *before* the generic split below — which would otherwise read
@@ -10579,6 +10618,11 @@ function getActivatedAbilityOptions(card) {
     let costHalf = ci < 0 ? "" : trimmed.slice(0, ci).trim();
     const effectHalf = ci < 0 ? "" : trimmed.slice(ci + 1).trim();
     if (!costHalf || !effectHalf) continue;
+    // CR 113.6j: not an ability of this *permanent* (see
+    // `abilityFunctionsOnBattlefield`). Skipped before `index` moves, so the
+    // options this menu numbers are the ones the server's battlefield list
+    // numbers.
+    if (!abilityFunctionsOnBattlefield(costHalf)) continue;
     // "Pay 2 life or {2}" is one cost with a choice: `cost` is what activating
     // charges by default and `orCost` is the payment the card offers instead.
     // Split before anything reads either, because `cost` is what the auto-tap
@@ -16284,6 +16328,7 @@ function renderBoard(state) {
   q("nextPhaseBtn").disabled = !hasPriority || hasBlockingPrompt || hasCombatDeclarationPrompt;
   q("undoBtn").disabled = sessionId === null;
   renderSpecialActions(state, hasPriority);
+  renderHandAbilities(state, hasPriority);
   selfHeader?.classList.toggle("turn-zone-self", isSelfTurn);
   // Per-seat, not just "not my turn": in FFA the active player might be one
   // of the corner seats instead of the classic header's seat.
@@ -18325,6 +18370,52 @@ function renderSpecialActions(state, hasPriority) {
         hand_index: entry.hand_index,
         permanent_id: entry.permanent_id,
         special_action_kind: entry.kind,
+      });
+    });
+    host.appendChild(button);
+  }
+}
+
+// CR 113.6j — an activated ability of a card in the viewer's hand (cycling,
+// CR 702.29a). The same shape as `renderSpecialActions` above and for the same
+// reason: a hand card's only gesture is "cast", so an ability activated from
+// one needs its own control. What differs is that this one uses the stack, so
+// it is offered only while the viewer has priority — which is also true of the
+// special actions, and is why both read the same flag.
+//
+// The server has already asked which abilities function from a hand
+// (`engine/activation_zones.py`) and whether the board can pay; this renders
+// what it is given rather than re-deciding, so the client cannot become the
+// second copy that disagrees with the action.
+function renderHandAbilities(state, hasPriority) {
+  const host = q("handAbilities");
+  if (!host) return;
+  const entries = hasPriority ? (state?.hand_abilities || []) : [];
+  host.innerHTML = "";
+  host.classList.toggle("hidden", entries.length === 0);
+  for (const entry of entries) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "secondary-btn";
+    // The cost clause as *printed*, which for a cycling card is "Cycling {2}" —
+    // the server walks the printed text through the same rewrite the compiler
+    // does, so the client never has to know the keyword. The whole line is the
+    // tooltip; a button wide enough for Waker of Waves' sentence would be wider
+    // than the phase rail.
+    button.textContent = `${entry.cost_text || "Activate"}: ${entry.name}`;
+    button.title = entry.text || "An ability activated from your hand (CR 113.6).";
+    button.disabled = entry.payable === false;
+    button.addEventListener("click", () => {
+      // `hand_index` says which copy: two copies of a card in a hand are the
+      // same immutable definition, so the name alone would activate whichever
+      // came first. `seat` is required of every action — the omission that
+      // made every CR 116 special action answer a click with a silent 422.
+      sendAction({
+        seat,
+        action: "activate_hand",
+        card_name: entry.name,
+        hand_index: entry.hand_index,
+        ability_index: entry.ability_index,
       });
     });
     host.appendChild(button);
