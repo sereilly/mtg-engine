@@ -431,6 +431,47 @@ def _lower_gain_control(
             return (
                 OracleInstruction("gain_control_of_bound_permanent", "", {}),
             )
+        if subject.quantifier == "all":
+            # "Gain control of **all permanents you own**." (Brand.) A *set*
+            # rather than a chosen object, and CR 611.2c fixes it as the effect
+            # is applied — so there is no target to name and nothing for the
+            # picker to offer. Its own kind for the reason the two lifetimes
+            # are two kinds one branch down: what the handler has to do is
+            # different (walk the board, take each) and a payload flag on the
+            # targeted kind would reach a handler that resolves one permanent
+            # and takes exactly that one.
+            #
+            # **Ownership, not control** (CR 108.3): "permanents you own" names
+            # the cards this player started the game with, wherever they are
+            # now — which is the whole of what Brand does, taking back what an
+            # opponent stole. Read as a controller narrowing the spell would
+            # be a blank.
+            if node.tap_when_lost or node.offered:
+                raise LoweringError(
+                    "no rider rides the board-wide control change", node=node
+                )
+            described = _filter_payload(subject.filter)
+            # ``owner`` is the phrase's whole content here and the pure matcher
+            # cannot answer it — an owner is a seat, and CR 108.3's answer is
+            # the game's. So it is carried separately and the handler asks
+            # ``subject_matches`` with an observer, exactly as the sacrifice
+            # charger carries "you control".
+            if object_only_filter(
+                described, carried_separately=frozenset({"owner", "controller"})
+            ) is None:
+                raise LoweringError(
+                    "the control change cannot test this restriction", node=node
+                )
+            if described.get("owner") not in (None, "you"):
+                raise LoweringError(
+                    "a board-wide control change takes what its controller "
+                    "owns", node=node,
+                )
+            return (
+                OracleInstruction(
+                    "gain_control_of_all_matching", "", described
+                ),
+            )
         if subject.quantifier != "target":
             raise LoweringError(
                 "the indefinite control change needs a named target", node=node

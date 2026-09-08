@@ -8,7 +8,7 @@ from ..events import emit
 from ..game_types import OracleExecutionContext, OracleStateMachine
 from ..handlers import EFFECT_HANDLERS
 from ..handlers._common import count_from_payload
-from ..oracle_types import X_FROM_COUNT
+from ..oracle_types import X_FROM_COUNT, substitute_x_bounds
 from ..models import CardDefinition, Permanent, PlayerState
 from ..auras import (AURA_REANIMATION_PHRASES, AURA_REANIMATION_TAPPED,
                      attach_aura, aura_animates_artifact, aura_keyword_grants,
@@ -69,6 +69,15 @@ class OracleInstructionsMixin:
             context = dataclasses.replace(
                 context, x_value=count_from_payload(self, context, count_spec, instruction)
             )
+        # "each artifact with mana value **X** or less" (Meltdown). The bound
+        # is a number the announcement supplied (CR 601.2b), resolved here
+        # beside the ``x_from_count`` substitution above and for its stated
+        # reason: one substitution at the single dispatch point gives the
+        # clause to every effect family, where doing it per handler is how the
+        # pump ended up the only sentence that could carry one.
+        substituted = substitute_x_bounds(instruction.payload, context.x_value)
+        if substituted is not instruction.payload:
+            instruction = dataclasses.replace(instruction, payload=substituted)
         handler = EFFECT_HANDLERS.get(instruction.kind)
         if handler is None:
             self.log.append(

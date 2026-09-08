@@ -18,6 +18,85 @@ from typing import Any
 # string agreed in two places is exactly the second copy that drifts.
 X_FROM_COUNT = "x_from_count"
 
+# The value a filter's numeric bound carries when the card printed **X** rather
+# than a number: "each artifact with mana value **X** or less" (Meltdown),
+# "a creature card with mana value X or less" (Citanul Flute). The same string
+# every *amount* in the engine uses for a value the announcement supplies, so a
+# reader that already resolves "x" needs no new vocabulary — and here for
+# ``X_FROM_COUNT``'s reason exactly: the grammar writes it, the dispatcher
+# substitutes it, and a string agreed in two places is the copy that drifts.
+X_BOUND = "x"
+
+
+def substitute_x_bounds(payload: dict, x_value: int | None) -> dict:
+    """*payload* with every ``X_BOUND`` filter bound resolved to *x_value*.
+
+    CR 601.2b announces X as the spell is cast and CR 608.2 applies the effect
+    with that number, so the substitution belongs at the single dispatch point
+    — the same argument ``X_FROM_COUNT``'s does one key up, and the same
+    payoff: every effect family gets the clause at once instead of the one
+    handler that happened to need it.
+
+    Recurses because a bound reaches the matcher twice, on the instruction's
+    own filter keys and inside the ``targets`` description the picker reads,
+    and a substitution honoured in one of them is a sweep that destroys a
+    different set from the one it offered.
+
+    Returns *payload* itself when nothing carries the bound, which is every
+    instruction in the pool but three — the cost of the scan is one dict walk
+    and the cost of getting it wrong is ``int("x")``.
+
+    An unannounced X resolves to 0, which is what ``resolve_amount`` reads it
+    as everywhere else: CR 107.3b makes an unspecified X zero.
+    """
+    if not _carries_x_bound(payload):
+        return payload
+    resolved = max(0, int(x_value or 0))
+    return _substituted(payload, resolved)
+
+
+#: The filter keys whose value is a ``{op, value}`` bound. All three, because
+#: emitting one and resolving another is how a restriction vanishes silently —
+#: the argument ``object_filter_payload`` already makes about emitting them.
+_BOUND_KEYS = ("mana_value", "power", "toughness")
+
+
+def _carries_x_bound(value: object) -> bool:
+    if isinstance(value, dict):
+        for key, inner in value.items():
+            if (
+                key in _BOUND_KEYS
+                and isinstance(inner, dict)
+                and inner.get("value") == X_BOUND
+            ):
+                return True
+            if _carries_x_bound(inner):
+                return True
+        return False
+    if isinstance(value, (list, tuple)):
+        return any(_carries_x_bound(item) for item in value)
+    return False
+
+
+def _substituted(value: object, resolved: int) -> object:
+    if isinstance(value, dict):
+        out = {}
+        for key, inner in value.items():
+            if (
+                key in _BOUND_KEYS
+                and isinstance(inner, dict)
+                and inner.get("value") == X_BOUND
+            ):
+                out[key] = {**inner, "value": resolved}
+            else:
+                out[key] = _substituted(inner, resolved)
+        return out
+    if isinstance(value, list):
+        return [_substituted(item, resolved) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_substituted(item, resolved) for item in value)
+    return value
+
 # The same clause, but counted **once per recipient**: "…deals damage to each
 # opponent equal to the number of Islands **that player** controls" (Typhoon).
 # A separate key rather than an `owner` value on the spec above, because the

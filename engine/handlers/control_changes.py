@@ -214,6 +214,68 @@ def gain_control_until_eot(game: Game, instruction: OracleInstruction, context: 
     return True, "resolved"
 
 
+@effect_handler("gain_control_of_all_matching")
+def gain_control_of_all_matching(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """"Gain control of all permanents you own." (Brand.)
+
+    A *set* rather than a chosen object: CR 611.2c fixes it as the effect is
+    applied, so the board is walked here and every match takes a CR 613 layer-2
+    contribution with no duration (CR 611.2a — an effect with no stated end has
+    none, which is what the parenthetical "This effect lasts indefinitely."
+    restates).
+
+    **Ownership, not control** (CR 108.3): the phrase names the cards this
+    player started the game with, wherever they are now. That is the whole of
+    what the card does — taking back what an opponent stole — and reading it as
+    a controller narrowing would make the spell a blank. ``subject_matches``
+    answers it because it holds the game; the pure matcher cannot, which is why
+    the key is carried rather than tested in the payload gate.
+
+    The contribution's source is the **card**, not a permanent: an instant has
+    no permanent to belong to, which is the reading ``gain_control_until_eot``
+    beside it already takes for the same reason.
+    """
+    from ..control import change_control
+    from ..subject_filters import subject_matches
+
+    seat = game.players.index(context.caster)
+    described = {
+        key: value for key, value in instruction.payload.items()
+        if key not in ("targets",)
+    }
+    took = 0
+    for permanent in list(game.all_permanents()):
+        if not subject_matches(game, permanent, described, observer=seat):
+            continue
+        if game.controller_index_of(permanent) == seat:
+            # Already theirs. Skipped rather than re-contributed, because a
+            # contribution recorded here would be one the *card* owns — and a
+            # later "end that effect" would then hand the permanent somewhere
+            # it never was.
+            continue
+        # Guardian Beast's prohibition, asked at the seam that takes control
+        # rather than inherited: `change_control` is reached directly here, as
+        # it is in every branch of this module that has no source permanent.
+        if game.cant_gain_control(permanent, context.caster):
+            game.log.append(
+                f"{context.card.name}: {permanent.card.name} can't change "
+                "controllers"
+            )
+            continue
+        change_control(permanent, seat, source=context.card, until_eot=False)
+        took += 1
+        game.log.append(
+            f"{context.caster.name} gains control of {permanent.card.name} "
+            "for as long as the game lasts"
+        )
+    game._sync_control()
+    if not took:
+        game.log.append(f"{context.card.name}: nothing to take back")
+    return True, "resolved"
+
+
 @effect_handler("gain_control_of_bound_permanent")
 def gain_control_of_bound_permanent(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Whenever this creature becomes blocked by a creature, **gain control of

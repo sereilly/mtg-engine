@@ -20,6 +20,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ...oracle_types import X_BOUND
+
 from ._primitives import Fixed
 from ..vocabulary import TYPE_LINE_SUPERTYPES
 
@@ -262,13 +264,25 @@ def object_filter_payload(self: "ObjectFilter") -> dict[str, object]:
     # every payload written before this key existed is byte-identical.
     if self.excluded_subtypes:
         payload["exclude_subtypes"] = list(self.excluded_subtypes)
-    # "with mana value 3 or less" (Eliminate). Only a literal bound has a
-    # payload form; a variable one ("mana value X") is left unemitted so
-    # _filter_payload refuses the line rather than dropping the bound.
-    if self.mana_value is not None and isinstance(self.mana_value.value, Fixed):
+    # "with mana value 3 or less" (Eliminate); "with mana value **X** or less"
+    # (Meltdown, Citanul Flute, Ugin's second ability). A literal bound rides
+    # the payload as the number it is; a variable one rides it as the string
+    # "x", which is the same spelling every *amount* in the engine uses for a
+    # value the announcement supplies — and `_execute_oracle_instruction`
+    # substitutes it at the one dispatch point, beside the ``x_from_count``
+    # substitution that is there for exactly this reason.
+    #
+    # It used to be left unemitted, so `_filter_payload` refused the line
+    # rather than dropping the bound: the right direction while nothing could
+    # resolve it, and a card that reports unsupported once something can.
+    if self.mana_value is not None:
         payload["mana_value"] = {
             "op": self.mana_value.op,
-            "value": self.mana_value.value.value,
+            "value": (
+                self.mana_value.value.value
+                if isinstance(self.mana_value.value, Fixed)
+                else X_BOUND
+            ),
         }
     # "…with mana value less than or equal to the number of rust counters on
     # it" (Corrosion). Always emitted when set, for `characteristic_vs_source`'s

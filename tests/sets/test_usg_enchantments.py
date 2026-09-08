@@ -1302,3 +1302,87 @@ def test_lurking_evil_costs_a_second_activation_half_of_what_is_left(set_pool):
     game.activate_permanent_ability(0, "Lurking Evil")
     resolve_stack(game)
     assert game.players[0].life == 5
+
+
+# --- W2G5: Darkest Hour and Lingering Mirage — two statics one word apart ---
+from engine import Game, PlayerState
+from engine.models import Permanent
+from tests.helpers import resolve_stack
+
+
+def _g5c_two_seats():
+    alice, bob = PlayerState(name="Alice"), PlayerState(name="Bob")
+    game = Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    return game, alice, bob
+
+
+def test_darkest_hour_makes_every_creature_black_on_both_sides(
+    set_pool, catalog_by_name
+):
+    """"All creatures are black."
+
+    CR 105.3, layer 5: the colour is **set**, not added, so a green creature is
+    black and not green-and-black. Both battlefields, because the sentence
+    names no controller — and a non-creature is the control, since the noun is
+    payload on the row this uses and a scope read too widely would recolour the
+    artifact too.
+    """
+    game, _alice, _bob = _g5c_two_seats()
+    bears = Permanent(card=catalog_by_name["Grizzly Bears"])
+    game._put_permanent_onto_battlefield(1, bears, None)
+    mox = Permanent(card=catalog_by_name["Mox Ruby"])
+    game._put_permanent_onto_battlefield(0, mox, None)
+    assert bears.effective_colors == {"G"}
+
+    game._put_permanent_onto_battlefield(
+        0, Permanent(card=set_pool("USG")["Darkest Hour"]), None
+    )
+    game._recompute_continuous_effects()
+
+    assert bears.effective_colors == {"B"}, "set, not added (CR 105.3)"
+    assert mox.effective_colors == set(), "an artifact is not a creature"
+
+
+def test_darkest_hours_colour_ends_with_the_enchantment(set_pool, catalog_by_name):
+    """The contribution is derived from the source's own text on every
+    recompute, so a source that has left contributes nothing — there is no
+    stamped override to sweep.
+    """
+    game, _alice, _bob = _g5c_two_seats()
+    bears = Permanent(card=catalog_by_name["Grizzly Bears"])
+    game._put_permanent_onto_battlefield(1, bears, None)
+    hour = Permanent(card=set_pool("USG")["Darkest Hour"])
+    game._put_permanent_onto_battlefield(0, hour, None)
+    game._recompute_continuous_effects()
+    assert bears.effective_colors == {"B"}
+
+    game.remove_from_battlefield(hour)
+    game._recompute_continuous_effects()
+
+    assert bears.effective_colors == {"G"}
+
+
+def test_lingering_mirage_makes_the_land_an_island(set_pool, catalog_by_name):
+    """"Enchanted land is an Island."
+
+    Evil Presence's sentence with one word changed, and both halves of the
+    engine read the word wrongly: the support gate matched "a [a-z]+" (Island
+    takes "an") and the application compared against the literal "enchanted
+    land is a swamp". The tap is the assertion, because a type change nothing
+    reads is a card that attaches and does nothing.
+    """
+    game, _alice, bob = _g5c_two_seats()
+    forest = Permanent(card=catalog_by_name["Forest"])
+    game._put_permanent_onto_battlefield(1, forest, None)
+    game.players[0].hand = [set_pool("USG")["Lingering Mirage"]]
+
+    game.cast_from_hand(
+        0, "Lingering Mirage", target_player_index=1, target_permanent_index=0,
+    )
+    resolve_stack(game)
+
+    assert sorted(forest.basic_land_types) == ["island"]
+    assert not forest.has_type("forest"), "CR 305.7 replaces the subtype"
+    game.tap_land_for_mana(1, "Forest", permanent_id=forest.permanent_id)
+    assert bob.mana_pool.get("U") == 1

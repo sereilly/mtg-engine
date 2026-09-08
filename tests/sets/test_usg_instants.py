@@ -78,3 +78,59 @@ def test_w1g1_a_cycling_instant_is_discarded_for_a_card(set_pool, name):
     assert [c.name for c in player.hand] == [name]      # the card drawn
     assert len(player.library) == 3
     assert [p.card.name for p in game.players[1].battlefield] == opponent_board
+
+
+# --- W2G5: Brand — ownership, not control ---
+from engine import Game, PlayerState
+from engine.control import change_control
+from engine.models import Permanent
+from tests.helpers import resolve_stack
+
+
+def test_brand_takes_back_what_an_opponent_stole(set_pool, catalog_by_name):
+    """"Gain control of all permanents you own. (This effect lasts
+    indefinitely.)"
+
+    CR 108.3: ownership is where the card started, wherever it is now — which
+    is the whole of what this card does. Read as a *controller* narrowing the
+    spell would be a blank, so the assertion is a permanent an opponent
+    currently controls coming back, beside one they own staying put.
+    """
+    alice, bob = PlayerState(name="Alice"), PlayerState(name="Bob")
+    game = Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    mine = Permanent(card=catalog_by_name["Grizzly Bears"])
+    game._put_permanent_onto_battlefield(0, mine, None)
+    theirs = Permanent(card=catalog_by_name["Hill Giant"])
+    game._put_permanent_onto_battlefield(1, theirs, None)
+    change_control(mine, 1, source=catalog_by_name["Control Magic"], until_eot=False)
+    game._sync_control()
+    assert game.controller_index_of(mine) == 1
+
+    alice.hand = [set_pool("USG")["Brand"]]
+    game.cast_from_hand(0, "Brand")
+    resolve_stack(game)
+
+    assert game.controller_index_of(mine) == 0
+    assert game.controller_index_of(theirs) == 1, "they own the Giant"
+
+
+def test_brands_control_change_outlives_the_turn(set_pool, catalog_by_name):
+    """"(This effect lasts indefinitely.)" restates CR 611.2a — an effect with
+    no stated duration has no end — so the contribution must not be the
+    until-end-of-turn one, which cleanup drops.
+    """
+    alice, bob = PlayerState(name="Alice"), PlayerState(name="Bob")
+    game = Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    mine = Permanent(card=catalog_by_name["Grizzly Bears"])
+    game._put_permanent_onto_battlefield(0, mine, None)
+    change_control(mine, 1, source=catalog_by_name["Control Magic"], until_eot=False)
+    game._sync_control()
+
+    alice.hand = [set_pool("USG")["Brand"]]
+    game.cast_from_hand(0, "Brand")
+    resolve_stack(game)
+    game.resolve_cleanup_step(0)
+
+    assert game.controller_index_of(mine) == 0

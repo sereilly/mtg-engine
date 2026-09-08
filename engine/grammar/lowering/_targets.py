@@ -211,6 +211,18 @@ def card_divided_shares_payload(effects) -> dict[str, object] | None:
     }
 
 
+def _carries_x_bound(described: object) -> bool:
+    """Whether *described* holds a numeric bound the announcement supplies.
+
+    ``oracle_types``' own predicate, imported rather than re-spelled: the
+    substitution and this refusal have to agree about which payloads carry one,
+    and two spellings of "is there an X in here" is how they come apart.
+    """
+    from ...oracle_types import _carries_x_bound as carries
+
+    return carries(described)
+
+
 def _describe_targets(
     payload: dict[str, object],
     recipient: ast.Recipient,
@@ -226,6 +238,23 @@ def _describe_targets(
     """
     described = _targets_payload(recipient, carried_separately=carried_separately)
     if described is not None:
+        # "target creature with mana value **X**". The bound is resolved at the
+        # dispatch point (`oracle_types.substitute_x_bounds`), which every
+        # *handler* passes through — and the target picker does not: it reads
+        # this description at announcement, off the compiled payload, where the
+        # bound is still the string. Read there it would compare an int against
+        # "x"; dropped it would offer every mana value.
+        #
+        # So a targeted phrase carrying one refuses, exactly as it did before
+        # the bound had any payload form at all, while the sweep that has no
+        # picker (Meltdown, Ugin) is read. No card in either manifest role
+        # prints the targeted shape; this is the boundary that keeps it that
+        # way rather than a refusal anybody is waiting on.
+        if _carries_x_bound(described):
+            raise LoweringError(
+                "a target picker cannot read a bound the announcement supplies",
+                node=recipient,
+            )
         payload["targets"] = described
 
 
