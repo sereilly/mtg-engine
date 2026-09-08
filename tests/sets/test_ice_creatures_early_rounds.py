@@ -1392,10 +1392,36 @@ def test_a_condition_on_a_kind_nothing_asks_about_refuses_the_line(set_pool):
     """The qualifier is attached only to kinds whose enforcement site asks.
     Anywhere else it would be a restriction applied unconditionally — silently,
     and in the direction of doing more than the card says — so the line refuses
-    and its card is unsupported naming the clause."""
+    and its card is unsupported naming the clause.
+
+    **The subject moved rather than the rule.** ``cant_block`` was the example
+    here until Urza's Saga's second wave, when Wirecat ("can't attack or block
+    **if an enchantment is on the battlefield**") made the blocker gate read
+    its clause as an instruction and ask the condition — the same read the
+    attack gate had. So the kind joined
+    :data:`combat_restrictions.CONDITIONAL_RESTRICTION_KINDS` *with* its
+    enforcement, and the pair below is asserted directly: a qualified
+    ``cant_block`` is admitted now because something asks, and a qualified
+    requirement still refuses because nothing does.
+
+    ``must_attack_each_combat`` is the standing example, and it is the right
+    one for the reason this test exists: ``_must_attack_if_able`` reads the
+    kind out of a *set* of instruction kinds, which cannot see a payload at
+    all, so a condition attached to it would be a creature compelled to attack
+    every combat on a clause nobody ever evaluates.
+    """
     from engine.combat_restrictions import combat_restriction_for
 
     assert combat_restriction_for(
-        "this creature can't block as long as you control a snow land"
+        "this creature attacks each combat if able as long as you control a snow land"
     ) is None
+    assert combat_restriction_for("this creature attacks each combat if able") is not None
+    # …and the kind that *is* asked, admitted with its clause on it.
+    admitted = combat_restriction_for(
+        "this creature can't block as long as you control a snow land"
+    )
+    assert admitted is not None and admitted.payload.get("condition") == {
+        "who": "you",
+        "subject": {"type_filter": "land", "supertypes": ["snow"]},
+    }
     assert combat_restriction_for("this creature can't block") is not None

@@ -48,6 +48,31 @@ class CombatDamageStepMixin:
         blockers.update(self.combat_band_blocks.get(attacker_idx, []))
         return sorted(blockers)
 
+    def _defender_assigns_attacker_damage(self, attacker_idx: int) -> bool:
+        """Whether the **defending** player divides this attacker's damage.
+
+        Two rules give the same answer, and this is the one reader both the
+        damage step and ``web/combat_prompts.py`` ask — the property
+        :meth:`_attacker_blocked_by_banding` below already documents about
+        itself, kept as one question now that a second rule reaches it: what a
+        player is offered to divide and what the step then honours must be one
+        set of attackers.
+
+        CR 702.22j is the band. CR 510.1a's "rather than the attacking player"
+        (Defensive Formation) is the other, and it is not a property of the
+        *blockers* at all — it is a permanent the defending player controls, so
+        it reaches every attacker aimed at that seat, banded or not.
+        """
+        if self._attacker_blocked_by_banding(attacker_idx):
+            return True
+        from ..combat_assignment import defender_assigns_all_damage
+
+        defending_index = self.combat_attackers.get(attacker_idx)
+        return (
+            isinstance(defending_index, int)
+            and defender_assigns_all_damage(self, defending_index)
+        )
+
     def _attacker_blocked_by_banding(self, attacker_idx: int) -> bool:
         """CR 702.22j: does the **defending** player divide this attacker's damage?
 
@@ -95,8 +120,10 @@ class CombatDamageStepMixin:
             attacker_idx = int(attacker_idx)
             if self.combat_attackers.get(attacker_idx) != defender_index:
                 return False, "that attacker isn't attacking this player"
-            if not self._attacker_blocked_by_banding(attacker_idx):
-                return False, "attacker is not blocked by a creature with banding"
+            if not self._defender_assigns_attacker_damage(attacker_idx):
+                return False, (
+                    "the attacking player assigns this attacker's damage"
+                )
             if not (0 <= attacker_idx < len(attacker_controller.battlefield)):
                 return False, "attacker index out of range"
             attacker = attacker_controller.battlefield[attacker_idx]
@@ -474,7 +501,7 @@ class CombatDamageStepMixin:
 
             # CR 702.22j: when an attacker is blocked by a creature with banding, the
             # defending player (not the active player) assigns that attacker's damage.
-            if self._attacker_blocked_by_banding(attacker_idx) and attacker_idx in self.combat_banding_damage:
+            if self._defender_assigns_attacker_damage(attacker_idx) and attacker_idx in self.combat_banding_damage:
                 requested = self.combat_banding_damage[attacker_idx]
             else:
                 requested = attacker_damage.get(attacker_idx, {})

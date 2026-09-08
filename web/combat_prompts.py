@@ -71,7 +71,10 @@ def _banding_blocked_attackers(game) -> list[int]:
     for attacker_idx, blockers in by_attacker.items():
         if len(blockers) < 2:
             continue
-        if game._attacker_blocked_by_banding(attacker_idx):
+        # CR 702.22j *or* CR 510.1a's printed substitution (Defensive
+        # Formation), through the one reader the damage step asks — a
+        # second question here would offer a division the step ignored.
+        if game._defender_assigns_attacker_damage(attacker_idx):
             result.append(attacker_idx)
     return sorted(result)
 

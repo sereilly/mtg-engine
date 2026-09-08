@@ -6127,6 +6127,21 @@ def _derived_static_claims(
         for line in (oracle_text or "").splitlines()
     ):
         claims.append(SPELL_CAP_CLAIM)
+    # "Rather than the attacking player, you assign the combat damage of each
+    # creature attacking you." (Defensive Formation.) CR 510.1a's assigner
+    # substituted, read off the board by the combat damage step — so there is no
+    # instruction, and the enchantment's whole text is this sentence plus one
+    # restating CR 510.1c, which means no claim is an unsupported card however
+    # well the substitution works.
+    from .combat_assignment import (DEFENDER_ASSIGNS_CLAIM,
+                                    defender_assigns_line)
+
+    if any(
+        defender_assigns_line(sentence)
+        for line in (oracle_text or "").splitlines()
+        for sentence in line.split(". ")
+    ):
+        claims.append(DEFENDER_ASSIGNS_CLAIM)
     # "Players can't gain life." (Forsaken Wastes, CR 119.7.) The life-gain seam
     # asks this same table on every gain, so there is no instruction to produce
     # — and a permanent whose whole text is the sentence would report
