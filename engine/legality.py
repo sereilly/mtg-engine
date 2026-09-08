@@ -1244,7 +1244,8 @@ class LegalityMixin:
     def _size_activation_x_targets(
         self, controller_index: int, spec: dict, ability, source_permanent
     ) -> None:
-        """Turn an ability's ``x_targets`` flag into CR 601.2c's number.
+        """Fill in what an ability's **defined** X makes knowable: CR 601.2c's
+        number of targets, and CR 601.2d's quantity to divide.
 
         "Destroy up to **X** target nonblack creatures, where X is the number of
         verse counters on this enchantment." (Vile Requiem, Recantation, and the
@@ -1277,18 +1278,38 @@ class LegalityMixin:
 
         Writes ``max_targets`` and drops the flag, exactly as the cast side does
         one question over, so everything downstream reads one key.
+
+        **And the same number sizes a division.** "Prevent the next X damage …
+        to any number of targets, divided as you choose, where X is the number
+        of verse counters on this enchantment." (Serra's Hymn.) CR 601.2d's
+        announcement needs the total *before* the shares are named, and the
+        client's own reader (``dividedDivisionTotal``) asks the spec for it —
+        so an ability whose X is defined has to say it here or the browser falls
+        back to the X box it was never shown and divides nothing. One method for
+        both, because it is one question: what is this ability's X, now, off the
+        board the where-clause names.
         """
-        if not spec.get("x_targets"):
-            return
         instruction = targeting_instruction(getattr(ability, "instruction", None))
         counted = (getattr(instruction, "payload", None) or {}).get("x_from_count")
         if not isinstance(counted, dict):
             return
-        spec.pop("x_targets", None)
-        spec["max_targets"] = max(0, evaluate_count(
+        defined = max(0, evaluate_count(
             self, self.players[controller_index], counted,
             source=source_permanent,
         ))
+        if spec.get("x_targets"):
+            spec.pop("x_targets", None)
+            spec["max_targets"] = defined
+        # ``division_total`` and not ``defined_x``: the client reads the total
+        # first and the announced X only as a fallback, and this X is not
+        # announced at all — an ``defined_x`` here would also make the picker
+        # stop asking for an X on abilities that legitimately want one.
+        if (
+            spec.get("kind") == "divided"
+            and "division_total" not in spec
+            and (getattr(instruction, "payload", None) or {}).get("amount") == "x"
+        ):
+            spec["division_total"] = defined
 
     def activation_target_spec(
         self, controller_index: int, permanent_index: int, ability_index: int | None = None

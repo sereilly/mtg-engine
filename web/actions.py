@@ -379,6 +379,23 @@ def _action_activate(session, req, seat_type):
                 else req.target_permanent_index
             ),
             target_permanent_ids=req.target_permanent_ids,
+            # CR 601.2d's announced division, forwarded exactly as the cast
+            # path's helper forwards it and in the same shape: a two-tuple
+            # where no share was announced (which is what an evenly-divided
+            # ability and every non-interactive caller send) and a three-tuple
+            # where one was. Serra's Hymn is the pool's first ability to print
+            # a division, so this field reached the engine on the cast side
+            # alone until now.
+            divided_targets=(
+                [
+                    (entry.seat, entry.index)
+                    if entry.amount is None
+                    else (entry.seat, entry.index, entry.amount)
+                    for entry in req.divided_targets
+                ]
+                if req.divided_targets
+                else None
+            ),
             target_stack_index=engine_stack_index,
             ability_index=req.ability_index,
             x_value=req.x_value,

@@ -10941,6 +10941,21 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     return;
   }
 
+  // "Prevent the next X damage that would be dealt this turn **to any number of
+  // targets, divided as you choose**." (Serra's Hymn.) CR 601.2d, announced by
+  // an *ability* — the same prompt the cast side runs, with the activation's
+  // source permanent carried beside it, exactly as the several-target and role
+  // branches above it do. Serra's Hymn is the pool's first divided ability, so
+  // this cascade had no branch for one and the activation went out with no
+  // division at all: the shield was armed on nobody and the card reported
+  // success.
+  if (cardRequiresDividedDamage(card)) {
+    startCastDividedPrompt(card, "activate", null, {
+      sourcePermanentIndex: permanentIndex, abilityIndex,
+    });
+    return;
+  }
+
   // An ability naming several targets of **different kinds**, chosen in
   // dependency order (Sorrow's Path: "two target blocking creatures controlled
   // by the same opponent", where the second is settled by whose creature the
@@ -11957,7 +11972,7 @@ function startCastAnyTargetPrompt(card, castAction = "cast", validTargets = null
 // Fireball-style "divided among any number of targets" cast flow. The player
 // accumulates targets (creatures on one side, or a single player's face),
 // confirms, then chooses X — the extra targets are taxed {1} each.
-function startCastDividedPrompt(card, castAction = "cast", validTargets = null) {
+function startCastDividedPrompt(card, castAction = "cast", validTargets = null, extra = {}) {
   const cardName = normalizeCardName(card);
   if (!cardName) return;
   pendingCastTarget = {
@@ -11967,6 +11982,12 @@ function startCastDividedPrompt(card, castAction = "cast", validTargets = null) 
     targetKind: "divided",
     dividedTargets: [], // [{ seat, idx }] creatures — any mix across both seats
     dividedFaces: [], // [seat, ...] player faces — combinable with creatures
+    // Set only for an activated ability, and carried the whole way to the
+    // division confirm — an ability is addressed by its source permanent and
+    // never by a card in hand. Serra's Hymn is the pool's first divided
+    // *ability*, which is why this prompt has been cast-only until now.
+    sourcePermanentIndex: extra.sourcePermanentIndex,
+    abilityIndex: extra.abilityIndex,
     ...pendingTargetFields(card, validTargets),
   };
   renderActivationPrompt();
@@ -12359,6 +12380,11 @@ function confirmDividedTargets() {
     ...(p.dividedFaces || []).map((faceSeat) => ({ seat: faceSeat })),
   ];
   const { card, cardName, castAction } = p;
+  // Read off the prompt before it is cleared below: an activated ability is
+  // addressed by its source permanent, and the division prompt behind this one
+  // is what finally sends the action.
+  const activationSource = p.sourcePermanentIndex;
+  const activationAbility = p.abilityIndex;
   const chosenValidTargets = p.validTargets || [];
   // Volcanic Eruption: X equals the number of chosen targets (Mountains), so there
   // is no separate X prompt — cast straight away with x_value = the count.
@@ -12421,6 +12447,7 @@ function confirmDividedTargets() {
     startCastDivisionPrompt(
       card, cardName, dividedPayload, fixedTotal, castAction || "cast",
       Number.isInteger(definedX) ? definedX : null, chosenValidTargets,
+      { sourcePermanentIndex: activationSource, abilityIndex: activationAbility },
     );
     return;
   }
@@ -12467,11 +12494,18 @@ function evenStartingDivision(total, count) {
   return shares;
 }
 
-function startCastDivisionPrompt(card, cardName, dividedPayload, total, castAction, xValue, validTargets) {
+function startCastDivisionPrompt(
+  card, cardName, dividedPayload, total, castAction, xValue, validTargets, extra = {},
+) {
   pendingCastDivision = {
     card,
     cardName,
     castAction: castAction || "cast",
+    // See `startCastDividedPrompt`: an activated ability is addressed by its
+    // source permanent, so the two fields ride the whole chain rather than
+    // being re-derived at the confirm.
+    sourcePermanentIndex: extra.sourcePermanentIndex,
+    abilityIndex: extra.abilityIndex,
     xValue,
     total,
     entries: dividedPayload.map((entry) => ({
@@ -12523,21 +12557,40 @@ function confirmCastDivision() {
     updateActionHint(`The division must total ${pending.total} (CR 601.2d).`, true);
     return;
   }
-  const body = {
-    seat,
-    action: pending.castAction,
-    card_name: pending.cardName,
-    divided_targets: pending.entries.map((entry, position) => ({
-      seat: entry.seat,
-      ...(Number.isInteger(entry.index) ? { index: entry.index } : {}),
-      amount: pending.shares[position],
-    })),
-  };
+  const shares = pending.entries.map((entry, position) => ({
+    seat: entry.seat,
+    ...(Number.isInteger(entry.index) ? { index: entry.index } : {}),
+    amount: pending.shares[position],
+  }));
+  // An activated ability that divides (Serra's Hymn) is addressed by its source
+  // permanent and its ability index, never by a card name in hand — the same
+  // shape `confirmSeveralTargets` sends, and for its reason.
+  const activating = pending.castAction === "activate";
+  const body = activating
+    ? withPermanentId(
+        {
+          seat,
+          action: "activate",
+          permanent_name: pending.cardName,
+          permanent_index: pending.sourcePermanentIndex,
+          divided_targets: shares,
+        },
+        "permanent_id", seat, pending.sourcePermanentIndex,
+      )
+    : {
+        seat,
+        action: pending.castAction,
+        card_name: pending.cardName,
+        divided_targets: shares,
+      };
+  if (activating && Number.isInteger(pending.abilityIndex)) {
+    body.ability_index = pending.abilityIndex;
+  }
   if (Number.isInteger(pending.xValue)) body.x_value = pending.xValue;
   pendingCastDivision = null;
-  updateActionHint(`Casting ${pending.cardName}...`);
+  updateActionHint(`${activating ? "Activating" : "Casting"} ${pending.cardName}...`);
   sendAction(body)
-    .then(() => updateActionHint(`Cast ${pending.cardName}.`))
+    .then(() => updateActionHint(`${activating ? "Activated" : "Cast"} ${pending.cardName}.`))
     .catch((e) => updateActionHint(e.message, true))
     .finally(() => clearPendingHandCast());
 }
