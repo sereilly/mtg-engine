@@ -30,7 +30,7 @@ def _cast_into(tax: Permanent, spell, mana: dict):
     game = Game(players=[p1, p2])
     game.start_turn(1)
     # After the turn starts, not before: a mana pool empties at every step
-    # boundary (CR 500.4), so a pool filled at construction is gone by the time
+    # boundary (CR 500.5), so a pool filled at construction is gone by the time
     # the spell is cast.
     p2.mana_pool.update(mana)
     result = game.cast_from_hand(1, spell.name, target_player_index=0)

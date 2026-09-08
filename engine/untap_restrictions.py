@@ -421,7 +421,7 @@ def _collapse_self_name(line: str, card_name: str | None) -> str:
     Old Man of the Sea prints "this creature". The grammar's lexer collapses
     the same references to one SELF token; this is that rule for a registry
     that matches on raw text. The forms are the full name and — for a
-    legendary name with a comma — the short name before it (CR 201.4c), the
+    legendary name with a comma — the short name before it (CR 201.5c), the
     same two ``engine/oracle.py``'s ``_self_name_forms`` reads; a copy here
     rather than an import because oracle.py imports this module.
     """

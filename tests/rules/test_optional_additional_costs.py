@@ -9,7 +9,7 @@ taken past what the pool holds is refused by the mana payment itself.
 What makes it a subsystem rather than a flag is that the resolution reads the
 announcement back — "for each additional {1}{R} you paid", "if this spell's
 additional cost was paid" — and by then the mana pool that paid it is empty
-(CR 500.4), so the count on the stack item is the only record there is.
+(CR 500.5), so the count on the stack item is the only record there is.
 
 These tests are about the *rule*; the cards that print it have their own tests
 under ``tests/sets/``.
@@ -226,7 +226,7 @@ def _combat(pay: bool | None) -> Game:
     game.advance_combat_phase()          # declare_attackers
     game.declare_attackers(0, [0, 1])
     if pay is not None:
-        # CR 500.4 empties the pool at the end of each step, so the mana goes in
+        # CR 500.5 empties the pool at the end of each step, so the mana goes in
         # here, in the step the spell is actually cast in.
         defender.mana_pool["G"] = 1
         defender.mana_pool["R"] = 3

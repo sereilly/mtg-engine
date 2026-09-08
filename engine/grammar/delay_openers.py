@@ -406,7 +406,7 @@ def _parse_land_tapped_for_mana(stream: TokenStream) -> "ast.ObjectFilter | None
 
     The active-voice spelling of the event ``trigger_tables`` already reads in
     the passive ("whenever a Mountain **is tapped** for mana"), and the same
-    event: CR 106.11's mana production, announced by the tap seam. Read here
+    event: CR 106.4's mana production, announced by the tap seam. Read here
     rather than there because a delayed ability is created by a resolving
     effect, so the sentence sits inside a statement rather than opening a line.
 

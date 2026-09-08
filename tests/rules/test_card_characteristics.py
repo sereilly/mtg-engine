@@ -1,4 +1,5 @@
-"""CR 105 / 202 / 205 — an object's colours, its mana cost and its types.
+"""CR 105 / 201 / 202 / 205 — an object's colours, its name, its mana cost
+and its types.
 
 Three questions the engine answers from several places, and the reason they are
 tested together is that each has a *printed* answer and a *derived* one:
@@ -7,7 +8,7 @@ tested together is that each has a *printed* answer and a *derived* one:
   intersection, so a colourless permanent shares one with nothing (CR 105.1:
   there are five colours and colourless is not among them), a gold permanent
   answers to each of its colours (CR 105.2b), and a lace *replaces* the whole
-  set rather than adding to it (CR 105.2a). Every one of those is asked of the
+  set rather than adding to it (CR 105.3). Every one of those is asked of the
   layer-5 answer (``permanent_effective_colors``), never of ``card.colors``.
 * **Mana cost** (CR 202) is the one characteristic a card carries in every zone.
   CR 202.1a makes the printed symbols what a player must actually spend, and
@@ -20,6 +21,10 @@ tested together is that each has a *printed* answer and a *derived* one:
   without the card type moving (CR 205.3i); and a supertype survives a type
   change and is never granted by a subtype (CR 205.4b/c — a Tundra given the
   Swamp land type is still a nonbasic land).
+* **Name** (CR 201) is here for the same reason: a card that prints its own name
+  is talking about *that object* (CR 201.5), and the engine has to tell that
+  apart from the same word used as a creature type. Aurochs prints both in one
+  sentence.
 """
 
 from __future__ import annotations
@@ -142,15 +147,16 @@ def test_a_multicolored_permanent_is_each_of_its_colors(catalog_by_name):
     assert _ability_picker(game, paladin) == ["Axelrod Gunnarson"]
 
 
-@pytest.mark.cr("105.2a", "105.2", "613.1e")
+@pytest.mark.cr("105.3", "105.2a", "105.2", "613.1e")
 def test_a_lace_replaces_the_whole_color_set(catalog_by_name):
     """Purelace: "Target spell or permanent **becomes** white."
 
-    "Becomes" is a replacement of the set, not an addition to it (CR 105.2a — the
-    object is afterwards *monocoloured*), so a black-and-red gold creature that
-    has been laced white stops answering "target black permanent" entirely. An
-    implementation that added white would leave it black and the Paladin would
-    still offer it.
+    "Becomes" is a replacement of the set, not an addition to it — CR 105.3 is
+    the rule ("the new color replaces all previous colors the object had",
+    absent an "in addition"), and CR 105.2a is the state it lands in. So a
+    black-and-red gold creature that has been laced white stops answering
+    "target black permanent" entirely. An implementation that added white would
+    leave it black and the Paladin would still offer it.
     """
     game, p1, p2 = _duel()
     paladin = _nosick(Permanent(card=catalog_by_name["Northern Paladin"]))
@@ -723,3 +729,69 @@ def test_a_line_no_effect_touches_is_the_printed_one(catalog_by_name):
         permanent = Permanent(card=card)
         p1.battlefield = [permanent]
         assert displayed_type_line(permanent) == card.type_line, card.name
+
+
+@pytest.mark.cr("105.3", "613.1e")
+def test_a_board_wide_static_sets_colour_rather_than_adding_it(catalog_by_name):
+    """"Nonland permanents you control **are white**." (Celestial Dawn.)
+
+    The same rule as the lace above through a different channel: that one is a
+    one-shot on a target, this is a board-wide static
+    (``engine/global_statics.py``) recomputed every settle. CR 105.3 governs
+    both — a Grizzly Bears under Celestial Dawn is white and **not**
+    green-and-white — and the two paths are exactly where one implementation
+    can set while the other adds.
+    """
+    game, p1, _p2 = _duel()
+    p1.battlefield.append(Permanent(card=catalog_by_name["Celestial Dawn"]))
+    bears = Permanent(card=catalog_by_name["Grizzly Bears"])
+    p1.battlefield.append(bears)
+    game._settle()
+
+    assert bears.card.colors == ("G",)          # as printed
+    assert bears.effective_colors == {"W"}      # as the layers answer
+
+
+@pytest.mark.cr("201.5")
+def test_a_card_naming_itself_is_read_as_the_object_not_as_the_word(catalog_by_name):
+    """"Text that refers to the object it’s on by name means just that
+    particular object."
+
+    Aurochs is the card where both readings are printed in one sentence:
+    "Whenever **Aurochs** attacks, it gets +1/+0 until end of turn for each other
+    attacking **Aurochs**." The first is the creature talking about itself; the
+    second is the creature *type*, and a lord that pumped per copy of itself
+    rather than per Aurochs on the board would be a different card.
+
+    Position decides which, so the collapse is not a blanket substitution: a
+    name in a type slot ("each other attacking …") is left alone.
+    """
+    from engine.oracle import _collapse_self_references
+
+    printed = ("whenever aurochs attacks, it gets +1/+0 until end of turn "
+               "for each other attacking aurochs")
+    collapsed = _collapse_self_references(printed, "Aurochs", "this creature")
+
+    assert collapsed == ("whenever this creature attacks, it gets +1/+0 until "
+                         "end of turn for each other attacking aurochs")
+    # The card itself still compiles off that reading.
+    assert compile_card_oracle(catalog_by_name["Aurochs"]).supported
+
+
+@pytest.mark.cr("201.5c")
+def test_a_legendary_card_may_name_itself_by_its_short_name(catalog_by_name):
+    """"Text printed on some cards refers to that card by a shortened version of
+    its name ... treated as though they used the card’s full name."
+
+    The engine takes the part before the comma, which is the form Legends and
+    every later legend print ("Ugin, the Spirit Dragon" says "Ugin"). A name
+    without a comma has no short form to take — asserted here so the narrowing
+    is a decision on the record rather than an accident of the regex.
+    """
+    from engine.oracle import _self_name_forms
+
+    assert _self_name_forms("Ugin, the Spirit Dragon") == (
+        "ugin, the spirit dragon", "ugin")
+    assert _self_name_forms("Rubinia Soulsinger") == ("rubinia soulsinger",)
+    assert _self_name_forms(None) == ()
+

@@ -473,3 +473,96 @@ def test_one_store_answers_for_a_pt_counter_in_both_directions():
     assert counters_on(perm, "-1/-1") == 1
     assert (perm.effective_power, perm.effective_toughness) == (2, 2)
 # --- end HML W2G4 ---
+
+
+# ---------------------------------------------------------------------------
+# 122.5 — moving a counter is ONE action, not a removal plus a placement
+# ---------------------------------------------------------------------------
+
+
+def _afiya_move():
+    """Afiya Grove's upkeep instruction, off the compiled card."""
+    from engine.card_loader import load_catalog
+    from engine.oracle import compile_card_oracle
+
+    catalog = {c.name: c for c in load_catalog()}
+    program = compile_card_oracle(catalog["Afiya Grove"])
+    move = next(
+        ability.instruction
+        for ability in program.triggered_abilities
+        if ability.instruction.kind == "move_counter_from_self"
+    )
+    return catalog, move
+
+
+def _grove_board(catalog):
+    from engine.models import Permanent
+
+    grove = Permanent(card=catalog["Afiya Grove"])
+    bears = Permanent(card=catalog["Grizzly Bears"])
+    p1 = PlayerState(name="P1", battlefield=[grove, bears])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    return game, p1, grove, bears
+
+
+def _run_move(game, p1, catalog, move, grove, bears):
+    from engine.game_types import OracleExecutionContext
+    from engine.handlers.registry import EFFECT_HANDLERS
+
+    context = OracleExecutionContext(
+        caster=p1, target=p1, card=catalog["Afiya Grove"],
+        source_permanent=grove,
+        target_permanent_id=game.permanent_id_of(bears),
+    )
+    return EFFECT_HANDLERS[move.kind](game, move, context)
+
+
+@pytest.mark.cr("122.5")
+def test_122_5_a_move_with_nothing_to_take_puts_nothing_anywhere():
+    """"If either of these actions isn’t possible, it’s not possible to move a
+    counter, and no counter is removed from or put onto anything."
+
+    Afiya Grove is the card the rule is written for: "move a +1/+1 counter from
+    this enchantment onto target creature", with a second line that sacrifices
+    it once it runs dry. Composed as a removal *then* a placement — which is the
+    obvious spelling and the wrong one — an empty Grove would still hand the
+    creature a counter every upkeep, forever.
+
+    The observable is the **target**, not the source: a source with nothing on
+    it is unchanged either way, so a test watching only the Grove passes on the
+    broken spelling too.
+    """
+    from engine.named_counters import counters_on
+
+    catalog, move = _afiya_move()
+    game, p1, grove, bears = _grove_board(catalog)
+    # The Grove enters with three, but this one has already given them all away.
+    assert counters_on(grove, "+1/+1") == 0
+
+    _run_move(game, p1, catalog, move, grove, bears)
+
+    assert counters_on(grove, "+1/+1") == 0
+    assert counters_on(bears, "+1/+1") == 0
+    assert (bears.effective_power, bears.effective_toughness) == (2, 2)
+
+
+@pytest.mark.cr("122.5", "122.1a")
+def test_122_5_a_move_that_can_happen_takes_from_one_end_and_gives_to_the_other():
+    """The other half of the same rule: when both actions *are* possible the
+    counter leaves the source and arrives on the target — one counter, not two,
+    and the P/T that CR 122.1a hangs on it moves with it.
+    """
+    from engine.named_counters import add_counters, counters_on
+
+    catalog, move = _afiya_move()
+    game, p1, grove, bears = _grove_board(catalog)
+    add_counters(grove, "+1/+1", 3)
+
+    _run_move(game, p1, catalog, move, grove, bears)
+
+    assert counters_on(grove, "+1/+1") == 2
+    assert counters_on(bears, "+1/+1") == 1
+    assert (bears.effective_power, bears.effective_toughness) == (3, 3)
+

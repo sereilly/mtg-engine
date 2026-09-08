@@ -209,11 +209,12 @@ def _pick_mana_alternative(alternatives, context) -> tuple:
 
     That default is a real choice rather than a guess. The alternatives of an
     "Add A or B" carry no cost between them and land in the same pool under the
-    same restriction, and this engine has no mana burn (CR 500.4 empties an
-    unspent pool with no penalty), so more mana of the same kind is never worse
-    than less — Adarkar Unicorn's {C}{U} strictly contains its {U}. Taking the
-    first printed instead, which is what the single-symbol branch above does,
-    would hand a non-interactive seat the smaller half of every such card.
+    same restriction, and this engine has no mana burn (CR 500.5 empties an
+    unspent pool and CR 106.4 makes that a loss with no penalty), so more mana
+    of the same kind is never worse than less — Adarkar Unicorn's {C}{U}
+    strictly contains its {U}. Taking the first printed instead, which is what
+    the single-symbol branch above does, would hand a non-interactive seat the
+    smaller half of every such card.
     """
     chosen = (context.choices or {}).get("mana_alternative")
     if isinstance(chosen, int) and 0 <= chosen < len(alternatives):

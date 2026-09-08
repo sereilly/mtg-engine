@@ -66,7 +66,7 @@ def _line(raw: str) -> str:
 
 
 def _self_forms(card_name: str | None) -> tuple[str, ...]:
-    """The names *card_name* may refer to itself by (CR 201.4c: a legendary
+    """The names *card_name* may refer to itself by (CR 201.5c: a legendary
     name is also spoken as its first word)."""
     if not card_name:
         return ()

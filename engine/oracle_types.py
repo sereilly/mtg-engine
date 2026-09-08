@@ -189,7 +189,7 @@ BLOCK_PAIR_SUBJECT = "block_pair"
 # payments* announced in that same step. CR 601.2c fixes the number of targets
 # as the spell is announced, one step after the payment, so it is knowable at
 # the announcement and nowhere earlier — the pool that paid it is empty by
-# resolution (CR 500.4).
+# resolution (CR 500.5).
 #
 # Here rather than beside any one of its readers: the grammar's lowering writes
 # it, ``engine/targeting.py`` turns it into a picker spec and

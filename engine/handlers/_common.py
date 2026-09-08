@@ -2604,7 +2604,7 @@ def seats_matching_deed(game, context, seats, deed) -> list:
         # (``mixins/turn_management.tap_land_for_mana``) and cleared with the
         # rest of the turn histories. Never a read of the board: a land that
         # untapped, left, or was tapped again for something that is not mana
-        # would answer the wrong question, and CR 106.11's mana is long gone by
+        # would answer the wrong question, and CR 106.4's mana is long gone by
         # the end step this asks in.
         return [
             seat for seat in seats

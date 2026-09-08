@@ -100,7 +100,7 @@ def _forest(name: str = "Forest") -> CardDefinition:
 
     Upkeep costs are paid from floating mana *or* by tapping lands during the
     step (``can_pay_upkeep_mana``), and the step empties the pool when it ends
-    (CR 500.4) — so a tapped land is the observable that survives the
+    (CR 500.5) — so a tapped land is the observable that survives the
     resolution, and asserting on leftover floating mana asserts nothing.
     """
     return CardDefinition(

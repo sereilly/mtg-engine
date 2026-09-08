@@ -1867,7 +1867,7 @@ class SpellCastingMixin:
                         # second lookup that could not succeed.
                         # How many times each CR 601.2b optional additional
                         # cost was taken. The pool is empty by resolution
-                        # (CR 500.4) and the spell is on the stack, so nothing
+                        # (CR 500.5) and the spell is on the stack, so nothing
                         # in the game state can answer "for each additional
                         # {1}{R} you paid" — this is where the announcement
                         # survives, beside the other costs' spoils and for the

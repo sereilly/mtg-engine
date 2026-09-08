@@ -412,7 +412,7 @@ class AdditionalCostPaidCount:
 
     A quantity that is neither a board count nor a history: the caster
     announced it as the spell was cast, and the mana pool that paid it emptied
-    at the end of that step (CR 500.4), so the announcement carried on the stack
+    at the end of that step (CR 500.5), so the announcement carried on the stack
     item is the only thing that can answer. That is why it is its own leaf
     rather than a :class:`BoardCount` name — nothing about the board or the
     turn's record moves this number.

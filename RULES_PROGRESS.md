@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**368 / 616 tracked rules covered (59%)** — 2286 tests, 0 unannotated.
+**371 / 616 tracked rules covered (60%)** — 2294 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -14,7 +14,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [102. Players](#102-players) | 3/4 | 75% |
 | [103. Starting the Game](#103-starting-the-game) | 4/8 | 50% |
 | [104. Ending the Game](#104-ending-the-game) | 5/5 | 100% |
-| [105. Colors](#105-colors) | 2/5 | 40% |
+| [105. Colors](#105-colors) | 3/5 | 60% |
 | [106. Mana](#106-mana) | 7/13 | 53% |
 | [107. Numbers and Symbols](#107-numbers-and-symbols) | 5/18 | 27% |
 | [108. Cards](#108-cards) | 2/6 | 33% |
@@ -31,9 +31,9 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [119. Life](#119-life) | 4/10 | 40% |
 | [120. Damage](#120-damage) | 5/10 | 50% |
 | [121. Drawing a Card](#121-drawing-a-card) | 4/9 | 44% |
-| [122. Counters](#122-counters) | 4/9 | 44% |
+| [122. Counters](#122-counters) | 5/9 | 55% |
 | [200. General](#200-general) | 0/3 | 0% |
-| [201. Name](#201-name) | 1/6 | 16% |
+| [201. Name](#201-name) | 2/6 | 33% |
 | [202. Mana Cost and Color](#202-mana-cost-and-color) | 3/4 | 75% |
 | [205. Type Line](#205-type-line) | 4/4 | 100% |
 | [207. Text Box](#207-text-box) | 0/5 | 0% |
@@ -43,10 +43,10 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [302. Creatures](#302-creatures) | 1/7 | 14% |
 | [303. Enchantments](#303-enchantments) | 7/7 | 100% |
 | [304. Instants](#304-instants) | 0/5 | 0% |
-| [305. Lands](#305-lands) | 3/9 | 33% |
+| [305. Lands](#305-lands) | 4/9 | 44% |
 | [306. Planeswalkers](#306-planeswalkers) | 9/9 | 100% |
 | [307. Sorceries](#307-sorceries) | 1/5 | 20% |
-| [400. General](#400-general) | 6/12 | 50% |
+| [400. General](#400-general) | 5/12 | 41% |
 | [401. Library](#401-library) | 4/7 | 57% |
 | [402. Hand](#402-hand) | 3/3 | 100% |
 | [403. Battlefield](#403-battlefield) | 3/5 | 60% |
@@ -148,7 +148,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **105.1** There are five colors in the Magic game: white, blue, black, red, and green. *(4 tests)*
 - [x] **105.2** An object can be one or more of the five colors, or it can be no color at all. An object is the c... *(8 tests, subrules abc)*
-- [ ] **105.3** Effects may change an object’s color or give a color to a colorless object. If an effect gives an...
+- [x] **105.3** Effects may change an object’s color or give a color to a colorless object. If an effect gives an... *(2 tests)*
 - [ ] **105.4** If a player is asked to choose a color, they must choose one of the five colors. “Multicolored” i...
 - [ ] **105.5** If an effect refers to a color pair, it means exactly two of the five colors. There are ten color...
 
@@ -345,11 +345,11 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 122. Counters
 
-- [x] **122.1** A counter is a marker placed on an object or player that modifies its characteristics and/or inte... *(25 tests, subrules af)*
+- [x] **122.1** A counter is a marker placed on an object or player that modifies its characteristics and/or inte... *(26 tests, subrules af)*
 - [x] **122.2** Counters on an object are not retained if that object moves from one zone to another. The counter... *(1 tests)*
 - [x] **122.3** If a permanent has both a +1/+1 counter and a -1/-1 counter on it, N +1/+1 and N -1/-1 counters a... *(3 tests)*
 - [ ] **122.4** If a permanent with an ability that says it can’t have more than N counters of a certain kind on ...
-- [ ] **122.5** If an effect says to “move” a counter, it means to remove that counter from the object it’s curre...
+- [x] **122.5** If an effect says to “move” a counter, it means to remove that counter from the object it’s curre... *(2 tests)*
 - [x] **122.6** Some spells and abilities refer to counters being put on an object. This refers to putting counte... *(2 tests)*
 - [ ] **122.7** An ability that triggers “When/Whenever the Nth [kind] counter” is put on an object triggers when...
 - [ ] **122.8** If a triggered ability instructs a player to put one object’s counters on another object and that...
@@ -367,7 +367,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **201.2** A card’s name is always considered to be the English version of its name, regardless of printed l... *(2 tests, subrules a)*
 - [ ] **201.3** Some cards with different English names are treated as though they had the same English name. Pai...
 - [ ] **201.4** If an effect instructs a player to choose a card name, the player must choose the name of a card ...
-- [ ] **201.5** Text that refers to the object it’s on by name means just that particular object and not any othe...
+- [x] **201.5** Text that refers to the object it’s on by name means just that particular object and not any othe... *(2 tests, subrules c)*
 - [ ] **201.6** Promotional or alternate-art versions of some cards feature a secondary title bar below the name ...
 
 ### 202. Mana Cost and Color
@@ -450,7 +450,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **305.3** A player can’t play a land, for any reason, if it isn’t their turn. Ignore any part of an effect ...
 - [ ] **305.4** Effects may also allow players to “put” lands onto the battlefield. This isn’t the same as “playi...
 - [ ] **305.5** Land subtypes are always a single word and are listed after a long dash. Land subtypes are also c...
-- [ ] **305.6** The basic land types are Plains, Island, Swamp, Mountain, and Forest. If an object uses the words...
+- [x] **305.6** The basic land types are Plains, Island, Swamp, Mountain, and Forest. If an object uses the words... *(2 tests)*
 - [x] **305.7** If an effect sets a land’s subtype to one or more of the basic land types, the land no longer has... *(23 tests)*
 - [ ] **305.8** Any land with the supertype “basic” is a basic land. Any land that doesn’t have this supertype is...
 - [ ] **305.9** If an object is both a land and another card type, it can be played only as a land. It can’t be c...
@@ -480,7 +480,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **400.1** A zone is a place where objects can be during a game. There are normally seven zones: library, ha... *(4 tests)*
 - [x] **400.2** Public zones are zones in which all players can see the cards’ faces, except for those cards that... *(5 tests)*
 - [x] **400.3** If an object would go to any library, graveyard, or hand other than its owner’s, it goes to its o... *(8 tests)*
-- [x] **400.4** Cards with certain card types can’t enter certain zones. *(1 tests)*
+- [ ] **400.4** Cards with certain card types can’t enter certain zones.
 - [x] **400.5** The order of objects in a library, in a graveyard, or on the stack can’t be changed except when e... *(2 tests)*
 - [ ] **400.6** If an object would move from one zone to another, determine what event is moving the object. If t...
 - [x] **400.7** An object that moves from one zone to another becomes a new object with no memory of, or relation... *(18 tests)*
@@ -516,9 +516,9 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 404. Graveyard
 
-- [x] **404.1** A player’s graveyard is their discard pile. Any object that’s countered, discarded, destroyed, or... *(8 tests)*
-- [ ] **404.2** Each graveyard is kept in a single face-up pile. A player can examine the cards in any graveyard ...
-- [x] **404.3** If an effect or rule puts two or more cards into the same graveyard at the same time, the owner o... *(2 tests)*
+- [x] **404.1** A player’s graveyard is their discard pile. Any object that’s countered, discarded, destroyed, or... *(10 tests)*
+- [x] **404.2** Each graveyard is kept in a single face-up pile. A player can examine the cards in any graveyard ... *(3 tests)*
+- [ ] **404.3** If an effect or rule puts two or more cards into the same graveyard at the same time, the owner o...
 
 ### 405. Stack
 
@@ -662,7 +662,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(236 tests, subrules abcdefghi)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(235 tests, subrules abcdefghi)*
 - [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(26 tests, subrules a)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [x] **601.5** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*
@@ -704,7 +704,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 605. Mana Abilities
 
-- [x] **605.1** Some activated abilities and some triggered abilities are mana abilities, which are subject to sp... *(9 tests, subrules ab)*
+- [x] **605.1** Some activated abilities and some triggered abilities are mana abilities, which are subject to sp... *(10 tests, subrules ab)*
 - [x] **605.2** A mana ability remains a mana ability even if the game state doesn’t allow it to produce mana. *(1 tests)*
 - [x] **605.3** Activating an activated mana ability follows the rules for activating any other activated ability... *(11 tests, subrules abc)*
 - [x] **605.4** Triggered mana abilities follow all the rules for other triggered abilities (see rule 603, “Handl... *(6 tests, subrules a)*
@@ -772,7 +772,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 613. Interaction of Continuous Effects
 
-- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(98 tests, subrules abcdefg)*
+- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(99 tests, subrules abcdefg)*
 - [x] **613.2** Within layer 1, apply effects in a series of sublayers in the order described below. Within each ... *(17 tests, subrules ac)*
 - [ ] **613.3** Within layers 2–6, apply effects from characteristic-defining abilities first (see rule 604.3), t...
 - [x] **613.4** Within layer 7, apply effects in a series of sublayers in the order described below. Within each ... *(73 tests, subrules abcd)*

@@ -201,7 +201,7 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
     # Flowers). Read before the flip branch below, which opens on the same
     # "you" and resets cleanly either way, and read as a *record* rather than
     # a board state for the reason `ast.ManaAddedWithThisAbility` gives: the
-    # mana pool empties at every step (CR 500.4), so nothing but the ability's
+    # mana pool empties at every step (CR 500.5), so nothing but the ability's
     # own note can answer which ability produced anything.
     mana_added = accept_mana_added_with_this_ability(stream)
     if mana_added is not None:

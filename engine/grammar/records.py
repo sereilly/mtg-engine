@@ -556,7 +556,7 @@ def accept_additional_cost_paid(stream: "TokenStream") -> str | None:
     *payment*, which is why it is here beside the sacrificed- and
     exiled-for-cost readers rather than in ``amounts``: CR 601.2b's optional
     additional cost was announced and paid before the spell was ever on the
-    stack, and by resolution the pool that paid it is empty (CR 500.4).
+    stack, and by resolution the pool that paid it is empty (CR 500.5).
 
     A named function rather than an inline branch for
     :func:`accept_sacrificed_for_cost`'s reason, and the same reason twice over

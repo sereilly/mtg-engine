@@ -41,7 +41,7 @@ CHOICE_KEYS = (
     # Paradise); "If this spell's additional cost was paid, …" (Undergrowth).
     # An *offer* the caster took, counted — not an object a cost ate like the
     # channels below, but the same shape and here for the same reason: the mana
-    # pool empties at the end of the step (CR 500.4) and the announcement is the
+    # pool empties at the end of the step (CR 500.5) and the announcement is the
     # only record that the price was paid at all. Keyed by the cost's canonical
     # spelling: ``{"{1}{R}": 2}``.
     "additional_costs_paid",
@@ -103,7 +103,7 @@ CHOICE_KEYS = (
     # CR 107.4b's symbols a printed mana cost actually consumed ("Note the type
     # of mana spent to pay this activation cost", Jeweled Amulet, Ice Cauldron).
     # A symbol dict, and on this channel for the three above's reason: the pool
-    # empties at the end of the step (CR 500.4), so by resolution nothing in the
+    # empties at the end of the step (CR 500.5), so by resolution nothing in the
     # game state can say what paid. Measured as the difference the payment made
     # rather than read off the cost — a generic pip says how much is owed and
     # never which symbol covers it.

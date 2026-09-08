@@ -945,7 +945,7 @@ def optional_cost_key(symbols: str) -> str:
     names it. The step in this case is the *cast* (CR 601.2b), and the record is
     on the stack item's choices rather than in the resolution scratchpad,
     because the mana pool that paid the cost empties at the end of that step
-    (CR 500.4).
+    (CR 500.5).
 
     Through the same two functions ``cast_costs`` spells its offers with
     (``mana_cost_from_symbols`` then ``mana_cost_label``), so the sentence that

@@ -942,10 +942,11 @@ class TurnManagementMixin:
         window in which to be answered: a triggered mana ability resolves
         without using the stack, here, inside the cost payment that tapped the
         land, before the spell being paid for is even announced. Nothing is
-        lost by taking it in this engine — there is no mana burn (CR 500.4
-        empties the pool at every step boundary), and Snowfall's mana is
-        restricted to cumulative upkeep costs, so unspent mana costs its
-        controller nothing. A seat that could be asked would be asked here.
+        lost by taking it in this engine — there is no mana burn (CR 500.5
+        empties the pool at every step boundary and CR 106.4 makes that a loss
+        with no penalty), and Snowfall's mana is restricted to cumulative
+        upkeep costs, so unspent mana costs its controller nothing. A seat that
+        could be asked would be asked here.
         """
         recipient = str(instruction.payload.get("recipient", "that_player"))
         if recipient == "land_controller":

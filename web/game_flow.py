@@ -372,7 +372,7 @@ def _advance_phase(session: Session) -> None:
         # The phase-rail upkeep window has closed — resolve the upkeep itself now,
         # prompting for the trigger decisions deliberately deferred past it. Runs
         # before close_beginning_step so the step's own end (which empties mana
-        # pools, CR 500.4) doesn't strand mana the player floated to pay with.
+        # pools, CR 500.5) doesn't strand mana the player floated to pay with.
         if step == "upkeep" and session.upkeep_decisions_deferred:
             _resume_deferred_upkeep(session, session.current_turn)
             return

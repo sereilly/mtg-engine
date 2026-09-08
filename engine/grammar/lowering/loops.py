@@ -206,7 +206,7 @@ def _lower_for_each_cost_paid(
     :func:`_lower_for_each_life_lost`'s twin, one channel over: a loop whose
     iterator is a number, read off what the *caster announced* as the spell was
     cast (CR 601.2b) rather than off a firing event. It is on the stack item's
-    choices because the pool that paid it is empty by resolution (CR 500.4).
+    choices because the pool that paid it is empty by resolution (CR 500.5).
 
     No event gate, deliberately, where the life-lost loop has one: this number
     is recorded by the casting path for every spell that prints an optional

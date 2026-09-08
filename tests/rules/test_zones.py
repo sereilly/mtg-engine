@@ -372,6 +372,50 @@ def test_404_1_cards_are_put_on_top_of_the_graveyard():
     assert p2.graveyard[-1].name == "Second Bear"  # most recent on top
 
 
+@pytest.mark.cr("404.2", "404.1")
+def test_404_2_each_graveyard_is_one_pile_that_keeps_its_order():
+    """"Each graveyard is kept in a **single** face-up pile ... normally can't
+    change their order."
+
+    Two halves, and the engine has to get both. *Single* is per player: the
+    spells the caster spent and the creatures they killed are two piles, sorted
+    by **owner** and not by who did the killing (CR 404.1's "its owner's
+    graveyard"). *Ordered* is that nothing reshuffles a pile behind the reader's
+    back — the two Terrors land in the order they resolved, so a card asking
+    what is above what (Death Spark, Nether Shadow) has a stable answer.
+
+    Through real casts rather than by appending to the lists, because the claim
+    is about what the engine does on the way in.
+    """
+    terrors = [
+        _mk_card("First Terror", "Instant", "Destroy target creature."),
+        _mk_card("Second Terror", "Instant", "Destroy target creature."),
+    ]
+    p1 = PlayerState(name="P1", hand=terrors)
+    p2 = PlayerState(
+        name="P2",
+        battlefield=[
+            Permanent(card=_mk_creature("First Bear")),
+            Permanent(card=_mk_creature("Second Bear")),
+        ],
+    )
+    game = Game(players=[p1, p2])
+
+    game.cast_from_hand(0, "First Terror", target_player_index=1, target_permanent_index=0)
+    game.cast_from_hand(0, "Second Terror", target_player_index=1, target_permanent_index=0)
+
+    # One pile each, split by owner — no card crossed over.
+    assert [c.name for c in p1.graveyard] == ["First Terror", "Second Terror"]
+    assert [c.name for c in p2.graveyard] == ["First Bear", "Second Bear"]
+
+    # …and "the top card" reads the end of the list, in both piles.
+    from engine.graveyard_order import positions_named
+
+    top = {"count": 1, "position": "top"}
+    assert positions_named(p1.graveyard, top) == [1]
+    assert positions_named(p2.graveyard, top) == [1]
+
+
 # ---------------------------------------------------------------------------
 # Rule 406 — Exile
 # ---------------------------------------------------------------------------
@@ -811,15 +855,21 @@ def test_401_4_a_single_card_going_back_on_top_is_no_arrangement_at_all():
 
 
 # ---------------------------------------------------------------------------
-# CR 404.3 — a graveyard is an ordered zone, and a card can read that order
+# CR 404.2 — a graveyard is an ordered zone, and a card can read that order
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.cr("404.3", "400.4")
-def test_404_3_above_in_a_graveyard_means_later_in_the_pile():
-    """A graveyard is ordered — CR 404.3 lets its owner arrange what goes in at
-    once, and CR 400.4 puts a card on top — so "above" is a real relation three
-    cards in the pool ask about (Death Spark, Krovikan Horror, Nether Shadow).
+@pytest.mark.cr("404.1", "404.2")
+def test_404_2_above_in_a_graveyard_means_later_in_the_pile():
+    """CR 404.1 puts an arriving card on **top**, and CR 404.2 keeps the pile in
+    that order ("normally can't change their order") — which is what gives
+    "above" a meaning at all. Three cards in the pool ask about it (Death Spark,
+    Krovikan Horror, Nether Shadow).
+
+    Not CR 404.3, which these two tests cited for years: that rule is the
+    tie-break for cards arriving *at the same time*, and nothing here puts two
+    cards in at once. ``engine/graveyard_order.py`` carries the same correction
+    and named these as the sites that had copied it.
 
     One reader answers it (``engine/graveyard_order.py``), because the fire site
     and the intervening-if both ask and a second copy of the arithmetic is how
@@ -841,12 +891,16 @@ def test_404_3_above_in_a_graveyard_means_later_in_the_pile():
     assert satisfies_above([bottom, waste, beast], 0, counted)
 
 
-@pytest.mark.cr("404.3", "601.2c")
-def test_404_3_two_copies_of_one_card_are_two_positions():
+@pytest.mark.cr("404.2")
+def test_404_2_two_copies_of_one_card_are_two_positions():
     """A graveyard holds ``CardDefinition`` objects and the loader dedupes by
     ``oracle_id``, so two copies of one card in one pile are the **same Python
     object**. Only the position tells them apart, which is why the reader
-    answers with indices rather than with the card."""
+    answers with indices rather than with the card.
+
+    CR 404.2's single ordered pile is what makes a position an identity; the
+    marker used to read 404.3 (simultaneous arrivals) and 601.2c (announcing a
+    spell's targets), neither of which this exercises."""
     from engine.graveyard_order import positions_satisfying
 
     spark = _mk_card("Spark", "Instant")

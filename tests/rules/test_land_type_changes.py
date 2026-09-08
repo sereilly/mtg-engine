@@ -608,3 +608,67 @@ def test_305_7_a_replacing_static_still_replaces_beside_an_additive_one(set_pool
     game._recompute_continuous_effects()
 
     assert tundra.basic_land_types == ("mountain",), game.log
+
+
+# ---------------------------------------------------------------------------
+# CR 305.6 — the basic land types, and the mana ability each one *is*
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("305.6", "605.1a")
+def test_305_6_the_intrinsic_mana_ability_follows_the_land_type(catalog):
+    """"An object with the land type Plains has the intrinsic ability
+    ‘{T}: Add {W}.’" — and the same for the other four.
+
+    The ability is not printed on a basic; CR 305.6 *gives* it to anything with
+    the type. So changing the type has to change what the land taps for, and a
+    Mountain made an Island makes {U} — not {R}, and not both. Reading the
+    printed type line (or Scryfall’s ``produced_mana``) would keep it making
+    {R}, which is the failure mode this whole module exists for.
+
+    Asserted at the pool as well as at the accessor, because the value the tap
+    seam actually spends is ``effective_produced_mana``.
+    """
+    mountain = Permanent(card=catalog["Mountain"])
+    game, _p1, _p2 = _game(mountain)
+    assert mountain.basic_land_mana == ("R",)
+    assert mountain.effective_produced_mana == ("R",)
+
+    change_land_type(mountain, "island", source="test")
+
+    assert mountain.basic_land_mana == ("U",)
+    assert mountain.effective_produced_mana == ("U",)
+
+    game.tap_land_for_mana(
+        1, "Mountain", "U", permanent_id=game.permanent_id_of(mountain)
+    )
+    pool = game.players[1].mana_pool
+    assert pool["U"] == 1
+    assert pool["R"] == 0
+
+
+@pytest.mark.cr("305.6")
+def test_305_6_pairs_each_basic_land_type_with_its_one_symbol():
+    """"For Plains, [mana symbol] is {W}; for Islands, {U}; for Swamps, {B};
+    for Mountains, {R}; and for Forests, {G}."
+
+    A closed set of five with one symbol each, held in **one** table
+    (``engine/models._LAND_TYPE_MANA``) that ``engine/commander.py`` imports
+    rather than re-spelling — the intrinsic ability is also what gives Badlands
+    a black-red colour identity under CR 903.4 while its printed text is nothing
+    but reminder text.
+
+    Note what is *not* here: "desert" is a land type but not a **basic** one,
+    and ``static_bonuses.BASIC_LAND_WORDS`` carries it for a different question.
+    A test that asserted against that list would pass while claiming a sixth
+    basic type exists.
+    """
+    from engine.models import _LAND_TYPE_MANA
+
+    assert _LAND_TYPE_MANA == {
+        "plains": "W",
+        "island": "U",
+        "swamp": "B",
+        "mountain": "R",
+        "forest": "G",
+    }

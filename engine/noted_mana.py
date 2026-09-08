@@ -4,7 +4,7 @@
 "…note the type **and amount** of mana spent to pay this activation cost."
 (Ice Cauldron.) CR 107.4b's mana symbols are the record: what the ability adds
 later is not "a mana" but *that* mana, and nothing in the game state answers the
-question after the pool has emptied (CR 500.4).
+question after the pool has emptied (CR 500.5).
 
 **The record hangs off the permanent, not off the seat.** The card says "**this
 artifact's** last noted type", so two copies of the same artifact each remember

@@ -898,7 +898,7 @@ def _prejudice_game(set_pool, mine: tuple[str, ...], theirs: tuple[str, ...], ma
     p2 = PlayerState(name="P2", hand=[_prejudice_creature("Threat", theirs)])
     game = Game(players=[p1, p2])
     game.start_turn(1)
-    # After the turn starts: a pool empties at every step boundary (CR 500.4).
+    # After the turn starts: a pool empties at every step boundary (CR 500.5).
     p2.mana_pool.update(mana)
     game.cast_from_hand(1, "Threat")
     game._settle()

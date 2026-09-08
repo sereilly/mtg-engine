@@ -555,7 +555,7 @@ def target_gains_life(game: Game, instruction: OracleInstruction, context: Oracl
     # (Taste of Paradise). CR 601.2b's optional additional cost, taken however
     # many times the caster announced — added to the printed base rather than
     # multiplying it, because the card prints a base gain the offer only tops
-    # up. The pool that paid it emptied at the end of that step (CR 500.4), so
+    # up. The pool that paid it emptied at the end of that step (CR 500.5), so
     # the count on the stack item's choices is the only record; none means the
     # offer was declined, which gains the printed base and nothing more.
     scaled = instruction.payload.get("plus_per_cost_paid")
@@ -653,7 +653,7 @@ def _capped_life_gain(context, instruction, life_gain: int) -> int:
         elif kind == "mana_spent_on_x":
             # "the amount of {B} spent on X" (Soul Burn) — the split the cast
             # chose (CR 601.2h), carried on the stack item because the pool it
-            # came out of is emptied at the end of the step (CR 500.4).
+            # came out of is emptied at the end of the step (CR 500.5).
             spent = (context.choices or {}).get("x_mana_spent") or {}
             life_gain = min(life_gain, max(0, int(spent.get(term.get("symbol"), 0))))
         else:

@@ -106,7 +106,7 @@ def _self_reference_spans(normalized: str, card_name: str | None) -> list[tuple[
     modern templating says "This creature deals…". Both mean the source, so the
     lexer collapses them to one SELF token and the grammar never needs a card
     name. A legendary name with a comma is also referred to by its short name
-    (CR 201.4c: "Ugin, the Spirit Dragon" says "Ugin"), so that form is
+    (CR 201.5c: "Ugin, the Spirit Dragon" says "Ugin"), so that form is
     matched too — full name first, so the short form never splits a longer
     self-reference in half.
 

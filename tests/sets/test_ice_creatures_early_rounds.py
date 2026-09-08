@@ -396,7 +396,7 @@ def test_aurochs_counts_the_creature_type_not_itself(set_pool):
 def test_a_name_that_is_a_creature_type_still_collapses_in_self_position(set_pool):
     """The other half, and the half that must not break: Lhurgoyf's name is a
     creature type too, and "Lhurgoyf's power is equal to…" is the card naming
-    itself (CR 201.4). Only a *type position* is left alone."""
+    itself (CR 201.5). Only a *type position* is left alone."""
     from engine.oracle import _restriction_line
 
     assert _restriction_line(
@@ -784,7 +784,7 @@ def test_cumulative_upkeep_can_be_paid_from_its_own_bucket(set_pool):
     )
 
     # And the pair itself, because by the time the step is over the bucket has
-    # emptied with the pool (CR 500.4) and the count no longer reads back. The
+    # emptied with the pool (CR 500.5) and the count no longer reads back. The
     # purpose is what makes the bucket visible at all: without one the same
     # board cannot pay.
     from engine.restricted_mana import CUMULATIVE_UPKEEP, PaymentPurpose

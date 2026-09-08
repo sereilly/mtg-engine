@@ -1271,7 +1271,7 @@ def buyback_paid(card: CardDefinition, choices: dict | None) -> bool:
     """Whether this cast of *card* paid its buyback cost (CR 702.27a).
 
     *choices* is the resolving stack item's own record — the pool is empty by
-    resolution (CR 500.4) and the announcement is long over, so
+    resolution (CR 500.5) and the announcement is long over, so
     ``additional_costs_paid`` is the only place the answer survives, exactly as
     it is for "for each additional {1}{R} you paid".
 

@@ -173,7 +173,7 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         # "**If this spell's additional cost was paid**, …" (Undergrowth.)
         # CR 601.2b's optional additional cost, asked at resolution about an
         # announcement made while the spell was being cast. The mana pool that
-        # paid it emptied at the end of that step (CR 500.4), so the count the
+        # paid it emptied at the end of that step (CR 500.5), so the count the
         # casting path recorded on the stack item is the only record there is —
         # and a resolution with no record answers False, which is what
         # declining the offer means.
@@ -2980,7 +2980,7 @@ def for_each(game: Game, instruction: OracleInstruction, context: OracleExecutio
     # Paradise) — a number again, off the *cast* rather than off an event or the
     # scratchpad. CR 601.2b's optional additional cost was announced before this
     # spell was ever on the stack, and the pool that paid it emptied at the end
-    # of that step (CR 500.4), so the announcement on the stack item's choices
+    # of that step (CR 500.5), so the announcement on the stack item's choices
     # is the only thing that can answer. Read beside the two counted forms
     # above, before either branch that wants a board to scan.
     repeat_cost = filters.get("repeat_from_cost")

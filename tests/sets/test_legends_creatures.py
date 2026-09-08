@@ -901,7 +901,7 @@ def test_willow_satyr_untapped_in_response_never_starts_the_steal(set_pool):
 
 def test_rubinia_soulsinger_compiles_with_both_her_lines(set_pool):
     """Rubinia spells her own name where Willow Satyr says "this creature" —
-    both mean the source (CR 201.4c), so she compiles to the same steal, and
+    both mean the source (CR 201.5c), so she compiles to the same steal, and
     her optional-untap line is claimed by the untap-restriction registry
     rather than left refusing the card."""
     program = compile_card_oracle(set_pool("LEG")["Rubinia Soulsinger"])

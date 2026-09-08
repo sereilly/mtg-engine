@@ -366,7 +366,7 @@ class EachAdditionalCostPaid:
     a field on that one is where the number comes from: this is an announcement
     the **caster** made as the spell was cast (CR 601.2b), carried on the stack
     item because the mana pool it was paid out of is empty by the time the
-    spell resolves (CR 500.4). Neither the board nor the firing event can
+    spell resolves (CR 500.5). Neither the board nor the firing event can
     answer it.
 
     *symbols* is which offer, because a single sentence may print two of them
@@ -698,7 +698,7 @@ class ManaAddedWithThisAbility:
 
     CR 603.4's intervening-if over a record no board holds. Nothing about the
     enchantment, about the mana pool or about the turn's history says which
-    *ability* a mana came from — CR 500.4 empties the pool at every step — so
+    *ability* a mana came from — CR 500.5 empties the pool at every step — so
     the ability writes it down as it resolves and this clause reads it back
     (``engine/mana_ability_records.py``, where both halves live so the string
     they share cannot be spelled twice).

@@ -31,7 +31,7 @@ def _board(catalog_by_name, *names: str, pool: dict[str, int] | None = None):
     The first permanent is the subject; the rest are its lands. Returned as
     ``(game, seat, subject, lands)`` so a test can read the tapped state off
     the very objects it placed — the step empties the pool when it ends
-    (CR 500.4), so a tapped land is the observable that survives.
+    (CR 500.5), so a tapped land is the observable that survives.
     """
     perms = [Permanent(card=catalog_by_name[name]) for name in names]
     p1 = PlayerState(

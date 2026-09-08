@@ -4134,7 +4134,7 @@ LOYALTY_ANY_TIME_STATIC = (
 
 def _self_name_forms(card_name: str | None) -> tuple[str, ...]:
     """The lowercase name forms a card may refer to itself by: the full name,
-    and — for a name with a comma — the short name before it (CR 201.4c,
+    and — for a name with a comma — the short name before it (CR 201.5c,
     "Ugin, the Spirit Dragon" says "Ugin")."""
     if not card_name:
         return ()
@@ -4171,7 +4171,7 @@ def _collapse_self_references(normalized: str, card_name: str | None, replacemen
 
     A name that is also a **creature type** is left alone where the sentence
     uses it as one — see :data:`_TYPE_POSITION_WORDS`. Everywhere else it is the
-    card naming itself (CR 201.4), the possessive "Lhurgoyf's power" included,
+    card naming itself (CR 201.5), the possessive "Lhurgoyf's power" included,
     which is the form the pool's other such cards print.
     """
     from .grammar.vocabulary import CREATURE_TYPES
@@ -4774,7 +4774,7 @@ def _restriction_line(line: str, card_name: str | None) -> str:
     restriction table is anchored on "this creature", so without this the clause
     matched nothing and the card reported "text too complex" for a template the
     engine implements. The lexer already collapses the same references for the
-    grammar (CR 201.4c's short name included); this is that rule on the
+    grammar (CR 201.5c's short name included); this is that rule on the
     static-line path.
 
     Scoped to this one consult rather than folded into

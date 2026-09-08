@@ -1382,7 +1382,7 @@ class StackResolutionMixin:
                 # CR 702.27a's second static ability, asked here because "as it
                 # resolves" is exactly this step and nowhere else. The answer is
                 # the announcement this cast made, which by now survives only on
-                # the stack item's own record (CR 500.4 emptied the pool).
+                # the stack item's own record (CR 500.5 emptied the pool).
                 hand_instead=buyback_paid(card, choices),
             )
 

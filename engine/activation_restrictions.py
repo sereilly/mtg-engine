@@ -1909,7 +1909,7 @@ def _matching_entry(clause: str) -> "tuple[ActivationRestriction, re.Match[str]]
 
 #: What a card naming itself inside a restriction clause is rewritten to.
 #: "Activate only if **Hakim** isn't enchanted" and "…if **this creature** isn't
-#: enchanted" are one sentence about one object (CR 201.4), so they are one row
+#: enchanted" are one sentence about one object (CR 201.5), so they are one row
 #: here — the alternative is a row per printed name, which is a hook wearing a
 #: regex. The noun is deliberately the generic one: every row that reads a
 #: self-reference matches ``this [a-z]+``, because which noun a card calls
@@ -1925,7 +1925,7 @@ def _clauses(text: str, card_name: str | None = None) -> list[str]:
     line-level reader would never see it on its own.
 
     *card_name* collapses the card's own name to :data:`_SELF_SUBJECT` first.
-    A card may refer to itself by name (CR 201.4) inside one of these clauses,
+    A card may refer to itself by name (CR 201.5) inside one of these clauses,
     and without the collapse the row would have to be written round the name —
     so the clause read as unknown, and the whole ability line was refused by the
     grammar's full-consumption invariant. Optional because the two callers that
@@ -2083,7 +2083,7 @@ def activation_denial(game, controller_index: int, source, ability_text: str) ->
     gate one ability with the other's rule.
     """
     # The name off the *source*, which every caller already has: a permanent's
-    # printed line may name the card (CR 201.4), and a clause left with the name
+    # printed line may name the card (CR 201.5), and a clause left with the name
     # in it matches no row — which for an enforcement path is a restriction
     # silently not applied, this module's own failure mode.
     card = getattr(source, "card", None)

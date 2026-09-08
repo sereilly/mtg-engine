@@ -985,7 +985,7 @@ def _g3_to_beginning_of_combat(game, *, mana=None, seat=1):
     to the declaration would leave the offer unmade and the prompt unarmed.
 
     *mana* fills a seat's pool **after** the step boundary, which is where it
-    has to go: CR 500.4 empties the pool as a step ends, so mana put there
+    has to go: CR 500.5 empties the pool as a step ends, so mana put there
     before the walk is gone by the time the offer is made. A seat with nothing
     to pay with is not offered the choice at all (CR 601.2b), so the pool is
     what makes the decline a decision rather than an inability.

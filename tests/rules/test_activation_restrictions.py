@@ -190,7 +190,7 @@ def test_every_printed_activation_clause_in_the_pool_is_readable():
     **With the card's name**, which this guard did not pass until Mirage's
     promotion and which is the difference between reading the sentence the
     enforcement path reads and reading a different one. A card may name itself
-    inside the clause (CR 201.4) and every real caller collapses that first;
+    inside the clause (CR 201.5) and every real caller collapses that first;
     a guard that does not is a second spelling of the thing it checks, and it
     reported Hakim, Loreweaver's fully-enforced restriction as unenforced. The
     failure looked exactly like a finding, which is what makes this class

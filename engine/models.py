@@ -967,7 +967,7 @@ class PlayerState:
     # Fire and Brimstone is printed for. Reset with the rest of the turn
     # histories.
     attacked_this_turn: bool = False
-    # Whether this seat tapped a land for mana this turn (CR 106.11 /
+    # Whether this seat tapped a land for mana this turn (CR 106.4 /
     # CR 701.26a's event, announced by the one tap seam in
     # `mixins/turn_management.py`). Beside `attacked_this_turn` above and for
     # exactly its reason: Desolation's "each player who tapped a land for mana
