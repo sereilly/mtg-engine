@@ -500,6 +500,13 @@ _DAMAGE_RECIPIENTS: tuple[tuple[tuple[str, ...], str], ...] = (
     (("a", "player"), "a player"),
     (("an", "opponent"), "an opponent"),
     (("a", "planeswalker"), "a planeswalker"),
+    # "…deals combat damage to **defending player**" (Electryte). The seat the
+    # attack was declared against (CR 506.2), which is a relation to the
+    # *combat* rather than to the ability's controller — so it is a row here
+    # beside "an opponent" and a test of its own in `events.py`, not a spelling
+    # of one of the four above. Printed with no article, which is why the tuple
+    # is two words.
+    (("defending", "player"), "defending player"),
     (("you",), "you"),
 )
 

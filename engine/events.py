@@ -950,17 +950,38 @@ def _nonmana_ability_activated_filter(
 # walker half already read — plus the observing permanent's seat, because
 # "you" and "an opponent" are CR 109.5 questions about the trigger's own
 # controller.
+#: What each printed recipient word means, tested against the event's recipient
+#: and the seat that took the damage.
+#:
+#: Every row takes the *game* as well, and only one row reads it — "defending
+#: player" is the one word here that names a relation to the **combat** rather
+#: than to the ability's controller, and no fact carried on the event can
+#: answer it. A widened signature rather than a second table or a parked
+#: reference: five rows ignoring an argument is cheaper than two tables that can
+#: disagree about which words this engine tests.
 _DAMAGE_RECIPIENT_TESTS = {
-    "a player": lambda recipient, seat, observer: _is_player(recipient),
-    "an opponent": lambda recipient, seat, observer: (
+    "a player": lambda game, recipient, seat, observer: _is_player(recipient),
+    "an opponent": lambda game, recipient, seat, observer: (
         _is_player(recipient) and seat != observer
     ),
-    "you": lambda recipient, seat, observer: (
+    "you": lambda game, recipient, seat, observer: (
         _is_player(recipient) and seat == observer
     ),
-    "a planeswalker": lambda recipient, seat, observer: _is_walker(recipient),
-    "a player or planeswalker": lambda recipient, seat, observer: (
+    "a planeswalker": lambda game, recipient, seat, observer: _is_walker(recipient),
+    "a player or planeswalker": lambda game, recipient, seat, observer: (
         _is_player(recipient) or _is_walker(recipient)
+    ),
+    # "…deals combat damage to **defending player**" (Electryte). CR 506.2: the
+    # player the attack was declared against. Deliberately not a spelling of
+    # "an opponent" — in a multiplayer game an attacker's controller has
+    # opponents who are not defending this combat, and the printed word names
+    # exactly the one who is. Outside combat there is no such seat and the word
+    # matches nothing, which is the honest answer for a condition that also
+    # requires combat damage.
+    "defending player": lambda game, recipient, seat, observer: (
+        _is_player(recipient)
+        and seat is not None
+        and seat == getattr(game, "combat_defending_player_index", None)
     ),
 }
 
@@ -1085,7 +1106,9 @@ def _damage_dealt_filter(
         )
     if union_seat is not None:
         if _is_player(recipient):
-            return bool(_DAMAGE_RECIPIENT_TESTS[union_seat](recipient, seat, observer))
+            return bool(
+                _DAMAGE_RECIPIENT_TESTS[union_seat](game, recipient, seat, observer)
+            )
         return trigger_subject_matches(
             game, trig, "damaged", recipient, observer=observer, source=permanent,
         )
@@ -1109,7 +1132,7 @@ def _damage_dealt_filter(
                 observer=observer, source=permanent,
             )
         return True
-    return bool(test(recipient, seat, observer))
+    return bool(test(game, recipient, seat, observer))
 
 
 @event_filter("counters_put_on_creature")

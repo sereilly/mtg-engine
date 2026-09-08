@@ -374,7 +374,12 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      # That is exactly what it did — Mangara's Equity's third sentence compiled
      # to nothing at all.
      r"(?P<damage_recipient>a player or planeswalker|a player"
-     r"|an opponent|a planeswalker|you)"
+     # "…to **defending player**" (Electryte). CR 506.2's seat, printed with no
+     # article — the one recipient word naming a relation to the *combat*
+     # rather than to the ability's controller. Beside the others here because
+     # it is a fixed word like them, and tested in `events.py` against the
+     # attack declaration.
+     r"|an opponent|a planeswalker|defending player|you)"
      # "…deals damage **to a creature**" (Bellowing Fiend). A recipient that is
      # an *object*: none of the fixed words above can say it, because every one
      # of them names a player or a planeswalker. Delimited as a `damaged_subject`

@@ -2623,7 +2623,26 @@ def deal_damage_each_matching(
     from ..subject_filters import subject_matches
 
     card = context.card
-    damage = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+    # "…**it** deals damage equal to its power to each blocking creature."
+    # (Electryte.) A *bite* over a described set: the amount is a read of the
+    # dealer at resolution, not a number the lowering could bake in, which is
+    # why `lowering/_bites.py` emits this kind rather than going through
+    # `_sweeps` — both of that module's sweeps refuse a computed amount outright.
+    #
+    # CR 613's computed power, off the `Permanent` and not the card, so a pump
+    # between the trigger firing and its resolution counts. A dealer that has
+    # left the battlefield deals nothing rather than falling back to a number
+    # the card never printed, which is the rule every other amount channel in
+    # this file follows.
+    biter = (
+        context.source_permanent
+        if instruction.payload.get("amount_from_source_power")
+        else None
+    )
+    if instruction.payload.get("amount_from_source_power"):
+        damage = max(0, biter.effective_power) if biter is not None else 0
+    else:
+        damage = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
     described = instruction.payload.get("filter") or {}
     per_recipient = instruction.payload.get("per_recipient_count")
     caster = context.caster
@@ -2667,7 +2686,13 @@ def deal_damage_each_matching(
             # not dealt to.
             if dealt <= 0:
                 continue
-        apply_damage_to_creature(game, perm, dealt, card)
+        # The **dealer** for a bite is the permanent (CR 119.3): lifelink, "a
+        # source you control" and a "deals damage" trigger all read it, and the
+        # printed `CardDefinition` every other sweep passes is shared by every
+        # copy in the process and answers none of them. Only where the sentence
+        # made the source the dealer — every other sweep here keeps the card it
+        # has always passed.
+        apply_damage_to_creature(game, perm, dealt, biter if biter is not None else card)
         struck.append(f"{perm.card.name} ({dealt})" if per_recipient else perm.card.name)
     if not struck:
         game.log.append(f"{card.name} found nothing to damage")
