@@ -393,6 +393,20 @@ class BecomeCreature:
     #: printed one does. The production checks that each line parses before
     #: admitting the card, so nothing here grants text no reader claims.
     granted_ability_lines: tuple[str, ...] = ()
+    #: "…an Illusion creature with **power and toughness each equal to that
+    #: spell’s mana value**." (Veiled Sentry.) The size is not on the card at
+    #: all: it is a characteristic of the spell the trigger fired on, so
+    #: :attr:`power` and :attr:`toughness` carry nothing and the handler reads
+    #: the trigger’s frozen record. CR 208.2’s "defined by an effect" rather
+    #: than CR 604.3’s characteristic-defining ability — the number is fixed
+    #: as the ability resolves and does not track the spell afterwards.
+    pt_from_triggering_spell: bool = False
+    #: "…a 4/4 Giant creature with **protection from each of that spell’s
+    #: colors**." (Opal Titan.) CR 702.16g’s shorthand for one protection
+    #: ability per colour, and which colours the same frozen record answers —
+    #: a flag rather than a keyword string for that reason: the words are not
+    #: on the card.
+    protection_from_triggering_spell: bool = False
 
 
 #: The colour an effect does not name because CR 608.2d makes the choice part of

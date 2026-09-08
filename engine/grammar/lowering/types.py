@@ -95,6 +95,15 @@ def _lower_become_creature(
                 "the animation sweep cannot test this noun phrase", node=node
             )
         _refuse_indefinite(node, "an animation sweep")
+        if node.pt_from_triggering_spell or node.protection_from_triggering_spell:
+            # Both read the spell a *trigger* fired on, and a sweep of a
+            # described set is printed on no trigger in this pool. Refusing
+            # names the missing piece; admitting it would animate the board at
+            # 0/0 with no protection, which is a card doing strictly less than
+            # it prints.
+            raise LoweringError(
+                "an animation sweep has no triggering spell to read", node=node
+            )
         payload = _animation_payload(node)
         payload.update(described)
         return (OracleInstruction("animate_matching_until_eot", "", payload),)
@@ -162,6 +171,26 @@ def _animation_payload(node: ast.BecomeCreature) -> dict[str, object]:
     }
     if node.colors:
         payload["colors"] = list(node.colors)
+    if node.pt_from_triggering_spell:
+        # "…an Illusion creature with power and toughness each equal to that
+        # spell’s mana value." (Veiled Sentry.) The size is the *event’s*, so
+        # it travels as the count spec every other resolution-time quantity
+        # uses (`handlers/_common.count_from_payload`) rather than as a second
+        # vocabulary only the animation understands — `triggering_spell` is the
+        # object the cast fire site froze on the trigger’s context.
+        payload["pt_count"] = {
+            "object_characteristic": {
+                "object": "triggering_spell",
+                "characteristic": "mana_value",
+                "offset": 0,
+            }
+        }
+    if node.protection_from_triggering_spell:
+        # "…with protection from each of that spell’s colors." (Opal Titan.)
+        # A flag, because the colours are not on the card: CR 105.2 makes them
+        # a characteristic of the spell, read at resolution off the same frozen
+        # record the size above reads.
+        payload["protection_from_triggering_spell_colors"] = True
     if node.granted_ability_lines:
         # "…a 4/4 Serpent creature **with "This creature can't attack unless
         # defending player controls an Island.""** (Veiled Serpent.) Carried,

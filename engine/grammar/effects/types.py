@@ -382,22 +382,31 @@ def _parse_become_creature(
     """
     mark = stream.mark()
     stream.accept_word("a", "an")
+    # **Optional**, because one body in the pool prints no size at all: "…it
+    # becomes an Illusion creature with power and toughness each equal to that
+    # spell’s mana value." (Veiled Sentry.) A body with neither a printed P/T
+    # nor that clause is refused below — a creature with no size is a 0/0 the
+    # next state-based check bins (CR 704.5f).
+    pt_mark = stream.mark()
+    power = toughness = None
     try:
         power, power_negative, toughness, toughness_negative = expect_pt(stream)
     except GrammarError:
-        stream.reset(mark)
-        return None
-    # "…becomes an **X/X** Construct artifact creature" (Chimeric Staff). The
-    # lexer already reads "X/X" as one P/T token and ``parse_pt_pair`` already
-    # produces ``Var``s from it; what refused was this gate. A *negative* one
-    # still refuses — a creature body states a size and never a delta, so a
-    # sign here would be a sentence this production has not understood.
-    if power_negative or toughness_negative or not (
-        isinstance(power, (ast.Fixed, ast.Var))
-        and isinstance(toughness, (ast.Fixed, ast.Var))
-    ):
-        stream.reset(mark)
-        return None
+        stream.reset(pt_mark)
+        power = toughness = None
+    else:
+        # "…becomes an **X/X** Construct artifact creature" (Chimeric Staff).
+        # The lexer already reads "X/X" as one P/T token and ``parse_pt_pair``
+        # already produces ``Var``s from it; what refused was this gate. A
+        # *negative* one still refuses — a creature body states a size and
+        # never a delta, so a sign here would be a sentence this production has
+        # not understood.
+        if power_negative or toughness_negative or not (
+            isinstance(power, (ast.Fixed, ast.Var))
+            and isinstance(toughness, (ast.Fixed, ast.Var))
+        ):
+            stream.reset(mark)
+            return None
     # "…becomes a 2/2 **green** creature that's still a land." (Quirion Druid.)
     # CR 613 layer 5, printed inside the creature body between the P/T and the
     # subtypes, which is where the templating puts it. Read here rather than
@@ -446,18 +455,61 @@ def _parse_become_creature(
         stream.reset(mark)
         return None
     keywords: list[str] = []
+    # "…with **power and toughness each equal to that spell’s mana value**"
+    # (Veiled Sentry) and "…with **protection from each of that spell’s
+    # colors**" (Opal Titan). Two halves of one body read off the *event* the
+    # trigger fired on rather than off the printed line, which is why they are
+    # flags: the words carry no value at all, and the handler asks the trigger
+    # context for the spell.
+    pt_from_spell = False
+    protection_from_spell = False
     if stream.accept_word("with"):
-        while True:
-            keyword = stream.peek_word()
-            if keyword is None or keyword not in IMPLEMENTED_KEYWORDS:
-                break
-            keywords.append(keyword)
-            stream.advance()
-            if not (stream.accept_word("and") or stream.accept_punct(",")):
-                break
-        if not keywords:
-            stream.reset(mark)
-            return None
+        # Both before the keyword loop. "power" is not a keyword and would end
+        # the loop with nothing consumed; "protection" **is** one, so the loop
+        # would take that word and strand "from each of that spell’s colors" —
+        # which is the reading Opal Titan actually got.
+        if stream.accept_phrase("power", "and", "toughness", "each", "equal", "to"):
+            # Only the *triggering spell*’s mana value. "…each equal to **its**
+            # mana value" is the same words about the permanent itself and is
+            # ``_parse_gain_type``’s sentence (Xenic Poltergeist, Karn) — read
+            # here it would take those two cards over and animate the wrong
+            # object’s size. A body that printed a P/T as well states the size
+            # twice and is a sentence nobody prints. Anything else refuses.
+            if power is not None or not stream.accept_phrase(
+                "that", "spell", "'s", "mana", "value"
+            ):
+                stream.reset(mark)
+                return None
+            pt_from_spell = True
+        elif stream.accept_phrase("protection", "from", "each", "of"):
+            # "…**protection from each of that spell’s colors**" (Opal Titan).
+            # CR 702.16g’s shorthand for one protection ability per colour, and
+            # which colours is not on the card — it is a characteristic of the
+            # spell the trigger fired on (CR 105.2), so nothing here can carry
+            # it and the handler reads the event.
+            if not stream.accept_phrase("that", "spell", "'s", "colors"):
+                stream.reset(mark)
+                return None
+            protection_from_spell = True
+        else:
+            while True:
+                keyword = stream.peek_word()
+                if keyword is None or keyword not in IMPLEMENTED_KEYWORDS:
+                    break
+                keywords.append(keyword)
+                stream.advance()
+                if not (stream.accept_word("and") or stream.accept_punct(",")):
+                    break
+            if not keywords:
+                stream.reset(mark)
+                return None
+    if power is None and not pt_from_spell:
+        # A creature body with no size at all — "becomes a Beast creature" —
+        # is a 0/0 the next state-based check bins (CR 704.5f). Refusing keeps
+        # it a sentence nobody has read rather than a card that animates and
+        # dies.
+        stream.reset(mark)
+        return None
     # The addition clause, in any of the three places the pool prints it:
     # before the duration ("…in addition to its other types until end of turn",
     # Riddleform), as a relative clause on the noun itself ("…a 3/3 artifact
@@ -567,10 +619,14 @@ def _parse_become_creature(
     # absence, carried on the node as its own field rather than as
     # ``not in_addition`` so the two claims are separable at every reader.
     return ast.BecomeCreature(
-        subject, _pt_value(power), _pt_value(toughness),
+        subject,
+        0 if power is None else _pt_value(power),
+        0 if toughness is None else _pt_value(toughness),
         tuple(subtypes), tuple(keywords),
         tuple(card_types), tuple(colors), until_eot,
         replaces_types=not in_addition,
+        pt_from_triggering_spell=pt_from_spell,
+        protection_from_triggering_spell=protection_from_spell,
     )
 
 

@@ -8,6 +8,7 @@ from ..delayed_triggers import (END_OF_TURN, DelayedTrigger,
 from ..land_types import MIRE_COUNTER, change_land_type
 from ..auras import BECAME_AURA_ENCHANT, BECAME_AURA_RECORD
 from ..layer_bridge import GAINED_TYPES, SET_CARD_TYPES
+from ..oracle_types import _COLOR_WORD_TO_SYMBOL
 from ..models import CardDefinition, Permanent
 from ..oracle_types import (CHOSEN_TARGET_PERMANENTS, COUNTERS_REMOVED,
                             LAST_TARGET_CONTROLLER,
@@ -26,7 +27,8 @@ from ._common import (BLOCK_PAIR_SUBJECT, SUBJECT_FROM_TRIGGER,
                       one_recorded_permanent_id,
                       per_recipient_amount,
                       permanent_matches_filter,
-                      resolve_amount, resolve_target_permanent,
+                      count_from_payload, resolve_amount,
+                      resolve_target_permanent,
                       resolve_target_permanents, seats_matching_deed)
 from .registry import effect_handler
 
@@ -929,7 +931,8 @@ ANIMATE_INDEFINITELY = "animate_indefinitely"
 #: ``_lower_become_creature`` refuses outright.
 _ANIMATION_PAYLOAD_KEYS = frozenset({
     "power", "toughness", "subtypes", "keywords", "card_types", "colors",
-    "replaces_types", "granted_ability_lines",
+    "replaces_types", "granted_ability_lines", "pt_count",
+    "protection_from_triggering_spell_colors",
 })
 
 
@@ -955,6 +958,55 @@ def _animation_record(payload: dict) -> dict:
         record["replaces_types"] = True
         record["timestamp"] = next_timestamp()
     return record
+
+
+def _animation_size(
+    game: Game, payload: dict, context: OracleExecutionContext
+) -> tuple[int, int]:
+    """The P/T the body states, whichever of the three ways it states it.
+
+    A printed number, an X the activation paid (Chimeric Staff), or — for
+    Veiled Sentry — the mana value of the spell the trigger fired on, read
+    through the same ``count_from_payload`` every other resolution-time
+    quantity goes through. One reader, because all three animation handlers ask
+    the same question and a second copy is a second chance for one of them to
+    answer 0.
+    """
+    counted = payload.get("pt_count")
+    if counted is not None:
+        size = count_from_payload(game, context, counted)
+        return size, size
+    return (
+        resolve_amount(payload.get("power", 0), context.x_value),
+        resolve_amount(payload.get("toughness", 0), context.x_value),
+    )
+
+
+def _grant_animation_protection(
+    perm, payload: dict, context: OracleExecutionContext
+) -> None:
+    """"…with protection from each of that spell's colors." (Opal Titan.)
+
+    CR 702.16g: "protection from each of" a set of qualities is one protection
+    ability per quality, so a colourless spell grants none and a two-coloured
+    one grants two. Written on the ``protection_from_<word>`` channel every
+    other granted protection uses (`mixins/permanent_state._protection_qualities`),
+    so the Titan's shield is read by the same code a printed one is.
+
+    The colours are the spell's as the trigger froze it (CR 603.10): by the
+    time the ability resolves the spell may have resolved or been countered,
+    and the stack cannot be asked.
+
+    No lifetime, because the animation has none — the Titan is a creature for
+    the rest of the game and keeps what its own sentence gave it.
+    """
+    if not payload.get("protection_from_triggering_spell_colors"):
+        return
+    cast_card = (context.trigger_context or {}).get("cast_card")
+    symbols = set(getattr(cast_card, "colors", None) or ())
+    for word, symbol in _COLOR_WORD_TO_SYMBOL.items():
+        if symbol in symbols:
+            perm.metadata[f"protection_from_{word}"] = True
 
 
 def _grant_animation_abilities(
@@ -1044,14 +1096,11 @@ def _animate_self(
     if source is None:
         return False, "ability not implemented"
     payload = instruction.payload
-    # "…becomes an **X/X** Construct artifact creature" (Chimeric Staff): the X
-    # is the one the activation paid, through the same resolver every other
-    # amount in the engine uses. A printed number resolves to itself.
-    power = resolve_amount(payload.get("power", 0), context.x_value)
-    toughness = resolve_amount(payload.get("toughness", 0), context.x_value)
+    power, toughness = _animation_size(game, payload, context)
     set_base_pt(source, power, toughness, until_eot=until_eot)
     source.metadata[record_key] = _animation_record(payload)
     _grant_animation_abilities(source, payload, until_eot=until_eot)
+    _grant_animation_protection(source, payload, context)
     _record_animation_colors(source, payload, until_eot=until_eot)
     game.log.append(
         f"{context.card.name} becomes a {power}/{toughness} creature {duration}"
@@ -1182,11 +1231,11 @@ def _animate_target(
         game.log.append(f"{context.card.name}: no land to animate")
         return True, "resolved"
     payload = instruction.payload
-    power = resolve_amount(payload.get("power", 0), context.x_value)
-    toughness = resolve_amount(payload.get("toughness", 0), context.x_value)
+    power, toughness = _animation_size(game, payload, context)
     set_base_pt(target, power, toughness, until_eot=until_eot)
     target.metadata[record_key] = _animation_record(payload)
     _grant_animation_abilities(target, payload, until_eot=until_eot)
+    _grant_animation_protection(target, payload, context)
     _record_animation_colors(target, payload, until_eot=until_eot)
     game.log.append(
         f"{target.card.name} becomes a {power}/{toughness} creature "
@@ -1226,8 +1275,7 @@ def animate_matching_until_eot(game: Game, instruction: OracleInstruction, conte
         game.players.index(context.caster) if context.caster in game.players else None
     )
     payload = instruction.payload
-    power = resolve_amount(payload.get("power", 0), context.x_value)
-    toughness = resolve_amount(payload.get("toughness", 0), context.x_value)
+    power, toughness = _animation_size(game, payload, context)
     record = _animation_record(payload)
     animated = []
     for permanent in game.all_permanents():
@@ -1239,6 +1287,7 @@ def animate_matching_until_eot(game: Game, instruction: OracleInstruction, conte
         set_base_pt(permanent, power, toughness, until_eot=True)
         permanent.metadata[ANIMATE_UNTIL_EOT] = dict(record)
         _grant_animation_abilities(permanent, payload, until_eot=True)
+        _grant_animation_protection(permanent, payload, context)
         _record_animation_colors(permanent, payload, until_eot=True)
         animated.append(permanent)
     if not animated:
