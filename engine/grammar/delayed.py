@@ -11,11 +11,20 @@ refer back to.
 Those are two subjects, and at Tempest's Phase 0 the second half of that
 sentence became the seam: **which event** the printed opener names is
 `delay_openers`, which this asks and never imports back. What is left is the
-production that *arranges* the ability — :func:`_parse_create_delayed_trigger`,
-the one place the rows become a node — and the three walks over the sentence it
+production that *arranges* the ability and the three walks over the sentence it
 wraps, which are the whole of "what may it refer back to": whether the effect is
 about an object the spell chose, what "that turn" names inside a delay, and the
 following sentence that back-references a flip only the delay produces.
+
+**Arranging it is two functions, one per printed word order**, and until Urza's
+Legacy's Phase 0 this docstring said it was one: it called
+:func:`_parse_create_delayed_trigger` "the one place the rows become a node"
+while the trailing spelling's assembly sat inside `statements`, building the
+same node out of the same rows and calling all three walks up into itself.
+:func:`wrap_in_trailing_delay` is that block, back where the rows and the walks
+already were. It is `delay_openers`' own argument one layer up — the two word
+orders are the same table and the same construction, so a file boundary between
+them costs a reader the comparison and buys no room.
 
 That is also the stable half. Each walk is written against the dataclass fields
 rather than a per-node list, so a statement class added later is covered by
@@ -605,3 +614,150 @@ def resolve_that_turn(node):
             for new, old in zip(rebuilt_items, node)
         )
     return None
+
+
+def wrap_in_trailing_delay(
+    stream: TokenStream,
+    statement,
+    delay,
+    definition,
+    *,
+    parse_statement,
+    parse_body,
+    accept_delayed_toll,
+):
+    """The ability a delay printed **behind** its effect creates (CR 603.7).
+
+    ``parse_statement`` reads a whole sentence and then a trailing delay row;
+    this turns the two into the node. It is the same construction out of the
+    same rows as :func:`_parse_create_delayed_trigger`, which is the leading
+    word order — so the reason ``delay_openers`` gives for keeping both
+    spellings together applies once more, one layer up: the three walks over
+    the wrapped sentence (:func:`resolve_that_turn`, :func:`fold_flip_stakes`,
+    :func:`delay_binds_an_object`) are all defined in this file and every one
+    of them was called from ``statements`` and from nowhere else.
+
+    Which is what this module's docstring got wrong until Urza's Legacy's
+    Phase 0. It called :func:`_parse_create_delayed_trigger` "the one place the
+    rows become a node", and there were two — the second in the module the
+    walks were being imported *up* into. Now there is one file, and the
+    sentence is true.
+
+    The three callables arrive as parameters for this file's stated reason: a
+    delayed trigger contains a whole statement, so the statement layer is
+    handed down rather than imported up. ``accept_delayed_toll`` is
+    ``sentence_clauses``', which sits above this module for that same reason.
+    """
+    event, once, duration, binds, watches = delay
+    if definition is not None:
+        # "…, where X is the number of lands you control **at that time**."
+        # The words decide which of two different cards this is. Inside the
+        # delay the count is taken when the ability *resolves*, which is what
+        # "at that time" says; a card meaning the count as it stood when the
+        # ability was created would need the number frozen at arming time, and
+        # this engine has nowhere to freeze it. So the phrase is required
+        # rather than tolerated, and its absence refuses the line instead of
+        # counting the wrong board.
+        if not stream.accept_phrase("at", "that", "time"):
+            raise stream.error(
+                "a delayed sentence's X must say when it is counted"
+            )
+    statement = resolve_that_turn(statement) or statement
+    # "…you gain 2 life, **and** you return this card from your graveyard to
+    # your hand **at the beginning of the next end step**." (Mangara's
+    # Blessing.) A trailing delay attaches to the clause it follows, not to
+    # the whole sentence: Magic prints a whole-sentence delay as an *opener*
+    # ("At the beginning of …, do X"), which is what `_DELAYED_OPENERS`
+    # reads. So the steps in front of the last one stay where they are, and
+    # the Blessing gains its 2 life as the trigger resolves rather than an
+    # end step later — which on a card printed to be discarded is the
+    # difference between surviving the turn and not.
+    #
+    # Only a sequence built **inside one sentence** is split here, which is
+    # the only kind that reaches this point: sentences separated by a full
+    # stop are joined one layer up, by `_statements_from_sentences`, after
+    # each has already been through this function.
+    #
+    # Split **before** `fold_flip_stakes` below, and that order is the whole
+    # of its safety: that fold *creates* a sequence by pulling the sentence
+    # behind the delay into it (Goblin Kites), and a split run afterwards
+    # would leave the coin flip happening now and delay only the sacrifice.
+    leading: tuple = ()
+    if isinstance(statement, ast.Sequence) and len(statement.steps) > 1:
+        leading, statement = statement.steps[:-1], statement.steps[-1]
+    # "Flip a coin at the beginning of the next end step. **If you lose the
+    # flip, sacrifice that creature.**" (Goblin Kites.) The sentence behind the
+    # delay reads a value only the delayed effect produces, so it belongs inside
+    # the ability rather than beside it — folded before the node is built, which
+    # is what lets `delay_binds_an_object` below see the "that creature" it now
+    # contains.
+    statement = fold_flip_stakes(stream, statement, parse_statement)
+
+    # "…at the beginning of their next upkeep **unless they pay {2} before that
+    # step**." (Sabertooth Cobra.) The toll printed behind the delay rather than
+    # behind the body, so the reader around the body has already stopped by the
+    # time the word arrives. Folded *inside* the delayed ability, because that
+    # is when the offer is made — wrapped around the delay it would ask for the
+    # payment now and delay only the penalty.
+    tolled = accept_delayed_toll(parse_body, stream, statement)
+    if tolled is not None:
+        statement = tolled
+
+    def _delay(effect: ast.Statement) -> ast.CreateDelayedTrigger:
+        return ast.CreateDelayedTrigger(
+            event=event, effect=effect,
+            once=once, duration=duration,
+            # A permission, not the answer — see ``delay_binds_an_object``.
+            binds_target=delay_binds_an_object(binds, effect),
+            subject=None, agent=None,
+            watches=watches,
+        )
+
+    # "**For each** +1/+1 counter you put on a creature this way, remove a +1/+1
+    # counter from that creature **at the beginning of the next cleanup step**."
+    # (Bounty of the Hunt.) The delay is printed after the loop but modifies the
+    # verb *inside* it, so the ability is created once per member (CR 603.7) and
+    # each one is about that member — which is also the only reading that can
+    # work here: left wrapped around the loop, the loop would run a turn later,
+    # by which time the record it iterates is long out of scope and "that
+    # creature" names nobody.
+    if isinstance(statement, ast.ForEach):
+        delayed = dataclasses.replace(statement, effect=_delay(statement.effect))
+    else:
+        delayed = _delay(statement)
+    joined = _accept_conjunct_after_delay(stream, delayed, parse_statement)
+    # The steps the delay does not govern, back in front of it and in the
+    # order they were printed.
+    return ast.Sequence((*leading, joined)) if leading else joined
+
+
+def _accept_conjunct_after_delay(
+    stream: TokenStream, delayed: ast.CreateDelayedTrigger, parse_statement
+) -> ast.Statement:
+    """``… <delay> and <effect>.`` — a second effect the delay does **not**
+    govern.
+
+    "When this creature dies, return it to the battlefield under its owner's
+    control **at the beginning of the next end step** and you skip your next
+    draw step." (Ivory Gargoyle.) The delay is a postfix on the first conjunct
+    and the second belongs to the trigger itself: the skip happens as the death
+    trigger resolves, not at the end step.
+
+    Read here, after the node is built, because that is the only place the
+    scope is unambiguous — the body parser has already stopped, so an "and" it
+    could see would have been swallowed into the delayed half. Before this the
+    word was simply unconsumed text and took the whole line down.
+
+    Returns *delayed* unchanged when no conjunct follows, so every line that
+    parsed before this existed parses identically.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("and"):
+        stream.reset(mark)
+        return delayed
+    try:
+        second = parse_statement(stream, top_level=False)
+    except GrammarError:
+        stream.reset(mark)
+        return delayed
+    return ast.Conjunction((delayed, second))

@@ -475,6 +475,32 @@ PARSE_LAYERS = [
     # `subject_verb` and `effects` and is imported by `statements` alone. The
     # statement layer is handed down as parameters, never imported up.
     "leading_iteration",
+    # Every sentence whose printed first word is "if" — nine spellings that
+    # only wear the word (a mana swap, a replacement, a retarget, a rider) and
+    # the one intervening-if that means it. Split out of `statements` at Urza's
+    # Legacy's Phase 0, when that module stood 14 lines under the guard below
+    # with five parallel groups about to add sentence openings to
+    # `_parse_statement_body`. The seam is one the cascade had drawn for itself:
+    # a contiguous run of ten branches, every one gated on or opening with "if",
+    # and nothing between them was — the same shape `player_verbs` was cut on.
+    #
+    # The generic conditional went with them rather than staying behind,
+    # because it is the fall-through the other nine exist to get in front of;
+    # an ordering split across two files is an ordering neither file can state.
+    # `statements` reads no "if" opener at all now.
+    #
+    # Here rather than under `conditions`: that is the *event* half and is
+    # spoken for on every side (`conditions`, `ast/conditions.py`,
+    # `lowering/conditions.py`), and it may not import a statement production
+    # by its own docstring. `control_flow` is the mirror word for the `if_then`
+    # wrapper these lower through and sits one layer *above* `statements`, so
+    # it cannot be imported from below it either — which is why the name says
+    # what the file reads, `static_lines`' answer to the same collision.
+    #
+    # Below `statements`, which hands down `parse_statement` rather than being
+    # imported back — the inversion `subject_verb`, `delayed`,
+    # `sentence_clauses` and `leading_iteration` all make.
+    "if_openings",
     "statements",
     # A sentence whose subject is a pronoun pointing at the sentence before it
     # ("It gains …", "Untap that creature", "It loses \"enchant creature\""). Split
