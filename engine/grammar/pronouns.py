@@ -22,10 +22,13 @@ from dataclasses import replace
 from . import ast
 from .errors import GrammarError
 from .lexer import PT, QUOTE
-from .effects import _parse_gains, _parse_loses, _parse_put_counter
+from .effects import (_parse_gains, _parse_gets, _parse_loses,
+                      _parse_put_counter)
 from .effects.characteristics import _parse_quoted_abilities
 from .phrases import _accept_self_reference
 from .rebinding import statement_bound_target as _statement_bound_target
+from .rebinding import (statement_bound_several_targets
+                        as _statement_bound_several_targets)
 from .statements import _parse_condition
 from .stream import TokenStream
 from .vocabulary import CARD_TYPES
@@ -63,6 +66,61 @@ def _parse_pronoun_verb_rider(
         stream.reset(mark)
         return None
     return ast.Untap(target)
+
+
+def _parse_plural_pronoun_pump_rider(
+    stream: TokenStream, steps: list[ast.Statement]
+) -> ast.Statement | None:
+    """``Each of them gets +N/+N [duration].`` after a sentence that chose
+    **several** targets.
+
+    "Untap two target creatures. **Each of them** gets +1/+1 until end of turn."
+    (Hope and Glory.) The plural of the "it" the two riders around it bind, and
+    it needs its own production for the reason it needs its own antecedent
+    reader (:func:`rebinding.statement_bound_several_targets`): "each of them"
+    is not a pronoun the subject parser reads at all — the line refused at
+    "expected a subject" — and every reader of the singular binding hands its
+    spec to a lowering that resolves one permanent.
+
+    Read by parsing the pump with the ordinary production once the pronoun has
+    been consumed and the bound spec handed in as its subject, which is the
+    counter rider's method next door and for its reason: "+1/+1", "-0/-2", a
+    "where X is …" tail and the duration are all things ``_parse_gets`` already
+    reads, and a rider that re-spelled the pump would be free to disagree about
+    any of them.
+
+    The bound spec **stays a target**, exactly as
+    :func:`rebinding.rebind_pump_pronoun_to_sentence_target` keeps its own: CR
+    601.2c chose the two creatures once, both steps carry the identical
+    ``targets`` payload, and the picker therefore asks once for the spell rather
+    than twice.
+
+    "Each" is required and is not decorative. Without a distributive word the
+    sentence would be "they get +1/+1", which English also allows and no card in
+    this pool prints; admitting a spelling nobody prints is how a production
+    comes to claim a sentence it has not been checked against.
+    """
+    target = _statement_bound_several_targets(steps[-1]) if steps else None
+    if target is None:
+        return None
+    mark = stream.mark()
+    if not stream.accept_phrase("each", "of", "them"):
+        return None
+    if not stream.at_word("gets", "get"):
+        stream.reset(mark)
+        return None
+    try:
+        statement = _parse_gets(stream, target)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not isinstance(statement, ast.Pump):
+        # "Each of them gets a poison counter" would be a pronoun for a set of
+        # *players*, which this binding cannot mean — put the words back and let
+        # the sentence fail loudly rather than binding it to permanents.
+        stream.reset(mark)
+        return None
+    return statement
 
 
 def _parse_pronoun_counter_rider(

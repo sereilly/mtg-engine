@@ -15,17 +15,16 @@ from __future__ import annotations
 
 import dataclasses
 
-from ...banding import BANDS_WITH_OTHER
-from ...keywords import keyword_ability_name
 from ...oracle_types import OracleInstruction
 from ...subject_filters import untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
-from ..vocabulary import IMPLEMENTED_KEYWORDS, NUMERIC_ARGUMENT_KEYWORDS
+from ..vocabulary import IMPLEMENTED_KEYWORDS
 from ._events import _RECORDED_PERMANENTS, binds_block_pair
 from ._record_keys import CREATED_TOKEN
-from ._common import (_describe_several_targets, _describe_targets, _filter_payload,
-                      _durationless_reason, _is_created_token, _is_landwalk,
+from ._common import (_check_grantable, _describe_several_targets,
+                      _describe_targets, _filter_payload,
+                      _durationless_reason, _is_created_token,
                       _refuse_bare_chosen_ability,
                       _restrictions_beyond, _is_enchanted,
                       _is_source, _is_target, _names_several_targets,
@@ -811,49 +810,3 @@ def _lower_gain_ability_text(
     assert isinstance(node.subject, ast.TargetSpec)
     _describe_targets(payload, node.subject)
     return (OracleInstruction("grant_target_ability_text", "", payload),)
-
-
-LANDWALK = "landwalk"
-
-
-def _check_grantable(keyword: str, node) -> None:
-    """Refuse a grant of a keyword the engine cannot actually give.
-
-    Two questions, and both have to be asked here: whether the *ability* is
-    implemented at all (`grant_keyword` will put any word into layer 6, and a
-    word with no behaviour behind it is a grant of nothing), and whether the
-    keyword's printed argument came with it. "Rampage 2" grants +2/+2 per extra
-    blocker; a bare "rampage" names no N, so there is nothing to grant — the
-    parser leaves the number optional because a *test* for the ability does not
-    want it (CR 702.23a defines the ability, the number parameterises it).
-    """
-    name = keyword_ability_name(keyword)
-    if name not in IMPLEMENTED_KEYWORDS and not _is_landwalk(keyword):
-        raise LoweringError(
-            f"granting {keyword!r} needs the keyword implemented", node=node
-        )
-    # The bare family name, which only a *removal* prints ("loses all 'bands
-    # with other' abilities"). CR 702.22b's ability is the word plus a quality;
-    # granting the family alone would put a word into layer 6 that names no set
-    # of creatures, so the band it created would be one nothing could join —
-    # the grant-of-nothing this function exists to refuse, in the one spelling
-    # the keyword registry cannot catch, since the family word is what the
-    # registry lists.
-    if keyword == BANDS_WITH_OTHER:
-        raise LoweringError(
-            f"granting {keyword!r} needs the quality the band is with", node=node
-        )
-    # The same shape one family over. CR 702.14a's landwalk is the word plus a
-    # land type, so the bare family word names no land and restricts no block
-    # (`landwalk_requirement` answers None for it) — granting it would put a
-    # word into layer 6 that does nothing. A *removal* of it is a real thing and
-    # is what `expand_ability_removal` reads, which is why the refusal is here
-    # and not in the registry.
-    if keyword == LANDWALK:
-        raise LoweringError(
-            f"granting {keyword!r} needs the land type it walks", node=node
-        )
-    if name in NUMERIC_ARGUMENT_KEYWORDS and keyword == name:
-        raise LoweringError(
-            f"granting {keyword!r} needs the printed number it takes", node=node
-        )

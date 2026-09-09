@@ -439,3 +439,65 @@ def test_hammerheim_leaves_other_evasion_alone(set_pool):
     assert result.supported
     assert not game._has_keyword(flier, "forestwalk")
     assert game._has_keyword(flier, "flying")
+
+
+# --- W1G2 (ULG wave 1): Urborg's "or" — a shipped card removing three
+# keywords where it prints one ---
+from engine import Game as _G2Game, PlayerState as _G2PlayerState
+from engine.card_loader import load_cards, manifest_set_paths
+from engine.models import Permanent as _G2Permanent
+from tests.helpers import resolve_stack as _g2_resolve_stack
+
+
+def _g2_urborg_board(set_pool):
+    """Urborg on Alice's board and a creature with both its keywords on Bob's.
+
+    Rime Dryad has swampwalk and nothing else, so the victim is built from the
+    shipped pool: the assertion below needs one creature carrying *both* words
+    the card names, or "it removed only one" cannot be told from "it removed the
+    only one there was".
+    """
+    cached = getattr(_g2_urborg_board, "_g2_pool", None)
+    if cached is None:
+        cached = {}
+        for path in manifest_set_paths():
+            for card in load_cards(path):
+                cached.setdefault(card.name, card)
+        _g2_urborg_board._g2_pool = cached
+    alice, bob = _G2PlayerState(name="Alice"), _G2PlayerState(name="Bob")
+    game = _G2Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    urborg = _G2Permanent(card=set_pool("LEG")["Urborg"])
+    game._put_permanent_onto_battlefield(0, urborg, None)
+    urborg.metadata["summoning_sickness_turn"] = -99
+    victim = _G2Permanent(card=cached["White Knight"])
+    game._put_permanent_onto_battlefield(1, victim, None)
+    from engine.keywords import grant_keyword
+
+    grant_keyword(victim, "swampwalk")
+    return game, victim
+
+
+def test_urborg_removes_one_of_the_two_it_names(set_pool):
+    """"{T}: Target creature loses first strike **or** swampwalk until end of
+    turn."
+
+    CR 608.2d makes that one keyword, chosen while the ability resolves. It
+    removed **both** — the keyword-list reader answers whether the list was
+    joined with "or" and the removal lowering threw the answer away, where the
+    grant beside it has honoured it since Nature's Blessing. A shipped card
+    doing more than it prints, silently and in its controller's favour; found by
+    the whole-pool differential over a ULG round, not by any census.
+    """
+    game, knight = _g2_urborg_board(set_pool)
+    assert knight.has_keyword("first strike") and knight.has_keyword("swampwalk")
+
+    result = game.activate_permanent_ability(
+        0, "Urborg", ability_index=1,
+        target_player_index=1, target_permanent_index=0,
+    )
+    _g2_resolve_stack(game)
+
+    assert result.supported, result.details
+    assert not knight.has_keyword("first strike"), "the first printed option"
+    assert knight.has_keyword("swampwalk"), "the option nobody chose"

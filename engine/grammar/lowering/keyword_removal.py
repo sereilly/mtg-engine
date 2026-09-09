@@ -19,6 +19,8 @@ than to take one — so it is the half that stayed.
 
 from __future__ import annotations
 
+import dataclasses
+
 from ...keywords import keyword_ability_name
 from ...oracle_types import OracleInstruction
 from ...subject_filters import object_only_filter, untestable_filter_keys
@@ -144,6 +146,35 @@ def _lower_lose_keyword(
     _refuse_bare_chosen_ability(node)
     if node.all_abilities:
         return _lower_lose_all_abilities(node)
+    # "loses **your choice of** flying, first strike, or trample" (Walking
+    # Sponge). The exact mirror of ``_lower_gain_keyword``'s first branch, and
+    # it reuses that branch's composition seam rather than inventing a prompt:
+    # `choose_one` is the mode chooser (`engine/handlers/control_flow.py`) a
+    # nested modal effect already resolves through, so there is no new
+    # pending-choice kind, no new web renderer, and the non-interactive default
+    # is the one already stated for a mode — the first printed. Lowering each
+    # alternative back through this same function is what keeps a keyword the
+    # engine cannot remove refusing the whole line rather than being offered as
+    # an option that does nothing.
+    #
+    # Every alternative carries the *same* target payload, because CR 602.2b
+    # chose the target when the ability was activated and only the keyword is
+    # left to pick — so the picker asks once, exactly as it does for the two
+    # arms of Orcish Captain's coin flip.
+    if node.choose_one:
+        modes = []
+        for keyword in node.keywords:
+            alternative = dataclasses.replace(
+                node, keywords=(keyword,), choose_one=False
+            )
+            lowered = _lower_lose_keyword(alternative, event, event_subject)
+            if len(lowered) != 1:
+                raise LoweringError(
+                    "a keyword choice needs one instruction per option",
+                    node=node,
+                )
+            modes.append({"label": keyword, "instruction": lowered[0]})
+        return (OracleInstruction("choose_one", "", {"modes": tuple(modes)}),)
     for keyword in node.keywords:
         # Through the ability's *name*, so a keyword carrying a printed
         # argument is asked about the ability rather than about the argument:

@@ -1287,6 +1287,27 @@ class GameEndingMixin:
                     # empty hand exactly as it does for an opponent's.
                     holds = any(not player.hand for player in self.players)
                     key = ("empty_hand", trig.source_line)
+                elif kind == "controller_life_at_most":
+                    if trig.instruction is None:
+                        continue
+                    # "**When you have 10 or less life**" (Opal Avenger).
+                    # CR 603.8 off a life total, and "you" is the source's
+                    # own controller — the seat this loop already resolved —
+                    # where the empty-hand row above it asks every seat.
+                    # That difference is the printed word, not a policy:
+                    # "a player" is everyone and "you" is one seat.
+                    #
+                    # The threshold is payload, so a card printing another
+                    # number needs no code. A row that somehow arrives
+                    # without one is refused rather than defaulted: a
+                    # missing threshold read as zero would be an animation
+                    # that never fires, and read as any other number would
+                    # be one that fires at a life total the card never named.
+                    threshold = trig.condition.payload.get("life_count")
+                    if not isinstance(threshold, int):
+                        continue
+                    holds = self.players[observer].life <= threshold
+                    key = ("life_at_most", trig.source_line)
                 else:
                     continue
                 announced = permanent.metadata.get("_state_trigger_announced") or set()

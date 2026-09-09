@@ -79,6 +79,25 @@ def _parse_state_trigger_event(
     if stream.accept_phrase("a", "player", "has", "no", "cards", "in", "hand"):
         return ast.TriggerEvent("player_has_no_cards_in_hand", word)
 
+    # "When **you have 10 or less life**, …" (Opal Avenger.) CR 603.8 read
+    # off a life total, and read on this front end for the reason the branch
+    # above it is: both front ends see the whole line, and a condition only
+    # one of them reads leaves the other refusing the effect behind it.
+    #
+    # The threshold is consumed and dropped, exactly as the power branch
+    # below drops its own: `engine/oracle.py`'s table is the front end that
+    # supplies the condition and its payload to the dispatcher, and a number
+    # carried here would be free to disagree with it. Both spellings are
+    # accepted because the lexer gives a printed digit its own token kind,
+    # and "10" is the only spelling the one card printing this uses.
+    life_mark = stream.mark()
+    if stream.accept_phrase("you", "have"):
+        if stream.at_kind(NUMBER) or stream.peek_word() in NUMBER_WORDS:
+            stream.advance()
+            if stream.accept_phrase("or", "less", "life"):
+                return ast.TriggerEvent("controller_life_at_most", word)
+    stream.reset(life_mark)
+
     unpaid_mark = stream.mark()
     if stream.accept_phrase("a", "player", "doesn't", "pay", "this"):
         stream.accept_word(

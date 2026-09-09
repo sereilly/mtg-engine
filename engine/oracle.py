@@ -1333,6 +1333,31 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      r"has no (?P<counter_kind>[-+/0-9a-z]+) counters? on it"),
     ("source_has_keyword",
      r"whenever this creature has (?P<keyword_name>[a-z]+)"),
+    # "**When you have 10 or less life**, if this permanent is an
+    # enchantment, it becomes a 3/5 Soldier creature." (Opal Avenger.)
+    # CR 603.8 asked of a **life total** — the fourth thing this family
+    # reads a state off, beside a counter store, a characteristic and a
+    # hand. Its own kind rather than a seat on `player_has_no_cards_in_hand`
+    # below, for that row's own reason: what is counted is not the same
+    # thing, and the sweep that answers it reads `player.life` rather than
+    # `player.hand`.
+    #
+    # "**You**" is the source's controller and not every seat, which is the
+    # difference from that row and is why the seat is in the pattern rather
+    # than in the payload: Opal Avenger wakes when *its* controller is low,
+    # and a reading that fired on an opponent's life total would animate it
+    # at exactly the wrong moment.
+    #
+    # The threshold is delimited and read by `_NUMBER_WORDS`, so a card
+    # printing another number is payload rather than a second row — and the
+    # character class admits a digit because 10 is the only spelling this
+    # card uses, exactly as `source_power_at_least`'s does for 7.
+    #
+    # In the whenever table under the "when" the card prints, like every
+    # state trigger above it: a kind lives in one table, and this is the one
+    # both printed words reach.
+    ("controller_life_at_most",
+     r"whenever you have (?P<life_count>[a-z0-9]+) or less life"),
     # "**When** a player doesn't pay this enchantment's cumulative upkeep, …"
     # (Thought Lash.) Not a state trigger: CR 702.24a's ability resolves and
     # *fails to be paid* at one identifiable moment, so this is announced from
