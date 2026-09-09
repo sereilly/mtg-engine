@@ -2085,6 +2085,14 @@ class PermanentStateMixin:
                 game.controller_index_of(permanent)
                 == game.controller_index_of(source)
             )
+        if static.applies_to == "permanent":
+            # "**All permanents** are colorless." (Thran Lens.) The widest noun
+            # this table prints, and the one scope with nothing to test:
+            # CR 109.2's description names every object on every battlefield,
+            # its own source included -- which is what the comment in
+            # ``_apply_global_statics`` means by a scope answering on its own
+            # merits rather than by a blanket skip of the source.
+            return True
         if static.applies_to == "creature_you_control":
             if source is None or game is None or not permanent.is_creature:
                 return False

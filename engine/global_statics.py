@@ -64,7 +64,16 @@ class GlobalStatic:
     # layer 5, set rather than added: CR 105.3 replaces every colour the object
     # had. A tuple because a card could print two words, and because a frozen
     # dataclass has to stay hashable.
-    sets_colors: tuple[str, ...] = ()
+    #
+    # ``None`` is "this static says nothing about colour"; the **empty tuple**
+    # is a real answer -- CR 105.2c's colourless ("All permanents are
+    # colorless", Thran Lens), which is the absence of every colour and not a
+    # sixth one. Exactly the ``is not None`` reading ``layer_bridge`` already
+    # documents for the ``color_override`` channel two branches above where
+    # this one is read, and the reason the default is ``None`` rather than
+    # ``()``: were the two spelled the same, every static in this table that is
+    # not about colour would set every permanent it reaches colourless.
+    sets_colors: tuple[str, ...] | None = None
     # "**The same is true** for spells you control and nonland cards you own
     # that aren't on the battlefield." The rest of the same sentence, and a flag
     # rather than a second static because it names no new effect -- it says the
@@ -238,9 +247,24 @@ _TEMPLATES: tuple[tuple[re.Pattern[str], GlobalStatic], ...] = (
         # CR 105.3, layer 5: the colour is **set**, not added — a Grizzly Bears
         # under this is black and not green-and-black — which is what
         # ``sets_colors`` already means for the row above.
+        # **And so is colourless.** "All permanents are colorless." (Thran
+        # Lens.) CR 105.2c: colourless is not a colour, so the sentence sets an
+        # object's colours to *none* rather than to a sixth one -- which is what
+        # the empty ``sets_colors`` above means, and why the printed word rides
+        # in the same group as the five colour words rather than in a row of its
+        # own. The sentence is Darkest Hour's with one noun and one adjective
+        # changed, and a second row would be this module deciding that removing
+        # colour is a different mechanism from replacing it: it is the same
+        # layer, the same timestamp and the same reader.
+        #
+        # ``permanents`` joins the scope alternation for the reason the two
+        # nouns beside it are payload. It is the *widest* noun this table
+        # prints, so it is also the one scope with nothing to test -- see
+        # ``_global_static_applies``, which answers it with no narrowing at all
+        # rather than with a predicate that could answer False for everything.
         re.compile(
-            r"^all (?P<all_scope>artifacts|creatures) are "
-            r"(?P<sets>white|blue|black|red|green)$"
+            r"^all (?P<all_scope>artifacts|creatures|permanents) are "
+            r"(?P<sets>white|blue|black|red|green|colorless)$"
         ),
         GlobalStatic(name="board_wide_color", applies_to=""),
     ),
@@ -299,7 +323,12 @@ def global_static_for(oracle_text: str) -> GlobalStatic | None:
                     applies_to=(
                         scope.rstrip("s") if scope else static.applies_to
                     ),
-                    sets_colors=(sets,),
+                    # CR 105.2c: "colorless" names no colour, so the set is
+                    # empty rather than holding the printed word. Read here,
+                    # where the printed sentence is, so no reader of the field
+                    # has to know that one of the six words it can carry is not
+                    # a colour.
+                    sets_colors=() if sets == "colorless" else (sets,),
                     extends_to_spells_and_cards=bool(groups.get("extends")),
                 )
             granted = groups.get("ability")

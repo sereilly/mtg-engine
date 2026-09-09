@@ -109,8 +109,32 @@ def _compare_count(count: int, op: str, wanted: int | None) -> bool:
     return False
 
 
+def _strict_leader(game: Game, score) -> "int | None":
+    """The living seat *score* puts strictly ahead of every other, or None.
+
+    The arithmetic behind every "more <something> than each other player" this
+    engine reads, in one place because the *rule* is one: "more than" is strict,
+    so a tie names nobody, and players who have lost are not in the comparison
+    at all (CR 800.4a). Written twice, the two copies would be free to disagree
+    about a tie — and a superlative that quietly picks the first of two leaders
+    is a card that answers on a board where the sentence names no one.
+
+    *score* is called with the seat index and reads whatever the sentence
+    counts: a life total, or the permanents that seat controls.
+    """
+    living = [
+        index for index, player in enumerate(game.players) if not player.lost
+    ]
+    if not living:
+        return None
+    scores = {index: int(score(index)) for index in living}
+    best = max(scores.values())
+    leaders = [index for index in living if scores[index] == best]
+    return leaders[0] if len(leaders) == 1 else None
+
+
 def most_life_seat(game: Game) -> "int | None":
-    """The seat strictly ahead of every other living one, or None on a tie.
+    """The seat strictly ahead of every other living one on life, or None.
 
     "…**the player with the most life** gains control of this creature." (Wild
     Dogs, whose intervening-if asks the same question one clause earlier.) One
@@ -120,19 +144,30 @@ def most_life_seat(game: Game) -> "int | None":
 
     A tie names nobody, and that is the printed reading: "more life than each
     other player" is strict, and CR 104.3b's "the player with the most life"
-    has no answer when two are level. Players who have lost are not in the
-    comparison (CR 800.4a).
+    has no answer when two are level.
     """
-    living = [
-        (index, player)
-        for index, player in enumerate(game.players)
-        if not player.lost
-    ]
-    if not living:
-        return None
-    best = max(int(player.life) for _index, player in living)
-    leaders = [index for index, player in living if int(player.life) == best]
-    return leaders[0] if len(leaders) == 1 else None
+    return _strict_leader(game, lambda index: game.players[index].life)
+
+
+def most_permanents_seat(game: Game) -> "int | None":
+    """The seat controlling strictly more permanents than each other, or None.
+
+    "**A player who controls more permanents than each other player** can't
+    play lands or cast artifact, creature, or enchantment spells." (Damping
+    Engine.) The same superlative as :func:`most_life_seat` over a different
+    count, which is why both are one arithmetic: a tie names nobody, so the
+    Engine stops nobody on a level board — and that is the card, not a corner
+    of it.
+
+    Counted through the control seam (CR 613 layer 2), never off
+    ``player.battlefield``: the lists are the *projection* of the derived
+    controller, so a raw read is a second opinion about who controls what — and
+    on a card whose whole effect is a comparison of two such counts, a stolen
+    permanent counted on both sides is the card pointing at the wrong player.
+    """
+    return _strict_leader(
+        game, lambda index: sum(1 for _ in game.controlled_by(index))
+    )
 
 
 def _condition_player(game: Game, context: OracleExecutionContext, whose):

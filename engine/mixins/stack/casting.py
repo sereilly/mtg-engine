@@ -32,6 +32,7 @@ from ...auras import controller_cast_ban
 # one import shadowing the other, silently, with the surviving reader answering
 # the wrong question for both cards.
 from ...cast_restrictions import (check_cast_timing, chosen_name_ban,
+                                  most_permanents_cast_ban,
                                   combat_play_ban,
                                   global_play_timing,
                                   global_cast_ban, own_cast_ban,
@@ -1034,6 +1035,21 @@ class SpellCastingMixin:
         forbidding_permanent = global_cast_ban(self, card)
         if forbidding_permanent is not None:
             details = f"can't cast {card.name}: {forbidding_permanent}"
+            self.log.append(details)
+            return SimulationResult(card.name, False, classification.effect_kind, details)
+
+        # "A player who controls more permanents than each other player can't
+        # play lands or cast artifact, creature, or enchantment spells."
+        # (Damping Engine.) The same CR 601.3a prohibition over a seat the
+        # *board* names rather than the sentence — so it is asked of every
+        # battlefield beside the bans above and binds its own controller the
+        # moment they are the one who is ahead.
+        leading = most_permanents_cast_ban(self, caster_index, card)
+        if leading is not None:
+            details = (
+                f"can't cast {card.name}: {leading} stops the player who "
+                "controls the most permanents"
+            )
             self.log.append(details)
             return SimulationResult(card.name, False, classification.effect_kind, details)
 

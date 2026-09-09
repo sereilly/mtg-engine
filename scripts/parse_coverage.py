@@ -74,7 +74,8 @@ from engine.cast_restrictions import (CAST_RESTRICTIONS,  # noqa: E402
                                       chosen_name_ban_line,
                                       global_cast_ban_line,
                                       global_play_timing_line)
-from engine.cast_restrictions import spell_cap_line  # noqa: E402
+from engine.cast_restrictions import (most_permanents_play_ban_sentence,  # noqa: E402
+                                      spell_cap_line)
 from engine.combat_assignment import defender_assigns_line  # noqa: E402
 from engine.counter_conditions import uncounterable_line  # noqa: E402
 
@@ -393,6 +394,20 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # cannot outlive the ban.
     ("cast_restrictions.py (chosen-name ban)",
      lambda s: chosen_name_ban_line(s)),
+    # "A player who controls more permanents than each other player can't play
+    # lands or cast artifact, creature, or enchantment spells." (Damping
+    # Engine.) CR 601.3a over a seat the board names rather than the sentence,
+    # enforced by `cast_restrictions.most_permanents_cast_ban` from
+    # `mixins/stack/casting.py` and by `most_permanents_land_ban` from
+    # `Game._land_play_refusal`.
+    #
+    # The **sentence** reader, where the support gate and the grammar ask the
+    # *line* one: this census splits a printed line into sentences, and the
+    # CR 116.2d offer behind this one is claimed on its own by the
+    # `special_actions.py (permanent offer)` channel below. Two claims for two
+    # sentences, each asking the code that carries that sentence out.
+    ("cast_restrictions.py (most-permanents play ban)",
+     lambda s: most_permanents_play_ban_sentence(s) is not None),
     # The same shape one rule over — "Activated abilities of creatures can't be
     # activated." (Cursed Totem), CR 602.5's board half, enforced by
     # `activation_restrictions.global_activation_ban` from
