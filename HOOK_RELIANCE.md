@@ -42,7 +42,7 @@ Held at this rate, supporting the 26,113-card release line would need about **45
 | EXO | 143 | 143 (100.0%) | 0 (0.0%) | 207 | 0 (0.0%) | 0 | 0.0 |
 | USG | 335 | 335 (100.0%) | 1 (0.3%) | 486 | 0 (0.0%) | 1 | 0.3 |
 | M21 | 285 | 285 (100.0%) | 0 (0.0%) | 503 | 0 (0.0%) | 0 | 0.0 |
-| ULG *(measured)* | 143 | 134 (93.7%) | 0 (0.0%) | 217 | 0 (0.0%) | 0 | 0.0 |
+| ULG *(measured)* | 143 | 137 (95.8%) | 0 (0.0%) | 220 | 0 (0.0%) | 0 | 0.0 |
 | **Whole pool (shipped, deduped)** | **3427** | **3427 (100.0%)** | **53 (1.5%)** | **5322** | **49 (0.9%)** | **59** | **1.7** |
 
 *(measured)* — ULG are ingested for measurement and **not shipped**: `cards/manifest.json` lists them under `measured`, the engine's catalog does not load them, and no player can put one in a deck. They are reported here and excluded from the ALL row and from the ceilings, because a ratchet over a set nobody has implemented would fire on its composition rather than on anything anyone did. A measured set moves up to `sets` when it is fully supported.

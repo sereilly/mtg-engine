@@ -25,14 +25,10 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**3 unclaimed sentence(s) across 3 supported card(s).**
+**1 unclaimed sentence(s) across 1 supported card(s).**
 
 - **Engineered Plague**
   - `all creatures of the chosen type get -1/-1`
-- **Repopulate**
-  - `shuffle all creature cards from target player's graveyard into that player's library`
-- **Unearth**
-  - `return target creature card with mana value 3 or less from your graveyard to the battlefield`
 
 ## Acknowledged simplifications
 
