@@ -57,9 +57,9 @@ from .quoted_lines import (_ASSIGN_UNBLOCKED_LINE_RE,
                            _parse_emblem_line,
                            _parse_reanimation_aura_line)
 from .rebinding import (bind_recorded_card,
-                        rebind_attachment_pronoun_to_sentence_target,
                         rebind_pronoun_to_event_subject,
                         rebind_combat_role_to_event_subject)
+from .sentence_rebinding import rebind_attachment_pronoun_to_sentence_target
 from .registries import registry_for_line
 # The sentence loop left for `sequences` at the thousand-line guard, and this
 # import is also its re-export: the name keeps its old address, which is the

@@ -313,11 +313,45 @@ PARSE_LAYERS = [
     # branches both added a definition. The name re-forms the mirror
     # `lowering/where_x.py` has had since round 23.
     "where_x",
-    # Which object a bare "it" in an effect names. Under `triggers` because
-    # only one of its two rebinders is about a trigger and neither needs a
+    # Which object a bare "it" in an effect names, when the antecedent is
+    # **outside** the sentence — a trigger's condition described it, the firing
+    # event carried it, an intervening-if recorded a card. Under `triggers`
+    # because only one of its rebinders is about a trigger and none needs a
     # production: the walk is about the shape of the AST, so it imports `ast`
-    # and nothing else.
+    # and nothing else. It also holds `_walk_specs`, the AST walk both halves
+    # rewrite through, which is the **whole** edge between them.
     "rebinding",
+    # The same question when the antecedent is **in the same sentence**: a
+    # target the statement itself announced — the delay's own opener, the
+    # clause in front of it, the previous sentence of the printed line, the
+    # arm of an alternative. Split out of `rebinding` at the thousand-line
+    # guard, on a seam that was measured rather than inherited: no function in
+    # either half calls one in the other, and the whole edge between them is
+    # one name. The readers were attributed to their callers rather than left
+    # in a shared pile — `_announced_target` and `_names_a_target` are read by
+    # the in-sentence rebinders and by nothing else, so they came up here,
+    # while `statement_bound_target` stayed below where the condition side and
+    # `pronouns` / `riders` read it. 493 lines stay and 541 leave, from 977.
+    #
+    # The two are one *question* and two design problems, which is the honest
+    # reason they are two files. An out-of-sentence antecedent is found by
+    # asking the condition — one object, known before the effect is read. An
+    # in-sentence one is found by walking the statement being rewritten and
+    # deciding how far the word reaches, so every rebinder here carries a
+    # paragraph about its own narrowness and one of them
+    # (`rebind_pump_pronoun_to_sentence_target`) has a whole-pool differential
+    # behind it: eight shipped cards print a bare "it" after a targeting
+    # sentence and already play correctly, so a walk that rewrote every spec
+    # broke all eight.
+    #
+    # No mirror name to reuse — `back_references` one layer down is the
+    # *production* answer to a bound noun and says so in its own docstring,
+    # and no lowering family carries this subject. **Nothing is re-exported**:
+    # the five callers import from here directly, because a re-export would be
+    # an upward import from the layer below and the guard would refuse it —
+    # the one case where the `prices` / `readers` arrangement further down
+    # this list cannot be copied.
+    "sentence_rebinding",
     # Trigger events whose subject the sentence *names* — the source, or the
     # permanent the source is attached to — rather than quantifying it. Split
     # out of `triggers` at the size guard below, along the boundary that module

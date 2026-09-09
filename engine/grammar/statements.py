@@ -37,8 +37,8 @@ from .where_x import accept_cast_time_marker, parse_where_x_definition
 from .subject_verb import parse_subject_verb
 from .leading_iteration import parse_leading_iteration
 from .if_openings import parse_if_opening
-from .rebinding import (rebind_alternative_pronoun_to_choice_target,
-                        rebind_counter_pronoun_to_bound_target)
+from .rebinding import rebind_counter_pronoun_to_bound_target
+from .sentence_rebinding import rebind_alternative_pronoun_to_choice_target
 from .phrases import (_accept_conjoined_life_cost, _accept_life_only_offer,
                       _parse_duration, _parse_mana_payment)
 from .effects import (_parse_damage_becomes_counter_removal,

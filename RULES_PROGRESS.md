@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**411 / 617 tracked rules covered (66%)** — 2380 tests, 0 unannotated.
+**411 / 617 tracked rules covered (66%)** — 2386 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -666,7 +666,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(239 tests, subrules abcdefghi)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(241 tests, subrules abcdefghi)*
 - [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(26 tests, subrules a)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [x] **601.5** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*
@@ -685,7 +685,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **603.1** Triggered abilities have a trigger condition and an effect. They are written as “[When/Whenever/A... *(2 tests, subrules b)*
 - [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(26 tests, subrules bd)*
-- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(47 tests, subrules bcd)*
+- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(54 tests, subrules bcd)*
 - [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(14 tests)*
 - [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(6 tests)*
 - [x] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit... *(3 tests, subrules c)*
@@ -892,7 +892,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.20** Vigilance *(2 tests, subrules b)*
 - [x] **702.22** Banding *(35 tests, subrules abcdefghjk)*
 - [x] **702.23** Rampage *(6 tests, subrules abc)*
-- [x] **702.24** Cumulative Upkeep *(28 tests, subrules ab)*
+- [x] **702.24** Cumulative Upkeep *(31 tests, subrules ab)*
 - [x] **702.25** Flanking *(6 tests, subrules ab)*
 - [x] **702.26** Phasing *(16 tests, subrules adfgim)*
 - [x] **702.27** Buyback *(7 tests, subrules a)*

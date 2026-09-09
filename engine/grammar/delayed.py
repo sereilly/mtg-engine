@@ -55,7 +55,7 @@ from .delay_openers import (_DELAYED_OPENERS, _delayed_bound_subject,
 from .errors import GrammarError
 from .conditions import _parse_condition
 from .nouns import parse_object_filter
-from .rebinding import rebind_pronoun_to_delay_target
+from .sentence_rebinding import rebind_pronoun_to_delay_target
 from .stream import TokenStream
 
 
