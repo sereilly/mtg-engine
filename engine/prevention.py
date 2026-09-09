@@ -927,12 +927,16 @@ def _applies_combat_to_and_by(game, event: dict) -> bool:
 # Shields
 # ---------------------------------------------------------------------------
 #
-# The first two are turn-wide flags rather than shields a recipient holds, which
-# is why they read a game flag and a permanent's marker instead of the
-# collection: nothing is consumed, so there is no charge, no lifetime and no
-# remaining-uses bookkeeping for a Shield to carry. The directional one also has
-# to be readable off the damage's *source* ("dealt to and dealt by"), which a
-# recipient-keyed collection cannot express.
+# Protection comes first and is the extreme case of the pattern the next few
+# share: it holds no charge at all, because it is a static ability of the
+# damaged object rather than something armed onto it.
+#
+# The two combat blankets after it are turn-wide flags rather than shields a
+# recipient holds, which is why they read a game flag and a permanent's marker
+# instead of the collection: nothing is consumed, so there is no charge, no
+# lifetime and no remaining-uses bookkeeping for a Shield to carry. The
+# directional one also has to be readable off the damage's *source* ("dealt to
+# and dealt by"), which a recipient-keyed collection cannot express.
 
 def _applies_protection(game, event: dict) -> bool:
     """CR 702.16e: is the recipient protected from a quality this source has?
@@ -940,11 +944,11 @@ def _applies_protection(game, event: dict) -> bool:
     **The one place the damage half of protection is asked**, and it took the
     engine until now to have one. It used to be four early returns inside the
     combat damage step and a fifth inside the player-damage path, each of which
-    skipped the damage event entirely rather than preventing it — so a Black
-    Knight took its full 3 from a Pestilence, an Earthquake and a Ankh of
-    Mishra, and had done for the life of this engine. ``deal_damage`` is the
-    seam every damage path goes through (CR 120.4), and this is the rule read
-    there instead.
+    skipped the damage event entirely rather than preventing it — so a White
+    Knight took its point from a Pestilence, a Subterranean Spirit swept itself
+    with its own red ability, and both had done so for the life of this engine.
+    ``deal_damage`` is the seam every damage path goes through (CR 120.4), and
+    this is the rule read there instead.
 
     Prevention rather than a skip, because that is the rule's own word: "Any
     damage that would be dealt … **is prevented**". Two consequences fall out

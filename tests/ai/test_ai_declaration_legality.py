@@ -176,3 +176,43 @@ def test_a_lethal_swing_is_pruned_to_a_legal_one(set_pool):
     ok, why = game.declare_attackers(0, proposed, defending_player_index=1)
     assert ok, why
     assert proposed, "attacking with nobody is not a lethal swing"
+
+
+def test_the_ai_can_declare_at_one_seat_of_three_under_a_per_defender_cap(set_pool):
+    """A free-for-all is the one table where the engine cannot fill the map in.
+
+    `choose_attackers` sends every attacker at one chosen opponent even with
+    three seats, so a Crawlspace at *that* seat caps the declaration — and
+    `attack_declaration_refusal` asked with no `defenders` map and more than one
+    living opponent declines to guess which seat is being attacked, because
+    guessing would refuse legal declarations. So the AI has to say. Without
+    that, the prune sees only the global cap, the declaration is refused whole
+    for the per-defender one, and the seat is back to attacking with nobody.
+    """
+    seats = [PlayerState(name="P1"), PlayerState(name="P2"), PlayerState(name="P3")]
+    attackers = [
+        Permanent(card=_mk_creature_card(name, power, power))
+        for name, power in (("Runt", 1), ("Middling", 2), ("Fatty", 4))
+    ]
+    seats[0].battlefield.extend(attackers)
+    # On both defenders, so whichever the AI picks is capped.
+    for seat in seats[1:]:
+        seat.battlefield.append(Permanent(card=set_pool("ULG")["Crawlspace"]))
+    game = Game(players=seats)
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    for permanent in attackers:
+        _nosick(permanent)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.current_step == "declare_attackers"
+
+    from engine.ai_policy import choose_attack_target
+
+    target = choose_attack_target(game, 0)
+    proposed = choose_attackers(game, 0)
+    ok, why = game.declare_attackers(0, proposed, defending_player_index=target)
+
+    assert ok, f"proposed {proposed} at seat {target}: {why!r}"
+    assert len(proposed) == 2, proposed

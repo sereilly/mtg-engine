@@ -669,7 +669,8 @@ def legal_attackers(game: Game, attacking_player_index: int, against: int | None
 
 
 def _legal_declaration(
-    game: Game, attacking_player_index: int, chosen: list[int]
+    game: Game, attacking_player_index: int, chosen: list[int],
+    *, against: int | None = None,
 ) -> list[int]:
     """*chosen*, pruned until the **declaration** itself is legal (CR 508.1c).
 
@@ -695,6 +696,12 @@ def _legal_declaration(
     inside the rules engine. So the list is handed over weakest-last, and the
     surviving indices come back in their original order, which is what makes
     this a cap the AI attacks *under* rather than one it attacks *through*.
+
+    *against* is the seat this declaration is aimed at, which the per-defender
+    cap needs and the global one does not. It matters only at a table with more
+    than two living players: with one opponent the engine fills it in, and with
+    several it cannot guess, so a free-for-all declaration would be pruned
+    against the global cap alone and then refused whole for the other.
     """
     # Through the seam (`permanent_at`), which is where an index becomes a
     # permanent: the AI carries slots because that is what the declaration takes,
@@ -709,7 +716,19 @@ def _legal_declaration(
     # is a set, and it is returned in the caller's order below.
     pruned.sort(key=lambda entry: -_permanent_value(entry[1]))
     while pruned:
-        refusal = game.attack_declaration_refusal([perm for _idx, perm in pruned])
+        refusal = game.attack_declaration_refusal(
+            [perm for _idx, perm in pruned],
+            # Who this seat is aiming at, when the caller knows. Omitting it is
+            # only safe at a table with one living opponent, where the engine
+            # fills it in; `choose_attackers` picks a single target even in a
+            # free-for-all, so a per-defender cap (Crawlspace) at *that* seat
+            # would otherwise be invisible here and the whole declaration would
+            # be refused again — the exact failure this prune exists to stop.
+            defenders=(
+                None if against is None
+                else {perm.permanent_id: against for _idx, perm in pruned}
+            ),
+        )
         if refusal is None:
             break
         offender, _reason = refusal
@@ -794,7 +813,10 @@ def choose_attackers(game: Game, attacking_player_index: int) -> list[int]:
         if perm.card.primary_type == "creature" and not perm.tapped
     ]
     if not opponent_blockers:
-        return _legal_declaration(game, attacking_player_index, legal_attackers_list)
+        return _legal_declaration(
+            game, attacking_player_index, legal_attackers_list,
+            against=opponent_index,
+        )
 
     chosen = list(forced)
     for idx in legal_attackers_list:
@@ -810,14 +832,19 @@ def choose_attackers(game: Game, attacking_player_index: int) -> list[int]:
     chosen = _with_conditional_requirements(
         game, attacking_player_index, chosen, legal_attackers_list
     )
-    chosen = _legal_declaration(game, attacking_player_index, chosen)
+    chosen = _legal_declaration(
+        game, attacking_player_index, chosen, against=opponent_index
+    )
 
     # Go all-in when lethal is on the table — through the same prune, because a
     # declaration that is refused deals no damage at all. This returned the raw
     # legal set, so under either attack cap the lethal swing was refused whole
     # and the seat attacked with nobody on the turn it could have won.
     if sum(player.battlefield[i].effective_power for i in legal_attackers_list) >= opponent.life:
-        return _legal_declaration(game, attacking_player_index, legal_attackers_list)
+        return _legal_declaration(
+            game, attacking_player_index, legal_attackers_list,
+            against=opponent_index,
+        )
 
     return sorted(chosen)
 
