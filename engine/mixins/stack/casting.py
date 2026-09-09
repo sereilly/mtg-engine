@@ -767,7 +767,16 @@ class SpellCastingMixin:
         *above* the Demon, not under it. See ``deferring_triggers``.
         """
         with self.deferring_triggers():
-            return self._cast_onto_stack(*args, **kwargs)
+            result = self._cast_onto_stack(*args, **kwargs)
+        if result.supported:
+            # CR 704.3, the cast side of the sweep ``queue_permanent_ability``
+            # runs for the same reason: CR 117.3c gives the caster priority
+            # again the moment the spell is on the stack, and a cost paid on the
+            # way there (a sacrifice, a life payment, a discard) is a state
+            # change with no resolution behind it. ``_settle`` covers the
+            # headless caller; the interactive path had nothing.
+            self.check_state_based_actions()
+        return result
 
     def _cast_onto_stack(
         self,

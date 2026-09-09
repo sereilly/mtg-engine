@@ -860,3 +860,39 @@ def test_109_1_two_copies_of_one_card_on_the_stack_are_two_objects():
     assert p1.battlefield[0] is not p1.battlefield[1]
     assert len({perm.permanent_id for perm in p1.battlefield}) == 2
 
+
+
+# ---------------------------------------------------------------------------
+# 704.3 / 117.3c — a cost payment is a state change with no resolution behind it
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("704.3", "117.3c", "116.1")
+def test_704_3_sweeps_after_a_cost_is_paid_on_the_interactive_path(set_pool):
+    """CR 704.3 checks state-based actions **whenever a player would receive
+    priority**, and CR 117.3c hands priority straight back to the activator once
+    the ability is on the stack. Paying a cost is a state change with no
+    resolution behind it, so it is the one place nothing else swept: the
+    headless caller's ``_settle`` sweeps before it resolves anything, and
+    ``pass_priority`` sweeps only *after a resolution* — which CR 116.1 says a
+    special action is not.
+
+    Greed's ``{B}, Pay 2 life: Draw a card`` activated at exactly 2 life is the
+    measurement. Before this, the seat sat at 0 life, ``lost`` False and
+    ``is_game_over`` False, and passing priority did not fix it either.
+    """
+    pool = set_pool("LEG")
+    lea = set_pool("LEA")
+    greed = Permanent(card=pool["Greed"])
+    greed.metadata["summoning_sickness_turn"] = -99
+    p1 = PlayerState(name="P1", battlefield=[greed], library=[lea["Swamp"]] * 5)
+    p2 = PlayerState(name="P2", library=[lea["Forest"]] * 5)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    p1.life = 2
+
+    game.queue_permanent_ability(0, "Greed")
+
+    assert p1.life == 0
+    assert p1.lost is True
+    assert game.is_game_over() is True

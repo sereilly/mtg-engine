@@ -38,7 +38,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | EXO | 143 | 207 | 90.3% | 90.3% | 66.2% | 127 |
 | USG | 335 | 486 | 87.2% | 87.2% | 63.0% | 266 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| ULG *(measured)* | 143 | 227 | 75.3% | 72.2% | 48.9% | 101 |
+| ULG *(measured)* | 143 | 227 | 76.7% | 74.4% | 51.1% | 106 |
 | **All (shipped)** | **5208** | **7725** | **90.6%** | **89.8%** | **60.3%** | **3916** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -51,8 +51,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 438 | 191 | expected a subject |  |
-| 121 | 65 | unrecognized effect verb |  |
+| 437 | 190 | expected a subject |  |
+| 120 | 64 | unrecognized effect verb |  |
 | 86 | 42 | unconsumed text |  |
 | 41 | 25 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
@@ -73,9 +73,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 3 | 3 | unrecognized "can't be" restriction |  |
 | 3 | 3 | expected a keyword ability |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
-| 2 | 2 | expected 'counter or counters' |  |
 | 2 | 1 | expected 'the number of' in a where-clause |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
+| 2 | 2 | expected 'a' |  |
 
 ## Cards executing through the grammar
 
@@ -2907,6 +2907,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature attacks, defending player may draw a card.`
 - **Harmattan Efreet**
   - `{1}{U}{U}: Target creature gains flying until end of turn.`
+- **Harmonic Convergence**
+  - `Put all enchantments on top of their owners' libraries.`
 - **Harrow**
   - `Search your library for up to two basic land cards, put them onto the battlefield, then shuffle.`
 - **Harvest Wurm**
@@ -4129,6 +4131,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Destroy each artifact with mana value X or less.`
 - **Melting**
   - `All lands are no longer snow.`
+- **Memory Jar**
+  - `{T}, Sacrifice this artifact: Each player exiles all cards from their hand face down and draws seven cards. At the beginning of the next end step, each player discards their hand and returns to their hand each card they exiled this way.`
 - **Memory Lapse**
   - `Counter target spell. If that spell is countered this way, put it on top of its owner's library instead of into that player's graveyard.`
   - `Counter target spell. If that spell is countered this way, put it on top of its owner's library instead of into that player's graveyard.`
@@ -4671,6 +4675,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Remove two carrion counters from this creature: This creature gets +1/+1 until end of turn.`
   - `At the beginning of each end step, if a creature died this turn, put a carrion counter on this creature.`
   - `Remove two carrion counters from this creature: This creature gets +1/+1 until end of turn.`
+- **Ostracize**
+  - `Target opponent reveals their hand. You choose a creature card from it. That player discards that card.`
 - **Outmaneuver**
   - `X target blocked creatures assign their combat damage this turn as though they weren't blocked.`
 - **Overrun**
@@ -5344,6 +5350,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever an opponent casts a spell that targets you or a creature you control, you may draw a card.`
 - **Repentance**
   - `Target creature deals damage to itself equal to its power.`
+- **Repopulate**
+  - `Shuffle all creature cards from target player's graveyard into that player's library.`
 - **Reprisal**
   - `Destroy target creature with power 4 or greater. It can't be regenerated.`
 - **Reprocess**
@@ -7053,6 +7061,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add one mana of any color. During your next untap step, as you untap your permanents, return this land to its owner's hand.`
 - **Undo**
   - `Return two target creatures to their owners' hands.`
+- **Unearth**
+  - `Return target creature card with mana value 3 or less from your graveyard to the battlefield.`
 - **Unerring Sling**
   - `{3}, {T}, Tap an untapped creature you control: This artifact deals damage equal to the tapped creature's power to target attacking or blocking creature with flying.`
 - **Unfulfilled Desires**

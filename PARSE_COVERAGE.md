@@ -25,7 +25,7 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**6 unclaimed sentence(s) across 6 supported card(s).**
+**4 unclaimed sentence(s) across 4 supported card(s).**
 
 - **Angel's Trumpet**
   - `at the beginning of each player's end step, tap all untapped creatures that player controls that didn't attack this turn. this artifact deals damage to the player equal to the number of creatures tapped this way`
@@ -33,12 +33,8 @@ anything anyone did, and every ingest would arrive red.
   - `all creatures of the chosen type get -1/-1`
 - **Ghitu Encampment**
   - `{1}{r}: this land becomes a 2/1 red warrior creature with first strike until end of turn. it's still a land`
-- **Repopulate**
-  - `shuffle all creature cards from target player's graveyard into that player's library`
 - **Spawning Pool**
   - `{1}{b}: this land becomes a 1/1 black skeleton creature with "{b}: regenerate this creature" until end of turn. it's still a land`
-- **Unearth**
-  - `return target creature card with mana value 3 or less from your graveyard to the battlefield`
 
 ## Acknowledged simplifications
 

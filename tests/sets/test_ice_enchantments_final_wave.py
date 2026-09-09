@@ -704,8 +704,15 @@ def test_mystic_remora_offers_the_toll_to_the_seat_that_cast_the_spell(set_pool)
         name="P1",
         battlefield=[_G5Permanent(card=pool["Island"]) for _ in range(4)],
     )
+    # A library for the seat whose turn this is, because ``start_turn`` draws:
+    # CR 704.5b makes a player who tried to draw from an empty one lose the next
+    # time state-based actions are checked, and until W1G5 added CR 704.3's
+    # sweep after a cost payment nothing swept between the draw step and the
+    # assertion. The fixture was always in that state; the sweep is what made it
+    # visible, and the test is about which seat is offered the toll.
     p2 = _G5PlayerState(
         name="P2", hand=[pool["Dark Ritual"]],
+        library=[pool["Balduvian Bears"]],
         battlefield=[_G5Permanent(card=pool["Island"]) for _ in range(4)],
     )
     game = _G5Game(players=[p0, p1, p2])

@@ -521,6 +521,23 @@ class AbilityActivationMixin:
                     permanent.metadata[CHOSEN_ABILITY] = prior
                 else:
                     permanent.metadata.pop(CHOSEN_ABILITY, None)
+            return result
+        # CR 704.3: state-based actions are checked **whenever a player would
+        # receive priority**, and CR 117.3c hands priority straight back to the
+        # activator once the ability is on the stack. Paying a cost is a state
+        # change with no resolution behind it, so nothing else in the
+        # interactive path would sweep: ``_settle`` sweeps for the headless
+        # caller and ``pass_priority`` sweeps only *after a resolution*, which
+        # CR 116.1 says a special action is not. Measured before it was added —
+        # Greed activated at 2 life left the player at 0, not lost, with
+        # ``is_game_over`` False, and a `pass_priority` did not fix it either.
+        #
+        # After the deferral block, never inside it: a trigger the sweep fires
+        # (a dies trigger from a sacrificed cost) belongs on the stack above the
+        # ability that was just announced (CR 603.3b), which is where an
+        # ordinary enqueue puts it — and inside the block it would be held back
+        # into the announcement it comes after.
+        self.check_state_based_actions()
         return result
 
     def _activate_onto_stack(
