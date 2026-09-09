@@ -173,6 +173,28 @@ class DamageRedirect:
 #: ``Permanent`` both carry it without either learning what a redirect is.
 _REDIRECTS_ATTR = "_damage_redirects"
 
+#: Where an **attached permanent's** derived record is kept between events.
+#: Every record above is armed and lives on the object it watches; a static
+#: Aura's is re-derived on each damage event, so a fresh object would be handed
+#: to the interceptor every time — and the interceptor's recursion guard is a
+#: flag *on the record* (``applying``), which a fresh object throws away.
+#:
+#: That is CR 614.5 ("a replacement effect gets only one opportunity to affect
+#: an event or any modified events resulting from it") and it stops being
+#: academic the moment both directions of this family are on one creature:
+#: Pariah moves your damage onto the creature, Treacherous Link moves the
+#: creature's onto you, and each hand-off is a fresh event that runs the whole
+#: contention set again. Re-using one record per Aura is what makes the flag
+#: mean what its docstring says, and the chain then terminates exactly where
+#: CR 614.5 says it does.
+#:
+#: Its own attribute rather than the collection above because these are not
+#: armed records: nothing puts them there and no sweep takes them away — the
+#: Aura ceasing to be attached is the whole of the removal — and ``redirects_on``
+#: is read by :func:`applicable_redirect` for the object being *damaged*, which
+#: would find an Aura's own record if the Aura were ever a creature.
+_DERIVED_ATTR = "_derived_damage_redirect"
+
 
 def redirects_on(recipient) -> list[DamageRedirect]:
     """The redirects watching *recipient*, created on first use."""
@@ -386,18 +408,22 @@ def attached_static_redirects(game, recipient) -> list[DamageRedirect]:
     the host sits on: an opponent may control the enchanted creature, and Pariah
     on their creature still moves your damage onto it.
 
-    A player only. Every printed sentence in this family protects a player, and
-    the derived record's new recipient is a permanent — so a permanent recipient
-    is outside this scan rather than inside it, which is also what keeps the
-    hand-off from recursing: the damage moved onto the host asks this function
-    about a permanent and gets nothing.
+    **Both directions, and they are two scans rather than one parameterised
+    one.** "All damage that would be dealt to **enchanted creature** is dealt to
+    **its controller** instead" (Treacherous Link) is the same static Aura
+    shape with the ends swapped, and swapping the ends swaps everything else
+    too: the recipient is a permanent instead of a player, the new recipient is
+    a player instead of a permanent, and — the part that decides the code — the
+    record is found by asking *what is attached to the damaged permanent*
+    rather than by walking a seat's battlefield. A record lives on the object it
+    watches, and those are two different objects.
 
-    ``live_recipient`` still decides whether the record does anything: an Aura
-    whose host has left, or stopped being a creature, is CR 614.9's effect that
-    does nothing, and that rule is already written once for every record here.
+    ``live_recipient`` still decides whether either does anything: an Aura whose
+    host has left, or stopped being a creature, is CR 614.9's effect that does
+    nothing, and that rule is already written once for every record here.
     """
     if _is_permanent(recipient):
-        return []
+        return _host_static_redirects(game, recipient)
     seat = next(
         (i for i, player in enumerate(game.players) if player is recipient), None
     )
@@ -421,11 +447,62 @@ def attached_static_redirects(game, recipient) -> list[DamageRedirect]:
             for line in (aura.effective_card.oracle_text or "").splitlines()
         ):
             continue
-        found.append(
-            DamageRedirect(
-                new_recipient=host, source_name=aura.card.name,
-            )
-        )
+        found.append(_derived_record(aura, host))
+    return found
+
+
+def _derived_record(aura, new_recipient) -> DamageRedirect:
+    """The record *aura*'s static text contributes, re-used across events.
+
+    One object per Aura, with its recipient refreshed on every call — the
+    recipient is a live question (the host may have been re-attached, the
+    controller may have changed) and the ``applying`` flag is the only thing
+    that has to survive, for the reason ``_DERIVED_ATTR`` gives.
+    """
+    record = getattr(aura, _DERIVED_ATTR, None)
+    if record is None:
+        record = DamageRedirect(new_recipient=new_recipient, source_name=aura.card.name)
+        setattr(aura, _DERIVED_ATTR, record)
+    else:
+        record.new_recipient = new_recipient
+    return record
+
+
+def _host_static_redirects(game, recipient) -> list[DamageRedirect]:
+    """The redirections an attached permanent's own Auras move *off* it.
+
+    "All damage that would be dealt to enchanted creature is dealt to its
+    controller instead." (Treacherous Link.) The mirror of the scan above, and
+    the shorter one: what watches this permanent is attached to it, so there is
+    no battlefield to walk — ``auras_attached_to`` is the authority
+    (``attached_aura`` is one slot a second Aura overwrites).
+
+    **"its" is the damaged permanent's controller**, not the Aura's. The
+    possessive takes the noun phrase the sentence has just named, and the
+    difference is the whole card: Treacherous Link is put on an *opponent's*
+    creature so damage aimed at it lands on them. Read through
+    ``controller_index_of`` (CR 613 layer 2) rather than
+    ``base_controller_index``, so a creature an effect has taken control of
+    routes its damage to whoever controls it now.
+    """
+    seat = game.controller_index_of(recipient)
+    if seat is None:
+        return []
+    from .auras import (aura_redirects_host_damage_to_controller,
+                        auras_attached_to)
+
+    controller = game.players[seat]
+    found: list[DamageRedirect] = []
+    for aura in auras_attached_to(recipient):
+        # ``effective_card`` for ``attached_static_redirects``' reason: a Clone
+        # of Treacherous Link carries the sentence (CR 707.2) and one whose text
+        # was changed does not.
+        if not any(
+            aura_redirects_host_damage_to_controller(line)
+            for line in (aura.effective_card.oracle_text or "").splitlines()
+        ):
+            continue
+        found.append(_derived_record(aura, controller))
     return found
 
 

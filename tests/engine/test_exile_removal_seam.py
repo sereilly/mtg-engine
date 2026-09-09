@@ -396,6 +396,11 @@ _COMPUTED_ATTRIBUTE_WRITES: dict[str, str] = {
     "engine/damage_redirects.py::redirects_on": (
         "the redirect collection's attribute on a recipient, not a zone."
     ),
+    "engine/damage_redirects.py::_derived_record": (
+        "an attached permanent's re-used static redirect record, kept on the "
+        "Aura under _DERIVED_ATTR so CR 614.5's guard survives a hand-off — "
+        "one fixed name, not a zone."
+    ),
     "engine/library_top.py::reveal_grants_on": (
         "the granted-reveal collection's attribute on a player, not a zone "
         "— the same shape as the three collections below it."

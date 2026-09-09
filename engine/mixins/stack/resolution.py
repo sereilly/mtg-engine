@@ -105,6 +105,56 @@ def _controller_narrowing_is_in(spec: dict, instruction) -> bool:
 
 
 class StackResolutionMixin:
+    def counter_stack_object(self, item: StackItem) -> None:
+        """CR 701.6a: cancel *item*, taking it off the stack, and announce it.
+
+        The one place a spell or an ability is **countered**. It was three —
+        ``handlers/stack.counter_top_stack_spell``, ``counter_stack_ability``
+        and the pay-or-be-countered prompt's declined branch — each spelling out
+        its own ``stack.remove``, which is the ``become_tapped`` problem again:
+        anything that has to happen when an object is countered had three places
+        to be forgotten, and "whenever a spell you've cast is countered" was
+        forgotten in all three.
+
+        **Removal by identity.** ``StackItem`` is a plain dataclass and a deck
+        repeats one immutable ``CardDefinition`` per copy, so two casts of the
+        same card with the same target compare **equal** — ``list.remove`` would
+        take whichever sits lower on the stack. The same look-alike the control
+        seam bans ``battlefield.remove`` for, and ``exile_target_spell`` one
+        module over already walks the stack by ``is`` for it.
+
+        **What is not a counter.** Two neighbouring paths cancel a resolution
+        and deliberately do not come here, because CR does not call either one
+        countering: a spell **exiled** off the stack (``exile_target_spell`` —
+        "can't be countered" does not stop it), and CR 608.2b's spell whose
+        every target has become illegal, which "doesn't resolve" and is
+        "removed from the stack and, if it's a spell, put into its owner's
+        graveyard" without the word ever appearing. That second one reads
+        "countered by the rules" in this engine's log, which is the pre-M2010
+        wording; the log line is left alone and the announcement is not made,
+        because Multani's Presence must not draw off a fizzle.
+
+        The announcement is made for a **spell** only. ``is_ability`` is CR
+        113.3's question and the pool prints no trigger watching a countered
+        ability; a copy is excluded because CR 707.10 puts it on the stack
+        without it ever having been *cast*, which is the word the only condition
+        watching this event prints.
+
+        Where the card goes afterwards stays the caller's business: CR 701.6a's
+        graveyard, an "exile it instead" rider, Memory Lapse's library. This is
+        the cancel, not the destination.
+        """
+        for index, obj in enumerate(self.stack):
+            if obj is item:
+                del self.stack[index]
+                break
+        if item.is_ability or item.is_copy:
+            return
+        emit(
+            self, "your_spell_countered",
+            seat=item.caster_index, subject=item.card,
+        )
+
     def _bin_spell_card(
         self, owner, card: CardDefinition, *, exile_instead: bool, verb: str,
         hand_instead: bool = False,

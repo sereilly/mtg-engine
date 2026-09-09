@@ -4143,8 +4143,11 @@ class PendingChoicesMixin:
         else:
             # Declined or unable to pay: the spell is countered and Power Sink's rider
             # (tap all the controller's lands, drain their mana) applies.
-            if target is not None and target in self.stack:
-                self.stack.remove(target)
+            if target is not None and any(obj is target for obj in self.stack):
+                # CR 701.6a through the one seam, which is also what announces
+                # it: a spell countered for an unpaid cost is countered exactly
+                # as one countered by a Counterspell is.
+                self.counter_stack_object(target)
                 if data.get("countered_object") == "ability":
                     # An ability on the stack has no card (CR 113.7a): removing
                     # it from the stack is the whole of CR 701.6a for it, and

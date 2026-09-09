@@ -2616,6 +2616,22 @@ class PermanentStateMixin:
             word = getattr(source_perm, "metadata", {}).get("chosen_land_type")
             if not word or not target_perm.has_type(str(word)):
                 return False
+        # "All creatures **of the chosen type** get -1/-1." (Engineered
+        # Plague.) The branch above one card type over, and read the same way:
+        # the word was chosen as *source_perm* entered (CR 614.1c, CR 205.3m)
+        # and recorded on it, so this is the only reader that can answer it —
+        # which is why ``subject_filters`` refuses the key for a caller holding
+        # no source.
+        #
+        # Through ``has_type`` (CR 613 layer 4) like every other type read
+        # here, so a creature an effect made a Zombie is a Zombie and one whose
+        # types were replaced is not. No word recorded yet reaches nothing,
+        # which is the safe direction: a dropped narrowing would put -1/-1 on
+        # every creature on the battlefield.
+        if filt.chosen_creature_type:
+            word = getattr(source_perm, "metadata", {}).get("chosen_creature_type")
+            if not word or not target_perm.has_type(str(word)):
+                return False
         return True
 
     def _protection_qualities(self, permanent: Permanent) -> set[tuple[str, str]]:

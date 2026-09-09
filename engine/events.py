@@ -1240,6 +1240,13 @@ _SEAT_SCOPED_EVENTS = frozenset({
     "you_lose_life",
     "draws_second_card",
     "you_sacrifice_permanent",
+    # "Whenever a spell **you've cast** is countered" (Multani's Presence).
+    # The seat is the *caster* of the countered spell, which is the only seat
+    # the announcement could carry — CR 108.4 gives the card in the graveyard
+    # no controller by the time anything reads it, and CR 603.10e says an
+    # ability triggering on a countering looks back in time, so the seat has to
+    # travel on the event rather than be re-derived from the object.
+    "your_spell_countered",
 })
 
 

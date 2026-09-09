@@ -2863,6 +2863,11 @@ def aura_continuous_claim(line: str) -> str | None:
             "CR 614.9 redirection onto the host — "
             "damage_redirects.attached_static_redirects"
         )
+    if aura_redirects_host_damage_to_controller(normalized):
+        return (
+            "CR 614.9 redirection off the host — "
+            "damage_redirects.attached_static_redirects"
+        )
     if aura_controller_cast_ban(normalized) is not None:
         return "cast restriction on the host's controller — auras.controller_cast_ban"
     return None
@@ -2902,6 +2907,43 @@ def aura_redirects_all_damage(line: str) -> bool:
     landed on its controller.
     """
     return _ATTACHED_ALL_DAMAGE_REDIRECT.match(_line_text(line)) is not None
+
+
+#: "All damage that would be dealt to enchanted creature is dealt to its
+#: controller instead." (Treacherous Link.) The row above's mirror, and the two
+#: are not one pattern with the ends swapped: that one protects the Aura's
+#: *controller* and moves the damage onto a permanent, this one protects the
+#: *attached permanent* and moves it onto a player. Different recipients, so
+#: different scans in ``damage_redirects`` — a record lives on the object it
+#: watches, and those are two different objects.
+#:
+#: **"its" is the enchanted creature's**, not the Aura's. The possessive takes
+#: the nearest noun phrase, which is the one the sentence has just named, and
+#: the difference is the whole card: this is a {1}{B} Aura you put on an
+#: *opponent's* creature so that damage aimed at it lands on them. Read as the
+#: Aura's controller it would be a card that damages you.
+#:
+#: The noun is payload the way every printed noun in this file is, and both
+#: attachment words are read (CR 301.5f) — an Equipment printing the sentence is
+#: the same rule.
+_ATTACHED_HOST_DAMAGE_TO_CONTROLLER = re.compile(
+    rf"^all damage that would be dealt to {_ATTACHED} (?P<noun>{_NOUN}) is dealt "
+    rf"to its controller instead$"
+)
+
+
+def aura_redirects_host_damage_to_controller(line: str) -> bool:
+    """Whether one printed line moves all of the attached permanent's damage
+    onto that permanent's controller.
+
+    One reader, two callers, which is this file's standing rule: the support
+    gate asks it through :func:`aura_continuous_claim` so the line is claimed,
+    and ``damage_redirects.attached_static_redirects`` asks it at the damage
+    event so the line is *carried out*. Claimed here and read nowhere else it
+    would be an Aura reporting supported while every point of damage still
+    landed on the creature.
+    """
+    return _ATTACHED_HOST_DAMAGE_TO_CONTROLLER.match(_line_text(line)) is not None
 
 
 #: "Enchanted creature's **controller** can't cast creature spells."

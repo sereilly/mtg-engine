@@ -219,6 +219,20 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("opponent_casts_spell", ("an", "opponent", "casts", "a", "spell")),
     ("enchantment_cast", ("you", "cast", "an", "enchantment", "spell")),
     ("you_cast_spell", ("you", "cast", "a", "spell")),
+    # "Whenever a spell **you've cast** is countered" (Multani's Presence).
+    # CR 701.6a's cancel, watched from the battlefield — the passive voice of an
+    # event no card in this pool had ever watched, and a different question from
+    # the three cast rows above it: what is announced is the *countering*, which
+    # happens long after the cast and to an object that is already leaving the
+    # stack. CR 603.10e is why the tense is safe to read at all — an ability
+    # that triggers when a spell is countered looks back in time.
+    #
+    # The seat rides the announcement (``events._SEAT_SCOPED_EVENTS``) rather
+    # than the phrase, so "you've" is part of the condition's identity here and
+    # is not re-tested by the reader: the spell's caster is what the event
+    # carries, and the watching permanent's controller is CR 109.5's "you".
+    ("your_spell_countered",
+     ("a", "spell", "you've", "cast", "is", "countered")),
     # "…**you play a card**" (Juju Bubble). Listed on both front ends because
     # the card prints it and a line only one of them reads is a card the other
     # refuses -- the same reason the two draw spellings are both here.
