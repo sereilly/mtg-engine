@@ -250,6 +250,29 @@ file entirely, and a third counted 89 call sites for a change that touched
 seven functions. **A refusal site is a work-list entry, not a diagnosis**, and
 an inherited estimate is a lead to correct rather than a fact to trust.
 
+**Urza's Legacy named the direction the error runs in, which makes it
+predictable.** One group put its correction rate at "roughly half, and
+consistently in the same direction — it over-estimated four cards and
+under-estimated two", and the four over-estimates were all the same mistake:
+*the brief's diagnosis was written from a refusal site, and a refusal site names
+where the parser stopped rather than what is absent.* Molten Hydra's whole card
+was that `+1/+1` lexes as a `PT` token so a `peek_word()` answered None; Viashino
+Heretic's was **one article**; both of the "extra pieces" that brief scoped for
+it had been built two sets earlier. Meanwhile the two under-estimates were
+sentences whose refusal really was a probe-order artifact *and* which needed two
+more layers nobody had mentioned. So: assume a refusal site over-states, probe
+before believing it, and treat "this is only a probe artifact" as the claim most
+likely to cost a card.
+
+**Two cards in one wave were reported as needing a whitelist widened, and both
+diagnoses were wrong in the same expensive way.** The `becomes a … creature with
+⟨keyword⟩` body was not gating on a keyword list — the list had held `first
+strike` all along; the loop read **one token** with `peek_word()` against a set
+of ability names, a fork of the shared `parse_keyword_list`. Fixing it as
+briefed would have produced a *second* whitelist rather than removing the fork.
+**When a brief says "widen the whitelist", check first whether the whitelist is
+being consulted at all.**
+
 **Brief every group to make a name-keyed hook the last resort, explicitly.**
 Twelve independent agents under that instruction produced *one* new hook in 119
 cards and retired another, so the hooked share of the pool fell while the pool
@@ -323,12 +346,31 @@ instrument. It is bounded by the hook count — 53 cards — and it shrinks ever
 time a hook is retired, which is the wrong direction for a guard: the *fewer*
 hooks there are, the more it looks like the instrument is working.
 
-**Phase 4 of the next set clears it**, as two parts: attribute a hook's claim to
-the *lines the hook actually compiles* (`CARD_LINE_INSTRUCTIONS` is keyed by
-line, so the data is already there — it is `card_hooks bespoke` as a whole-card
-claim that is wrong), and re-run `parse_coverage --check` over the pool to see
-what the other 52 hooked cards have been hiding. Budget for that second number
-being non-zero.
+**Drained 2026-09-09, at ULG's Phase 4, as both parts the entry asked for.**
+The claim is attributed to the lines `CARD_LINE_INSTRUCTIONS` names, and only
+the four **event**-keyed registries (`ON_LEAVE_BATTLEFIELD`, `ON_SELF_RESOLVED`,
+`ON_SPELL_COUNTERED`, `DRAW_STEP_MODIFIERS`) still claim a whole card, because
+each implements an event rather than a sentence and has no line to point at.
+That exception is 3 sentences where the blanket was 80, and it is listed by
+registry name rather than discovered, so a new *line*-keyed registry cannot be
+folded in and handed back the blanket.
+
+**The first draft was wrong in the safe direction and the correction is the
+carryable part.** A `CARD_LINE_INSTRUCTIONS` key is a whole printed **line** and
+the script claims per **sentence**, so demanding equality reported the body of
+every multi-sentence hooked line as unclaimed — 66 sentences on 39 cards, none of
+them real. The test is containment, which is still exact where it matters: a
+sentence the hook's line does not contain is a sentence the hook does not
+compile.
+
+**The second number was 1**, and it is a *reporting* gap rather than a missing
+implementation — which is what a claim table is for. City in a Bottle's hook
+compiles its sacrifice trigger; its second line ("Players can't cast spells or
+play lands with a name originally printed in the Arabian Nights expansion") is
+enforced by `mixins/effects._set_lockout_banning_card`, which scans for the
+instruction the *first* line produces. Driven before naming it, and it now has a
+`CARD_CHANNELS` entry. Two guards hold the narrowing, because the report's own
+numbers cannot fail.
 
 **Added at USG's Phase 6: `simulate_ai_games.py` never enters a main phase.**
 W3G3 checked a claim in its brief rather than believing it and found the
@@ -342,9 +384,31 @@ Not a wrong result, an absent one, which is why no guard sees it: the run
 completes, the interaction count is non-zero, and the issue list is empty. It is
 the same shape as the `begin_turn_bookkeeping` omission this set fixed between
 waves, in the same function, and that one cost six shipped cards their per-turn
-records. **Phase 0 of the next set clears it** — the fix is a phase call in the
-loop, and it owes the same re-baseline check that one did (which turned out to
-be unnecessary: no seeded run moved).
+records.
+
+**Drained 2026-09-09, at ULG's Phase 0.** `_enter_main_phase(precombat=True)`
+plus the priority-window drain the entry deliberately does not do (a main phase
+is not closed before the active player acts in it). Validated backwards, which
+is what makes it a finding rather than a hope: a seeded six-game run pinned to
+Carpet of Flowers produces **9** log lines against the parent commit — the cast
+and the permanent entering, and nothing else ever — and **51** with the fix.
+Unlike the `begin_turn_bookkeeping` omission it repeats, **the re-baseline was
+not a no-op**: four of seven seeded set runs moved and two moved their game
+outcomes, because the loop now casts *during a main phase*, so a sorcery-speed
+activation the phase gate had been refusing all along is legal.
+
+**And clearing it exposed the sibling, which is larger: the AI simulator has no
+combat phase at all.** W2G4 went to add a `refused_attacks` counter — the attack
+side of the `refused_casts` honesty check — and found the counter would read 0
+for ever, because the loop never declares an attacker, never blocks and never
+runs the combat damage step. So **`simulate_ai_games.py` cannot validate any
+combat change**, and "run the sim" is not an end-to-end check for combat work;
+that group replaced it with a census parametrised over every card printing a
+declaration-level restriction, backwards-validated at 4 of 8 cases failing
+against the pre-fix engine. Adding combat to the loop is its own round and owes
+a re-baseline that will certainly move every seeded run. **Phase 0 of the next
+set is where to decide whether to take it**, and the honest reading is that the
+loop is a *casting* simulator with a main phase, not a game.
 
 **Added at FEM's Phase 6: `permanents_from` carries two arities and only one
 reader knows.** That payload key names a scratchpad record, and its producers
@@ -832,6 +896,25 @@ answer at picker time, so the card has per-slot enumeration and still no
 narrowing on the slot that needed one. It wants the keyword choice to reach the
 enumerator, which is its own piece.
 
+*A **card** can be a role, as of ULG's wave 2, and that is three of this
+entry's four named pieces built.* Goblin Welder ("Choose target artifact a player
+controls and target artifact card in that player's graveyard") needed a role that
+is not a battlefield permanent, and the pipeline now has one:
+`legality.role_object_at` is the single place a role candidate becomes an object;
+CR 115.3 distinctness is an identity **key** rather than `id(perm)`, because two
+copies of one card in one graveyard are literally one `CardDefinition` and `id`
+cannot separate them; `ROLE_RELATION_TESTS["in_graveyard_of_role"]` is the first
+relation whose two sides are not both permanents, and **its `(earlier, candidate,
+game)` signature took it unchanged** — the table was already general and only its
+three call sites were not; and `target_role_refs` is one announcement channel
+naming a `permanent_id` *or* a graveyard `(seat, index)`, describing every role
+rather than interleaving with `target_permanent_ids`.
+
+What is still open is the **seat**, and it is now the smaller half of what it
+was. Keeper of the Dead needs a *player* role, and a second thing besides: its
+two targets are announced by two **instructions** of a sequence, so converting it
+moves a **shipped** card's compiled program and owes its own differential.
+
 *A seat cannot be a role*, measured at EXO wave 2 and the reason a third
 leftover is recorded rather than closed. Keeper of the Dead is the card
 ("Choose target opponent … Destroy target nonblack creature **that player**
@@ -1120,6 +1203,14 @@ undone, and its *premise* — that the next set printing the phrase will meet it
 turned out to be wrong. Printing the phrase is not the trigger; printing it on a
 **spell with its own target** is. The condition is amended to say so.
 
+**Re-checked at ULG's Phase 6 against the amended condition, and it holds.**
+Urza's Legacy prints "a source of your choice" exactly once, on **Martyr's
+Cause** — an *activated* ability, which `mixins/stack/activation.py` already
+announces correctly through `choices["chosen_source"]`. So the set does not meet
+the trigger, the entry's work is still undone, and the amended condition did its
+job: under the *old* wording this would have read as due for the second set
+running and been read as a live work item for the second time.
+
 **Added at EXO's Phase 5: a client-only envelope has no guard, and one had
 been wrong for four sets.** `GameActionRequest.seat` is required of every
 action and `sendAction` does not supply it, so all 125 call sites in
@@ -1158,15 +1249,82 @@ actions and cost payments are others, and nobody has audited whether the sweep
 runs after those either. **Phase 3 of the next set that adds a non-resolution
 state change owes that audit.**
 
-**Added at EXO's Phase 6: `web/`'s layer reads now have three named sites and
-still no scan.** TMP's Phase 5 opened this with `web/serialization.py` asking
-`perm.card.type_line`; STH's added `is_aura` and the Licid; EXO's Phase 5 adds
-two more, both asking a **permanent** "is this a creature" through the printed
-card — `web/combat_prompts.py`'s blocker check (CR 702.22k: an animated land
-blocking a band is dropped) and `web/prompts.py`'s Balance lists (an animated
-land is both a land and a creature and shows only as a land). Three promotions
-running have each found one, which is now enough evidence that the widened scan
-over `web/` is cheaper than the instalments. It is still a round.
+**Added at EXO's Phase 6, escalated at ULG's: `web/`'s layer reads now have
+**seven** named sites, four consecutive promotions have each found one, and the
+grep that would have caught the first six does not catch the seventh.**
+
+TMP's Phase 5 opened this with `web/serialization.py` asking `perm.card.type_line`;
+STH's added `is_aura` and the Licid; EXO's Phase 5 added `web/combat_prompts.py`'s
+blocker check (CR 702.22k: an animated land blocking a band is dropped) and
+`web/prompts.py`'s Balance lists; ULG's wave 1 added `web/combat_prompts.py:138`
+and `web/state_view.py:241` and `:617`, all three asking a *permanent*'s type
+through `card.primary_type`.
+
+**And ULG's Phase 5 found the one that changes the entry's shape.**
+`_effective_keywords` asked `game._protection_colors` — a **real accessor**, and
+the deliberate colour *slice* of `_protection_qualities`. Nothing about it is a
+printed-card read, so a scan for `card.type_line` / `card.colors` /
+`card.primary_type` finds every other site and misses this one. Two shipped cards
+paid: Angelic Curator showed only "Flying" and Yavimaya Scion, whose entire
+printed text is "Protection from artifacts", reached the client with no badge at
+all. Fixed and pinned in `tests/ui/test_layer_reads_on_the_wire.py`.
+
+So the round this entry has been asking for is **two questions, not one**: which
+`web/` reads ask the printed card, and which ask an accessor **narrower than the
+question**. The second cannot be grepped and has to be read — every place `web/`
+calls an engine accessor, against what the caller actually needs to know.
+
+**Added at ULG's Phase 6: an off-battlefield colour read ignores a
+colour-defining static.** `engine/object_colors.py`'s own docstring names the
+class ("has not been taught the seat"), and W2G2 measured two live instances
+while landing Thran Lens. **Gloom does not tax a spell Celestial Dawn made
+white**: `cost_modifiers._subject_matches` reads `card.colors`, so a Dark Ritual
+in hand under the Dawn reads `('W',)` to `object_colors.card_colors` and is taxed
+`(0, [])` where a real white card is taxed `(3, ['Gloom'])` — and CR 601.2f asks
+about the *spell*, which the Dawn's second sentence makes white. And
+**protection stops a spell by its printed colour**: `permanent_state.
+_card_has_quality` reads `card.colors`, so under the Dawn a Terror is a white
+spell and White Knight still reports it untargetable.
+
+The battlefield side is **clean** and that is what makes this bounded:
+`_permanent_has_quality`, `damage_source_colors`, `subject_matches` and the lord
+buffs all resolve through `effective_colors`, so layer 5 is read correctly
+everywhere `tests/engine/test_layer_reads.py` covers. What is not covered is a
+card that is not on the battlefield, where there is no `Permanent` to ask.
+`_matches` feeds five loops and every tax in the pool, so this is a round with
+its own differential rather than a rider. **It is the same shape as the `web/`
+entry above — an accessor that answers a narrower question than its caller
+needs — and whoever takes either should look at both.**
+
+**Added at ULG's W2G4, declined there with its parts named: the *blocking* side
+of the declaration-legality gap.** The attack side was fixed (both caps moved
+behind `attack_declaration_refusal`, so the AI no longer proposes an over-cap set
+and then attacks with nobody). Blocking has the identical failure and **no
+predicate at all**: `declare_blockers` enforces `max_blockers_each_combat` and
+the company/greater-power requirements inline, `choose_combat_blockers` prunes
+against nothing, and `web/game_flow.py` falls back to `{}` — the defender blocks
+with nobody. It is not a transcription of the attack fix, and the parts are:
+(1) a predicate that needs the *game* and the declaring seat, because the block
+cap totals **every** defender's blockers (CR 509.1b) plus the Camouflage
+exemption; (2) hoisting `resolved_blockers` out of `declare_blockers`; (3) an AI
+prune over a **map** (blocker → attacker), so "drop the offender" means removing
+a key and `choose_combat_blockers` needs a substitution mode; (4) a census twin
+over the block kinds. Population: Caverns of Despair, Mogg Flunkies, Orcish
+Conscripts, Okk. **Note that it cannot be validated by the AI simulator**, which
+has no combat phase — see the entry above.
+
+**Added at ULG's W2G5, declined there: two prompts whose subject has no
+`permanent_id`.** The upkeep prompt is now addressed by permanent, which fixed
+112 shipped cards — but the Nether Shadow graveyard-return prompt's subject is a
+**card in a graveyard** and the Nafs Asp draw-step obligation's is an
+**obligation record** whose source may have left the battlefield. Two eligible
+Nether Shadows still share one prompt and one answer returns both. Keying either
+needs an address for a non-permanent, which is the same question W2G1 answered
+for *targets* (`TargetRoleRef` carries a `permanent_id` **or** a graveyard
+`(seat, index)`) — so the shape exists now and the two prompts are its second
+customer. Also left: `trigger_targets` values are still `(seat, battlefield
+index)`, a smaller instance of the same class, far less dangerous because the
+index is resolved and re-validated inside the same call.
 
 ## Phase 0 — Pre-flight
 
@@ -1280,6 +1438,41 @@ instruments current.
    groups independently made the *same* split of `lowering/stack.py`, moving
    seven byte-identical functions. Splitting at the cap beats raising the
    number.
+
+   **Urza's Legacy is the rule's cleanest result and the seam advice's worst.**
+   Eight modules sat within 30 lines at Phase 0; the four that two or more of the
+   wave's groups would reach were pre-split, and **integration crossed zero
+   caps** across two waves and ten groups — the first set where it crossed none.
+   Pre-splitting a shared module works, and this is the run to cite.
+
+   What the same exercise says about *seams* is the opposite. Each of the four
+   agents was told its module's recorded seam was a lead rather than a fact, and
+   **three of the four found a written line that was wrong** — not stale by a
+   clause, wrong: `lowering/control_flow.py`'s docstring named four composers of
+   which two had already left, `conditions.py`'s comment claimed the record
+   clauses were read elsewhere when eleven were read by the dispatcher itself,
+   and `delayed.py` called itself "the one place the rows become a node" with a
+   second place one layer up. **And the fourth is the shape to watch for: the
+   wrong sentence was in a *different module's* docstring.** `parser.py`'s own
+   seam was right and `riders.py` denied it ("the loop … stays behind in
+   `parser.py` with the line-level productions it belongs to") — which is the
+   sentence a briefer would most likely hand over, because it is the one that
+   mentions the module you are cutting. Read the seam **and** everything that
+   points at it.
+
+   Three brief corrections the same wave produced, all mechanical and all worth
+   carrying: declaring a new top-level `engine/grammar/*.py` is **one** place
+   (`PARSE_LAYERS` satisfies both layering guards; `FAMILY_SHARED` is only ever
+   compared against members of `effects/`, `lowering/` and `ast/`, so a
+   top-level module cannot reach it), while a module *inside* `lowering/` needs
+   `FAMILY_SHARED` **and** the `shared` tuple in
+   `test_families_import_only_their_package_shared_module`'s parametrize.
+   Re-export is enforced in the **opposite** direction from "so no caller moves":
+   `tests/engine/test_import_hygiene.py` fails on a re-export nobody *pulls*, so
+   the rule is re-export exactly what a caller pulls and nothing else. And
+   **`oracle_diff compare` belongs before the suite, not after** — it caught an
+   arity mismatch that all five post-split scans are structurally blind to,
+   failing in seconds with a full traceback where the suite scatters failures.
 4. Clear anything above in Known gaps marked for Phase 0.
 
 ## Phase 1 — Ingest and measure
@@ -1385,6 +1578,15 @@ is green, the trackers carry its row, and the census is in hand.
    plus one intervening-if. Two probes, before any brief was written, and they
    changed the shape of the wave.
 
+   **And the *next* set is where that work is paid back, which is worth knowing
+   before you read an arrival percentage as a fact about the set.** Urza's Legacy
+   arrived **80.4% supported**, the highest of any set ever ingested here against
+   a previous best of 67.8% — not because its cards are simpler but because 25 of
+   them print echo or cycling, which Urza's Saga had built as rewrites the block
+   before. A block's second set inherits its first set's keyword work wholesale.
+   Read a high arrival number as "the last set did this already", and check which
+   of the census's big rocks are already-built rewrites before sizing anything.
+
 6. **Ask how many of the set's cards are new to the pool**, before planning any
    round. Every phase after this one is written for a set that brings cards,
    and a reprint set brings printings: 4ED's 378 entries were 368 unique cards
@@ -1486,6 +1688,22 @@ once, four cards whose triggers targeted themselves, and CR 603.4's fire-time
 half. Spend the group this way only when the pile is already enumerated —
 finding the work is a different job from doing it, and the enumeration is what
 makes it one round's worth.
+
+**Urza's Legacy spent two of five that way and both paid more than the cards
+did.** Its second wave had six cards left, so three groups took them and two took
+the pile: one found that **protection's damage half (CR 702.16e) did not exist**
+— `_is_protected_from` was asked only from the two combat steps and
+`damage_events.deal_damage`, the one seam, never asked it at all, so 64 shipped
+cards printing protection took damage from 69 sweep lines for the life of the
+engine — plus an attack cap the AI could not satisfy, so a seat under Crawlspace
+*or* Caverns of Despair attacked with nobody for the rest of the game. The other
+found the **upkeep prompt addressed by card name**: two Bad Moons, one answer,
+both paid — 112 shipped cards, and CLAUDE.md's "address a permanent by its id,
+not its slot" is the same rule with an index instead of a name.
+
+The scheduling rule that follows: **the count of no-card groups is set by the
+size of the enumerated pile, not by how many cards are left.** Six cards did not
+need five groups; the pile did.
 
 **A new census or instrument must be validated *backwards* before anyone trusts
 it.** Run it against a commit where the defects it is meant to find are still
@@ -1787,6 +2005,19 @@ that, each inventing a disagreement it then reported. A guard that re-spells
 the thing it checks is the most expensive kind, because its failures look like
 real findings.
 
+**Urza's Legacy's rehearsal is the cleanest instance of the split and worth
+copying as a procedure.** Five guards went red: three were ratchets (accepting is
+the review) and the other two were **exactly one of each kind**. Thran Weaponry
+was real — "All creatures get +2/+2 **for as long as this artifact remains
+tapped**" dropped its duration in the lowering, so the payload fell back to end
+of turn and the buff both outlived the artifact untapping *and* died at the
+cleanup step of a card whose other printed line exists to keep it tapped across
+turns. Aura Flux was the guard: `test_every_lord_shaped_line_in_the_pool_derives`
+finds candidates with a substring and then asked only the lord-buff table, so it
+reported a disagreement it had invented about a card whose subject is
+enchantments. **Run the card.** Neither could be told from the other by reading,
+and driving each took a minute.
+
 **And expect that to stop being true once the guards are fixed.** Weatherlight's
 rehearsal turned seven guards red and **every one was a real finding** — the
 first promotion in this project where none of them was the guard. Ten effect
@@ -1904,7 +2135,20 @@ review directly shrinks this phase.
    missing the same way since Mirage. **No engine instrument can see this**: the
    card compiles, claims every sentence, has no hollow line and plays correctly.
    Read what the *wire* carries for one card of the set's headline mechanic, not
-   only what the engine computes. **For a
+   only what the engine computes.
+
+   **Urza's Legacy found the fourth site and it is a new shape of the same
+   class.** The three before it read a printed **type line** where a CR 613
+   accessor was needed, so a grep for `card.type_line` would have found them all.
+   This one reads a real accessor whose **narrower sibling** answers a strictly
+   smaller question: `_effective_keywords` asked `_protection_colors`, the
+   deliberate colour slice of `_protection_qualities`, which was right for as
+   long as every protection in the pool was from a colour. Urza's Legacy printed
+   two from a card type and the wire went silent about both — Yavimaya Scion,
+   whose *entire* printed text is "Protection from artifacts", reached the client
+   carrying **no badge at all** while the engine had the shield right at every
+   seam it owns. Nothing greppable would have found it; driving one card of the
+   set's new mechanic and reading the payload did. **For a
    reprint set this is the only step that shows what promotion bought**, and
    what it buys is the set as a deckbuilding constraint: the deck editor's set
    filter gains the code, and every card under it renders that set's own art.
@@ -2726,3 +2970,68 @@ the entry described — and CR 615.8's chosen source had its trigger condition
 corrected, because USG printed the phrase eight times and all eight were
 activated abilities the engine already handles. Printing the phrase was never
 the trigger; printing it on a **spell with its own target** is.
+
+### ULG — 2026-09-09
+
+*The two rounds with no cards in them were, again, the rounds that paid best —
+and this time there were two of them because the pile said so, not the card
+count.* Six cards were left when wave 2 opened; three groups took them and two
+took the shipped-defect pile wave 1 had enumerated. Those two returned
+**protection's damage half, which did not exist** — `deal_damage`, the one seam,
+never asked `_is_protected_from`, so 64 shipped cards printing protection took
+damage from 69 sweep lines for the life of the engine — an attack cap the AI
+could not satisfy, so a seat under Crawlspace *or* Caverns of Despair attacked
+with nobody for the rest of the game, and **an upkeep prompt addressed by card
+name**, so two Bad Moons shared one answer and both got paid for, across 112
+shipped cards. Phase 3's text now says the count of no-card groups is set by the
+size of the enumerated pile.
+
+*Four pre-splits, zero cap crossings at integration — and three of four recorded
+seams were wrong.* The first half is the pre-split rule's cleanest result: eight
+modules sat within 30 lines, the four that two or more groups would reach were
+cut at Phase 0, and two waves of five groups crossed **no** cap. The second half
+is the warning that goes with it. `lowering/control_flow.py`'s docstring named
+four composers of which two had already left; `conditions.py` claimed the record
+clauses were read elsewhere when eleven were read by the dispatcher itself;
+`delayed.py` called itself "the one place the rows become a node" and there were
+two. **And the fourth is the shape to watch: `parser.py`'s own seam was right and
+`riders.py` denied it** — the wrong sentence was in a different module's
+docstring, which is exactly the sentence a briefer hands over.
+
+*The set arrived 80.4% supported, the highest ever, and that is a fact about the
+previous set.* 25 ULG cards print echo or cycling, both built at Urza's Saga as
+`expand_ability_lines` rewrites, so they compiled on arrival with nothing to do.
+Phase 1's text now says to read a high arrival number as "the last set did this
+already" and to check which census big rocks are already-built rewrites.
+
+*The promotion rehearsal produced exactly one real card and exactly one stale
+guard, which is the split the phase text predicts and cannot be told apart by
+reading.* Thran Weaponry dropped "for as long as this artifact remains tapped"
+in its lowering, so the buff outlived the untap **and** died at the cleanup step
+of a card whose other line exists to keep it tapped across turns; Aura Flux was a
+guard asking only the lord-buff table about a line whose subject is enchantments.
+A minute of driving each settled both.
+
+*One brief instruction earned its place twice.* Ten groups were told a
+name-keyed hook was the last resort; **the set ships with zero**, the eighth to
+do so, and pool reliance held at 1.5% while the pool grew by 143.
+
+*Phase 4 drained the hooked-claim gap and Phase 5 found the fourth `web/`
+layer-read site — in a new shape.* A hook now claims only the lines
+`CARD_LINE_INSTRUCTIONS` compiles (the blanket was 80 sentences and is now 3),
+and the pool-wide re-run found one card, City in a Bottle, whose second line was
+implemented and unattributed. The `web/` site is the one worth carrying: it is
+not a printed-card read but an accessor whose **narrower sibling** answers a
+smaller question, so no grep would have found it — Yavimaya Scion, whose entire
+text is "Protection from artifacts", reached the client with no badge at all.
+
+*Three items added to Known gaps* (the AI simulator has no combat phase, so
+`simulate_ai_games.py` cannot validate any combat change; an off-battlefield
+colour read ignores a colour-defining static, so Gloom does not tax a spell
+Celestial Dawn made white; and the blocking side of the declaration-legality gap,
+declined with its four parts named). *Two drained* (the hooked-card blanket
+claim, and the simulator's missing main phase — whose re-baseline, unlike its
+`begin_turn_bookkeeping` sibling, was **not** a no-op). *Two amended*: a **card**
+can now be a role, which is three of the multi-slot entry's four named pieces
+built, and CR 615.8's chosen source was re-checked against its own amended
+condition and correctly did not fire.

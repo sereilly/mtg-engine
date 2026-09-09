@@ -940,6 +940,7 @@ a wave is five parallel worktree groups integrated serially.
 | STH | 143 | 67.8% | 2 waves |
 | EXO | 143 | 63.6% | 2 waves + 1 closer |
 | USG | 335 | 60.9% | 3 waves |
+| ULG | 143 | 80.4% | 2 waves |
 
 Three data points shape an estimate. **Legends** is the warning: the lowest
 starting coverage and the flattest ranking — after eight rounds, 113 of its 135
@@ -955,17 +956,26 @@ mis-playing along the way, which every set since Ice Age has repeated and which
 is the argument for the Rock Hydra step.
 
 **Where the pool stands** (regenerate rather than trust these; read
-2026-09-07): 3,109 unique cards over 21 sets, 4,873 printings, 100% supported.
-Grammar parses 90.5% of lines, lowers 89.8% and executes 60.0%
-(`GRAMMAR_COVERAGE.md`). **1.9%** of supported cards carry a name-keyed hook —
-58 cards, 64 entries in 6 registries (`HOOK_RELIANCE.md`) — and the projection
+2026-09-09): 3,570 unique cards over 23 sets, 5,747 printings, 100% supported.
+Grammar parses 90.4% of lines, lowers 89.7% and executes 60.3%
+(`GRAMMAR_COVERAGE.md`). **1.5%** of supported cards carry a name-keyed hook —
+53 cards, 59 entries in 6 registries (`HOOK_RELIANCE.md`) — and the projection
 that implies for the release line has fallen from 1,195 hand-written entries to
-**538**, across nine consecutive sets that added no hook and retired several.
+**432**, across eleven consecutive sets that added no hook and retired several.
 That is the measure moving the way the architecture needs it to. Parse
-coverage: 3,107 of 3,109 supported cards fully claimed, 2 acknowledged, **0
+coverage: 3,568 of 3,570 supported cards fully claimed, 2 acknowledged, **0
 unclaimed** (`PARSE_COVERAGE.md`). `RULES_PROGRESS.md` is the CR coverage
-tracker. `CARD_VERIFICATION.md` is a log, not a target: 572 passed (398
-in-game, 174 auto), 42 equivalent, 0 failed, 2,495 untested.
+tracker. `CARD_VERIFICATION.md` is a log, not a target: 600 passed (402
+in-game, 198 auto), 47 equivalent, 0 failed, 2,923 untested.
+
+**A hook count is only as honest as what claims a hooked card's other lines.**
+`parse_coverage` blanket-claimed *every* sentence of any card carrying *any*
+hook entry until Urza's Legacy's promotion gate, so the instrument built to find
+an unimplemented printed line was structurally blind to one on all 53 of these
+cards — and the blindness shrank every time a hook was retired, which is the
+wrong direction for a guard. The claim is now attributed to the lines
+`CARD_LINE_INSTRUCTIONS` actually compiles; only the four event-keyed registries
+still claim whole, and that is 3 sentences where the blanket was 80.
 
 **Read a ratchet move as a measurement change before crediting it as a
 regression.** Retiring Kudzu's dispatcher moved its line into
