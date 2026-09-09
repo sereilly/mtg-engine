@@ -2,11 +2,11 @@
 
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
-- Total cards: **3427**
-- Passed: **591** (399 checked in-game, 192 auto-passed)
+- Total cards: **3570**
+- Passed: **599** (399 checked in-game, 200 auto-passed)
 - Failed: **0**
-- Equivalent to a passing card: **45**
-- Untested: **2791**
+- Equivalent to a passing card: **47**
+- Untested: **2924**
 
 An *auto-pass* is derived, never recorded: the card has no abilities, or nothing but keywords the engine implements, so its behaviour is the generic combat and keyword code plus its printed numbers, and there is no card-specific path for a manual check to exercise. The note names which. A result recorded in-game always takes precedence over it.
 
@@ -22,6 +22,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Abjure | ⬜ untested |  |
 | Abomination | ⬜ untested |  |
 | Aboroth | ⬜ untested |  |
+| About Face | ⬜ untested |  |
 | Absolute Grace | ⬜ untested |  |
 | Absolute Law | ⬜ untested |  |
 | Abu Ja'far | ✅ pass |  |
@@ -109,9 +110,11 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Ancestral Recall | ✅ pass |  |
 | Ancient Runes | ⬜ untested |  |
 | Ancient Tomb | ⬜ untested |  |
+| Angel's Trumpet | ⬜ untested |  |
 | Angelic Ascension | ⬜ untested |  |
 | Angelic Blessing | ⬜ untested |  |
 | Angelic Chorus | ⬜ untested |  |
+| Angelic Curator | ✅ pass | auto-pass: keywords only (flying, protection from artifacts) |
 | Angelic Page | ⬜ untested |  |
 | Angelic Protector | ⬜ untested |  |
 | Angelic Renewal | ⬜ untested |  |
@@ -127,6 +130,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Anoint | ⬜ untested |  |
 | Anointed Chorister | ⬜ untested |  |
 | Antagonism | ⬜ untested |  |
+| Anthroplasm | ⬜ untested |  |
 | Anti-Magic Aura | ⬜ untested |  |
 | Anvil of Bogardan | ⬜ untested |  |
 | Apathy | ⬜ untested |  |
@@ -141,6 +145,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Arcane Laboratory | ⬜ untested |  |
 | Archangel | ✅ pass | auto-pass: keywords only (flying, vigilance) |
 | Archfiend's Vessel | ⬜ untested |  |
+| Archivist | ⬜ untested |  |
 | Arctic Foxes | ⬜ untested |  |
 | Arctic Wolves | ⬜ untested |  |
 | Arcum's Sleigh | ⬜ untested |  |
@@ -185,12 +190,14 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Astrolabe | ⬜ untested |  |
 | Atog | ⬜ untested |  |
 | Attunement | ⬜ untested |  |
+| Aura Flux | ⬜ untested |  |
 | Aura of Silence | ⬜ untested |  |
 | Auratog | ⬜ untested |  |
 | Aurochs | ⬜ untested |  |
 | Auspicious Ancestor | ⬜ untested |  |
 | Autumn Willow | ⬜ untested |  |
 | Avalanche | ⬜ untested |  |
+| Avalanche Riders | ⬜ untested |  |
 | Aven Gagglemaster | ⬜ untested |  |
 | Avenging Angel | ⬜ untested |  |
 | Avenging Druid | ⬜ untested |  |
@@ -266,6 +273,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Bazaar of Baghdad | ✅ pass |  |
 | Bazaar of Wonders | ⬜ untested |  |
 | Beast Walkers | ⬜ untested |  |
+| Beast of Burden | ⬜ untested |  |
 | Beasts of Bogardan | ⬜ untested |  |
 | Bedlam | ⬜ untested |  |
 | Befoul | ⬜ untested |  |
@@ -301,6 +309,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Blasted Landscape | ⬜ untested |  |
 | Blaze of Glory | ✅ pass |  |
 | Blazing Effigy | ⬜ untested |  |
+| Blessed Reversal | ⬜ untested |  |
 | Blessed Wine | ⬜ untested |  |
 | Blessing | ✅ pass |  |
 | Blight | ⬜ untested |  |
@@ -310,6 +319,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Blinking Spirit | ⬜ untested |  |
 | Blistering Barrier | ✅ pass | auto-pass: keywords only (defender) |
 | Blizzard | ⬜ untested |  |
+| Bloated Toad | ⬜ untested |  |
 | Blood Frenzy | ⬜ untested |  |
 | Blood Glutton | ✅ pass | auto-pass: keywords only (lifelink) |
 | Blood Lust | ⬜ untested |  |
@@ -340,6 +350,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Bone Mask | ⬜ untested |  |
 | Bone Pit Brute | ⬜ untested |  |
 | Bone Shaman | ⬜ untested |  |
+| Bone Shredder | ⬜ untested |  |
 | Booby Trap | ⬜ untested |  |
 | Book of Rass | ⬜ untested |  |
 | Boomerang | ⬜ untested |  |
@@ -348,6 +359,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Bottle of Suleiman | ✅ pass |  |
 | Bottomless Pit | ⬜ untested |  |
 | Bottomless Vault | ⬜ untested |  |
+| Bouncing Beebles | ⬜ untested |  |
 | Bounty Hunter | ⬜ untested |  |
 | Bounty of the Hunt | ⬜ untested |  |
 | Braingeyser | ✅ pass |  |
@@ -370,6 +382,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Brilliant Halo | ⬜ untested |  |
 | Brine Hag | ⬜ untested |  |
 | Brine Shaman | ⬜ untested |  |
+| Brink of Madness | ⬜ untested |  |
 | Broken Fall | ⬜ untested |  |
 | Broken Visage | ⬜ untested |  |
 | Bronze Horse | ⬜ untested |  |
@@ -396,6 +409,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Burnout | ⬜ untested |  |
 | Burnt Offering | ⬜ untested |  |
 | Burrowing | ✅ pass |  |
+| Burst of Energy | ⬜ untested |  |
 | Bösium Strip | ⬜ untested |  |
 | Cackling Fiend | ⬜ untested |  |
 | Cadaverous Bloom | ⬜ untested |  |
@@ -451,6 +465,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Cemetery Gate | ✅ pass | auto-pass: keywords only (defender, protection from black) |
 | Centaur Archer | ⬜ untested |  |
 | Cerulean Wyvern | ✅ pass | auto-pass: keywords only (flying, protection from green) |
+| Cessation | ⬜ untested |  |
 | Chain Lightning | ⬜ untested |  |
 | Chain Stasis | ⬜ untested |  |
 | Chains of Mephistopheles | ⬜ untested |  |
@@ -533,6 +548,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Cloud Djinn | ⬜ untested |  |
 | Cloud Elemental | ⬜ untested |  |
 | Cloud Spirit | ⬜ untested |  |
+| Cloud of Faeries | ⬜ untested |  |
 | Cloudchaser Eagle | ⬜ untested |  |
 | Coal Golem | ⬜ untested |  |
 | Coat of Arms | ✅ pass |  |
@@ -595,6 +611,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Craven Giant | ⬜ untested |  |
 | Craw Giant | ⬜ untested |  |
 | Craw Wurm | ✅ pass |  |
+| Crawlspace | ⬜ untested |  |
 | Crazed Armodon | ⬜ untested |  |
 | Crazed Skirge | ✅ pass | auto-pass: keywords only (flying, haste) |
 | Creature Bond | ✅ pass |  |
@@ -605,6 +622,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Crimson Manticore | ⬜ untested |  |
 | Crimson Roc | ⬜ untested |  |
 | Crookshank Kobolds | ✅ pass | auto-pass: no abilities |
+| Crop Rotation | ⬜ untested |  |
 | Crossbow Ambush | ⬜ untested |  |
 | Crosswinds | ⬜ untested |  |
 | Crovax the Cursed | ⬜ untested |  |
@@ -639,6 +657,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Cyclopean Tomb | ✅ pass |  |
 | D'Avenant Archer | ⬜ untested |  |
 | Dakkon Blackblade | ⬜ untested |  |
+| Damping Engine | ⬜ untested |  |
 | Damping Field | ⬜ untested |  |
 | Dance of Many | ⬜ untested |  |
 | Dance of the Dead | ⬜ untested |  |
@@ -657,6 +676,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Darkling Stalker | ⬜ untested |  |
 | Darkness | ≡ equivalent | same behaviour as Fog |
 | Darkpact | ✅ pass |  |
+| Darkwatch Elves | ⬜ untested |  |
 | Daughter of Autumn | ⬜ untested |  |
 | Dauthi Cutthroat | ⬜ untested |  |
 | Dauthi Embrace | ⬜ untested |  |
@@ -688,12 +708,17 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Decomposition | ⬜ untested |  |
 | Deep Spawn | ⬜ untested |  |
 | Deep Water | ⬜ untested |  |
+| Defender of Chaos | ✅ pass | auto-pass: keywords only (flash, protection from white) |
+| Defender of Law | ✅ pass | auto-pass: keywords only (flash, protection from red) |
+| Defense Grid | ⬜ untested |  |
+| Defense of the Heart | ⬜ untested |  |
 | Defensive Formation | ⬜ untested |  |
 | Defiant Strike | ⬜ untested |  |
 | Deflection | ⬜ untested |  |
 | Delif's Cone | ⬜ untested |  |
 | Delif's Cube | ⬜ untested |  |
 | Delirium | ⬜ untested |  |
+| Delusions of Mediocrity | ⬜ untested |  |
 | Demonic Attorney | ✅ pass |  |
 | Demonic Consultation | ⬜ untested |  |
 | Demonic Embrace | ✅ pass |  |
@@ -701,6 +726,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Demonic Torment | ⬜ untested |  |
 | Demonic Tutor | ✅ pass |  |
 | Dense Foliage | ⬜ untested |  |
+| Deranged Hermit | ⬜ untested |  |
 | Derelor | ⬜ untested |  |
 | Desert | ✅ pass |  |
 | Desert Nomads | ✅ pass |  |
@@ -714,6 +740,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Destructive Urge | ⬜ untested |  |
 | Detonate | ⬜ untested |  |
 | Devouring Deep | ✅ pass | auto-pass: keywords only (islandwalk) |
+| Devout Harpist | ⬜ untested |  |
 | Diabolic Edict | ⬜ untested |  |
 | Diabolic Machine | ⬜ untested |  |
 | Diabolic Servitude | ⬜ untested |  |
@@ -895,6 +922,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Energy Vortex | ⬜ untested |  |
 | Enervate | ⬜ untested |  |
 | Enfeeblement | ⬜ untested |  |
+| Engineered Plague | ⬜ untested |  |
 | Enlightened Tutor | ⬜ untested |  |
 | Enraging Licid | ⬜ untested |  |
 | Enslaved Scout | ⬜ untested |  |
@@ -906,6 +934,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Equilibrium | ⬜ untested |  |
 | Equinox | ⬜ untested |  |
 | Equipoise | ⬜ untested |  |
+| Erase | ⬜ untested |  |
 | Erg Raiders | ✅ pass |  |
 | Erhnam Djinn | ✅ pass |  |
 | Eron the Relentless | ⬜ untested |  |
@@ -934,12 +963,14 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Evil Eye of Orms-by-Gore | ⬜ untested |  |
 | Evil Presence | ✅ pass |  |
 | Evincar's Justice | ⬜ untested |  |
+| Eviscerator | ⬜ untested |  |
 | Exalted Dragon | ⬜ untested |  |
 | Excavator | ⬜ untested |  |
 | Exhaustion | ⬜ untested |  |
 | Exhume | ⬜ untested |  |
 | Exile | ⬜ untested |  |
 | Exorcist | ⬜ untested |  |
+| Expendable Troops | ⬜ untested |  |
 | Experimental Overload | ⬜ untested |  |
 | Exploration | ⬜ untested |  |
 | Expunge | ⬜ untested |  |
@@ -948,6 +979,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Eye of Singularity | ⬜ untested |  |
 | Fabled Passage | ⬜ untested |  |
 | Fade Away | ⬜ untested |  |
+| Faerie Conclave | ⬜ untested |  |
 | Faerie Noble | ⬜ untested |  |
 | Faith Healer | ⬜ untested |  |
 | Faith's Fetters | ⬜ untested |  |
@@ -1039,6 +1071,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Flash Flood | ⬜ untested |  |
 | Flashfires | ✅ pass |  |
 | Fledgling Djinn | ≡ equivalent | same behaviour as Serendib Efreet |
+| Fleeting Image | ⬜ untested |  |
 | Flesh Reaver | ⬜ untested |  |
 | Flickering Ward | ⬜ untested |  |
 | Flight | ✅ pass |  |
@@ -1067,6 +1100,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Fog | ✅ pass |  |
 | Fog Bank | ⬜ untested |  |
 | Fog Elemental | ⬜ untested |  |
+| Fog of Gnats | ⬜ untested |  |
 | Folk of An-Havva | ⬜ untested |  |
 | Folk of the Pines | ⬜ untested |  |
 | Fool's Tome | ⬜ untested |  |
@@ -1075,6 +1109,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Forbidden Crypt | ⬜ untested |  |
 | Forbidden Lore | ⬜ untested |  |
 | Forbidden Ritual | ⬜ untested |  |
+| Forbidding Watchtower | ⬜ untested |  |
 | Force Spike | ⬜ untested |  |
 | Force Void | ⬜ untested |  |
 | Force of Nature | ✅ pass |  |
@@ -1099,6 +1134,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Foxfire | ⬜ untested |  |
 | Frankenstein's Monster | ⬜ untested |  |
 | Frantic Inventory | ⬜ untested |  |
+| Frantic Search | ⬜ untested |  |
 | Freewind Falcon | ✅ pass | auto-pass: keywords only (flying, protection from red) |
 | Frenetic Efreet | ⬜ untested |  |
 | Freyalise Supplicant | ⬜ untested |  |
@@ -1144,6 +1180,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Gallowbraid | ⬜ untested |  |
 | Gamble | ⬜ untested |  |
 | Game of Chaos | ⬜ untested |  |
+| Gang of Elk | ⬜ untested |  |
 | Gangrenous Zombies | ⬜ untested |  |
 | Gargantuan Gorilla | ⬜ untested |  |
 | Garruk's Gorehorn | ✅ pass | auto-pass: no abilities |
@@ -1162,6 +1199,10 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Gerrard's Battle Cry | ⬜ untested |  |
 | Gerrard's Wisdom | ⬜ untested |  |
 | Ghazbán Ogre | ✅ pass |  |
+| Ghitu Encampment | ⬜ untested |  |
+| Ghitu Fire-Eater | ⬜ untested |  |
+| Ghitu Slinger | ⬜ untested |  |
+| Ghitu War Cry | ⬜ untested |  |
 | Ghost Hounds | ⬜ untested |  |
 | Ghost Ship | ⬜ untested |  |
 | Ghost Town | ⬜ untested |  |
@@ -1170,6 +1211,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Ghosts of the Damned | ⬜ untested |  |
 | Giant Albatross | ⬜ untested |  |
 | Giant Caterpillar | ⬜ untested |  |
+| Giant Cockroach | ✅ pass | auto-pass: no abilities |
 | Giant Crab | ⬜ untested |  |
 | Giant Growth | ✅ pass |  |
 | Giant Mantis | ✅ pass | auto-pass: keywords only (reach) |
@@ -1218,6 +1260,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Goblin Lackey | ⬜ untested |  |
 | Goblin Lyre | ⬜ untested |  |
 | Goblin Matron | ⬜ untested |  |
+| Goblin Medics | ⬜ untested |  |
 | Goblin Mutant | ⬜ untested |  |
 | Goblin Offensive | ⬜ untested |  |
 | Goblin Patrol | ⬜ untested |  |
@@ -1237,6 +1280,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Goblin War Buggy | ⬜ untested |  |
 | Goblin War Drums | ⬜ untested |  |
 | Goblin Warrens | ⬜ untested |  |
+| Goblin Welder | ⬜ untested |  |
 | Goblin Wizard | ⬜ untested |  |
 | Goblin Wizardry | ⬜ untested |  |
 | Goblins of the Flarg | ⬜ untested |  |
@@ -1254,6 +1298,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Grandmother Sengir | ⬜ untested |  |
 | Granger Guildmage | ⬜ untested |  |
 | Granite Gargoyle | ✅ pass |  |
+| Granite Grip | ⬜ untested |  |
 | Grapeshot Catapult | ⬜ untested |  |
 | Grasp of Darkness | ⬜ untested |  |
 | Grasslands | ⬜ untested |  |
@@ -1279,6 +1324,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Griffin Aerie | ⬜ untested |  |
 | Griffin Canyon | ⬜ untested |  |
 | Grim Feast | ⬜ untested |  |
+| Grim Monolith | ≡ equivalent | same behaviour as Basalt Monolith |
 | Grim Tutor | ⬜ untested |  |
 | Grindstone | ⬜ untested |  |
 | Grinning Totem | ⬜ untested |  |
@@ -1308,6 +1354,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Harbinger of Night | ⬜ untested |  |
 | Harbor Guardian | ⬜ untested |  |
 | Harmattan Efreet | ⬜ untested |  |
+| Harmonic Convergence | ⬜ untested |  |
 | Harrow | ⬜ untested |  |
 | Harvest Wurm | ⬜ untested |  |
 | Hasran Ogress | ✅ pass |  |
@@ -1363,6 +1410,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Hibernation | ⬜ untested |  |
 | Hibernation Sliver | ⬜ untested |  |
 | Hidden Ancients | ⬜ untested |  |
+| Hidden Gibbons | ⬜ untested |  |
 | Hidden Guerrillas | ⬜ untested |  |
 | Hidden Herd | ⬜ untested |  |
 | Hidden Horror | ⬜ untested |  |
@@ -1393,6 +1441,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Honorable Passage | ⬜ untested |  |
 | Hooded Blightfang | ⬜ untested |  |
 | Hope Charm | ⬜ untested |  |
+| Hope and Glory | ⬜ untested |  |
 | Hopping Automaton | ⬜ untested |  |
 | Horn of Deafening | ⬜ untested |  |
 | Horn of Greed | ⬜ untested |  |
@@ -1458,6 +1507,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Illusions of Grandeur | ⬜ untested |  |
 | Imaginary Pet | ⬜ untested |  |
 | Immolation | ⬜ untested |  |
+| Impending Disaster | ⬜ untested |  |
 | Implements of Sacrifice | ⬜ untested |  |
 | Imposing Visage | ⬜ untested |  |
 | Imprison | ⬜ untested |  |
@@ -1488,6 +1538,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Inspiration | ⬜ untested |  |
 | Instill Energy | ✅ pass |  |
 | Interdict | ⬜ untested |  |
+| Intervene | ⬜ untested |  |
 | Intrepid Hero | ⬜ untested |  |
 | Intruder Alarm | ⬜ untested |  |
 | Intuition | ⬜ untested |  |
@@ -1497,8 +1548,10 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Invoke Prejudice | ⬜ untested |  |
 | Invulnerability | ⬜ untested |  |
 | Irini Sengir | ⬜ untested |  |
+| Iron Maiden | ⬜ untested |  |
 | Iron Star | ✅ pass |  |
 | Iron Tusk Elephant | ✅ pass | auto-pass: keywords only (trample) |
+| Iron Will | ⬜ untested |  |
 | Iron-Heart Chimera | ⬜ untested |  |
 | Ironclaw Curse | ⬜ untested |  |
 | Ironclaw Orcs | ✅ pass |  |
@@ -1535,6 +1588,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Jet Medallion | ⬜ untested |  |
 | Jeweled Amulet | ⬜ untested |  |
 | Jeweled Bird | ✅ pass |  |
+| Jhoira's Toolbox | ⬜ untested |  |
 | Jihad | ✅ pass |  |
 | Jinx | ⬜ untested |  |
 | Jinxed Idol | ⬜ untested |  |
@@ -1570,6 +1624,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Kaervek, the Spiteful | ✅ pass |  |
 | Karakas | ⬜ untested |  |
 | Karma | ✅ pass |  |
+| Karmic Guide | ⬜ untested |  |
 | Karn, Silver Golem | ⬜ untested |  |
 | Karoo | ⬜ untested |  |
 | Karoo Meerkat | ✅ pass | auto-pass: keywords only (protection from blue) |
@@ -1599,6 +1654,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Kindle | ⬜ untested |  |
 | Kinetic Augur | ⬜ untested |  |
 | King Cheetah | ✅ pass | auto-pass: keywords only (flash) |
+| King Crab | ⬜ untested |  |
 | King Suleiman | ✅ pass |  |
 | Kird Ape | ✅ pass |  |
 | Kismet | ⬜ untested |  |
@@ -1623,6 +1679,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Knight of Stromgald | ⬜ untested |  |
 | Knight of Valor | ⬜ untested |  |
 | Knight of the Mists | ⬜ untested |  |
+| Knighthood | ⬜ untested |  |
 | Knights of Thorn | ✅ pass | auto-pass: keywords only (protection from red, banding) |
 | Knowledge Vault | ⬜ untested |  |
 | Kobold Drill Sergeant | ⬜ untested |  |
@@ -1660,8 +1717,10 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Land Tax | ⬜ untested |  |
 | Land's Edge | ⬜ untested |  |
 | Lapis Lazuli Talisman | ⬜ untested |  |
+| Last-Ditch Effort | ⬜ untested |  |
 | Lat-Nam's Legacy | ⬜ untested |  |
 | Launch | ⬜ untested |  |
+| Lava Axe | ⬜ untested |  |
 | Lava Burst | ⬜ untested |  |
 | Lava Hounds | ⬜ untested |  |
 | Lava Storm | ⬜ untested |  |
@@ -1683,6 +1742,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Leshrac's Sigil | ⬜ untested |  |
 | Lesser Werewolf | ⬜ untested |  |
 | Leviathan | ⬜ untested |  |
+| Levitation | ⬜ untested |  |
 | Ley Druid | ✅ pass |  |
 | Lhurgoyf | ⬜ untested |  |
 | Library Larcenist | ⬜ untested |  |
@@ -1741,6 +1801,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Locust Swarm | ⬜ untested |  |
 | Lodestone Bauble | ⬜ untested |  |
 | Lofty Denial | ⬜ untested |  |
+| Lone Wolf | ⬜ untested |  |
 | Longbow Archer | ✅ pass | auto-pass: keywords only (reach, first strike) |
 | Looming Shade | ≡ equivalent | same behaviour as Frozen Shade |
 | Lord Magnus | ⬜ untested |  |
@@ -1760,6 +1821,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Lure of Prey | ⬜ untested |  |
 | Lurker | ⬜ untested |  |
 | Lurking Evil | ⬜ untested |  |
+| Lurking Skirge | ⬜ untested |  |
 | Maddening Imp | ⬜ untested |  |
 | Maddening Wind | ⬜ untested |  |
 | Mage il-Vec | ⬜ untested |  |
@@ -1811,6 +1873,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Marsh Goblins | ✅ pass | auto-pass: keywords only (swampwalk) |
 | Marsh Lurker | ⬜ untested |  |
 | Marsh Viper | ⬜ untested |  |
+| Martyr's Cause | ⬜ untested |  |
 | Martyr's Cry | ⬜ untested |  |
 | Martyrdom | ⬜ untested |  |
 | Martyrs of Korlis | ⬜ untested |  |
@@ -1835,6 +1898,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Meltdown | ⬜ untested |  |
 | Melting | ⬜ untested |  |
 | Memory Crystal | ⬜ untested |  |
+| Memory Jar | ⬜ untested |  |
 | Memory Lapse | ⬜ untested |  |
 | Mercenaries | ⬜ untested |  |
 | Merchant Scroll | ⬜ untested |  |
@@ -1856,6 +1920,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Meteorite | ⬜ untested |  |
 | Metrognome | ⬜ untested |  |
 | Midsummer Revel | ⬜ untested |  |
+| Might of Oaks | ≡ equivalent | same behaviour as Giant Growth |
 | Mightstone | ⬜ untested |  |
 | Mijae Djinn | ✅ pass |  |
 | Millstone | ⬜ untested |  |
@@ -1887,6 +1952,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Mirri's Guile | ⬜ untested |  |
 | Mirri, Cat Warrior | ✅ pass | auto-pass: keywords only (first strike, forestwalk, vigilance) |
 | Mirror Universe | ⬜ untested |  |
+| Miscalculation | ⬜ untested |  |
 | Miscast | ⬜ untested |  |
 | Mischievous Poltergeist | ⬜ untested |  |
 | Misers' Cage | ⬜ untested |  |
@@ -1919,6 +1985,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Mogg Squad | ⬜ untested |  |
 | Mold Demon | ⬜ untested |  |
 | Mole Worms | ⬜ untested |  |
+| Molten Hydra | ⬜ untested |  |
 | Mongrel Pack | ⬜ untested |  |
 | Monk Idealist | ⬜ untested |  |
 | Monk Realist | ⬜ untested |  |
@@ -1935,6 +2002,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Mortuary | ⬜ untested |  |
 | Moss Diamond | ⬜ untested |  |
 | Moss Monster | ✅ pass | auto-pass: no abilities |
+| Mother of Runes | ⬜ untested |  |
 | Mountain | ✅ pass |  |
 | Mountain Goat | ✅ pass | auto-pass: keywords only (mountainwalk) |
 | Mountain Stronghold | ⬜ untested |  |
@@ -1953,6 +2021,9 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Mtenda Lion | ⬜ untested |  |
 | Mudslide | ⬜ untested |  |
 | Mulch | ⬜ untested |  |
+| Multani's Acolyte | ⬜ untested |  |
+| Multani's Presence | ⬜ untested |  |
+| Multani, Maro-Sorcerer | ⬜ untested |  |
 | Mundungu | ⬜ untested |  |
 | Murk Dwellers | ⬜ untested |  |
 | Muscle Sliver | ⬜ untested |  |
@@ -2005,6 +2076,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Night Soil | ⬜ untested |  |
 | Nightmare | ✅ pass |  |
 | Nine Lives | ⬜ untested |  |
+| No Mercy | ⬜ untested |  |
 | No Quarter | ⬜ untested |  |
 | No Rest for the Wicked | ⬜ untested |  |
 | Noble Benefactor | ⬜ untested |  |
@@ -2043,11 +2115,14 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Onyx Talisman | ⬜ untested |  |
 | Opal Acrolith | ⬜ untested |  |
 | Opal Archangel | ⬜ untested |  |
+| Opal Avenger | ⬜ untested |  |
 | Opal Caryatid | ⬜ untested |  |
+| Opal Champion | ⬜ untested |  |
 | Opal Gargoyle | ⬜ untested |  |
 | Opal Titan | ⬜ untested |  |
 | Ophidian | ⬜ untested |  |
 | Opportunist | ⬜ untested |  |
+| Opportunity | ⬜ untested |  |
 | Oppression | ⬜ untested |  |
 | Opt | ⬜ untested |  |
 | Oracle en-Vec | ⬜ untested |  |
@@ -2078,6 +2153,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Ornery Dilophosaur | ⬜ untested |  |
 | Ornithopter | ✅ pass | auto-pass: keywords only (flying) |
 | Osai Vultures | ⬜ untested |  |
+| Ostracize | ⬜ untested |  |
 | Oubliette | ✅ pass |  |
 | Outmaneuver | ⬜ untested |  |
 | Overgrowth | ⬜ untested |  |
@@ -2088,6 +2164,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Painful Memories | ⬜ untested |  |
 | Paladin en-Vec | ✅ pass | auto-pass: keywords only (first strike, protection from black and from red) |
 | Pale Bears | ✅ pass | auto-pass: keywords only (islandwalk) |
+| Palinchron | ⬜ untested |  |
 | Palladia-Mors | ⬜ untested |  |
 | Palladium Myr | ⬜ untested |  |
 | Pallimud | ⬜ untested |  |
@@ -2098,6 +2175,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Paralyze | ✅ pass |  |
 | Parapet | ⬜ untested |  |
 | Parasitic Bond | ≡ equivalent | same behaviour as Wanderlust |
+| Parch | ⬜ untested |  |
 | Pariah | ⬜ untested |  |
 | Paroxysm | ⬜ untested |  |
 | Part Water | ⬜ untested |  |
@@ -2107,6 +2185,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Paupers' Cage | ⬜ untested |  |
 | Pavel Maliki | ⬜ untested |  |
 | Peace Talks | ⬜ untested |  |
+| Peace and Quiet | ⬜ untested |  |
 | Peace of Mind | ⬜ untested |  |
 | Peacekeeper | ⬜ untested |  |
 | Pearl Dragon | ⬜ untested |  |
@@ -2141,7 +2220,11 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Phantom Wings | ⬜ untested |  |
 | Phelddagrif | ⬜ untested |  |
 | Phyrexian Boon | ⬜ untested |  |
+| Phyrexian Broodlings | ⬜ untested |  |
 | Phyrexian Colossus | ⬜ untested |  |
+| Phyrexian Debaser | ⬜ untested |  |
+| Phyrexian Defiler | ⬜ untested |  |
+| Phyrexian Denouncer | ⬜ untested |  |
 | Phyrexian Devourer | ⬜ untested |  |
 | Phyrexian Dreadnought | ⬜ untested |  |
 | Phyrexian Furnace | ⬜ untested |  |
@@ -2150,9 +2233,11 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Phyrexian Grimoire | ⬜ untested |  |
 | Phyrexian Hulk | ✅ pass | auto-pass: no abilities |
 | Phyrexian Marauder | ⬜ untested |  |
+| Phyrexian Plaguelord | ⬜ untested |  |
 | Phyrexian Portal | ⬜ untested |  |
 | Phyrexian Processor | ⬜ untested |  |
 | Phyrexian Purge | ⬜ untested |  |
+| Phyrexian Reclamation | ⬜ untested |  |
 | Phyrexian Splicer | ⬜ untested |  |
 | Phyrexian Tower | ⬜ untested |  |
 | Phyrexian Tribute | ⬜ untested |  |
@@ -2172,10 +2257,12 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Pit Trap | ⬜ untested |  |
 | Pitchburn Devils | ⬜ untested |  |
 | Pixie Queen | ⬜ untested |  |
+| Plague Beetle | ✅ pass | auto-pass: keywords only (swampwalk) |
 | Plague Rats | ✅ pass |  |
 | Plaguebearer | ⬜ untested |  |
 | Plains | ✅ pass |  |
 | Planar Birth | ⬜ untested |  |
+| Planar Collapse | ⬜ untested |  |
 | Planar Gate | ⬜ untested |  |
 | Planar Void | ⬜ untested |  |
 | Plateau | ✅ pass |  |
@@ -2236,11 +2323,13 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Purelace | ✅ pass |  |
 | Purgatory | ⬜ untested |  |
 | Purging Scythe | ⬜ untested |  |
+| Purify | ⬜ untested |  |
 | Purraj of Urborg | ⬜ untested |  |
 | Pursued Whale | ⬜ untested |  |
 | Pursuit of Knowledge | ⬜ untested |  |
 | Pygmy Allosaurus | ✅ pass | auto-pass: keywords only (swampwalk) |
 | Pygmy Hippo | ⬜ untested |  |
+| Pygmy Pyrosaur | ⬜ untested |  |
 | Pygmy Troll | ⬜ untested |  |
 | Pyknite | ⬜ untested |  |
 | Pyramids | ✅ pass |  |
@@ -2248,12 +2337,14 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Pyroblast | ⬜ untested |  |
 | Pyroclasm | ⬜ untested |  |
 | Pyrokinesis | ⬜ untested |  |
+| Pyromancy | ⬜ untested |  |
 | Pyrotechnics | ⬜ untested |  |
 | Python | ✅ pass | auto-pass: no abilities |
 | Quagmire | ⬜ untested |  |
 | Quarum Trench Gnomes | ⬜ untested |  |
 | Quickening Licid | ⬜ untested |  |
 | Quicksand | ⬜ untested |  |
+| Quicksilver Amulet | ⬜ untested |  |
 | Quirion Druid | ⬜ untested |  |
 | Quirion Dryad | ⬜ untested |  |
 | Quirion Elves | ⬜ untested |  |
@@ -2261,9 +2352,13 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Rabid Rats | ⬜ untested |  |
 | Rabid Wolverines | ⬜ untested |  |
 | Rabid Wombat | ⬜ untested |  |
+| Rack and Ruin | ⬜ untested |  |
 | Radha, Heart of Keld | ⬜ untested |  |
 | Radiant Essence | ⬜ untested |  |
 | Radiant Fountain | ✅ pass |  |
+| Radiant's Dragoons | ⬜ untested |  |
+| Radiant's Judgment | ⬜ untested |  |
+| Radiant, Archangel | ⬜ untested |  |
 | Radjan Spirit | ⬜ untested |  |
 | Rag Man | ⬜ untested |  |
 | Raging Bull | ✅ pass | auto-pass: no abilities |
@@ -2286,8 +2381,10 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Ramirez DePietro | ✅ pass | auto-pass: keywords only (first strike) |
 | Rampant Growth | ⬜ untested |  |
 | Ramses Overdark | ⬜ untested |  |
+| Rancor | ⬜ untested |  |
 | Ranger en-Vec | ⬜ untested |  |
 | Ranger's Guile | ⬜ untested |  |
+| Rank and File | ⬜ untested |  |
 | Ransack | ⬜ untested |  |
 | Rapid Fire | ⬜ untested |  |
 | Rashida Scalebane | ⬜ untested |  |
@@ -2295,6 +2392,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Rasputin Dreamweaver | ⬜ untested |  |
 | Rathi Dragon | ⬜ untested |  |
 | Rats of Rath | ⬜ untested |  |
+| Raven Familiar | ⬜ untested |  |
 | Ravenous Baboons | ⬜ untested |  |
 | Ravenous Skirge | ⬜ untested |  |
 | Ravenous Vampire | ⬜ untested |  |
@@ -2312,6 +2410,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Reaping the Rewards | ⬜ untested |  |
 | Rebirth | ⬜ untested |  |
 | Rebound | ⬜ untested |  |
+| Rebuild | ⬜ untested |  |
 | Recall | ⬜ untested |  |
 | Recantation | ⬜ untested |  |
 | Reckless Embermage | ⬜ untested |  |
@@ -2358,6 +2457,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Reparations | ⬜ untested |  |
 | Repentance | ⬜ untested |  |
 | Repentant Blacksmith | ✅ pass |  |
+| Repopulate | ⬜ untested |  |
 | Reprisal | ⬜ untested |  |
 | Reprocess | ⬜ untested |  |
 | Rescind | ⬜ untested |  |
@@ -2388,6 +2488,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Righteousness | ✅ pass |  |
 | Rime Dryad | ✅ pass | auto-pass: keywords only (snow forestwalk) |
 | Rin and Seri, Inseparable | ⬜ untested |  |
+| Ring of Gix | ⬜ untested |  |
 | Ring of Immortals | ⬜ untested |  |
 | Ring of Ma'rûf | ✅ pass |  |
 | Ring of Renewal | ⬜ untested |  |
@@ -2396,6 +2497,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Ritual of Steel | ⬜ untested |  |
 | Ritual of Subdual | ⬜ untested |  |
 | Ritual of the Machine | ⬜ untested |  |
+| Rivalry | ⬜ untested |  |
 | Riven Turnbull | ⬜ untested |  |
 | River Boa | ⬜ untested |  |
 | River Delta | ⬜ untested |  |
@@ -2528,6 +2630,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Scoured Barrens | ⬜ untested |  |
 | Scragnoth | ⬜ untested |  |
 | Scrap | ⬜ untested |  |
+| Scrapheap | ⬜ untested |  |
 | Screeching Harpy | ⬜ untested |  |
 | Scrivener | ⬜ untested |  |
 | Scroll Rack | ⬜ untested |  |
@@ -2549,6 +2652,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Seasoned Hallowblade | ⬜ untested |  |
 | Seasoned Marshal | ⬜ untested |  |
 | Seasoned Tactician | ⬜ untested |  |
+| Second Chance | ⬜ untested |  |
 | Secure the Scene | ⬜ untested |  |
 | Sedge Troll | ✅ pass |  |
 | See the Truth | ⬜ untested |  |
@@ -2631,6 +2735,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Shivan Dragon | ✅ pass |  |
 | Shivan Gorge | ⬜ untested |  |
 | Shivan Hellkite | ⬜ untested |  |
+| Shivan Phoenix | ⬜ untested |  |
 | Shivan Raptor | ⬜ untested |  |
 | Shock | ⬜ untested |  |
 | Shocker | ⬜ untested |  |
@@ -2641,6 +2746,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Shrink | ⬜ untested |  |
 | Shyft | ⬜ untested |  |
 | Sibilant Spirit | ⬜ untested |  |
+| Sick and Tired | ⬜ untested |  |
 | Sicken | ⬜ untested |  |
 | Sidar Jabari | ⬜ untested |  |
 | Siege Striker | ⬜ untested |  |
@@ -2649,9 +2755,11 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Silent Attendant | ⬜ untested |  |
 | Silent Dart | ✅ pass |  |
 | Silhouette | ⬜ untested |  |
+| Silk Net | ⬜ untested |  |
 | Silver Erne | ✅ pass | auto-pass: keywords only (flying, trample) |
 | Silver Wyvern | ⬜ untested |  |
 | Silversmote Ghoul | ⬜ untested |  |
+| Simian Grunts | ⬜ untested |  |
 | Simoon | ⬜ untested |  |
 | Simulacrum | ✅ pass |  |
 | Sindbad | ✅ pass |  |
@@ -2689,14 +2797,18 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Skyway Sniper | ⬜ untested |  |
 | Slaughter | ⬜ untested |  |
 | Sleeper Agent | ⬜ untested |  |
+| Sleeper's Guile | ⬜ untested |  |
 | Sleight of Mind | ✅ pass |  |
 | Slippery Karst | ⬜ untested |  |
 | Sliver Queen | ⬜ untested |  |
+| Slow Motion | ⬜ untested |  |
+| Sluggishness | ⬜ untested |  |
 | Smite | ⬜ untested |  |
 | Smoke | ✅ pass |  |
 | Smokestack | ⬜ untested |  |
 | Smoldering Crater | ⬜ untested |  |
 | Snake Basket | ⬜ untested |  |
+| Snap | ⬜ untested |  |
 | Snarespinner | ⬜ untested |  |
 | Sneak Attack | ⬜ untested |  |
 | Snow Devil | ⬜ untested |  |
@@ -2761,6 +2873,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Southern Paladin | ≡ equivalent | same behaviour as Northern Paladin |
 | Sparkhunter Masticore | ⬜ untested |  |
 | Spatial Binding | ⬜ untested |  |
+| Spawning Pool | ⬜ untested |  |
 | Speaker of the Heavens | ⬜ untested |  |
 | Spectral Bears | ⬜ untested |  |
 | Spectral Cloak | ⬜ untested |  |
@@ -2873,6 +2986,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Subira, Tulzidi Caravanner | ⬜ untested |  |
 | Sublime Epiphany | ⬜ untested |  |
 | Subterranean Spirit | ⬜ untested |  |
+| Subversion | ⬜ untested |  |
 | Sudden Impact | ⬜ untested |  |
 | Suffocation | ⬜ untested |  |
 | Suleiman's Legacy | ⬜ untested |  |
@@ -2893,11 +3007,13 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Sure Strike | ⬜ untested |  |
 | Surge of Strength | ⬜ untested |  |
 | Survival of the Fittest | ⬜ untested |  |
+| Sustainer of the Realm | ⬜ untested |  |
 | Sustaining Spirit | ⬜ untested |  |
 | Svyelunite Priest | ⬜ untested |  |
 | Svyelunite Temple | ⬜ untested |  |
 | Swamp | ✅ pass |  |
 | Swamp Mosquito | ⬜ untested |  |
+| Swat | ⬜ untested |  |
 | Swift Response | ⬜ untested |  |
 | Swiftwater Cliffs | ✅ pass |  |
 | Sword of the Ages | ⬜ untested |  |
@@ -2966,6 +3082,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Teremko Griffin | ✅ pass | auto-pass: keywords only (flying, banding) |
 | Terror | ✅ pass |  |
 | Terror of the Peaks | ⬜ untested |  |
+| Tethered Skirge | ⬜ untested |  |
 | Tetravus | ⬜ untested |  |
 | Tetsuo Umezawa | ⬜ untested |  |
 | Thalakos Deceiver | ⬜ untested |  |
@@ -2998,14 +3115,18 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Thirst | ⬜ untested |  |
 | Thopter Squadron | ⬜ untested |  |
 | Thorn Thallid | ⬜ untested |  |
+| Thornwind Faeries | ⬜ untested |  |
 | Thornwood Falls | ⬜ untested |  |
 | Thought Lash | ⬜ untested |  |
 | Thoughtlace | ✅ pass |  |
 | Thoughtleech | ⬜ untested |  |
 | Thran Forge | ⬜ untested |  |
+| Thran Lens | ⬜ untested |  |
 | Thran Quarry | ⬜ untested |  |
 | Thran Tome | ⬜ untested |  |
 | Thran Turbine | ⬜ untested |  |
+| Thran War Machine | ⬜ untested |  |
+| Thran Weaponry | ⬜ untested |  |
 | Thrashing Brontodon | ⬜ untested |  |
 | Three Wishes | ⬜ untested |  |
 | Thrill of Possibility | ⬜ untested |  |
@@ -3020,6 +3141,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Thunderbolt | ⬜ untested |  |
 | Thundering Giant | ✅ pass | auto-pass: keywords only (haste) |
 | Thundermare | ⬜ untested |  |
+| Ticking Gnomes | ⬜ untested |  |
 | Tidal Control | ⬜ untested |  |
 | Tidal Flats | ⬜ untested |  |
 | Tidal Influence | ⬜ untested |  |
@@ -3042,6 +3164,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Timmerian Fiends | ⬜ untested |  |
 | Tin-Wing Chimera | ⬜ untested |  |
 | Tinder Wall | ⬜ untested |  |
+| Tinker | ⬜ untested |  |
 | Titania's Boon | ⬜ untested |  |
 | Titania's Chosen | ⬜ untested |  |
 | Titania's Song | ⬜ untested |  |
@@ -3082,6 +3205,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Tracker | ⬜ untested |  |
 | Trade Caravan | ⬜ untested |  |
 | Tradewind Rider | ⬜ untested |  |
+| Tragic Poet | ⬜ untested |  |
 | Trailblazer | ⬜ untested |  |
 | Trained Armodon | ✅ pass | auto-pass: no abilities |
 | Traitorous Greed | ⬜ untested |  |
@@ -3093,10 +3217,13 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Transmogrifying Licid | ✅ pass |  |
 | Transmutation | ⬜ untested |  |
 | Transmute Artifact | ⬜ untested |  |
+| Treacherous Link | ⬜ untested |  |
 | Treasure Hunter | ⬜ untested |  |
 | Treasure Trove | ⬜ untested |  |
+| Treefolk Mystic | ⬜ untested |  |
 | Treefolk Seedlings | ⬜ untested |  |
 | Treetop Rangers | ⬜ untested |  |
+| Treetop Village | ⬜ untested |  |
 | Tremor | ⬜ untested |  |
 | Triangle of War | ⬜ untested |  |
 | Triassic Egg | ⬜ untested |  |
@@ -3133,6 +3260,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Underworld Dreams | ⬜ untested |  |
 | Undiscovered Paradise | ⬜ untested |  |
 | Undo | ⬜ untested |  |
+| Unearth | ⬜ untested |  |
 | Unerring Sling | ⬜ untested |  |
 | Unfulfilled Desires | ⬜ untested |  |
 | Unholy Citadel | ⬜ untested |  |
@@ -3159,6 +3287,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Urza's Armor | ⬜ untested |  |
 | Urza's Avenger | ⬜ untested |  |
 | Urza's Bauble | ⬜ untested |  |
+| Urza's Blueprints | ⬜ untested |  |
 | Urza's Chalice | ⬜ untested |  |
 | Urza's Engine | ⬜ untested |  |
 | Urza's Mine | ⬜ untested |  |
@@ -3204,8 +3333,12 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Veteran's Voice | ⬜ untested |  |
 | Vexing Arcanix | ⬜ untested |  |
 | Vhati il-Dal | ⬜ untested |  |
+| Viashino Bey | ⬜ untested |  |
+| Viashino Cutthroat | ⬜ untested |  |
+| Viashino Heretic | ⬜ untested |  |
 | Viashino Outrider | ⬜ untested |  |
 | Viashino Runner | ✅ pass | auto-pass: keywords only (menace) |
+| Viashino Sandscout | ⬜ untested |  |
 | Viashino Sandstalker | ⬜ untested |  |
 | Viashino Sandswimmer | ⬜ untested |  |
 | Viashino Warrior | ✅ pass | auto-pass: no abilities |
@@ -3214,6 +3347,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Vibrating Sphere | ⬜ untested |  |
 | Victimize | ⬜ untested |  |
 | Victual Sliver | ⬜ untested |  |
+| Vigilant Drake | ⬜ untested |  |
 | Vigilant Martyr | ⬜ untested |  |
 | Vile Requiem | ⬜ untested |  |
 | Village Elder | ⬜ untested |  |
@@ -3255,6 +3389,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Walking Corpse | ✅ pass | auto-pass: no abilities |
 | Walking Dead | ⬜ untested |  |
 | Walking Dream | ⬜ untested |  |
+| Walking Sponge | ⬜ untested |  |
 | Walking Wall | ⬜ untested |  |
 | Wall of Air | ✅ pass |  |
 | Wall of Blossoms | ⬜ untested |  |
@@ -3325,6 +3460,9 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Wayward Soul | ⬜ untested |  |
 | Weakness | ✅ pass |  |
 | Weakstone | ✅ pass |  |
+| Weatherseed Elf | ⬜ untested |  |
+| Weatherseed Faeries | ✅ pass | auto-pass: keywords only (flying, protection from red) |
+| Weatherseed Treefolk | ⬜ untested |  |
 | Web | ✅ pass |  |
 | Welkin Hawk | ⬜ untested |  |
 | Well of Knowledge | ⬜ untested |  |
@@ -3332,6 +3470,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Western Paladin | ⬜ untested |  |
 | Whalebone Glider | ⬜ untested |  |
 | Wheel of Fortune | ✅ pass |  |
+| Wheel of Torture | ⬜ untested |  |
 | Whetstone | ⬜ untested |  |
 | Whim of Volrath | ⬜ untested |  |
 | Whip Vine | ⬜ untested |  |
@@ -3372,6 +3511,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Windreaper Falcon | ✅ pass | auto-pass: keywords only (flying, protection from blue) |
 | Winds of Change | ⬜ untested |  |
 | Winds of Rath | ⬜ untested |  |
+| Wing Snare | ⬜ untested |  |
 | Winged Sliver | ⬜ untested |  |
 | Wings of Aesthir | ⬜ untested |  |
 | Winter Blast | ⬜ untested |  |
@@ -3417,6 +3557,9 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Yavimaya Ancients | ⬜ untested |  |
 | Yavimaya Ants | ⬜ untested |  |
 | Yavimaya Gnats | ⬜ untested |  |
+| Yavimaya Granger | ⬜ untested |  |
+| Yavimaya Scion | ✅ pass | auto-pass: keywords only (protection from artifacts) |
+| Yavimaya Wurm | ✅ pass | auto-pass: keywords only (trample) |
 | Yawgmoth Demon | ⬜ untested |  |
 | Yawgmoth's Edict | ⬜ untested |  |
 | Yawgmoth's Will | ⬜ untested |  |

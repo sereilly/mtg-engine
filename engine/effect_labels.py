@@ -297,6 +297,7 @@ ACTIVATED_LABELS: dict[str, str] = {
     # duration is not what the ability is *for*, so it takes the pump bucket
     # every other P/T change takes.
     "pump_target_while_source_tapped": "activated_pump",
+    "buff_creatures_global_while_source_tapped": "activated_pump",
     # Xenic Poltergeist turns a noncreature into a creature; Mishra's Factory
     # turns itself into one. Both are the layer-4 type change the
     # `characteristics` category names, and the report's existing word for a

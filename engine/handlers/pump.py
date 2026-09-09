@@ -325,6 +325,48 @@ def pump_target_while_source_tapped(game: Game, instruction: OracleInstruction, 
     return True, "resolved"
 
 
+@effect_handler("buff_creatures_global_while_source_tapped")
+def buff_creatures_global_while_source_tapped(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """Thran Weaponry: "{2}, {T}: All creatures get +2/+2 for as long as this
+    artifact remains tapped."
+
+    `pump_target_while_source_tapped`'s global twin, and the same record on the
+    same source for the same reason: an effect that ends on a **condition** has
+    no moment anyone could hook, so nothing is written onto the creatures and
+    nothing schedules a removal. What differs is only the subject — a board scan
+    rather than one chosen permanent — so the record carries a `filter` where
+    that one carries a `target_id`, and `_refresh_linked_tapped_pumps` reads
+    whichever is present.
+
+    The board is **not** frozen here. CR 611.2c fixes the affected set for a
+    one-shot pump, but this is CR 611.2b's continuous effect with a duration:
+    the set is whatever matches while the condition holds, so a creature that
+    arrives after the activation is buffed too and one that leaves stops being.
+    That is why the scan lives in the recompute rather than in this handler.
+    """
+    source_permanent = context.source_permanent
+    if source_permanent is None:
+        return False, "ability not implemented"
+
+    power_delta = resolve_amount(instruction.payload.get("power", 0), context.x_value)
+    toughness_delta = resolve_amount(
+        instruction.payload.get("toughness", 0), context.x_value
+    )
+    source_permanent.metadata[PUMP_WHILE_TAPPED_KEY] = {
+        "filter": dict(instruction.payload.get("filter") or {}),
+        "power": power_delta,
+        "toughness": toughness_delta,
+    }
+    game._refresh_dynamic_creatures()
+    game.log.append(
+        f"{context.card.name} gives creatures "
+        f"{power_delta:+d}/{toughness_delta:+d} while it remains tapped"
+    )
+    return True, "resolved"
+
+
 @effect_handler("pump_targets_until_eot")
 def pump_targets_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Until end of turn, target creature gets +0/+2 and **another** target

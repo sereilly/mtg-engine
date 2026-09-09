@@ -1502,16 +1502,38 @@ class PermanentStateMixin:
         the source untaps, the source leaves the battlefield (its record leaves
         with it), or the pumped permanent leaves (its id no longer resolves).
         """
+        from ..handlers._common import permanent_matches_filter
         from ..handlers.pump import PUMP_WHILE_TAPPED_KEY
 
         for source in all_permanents:
             record = source.metadata.get(PUMP_WHILE_TAPPED_KEY)
             if not record or not source.tapped:
                 continue
+            power = int(record.get("power", 0))
+            toughness = int(record.get("toughness", 0))
+            # One record, two subjects, and exactly one of them per record: a
+            # chosen permanent (`target_id`, Ashnod's Battle Gear) or a board
+            # scan (`filter`, Thran Weaponry). Asserted rather than guessed at,
+            # because a shared channel whose readers disagree about its shape is
+            # this repo's most-repeated defect — settle the arity and the
+            # element type in the same breath as the second producer.
+            if "filter" in record:
+                assert "target_id" not in record, (
+                    "a linked-tapped pump names one permanent or a class, "
+                    f"never both: {record!r}"
+                )
+                described = record.get("filter") or {}
+                for perm in all_permanents:
+                    if not perm.is_creature:
+                        continue
+                    if described and not permanent_matches_filter(perm, described):
+                        continue
+                    _add_static_pt(perm, power, toughness)
+                continue
             target = self.permanent_by_id(record.get("target_id"))
             if target is None:
                 continue
-            _add_static_pt(target, int(record.get("power", 0)), int(record.get("toughness", 0)))
+            _add_static_pt(target, power, toughness)
 
     def _refresh_dynamic_creatures(self) -> None:
         all_permanents = list(self.all_permanents())

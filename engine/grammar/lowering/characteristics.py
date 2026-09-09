@@ -839,6 +839,27 @@ def _lower_pump(
                     node=node,
                 )
             payload["filter"] = described
+        if node.duration.kind == "while_source_tapped":
+            # "All creatures get +2/+2 **for as long as this artifact remains
+            # tapped**." (Thran Weaponry.) The global twin of
+            # `pump_target_while_source_tapped` above, and its own kind for that
+            # branch's reason exactly: `buff_creatures_global` walks the board
+            # once and stamps a temporary delta a sweep subtracts, and this
+            # effect must not be a delta at all — it is rebuilt from the
+            # source's record on every recompute, so it ends the instant the
+            # source untaps and *survives* every cleanup until it does.
+            #
+            # Both halves were wrong before this kind existed, and in opposite
+            # directions: the duration was dropped, so the payload defaulted to
+            # end-of-turn. The buff outlived the artifact untapping, and died at
+            # the cleanup step of a card whose *other* printed line — "You may
+            # choose not to untap this artifact during your untap step" — exists
+            # so that it does not.
+            return (
+                OracleInstruction(
+                    "buff_creatures_global_while_source_tapped", "", payload
+                ),
+            )
         return (OracleInstruction("buff_creatures_global", "", payload),)
 
     raise LoweringError("unsupported pump subject", node=node)

@@ -848,3 +848,93 @@ def test_an_ai_seat_attacks_under_crawlspace_rather_than_not_at_all(set_pool):
     assert ok, msg
     assert len(proposed) == 2, proposed
     assert len(game.combat_attackers) == 2
+
+
+# --- Promotion gate: Thran Weaponry's duration is a condition, not a step ---
+import pytest as _gate_pytest
+
+from engine import Game as _GateGame, PlayerState as _GatePlayerState
+from engine.models import Permanent as _GatePermanent
+from tests.helpers import resolve_stack as _gate_resolve_stack
+
+
+def _gate_board(set_pool):
+    """A Thran Weaponry and a vanilla creature, on one battlefield.
+
+    Named apart from the wave blocks above and ending on its own two lines, per
+    SET_PLAYBOOK.md: a helper whose last lines match another block's helper is
+    matched by git as common context and a union can splice one body onto the
+    other's signature.
+    """
+    pool = set_pool("ULG")
+    p1 = _GatePlayerState(name="P1", library=[], hand=[])
+    p2 = _GatePlayerState(name="P2", library=[], hand=[])
+    game = _GateGame(players=[p1, p2])
+    game.enforce_mana_costs = False
+    weapon = _GatePermanent(card=pool["Thran Weaponry"])
+    bear = _GatePermanent(card=set_pool("LEA")["Grizzly Bears"])
+    p1.battlefield.extend([weapon, bear])
+    game._sync_control()
+    return game, weapon, bear
+
+
+def test_thran_weaponrys_buff_ends_when_it_untaps_and_survives_cleanup(set_pool):
+    """"All creatures get +2/+2 **for as long as this artifact remains tapped.**"
+
+    Found at Urza's Legacy's promotion gate, by the guard that asks whether
+    every lord-shaped line in the pool is claimed by the derivation table or by a
+    production. Nothing else could see it: the card compiles, reports supported,
+    carries no hollow line, and `parse_coverage` claims the sentence — the
+    printed duration was simply dropped in the lowering, so the payload fell
+    back to end-of-turn.
+
+    Both halves were wrong and in opposite directions. The buff outlived the
+    artifact untapping, and it died at the cleanup step of a card whose *other*
+    printed line ("You may choose not to untap this artifact during your untap
+    step") exists precisely so that it does not. This test pins both, because
+    fixing one direction alone still leaves the card unplayable.
+    """
+    game, weapon, bear = _gate_board(set_pool)
+    assert (bear.effective_power, bear.effective_toughness) == (2, 2)
+
+    result = game.activate_permanent_ability(0, "Thran Weaponry")
+    _gate_resolve_stack(game)
+    assert result.supported, result.details
+    assert weapon.tapped
+    assert (bear.effective_power, bear.effective_toughness) == (4, 4)
+
+    # CR 611.2b: the effect lasts as long as the condition holds, so it ends the
+    # instant the source stops being tapped — with nothing scheduling a removal.
+    weapon.tapped = False
+    game._refresh_dynamic_creatures()
+    assert (bear.effective_power, bear.effective_toughness) == (2, 2)
+
+    # And it comes back, because the contribution is rebuilt from the board
+    # rather than remembered as a delta somebody has to re-add.
+    weapon.tapped = True
+    game._refresh_dynamic_creatures()
+    assert (bear.effective_power, bear.effective_toughness) == (4, 4)
+
+    # The half a step-boundary duration gets wrong: cleanup must not take it.
+    game.resolve_cleanup_step(0)
+    assert weapon.tapped
+    assert (bear.effective_power, bear.effective_toughness) == (4, 4)
+
+
+def test_thran_weaponry_buffs_a_creature_that_arrives_after_the_activation(set_pool):
+    """CR 611.2b, not CR 611.2c: the affected set is not frozen at resolution.
+
+    A one-shot pump fixes its set when it begins; a continuous effect with a
+    duration applies to whatever matches while the condition holds. That is why
+    the board scan lives in the recompute rather than in the handler, and this
+    is the assertion that tells the two models apart.
+    """
+    game, weapon, _bear = _gate_board(set_pool)
+    game.activate_permanent_ability(0, "Thran Weaponry")
+    _gate_resolve_stack(game)
+
+    latecomer = _GatePermanent(card=set_pool("LEA")["Hurloon Minotaur"])
+    game.players[0].battlefield.append(latecomer)
+    game._sync_control()
+    game._refresh_dynamic_creatures()
+    assert (latecomer.effective_power, latecomer.effective_toughness) == (4, 5)

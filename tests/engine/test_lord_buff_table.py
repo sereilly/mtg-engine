@@ -17,6 +17,28 @@ from __future__ import annotations
 
 import pytest
 
+#: Every kind that carries out a board-wide continuous effect, of which
+#: `lord_buff` is one. The guard below finds candidate lines with a substring
+#: test, and a substring cannot tell which of these readers owns a given one —
+#: so asking only the lord-buff table makes the guard report a disagreement it
+#: invented. Urza's Legacy's promotion gate found two such reports in one run,
+#: and neither was a defect in the line it named:
+#:
+#: * `derived_static_rule` — `engine/global_statics.py`, for a board-wide static
+#:   whose subject is **not** a creature (Aura Flux's `Other enchantments have
+#:   "…"`). `lord_buffs`' subject table is creature-only by construction.
+#: * `buff_creatures_global_while_source_tapped` — an anthem whose duration is a
+#:   **condition** rather than a step boundary (Thran Weaponry). Contributed by
+#:   `_refresh_linked_tapped_pumps` on every recompute, so it never becomes a
+#:   `lord_buff` and never should.
+#:
+#: A fourth reader belongs in this tuple rather than in a widened substring:
+#: the substring is what *finds* the line, and this is what claims it.
+BOARD_WIDE_CONTINUOUS_KINDS = (
+    "derived_static_rule",
+    "buff_creatures_global_while_source_tapped",
+)
+
 from engine.lord_buffs import (
     CONDITIONS,
     LORD_BUFF_KIND,
@@ -445,7 +467,23 @@ def test_every_lord_shaped_line_in_the_pool_derives(catalog):
             1 for instruction in program.instructions
             if instruction.kind == LORD_BUFF_KIND
         )
-        if buffs >= len(lord_shaped):
+        # And ask the **third** reader, which this guard did not know about
+        # until Urza's Legacy's promotion gate. `engine/global_statics.py` takes
+        # the board-wide statics whose subject is not a creature — Aura Flux's
+        # `Other enchantments have "…"` is lord-*shaped* by the substring test
+        # above and is not a lord buff, because `lord_buffs`' subject table is
+        # creature-only by construction; Thran Weaponry's anthem is the other,
+        # whose duration is a condition. See BOARD_WIDE_CONTINUOUS_KINDS.
+        #
+        # This is the shape SET_PLAYBOOK.md tells a promotion to read for: a
+        # guard that keeps its own copy of "who may claim this line" reports a
+        # disagreement it invented. The fix is to ask every reader that exists,
+        # not to widen the substring until the card falls out of it.
+        statics = sum(
+            1 for instruction in program.instructions
+            if instruction.kind in BOARD_WIDE_CONTINUOUS_KINDS
+        )
+        if buffs + statics >= len(lord_shaped):
             continue
         unclaimed.extend(f"{card.name}: {line}" for line in lord_shaped)
     assert not unclaimed, (

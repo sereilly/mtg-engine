@@ -100,6 +100,13 @@
   ]
  },
  {
+  "card": "Angel's Trumpet",
+  "clause": "tap all untapped creatures that player controls that didn't attack this turn. this artifact deals damage to the player equal to the number of creatures tapped this way",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Animal Sanctuary",
   "clause": "put a +1/+1 counter on target bird, cat, dog, goat, ox, or snake",
   "ignored": [
@@ -160,6 +167,13 @@
   "clause": "destroy all lands",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Avalanche Riders",
+  "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {3}{r}",
+  "ignored": [
+   "permanent"
   ]
  },
  {
@@ -272,6 +286,13 @@
   "clause": "all creatures get -1/-0 until end of turn",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Bone Shredder",
+  "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {2}{b}",
+  "ignored": [
+   "permanent"
   ]
  },
  {
@@ -457,6 +478,13 @@
   "clause": "if it's on the battlefield, it loses \"enchant creature card in a graveyard\" and gains \"enchant creature put onto the battlefield with this aura.\" put enchanted creature card onto the battlefield tapped under your control and attach this aura to it. when this aura leaves the battlefield, that creature's controller sacrifices it",
   "ignored": [
    "tapped"
+  ]
+ },
+ {
+  "card": "Deranged Hermit",
+  "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {3}{g}{g}",
+  "ignored": [
+   "permanent"
   ]
  },
  {
@@ -822,6 +850,13 @@
   ]
  },
  {
+  "card": "Ghitu Slinger",
+  "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {2}{r}",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
   "card": "Giant Albatross",
   "clause": "you may pay {1}{u}. if you do, for each creature that dealt damage to this creature this turn, destroy that creature unless its controller pays 2 life. a creature destroyed this way can't be regenerated",
   "ignored": [
@@ -957,6 +992,13 @@
   ]
  },
  {
+  "card": "Harmonic Convergence",
+  "clause": "put all enchantments on top of their owners' libraries",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Hazezon Tamar",
   "clause": "exile all sand warriors",
   "ignored": [
@@ -1015,6 +1057,13 @@
  {
   "card": "Hidden Ancients",
   "clause": "if this permanent is an enchantment, it becomes a 5/5 treefolk creature",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Hidden Gibbons",
+  "clause": "if this permanent is an enchantment, it becomes a 4/4 ape creature",
   "ignored": [
    "permanent"
   ]
@@ -1125,6 +1174,13 @@
   ]
  },
  {
+  "card": "Impending Disaster",
+  "clause": "if there are seven or more lands on the battlefield, sacrifice this enchantment and destroy all lands",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Infernal Harvest",
   "clause": "infernal harvest deals x damage divided as you choose among any number of target creatures",
   "ignored": [
@@ -1202,6 +1258,13 @@
   "ignored": [
    "each",
    "each"
+  ]
+ },
+ {
+  "card": "Karmic Guide",
+  "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {3}{w}{w}",
+  "ignored": [
+   "permanent"
   ]
  },
  {
@@ -1335,6 +1398,13 @@
   ]
  },
  {
+  "card": "Lurking Skirge",
+  "clause": "if this permanent is an enchantment, it becomes a 3/2 phyrexian imp creature with flying",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
   "card": "Magnetic Web",
   "clause": "all creatures with magnet counters on them block that creature this turn if able",
   "ignored": [
@@ -1402,6 +1472,14 @@
   "card": "Meltdown",
   "clause": "destroy each artifact with mana value x or less",
   "ignored": [
+   "each"
+  ]
+ },
+ {
+  "card": "Memory Jar",
+  "clause": "each player exiles all cards from their hand face down and draws seven cards. at the beginning of the next end step, each player discards their hand and returns to their hand each card they exiled this way",
+  "ignored": [
+   "all",
    "each"
   ]
  },
@@ -1475,6 +1553,13 @@
   "clause": "tap all untapped islands that player controls and this enchantment deals x damage to the player, where x is the number of islands tapped this way",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Multani's Acolyte",
+  "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {g}{g}",
+  "ignored": [
+   "permanent"
   ]
  },
  {
@@ -1586,8 +1671,22 @@
   ]
  },
  {
+  "card": "Opal Avenger",
+  "clause": "if this permanent is an enchantment, it becomes a 3/5 soldier creature",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
   "card": "Opal Caryatid",
   "clause": "if this permanent is an enchantment, it becomes a 2/2 soldier creature",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Opal Champion",
+  "clause": "if this permanent is an enchantment, it becomes a 3/3 knight creature with first strike",
   "ignored": [
    "permanent"
   ]
@@ -1684,6 +1783,13 @@
   ]
  },
  {
+  "card": "Planar Collapse",
+  "clause": "if there are four or more creatures on the battlefield, sacrifice this enchantment and destroy all creatures. they can't be regenerated",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Pouncing Jaguar",
   "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {g}",
   "ignored": [
@@ -1695,6 +1801,13 @@
   "clause": "that player may pay any amount of mana. this aura deals 2 damage to that player. prevent x of that damage, where x is the amount of mana that player paid this way",
   "ignored": [
    "aura"
+  ]
+ },
+ {
+  "card": "Purify",
+  "clause": "destroy all artifacts and enchantments",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -1719,6 +1832,13 @@
   ]
  },
  {
+  "card": "Radiant's Dragoons",
+  "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {3}{w}",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
   "card": "Raiding Party",
   "clause": "each player may tap any number of untapped white creatures they control. for each creature tapped this way, that player chooses up to two plains. then destroy all plains that weren't chosen this way by any player",
   "ignored": [
@@ -1733,10 +1853,24 @@
   ]
  },
  {
+  "card": "Raven Familiar",
+  "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {2}{u}",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
   "card": "Reality Ripple",
   "clause": "target artifact, creature, or land phases out",
   "ignored": [
    "or"
+  ]
+ },
+ {
+  "card": "Rebuild",
+  "clause": "return all artifacts to their owners' hands",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -1814,6 +1948,20 @@
   "clause": "you may have this enchantment become a 3/3 sphinx creature with flying in addition to its other types until end of turn",
   "ignored": [
    "have"
+  ]
+ },
+ {
+  "card": "Ring of Gix",
+  "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {3}",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Ring of Gix",
+  "clause": "tap target artifact, creature, or land",
+  "ignored": [
+   "or"
   ]
  },
  {
@@ -2040,6 +2188,20 @@
   "clause": "you may have this creature become the color or colors of your choice",
   "ignored": [
    "have"
+  ]
+ },
+ {
+  "card": "Sick and Tired",
+  "clause": "two target creatures each get -1/-1 until end of turn",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
+  "card": "Simian Grunts",
+  "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {2}{g}",
+  "ignored": [
+   "permanent"
   ]
  },
  {
@@ -2280,10 +2442,38 @@
   ]
  },
  {
+  "card": "Thran War Machine",
+  "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {4}",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Thran Weaponry",
+  "clause": "all creatures get +2/+2 for as long as this artifact remains tapped",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Thran Weaponry",
+  "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {4}",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
   "card": "Thundermare",
   "clause": "tap all other creatures",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Ticking Gnomes",
+  "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {3}",
+  "ignored": [
+   "permanent"
   ]
  },
  {
@@ -2394,6 +2584,13 @@
   ]
  },
  {
+  "card": "Treefolk Mystic",
+  "clause": "destroy all auras attached to that creature",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Tremor",
   "clause": "tremor deals 1 damage to each creature without flying",
   "ignored": [
@@ -2477,6 +2674,13 @@
   "clause": "this creature gets -1/-1 and gains your choice of banding, flying, first strike, or trample until end of turn",
   "ignored": [
    "or"
+  ]
+ },
+ {
+  "card": "Urza's Blueprints",
+  "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {6}",
+  "ignored": [
+   "permanent"
   ]
  },
  {
@@ -2568,6 +2772,13 @@
   "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {1}{r}{r}",
   "ignored": [
    "permanent"
+  ]
+ },
+ {
+  "card": "Walking Sponge",
+  "clause": "target creature loses your choice of flying, first strike, or trample until end of turn",
+  "ignored": [
+   "or"
   ]
  },
  {
@@ -2711,6 +2922,13 @@
   "clause": "tap all red creatures",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Yavimaya Granger",
+  "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {2}{g}",
+  "ignored": [
+   "permanent"
   ]
  },
  {

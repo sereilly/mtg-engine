@@ -16,6 +16,7 @@
     "Femeref Scouts",
     "Fire Elemental",
     "Garruk's Gorehorn",
+    "Giant Cockroach",
     "Goblin Hero",
     "Gorilla Warrior",
     "Gray Ogre",
@@ -87,6 +88,7 @@
     "Sea Sprite",
     "Voice of Grace",
     "Voice of Law",
+    "Weatherseed Faeries",
     "Windreaper Falcon"
   ],
   [
@@ -96,6 +98,7 @@
     "Lost Soul",
     "Marsh Goblins",
     "Moor Fiend",
+    "Plague Beetle",
     "Pygmy Allosaurus",
     "Warthog"
   ],
@@ -250,10 +253,22 @@
     "Rune of Protection: White"
   ],
   [
+    "Bloated Toad",
+    "Darkwatch Elves",
+    "Disciple of Grace",
+    "Disciple of Law"
+  ],
+  [
     "Burn Bright",
     "Scare Tactics",
     "Shield Wall",
     "Warrior's Honor"
+  ],
+  [
+    "Colossal Dreadmaw",
+    "Rootbreaker Wurm",
+    "Wildwood Patrol",
+    "Yavimaya Wurm"
   ],
   [
     "Deathlace",
@@ -333,11 +348,6 @@
     "Cloud Spirit"
   ],
   [
-    "Colossal Dreadmaw",
-    "Rootbreaker Wurm",
-    "Wildwood Patrol"
-  ],
-  [
     "Craven Giant",
     "Goblin Raider",
     "Hulking Cyclops"
@@ -363,6 +373,11 @@
     "Skyshroud Troopers"
   ],
   [
+    "Giant Growth",
+    "Might of Oaks",
+    "Titanic Growth"
+  ],
+  [
     "Killer Whale",
     "Manta Riders",
     "Whiptongue Frog"
@@ -376,6 +391,10 @@
     "Prodigal Sorcerer",
     "Rootwater Hunter",
     "Zuran Spellcaster"
+  ],
+  [
+    "About Face",
+    "Transmutation"
   ],
   [
     "Absolute Grace",
@@ -420,6 +439,10 @@
   [
     "Bad Moon",
     "Crusade"
+  ],
+  [
+    "Basalt Monolith",
+    "Grim Monolith"
   ],
   [
     "Basri's Solidarity",
@@ -474,8 +497,8 @@
     "Pincher Beetles"
   ],
   [
-    "Disciple of Grace",
-    "Disciple of Law"
+    "Defender of Chaos",
+    "Defender of Law"
   ],
   [
     "Dromosaur",
@@ -496,6 +519,10 @@
   [
     "Elven Cache",
     "Regrowth"
+  ],
+  [
+    "Elvish Berserker",
+    "Gang of Elk"
   ],
   [
     "Essence Flare",
@@ -532,10 +559,6 @@
   [
     "Forest",
     "Snow-Covered Forest"
-  ],
-  [
-    "Giant Growth",
-    "Titanic Growth"
   ],
   [
     "Goblin Mutant",
@@ -618,6 +641,10 @@
     "Mole Worms"
   ],
   [
+    "Mawcor",
+    "Thornwind Faeries"
+  ],
+  [
     "Mesa Falcon",
     "Pearl Dragon"
   ],
@@ -664,6 +691,10 @@
   [
     "Phantasmal Forces",
     "Spindrift Drake"
+  ],
+  [
+    "Phyrexian Defiler",
+    "Phyrexian Denouncer"
   ],
   [
     "Piety",
@@ -716,6 +747,10 @@
   [
     "Torment",
     "Weakness"
+  ],
+  [
+    "Viashino Sandscout",
+    "Viashino Sandstalker"
   ],
   [
     "Wall of Fire",

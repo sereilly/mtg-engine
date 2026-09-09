@@ -37,6 +37,10 @@ PUMP_INSTRUCTION_CATEGORIES: dict[str, str] = {
     "pump_self": "pump",
     "pump_enchanted_creature": "pump",
     "buff_creatures_global": "pump",
+    # Thran Weaponry: the same board sweep whose duration is a *condition*
+    # rather than a step boundary, so it is contributed by the recompute
+    # instead of stamped. Same category — what differs is how it ends.
+    "buff_creatures_global_while_source_tapped": "pump",
     "set_base_pt_target_until_eot": "pump",
     # "…becomes a 3/3 Sphinx creature … until end of turn" (Riddleform).
     # The "pump" family, because what the sentence does is set a P/T — the

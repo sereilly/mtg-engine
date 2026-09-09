@@ -13,9 +13,9 @@ Antiquities (85), Revised Edition (296), Legends (310), The Dark (119),
 Fallen Empires (102), Fourth Edition (368), Ice Age (373), Homelands (115),
 Alliances (144), Mirage (335), Visions (167), Fifth Edition (434),
 Weatherlight (167), Tempest (335), Stronghold (143), Exodus (143),
-Urza's Saga (335) and Core Set 2021 (285), 3,427 unique cards, all classified
-as supported.
-**Twenty-two sets, and their sizes are the whole spread**: 4ED and 5ED are pure
+Urza's Saga (335), Urza's Legacy (143) and Core Set 2021 (285), 3,570 unique
+cards, all classified as supported.
+**Twenty-three sets, and their sizes are the whole spread**: 4ED and 5ED are pure
 reprint sets, every one of their cards already in the pool, so they are the two
 sets that ship without implementing a card; Ice Age is the largest ever ingested and brought
 **346 new cards**, more than any set since Alpha; and Fallen Empires is the
@@ -64,7 +64,7 @@ Rehearsed at the wrong end before the real promotion, the prefix guard passed
 and `test_the_shipped_sets_are_in_printing_order` failed at index 20 — which is
 exactly the division of labour those two guards are documented to have, observed
 rather than assumed. Which is why
-the per-set totals sum to far more than 3,427 — they are printings (5,208 of
+the per-set totals sum to far more than 3,570 — they are printings (5,747 of
 them). Alliances was the
 first set to reach 100% with **zero name-keyed hooks**, across all 144, Visions
 is the second across all 167, **Weatherlight is the third** across all 167
@@ -77,8 +77,10 @@ Alpha's Power Sink arriving as a reprint — **Stronghold is the fifth**,
 **Exodus is the sixth**, 143 of 143 across eleven parallel groups in two
 waves plus a closing round, adding none — and **Urza's Saga is the seventh and
 the first to move the count downward on purpose**: 335 cards across fifteen
-parallel groups in three waves, adding no hook and **retiring five**.
-Reliance is **1.5% of supported cards**, 53 of 3,427, down from 58 of 3,109.
+parallel groups in three waves, adding no hook and **retiring five** — and
+**Urza's Legacy is the eighth**, 143 of 143 across ten parallel groups in two
+waves, adding none.
+Reliance is **1.5% of supported cards**, 53 of 3,570, down from 53 of 3,427.
 
 USG's five are worth naming because four of them were hooks that were *wrong*,
 and wrong in one way: **a hook writes the end state directly, so it is a place a
@@ -968,7 +970,7 @@ The board UI is **canvas-rendered** (`web/static/battlefield-canvas.js`).
 ## Card verification tracker
 
 `CARD_VERIFICATION.md` / `card_verification.json` track which cards have been
-manually validated in-game (590 of the 3,427 catalog cards passing — 398
+manually validated in-game (590 of the 3,570 catalog cards passing — 398
 checked in-game and 192 auto-passed — with 45 more reported `equivalent`; the
 rest — almost all of M21, Antiquities, Legends, The Dark, Ice Age, Fallen
 Empires, Homelands, Alliances, Mirage, Visions, Weatherlight, Tempest,

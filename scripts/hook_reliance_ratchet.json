@@ -100,6 +100,11 @@
       "hooked_cards_pct_of_supported": 0.3,
       "hooked_lines_pct_of_supported": 0.0
     },
+    "ULG": {
+      "entries_per_100_supported_cards": 0.0,
+      "hooked_cards_pct_of_supported": 0.0,
+      "hooked_lines_pct_of_supported": 0.0
+    },
     "USG": {
       "entries_per_100_supported_cards": 0.3,
       "hooked_cards_pct_of_supported": 0.3,

@@ -12,9 +12,9 @@ The measures are **ceilings**, the opposite direction to `GRAMMAR_COVERAGE.md`'s
 
 ## The headline
 
-**53 of 3427 supported cards (1.5%)** carry at least one name-keyed entry, across **59 entries** in 6 registries. The pool is 3427 cards, 100.0% supported.
+**53 of 3570 supported cards (1.5%)** carry at least one name-keyed entry, across **59 entries** in 6 registries. The pool is 3570 cards, 100.0% supported.
 
-Held at this rate, supporting the 26,113-card release line would need about **450 hand-written entries** covering **404 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
+Held at this rate, supporting the 26,113-card release line would need about **432 hand-written entries** covering **388 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
 
 ## By set
 
@@ -41,11 +41,9 @@ Held at this rate, supporting the 26,113-card release line would need about **45
 | STH | 143 | 143 (100.0%) | 0 (0.0%) | 215 | 0 (0.0%) | 0 | 0.0 |
 | EXO | 143 | 143 (100.0%) | 0 (0.0%) | 207 | 0 (0.0%) | 0 | 0.0 |
 | USG | 335 | 335 (100.0%) | 1 (0.3%) | 486 | 0 (0.0%) | 1 | 0.3 |
+| ULG | 143 | 143 (100.0%) | 0 (0.0%) | 227 | 0 (0.0%) | 0 | 0.0 |
 | M21 | 285 | 285 (100.0%) | 0 (0.0%) | 503 | 0 (0.0%) | 0 | 0.0 |
-| ULG *(measured)* | 143 | 143 (100.0%) | 0 (0.0%) | 227 | 0 (0.0%) | 0 | 0.0 |
-| **Whole pool (shipped, deduped)** | **3427** | **3427 (100.0%)** | **53 (1.5%)** | **5322** | **49 (0.9%)** | **59** | **1.7** |
-
-*(measured)* — ULG are ingested for measurement and **not shipped**: `cards/manifest.json` lists them under `measured`, the engine's catalog does not load them, and no player can put one in a deck. They are reported here and excluded from the ALL row and from the ceilings, because a ratchet over a set nobody has implemented would fire on its composition rather than on anything anyone did. A measured set moves up to `sets` when it is fully supported.
+| **Whole pool (shipped, deduped)** | **3570** | **3570 (100.0%)** | **53 (1.5%)** | **5549** | **49 (0.9%)** | **59** | **1.7** |
 
 **Read the rows, not the average.** The base sets are near-identical reprint lists, so five of these rows (LEA, LEB, 2ED, 3ED, 4ED) are one data point wearing five hats — and the ALL row, deduped across reprints, is dominated by it. The independent comparison is between that block and the sets printed to a different brief.
 

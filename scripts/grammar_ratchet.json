@@ -22,8 +22,8 @@
     },
     "<pool>": {
       "executed_pct": 60.3,
-      "lowered_pct": 89.8,
-      "parsed_pct": 90.6
+      "lowered_pct": 89.7,
+      "parsed_pct": 90.4
     },
     "ALL": {
       "executed_pct": 70.5,
@@ -99,6 +99,11 @@
       "executed_pct": 65.7,
       "lowered_pct": 92.3,
       "parsed_pct": 92.7
+    },
+    "ULG": {
+      "executed_pct": 59.5,
+      "lowered_pct": 84.1,
+      "parsed_pct": 84.1
     },
     "USG": {
       "executed_pct": 63.0,
