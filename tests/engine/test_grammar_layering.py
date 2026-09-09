@@ -1448,7 +1448,7 @@ def test_layers_only_import_downward(layers):
     "package,shared,roof",
     [
         ("effects", (), ()),
-        ("lowering", ("_common", "_filters", "_events", "_deaths", "_delays", "_amounts", "_counted_damage", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_conjuncts", "_bound_returns", "_bound_exiles", "_described_returns", "_piles", "_counter_stores", "_plus_one_counters", "_blankets", "_pump_categories", "_zone_categories", "_record_keys", "_record_conditions", "_superlatives", "categories", "conditions"), ()),
+        ("lowering", ("_common", "_filters", "_events", "_deaths", "_delays", "_amounts", "_counted_damage", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_conjuncts", "_bound_returns", "_bound_exiles", "_described_returns", "_piles", "_counter_stores", "_plus_one_counters", "_blankets", "_pump_categories", "_zone_categories", "_record_keys", "_record_conditions", "_superlatives", "_collapses", "categories", "conditions"), ()),
         # `costs` is shared beside `_core` rather than a family: a cost is
         # charged on the way to the stack and never lowered, so it has no
         # `effects/` or `lowering/` twin to be a family of — and both
@@ -2071,6 +2071,22 @@ FAMILY_SHARED = {
     # arrangement `_bound_returns` has with `_described_returns`, and nothing
     # reads back.
     "_record_conditions",
+    # `_collapses` split out of `lowering/control_flow.py` at Urza's Legacy's
+    # Phase 0, eleven lines under the guard with three of the wave's five
+    # groups due to compose a `may` or a `sequence` and none of them able to
+    # cross it alone — the shared module the playbook says is pre-split rather
+    # than briefed. The line is the one all five functions had already written
+    # into their own docstrings: an offer whose action carries its **own**
+    # ceiling ("up to three", "any number", "any amount of mana") is one
+    # decision and not two, and the prompt behind it is the half that suspends
+    # the resolution (CR 608.2) where an offer does not. They are recognisers —
+    # one `ast.May` in, a collapsed instruction or None out — and not one of
+    # them takes `lower_statement`, which is the inversion the rest of
+    # `control_flow` is built on and the clearest evidence this is a floor
+    # rather than the family's second half. A floor for `_bound_returns`'
+    # reason exactly: `control_flow` is its only reader and a family may not
+    # import a sibling.
+    "_collapses",
 }
 
 

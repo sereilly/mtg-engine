@@ -114,7 +114,7 @@ def _lower_draw(
         # "**Then each player draws up to seven cards.**" (Diminishing Returns.)
         # The same decision with no "may" printed in front of it, which is not a
         # different card: "up to seven" already lets a seat draw none, so the
-        # offer `control_flow._each_player_optional_draw` collapses was never
+        # offer `_collapses._each_player_optional_draw` collapses was never
         # what made the choice — the ceiling was. That collapse reaches this
         # instruction from a `May` node; this reaches it from the bare sentence,
         # and both arrive at one handler so what a seat is asked cannot depend
