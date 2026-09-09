@@ -341,6 +341,12 @@ class StackResolutionMixin:
             card=item.card,
             target_permanent_index=item.target_permanent_index,
             target_permanent_id=item.target_permanent_id,
+            # The graveyard half of the same announcement, for a roles
+            # instruction whose slots sit in two zones (Goblin Welder). Every
+            # other graveyard target reads the index this method has already
+            # re-located; that one needs the stamp itself, because the index
+            # cannot say whose pile a slot counts into.
+            target_graveyard_card=item.target_graveyard_card,
             x_value=item.x_value,
             source_permanent=item.source_permanent,
             ability_text=item.ability_text,

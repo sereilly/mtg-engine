@@ -402,6 +402,16 @@ def _action_activate(session, req, seat_type):
                 else req.target_permanent_index
             ),
             target_permanent_ids=req.target_permanent_ids,
+            # …and the same announcement where its slots are not all
+            # permanents (Goblin Welder's artifact plus a card in a graveyard).
+            # Forwarded as plain dicts, which is the shape the engine's own
+            # channel takes: the engine has no business importing a request
+            # model, and the two names are the same words.
+            target_role_refs=(
+                [ref.model_dump() for ref in req.target_role_refs]
+                if req.target_role_refs
+                else None
+            ),
             # CR 601.2d's announced division, forwarded exactly as the cast
             # path's helper forwards it and in the same shape: a two-tuple
             # where no share was announced (which is what an evenly-divided

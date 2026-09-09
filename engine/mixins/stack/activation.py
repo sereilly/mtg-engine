@@ -307,6 +307,21 @@ class AbilityActivationMixin:
         # on different battlefields, which one `target_player_index` cannot
         # express — see `_stack_push`.
         target_permanent_ids: list[int | None] | None = None,
+        # **A roles announcement whose slots sit in two zones.** "Choose target
+        # artifact a player controls **and target artifact card in that
+        # player's graveyard**" (Goblin Welder): one slot is a permanent, named
+        # by id like every other target, and the other is a card in a
+        # graveyard, which has no id to name it by — two copies of one card in
+        # one pile are literally one ``CardDefinition``.
+        #
+        # So when this is supplied it describes **every** slot, in role order,
+        # each entry naming either a ``permanent_id`` or a
+        # ``graveyard_seat``/``graveyard_index`` pair. ``target_permanent_ids``
+        # above stays exactly what it was and is what every roles ability
+        # before this one still sends; the two are never mixed positionally,
+        # because "which list does slot 1 come from?" is a question a wire
+        # cannot be left to answer.
+        target_role_refs: "list[dict] | None" = None,
         # "Prevent the next X damage that would be dealt this turn **to any
         # number of targets, divided as you choose**." (Serra's Hymn.) CR
         # 601.2d's announcement, reached through CR 602.2b like every other
@@ -353,6 +368,7 @@ class AbilityActivationMixin:
             old_color=old_color,
             target_permanent_index=target_permanent_index,
             target_permanent_ids=target_permanent_ids,
+            target_role_refs=target_role_refs,
             divided_targets=divided_targets,
             target_stack_index=target_stack_index,
             ability_index=ability_index,
@@ -560,6 +576,21 @@ class AbilityActivationMixin:
         # on different battlefields, which one `target_player_index` cannot
         # express — see `_stack_push`.
         target_permanent_ids: list[int | None] | None = None,
+        # **A roles announcement whose slots sit in two zones.** "Choose target
+        # artifact a player controls **and target artifact card in that
+        # player's graveyard**" (Goblin Welder): one slot is a permanent, named
+        # by id like every other target, and the other is a card in a
+        # graveyard, which has no id to name it by — two copies of one card in
+        # one pile are literally one ``CardDefinition``.
+        #
+        # So when this is supplied it describes **every** slot, in role order,
+        # each entry naming either a ``permanent_id`` or a
+        # ``graveyard_seat``/``graveyard_index`` pair. ``target_permanent_ids``
+        # above stays exactly what it was and is what every roles ability
+        # before this one still sends; the two are never mixed positionally,
+        # because "which list does slot 1 come from?" is a question a wire
+        # cannot be left to answer.
+        target_role_refs: "list[dict] | None" = None,
         # "Prevent the next X damage that would be dealt this turn **to any
         # number of targets, divided as you choose**." (Serra's Hymn.) CR
         # 601.2d's announcement, reached through CR 602.2b like every other
@@ -830,6 +861,7 @@ class AbilityActivationMixin:
             target_player_index=target_player_index,
             target_permanent_index=target_permanent_index,
             target_permanent_ids=target_permanent_ids,
+            target_role_refs=target_role_refs,
             target_stack_item=target_stack_item,
         )
         if target_refusal is not None:
@@ -2613,6 +2645,18 @@ class AbilityActivationMixin:
             supported, details = state_machine.run(instruction)
             return SimulationResult(permanent.card.name, supported, ability.effect_kind, details)
 
+        # A mixed-zone roles announcement becomes the three positional lists a
+        # stack item already carries — ids for the battlefield slots, stamps for
+        # the graveyard ones, and one index list beside them. Built here rather
+        # than at the wire because the stamp has to be taken while the slot
+        # still means what the activator chose (CR 601.2c): the cost above this
+        # line may have put a card into the very pile the second slot counts
+        # into.
+        graveyard_stamps = None
+        if target_role_refs:
+            target_permanent_ids, target_permanent_index, graveyard_stamps = (
+                self._role_announcement_stamps(target_role_refs)
+            )
         self._stack_push(
             # CR 602.2b: an activated ability's targets were chosen when it
             # was activated, so it does not choose again here.
@@ -2623,6 +2667,7 @@ class AbilityActivationMixin:
                 target_player_index=target_idx,
                 target_permanent_index=target_permanent_index,
                 target_permanent_id=target_permanent_ids,
+                target_graveyard_card=graveyard_stamps,
                 x_value=x_value,
                 ability_instruction=instruction,
                 ability_effect_kind=ability.effect_kind,
@@ -3026,6 +3071,43 @@ class AbilityActivationMixin:
         )
         self.log.append(f"{card.name} ability added to stack")
         return SimulationResult(card.name, True, ability.effect_kind, "queued")
+
+    def _role_announcement_stamps(self, target_role_refs):
+        """One mixed-zone roles announcement as ``(ids, indices, stamps)``.
+
+        Three lists, all positional in role order, because that is what a
+        ``StackItem`` already carries: an id per battlefield slot
+        (``target_permanent_id``), a :class:`GraveyardTarget` per graveyard slot
+        (``target_graveyard_card``), and one index list beside them that the
+        resolution re-locates from. ``None`` fills each list wherever the other
+        one answers, which is what keeps the three readable against each other —
+        a reader holding slot 1 asks both and exactly one replies.
+
+        The index is derived from the id rather than sent, for the reason ids
+        exist: the activator chose a permanent, and where it sits is a fact
+        about the board at this moment.
+        """
+        ids: list = []
+        indices: list = []
+        stamps: list = []
+        for ref in target_role_refs:
+            ref = ref if isinstance(ref, dict) else {}
+            permanent_id = ref.get("permanent_id")
+            if isinstance(permanent_id, int):
+                found = self.find_permanent_by_id(permanent_id)
+                ids.append(permanent_id)
+                indices.append(
+                    self.battlefield_index_of(found[1]) if found else None
+                )
+                stamps.append(None)
+                continue
+            index = ref.get("graveyard_index")
+            ids.append(None)
+            indices.append(index if isinstance(index, int) else None)
+            stamps.append(
+                self.graveyard_target_at(ref.get("graveyard_seat"), index)
+            )
+        return ids, indices, stamps
 
     def activate_from_graveyard(
         self,

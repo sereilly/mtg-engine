@@ -20,8 +20,11 @@ from ._common import (
     graveyard_card_matches,
     permanent_matches_filter,
     resolve_amount,
+    resolve_role_graveyard_card,
+    resolve_role_permanent,
     resolve_target_permanent,
     resolve_target_permanents,
+    roles_still_legal,
 )
 # The runtime class. The bare name is a TYPE_CHECKING-only import above, and
 # two handlers here *build* instructions for an optional payment's branches.
@@ -8920,5 +8923,85 @@ def return_self_instead_of_untapping(game: Game, instruction: OracleInstruction,
     source.metadata[RETURN_AT_NEXT_UNTAP_SEAT] = game.players.index(context.caster)
     game.log.append(
         f"{context.card.name} will return to its owner's hand instead of untapping"
+    )
+    return True, "resolved"
+
+
+@effect_handler("sacrifice_and_return_targets")
+def sacrifice_and_return_targets(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """"Choose target artifact a player controls and target artifact card in
+    that player's graveyard. If both targets are still legal as this ability
+    resolves, that player simultaneously sacrifices the artifact and returns
+    the artifact card to the battlefield." (Goblin Welder.)
+
+    **The rider is the whole of what this handler adds to the two moves.**
+    CR 608.2b removes an object from the stack only when *every* target is
+    illegal, so with one target gone the default rule would still run the half
+    that is left — an artifact sacrificed for a card that never comes back, or
+    a card returned for nothing. The card says otherwise, and the payload
+    carries the sentence that says it. Both roles are re-checked through
+    ``roles_still_legal``, which asks the same relation table the picker
+    narrowed with, so what the activator was offered and what happens here
+    cannot come apart.
+
+    **Simultaneously** (CR 608.2's "as much as possible at once") is why the
+    card leaves the graveyard *before* the artifact is sacrificed into it: the
+    sacrifice feeds the very pile the return reads, and the return must not be
+    able to see it. Written for the rule rather than for a failing case, and
+    the test beside it says so — the stamp is keyed by ordinal, so on today's
+    boards the reversed order resolves to the same copy and nothing observable
+    separates them. That is a fact about the stamp, not a licence.
+
+    Who acts is "that player" — the seat the first slot's own "a player
+    controls" bound — so the card comes back under *their* control, on *their*
+    battlefield, which is the same seat whose graveyard it was chosen from.
+    Nothing here is relative to the ability's controller, and reading it as
+    "you" would let a Welder steal an opponent's artifact out of their pile.
+    """
+    payload = instruction.payload or {}
+    roles = ((payload.get("targets") or {}).get("roles") or ())
+    if len(roles) != 2:
+        return False, "a weld names two roles"
+    sacrificed_role, returned_role = roles[0].get("role"), roles[1].get("role")
+    observer = game.players.index(context.caster)
+    # The printed rider, read off the payload rather than assumed from the
+    # kind. It is always present today — the lowering refuses the sentence
+    # without it, because CR 608.2b's partial resolution is a card nothing here
+    # implements — so this is a reader of what the card says, not a defence
+    # against a payload that cannot arrive.
+    if payload.get("all_targets_required") and not roles_still_legal(
+        game, context, payload, observer=observer
+    ):
+        # Not a fizzle: CR 608.2b counters the ability only if *every* target
+        # is illegal, and that is decided above this handler
+        # (``legality.illegal_targets_refusal``). This is the printed
+        # condition, so the ability resolves and does nothing.
+        game.log.append(
+            f"{context.card.name}: both targets are not still legal — nothing happens"
+        )
+        return True, "resolved"
+    artifact = resolve_role_permanent(game, context, payload, sacrificed_role)
+    stamp = resolve_role_graveyard_card(game, context, payload, returned_role)
+    if artifact is None or stamp is None:
+        game.log.append(f"{context.card.name}: a chosen target is gone")
+        return True, "resolved"
+    seat = game.controller_index_of(artifact)
+    slot = game.graveyard_index_of(stamp)
+    if seat is None or slot is None:
+        game.log.append(f"{context.card.name}: a chosen target is gone")
+        return True, "resolved"
+    actor = game.players[stamp.seat]
+    # Out of the pile first — see the docstring: the sacrifice below puts a
+    # card into this very graveyard, and "simultaneously" means the return may
+    # not see it.
+    returning = actor.graveyard.pop(slot)
+    game.sacrifice_permanent(artifact)
+    arrival = Permanent(card=returning)
+    game._put_permanent_onto_battlefield(stamp.seat, arrival, None)
+    game.log.append(
+        f"{context.card.name}: {actor.name} sacrifices {artifact.card.name} "
+        f"and returns {returning.name} to the battlefield"
     )
     return True, "resolved"

@@ -82,6 +82,39 @@ class Sacrifice:
 
 
 @dataclass(frozen=True)
+class SacrificeAndReturnTargets:
+    """``Choose target <A> and target <B>. If both targets are still legal as
+    this ability resolves, that player simultaneously sacrifices the <A> and
+    returns the <B> to the battlefield.`` (Goblin Welder.)
+
+    **One node for two sentences, because it is one announcement and one
+    effect.** The first sentence is CR 601.2c's choosing and performs nothing
+    on its own; the second names both objects back by their printed nouns and
+    is unreadable without it. That is the rule ``choices`` states for every
+    "choose" sentence in the grammar, and here it is stronger still: the two
+    objects sit in *different zones*, so neither sentence alone says what the
+    card does to which.
+
+    ``must_all_be_legal`` is the printed "if **both** targets are still legal"
+    rider and is not decoration. CR 608.2b removes an ability from the stack
+    only when *every* target is illegal, so a card printing this sentence is
+    **stricter** than the default rule: one surviving target is enough for the
+    engine and not enough for the card. Dropped, the ability would sacrifice an
+    artifact and return nothing, or return a card and sacrifice nothing — wrong
+    in the player's favour and silent.
+
+    ``actor`` is the seat that carries both actions out, and it is the seat
+    ``sacrificed``'s own "a player controls" bound: the card never says "you",
+    and which graveyard ``returned`` was chosen from is that same seat's.
+    """
+
+    sacrificed: TargetSpec
+    returned: TargetSpec
+    actor: PlayerRef
+    must_all_be_legal: bool = False
+
+
+@dataclass(frozen=True)
 class Exile:
     """``Exile <subject> [duration]``.
 

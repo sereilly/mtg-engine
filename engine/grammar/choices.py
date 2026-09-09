@@ -1,10 +1,15 @@
 """``Choose <something>.`` and the sentence that binds what it chose.
 
-Three productions and one rule between them: a "choose" sentence performs
+Four productions and one rule between them: a "choose" sentence performs
 nothing on its own, so it parses **only** when the sentence that reads the
 choice follows. A card whose one instruction chose a target and then did
 nothing would report itself supported and do nothing at all, which is the
 failure this grammar refuses loudly everywhere else.
+
+The fourth (Goblin Welder's) is the strongest reading of that rule rather than
+an exception to it: its two chosen objects sit in **different zones**, so
+neither sentence alone says what the card does to which, and the pair is one
+production or nothing.
 
 Split out of `delayed` at the thousand-line guard, along the boundary that
 module's own docstring already drew: it explained at length why "Choose target
@@ -12,7 +17,7 @@ module's own docstring already drew: it explained at length why "Choose target
 shared reason is not a shared subject. What is left in `delayed` reads a
 sentence that arranges for something later; what is here reads a sentence whose
 own content is a **choice**, and the probe for the sentence that reads it back
-is the whole of the work in all three.
+is the whole of the work in all four.
 
 The recursion arrives as a parameter for `delayed`'s reason: a binder probe
 parses a whole statement, and `parse_statement` is the roof one layer up.
@@ -32,7 +37,7 @@ from .effects.prevention import _parse_bound_targeting_prevention
 from .errors import GrammarError
 from .phrases import BASIC_LAND_WORDS, _parse_duration
 from .nouns import parse_object_filter
-from .references import parse_recipient, parse_target_spec
+from .references import _parse_further_subjects, parse_recipient, parse_target_spec
 from .seat_comparisons import accept_player_comparison
 from .stream import TokenStream
 from .vocabulary import LAND_TYPES, TYPE_LINE_SUPERTYPES
@@ -246,6 +251,164 @@ def _parse_choose_target(stream: TokenStream, parse_statement) -> "ast.ChooseTar
         stream.reset(mark)
         return None
     return ast.ChooseTarget(chosen)
+
+
+
+#: The printed rider that makes CR 608.2b **all-or-nothing** for one ability.
+#:
+#: The default rule removes an ability from the stack only when *every* one of
+#: its targets has become illegal; an ability printing this sentence does
+#: nothing unless *both* are still legal. So it is strictly stronger than the
+#: rule, and a production that read it and dropped it would leave the engine
+#: resolving the half the card forbids — an artifact sacrificed for a card that
+#: never comes back, which is silent and in the player's favour.
+_BOTH_TARGETS_STILL_LEGAL = (
+    "if", "both", "targets", "are", "still", "legal",
+    "as", "this", "ability", "resolves",
+)
+
+
+def _accept_the_named_object(stream: TokenStream, spec: "ast.TargetSpec") -> bool:
+    """``the <printed noun of *spec*>`` at the cursor.
+
+    The back-reference half of a two-sentence announcement: the second sentence
+    names each chosen object by the noun the first sentence chose it with, and
+    this is what holds the two together. Compared by the *parsed* noun phrase
+    rather than by the raw words, so "the artifact card" and "the artifact" are
+    told apart by the same reader that told "target artifact card" from "target
+    artifact" one sentence earlier — a word-level match would let a card whose
+    second sentence names the wrong one of its two targets compile as though it
+    named the right one.
+
+    Only the type half is compared. A slot's *other* narrowings ("a player
+    controls", "in that player's graveyard") describe how it was chosen and are
+    not reprinted on the back-reference.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("the"):
+        stream.reset(mark)
+        return False
+    try:
+        named = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return False
+    wanted = spec.filter
+    if (
+        named.card_types == wanted.card_types
+        and named.subtypes == wanted.subtypes
+        and named.is_card == wanted.is_card
+    ):
+        return True
+    stream.reset(mark)
+    return False
+
+
+def _parse_choose_then_swap(
+    stream: TokenStream,
+) -> "ast.SacrificeAndReturnTargets | None":
+    """``Choose target <A> and target <B>. [If both targets are still legal as
+    this ability resolves,] that player simultaneously sacrifices the <A> and
+    returns the <B> to the battlefield.`` (Goblin Welder.)
+
+    A fusion for `_parse_choose_then_gain`'s reason and one more. The first
+    sentence performs nothing on its own — it is CR 601.2c's choosing — and the
+    second names both objects back by their printed nouns, so neither sentence
+    can be read alone. The extra reason is the pair of *zones*: one target is a
+    permanent and the other a card in a graveyard, and which is which is said
+    by the first sentence and acted on by the second.
+
+    The two slots are held to the shape the sentence behind them can mean: the
+    first is a battlefield permanent narrowed by the indefinite seat ("a player
+    controls"), the second a **card** in the graveyard of that same seat. That
+    is the binding "that player" points back at, and it is checked here rather
+    than assumed, because a production that accepted any two targets would read
+    "…in **your** graveyard" as though it said "theirs".
+    """
+    mark = stream.mark()
+    if not stream.accept_word("choose"):
+        stream.reset(mark)
+        return None
+    try:
+        first = parse_target_spec(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if first is None or not first.targeted or first.count != 1:
+        stream.reset(mark)
+        return None
+    # "…**and** target artifact card in that player's graveyard" — the same
+    # union reader every other several-target sentence uses, so the second slot
+    # is parsed by the machinery that already knows what "target" means rather
+    # than by a second reading of the word.
+    further = _parse_further_subjects(stream, first, several_targets=True)
+    if len(further) != 1:
+        stream.reset(mark)
+        return None
+    second = further[0]
+    if (
+        not isinstance(second, ast.TargetSpec)
+        or not second.targeted
+        or second.count != 1
+    ):
+        stream.reset(mark)
+        return None
+    if first.filter.controller != "any_player" or first.filter.is_card:
+        stream.reset(mark)
+        return None
+    owner = second.filter.zone_owner
+    if (
+        not second.filter.is_card
+        or second.filter.zone != "graveyard"
+        # "that player's graveyard", which `accept_zone_possessive` spells
+        # ``owner`` — its own comment says the two are one node. The seat is the
+        # one the first slot's "a player controls" bound, which is the whole
+        # dependency between the two slots.
+        or owner is None
+        or owner.kind != "owner"
+    ):
+        stream.reset(mark)
+        return None
+    if not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    must_all_be_legal = bool(stream.accept_phrase(*_BOTH_TARGETS_STILL_LEGAL))
+    if must_all_be_legal:
+        stream.accept_punct(",")
+    actor = parse_recipient(stream)
+    if not isinstance(actor, ast.PlayerRef) or actor.kind != "that_player":
+        stream.reset(mark)
+        return None
+    # CR 608.2's steps happen in the order written unless a card says
+    # otherwise, and this one says otherwise: the sacrifice and the return are
+    # **one** event, so the artifact going to the graveyard is not a card the
+    # return could have been aimed at and nothing sees the board in between.
+    # Required, not optional: without the word the sentence is two ordinary
+    # steps and a different card.
+    if not stream.accept_word("simultaneously"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("sacrifices"):
+        stream.reset(mark)
+        return None
+    if not _accept_the_named_object(stream, first):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("and") or not stream.accept_word("returns"):
+        stream.reset(mark)
+        return None
+    if not _accept_the_named_object(stream, second):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("to", "the", "battlefield"):
+        stream.reset(mark)
+        return None
+    return ast.SacrificeAndReturnTargets(
+        sacrificed=first,
+        returned=second,
+        actor=actor,
+        must_all_be_legal=must_all_be_legal,
+    )
 
 
 def _parse_choose_then_gain(stream: TokenStream) -> "ast.GainKeyword | None":

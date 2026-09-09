@@ -2108,12 +2108,30 @@ def roles_still_legal(
     blocked.
     """
     from ..subject_filters import subject_matches
-    from ..targeting import role_dependency, role_relation_holds
 
     targets = (payload or {}).get("targets") or {}
     roles = list(targets.get("roles") or ())
     resolved: list = []
     for role in roles:
+        # **A role is not always a battlefield permanent.** Goblin Welder's
+        # second slot is a card in a graveyard, whose "still legal" question is
+        # a different one: it has no controller and no keywords to have gained
+        # (CR 613.1 reads its printed line and nothing else), so what CR 608.2b
+        # asks of it is whether it is still *there* and still answers the
+        # printed noun. The stamp resolving to a live slot is the first half —
+        # the same answer ``illegal_targets_refusal`` reads one zone over — and
+        # ``graveyard_card_matches`` is the second, which is the predicate the
+        # picker offered by.
+        if role.get("kind") == "graveyard_card":
+            stamp = resolve_role_graveyard_card(game, context, payload, role.get("role"))
+            if stamp is None or game.graveyard_index_of(stamp) is None:
+                return False
+            if not graveyard_card_matches(role, stamp.card):
+                return False
+            if not _role_relation_still_holds(game, role, roles, resolved, stamp):
+                return False
+            resolved.append(stamp)
+            continue
         perm = resolve_role_permanent(game, context, payload, role.get("role"))
         if perm is None or not game.is_on_battlefield(perm):
             return False
@@ -2122,18 +2140,32 @@ def roles_still_legal(
             source=context.source_permanent,
         ):
             return False
-        _relation, depends_on = role_dependency(role)
-        earlier = next(
-            (
-                candidate for candidate, entry in zip(resolved, roles)
-                if entry.get("role") == depends_on
-            ),
-            None,
-        )
-        if not role_relation_holds(role, earlier, perm, game):
+        if not _role_relation_still_holds(game, role, roles, resolved, perm):
             return False
         resolved.append(perm)
     return bool(roles)
+
+
+def _role_relation_still_holds(game: Game, role: dict, roles: list, resolved: list, obj) -> bool:
+    """CR 608.2b for one role's *dependency*, asked of the objects settled so far.
+
+    Split out of :func:`roles_still_legal`'s loop when a second arm needed it —
+    a graveyard role's relation ("in **that player's** graveyard") is the same
+    question as a permanent role's and is answered by the same table, and two
+    copies of this lookup is exactly how a re-check comes to disagree with the
+    picker it was written from.
+    """
+    from ..targeting import role_dependency, role_relation_holds
+
+    _relation, depends_on = role_dependency(role)
+    earlier = next(
+        (
+            candidate for candidate, entry in zip(resolved, roles)
+            if entry.get("role") == depends_on
+        ),
+        None,
+    )
+    return bool(role_relation_holds(role, earlier, obj, game))
 
 
 #: The context keys a fire site freezes "that player" under, in the order this
@@ -2241,6 +2273,39 @@ def resolve_role_permanent(
     if isinstance(indices, list) and 0 <= slot < len(indices):
         return game.permanent_at(game.players.index(context.target), indices[slot])
     return None
+
+
+def resolve_role_graveyard_card(
+    game: Game,
+    context: OracleExecutionContext,
+    payload: dict,
+    role: str,
+):
+    """The card chosen for one **graveyard** role, as the
+    :class:`GraveyardTarget` the announcement stamped, or None.
+
+    :func:`resolve_role_permanent`'s sibling one zone over, and it has to be a
+    sibling rather than a branch: that one resolves an id through
+    ``permanent_by_id``, and a card in a graveyard has no id to resolve — two
+    copies of one card there are literally one ``CardDefinition``. The stamp is
+    the identity (pile plus which copy), and where it sits *now* is
+    ``Game.graveyard_index_of``, asked by the caller at the moment it acts.
+
+    Strict, and for :func:`resolve_role_permanent`'s reason: the slot comes
+    from ``payload_role_slot``, reading the same ``targets`` description the
+    picker and the announcement gate read, and there is no fallback scan. A
+    role that no longer resolves is CR 608.2b's illegal target, not an
+    invitation to reanimate whichever artifact card is nearest.
+    """
+    from ..targeting import payload_role_slot
+
+    slot = payload_role_slot(payload, role)
+    if slot is None:
+        return None
+    stamps = context.target_graveyard_card
+    if isinstance(stamps, list):
+        return stamps[slot] if 0 <= slot < len(stamps) else None
+    return stamps if slot == 0 else None
 
 
 def recorded_permanent_ids(context, key) -> tuple[int, ...]:

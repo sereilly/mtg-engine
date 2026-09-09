@@ -2535,6 +2535,21 @@ def _from_instruction(instruction) -> dict | None:
 ROLES_TARGET_KIND = "roles"
 
 
+#: The narrowings a **graveyard** role carries, and the whole of what separates
+#: one from the battlefield roles beside it.
+#:
+#: Every name here is one ``handlers/_common.graveyard_card_matches`` already
+#: reads, which is the point: the picker, the announcement gate and the CR
+#: 608.2b re-check ask that one predicate, so a role described in this module's
+#: own spelling would be a fourth reading of "which cards may be chosen" — the
+#: shape this repo keeps finding on the wrong side of.
+_GRAVEYARD_ROLE_KEYS = (
+    "any_card", "card_type", "card_types",
+    "graveyard_colors", "graveyard_subtypes", "graveyard_mana_value",
+    "supertypes", "own_graveyard_only", "opponent_graveyard_only",
+)
+
+
 def roles_spec(targets: dict) -> dict | None:
     """The ordered-role spec a ``kind: "roles"`` description means.
 
@@ -2608,6 +2623,23 @@ ROLE_RELATION_TESTS = {
     # opponents in a CR 802 multi-defender combat. The relation is what makes
     # the second choice depend on the first, and it is asked of the control
     # seam because control moves (CR 613 layer 2).
+    # "target artifact a player controls **and target artifact card in that
+    # player's graveyard**" (Goblin Welder). The first relation whose two sides
+    # are not both permanents: *earlier* is on a battlefield and *candidate* is
+    # a :class:`GraveyardTarget`, one card in one pile. What the relation asks
+    # is whose pile — the seat the earlier role's own "a player controls"
+    # bound — and it is asked of the control seam because control moves
+    # (CR 613 layer 2) and the answer has to be the same one the picker,
+    # the announcement gate and the resolution all get.
+    #
+    # ``candidate.seat`` rather than the card's owner: a graveyard is a zone
+    # belonging to a player (CR 404.1), and a card sitting in it is in *that*
+    # player's graveyard however it got there.
+    "in_graveyard_of_role": lambda earlier, candidate, game: (
+        game is not None
+        and getattr(candidate, "seat", None) is not None
+        and game.controller_index_of(earlier) == candidate.seat
+    ),
     "same_controller_role": lambda earlier, candidate, game: (
         game is not None
         and game.controller_index_of(earlier) is not None
@@ -2820,6 +2852,22 @@ def _from_targets_payload(targets) -> dict | None:
         # `_KIND_TO_SPEC_FROM_PAYLOAD`; answering here would hand the picker a
         # battlefield when the effect reads a graveyard.
         return None
+    if kind == "graveyard_card":
+        # One **role** of a several-role announcement whose object is a card in
+        # a graveyard (Goblin Welder's second slot). Read here rather than
+        # under ``kind == "card"`` above, which refuses: that shape carries no
+        # description of its own and leaves the spec to the instruction's own
+        # kind, while a role *is* the description — a roles walk enumerates
+        # slot by slot and has nothing else to ask.
+        #
+        # The keys are the ones ``graveyard_card_matches`` reads, copied rather
+        # than re-derived, so the picker offers exactly what the announcement
+        # gate admits and the resolution re-checks.
+        described = {"kind": GRAVEYARD_TARGET_KIND}
+        for key in _GRAVEYARD_ROLE_KEYS:
+            if key in targets:
+                described[key] = targets[key]
+        return described
     if kind == "roles":
         return roles_spec(targets)
     if kind == "any":

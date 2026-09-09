@@ -674,3 +674,248 @@ def test_g1_maro_still_counts_one_hand(set_pool):
     game._settle()
 
     assert (maro.effective_power, maro.effective_toughness) == (4, 4)
+
+
+# --- W2G1: an announcement whose two targets sit in two zones ---
+from engine import Game, PlayerState
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+from engine.subject_filters import subject_matches
+from engine.targeting import derive_activation_spec, spec_roles
+from tests.helpers import resolve_stack
+
+
+def _w2g1_welder_board(set_pool, *, mine=(), theirs=(), my_pile=(), their_pile=()):
+    """A Welder on seat 0 with artifacts and graveyards on both sides.
+
+    Returns ``(game, seat0, seat1, welder)``. The board is built by *card name*
+    rather than by a shared fixture so each test says what it is about, and the
+    Welder is given a turn stamp because a summoning-sick creature cannot pay
+    the {T} in its own cost (CR 302.6) - a detail that would otherwise refuse
+    every activation below for a reason none of them is about.
+    """
+    pool = set_pool("ULG")
+    seat0, seat1 = PlayerState(name="A"), PlayerState(name="B")
+    game = Game(players=[seat0, seat1])
+    game.enforce_mana_costs = False
+    welder = Permanent(card=pool["Goblin Welder"])
+    welder.metadata["summoning_sickness_turn"] = -99
+    seat0.battlefield.append(welder)
+    for name in mine:
+        seat0.battlefield.append(Permanent(card=pool[name]))
+    for name in theirs:
+        seat1.battlefield.append(Permanent(card=pool[name]))
+    seat0.graveyard.extend(pool[name] for name in my_pile)
+    seat1.graveyard.extend(pool[name] for name in their_pile)
+    game._sync_control()
+    return game, seat0, seat1, welder
+
+
+def _w2g1_walk(options, depth=0):
+    """Every (depth, seat, index, kind) the roles walk offers, flattened."""
+    found = []
+    for option in options:
+        found.append((depth, option["seat"], option["index"], option["kind"]))
+        found.extend(_w2g1_walk(option.get("next") or [], depth + 1))
+    return found
+
+
+def test_w2g1_welder_compiles_two_roles_in_two_zones(set_pool):
+    """CR 601.2c through CR 602.2b: both targets are chosen as the ability is
+    activated, and they are not the same kind of object. The second role is
+    described with the keys ``graveyard_card_matches`` reads, which is what
+    makes the picker, the announcement gate and the resolution one answer."""
+    program = compile_card_oracle(set_pool("ULG")["Goblin Welder"])
+
+    assert program.supported
+    ability, = program.activated_abilities
+    assert ability.instruction.kind == "sacrifice_and_return_targets"
+    roles = spec_roles(derive_activation_spec(ability))
+    assert [role["role"] for role in roles] == ["artifact", "artifact card"]
+    assert roles[0]["kind"] == "artifact"
+    assert roles[1]["kind"] == "graveyard_creature"
+    assert roles[1]["card_type"] == "artifact"
+    assert roles[1]["relation"] == "in_graveyard_of_role"
+    assert roles[1]["depends_on"] == "artifact"
+    # The printed rider, carried rather than dropped - see the handler.
+    assert ability.instruction.payload["all_targets_required"] is True
+
+
+def test_w2g1_a_player_controls_narrows_nothing_and_binds_a_seat(set_pool):
+    """"target artifact **a player controls**" is the one seat word that takes
+    nothing away: every permanent on the battlefield has a controller
+    (CR 110.2a). It is read rather than dropped because it is what the sentence
+    behind it points back at, and a value with no branch in ``subject_matches``
+    would fall through to the relative comparison and read as "you control"."""
+    game, _seat0, _seat1, _welder = _w2g1_welder_board(
+        set_pool, mine=["Grim Monolith"], theirs=["Iron Maiden"],
+    )
+    mine = list(game.controlled_by(0))[1]
+    theirs = list(game.controlled_by(1))[0]
+    described = {"type_filter": "artifact", "controller": "any_player"}
+
+    assert subject_matches(game, mine, described, observer=0)
+    assert subject_matches(game, theirs, described, observer=0)
+
+
+def test_w2g1_the_picker_pairs_each_artifact_with_its_own_graveyard(set_pool):
+    """The relation is the whole of what the second slot means: "in **that
+    player's** graveyard" is the seat the first slot's own noun phrase bound,
+    so choosing an opponent's artifact must offer only the opponent's pile."""
+    game, _seat0, _seat1, _welder = _w2g1_welder_board(
+        set_pool,
+        mine=["Grim Monolith"], theirs=["Iron Maiden"],
+        my_pile=["Quicksilver Amulet"], their_pile=["Ticking Gnomes"],
+    )
+    spec = game.activation_target_spec(0, 0)
+
+    assert spec["kind"] == "roles"
+    offered = _w2g1_walk(spec["valid_targets"])
+    # Seat 0's own artifact leads only to seat 0's pile, and seat 1's to seat 1's.
+    assert (0, 0, 1, "permanent") in offered
+    assert (0, 1, 0, "permanent") in offered
+    assert [entry for entry in offered if entry[0] == 1] == [
+        (1, 0, 0, "graveyard"), (1, 1, 0, "graveyard"),
+    ]
+    # The Welder is a creature, not an artifact, so it is not its own target.
+    assert not [entry for entry in offered if entry[:3] == (0, 0, 0)]
+
+
+def test_w2g1_a_cross_seat_announcement_is_refused_with_nothing_paid(set_pool):
+    """CR 602.2b: an activation whose announcement is illegal is refused before
+    a cost is paid. Naming your own artifact and an opponent's graveyard card
+    is exactly the pair the relation forbids, and the Welder must stay untapped."""
+    game, _seat0, _seat1, welder = _w2g1_welder_board(
+        set_pool,
+        mine=["Grim Monolith"], theirs=["Iron Maiden"],
+        my_pile=["Quicksilver Amulet"], their_pile=["Ticking Gnomes"],
+    )
+    mine = list(game.controlled_by(0))[1]
+    result = game.activate_permanent_ability(
+        0, "Goblin Welder", permanent_index=0,
+        target_role_refs=[
+            {"permanent_id": mine.permanent_id},
+            {"graveyard_seat": 1, "graveyard_index": 0},
+        ],
+    )
+
+    assert not result.supported
+    assert not welder.tapped
+    assert not game.stack
+
+
+def test_w2g1_an_empty_graveyard_makes_the_ability_unactivatable(set_pool):
+    """The other half of CR 602.2b, asked with nothing named: a board where no
+    legal *chain* exists refuses the activation outright rather than letting it
+    resolve doing nothing."""
+    game, _seat0, _seat1, welder = _w2g1_welder_board(set_pool, mine=["Grim Monolith"])
+    result = game.activate_permanent_ability(0, "Goblin Welder", permanent_index=0)
+
+    assert not result.supported
+    assert not welder.tapped
+
+
+def test_w2g1_the_weld_swaps_the_named_players_own_artifact(set_pool):
+    """The effect itself: "**that player** simultaneously sacrifices the
+    artifact and returns the artifact card to the battlefield". The seat is the
+    one the first slot bound, so an opponent's artifact dies into an opponent's
+    graveyard and an opponent's card comes back under *their* control - nothing
+    here is relative to the Welder's controller."""
+    game, _seat0, seat1, _welder = _w2g1_welder_board(
+        set_pool, theirs=["Iron Maiden"], their_pile=["Ticking Gnomes"],
+    )
+    theirs = list(game.controlled_by(1))[0]
+    game.activate_permanent_ability(
+        0, "Goblin Welder", permanent_index=0,
+        target_role_refs=[
+            {"permanent_id": theirs.permanent_id},
+            {"graveyard_seat": 1, "graveyard_index": 0},
+        ],
+    )
+    resolve_stack(game)
+
+    assert [perm.card.name for perm in game.controlled_by(1)] == ["Ticking Gnomes"]
+    assert [card.name for card in seat1.graveyard] == ["Iron Maiden"]
+    assert [perm.card.name for perm in game.controlled_by(0)] == ["Goblin Welder"]
+
+
+def test_w2g1_the_weld_neither_duplicates_nor_loses_a_card(set_pool):
+    """The hardest board for it: the artifact being sacrificed and the card
+    being returned are **the same printing**, so the pile the sacrifice feeds is
+    the pile the return reads.
+
+    What is asserted is the balance - one object leaves the battlefield and one
+    arrives, and the graveyard holds exactly what left. The *order* the handler
+    writes ("simultaneously", CR 608.2) is not asserted, and deliberately: the
+    graveyard stamp is keyed by ordinal, so a sacrifice that landed first would
+    still resolve to the chosen copy and the two orders agree here. Writing the
+    order for the rule rather than for a failing case is the point; claiming a
+    test proves it would not be true."""
+    game, _seat0, seat1, _welder = _w2g1_welder_board(
+        set_pool, theirs=["Ticking Gnomes"], their_pile=["Ticking Gnomes"],
+    )
+    theirs = list(game.controlled_by(1))[0]
+    game.activate_permanent_ability(
+        0, "Goblin Welder", permanent_index=0,
+        target_role_refs=[
+            {"permanent_id": theirs.permanent_id},
+            {"graveyard_seat": 1, "graveyard_index": 0},
+        ],
+    )
+    resolve_stack(game)
+
+    # One arrived and one went to the pile - not two of either.
+    assert len(list(game.controlled_by(1))) == 1
+    assert [card.name for card in seat1.graveyard] == ["Ticking Gnomes"]
+    # CR 400.7: what came back is a new object, never the permanent that left.
+    arrived = list(game.controlled_by(1))[0]
+    assert arrived is not theirs
+    assert arrived.permanent_id != theirs.permanent_id
+
+
+def test_w2g1_one_illegal_target_stops_the_whole_ability(set_pool):
+    """The printed rider, which is **stricter than CR 608.2b**: the rule removes
+    an ability from the stack only when *every* target is illegal, so with the
+    artifact gone the default would still return the card. "If **both** targets
+    are still legal" says otherwise, and a rider parsed and dropped is an
+    ability that works more often than the card allows."""
+    game, _seat0, seat1, _welder = _w2g1_welder_board(
+        set_pool, theirs=["Iron Maiden"], their_pile=["Ticking Gnomes"],
+    )
+    theirs = list(game.controlled_by(1))[0]
+    game.queue_permanent_ability(
+        0, "Goblin Welder", permanent_index=0,
+        target_role_refs=[
+            {"permanent_id": theirs.permanent_id},
+            {"graveyard_seat": 1, "graveyard_index": 0},
+        ],
+    )
+    # Bounced in response: one target is now illegal, the other is not.
+    game.remove_from_battlefield(theirs)
+    resolve_stack(game)
+
+    assert not list(game.controlled_by(1))
+    assert [card.name for card in seat1.graveyard] == ["Ticking Gnomes"]
+
+
+def test_w2g1_a_lost_graveyard_card_stops_it_too(set_pool):
+    """The same rider from the other side: the artifact is still there and the
+    card is not, so nothing is sacrificed. Asserted separately because the two
+    roles resolve through different readers - an id on a battlefield and a
+    stamp in a pile - and a rider honoured for one of them is not honoured."""
+    game, _seat0, seat1, _welder = _w2g1_welder_board(
+        set_pool, theirs=["Iron Maiden"], their_pile=["Ticking Gnomes"],
+    )
+    theirs = list(game.controlled_by(1))[0]
+    game.queue_permanent_ability(
+        0, "Goblin Welder", permanent_index=0,
+        target_role_refs=[
+            {"permanent_id": theirs.permanent_id},
+            {"graveyard_seat": 1, "graveyard_index": 0},
+        ],
+    )
+    seat1.graveyard.clear()
+    resolve_stack(game)
+
+    assert [perm.card.name for perm in game.controlled_by(1)] == ["Iron Maiden"]
+    assert not seat1.graveyard

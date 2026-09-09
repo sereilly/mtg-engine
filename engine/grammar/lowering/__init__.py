@@ -171,6 +171,7 @@ from .zones import (
 
     _lower_put_on_library_top,
     _lower_exile_graveyard_position,
+    _lower_sacrifice_and_return_targets,
 )
 from .returns import (
     _reads_no_return_restriction,
@@ -638,6 +639,7 @@ __all__ = [
     "_lower_ante_offer_ownership_exchange",
     "_lower_random_reveal_ownership_exchange",
     "_lower_exile_graveyard_position",
+    "_lower_sacrifice_and_return_targets",
     "_lower_exile_top_of_library",
     "_lower_exile_entire_library",
     "_lower_exile_random_from_hand",

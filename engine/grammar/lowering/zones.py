@@ -826,3 +826,117 @@ def _lower_exile_graveyard_position(
         # happened to be carrying.
         payload.update(_targets_only(node.position.owner))
     return (OracleInstruction("exile_graveyard_position", "", payload),)
+
+
+#: The role dependency "…in **that player's** graveyard", where *that player*
+#: is the seat an earlier role's own noun phrase bound ("target artifact **a
+#: player controls**").
+#:
+#: Spelled with the ``_role`` suffix every dependency in a roles description
+#: carries, which is what ``targeting.role_dependency`` finds it by; the answer
+#: behind the name is one entry in ``targeting.ROLE_RELATION_TESTS``, read by
+#: the picker, by the announcement gate and by the CR 608.2b re-check alike.
+IN_GRAVEYARD_OF_ROLE = "in_graveyard_of_role"
+
+
+def _lower_sacrifice_and_return_targets(
+    node: ast.SacrificeAndReturnTargets,
+) -> tuple[OracleInstruction, ...]:
+    """"Choose target artifact a player controls and target artifact card in
+    that player's graveyard. If both targets are still legal as this ability
+    resolves, that player simultaneously sacrifices the artifact and returns
+    the artifact card to the battlefield." (Goblin Welder.)
+
+    **One instruction, because it is one announcement.** The two targets are
+    chosen together (CR 601.2c through CR 602.2b) and the second's legal set is
+    decided by the first, which is exactly the ordered-**roles** description the
+    picker already walks — so the slots go there rather than into two steps of a
+    sequence, where nothing could enumerate the second against the first.
+
+    The second role is a card in a graveyard rather than a permanent, and it is
+    described with the same keys ``graveyard_card_matches`` reads everywhere
+    else. That predicate is what the picker offers by, what the announcement
+    gate admits by and what the resolution re-checks by; a payload written in
+    this module's own spelling would be a fourth reading of "which cards may be
+    chosen", which is this repo's recurring defect.
+    """
+    from ._described_returns import _graveyard_to_hand_payload
+
+    sacrificed = _filter_payload(node.sacrificed.filter)
+    noun = sacrificed.get("type_filter") or sacrificed.get("subtype_filter")
+    if not isinstance(noun, str):
+        raise LoweringError(
+            "a sacrificed target role needs a printed noun to be asked for",
+            node=node,
+        )
+    returned_filter = node.returned.filter
+    # Every narrowing on the graveyard slot that ``graveyard_card_matches``
+    # cannot test. Refused rather than dropped, in the direction this grammar
+    # always fails: a card in a graveyard has no power, no tapped state and no
+    # controller (CR 613.1 reads its printed line and nothing else), so a
+    # phrase carrying one of those is a card this lowering does not implement
+    # rather than a card it implements loosely.
+    if _restrictions_beyond(
+        returned_filter,
+        {
+            "card_types", "type_match", "subtypes", "subtype_match",
+            "supertypes", "colors", "zone", "zone_owner", "is_card",
+        },
+    ):
+        raise LoweringError(
+            "no graveyard picker reads this narrowing", node=node
+        )
+    described = _graveyard_to_hand_payload(returned_filter)
+    if returned_filter.colors:
+        described = {
+            **described, "graveyard_colors": list(returned_filter.colors),
+        }
+    returned_noun = described.get("card_type")
+    if not isinstance(returned_noun, str):
+        raise LoweringError(
+            "a returned target role needs a printed card type to be asked for",
+            node=node,
+        )
+    # The role *names* are the printed nouns, which is what the picker shows the
+    # activator ("Choose the artifact card for Goblin Welder (2 of 2)"). They
+    # have to differ — a roles walk turns a name back into a slot — and here the
+    # word "card" is exactly what the card prints to tell its two targets apart.
+    payload: dict[str, object] = {
+        "targets": {
+            "kind": "roles",
+            "roles": [
+                {
+                    "role": noun,
+                    "kind": "object",
+                    "count": 1,
+                    "filter": sacrificed,
+                },
+                {
+                    "role": f"{returned_noun} card",
+                    "kind": "graveyard_card",
+                    "count": 1,
+                    **described,
+                    IN_GRAVEYARD_OF_ROLE: noun,
+                },
+            ],
+        },
+    }
+    if not node.must_all_be_legal:
+        # The same two verbs **without** "if both targets are still legal" is a
+        # different card: CR 608.2b would let it resolve one half — sacrifice
+        # the artifact and return nothing, or the reverse — and nothing here
+        # does that. Refused by name rather than lowered onto the handler
+        # below, which does neither half and would be stricter than the rule in
+        # the direction that takes a player's artifact for nothing.
+        raise LoweringError(
+            "no handler resolves this weld one target at a time", node=node
+        )
+    # CR 608.2b removes an ability from the stack only when *every* target is
+    # illegal. This card is stricter, so the rider is carried onto the payload
+    # the handler reads rather than folded into the meaning of the kind:
+    # dropped, the ability would sacrifice an artifact and return nothing, and
+    # a second card printing the looser sentence has somewhere to say so.
+    payload["all_targets_required"] = True
+    return (
+        OracleInstruction("sacrifice_and_return_targets", "", payload),
+    )

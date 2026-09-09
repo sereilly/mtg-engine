@@ -151,6 +151,11 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     # graveyard and arrives in exile — so the same category and
     # GRAMMAR_CATEGORIES is unchanged.
     "exile_graveyard_position": "zones",
+    # Goblin Welder. Two zones in one event: a permanent leaves the
+    # battlefield for its owner's graveyard and a card leaves that graveyard
+    # for the battlefield, simultaneously — which is exactly the pair this
+    # table's family rule names.
+    "sacrifice_and_return_targets": "zones",
     "exile_entire_library": "zones",
     "exile_random_card_from_hand": "zones",
     "exile_chosen_card_from_hand": "zones",

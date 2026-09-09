@@ -12193,7 +12193,23 @@ function dividedTargetCount() {
 function roleTargetNoun(role) {
   if (!role) return "permanent";
   if (role.wall_only) return "Wall";
+  // A role whose objects are cards in a graveyard: the spec kind is the
+  // picker's name for that zone ("graveyard_creature") and says nothing a
+  // caster would recognise, so the *printed noun* the lowering named the role
+  // with is what is shown - "artifact card", for Goblin Welder's second slot.
+  if (roleReadsAGraveyard(role)) return role.role || "card in a graveyard";
   return role.kind || "permanent";
+}
+
+/** Whether this role's objects are chosen from a graveyard rather than a board. */
+function roleReadsAGraveyard(role) {
+  return !!role && role.kind === "graveyard_creature";
+}
+
+/** The role a roles walk is currently asking for, or null when it is finished. */
+function currentRole(p) {
+  if (!p || p.targetKind !== "roles") return null;
+  return p.roles[p.roleChosen.length] || null;
 }
 
 function roleTargetsHint() {
@@ -12237,17 +12253,54 @@ function startCastRolesTargetPrompt(card, castAction = "cast", extra = null) {
   };
   renderActivationPrompt();
   renderBoard(currentState);
+  revealRoleGraveyards();
   updateActionHint(roleTargetsHint());
 }
 
-function chooseRoleTarget(targetSeat, permanentIndex) {
+/** Open the zone-reveal panel on the graveyards this role's options lie in.
+ *
+ * The same auto-open the one-target graveyard prompt does, run at *every* step
+ * of the walk rather than once at the start: a roles announcement can begin on
+ * a battlefield and end in a pile (Goblin Welder), so which zone the caster is
+ * being asked about changes as they click.
+ */
+function revealRoleGraveyards() {
   const p = pendingCastTarget;
   if (!p || p.targetKind !== "roles") return;
+  if (!roleReadsAGraveyard(currentRole(p))) return;
+  const seats = [...new Set((p.validGraveyard || []).map((t) => t.seat))];
+  const sections = seats.map((s) => zoneRevealSectionFor(s, "graveyard"));
+  if (sections.length) openZoneReveal(sections, { auto: true });
+}
+
+function chooseRoleTarget(targetSeat, permanentIndex, zoneKind = "battlefield") {
+  const p = pendingCastTarget;
+  if (!p || p.targetKind !== "roles") return;
+  const wantedKind = zoneKind === "graveyard" ? "graveyard" : "permanent";
   const option = (p.roleOptions || []).find(
-    (o) => o && o.seat === targetSeat && o.index === permanentIndex,
+    (o) => o && o.kind === wantedKind
+      && o.seat === targetSeat && o.index === permanentIndex,
   );
   if (!option) {
-    updateActionHint("That permanent isn't a legal choice for this target.", true);
+    updateActionHint("That isn't a legal choice for this target.", true);
+    return;
+  }
+  if (wantedKind === "graveyard") {
+    // A card in a graveyard has no stable id to send - two copies of one card
+    // in one pile are one object to the server - so it is named by its pile and
+    // its slot, and the server stamps which copy as the ability goes on the
+    // stack (CR 601.2c).
+    p.roleChosen.push({ seat: targetSeat, idx: permanentIndex, zone: "graveyard" });
+    if (p.roleChosen.length >= p.roles.length) {
+      confirmRoleTargets();
+      return;
+    }
+    p.roleOptions = option.next || [];
+    Object.assign(p, indexValidTargets(p.roleOptions));
+    renderActivationPrompt();
+    renderBoard(currentState);
+    revealRoleGraveyards();
+    updateActionHint(roleTargetsHint());
     return;
   }
   // Ids, for the reason every other picker sends them: a permanent that left
@@ -12269,6 +12322,7 @@ function chooseRoleTarget(targetSeat, permanentIndex) {
   Object.assign(p, indexValidTargets(p.roleOptions));
   renderActivationPrompt();
   renderBoard(currentState);
+  revealRoleGraveyards();
   updateActionHint(roleTargetsHint());
 }
 
@@ -12277,6 +12331,16 @@ function confirmRoleTargets() {
   if (!p || p.targetKind !== "roles") return;
   const { cardName, castAction, roleChosen } = p;
   const activating = castAction === "activate";
+  // A slot chosen out of a graveyard cannot travel as an id, so the whole
+  // announcement travels in the wider shape instead - one entry per role,
+  // still positional. Never mixed with the id list: "which list does slot 1
+  // come from?" is a question the wire must not be asked.
+  const readsAZone = roleChosen.some((t) => t.zone === "graveyard");
+  const roleRefs = roleChosen.map((t) => (
+    t.zone === "graveyard"
+      ? { graveyard_seat: t.seat, graveyard_index: t.idx }
+      : { permanent_id: t.id }
+  ));
   // In role order, which is the order the engine's own roles list is in — the
   // wire is positional and both ends read one list.
   const body = activating
@@ -12286,7 +12350,9 @@ function confirmRoleTargets() {
           action: "activate",
           permanent_name: cardName,
           permanent_index: p.sourcePermanentIndex,
-          target_permanent_ids: roleChosen.map((t) => t.id),
+          ...(readsAZone
+            ? { target_role_refs: roleRefs }
+            : { target_permanent_ids: roleChosen.map((t) => t.id) }),
         },
         "permanent_id", seat, p.sourcePermanentIndex,
       )
@@ -12294,7 +12360,9 @@ function confirmRoleTargets() {
         seat,
         action: castAction || "cast",
         card_name: cardName,
-        target_permanent_ids: roleChosen.map((t) => t.id),
+        ...(readsAZone
+          ? { target_role_refs: roleRefs }
+          : { target_permanent_ids: roleChosen.map((t) => t.id) }),
       };
   if (activating && Number.isInteger(p.abilityIndex)) body.ability_index = p.abilityIndex;
   // Kor Chant: two targets **and** CR 609.7a's chosen source, which is the one
@@ -14822,9 +14890,16 @@ function renderZoneCards(
   const container = q(containerId);
   container.innerHTML = "";
   if (!cards || cards.length === 0) return;
+  // ...and a **roles** walk whose current slot is a graveyard one (Goblin
+  // Welder's second target). Same panel, same glow, same `validGraveyard` list
+  // the backend already ships for it - only the click differs, below.
+  const rolesReadingAGraveyard =
+    pendingCastTarget &&
+    pendingCastTarget.targetKind === "roles" &&
+    roleReadsAGraveyard(currentRole(pendingCastTarget));
   const graveyardTargeting =
     pendingCastTarget &&
-    pendingCastTarget.targetKind === "graveyard_creature" &&
+    (pendingCastTarget.targetKind === "graveyard_creature" || rolesReadingAGraveyard) &&
     zoneKind === "graveyard" &&
     Number.isInteger(zoneSeat);
   // The backend enumerates the legal graveyard targets (already restricting to the
@@ -14885,11 +14960,17 @@ function renderZoneCards(
     if (graveyardTargeting && isValidGraveyardTarget(index)) {
       el.classList.add("targeting-valid");
       el.style.cursor = "pointer";
-      el.addEventListener("click", () => (
-        chosenSlots
-          ? toggleSeveralGraveyardTarget(zoneSeat, index)
-          : resolvePendingCastTarget(zoneSeat, index)
-      ));
+      el.addEventListener("click", () => {
+        if (rolesReadingAGraveyard) {
+          chooseRoleTarget(zoneSeat, index, "graveyard");
+          return;
+        }
+        if (chosenSlots) {
+          toggleSeveralGraveyardTarget(zoneSeat, index);
+          return;
+        }
+        resolvePendingCastTarget(zoneSeat, index);
+      });
     } else if (
       isCastableFromZone(index)
       && (zoneKind === "command" || (!pendingCastTarget && !pendingCastHandCard))
