@@ -490,6 +490,33 @@ PARSE_LAYERS = [
     # do", "…, then …"). Above `statements` because reading one means reading
     # the statement it modifies.
     "riders",
+    # How a line's sentences join into one statement — the loop that reads
+    # sentence after sentence off whatever token stream it is handed, folds a
+    # rider into the step in front of it, and returns the single statement or
+    # the `Sequence`. Pre-split out of `parser` at Urza's Legacy's Phase 0, ten
+    # lines under the guard below with five groups about to open on the parser:
+    # the shared-module case SET_PLAYBOOK.md says to pre-split rather than to
+    # brief. The seam is the one `parser`'s own docstring draws when it lists
+    # what that file is, and the call graph agreed with the prose exactly —
+    # six functions calling each other and no line production among them.
+    #
+    # Above `riders`, `repeats`, `control_flow` and `pronouns`, whose attachers
+    # this loop drives: every one of them left `parser` for this same guard, and
+    # none reaches back. Below `parser`, its only caller, whose import of
+    # `_statements_from_sentences` is also that name's re-export — and only that
+    # name, because `test_import_hygiene.py` reads a re-export nobody pulls as
+    # the stale binding a move leaves behind. `riders`' docstring records that "the
+    # loop that drives them stays behind in `parser.py` with the line-level
+    # productions it belongs to" — true of the seam that sentence describes, and
+    # not true of the file: the loop is not a line production, it is what a line
+    # production is handed.
+    #
+    # The name is `lowering/sequences.py`'s, and the two are one subject from
+    # opposite ends — this builds the `ast.Sequence` out of the printed
+    # sentences and that lowers it, threading each step's records forward.
+    # Different packages, neither importing the other, so the mirror re-forms
+    # rather than forking, exactly as `zones` and `records` already do.
+    "sequences",
     # Whole printed lines whose frame is a *condition* rather than a verb —
     # "As long as <condition>, <effect>", "<effect> as long as <condition>",
     # "During your turn, <effect>". Split out of `parser` at the size guard,
