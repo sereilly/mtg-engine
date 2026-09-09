@@ -3949,12 +3949,43 @@ def _is_supported_keyword_line(line: str) -> bool:
 
 
 def _protection_quality_word(word: str) -> bool:
-    if word in _COLOR_WORD_TO_SYMBOL or word in ("multicolored", "planeswalkers", "planeswalker"):
-        return True
-    from .grammar.vocabulary import CREATURE_TYPES
+    """Whether one word of a protection clause names a quality the shield models.
 
-    singular = word[:-1] if word.endswith("s") else word
-    return word in CREATURE_TYPES or singular in CREATURE_TYPES
+    **Delegates**, and that is the whole of it. This was a hand-written copy of
+    ``keywords.protection_quality`` — colour, "multicolored", the literal pair
+    "planeswalker"/"planeswalkers", then the creature-type catalog — and the two
+    drifted the way this codebase's docstrings keep predicting: the copy's card
+    types were a list of the ones somebody had met, so "artifacts" was a quality
+    the *runtime* could answer (``_permanent_has_quality`` asks ``has_type``) and
+    the *gate* refused. Angelic Curator was the card that refused, with every one
+    of its lines grammar-clean.
+
+    One reader, so what is admitted here and what a shield answers to cannot come
+    apart again.
+    """
+    from .keywords import protection_quality
+
+    return protection_quality(word) is not None
+
+
+def _protection_clause_modelled(clause: str) -> bool:
+    """Whether every quality *clause* names is one the shield models.
+
+    CR 702.16g/h: "protection from Demons **and from** Dragons" is shorthand for
+    two protection abilities, so the clause is split exactly the way
+    ``permanent_state._protection_qualities`` splits it when it *builds* them.
+    Two spellings of that split is how a gate and a runtime come to read
+    different sentences out of one printed line.
+
+    Empty is False, not vacuously True: "protection from" with nothing behind it
+    names no quality, and admitting it would be the blanket prefix this replaced.
+    """
+    qualities = [
+        word.strip()
+        for word in re.split(r",|\band from\b|\band\b", clause)
+        if word.strip()
+    ]
+    return bool(qualities) and all(_protection_quality_word(q) for q in qualities)
 
 
 def _qualified_keyword_part(part: str) -> bool:
@@ -3994,19 +4025,23 @@ def _qualified_keyword_part(part: str) -> bool:
 
     if is_landwalk(part):
         return True
-    for prefix, admit in (
-        ("protection from ", _protection_quality_word),
-        # Hexproof stays colour-only: _can_be_targeted's hexproof branch reads
-        # colour words alone.
-        ("hexproof from ", lambda w: w in _COLOR_WORD_TO_SYMBOL),
-    ):
-        if part.startswith(prefix):
-            qualities = [
-                q.strip()
-                for q in re.split(r",|\band from\b|\band\b", part[len(prefix):])
-                if q.strip()
-            ]
-            return bool(qualities) and all(admit(q) for q in qualities)
+    # Both clauses split the same way (CR 702.16g's shorthand), and the split
+    # lives in :func:`_protection_clause_modelled` — the one the static-line gate
+    # asks too, so the comma-joined spelling and the standalone one cannot admit
+    # different sentences.
+    if part.startswith("protection from "):
+        return _protection_clause_modelled(part[len("protection from "):])
+    # Hexproof stays colour-only: _can_be_targeted's hexproof branch reads
+    # colour words alone.
+    if part.startswith("hexproof from "):
+        qualities = [
+            q.strip()
+            for q in re.split(r",|\band from\b|\band\b", part[len("hexproof from "):])
+            if q.strip()
+        ]
+        return bool(qualities) and all(
+            q in _COLOR_WORD_TO_SYMBOL for q in qualities
+        )
     return False
 
 
@@ -4721,6 +4756,15 @@ _GRAMMAR_STATIC_CREATURE_KINDS = frozenset(
         # complex" with both of its lines grammar-clean.
         "cant_attack_unless_greater_power_attacks",
         "cant_block_unless_greater_power_blocks",
+        # "You may have this creature assign its combat damage as though it
+        # weren't blocked." (Lone Wolf.) A static property of the creature read
+        # by the combat damage step at CR 510.1's turn-based action, so — like
+        # every kind above — the instruction is the *record* the consumer reads
+        # rather than something a handler executes. It reaches here through the
+        # grammar because the offer's subject and its absent window are what
+        # say it is a static rather than the one-turn mark Outmaneuver's
+        # identical verb writes, and neither is a thing a text table can see.
+        "may_assign_as_unblocked",
         # "As long as the top card of your graveyard is a creature card, this
         # creature has the full text of that card…" (Volrath's Shapeshifter.)
         # A CR 613 layer 1a contribution, derived from the zone on every read
@@ -4823,8 +4867,20 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
     if _grammar_static_creature_instructions(line, card_name):
         return True
     normalized = normalize_creature_line(line)
+    # "Protection from black" printed as a line of its own (Mountain Yeti's
+    # second line, Yavimaya Scion's only one). **Every named quality has to be
+    # one the shield models**, which is the same claim `_is_supported_keyword_line`
+    # makes about the comma-joined spelling — this was a bare `startswith`, and
+    # the gap between the two readers is a card whose printed shield does not
+    # exist. Yavimaya Scion is that card: "Protection from artifacts" was
+    # admitted here, compiled to a bare `static_line`, and
+    # `_protection_qualities` — which asks `keywords.protection_quality` — found
+    # nothing in it, so the creature blocked artifact creatures, took their
+    # combat damage and could be equipped. Angelic Curator prints the identical
+    # quality on a keyword line and was refused, loudly, by the reader that does
+    # ask. One reader now, and the refusal is the honest half of the pair.
     if normalized.startswith("protection from "):
-        return True
+        return _protection_clause_modelled(normalized[len("protection from "):])
     # Through the same name-substituting reader the combat restrictions use:
     # a card that says "**Radha** has first strike" is saying "this creature",
     # and the table below is written against the self-reference. Without it a

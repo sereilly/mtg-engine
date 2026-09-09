@@ -53,6 +53,19 @@ ASSIGNS_NO_COMBAT_DAMAGE = "assigns_no_combat_damage_until_eot"
 #: Swept with the turn by ``engine/mixins/_constants.py``.
 MUST_ASSIGN_AS_UNBLOCKED = "must_assign_combat_damage_as_unblocked_until_eot"
 
+#: The **offer** beside the restriction above: "You may have this creature
+#: assign its combat damage as though it weren't blocked", granted for the turn
+#: by Garruk, Savage Herald's −7 and printed permanently on Lone Wolf.
+#:
+#: Named here for this module's stated reason, and it was overdue: the string
+#: was spelled out in the handler that writes it, in the step that reads it and
+#: in the cleanup sweep that clears it — three copies of a channel, which is the
+#: arrangement whose failure mode is a write nothing reads.
+#:
+#: Swept with the turn by ``engine/mixins/_constants.py``. The printed half is
+#: not swept and is not a mark at all: see :func:`may_assign_as_unblocked`.
+MAY_ASSIGN_AS_UNBLOCKED = "assign_combat_damage_as_unblocked_until_eot"
+
 #: "Target unblocked attacking creature **becomes blocked**." (Dazzling Beauty;
 #: CR 509.1h.) Named here rather than beside the combat maps because the maps
 #: record *who blocks whom*, and this is precisely the state CR 509.1h says a
@@ -141,6 +154,39 @@ def defender_assigns_all_damage(game, defender_index: int) -> bool:
     return False
 
 
+def may_assign_as_unblocked(permanent) -> bool:
+    """Whether *permanent*'s controller may send its combat damage past its
+    blockers (CR 510.1b instead of CR 510.1a).
+
+    **Two channels, one question.** Garruk, Savage Herald's −7 grants the
+    ability for a turn and writes :data:`MAY_ASSIGN_AS_UNBLOCKED`; Lone Wolf
+    prints it, and a printed static is not a mark — nothing writes it and
+    nothing sweeps it, it is simply true while the creature is on the
+    battlefield. The damage step asks *this*, so a card printing the sentence
+    and a creature granted it cannot be answered differently.
+
+    Read off ``effective_card``, like every other text-derived combat read: a
+    Clone of Lone Wolf has the offer too (CR 707.2).
+
+    This is only the **offer**. Whether it is taken is the damage step's own
+    reading — an explicit per-blocker assignment is how a player declines — and
+    that decision is deliberately not made here: the restriction
+    (:data:`MUST_ASSIGN_AS_UNBLOCKED`, Outmaneuver) gives its controller nothing
+    to decline, and one function answering both would make it optional for
+    whoever bothered to assign.
+    """
+    from .oracle import compile_card_oracle
+
+    if permanent.metadata.get(MAY_ASSIGN_AS_UNBLOCKED):
+        return True
+    return any(
+        instruction.kind == "may_assign_as_unblocked"
+        for instruction in compile_card_oracle(
+            permanent.effective_card
+        ).instructions
+    )
+
+
 def combat_damage_assigned_by(permanent) -> int:
     """How much combat damage *permanent* assigns this step (CR 510.1a).
 
@@ -153,4 +199,9 @@ def combat_damage_assigned_by(permanent) -> int:
     return max(0, permanent.effective_power)
 
 
-__all__ = ["ASSIGNS_NO_COMBAT_DAMAGE", "combat_damage_assigned_by"]
+__all__ = [
+    "ASSIGNS_NO_COMBAT_DAMAGE",
+    "MAY_ASSIGN_AS_UNBLOCKED",
+    "combat_damage_assigned_by",
+    "may_assign_as_unblocked",
+]

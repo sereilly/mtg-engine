@@ -15,6 +15,7 @@ from ..combat_permissions import (ATTACK_AS_THOUGH_NO_DEFENDER,
                                   CANT_ATTACK_UNTIL_EOT)
 from ..combat_restrictions import (declaration_company_required,
                                    declaration_greater_power_required,
+                                   defender_attack_cap,
                                    participation_cap,
                                    restriction_condition_holds)
 from ..mana_payment import mana_cost_label, plan_payment, untapped_mana_lands
@@ -116,6 +117,38 @@ class DeclareAttackersStepMixin:
                 f"no more than {attack_cap} creature(s) can attack each combat"
             )
 
+        # "No more than two creatures can attack **you** each combat."
+        # (Crawlspace.) The same CR 508.1c restriction on the declaration,
+        # counted **per defending player** rather than over the whole of it —
+        # so it is a second count beside the one above rather than a narrowing
+        # of it, and three attackers split two-and-one across two opponents is
+        # legal here and illegal above.
+        #
+        # An attacker aimed at a **planeswalker** is not attacking the player
+        # (CR 508.1b), so it is left out of the tally: the card protects a seat,
+        # and counting an attack at their Garruk against it would refuse a
+        # declaration the printed sentence never mentions.
+        #
+        # Every living opponent, not just the seats this declaration named: the
+        # CR 508.1d loop below asks whether an *undeclared* creature could
+        # legally attack somebody, and a seat with no attacker aimed at it yet
+        # is precisely the one it might be required to attack.
+        per_defender_caps = {
+            seat: defender_attack_cap(self.controlled_by(seat))
+            for seat in set(living_opponents) | set(per_attacker_defender.values())
+        }
+        aimed_at_player: dict[int, int] = {}
+        for idx, seat in per_attacker_defender.items():
+            if idx in per_attacker_walker:
+                continue
+            aimed_at_player[seat] = aimed_at_player.get(seat, 0) + 1
+        for seat, cap in per_defender_caps.items():
+            if cap is not None and aimed_at_player.get(seat, 0) > cap:
+                return False, (
+                    f"no more than {cap} creature(s) can attack "
+                    f"{self.players[seat].name} each combat"
+                )
+
         # The permanents this declaration names, needed *before* the requirement
         # loop below: "If a creature you control attacks, this creature also
         # attacks if able" (Ekundu Cyclops) is a requirement conditional on the
@@ -143,7 +176,20 @@ class DeclareAttackersStepMixin:
                 or self._must_attack_beside(attacker, declared_now)
             ):
                 continue
-            if any(self.can_attack(attacker, opp) for opp in living_opponents):
+            # …and the seat must have room under its own cap (Crawlspace). CR
+            # 508.1d obeys requirements *subject to* the restrictions, so a
+            # creature whose only legal defenders are already at their cap is
+            # under no obligation the declaration can satisfy — the same
+            # reasoning the global cap gets three lines down, asked per seat
+            # because this cap is.
+            if any(
+                self.can_attack(attacker, opp)
+                and (
+                    per_defender_caps.get(opp) is None
+                    or aimed_at_player.get(opp, 0) < per_defender_caps[opp]
+                )
+                for opp in living_opponents
+            ):
                 required_attackers.append(attacker.card.name)
         # CR 508.1d: requirements are obeyed to the maximum **subject to** the
         # restrictions. A declaration already sitting at the cap has obeyed as
@@ -1244,12 +1290,29 @@ class DeclareAttackersStepMixin:
             for instr in compile_card_oracle(
                 source_perm.effective_card
             ).instructions:
-                if instr.kind != "creatures_must_attack_if_partner_attacks":
+                if instr.kind not in (
+                    "creatures_must_attack_if_partner_attacks",
+                    # "**If this creature attacks**, all creatures you control
+                    # attack if able." (Viashino Bey.) The same scan and the
+                    # same compelled set; only the condition differs, and it
+                    # differs in kind rather than in payload — what has to be
+                    # attacking is the permanent printing the line, which no
+                    # noun phrase names. Answered by identity below.
+                    "creatures_must_attack_if_source_attacks",
+                ):
                     continue
                 if not subject_matches(
                     self, attacker, dict(instr.payload.get("subject") or {}),
                     observer=source_seat, source=source_perm,
                 ):
+                    continue
+                if instr.kind == "creatures_must_attack_if_source_attacks":
+                    # ``is``, never ``in``: ``Permanent`` compares by value, so
+                    # a second Bey — or an opponent's copy of the same
+                    # catalog-shared card — would answer for this one and
+                    # compel a board whose own Bey stayed home (idiom #11).
+                    if any(other is source_perm for other in declared):
+                        return True
                     continue
                 condition = dict(instr.payload.get("condition_subject") or {})
                 if any(

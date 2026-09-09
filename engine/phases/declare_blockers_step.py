@@ -1041,7 +1041,31 @@ class DeclareBlockersStepMixin:
         attacker_program = compile_card_oracle(attacker.effective_card)
         attacker_kinds = {i.kind for i in attacker_program.instructions}
 
-        if "cant_be_blocked" in attacker_kinds or any(
+        # "This creature can't be blocked." (Phantom Warrior.) Read as an
+        # *instruction* rather than out of the kind set, exactly as the
+        # ``cant_block`` gate above reads its twin and for the same reason: the
+        # clause can be qualified — "…**as long as defending player controls an
+        # artifact**" (Bouncing Beebles) — and a kind-set membership test drops
+        # the condition and makes the creature unblockable for good. Every
+        # printed clause separately, because CR 509.1b makes restrictions
+        # cumulative: one whose condition is false answers only itself.
+        for restriction in attacker_program.instructions:
+            if restriction.kind != "cant_be_blocked":
+                continue
+            if restriction_condition_holds(
+                self,
+                restriction.payload.get("condition"),
+                # CR 109.5: "you" inside the noun phrase is the attacker's
+                # controller, whose card this is. "Defending player" is the seat
+                # being attacked, which for a legal block is the blocker's
+                # controller (CR 509.1a) — read off the blocker rather than the
+                # combat map because that is the seat this call is deciding for.
+                observer=self.controller_index_of(attacker),
+                defender=self.controller_index_of(blocker),
+                source=attacker,
+            ):
+                return False
+        if any(
             # "Enchanted creature can't be blocked." (Cloak of Mists.) The
             # attached channel of the same restriction, asked beside the
             # attacker's own program for the reason `cant_block` above is asked

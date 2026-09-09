@@ -41,6 +41,7 @@ from .models import CardDefinition, Permanent
 from .alternative_costs import alternative_costs
 from .cast_costs import buyback_cost, cast_announces_x, costs_charged_from
 from .cast_restrictions import timing_fixed_seat
+from .combat_restrictions import restriction_condition_holds
 from .cost_x_definitions import (caps_cast_x, cast_x_ceiling,
                                  cast_x_value, defines_cast_x)
 from .oracle import compile_card_oracle, expand_ability_lines
@@ -562,7 +563,26 @@ class LegalityMixin:
             return True
         seat = self.controller_index_of(perm)
         return any(
-            i.kind == "cant_be_blocked"
+            # "This creature can't be blocked **as long as defending player
+            # controls an artifact**." (Bouncing Beebles.) The clause can carry
+            # a condition, so the kind alone is not the answer — asked through
+            # the same reader the declare-blockers gate uses, with the same two
+            # seats, because a creature this tags and that gate would let a
+            # blocker onto is the UI *forbidding* a legal block. "Defending
+            # player" is the seat this creature was declared attacking
+            # (CR 508.1a), which the permanent records; a creature not attacking
+            # has none, and the condition then answers False — the direction
+            # that shows a block rather than promising one.
+            (
+                i.kind == "cant_be_blocked"
+                and restriction_condition_holds(
+                    self,
+                    i.payload.get("condition"),
+                    observer=seat,
+                    defender=perm.defending_player_index,
+                    source=perm,
+                )
+            )
             # "…as long as it's attacking alone" (Dream Prowler): CR 506.5's
             # condition, asked of the board rather than of a payload, so the
             # tag comes and goes with the declaration exactly as the blocker

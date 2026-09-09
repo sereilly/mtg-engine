@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from ..combat_assignment import (ASSIGNS_NO_COMBAT_DAMAGE,
-                               MUST_ASSIGN_AS_UNBLOCKED)
+                                 MAY_ASSIGN_AS_UNBLOCKED,
+                                 MUST_ASSIGN_AS_UNBLOCKED)
 from ..cost_tap_records import TAPPED_TO_PAY_FOR
 from ..combat_permissions import (ADDITIONAL_BLOCKS_UNTIL_EOT,
                                   ATTACK_AS_THOUGH_NO_DEFENDER,
@@ -28,7 +29,12 @@ _EOT_METADATA_KEYS = (
     # says so: with no entry here the record would make "this turn" mean
     # "ever", and the trigger would reach back over the whole game.
     TAPPED_TO_PAY_FOR,
-    "assign_combat_damage_as_unblocked_until_eot",
+    # "…creatures you control gain 'You may have this creature assign its
+    # combat damage as though it weren't blocked' until end of turn."
+    # (Garruk, Savage Herald's −7.) The *granted* half of the offer; the
+    # printed half (Lone Wolf) is a static ability and is not a mark, so it is
+    # deliberately not here — see `combat_assignment.may_assign_as_unblocked`.
+    MAY_ASSIGN_AS_UNBLOCKED,
     # "X target blocked creatures assign their combat damage **this turn**
     # as though they weren't blocked." (Outmaneuver.) The mandatory twin
     # of the offer above, swept beside it and at the same moment: a mark

@@ -238,7 +238,13 @@ def equip_refusal(game: "Game", equipment: "Permanent", creature: "Permanent") -
       in the pool has reconfigure), one that lost the subtype can't, and none
       can equip itself.
     * CR 702.16d — a creature with protection from a quality the Equipment has
-      can't be equipped by it. Colours only, as the sweep reads them.
+      can't be equipped by it. **Every** quality the shield models, not the
+      colour slice: every Equipment in this game is an artifact, so a creature
+      with "protection from artifacts" (Angelic Curator, Yavimaya Scion) is
+      protected from all of them — and a colour-only reading equipped it
+      happily. The rule names "a quality"; reading one family of quality is how
+      the E in protection's DEBT goes missing for exactly the cards a new
+      quality arrives with.
     """
     if creature is equipment:
         return "an Equipment can't equip itself (CR 301.5c)"
@@ -250,11 +256,15 @@ def equip_refusal(game: "Game", equipment: "Permanent", creature: "Permanent") -
         return f"{equipment.card.name} is no longer an Equipment (CR 301.5c)"
     if equipment.is_creature:
         return f"{equipment.card.name} is a creature and can't equip (CR 301.5c)"
-    protection = game._protection_colors(creature)
-    if protection and (protection & game._effective_colors(equipment)):
+    # Through ``_is_protected_from``, the one reader that asks every quality of
+    # the object it is asked about — never a second walk of the quality set here,
+    # which is how the blocking half and this half would come to disagree about
+    # what an animated artifact land is (a layer-4 type, which ``has_type``
+    # answers and a printed type line does not).
+    if game._is_protected_from(creature, equipment):
         return (
-            f"{creature.card.name} has protection from {equipment.card.name}'s "
-            "colour (CR 702.16d)"
+            f"{creature.card.name} has protection from {equipment.card.name} "
+            "(CR 702.16d)"
         )
     return None
 

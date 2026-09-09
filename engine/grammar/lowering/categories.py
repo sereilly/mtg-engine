@@ -660,6 +660,13 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # rewrite in the other direction, so the same category and
     # GRAMMAR_CATEGORIES is unchanged.
     "assign_as_unblocked_until_eot": "combat_restrictions",
+    # "You may have this creature assign its combat damage as though it weren't
+    # blocked." (Lone Wolf.) The row above with no window and the permanent
+    # itself as subject, which makes it a **static** ability rather than a mark:
+    # the combat damage step reads it off the compiled program at CR 510.1's
+    # turn-based action, exactly as it reads the mark. Same category, so
+    # GRAMMAR_CATEGORIES is unchanged.
+    "may_assign_as_unblocked": "combat_restrictions",
     "exempt_from_attack_tapping": "combat_restrictions",
     "remove_from_combat": "combat_restrictions",
     # "Target unblocked attacking creature becomes blocked." (Dazzling Beauty;
