@@ -38,7 +38,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | EXO | 143 | 207 | 90.3% | 90.3% | 66.2% | 127 |
 | USG | 335 | 486 | 87.2% | 87.2% | 63.0% | 266 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| ULG *(measured)* | 143 | 227 | 79.3% | 76.7% | 53.3% | 109 |
+| ULG *(measured)* | 143 | 227 | 81.1% | 79.3% | 55.9% | 113 |
 | **All (shipped)** | **5208** | **7725** | **90.6%** | **89.8%** | **60.3%** | **3916** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -264,6 +264,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {C}{C}. This land deals 2 damage to you.`
 - **Angel's Trumpet**
   - `All creatures have vigilance.`
+  - `At the beginning of each player's end step, tap all untapped creatures that player controls that didn't attack this turn. This artifact deals damage to the player equal to the number of creatures tapped this way.`
 - **Angelic Ascension**
   - `Exile target creature or planeswalker. Its controller creates a 4/4 white Angel creature token with flying.`
 - **Angelic Blessing**
@@ -3707,6 +3708,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Discard a card: If the discarded card was a land card, this enchantment deals 2 damage to target player or planeswalker. Any player may activate this ability.`
 - **Lapis Lazuli Talisman**
   - `Whenever a player casts a blue spell, you may pay {3}. If you do, untap target permanent.`
+- **Last-Ditch Effort**
+  - `Sacrifice any number of creatures. Last-Ditch Effort deals that much damage to any target.`
 - **Lat-Nam's Legacy**
   - `Shuffle a card from your hand into your library. If you do, draw two cards at the beginning of the next turn's upkeep.`
 - **Launch**
@@ -4326,6 +4329,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Tap target land. It doesn't untap during its controller's untap step for as long as this creature remains tapped.`
 - **Molten Hydra**
   - `{1}{R}{R}: Put a +1/+1 counter on this creature.`
+  - `{T}, Remove all +1/+1 counters from this creature: It deals damage to any target equal to the number of +1/+1 counters removed this way.`
 - **Mongrel Pack**
   - `When this creature dies during combat, create four 1/1 green Dog creature tokens.`
 - **Monk Idealist**
@@ -5095,6 +5099,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Pyroclasm deals 2 damage to each creature.`
 - **Pyrokinesis**
   - `Pyrokinesis deals 4 damage divided as you choose among any number of target creatures.`
+- **Pyromancy**
+  - `{3}, Discard a card at random: This enchantment deals damage to any target equal to the mana value of the discarded card.`
 - **Pyrotechnics**
   - `Pyrotechnics deals 4 damage divided as you choose among any number of targets.`
   - `Pyrotechnics deals 4 damage divided as you choose among any number of targets.`
@@ -6470,6 +6476,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `• Target player draws a card.`
 - **Subterranean Spirit**
   - `{T}: This creature deals 1 damage to each creature without flying.`
+- **Subversion**
+  - `At the beginning of your upkeep, each opponent loses 1 life. You gain life equal to the life lost this way.`
 - **Sudden Impact**
   - `Sudden Impact deals damage to target player equal to the number of cards in that player's hand.`
 - **Suffocation**
@@ -7244,6 +7252,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Until end of turn, target creature has base power 1 or base toughness 1.`
 - **Viashino Cutthroat**
   - `At the beginning of the end step, return this creature to its owner's hand.`
+- **Viashino Heretic**
+  - `{1}{R}, {T}: Destroy target artifact. This creature deals damage to that artifact's controller equal to the artifact's mana value.`
 - **Viashino Sandscout**
   - `At the beginning of the end step, return this creature to its owner's hand. (Return it only if it's on the battlefield.)`
 - **Viashino Sandstalker**

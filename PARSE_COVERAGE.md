@@ -25,10 +25,8 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**4 unclaimed sentence(s) across 4 supported card(s).**
+**3 unclaimed sentence(s) across 3 supported card(s).**
 
-- **Angel's Trumpet**
-  - `at the beginning of each player's end step, tap all untapped creatures that player controls that didn't attack this turn. this artifact deals damage to the player equal to the number of creatures tapped this way`
 - **Engineered Plague**
   - `all creatures of the chosen type get -1/-1`
 - **Repopulate**
