@@ -193,10 +193,20 @@ def protection_quality(word: str) -> tuple[str, str] | None:
     """The canonical quality one word of a protection clause names, or None.
 
     Four families (CR 702.16, the qualities this engine models): a colour
-    ("white"), "multicolored" (Basri's Lieutenant), a card type
-    ("planeswalkers", Sparkhunter Masticore), and a creature subtype
-    ("Demons", Baneslayer Angel; "Dogs", Pack Leader's flock). Subtypes print
-    pluralized, the catalog stores singulars.
+    ("white"), "multicolored" (Basri's Lieutenant), a card type ("artifacts",
+    Angelic Curator; "planeswalkers", Sparkhunter Masticore), and a creature
+    subtype ("Demons", Baneslayer Angel; "Dogs", Pack Leader's flock). Both
+    print pluralized, the catalogs store singulars.
+
+    **The card-type family reads the catalog rather than one word.** It was
+    the literal pair ``("planeswalker", "planeswalkers")``, which is a list of
+    the card types somebody had met — and the direction that costs is the
+    silent one: ``oracle._is_supported_static_creature_line`` admits any line
+    beginning "protection from " *without asking this function at all*, so
+    Yavimaya Scion ("Protection from artifacts") reported supported, compiled
+    to a bare ``static_line``, and had no protection from anything. A word this
+    function cannot read is a shield that is simply absent, and only the cards
+    printing an unmet type can tell you it happened.
 
     Here rather than beside its consumer for :func:`keyword_ability_name`'s
     reason exactly: both sides of the grant need it. ``permanent_state``
@@ -214,13 +224,21 @@ def protection_quality(word: str) -> tuple[str, str] | None:
         return ("color", symbol)
     if word == "multicolored":
         return ("multicolored", "")
-    if word in ("planeswalker", "planeswalkers"):
-        return ("card_type", "planeswalker")
     # Lazily for the reason :func:`keyword_ability_name` imports lazily: this
     # module sits underneath the grammar in the import order.
-    from .grammar.vocabulary import CREATURE_TYPES
+    from .grammar.vocabulary import CARD_TYPES, CREATURE_TYPES
 
     singular = word[:-1] if word.endswith("s") else word
+    # Card types before creature types, and the two catalogs share no word
+    # (asserted by ``tests/engine/test_keyword_registry.py``) — so the order is
+    # documentation rather than a tie-break. Both answers reach
+    # ``_permanent_has_quality``'s one ``has_type`` call, which resolves through
+    # the layer system: an animated artifact land is an artifact source and a
+    # printed type line would say otherwise.
+    if word in CARD_TYPES:
+        return ("card_type", word)
+    if singular in CARD_TYPES:
+        return ("card_type", singular)
     if word in CREATURE_TYPES:
         return ("subtype", word)
     if singular in CREATURE_TYPES:

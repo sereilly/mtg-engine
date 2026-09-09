@@ -2980,9 +2980,26 @@ class PermanentStateMixin:
                 only = spec_only_subtype(spec)
                 if only is not None and only in forbidden:
                     return False
+        # CR 702.16b. **An ability's source is the object, and the object is
+        # what the layers answer about** (CR 702.16a's exception to CR 109.2:
+        # "sources that are permanents with that card type"). A card read gives
+        # the printed line, so an animated artifact land aiming an ability would
+        # be a non-artifact source and a laced permanent the wrong colour —
+        # exactly the split ``prevention.source_has_type`` writes out one module
+        # over. The card read stays for a *spell*, which has no permanent.
+        qualities = self._protection_qualities(target)
+        if (
+            qualities
+            and ability_source is not None
+            and any(
+                self._permanent_has_quality(ability_source, quality)
+                for quality in qualities
+            )
+        ):
+            return False
         if source_card is not None and any(
             self._card_has_quality(source_card, quality)
-            for quality in self._protection_qualities(target)
+            for quality in qualities
         ):
             return False
         if caster_index is not None and caster_index != self.controller_index_of(target):

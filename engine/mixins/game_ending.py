@@ -870,13 +870,20 @@ class GameEndingMixin:
             # has protection from is put into its owner's graveyard, unless the
             # Aura's own text says the effect doesn't remove it (702.16n, e.g.
             # White Ward).
+            #
+            # **Every quality, not the colour slice.** This read
+            # ``_protection_colors``, which is one family of CR 702.16's four —
+            # so an Aura that is also an artifact stayed attached to a creature
+            # with "protection from artifacts", and the cast gate one module over
+            # (``_can_be_targeted``, which asks ``_card_has_quality``) had already
+            # refused to *put* it there. A rule enforced at announcement and not
+            # at the sweep is a rule that holds until something changes.
             for player in self.players:
                 departing = []
                 for perm in list(self.controlled_by(player)):
                     attached_to = perm.metadata.get("attached_to")
                     if "Aura" in perm.card.type_line and attached_to is not None:
-                        protection = self._protection_colors(attached_to)
-                        if protection and (protection & self._effective_colors(perm)):
+                        if self._is_protected_from(attached_to, perm):
                             text = perm.effective_card.oracle_text.lower()
                             exempt = "remove this aura" in text or "remove all auras" in text
                             if not exempt:

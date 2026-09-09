@@ -35,7 +35,7 @@ from ._collapses import (_each_player_optional_discard,
                          _each_player_optional_pay_mana,
                          _each_player_optional_tap,
                          _referent_seat_optional_draw)
-from ._common import _amount_payload
+from ._common import _amount_payload, _is_source
 from ._events import (EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER,
                       _DEFENDING_PLAYER_EVENTS, _EVENT_SUBJECT_CONTROLLERS,
                       _EVENT_SUBJECT_PLAYERS, LOOP_BOUND_OBJECT,
@@ -309,6 +309,57 @@ def _performed_by(step: OracleInstruction, actor: str) -> OracleInstruction:
     return OracleInstruction(step.kind, step.value, {**step.payload, "chooser": actor})
 
 
+def _may_assign_as_unblocked_static(
+    node: ast.May,
+) -> tuple[OracleInstruction, ...] | None:
+    """"You may have this creature assign its combat damage as though it weren't
+    blocked." (Lone Wolf; the ability Garruk, Savage Herald's −7 grants.)
+
+    An offer that is **not** made during a resolution. It is a static ability of
+    the permanent (CR 604.3), and the decision it offers belongs to CR 510.1's
+    turn-based action — so lowering it as an ordinary ``may`` would arm a prompt
+    at a moment nothing is resolving, on a creature's static line where no
+    handler ever runs, and the card would sit on the battlefield doing nothing.
+
+    The two things that say so are the **subject** and the **absent duration**.
+    Outmaneuver prints the same verb at "X target blocked creatures … *this
+    turn*", which is a spell choosing somebody else's creatures for a window —
+    that lowering is ``lowering/assignment``'s and keeps its mark. This names
+    the permanent printing it and names no window at all, which for a permanent
+    is "while I am here" and for a mark would be a window nothing ends. That is
+    the refusal ``_lower_assigns_combat_damage_as_unblocked`` still makes, and
+    still should: what changed is that there is now a record with the right
+    lifetime, not that the mark grew one.
+
+    Deliberately narrow, like every recogniser in ``lowering/_collapses``: an
+    offer carrying a cost, an if-you-do, an otherwise or a reflexive is a
+    sentence this static cannot express, and it keeps the ordinary offer — which
+    refuses by name rather than silently dropping the clause.
+
+    Here rather than in ``_collapses`` beside them because it is not one of
+    those: those collapse an offer into the *prompt* its own ceiling already
+    implies, and this collapses one into a permanent's continuous ability. Same
+    shape, different claim.
+    """
+    if not isinstance(node.action, ast.AssignsCombatDamageAsUnblocked):
+        return None
+    if node.actor.kind != "you":
+        return None
+    if node.cost is not None or node.life_cost is not None:
+        return None
+    if node.then is not None or node.otherwise is not None:
+        return None
+    if node.reflexive is not None or node.life_alternative is not None:
+        return None
+    if node.cost_alternatives or node.option_effects:
+        return None
+    if not _is_source(node.action.subject):
+        return None
+    if node.action.duration.kind is not None:
+        return None
+    return (OracleInstruction("may_assign_as_unblocked", "", {}),)
+
+
 def _lower_may(
     node: ast.May, produced: frozenset[str], event: str | None = None,
     event_subject: object | None = None,
@@ -341,6 +392,7 @@ def _lower_may(
         _each_player_optional_pay_mana,
         _each_player_optional_draw,
         _each_player_optional_tap,
+        _may_assign_as_unblocked_static,
     ):
         collapsed = collapse(node)
         if collapsed is not None:

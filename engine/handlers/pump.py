@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ..combat_assignment import MAY_ASSIGN_AS_UNBLOCKED
 from ..models import Permanent
 from ..pt import add_pt_modifier, set_base_pt
 from ._common import (divided_target_permanent, recorded_permanent_ids, 
@@ -678,7 +679,7 @@ def grant_team_assign_unblocked_until_eot(game: Game, instruction: OracleInstruc
     granted = 0
     for perm in game.controlled_by(caster_index):
         if perm.is_creature:
-            perm.metadata["assign_combat_damage_as_unblocked_until_eot"] = True
+            perm.metadata[MAY_ASSIGN_AS_UNBLOCKED] = True
             granted += 1
     game.log.append(
         f"{context.card.name}: {granted} creature(s) may assign combat damage as though unblocked"

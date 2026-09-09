@@ -92,6 +92,9 @@ class CombatRestriction:
 #   creatures_must_attack_if_partner_attacks
 #                                   phases/declare_attackers_step._must_attack_beside
 #                                   (a board scan over the declaration)
+#   creatures_must_attack_if_source_attacks
+#                                   phases/declare_attackers_step._must_attack_beside
+#                                   (the same scan, asking identity)
 #   must_block_each_combat          phases/declare_blockers_step.declare_blockers
 #   creatures_must_block            phases/declare_blockers_step.declare_blockers
 #                                   (a board scan)
@@ -116,6 +119,7 @@ class CombatRestriction:
 #   must_be_blocked                 phases/declare_blockers_step
 #   must_be_blocked_by_all_able     phases/declare_blockers_step
 #   max_attackers_each_combat       phases/declare_attackers_step.declare_attackers
+#   max_attackers_on_you_each_combat  phases/declare_attackers_step.declare_attackers
 #   max_blockers_each_combat        phases/declare_blockers_step.declare_blockers
 #   cant_attack_unless_others_attack  phases/declare_attackers_step.declare_attackers
 #   cant_block_unless_others_block  phases/declare_blockers_step.declare_blockers
@@ -124,6 +128,33 @@ class CombatRestriction:
 #   cant_block_unless_greater_power_blocks
 #                                   phases/declare_blockers_step.declare_blockers
 _PATTERNS: tuple[tuple[re.Pattern[str], "str | tuple[str, ...]"], ...] = (
+    (
+        # "No more than two creatures can attack **you** each combat."
+        # (Crawlspace.) The row below narrowed to one **defending player**, and
+        # its own kind rather than a payload flag on it, because the two count
+        # different things: that one caps the declaration entire (Caverns of
+        # Despair stops the third attacker whoever it is aimed at) and this caps
+        # the attackers aimed at *one seat*. A flag the counting branch ignored
+        # would make Crawlspace a Caverns — three attackers split two-and-one
+        # across two opponents is legal under this card and illegal under that
+        # one, and reading either as the other is a shipped card stricter or
+        # looser than it prints.
+        #
+        # "You" is the controller of the permanent printing it (CR 109.5),
+        # exactly as it is on ``creatures_cant_attack_you`` further down, which
+        # is the other row in this file scoped to a defender. And "attack you"
+        # is the *player*: an attack at a planeswalker its controller has is not
+        # an attack at them (CR 508.1b), so the enforcement counts only the
+        # attackers that named the seat itself — the same distinction Arboria's
+        # row records one screen down.
+        #
+        # The number is payload for the row below's reason, and the plural is
+        # optional for the same one.
+        re.compile(
+            r"^no more than (?P<count>\w+) creatures? can attack you each combat$"
+        ),
+        "max_attackers_on_you_each_combat",
+    ),
     (
         # "No more than two creatures can attack each combat." (Caverns of
         # Despair.) The only entry here that restricts the **declaration** as a
@@ -884,6 +915,33 @@ _PATTERNS: tuple[tuple[re.Pattern[str], "str | tuple[str, ...]"], ...] = (
         "creatures_must_attack_if_partner_attacks",
     ),
     (
+        # "**If this creature attacks**, all creatures you control attack if
+        # able." (Viashino Bey.) The row above with its condition naming the
+        # permanent itself rather than a set — and its own kind rather than that
+        # row's payload with an empty ``condition_subject``, because an empty
+        # filter is what ``subject_matches`` answers **True** for: the
+        # requirement would fire on every declaration anybody made, compelling a
+        # whole board to attack whenever any creature did.
+        #
+        # The compelled set is payload for this file's standing reason — a card
+        # printing "all Lizards you control" is this rule — and "you control"
+        # means the Bey's controller (CR 109.5), which the enforcement site
+        # supplies as the observer.
+        #
+        # Its condition really is about identity rather than about a filter:
+        # what has to be attacking is *this permanent*, and no noun phrase
+        # names it. So the enforcement asks ``is`` over the declaration, which
+        # is the only comparison that tells two Beys apart (idiom #11) — and
+        # unlike Ekundu Cyclops' "also", nothing here excludes the Bey from its
+        # own compelled set: it is already attacking, so the requirement it
+        # places on itself is one the declaration has met.
+        re.compile(
+            r"^if this creature attacks, "
+            r"(?:all |each )?(?P<must_attack_subject>.+) attack if able$"
+        ),
+        "creatures_must_attack_if_source_attacks",
+    ),
+    (
         # "**Creatures you control** attack each combat if able." (the Pirate
         # token Pursued Whale gives each opponent.) CR 508.1d's requirement
         # printed on one permanent about a *set* of others, so it is enforced
@@ -1173,7 +1231,16 @@ CONDITIONAL_RESTRICTION_KINDS: frozenset[str] = frozenset(
     # which cannot see a condition at all — so listing it without changing that
     # read would have grounded the Cat for the whole game on a clause that is
     # only sometimes true. Listing a kind here is a claim that its reader asks.
-    {"cant_be_blocked_by", "cant_attack", "cant_block"}
+    #
+    # ``cant_be_blocked`` joined it with Bouncing Beebles ("…as long as
+    # defending player controls an artifact"), and **two** readers had to learn
+    # to ask, which is the shape this set is really about: the declare-blockers
+    # gate and ``legality.is_unblockable``, the predicate the UI fades a
+    # creature with. A kind listed here whose second reader still answers
+    # unconditionally is a board where the picker offers no block and the step
+    # would have allowed one — the two disagreeing, which that predicate's own
+    # docstring says is the failure it exists to prevent.
+    {"cant_be_blocked", "cant_be_blocked_by", "cant_attack", "cant_block"}
 )
 
 
@@ -1841,6 +1908,37 @@ def participation_cap(permanents, kind: str) -> int | None:
         for permanent in permanents
         for instruction in compile_card_oracle(permanent.effective_card).instructions
         if instruction.kind == wanted
+    ]
+    return min(caps) if caps else None
+
+
+def defender_attack_cap(permanents) -> int | None:
+    """How many creatures may attack the seat controlling *permanents*, or None.
+
+    "No more than two creatures can attack **you** each combat." (Crawlspace.)
+    :func:`participation_cap` one narrowing over, and the caller is what supplies
+    the narrowing: it hands the permanents **one seat controls**, because "you"
+    is the controller of the permanent printing the clause (CR 109.5) and a
+    Crawlspace protects nobody else at the table.
+
+    The **smallest** cap wins, for that function's reason exactly: each printed
+    clause is a restriction in its own right (CR 508.1c), and two Crawlspaces —
+    or one beside a card printing a different number — are answered without
+    either card knowing the other exists.
+
+    Its own function rather than a ``kind`` argument on the one above: that one
+    is asked once of the whole board and this once per defending seat, and a
+    shared body taking "which kind" would let a caller ask the global question
+    with a seat's permanents, which is a cap silently applied to the wrong
+    declaration.
+    """
+    from .oracle import compile_card_oracle
+
+    caps = [
+        int(instruction.payload.get("count", 0))
+        for permanent in permanents
+        for instruction in compile_card_oracle(permanent.effective_card).instructions
+        if instruction.kind == "max_attackers_on_you_each_combat"
     ]
     return min(caps) if caps else None
 

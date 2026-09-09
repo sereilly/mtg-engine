@@ -29,7 +29,8 @@ interrupted.
 """
 
 from ..combat_assignment import (MUST_ASSIGN_AS_UNBLOCKED,
-                                combat_damage_assigned_by)
+                                 combat_damage_assigned_by,
+                                 may_assign_as_unblocked)
 from ..damage_events import deal_damage, lifelink_life_gained
 from ..models import Permanent
 from ..resumption import run_resumable
@@ -253,6 +254,22 @@ class CombatDamageStepMixin:
             blockers = self._attacker_all_blockers(attacker_idx)
             if not blockers:
                 continue
+            # "You may have this creature assign its combat damage as though it
+            # weren't blocked." (Lone Wolf; Garruk, Savage Herald's −7.) The
+            # default is to **take** the offer, so this builder leaves the
+            # attacker out entirely and the step's own branch sends the damage
+            # past the blockers.
+            #
+            # It has to be here rather than only there, because the step reads
+            # "no explicit per-blocker assignment" as the offer being accepted
+            # and this function *is* an assignment: every caller that passed
+            # None — the AI, the auto-resolve path, every test — had the offer
+            # silently declined on its behalf. Garruk's grant has been in the
+            # pool since M21 and did nothing on any of those paths; a caller
+            # that names the blockers still declines, which is the half that
+            # was already right.
+            if may_assign_as_unblocked(attacker):
+                continue
             has_trample = self._has_keyword(attacker, "trample")
             has_deathtouch = self._has_keyword(attacker, "deathtouch")
 
@@ -468,13 +485,19 @@ class CombatDamageStepMixin:
             # the dealing half needs no second look at the combat maps.
             attacked_walker_id = self.combat_attacked_planeswalkers.get(attacker_idx)
             # "You may have this creature assign its combat damage as though it
-            # weren't blocked." (Garruk, Savage Herald's −7.) The "may" is
-            # answered yes whenever no explicit per-blocker assignment was
-            # given for this attacker — an explicit assignment IS the player
-            # choosing to damage the blockers instead.
+            # weren't blocked." (Lone Wolf, printed; Garruk, Savage Herald's −7,
+            # granted for the turn.) The "may" is answered yes whenever no
+            # explicit per-blocker assignment was given for this attacker — an
+            # explicit assignment IS the player choosing to damage the blockers
+            # instead.
+            #
+            # Through ``may_assign_as_unblocked``, which folds both channels:
+            # the granted mark and the printed static are one offer, and asking
+            # the mark alone is what left Lone Wolf a 2/2 with a line that did
+            # nothing while Garruk's grant of the identical sentence worked.
             if (
                 blockers
-                and attacker.metadata.get("assign_combat_damage_as_unblocked_until_eot")
+                and may_assign_as_unblocked(attacker)
                 and not attacker_damage.get(attacker_idx)
             ):
                 to_players.append((defending_index, power_left, attacker, attacked_walker_id))

@@ -203,3 +203,65 @@ def test_the_aura_grant_vocabulary_is_the_keyword_registry():
     from engine.lord_buffs import grantable_keywords
 
     assert set(_grantable_keywords()) == set(grantable_keywords())
+
+
+# --- W1G4: protection qualities are one reader over two catalogs ---
+def test_the_gate_admits_exactly_the_protection_qualities_the_shield_models():
+    """`oracle._protection_quality_word` **is** `keywords.protection_quality`.
+
+    It used to be a hand-written copy, and the copy's card-type family was the
+    literal pair "planeswalker"/"planeswalkers" — so "protection from artifacts"
+    was a quality `_permanent_has_quality` answers (it asks `has_type`) and the
+    gate refused, which cost Angelic Curator its support with every line
+    grammar-clean.
+
+    Behavioural, like everything else in this file: the two lists are not
+    compared, the gate is asked and the modelled reader is asked, over a
+    vocabulary wide enough to cross every family.
+    """
+    from engine.keywords import protection_quality
+    from engine.oracle import _protection_quality_word
+
+    for word in (
+        "white", "blue", "black", "red", "green",   # colours
+        "multicolored",
+        "artifacts", "artifact", "planeswalkers", "creatures", "enchantments",
+        "Demons", "demons", "dragons",              # creature subtypes
+        "everything", "gnomes", "", "the chosen color",
+    ):
+        assert _protection_quality_word(word.lower()) == (
+            protection_quality(word) is not None
+        ), word
+
+
+def test_no_word_is_both_a_card_type_and_a_creature_type():
+    """What makes `protection_quality`'s ordering documentation rather than a
+    tie-break, and what its comment claims.
+
+    A word in both catalogs would resolve to whichever branch ran first, and the
+    two answers are tested differently downstream — a `card_type` quality asks
+    `has_type` about the printed type line's head, a `subtype` about its tail.
+    Nothing keeps the two vocabularies apart except that Magic does, so it is
+    asserted rather than assumed: a future `fetch_vocabulary` run that put one
+    word in both would otherwise change what a printed shield answers to with
+    nothing failing.
+    """
+    from engine.grammar.vocabulary import CARD_TYPES, CREATURE_TYPES
+
+    assert not (set(CARD_TYPES) & set(CREATURE_TYPES))
+
+
+def test_a_protection_line_naming_an_unmodelled_quality_is_refused():
+    """The direction that matters. A quality the shield cannot answer must keep
+    the whole line refused — admitting it ships a creature whose printed
+    protection silently does not exist, which is what a bare `startswith` in
+    `_is_supported_static_creature_line` did to Yavimaya Scion for as long as
+    the card had been in the pool.
+    """
+    from engine.oracle import _is_supported_static_creature_line
+
+    assert _is_supported_static_creature_line("Protection from artifacts")
+    assert not _is_supported_static_creature_line(
+        "Protection from the chosen card name"
+    )
+    assert not _is_supported_static_creature_line("Protection from everything")
