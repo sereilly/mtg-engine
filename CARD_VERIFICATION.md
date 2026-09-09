@@ -3,10 +3,10 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **3570**
-- Passed: **599** (399 checked in-game, 200 auto-passed)
+- Passed: **600** (402 checked in-game, 198 auto-passed)
 - Failed: **0**
 - Equivalent to a passing card: **47**
-- Untested: **2924**
+- Untested: **2923**
 
 An *auto-pass* is derived, never recorded: the card has no abilities, or nothing but keywords the engine implements, so its behaviour is the generic combat and keyword code plus its printed numbers, and there is no card-specific path for a manual check to exercise. The note names which. A result recorded in-game always takes precedence over it.
 
@@ -114,7 +114,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Angelic Ascension | ⬜ untested |  |
 | Angelic Blessing | ⬜ untested |  |
 | Angelic Chorus | ⬜ untested |  |
-| Angelic Curator | ✅ pass | auto-pass: keywords only (flying, protection from artifacts) |
+| Angelic Curator | ✅ pass |  |
 | Angelic Page | ⬜ untested |  |
 | Angelic Protector | ⬜ untested |  |
 | Angelic Renewal | ⬜ untested |  |
@@ -3126,7 +3126,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Thran Tome | ⬜ untested |  |
 | Thran Turbine | ⬜ untested |  |
 | Thran War Machine | ⬜ untested |  |
-| Thran Weaponry | ⬜ untested |  |
+| Thran Weaponry | ✅ pass |  |
 | Thrashing Brontodon | ⬜ untested |  |
 | Three Wishes | ⬜ untested |  |
 | Thrill of Possibility | ⬜ untested |  |
@@ -3558,7 +3558,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Yavimaya Ants | ⬜ untested |  |
 | Yavimaya Gnats | ⬜ untested |  |
 | Yavimaya Granger | ⬜ untested |  |
-| Yavimaya Scion | ✅ pass | auto-pass: keywords only (protection from artifacts) |
+| Yavimaya Scion | ✅ pass |  |
 | Yavimaya Wurm | ✅ pass | auto-pass: keywords only (trample) |
 | Yawgmoth Demon | ⬜ untested |  |
 | Yawgmoth's Edict | ⬜ untested |  |
