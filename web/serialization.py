@@ -111,18 +111,48 @@ def _effective_keywords(perm: Permanent, game: Game) -> list[str]:
     keywords = [kw for kw in _DISPLAY_KEYWORDS if game._has_keyword(perm, kw)]
     if game._is_indestructible(perm):
         keywords.append("Indestructible")
-    # Protection is driven by the effective protected colors (CR 702.16) rather
-    # than the printed keyword, so a quality granted by another card (e.g. White
-    # Ward) shows up and is spelled out — "Protection from white".
-    colors = sorted(game._protection_colors(perm))
-    if colors:
-        words = [_SYMBOL_TO_COLOR_WORD.get(symbol, symbol) for symbol in colors]
-        label = "Protection from " + " and ".join(words)
-        keywords = [kw for kw in keywords if kw != "Protection"]
-        keywords.append(label)
-    else:
-        keywords = [kw for kw in keywords if kw != "Protection"]
+    # Protection is driven by the effective protected **qualities** (CR 702.16)
+    # rather than by the printed keyword, so one granted by another card (the
+    # Ward cycle) shows up and is spelled out — "Protection from white".
+    #
+    # Qualities, not colours, and that is the whole of this paragraph's history.
+    # This read was `_protection_colors`, the deliberate colour *slice* of the
+    # accessor below it, and it was right for as long as every protection in the
+    # pool was from a colour. Urza's Legacy printed two from a **card type** and
+    # the wire went silent about both: Angelic Curator reached the client
+    # showing only "Flying", and Yavimaya Scion — a 2/2 whose entire text is
+    # "Protection from artifacts" — reached it carrying **no badge at all**,
+    # while the engine had the shield right at every seam it owns.
+    #
+    # Found at Urza's Legacy's Phase 5, which is the step whose whole job is to
+    # read what the *wire* carries for one card of the set's new mechanic rather
+    # than what the engine computes. It is the fourth `web/` site of this class
+    # after `serialization`'s type-line read (Tempest), `is_aura` (Stronghold)
+    # and the blocker/Balance reads (Exodus).
+    keywords = [kw for kw in keywords if kw != "Protection"]
+    words = sorted(
+        _protection_quality_word(kind, value)
+        for kind, value in game._protection_qualities(perm)
+    )
+    if words:
+        keywords.append("Protection from " + " and ".join(words))
     return keywords
+
+
+def _protection_quality_word(kind: str, value: str) -> str:
+    """One protection quality, spelled the way the card prints it.
+
+    `keywords.protection_quality` canonicalizes to the *singular* because the
+    catalogs it matches against store singulars, and every card prints the
+    plural — "protection from artifact**s**". The badge is read by a player
+    beside the card, so it says what the card says.
+    """
+    if kind == "color":
+        return _SYMBOL_TO_COLOR_WORD.get(value, value)
+    if kind == "multicolored":
+        return "multicolored"
+    # A card type or a creature subtype: printed plural, stored singular.
+    return value if value.endswith("s") else value + "s"
 
 
 def _printed_stat(card, key: str) -> int | None:

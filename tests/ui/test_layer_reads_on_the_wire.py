@@ -125,3 +125,44 @@ def test_an_animated_land_keeps_its_keywords_on_the_wire(pool):
     # Untouched it is not a creature, and that is the honest answer.
     assert wire["is_creature"] is False
     assert wire["is_aura"] is False
+
+
+def test_protection_from_a_card_type_reaches_the_wire(pool):
+    """Urza's Legacy's site, and the fourth of this class.
+
+    Not a type-line read this time but its sibling: `_effective_keywords` asked
+    `game._protection_colors`, which is the *deliberate colour slice* of
+    `_protection_qualities` and was right for as long as every protection in the
+    pool was from a colour. Urza's Legacy printed two from a **card type** and
+    the wire went silent about both — Angelic Curator reached the client showing
+    only "Flying", and Yavimaya Scion, whose entire printed text is "Protection
+    from artifacts", reached it carrying **no badge at all** — while the engine
+    had the shield right at every seam it owns.
+
+    That is this class exactly: an accessor whose narrower sibling answers a
+    strictly smaller question, read by the client because it was sufficient when
+    it was written. Found by Phase 5's "read what the wire carries for one card
+    of the set's new mechanic", which is the same step that found the other
+    three.
+
+    The badge says "artifact**s**" because the card does: `protection_quality`
+    canonicalizes to the singular to match the catalogs it looks words up in.
+    """
+    curator = Permanent(card=pool["Angelic Curator"])
+    scion = Permanent(card=pool["Yavimaya Scion"])
+    knight = Permanent(card=pool["White Knight"])
+    game = Game(
+        players=[PlayerState(name="P1", battlefield=[curator, scion, knight]),
+                 PlayerState(name="P2")],
+        enforce_mana_costs=False,
+    )
+
+    curator_wire = _serialize_permanent(curator, game)["keywords"]
+    assert "Protection from artifacts" in curator_wire
+    assert "Flying" in curator_wire
+
+    # The one whose whole text is the protection: a badge or nothing at all.
+    assert _serialize_permanent(scion, game)["keywords"] == ["Protection from artifacts"]
+
+    # And the colour half still spells out the way it always did.
+    assert "Protection from black" in _serialize_permanent(knight, game)["keywords"]
