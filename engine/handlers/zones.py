@@ -3562,12 +3562,19 @@ def reveal_hand_and_choose(game: Game, instruction: OracleInstruction, context: 
     # one's reason: what is offered and what an answer is checked against are
     # one predicate, and a restriction only the handler knew about would be a
     # client offering the whole hand.
+    # "You choose **a creature card** from it." (Ostracize.) The positive form
+    # of the same question, under the key ``search_matches`` already answers it
+    # with — and it travels beside the other two for their reason: a type only
+    # this handler knew about would be a client offering the whole hand.
+    card_types = list(instruction.payload.get("card_types") or ())
     narrowing = {
         "exclude_types": exclude_types,
         "exclude_basic_lands": bool(
             instruction.payload.get("exclude_basic_lands")
         ),
     }
+    if card_types:
+        narrowing["card_type"] = tuple(card_types)
     legal = [
         index
         for index, held in enumerate(victim.hand)
@@ -3615,6 +3622,7 @@ def reveal_hand_and_choose(game: Game, instruction: OracleInstruction, context: 
         # against the hand as it then stands.
         exclude_types=exclude_types,
         exclude_basic_lands=narrowing["exclude_basic_lands"],
+        card_types=card_types,
         fate=str(instruction.payload.get("fate", "discard")),
         # The resolution's own scratchpad. Every pick writes the chosen card's
         # name into it — the pick *is* a chosen card, whatever becomes of it —
@@ -3940,7 +3948,7 @@ def put_exiled_this_way(game: Game, instruction: OracleInstruction, context: Ora
     """
     payload = instruction.payload
     zone = str(payload.get("zone") or "battlefield")
-    if zone != "battlefield":
+    if zone not in ("battlefield", "hand"):
         game.log.append(f"{context.card.name}: no handler puts a pile in the {zone}")
         return True, "resolved"
     who = str(payload.get("who", "you"))
@@ -3962,6 +3970,20 @@ def put_exiled_this_way(game: Game, instruction: OracleInstruction, context: Ora
                 game.log.append(
                     f"{context.card.name}: {card.name} is no longer exiled"
                 )
+                continue
+            if zone == "hand":
+                # "…returns to **their** hand each card they exiled this way."
+                # (Memory Jar.) The pile's own owner's hand, which is the seat
+                # this loop is already on — a hand is somebody's zone
+                # (CR 402.1) where a battlefield is nobody's, and the lowering
+                # refused any third party's. Through ``put_card_into_hand``
+                # rather than an append, because CR 903.9b has no single fire
+                # site and this is one more of the places that would forget it.
+                game.put_card_into_hand(player, card)
+                game.log.append(
+                    f"{player.name} returned {card.name} from exile to their hand"
+                )
+                returned += 1
                 continue
             game._put_permanent_onto_battlefield(seat, Permanent(card=card), None)
             game.log.append(
@@ -5197,6 +5219,61 @@ def put_target_on_library_top(game: Game, instruction: OracleInstruction, contex
     return True, "resolved"
 
 
+@effect_handler("put_all_matching_on_library_top")
+def put_all_matching_on_library_top(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Put all enchantments on top of their owners' libraries." (Harmonic
+    Convergence.)
+
+    The sweep twin of ``put_target_on_library_top``: no pick, every permanent
+    the printed noun phrase names, each onto **its own owner's** library
+    (CR 400.3) whoever controlled it. A zone change rather than a destruction,
+    so no dies trigger fires and regeneration cannot save one.
+
+    The matched list is taken **before** anything moves, for
+    ``return_all_matching``'s reason one screen up: a permanent leaving detaches
+    its Auras, so a sweep that re-read the board between removals would stop
+    matching objects it had already named — and an Aura is exactly what this
+    card's noun phrase names most of.
+
+    ``subject_matches`` with CR 109.5's observer, because "you control" and the
+    rest of the seat comparisons are answered there and nowhere else; the
+    lowering admitted the line only because that is true.
+    """
+    from ..subject_filters import subject_matches
+
+    swept = instruction.payload.get("filter") or {}
+    observer = (
+        game.players.index(context.caster) if context.caster in game.players else None
+    )
+    that_player = frozen_that_player_seat(game, context)
+    matched = [
+        perm for perm in game.all_permanents()
+        if subject_matches(
+            game, perm, swept, observer=observer, source=context.source_permanent,
+            that_player=that_player,
+        )
+    ]
+    tucked: list[str] = []
+    for perm in matched:
+        if not game.is_on_battlefield(perm):
+            # It went with something else this same sweep removed — a token
+            # ceasing to exist, an Aura falling off its host.
+            continue
+        owner_idx = game.owner_index_of(perm)
+        owner = game.players[owner_idx] if owner_idx is not None else context.caster
+        game.remove_from_battlefield(perm)
+        game._remove_aura_effects(perm)
+        game.put_card_into_library(
+            owner, perm.card, "top", from_battlefield=perm
+        )
+        tucked.append(perm.card.name)
+    game.log.append(
+        f"{context.card.name} put {', '.join(tucked)} on top of their owners' libraries"
+        if tucked else f"{context.card.name}: nothing to put on a library"
+    )
+    return True, "resolved"
+
+
 @effect_handler("put_source_card_on_library_top")
 def put_source_card_on_library_top(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Put this creature on top of its owner's library." (Thalakos Mistfolk's
@@ -6149,6 +6226,25 @@ def exile_hand_pile(game: Game, instruction: OracleInstruction, context: OracleE
         game.log.append("the face-down exile has no permanent to be linked to")
         return True, "resolved"
     described = dict(payload.get("card_filter") or {})
+    # "**Each player** exiles all cards from their hand face down." (Memory
+    # Jar.) The same act once per seat rather than a second kind: what the
+    # exile does to a hand does not depend on whose it is, and the seat is what
+    # ``exile_hand_slots`` already takes. The pick branch below is not reachable
+    # from here — a per-seat "any number of" is refused in the lowering,
+    # because a pick is owed by the seat that makes it and the queue would have
+    # to hold one prompt per player.
+    if str(payload.get("who", "you")) == "each_player":
+        for index in range(len(game.players)):
+            player = game.players[index]
+            game.exile_hand_slots(
+                context, source, index,
+                [
+                    slot for slot, card in enumerate(player.hand)
+                    if _card_matches_filter(card, described)
+                ],
+                face_down=bool(payload.get("face_down")),
+            )
+        return True, "resolved"
     slots = [
         index for index, card in enumerate(caster.hand)
         if _card_matches_filter(card, described)

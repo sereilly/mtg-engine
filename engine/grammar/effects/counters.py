@@ -177,6 +177,17 @@ def _parse_put_counter(stream: TokenStream) -> ast.Statement:
         # that player's. One node, two spellings.
         if stream.accept_phrase("on", "top", "of", "its", "owner", "'s", "library") or (
             stream.accept_phrase("on", "top", "of", "their", "library")
+        ) or (
+            # "Put all enchantments on top of **their owners' libraries**."
+            # (Harmonic Convergence.) The plural spelling of the same
+            # destination, printed because the *subject* is plural: the lexer
+            # gives ``owners'`` as one token and each object still goes to its
+            # own owner's library (CR 400.3), so it is the same node with the
+            # same owner reference — exactly the reading ``_parse_zone`` gives
+            # "their owners' hands" one family over.
+            stream.accept_phrase(
+                "on", "top", "of", "their", "owners'", "libraries"
+            )
         ):
             in_any_order = bool(stream.accept_phrase("in", "any", "order"))
             colors, optional = _accept_bottom_instead_rider(stream)

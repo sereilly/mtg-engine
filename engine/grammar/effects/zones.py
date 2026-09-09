@@ -212,7 +212,29 @@ def _parse_shuffle_graveyard_into_library(stream: TokenStream) -> ast.Statement 
             cards.is_card
             and cards.zone == "graveyard"
             and cards.zone_owner is not None
-            and cards.zone_owner.kind == "you"
+        ):
+            stream.reset(mark)
+            return None
+        # "Shuffle all creature cards from **target player's** graveyard into
+        # **that player's** library." (Repopulate.) Barishi's sentence with a
+        # chosen seat instead of the caster, so it is a branch of this reading
+        # rather than a second production — what differs is whose two zones the
+        # cards move between, and the pronoun in the destination is what says
+        # they are the *same* player's. Both possessives are read for the
+        # reason the "your" pair is: a card pairing one player's graveyard with
+        # another's library would be a different card, and consuming the words
+        # unread would compile it onto this one.
+        if cards.zone_owner.kind == "target_player":
+            if not stream.accept_phrase(
+                "into", "that", "player", "'s", "library"
+            ):
+                stream.reset(mark)
+                return None
+            return ast.ShuffleGraveyardIntoLibrary(
+                ast.PlayerRef("target_player"), cards=cards
+            )
+        if not (
+            cards.zone_owner.kind == "you"
             and stream.accept_phrase("into", "your", "library")
         ):
             stream.reset(mark)

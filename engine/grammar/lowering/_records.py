@@ -407,7 +407,16 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # hand"). Only the entries can answer the second — the pile may already
     # hold another copy of the same card, and a hand repeats one immutable
     # ``CardDefinition`` per copy, so the cards themselves are not distinct.
-    "exile_hand_pile": ("exiled_cards", "exiled_entries", "exiled_count"),
+    # …and a **fourth**, the per-seat one: "each player … returns to their hand
+    # each card **they** exiled this way" (Memory Jar) asks the question once
+    # per player, and the flat list above answers it with the whole table's
+    # hands. Declared for the kind rather than for the per-seat printing of it,
+    # because ``exile_hand_slots`` writes it on every path — the seat is its own
+    # parameter, and a record kept in one of two callers is the shape that seam
+    # exists to prevent.
+    "exile_hand_pile": (
+        "exiled_cards", "exiled_entries", "exiled_count", EXILED_BY_SEAT,
+    ),
     # "That player exiles a card at random from their hand." (Elkin Lair.) The
     # pile is one card and the seat is not the caster, neither of which the
     # back-references behind it care about: "that card" names what this step

@@ -1607,6 +1607,14 @@ def _reanimation_spec(payload: dict) -> dict | None:
     colors = tuple(payload.get("colors") or ())
     if colors:
         spec["graveyard_colors"] = list(colors)
+    # "…**with mana value 3 or less**" (Unearth). Handed straight over in the
+    # key ``graveyard_card_matches`` reads, for the type's and the colours'
+    # reason above: the handler re-checks the chosen card against this same
+    # payload, so a picker that ignored the bound would offer a card the
+    # resolution then declines — and this card's line has *no other* narrowing,
+    # so ignoring it is the whole restriction gone.
+    if payload.get("graveyard_mana_value"):
+        spec["graveyard_mana_value"] = dict(payload["graveyard_mana_value"])
     return spec
 
 
@@ -1869,7 +1877,15 @@ def _chosen_graveyard_shuffle_spec(payload: dict) -> dict | None:
     is for every other kind that answers None: absent, there is nothing to pick.
     """
     if not (payload.get("targets") or {}):
-        return None
+        # "Shuffle all creature cards from **target player's** graveyard into
+        # that player's library." (Repopulate.) The cards are *described* and
+        # nobody picks one, but the seat whose two zones they move between is
+        # chosen (CR 115.1), and that seat is the whole of what this spell
+        # announces. ``whose`` is the evidence, exactly as ``targets`` is for
+        # the branch above — and without it the card compiled, claimed its
+        # sentence, and had no picker at all: the client sent a bare cast and
+        # the engine refused it.
+        return player_pronoun_spec(payload.get("whose"))
     return _graveyard_to_library_spec(payload)
 
 

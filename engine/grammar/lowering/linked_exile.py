@@ -378,7 +378,7 @@ def _lower_put_exiled_pile_on_library(
 #: printing in the pool says "onto the battlefield", and a destination with no
 #: handler behind it would leave the cards in exile while the card compiled
 #: supported.
-_EXILED_THIS_WAY_DESTINATIONS = frozenset({"battlefield"})
+_EXILED_THIS_WAY_DESTINATIONS = frozenset({"battlefield", "hand"})
 
 
 def _lower_put_exiled_this_way(
@@ -416,9 +416,28 @@ def _lower_put_exiled_this_way(
         )
     # A battlefield is nobody's zone (CR 400.1), so a printed possessive on it
     # would be naming a seat this sentence has already named with its subject.
-    if zone.owner is not None:
+    # A **hand** is somebody's (CR 402.1), and the possessive it prints has to
+    # agree with the subject for the reason the pronoun in front of "exiled
+    # this way" does: "each player … returns to **their** hand" is one claim
+    # said twice, and a hand named for anybody else would be every player
+    # handing one seat the table's cards.
+    if zone.name == "battlefield":
+        if zone.owner is not None:
+            raise LoweringError(
+                "the battlefield is nobody's zone", node=node
+            )
+    elif zone.owner is None or zone.owner.kind not in ("you", "owner"):
+        # A **hand** is somebody's zone (CR 402.1) where a battlefield is
+        # nobody's, so this destination prints a possessive and the possessive
+        # has to be the pile's own owner's. Agreement with the subject is
+        # already the *parse*'s answer — ``_matching_possessive`` admits
+        # "their" only for a named seat and "your" only for the unnamed one,
+        # and either normalises to ``you`` meaning "the sentence's own actor" —
+        # so what is left here is refusing a third party's zone, which would be
+        # every player handing one seat the table's cards.
         raise LoweringError(
-            "the battlefield is nobody's zone", node=node
+            "the exiled-pile return names the pile's own owner's zone",
+            node=node,
         )
     if EXILED_BY_SEAT not in produced:
         raise LoweringError(

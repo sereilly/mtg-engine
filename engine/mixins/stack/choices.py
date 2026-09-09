@@ -2397,10 +2397,17 @@ class PendingChoicesMixin:
         if remaining <= 0 or not 0 <= victim_index < len(self.players):
             return
         exclude_types = list(choice.data.get("exclude_types") or ())
+        # Ostracize's positive twin of the exclusion, carried onto every pick of
+        # the chain for the reason the exclusion is: the picks after the first
+        # are the same printed choice, so a narrowing that survived only the
+        # first answer would widen the sentence part-way through.
+        card_types = list(choice.data.get("card_types") or ())
         narrowing = {
             "exclude_types": exclude_types,
             "exclude_basic_lands": bool(choice.data.get("exclude_basic_lands")),
         }
+        if card_types:
+            narrowing["card_type"] = tuple(card_types)
         victim = self.players[victim_index]
         legal = [
             index
@@ -2418,6 +2425,7 @@ class PendingChoicesMixin:
             fate=str(choice.data.get("fate", "discard")),
             exclude_types=exclude_types,
             exclude_basic_lands=narrowing["exclude_basic_lands"],
+            card_types=card_types,
             source_id=choice.data.get("source_id"),
             record=choice.data.get("record"),
             # The printed "up to" survives every answer: the picks after the

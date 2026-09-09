@@ -124,7 +124,20 @@ def _lower_exile_hand_pile(
     be dropped where it is tested — a sweep wider than the card prints.
     """
     filt = subject.filter
-    if filt.zone_owner is None or filt.zone_owner.kind != "you":
+    # Who empties the hand and whose hand it is are **one claim said twice**
+    # ("each player exiles all cards from **their** hand", Memory Jar), so they
+    # are checked against each other rather than either being read alone — the
+    # pairing the graveyard sweep in ``_lower_exile`` already makes of the same
+    # two words. A pairing this cannot resolve refuses instead of picking a
+    # half: "each player exiles all cards from your hand" is one hand and every
+    # player, and there is no such card.
+    actor = node.actor.kind if node.actor is not None else None
+    owner = filt.zone_owner.kind if filt.zone_owner is not None else None
+    if actor is None and owner == "you":
+        who = "you"
+    elif actor == "each_player" and owner in ("owner", "each_player"):
+        who = "each_player"
+    else:
         raise LoweringError("the hand exile reads your own hand", node=node)
     if node.duration.kind is not None or node.counters:
         raise LoweringError(
@@ -147,6 +160,21 @@ def _lower_exile_hand_pile(
     payload: dict[str, object] = {
         "quantifier": _HAND_PILE_QUANTIFIERS[subject.quantifier],
     }
+    if who != "you":
+        if payload["quantifier"] != "all":
+            # "Any number of" is a *pick*, and a pick is owed by the seat that
+            # makes it. Nothing in the pool asks every player to make one at
+            # once, and the queue would have to hold one prompt per seat with
+            # the resolution waiting on all of them — refused rather than
+            # silently answered for every seat by the caster.
+            raise LoweringError(
+                "a per-seat hand exile takes the whole hand, not a pick",
+                node=node,
+            )
+        # Emitted only when the card prints a subject, so Duplicity's and
+        # Scroll Rack's payloads stay byte-identical and no behaviour signature
+        # moves.
+        payload["who"] = who
     if described:
         payload["card_filter"] = described
     if node.face_down:
@@ -322,7 +350,9 @@ def _lower_exile(
         if node.counters:
             payload["counters"] = _entering_counter_payload(node.counters)
         return (OracleInstruction("exile_target_spell", "", payload),)
-    if node.actor is not None and not _is_graveyard_pile_exile(node.subject):
+    if node.actor is not None and not (
+        _is_graveyard_pile_exile(node.subject) or _is_hand_pile_exile(node.subject)
+    ):
         raise LoweringError("no exile handler names a subject", node=node)
     if node.duration.kind in ("until_end_of_turn", "this_turn"):
         subject = node.subject

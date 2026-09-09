@@ -21,6 +21,7 @@ nodes sit perfectly well beside the other card nodes.
 import dataclasses
 
 from .. import ast
+from ..errors import GrammarError
 from ..phrases import _accept_self_reference, _parse_zone
 from ..readers import _parse_entering_counters
 from ..references import parse_player_ref, parse_recipient
@@ -515,11 +516,12 @@ def _matching_possessive(player: "ast.PlayerRef | None") -> str:
     return "your" if player is None or player.kind == "you" else "their"
 
 
-def _parse_player_exiles_graveyard(
+def _parse_player_exiles_pile(
     stream: TokenStream, player: "ast.PlayerRef"
 ) -> "ast.Exile | None":
-    """``exiles all creature cards from their graveyard`` (Living Death) — the
-    verb and everything after it, with the subject already read by the caller.
+    """``exiles all creature cards from their graveyard`` (Living Death),
+    ``exiles all cards from their hand face down`` (Memory Jar) — the verb and
+    everything after it, with the subject already read by the caller.
 
     The bare imperative ("Exile all creature cards from your graveyard", Zombie
     Mob) has had a production since Mirage and lowers to the same instruction;
@@ -547,12 +549,14 @@ def _parse_player_exiles_graveyard(
         stream.reset(mark)
         return None
     filt = subject.filter
-    # A pile of *cards* in a graveyard and nothing else. The noun parser reads
-    # "from their graveyard" onto the filter as ``zone``/``zone_owner``, so a
-    # phrase that named the battlefield — or a hand, or a library — comes back
-    # here as a different zone and is put back rather than lowered onto a sweep
-    # that would read the wrong pile.
-    if not (filt.is_card and filt.zone == "graveyard"):
+    # A pile of *cards* in a graveyard or a hand and nothing else. The noun
+    # parser reads "from their graveyard" onto the filter as
+    # ``zone``/``zone_owner``, so a phrase that named the battlefield — or a
+    # library — comes back here as a different zone and is put back rather than
+    # lowered onto a sweep that would read the wrong pile. The two admitted
+    # zones lower to two different handlers; which one is the lowering's
+    # question, and it refuses anything it has no sweep for.
+    if not (filt.is_card and filt.zone in ("graveyard", "hand")):
         stream.reset(mark)
         return None
     # The possessive agrees with the subject, exactly as the library exile one
@@ -570,7 +574,14 @@ def _parse_player_exiles_graveyard(
     if subject.targeted:
         stream.reset(mark)
         return None
-    return ast.Exile(subject, actor=player)
+    # "…from their hand **face down**." (Memory Jar.) CR 406.3 makes a
+    # face-down card in exile hidden from every player, its owner included, so
+    # the words are a real difference and not decoration — read here rather
+    # than left unconsumed, which is what refused this whole sentence before.
+    # The bare imperative one production over reads the same two words onto the
+    # same field.
+    face_down = bool(stream.accept_phrase("face", "down"))
+    return ast.Exile(subject, actor=player, face_down=face_down)
 
 
 def _parse_player_exiles_target_spell(
@@ -590,7 +601,7 @@ def _parse_player_exiles_target_spell(
     pronoun means, so the spec is built from it.
 
     Gated on that one referent, which is the same narrowness
-    :func:`_parse_player_exiles_graveyard` states about its own: only the
+    :func:`_parse_player_exiles_pile` states about its own: only the
     ``target_spells_controller`` seat carries an object for "it" to name, and
     every other player-subject exile keeps its own reading and its own refusal.
 
@@ -626,7 +637,8 @@ def _parse_put_exiled_this_way(
     stream: TokenStream, player: "ast.PlayerRef | None" = None
 ) -> "ast.PutExiledThisWay | None":
     """``puts all cards they exiled this way onto the battlefield`` (Living
-    Death) — the verb and everything after it.
+    Death), ``returns to their hand each card they exiled this way`` (Memory
+    Jar) — the verb and everything after it.
 
     The back-reference is read here rather than by the shared noun parser for
     the reason every other one in this grammar is: "exiled this way" is not a
@@ -643,9 +655,31 @@ def _parse_put_exiled_this_way(
     "puts …" keeps its own reading and its own refusal.
     """
     mark = stream.mark()
-    if not stream.accept_word("puts", "put"):
+    # "**returns** to their hand …" (Memory Jar). One production for both
+    # verbs, because a card coming out of exile is one act however the sentence
+    # spells it — CR 400.1 moves an object to a zone and "put" and "return"
+    # name the same move. A card whose destination is a *hand* is the printing
+    # English says "return" for; which destinations have a handler is still the
+    # lowering's question.
+    if not stream.accept_word("puts", "put", "returns", "return"):
         stream.reset(mark)
         return None
+    # "…returns **to their hand** each card they exiled this way." (Memory
+    # Jar.) The destination printed in front of the object, which is English
+    # rather than a different effect — the same word order ``_parse_return``
+    # reads for Remove Enchantments, and refusing it would cost this card its
+    # whole sentence over where the preposition sits.
+    fronted: "ast.Zone | None" = None
+    if stream.at_word("to", "into", "onto"):
+        ahead = stream.mark()
+        stream.advance()
+        try:
+            fronted = _parse_zone(
+                stream, self_possessive=_matching_possessive(player)
+            )
+        except GrammarError:
+            stream.reset(ahead)
+            fronted = None
     subject = parse_recipient(stream)
     if not isinstance(subject, ast.TargetSpec):
         stream.reset(mark)
@@ -663,15 +697,21 @@ def _parse_put_exiled_this_way(
     if not stream.accept_phrase("exiled", "this", "way"):
         stream.reset(mark)
         return None
-    # "**onto** the battlefield" and "**into** their hand" are one preposition
-    # to the rules (CR 400.1 moves an object to a zone); which word is printed
-    # is which zone follows it. Both are read so a printing that gave the pile
-    # back to a hand is this production rather than a second one, and the
-    # lowering decides which destinations a handler implements.
-    if not stream.accept_word("onto", "into", "to"):
-        stream.reset(mark)
-        return None
-    zone = _parse_zone(stream, self_possessive=_matching_possessive(player))
+    if fronted is not None:
+        zone = fronted
+    else:
+        # "**onto** the battlefield" and "**into** their hand" are one
+        # preposition to the rules (CR 400.1 moves an object to a zone); which
+        # word is printed is which zone follows it. Both are read so a printing
+        # that gave the pile back to a hand is this production rather than a
+        # second one, and the lowering decides which destinations a handler
+        # implements.
+        if not stream.accept_word("onto", "into", "to"):
+            stream.reset(mark)
+            return None
+        zone = _parse_zone(
+            stream, self_possessive=_matching_possessive(player)
+        )
     # The zone the noun phrase carried is the *source* pile, which for this
     # sentence is always exile and is never printed — the record answers it.
     # Stripped before the filter is handed on so the lowering's card gate sees
