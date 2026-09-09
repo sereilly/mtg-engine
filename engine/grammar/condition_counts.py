@@ -52,6 +52,31 @@ from .stream import TokenStream
 from .vocabulary import COLOR_WORDS
 
 
+def _parse_count_bound(stream: TokenStream) -> ast.Comparison:
+    """The bound a "has …" clause states, including the printed **zero**.
+
+    "if you have **no** cards in hand" (Brink of Madness). ``parse_comparison``
+    reads a quantity and a printed "no" is not one — ``parse_amount`` refuses
+    the word outright rather than folding it onto zero, which is the lenient
+    reading that file exists to have deleted. So the zero is read here, where
+    the sentence has already said it is counting.
+
+    The same word the ``controls`` clause below already reads as its own
+    ``negated`` flag ("you control **no** lands"), producing the identical
+    ``Comparison("eq", 0)`` — one printed word, one meaning, on both of this
+    module's counted verbs. Reading it for one and not the other is what left
+    "you have no cards in hand" refusing while "you control no lands" parsed.
+
+    Both of the callers, for this module's standing arrangement: "your hand has
+    no cards" and "you have no cards in hand" are one question in two printed
+    word orders, and a bound one spelling admits and the other refuses is the
+    fork the two branches were written to avoid.
+    """
+    if stream.accept_word("no"):
+        return ast.Comparison("eq", ast.Fixed(0))
+    return parse_comparison(stream)
+
+
 def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
     """One counted condition, or None without consuming when it is something else.
 
@@ -104,7 +129,7 @@ def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
         zone = stream.peek_word()
         if zone in ("library", "graveyard", "hand") and stream.peek_word(1) == "has":
             stream.advance(2)
-            comparison = parse_comparison(stream)
+            comparison = _parse_count_bound(stream)
             stream.expect_word("cards", "card")
             # "…in it" is printed by this template and dropped: it names the
             # zone the sentence has already said.
@@ -146,7 +171,7 @@ def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
                 counted,
                 ast.Comparison("more_than_each_other_player", ast.Fixed(0)),
             )
-        comparison = parse_comparison(stream)
+        comparison = _parse_count_bound(stream)
         if stream.accept_word("life"):
             return ast.PlayerLifeIs(counted, comparison)
         if stream.accept_word("cards", "card") and stream.accept_phrase("in", "hand"):

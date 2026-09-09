@@ -2029,7 +2029,22 @@ class PermanentStateMixin:
         direction: a board-wide effect applying to the wrong side is worse than
         one that does not apply.
         """
-        if static.applies_to in ("artifact", "creature"):
+        # "**Other** enchantments have …" (Aura Flux). CR 109.5's exclusion,
+        # asked in front of every scope rather than inside one, because the word
+        # is a quantifier over whatever noun follows it and not part of the
+        # noun. Read here and nowhere else, which is where the comment in
+        # ``_apply_global_statics`` says a scope belongs.
+        #
+        # A static that says "other" and is handed no source cannot answer the
+        # question at all, so it answers False — the safe direction this
+        # docstring already states for a relative scope, and unreachable today:
+        # the sourceless caller is the stack half, and ``stack_statics`` reads
+        # only the "as long as this spell is on the stack" spellings, none of
+        # which prints the word.
+        if getattr(static, "other_than_source", False):
+            if source is None or permanent is source:
+                return False
+        if static.applies_to in ("artifact", "creature", "enchantment"):
             # Through the layer-6/4 accessors rather than the printed line, so
             # an animated land is a creature to The Tabernacle at Pendrell Vale
             # and a Clone of an artifact is an artifact to Energy Flux.

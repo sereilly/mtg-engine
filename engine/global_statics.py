@@ -81,6 +81,15 @@ class GlobalStatic:
     # A tuple, empty when the static sets nothing, for the reason ``colors`` is
     # one: a frozen dataclass has to stay hashable.
     sets_base_pt: tuple[int, int] = ()
+    # "**Other** enchantments have "…"." (Aura Flux.) CR 109.5's exclusion of
+    # the ability's own source, and the first template in this table to print
+    # the word — ``permanent_state._apply_global_statics`` says in as many words
+    # that "none of these templates says 'other'" and applies every one of them
+    # to its own source on purpose. So the exclusion has to be *stated*: a
+    # blanket skip would silently exempt the Pirate token Pursued Whale makes
+    # from the requirement that is half its drawback, which is the bug that
+    # comment records being fixed.
+    other_than_source: bool = False
 
 
 _TEMPLATES: tuple[tuple[re.Pattern[str], GlobalStatic], ...] = (
@@ -146,9 +155,17 @@ _TEMPLATES: tuple[tuple[re.Pattern[str], GlobalStatic], ...] = (
         # words — so it is an alternation here rather than a row of its own,
         # and the singular noun that comes with it is normalised beside the
         # plural in ``global_static_for``.
+        # **And so is the exclusion.** "**Other** enchantments have "At the
+        # beginning of your upkeep, sacrifice this enchantment unless you pay
+        # {2}."" (Aura Flux) is Energy Flux's sentence with one noun changed and
+        # one word added, and the word is not a spelling of "all": CR 109.5 puts
+        # the source outside the set, so it rides as ``other_than_source``
+        # rather than joining the quantifier alternation above.
         re.compile(
-            r"^(?:all (?P<scope>artifacts|creatures) have"
-            r"|each (?P<each_scope>artifact|creature) has) \"(?P<ability>.+)\"$"
+            r"^(?:all (?P<scope>artifacts|creatures|enchantments) have"
+            r"|each (?P<each_scope>artifact|creature|enchantment) has"
+            r"|other (?P<other_scope>artifacts|creatures|enchantments) have)"
+            r" \"(?P<ability>.+)\"$"
         ),
         GlobalStatic(name="granted_board_wide_ability", applies_to=""),
     ),
@@ -292,7 +309,10 @@ def global_static_for(oracle_text: str) -> GlobalStatic | None:
                 # the predicate, so each type word has one spelling. "**Each**
                 # creature" prints the singular already and arrives in its own
                 # group, because one alternation cannot spell a noun two ways.
-                scope = groups.get("scope") or groups.get("each_scope")
+                other_scope = groups.get("other_scope")
+                scope = (
+                    groups.get("scope") or groups.get("each_scope") or other_scope
+                )
                 colour = groups.get("color")
                 return GlobalStatic(
                     name=static.name,
@@ -302,6 +322,10 @@ def global_static_for(oracle_text: str) -> GlobalStatic | None:
                     pt_from_mana_value=static.pt_from_mana_value,
                     grants_ability=granted,
                     colors=(colour,) if colour else (),
+                    # Only the "other" arm above can have matched, so the flag
+                    # is the group's own presence rather than a second reading
+                    # of the printed line.
+                    other_than_source=bool(other_scope),
                 )
             return static
     return None
