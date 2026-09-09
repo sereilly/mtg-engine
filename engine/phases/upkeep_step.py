@@ -37,7 +37,8 @@ from ..mana_payment import plan_payment, untapped_mana_lands
 from ..upkeep_costs import UpkeepCost, cost_from_payload, cost_prompt_fields
 from ..effect_labels import triggered_label
 from ..handlers import EFFECT_HANDLERS
-from .upkeep_effects import UPKEEP_EFFECTS, UpkeepContext, UpkeepEffectsMixin
+from .upkeep_effects import (UPKEEP_EFFECTS, UpkeepContext, UpkeepEffectsMixin,
+                             upkeep_answer)
 
 #: Upkeep conditions whose seat this loop can name: "at the beginning of
 #: **your** upkeep" is the source's controller, "at the beginning of **each
@@ -60,6 +61,26 @@ from .upkeep_effects import UPKEEP_EFFECTS, UpkeepContext, UpkeepEffectsMixin
 #: anything about it was interactive. Erosion and Curse Artifact are the
 #: ordinary shape: an offer with a penalty, which the grammar reads as a `may`
 #: and the generic pending-choice queue already runs.
+def upkeep_prompt_key(entry: dict):
+    """The key *entry*'s answer belongs under in the map handed to
+    :meth:`UpkeepStepMixin.resolve_upkeep`.
+
+    ``permanent_id`` for a prompt whose subject is on the battlefield, which is
+    every one of them but two: Nether Shadow's return offer is about a card in
+    a **graveyard** and Nafs Asp's is about an obligation *record* whose source
+    may have left, and neither has a permanent id to be addressed by. Those two
+    keep the printed name, and are named in ``ROADMAP.md`` as the remainder of
+    this class.
+
+    One function, read by the arming side (``web/turn_steps.py``) and by the
+    answering side (``web/action_turn.py``), so what a prompt is filed under and
+    what an answer is filed under cannot drift — which is the whole failure this
+    file just came out of, one level up.
+    """
+    permanent_id = entry.get("permanent_id")
+    return entry["card_name"] if permanent_id is None else permanent_id
+
+
 def _reason_card(reason: str):
     """A stand-in card naming the permanent a cost was paid for.
 
@@ -360,6 +381,44 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         )
         self._execute_oracle_instruction(instruction, context)
 
+    def _upkeep_answers_by_permanent(self, answers: dict | None) -> dict | None:
+        """Normalise one prompt-answer map so every battlefield answer is keyed
+        by ``Permanent.permanent_id``.
+
+        The web layer sends ids. A **string** key is the shorthand every
+        headless caller and every test in this repo uses: it names a *card*, so
+        it answers **every** permanent of that name at once. On a board with one
+        copy that is exact, which is why it stayed correct for as long as it
+        did; with two copies it is one answer for two decisions, and there was
+        no way to say "pay for this one, let that one go".
+
+        Expanded here, once, above every handler — not read as a fallback down
+        in :func:`upkeep_effects.upkeep_answer`. A fallback per reader is ten
+        places that have to agree about precedence, which is the reason
+        ``web/actions.py`` resolves its permanent ids in one preamble too.
+
+        An explicit id **wins** over a name covering the same permanent: the id
+        is the specific answer and the name is the blanket one, and letting
+        dict order decide is the silent precedence this step's registry exists
+        to remove.
+
+        Unmatched string keys are **kept**, not dropped: the two prompts whose
+        subject is not a permanent (see :func:`upkeep_prompt_key`) are still
+        answered by name, and their readers look them up in this same map.
+        """
+        if not answers:
+            return answers
+        by_name: dict[str, list] = {}
+        for permanent in self.all_permanents():
+            by_name.setdefault(permanent.card.name, []).append(permanent)
+        keyed = dict(answers)
+        for key, value in answers.items():
+            if not isinstance(key, str):
+                continue
+            for permanent in by_name.get(key, ()):
+                keyed.setdefault(permanent.permanent_id, value)
+        return keyed
+
     def get_upkeep_pay_triggers(self, player_index: int) -> list[dict]:
         """Return pay-or-consequence upkeep triggers that the player must decide on.
 
@@ -413,6 +472,12 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
             cost = upcoming_cost(permanent, trig.instruction)
             choices.append({
                 "card_name": permanent.card.name,
+                # Which permanent this price is being quoted for (CR 400.7's
+                # identity). ``card_name`` stays for the label; it is no longer
+                # the address, because two copies print two of these entries
+                # and a client that could not tell them apart could not answer
+                # them apart either.
+                "permanent_id": permanent.permanent_id,
                 **cost_prompt_fields(cost),
                 "kind": trig.instruction.kind,
                 # "unless you pay" alternative consequence, used to label the
@@ -437,6 +502,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
             if trig is not None:
                 choices.append({
                     "card_name": permanent.card.name,
+                    "permanent_id": permanent.permanent_id,
                     **cost_prompt_fields(cost_from_payload(trig.instruction.payload)),
                     "kind": trig.instruction.kind,
                     "damage": 0,
@@ -464,6 +530,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                     mana[sym.upper()] = mana.get(sym.upper(), 0) + 1
             choices.append({
                 "card_name": permanent.card.name,
+                "permanent_id": permanent.permanent_id,
                 **cost_prompt_fields(UpkeepCost(mana=mana)),
                 "kind": "upkeep_pay_to_gain_life",
                 "damage": 0,
@@ -491,6 +558,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
             if trig is not None:
                 triggers.append({
                     "card_name": permanent.card.name,
+                    "permanent_id": permanent.permanent_id,
                     "kind": "upkeep_pay_to_prevent_damage",
                     "damage": int(trig.instruction.payload.get("amount", 1)),
                 })
@@ -577,10 +645,17 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         player's own upkeep.
 
         Generic across trigger sources; currently covers graveyard-recursion
-        abilities (Nether Shadow). Each entry carries a human-readable ``prompt``
-        and the ``card_name`` used to key the player's decision.
+        abilities (Nether Shadow) and Vesuvan Doppelganger's granted re-copy.
+        Each entry carries a human-readable ``prompt`` and the key its answer
+        goes under — see :func:`upkeep_prompt_key`.
         """
         triggers: list[dict] = []
+        # **The graveyard half only.** Its subject is a card in a graveyard,
+        # which has no ``permanent_id`` to be addressed by, so it is still
+        # keyed — and so still deduped — by printed name: two eligible Nether
+        # Shadows share one offer and one answer returns both. That is the
+        # remainder of this file's own defect and is named in ``ROADMAP.md``;
+        # the battlefield half below no longer has it.
         seen: set[str] = set()
         for _grave_index, card in self._graveyard_return_candidates(player_index):
             if card.name in seen:
@@ -588,6 +663,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
             seen.add(card.name)
             triggers.append({
                 "card_name": card.name,
+                "permanent_id": None,
                 "kind": "upkeep_return_self_from_graveyard",
                 "prompt": f"Return {card.name} to the battlefield from your graveyard?",
             })
@@ -603,8 +679,6 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         for perm_index, perm in enumerate(self.players[player_index].battlefield):
             if not grants_ability(perm, RECOPY_EACH_UPKEEP):
                 continue
-            if perm.card.name in seen:
-                continue
             valid_targets = [
                 {"kind": "permanent", "seat": s, "index": i, "name": p.card.name}
                 for s, player in enumerate(self.players)
@@ -613,9 +687,13 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
             ]
             if not valid_targets:
                 continue
-            seen.add(perm.card.name)
             triggers.append({
                 "card_name": perm.card.name,
+                # CR 603.3d, and the reason the name dedupe that used to stand
+                # here is gone: two Vesuvan Doppelgangers are two triggers, each
+                # choosing its own creature to copy, and one prompt for both
+                # made the second one's choice for it.
+                "permanent_id": perm.permanent_id,
                 "kind": "upkeep_recopy",
                 "prompt": f"Have {perm.card.name} become a copy of a different creature?",
                 "needs_target": "creature",
@@ -637,13 +715,18 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         ]
 
     def _resolve_upkeep_trigger_target(
-        self, card_name: str, trigger_targets: dict | None, candidates: list[Permanent]
+        self, source: Permanent, trigger_targets: dict | None, candidates: list[Permanent]
     ) -> Permanent | None:
-        """The target a human picked for a mandatory targeted upkeep trigger, or —
-        for AI/headless play, or a stale pick whose permanent has since left the
-        battlefield — the first legal candidate. Returns None with no candidates
-        (CR 603.3d: a trigger with no legal target is removed from the stack)."""
-        chosen = (trigger_targets or {}).get(card_name)
+        """The target a human picked for *source*'s mandatory targeted upkeep
+        trigger, or — for AI/headless play, or a stale pick whose permanent has
+        since left the battlefield — the first legal candidate. Returns None
+        with no candidates (CR 603.3d: a trigger with no legal target is removed
+        from the stack).
+
+        Keyed by *source*'s ``permanent_id``. It took the printed name, which
+        is one answer for every copy: CR 603.3d chooses a target per ability,
+        by its controller, as it goes on the stack."""
+        chosen = (trigger_targets or {}).get(source.permanent_id)
         if chosen is not None:
             seat, index = chosen
             if 0 <= seat < len(self.players) and 0 <= index < len(self.players[seat].battlefield):
@@ -700,9 +783,19 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         """Mandatory upkeep triggers that need the controller to choose a target.
 
         Same payload shape as ``get_optional_upkeep_triggers`` (``card_name``,
-        ``prompt``, ``valid_targets``) plus ``mandatory: True``, so the web layer
-        and UI reuse one channel — the difference is only that the player picks a
-        target rather than answering yes/no, and can't decline.
+        ``permanent_id``, ``prompt``, ``valid_targets``) plus ``mandatory:
+        True``, so the web layer and UI reuse one channel — the difference is
+        only that the player picks a target rather than answering yes/no, and
+        can't decline.
+
+        **One entry per trigger, never one per card name.** This deduped by
+        ``perm.card.name``, so two Erhnam Djinns produced a single prompt and
+        the second ability's target was never asked for — it took the first
+        one's answer, and both grants landed on one creature. CR 603.3d hands
+        the choice to CR 601.2c, which makes it per ability. Measured on a
+        board: Erhnam Djinn and Afiya Grove are the two shipped cards a seat
+        can hold two of (Halfdane prints the third such trigger and is
+        legendary, so CR 704.5j means one controller never has two).
         """
         # instruction kind -> (choice kind, target-noun the UI highlights,
         # prompt builder, candidate lookup). A lookup takes the trigger's
@@ -721,7 +814,6 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
             ),
         }
         triggers: list[dict] = []
-        seen: set[str] = set()
         controller = self.players[player_index]
         for perm in self.controlled_by(player_index):
             program = compile_card_oracle(perm.effective_card)
@@ -733,15 +825,13 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                     entry = self._printed_target_upkeep_trigger(trig, controller)
                 if entry is None:
                     continue
-                if perm.card.name in seen:
-                    continue
                 choice_kind, target_noun, build_prompt, find_candidates = entry
                 candidates = find_candidates(controller, perm)
                 if not candidates:
                     continue
-                seen.add(perm.card.name)
                 triggers.append({
                     "card_name": perm.card.name,
+                    "permanent_id": perm.permanent_id,
                     "kind": choice_kind,
                     "mandatory": True,
                     "prompt": build_prompt(perm.card.name),
@@ -784,7 +874,22 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         # has to sacrifice something — fall back to the first land.
         return self._force_sacrifice_first_land(controller, source) if chosen is not None else None
 
-    def resolve_upkeep(self, player_index: int, human_choices: dict[str, bool] | None = None, optional_choices: dict[str, bool] | None = None, defer_priority: bool = False, mana_prevention: dict[str, int] | None = None, sacrifice_choices: dict[str, int] | None = None, trigger_targets: dict[str, tuple[int, int]] | None = None) -> None:
+    def resolve_upkeep(self, player_index: int, human_choices: dict[int | str, bool] | None = None, optional_choices: dict[int | str, bool] | None = None, defer_priority: bool = False, mana_prevention: dict[int | str, int] | None = None, sacrifice_choices: dict[int | str, int] | None = None, trigger_targets: dict[int | str, tuple[int, int]] | None = None) -> None:
+        """Run this seat's upkeep step, carrying out the prompt answers in hand.
+
+        Every answer map is keyed by ``Permanent.permanent_id``; a string key is
+        the legacy shorthand for "every copy of this card"
+        (:meth:`_upkeep_answers_by_permanent`).
+        """
+        # Every prompt answer, re-keyed to the permanent it is about, before
+        # anything reads one. See :meth:`_upkeep_answers_by_permanent` — this is
+        # the one place a printed card name is turned into an address, so no
+        # handler below can be written against a name again.
+        human_choices = self._upkeep_answers_by_permanent(human_choices)
+        optional_choices = self._upkeep_answers_by_permanent(optional_choices)
+        mana_prevention = self._upkeep_answers_by_permanent(mana_prevention)
+        sacrifice_choices = self._upkeep_answers_by_permanent(sacrifice_choices)
+        trigger_targets = self._upkeep_answers_by_permanent(trigger_targets)
         phase = "beginning"
         step = "upkeep"
         self._set_phase_and_step(phase, step)
@@ -1017,7 +1122,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                         # falls back to the first legal candidate, which is
                         # the answer for an AI seat and the wrong one for a
                         # player who was just asked.
-                        picked = (trigger_targets or {}).get(permanent.card.name)
+                        picked = (trigger_targets or {}).get(permanent.permanent_id)
                         upkeep_events.append({
                             "controller_index": controller_seat,
                             "source_permanent": permanent,
@@ -1190,10 +1295,12 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                 can_pay = all(gainer.mana_pool.get(sym, 0) >= cnt for sym, cnt in cost.items())
                 # Honor a human's decision (from the upkeep-pay prompt) when given;
                 # otherwise auto-pay when able (beneficial default for AI/headless).
-                if human_choices is not None and permanent.card.name in human_choices:
-                    wants_pay = bool(human_choices[permanent.card.name])
-                else:
-                    wants_pay = can_pay
+                # The Aura's own prompt answer, by permanent id like every
+                # other one on this step (`upkeep_effects.upkeep_answer` says
+                # why): two Farmsteads on two of this player's lands are two
+                # offers, and a name key made them one.
+                answered = upkeep_answer(human_choices, permanent)
+                wants_pay = can_pay if answered is None else bool(answered)
                 if wants_pay and can_pay:
                     for sym, cnt in cost.items():
                         gainer.mana_pool[sym] -= cnt
@@ -1239,9 +1346,9 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         for perm in list(owner.battlefield):
             if not grants_ability(perm, RECOPY_EACH_UPKEEP):
                 continue
-            if optional_choices is None or not optional_choices.get(perm.card.name, False):
+            if optional_choices is None or not optional_choices.get(perm.permanent_id, False):
                 continue
-            chosen = (trigger_targets or {}).get(perm.card.name)
+            chosen = (trigger_targets or {}).get(perm.permanent_id)
             source = None
             if chosen is not None:
                 seat, index = chosen

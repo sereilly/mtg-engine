@@ -62,10 +62,12 @@ from .pronouns import (_RIDER_FOLDED, _attach_returned_text_change,
                        _parse_pronoun_counter_rider,
                        _parse_plural_pronoun_pump_rider,
                        _parse_pronoun_grant_rider, _parse_pronoun_verb_rider)
-from .rebinding import (rebind_alternative_pronoun_to_choice_target,
-                        rebind_delayed_pronoun_to_sentence_target,
-                        rebind_keyword_loss_pronoun_to_clause_target,
-                        rebind_pump_pronoun_to_sentence_target)
+from .sentence_rebinding import (
+    rebind_alternative_pronoun_to_choice_target,
+    rebind_delayed_pronoun_to_sentence_target,
+    rebind_keyword_loss_pronoun_to_clause_target,
+    rebind_pump_pronoun_to_sentence_target,
+)
 from .repeats import (_attach_repeat_for_types,
                       _attach_repeat_optional_process,
                       _attach_repeat_this_process,

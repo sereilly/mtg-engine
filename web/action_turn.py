@@ -8,6 +8,7 @@ an AI turn forward.
 from __future__ import annotations
 
 from engine.untap_restrictions import permanent_in_limited_scope
+from engine.phases.upkeep_step import upkeep_prompt_key
 from engine.upkeep_costs import cost_from_payload
 from fastapi import HTTPException
 
@@ -29,6 +30,51 @@ from .turn_steps import (
     _upkeep_mana_prevention_pending,
     _upkeep_pay_pending,
 )
+
+
+def _answered_upkeep_prompt(pending: list[dict], req) -> tuple:
+    """The pending upkeep prompt *req* is answering, and the key to file it
+    under — or an HTTP error naming which half of the address was wrong.
+
+    **The permanent id is required whenever the prompt has one.** A card name
+    alone cannot say which of two Breeding Pits is being paid for, and a
+    request that sends only the name would silently answer whichever prompt
+    matched first — the defect this whole seam was rebuilt to remove, arriving
+    back through the wire. So a prompt carrying ``permanent_id`` is answerable
+    only by ``prompt_permanent_id``; the two that carry none (Nether Shadow's
+    graveyard return, a Nafs Asp obligation) are answered by ``card_name`` as
+    they always were.
+
+    An id that names no *pending* prompt is a 400 rather than a fall-through:
+    the client wrote this against the board it last polled, and if that
+    permanent has gone the name beside it now points at a different decision.
+    """
+    if req.prompt_permanent_id is not None:
+        match = next(
+            (c for c in pending if c.get("permanent_id") == req.prompt_permanent_id),
+            None,
+        )
+        if match is None:
+            raise HTTPException(
+                status_code=400,
+                detail="that permanent is not awaiting an upkeep decision",
+            )
+        return match, upkeep_prompt_key(match)
+    if not req.card_name:
+        raise HTTPException(status_code=400, detail="card_name is required")
+    match = next(
+        (c for c in pending if c["card_name"] == req.card_name), None
+    )
+    if match is None:
+        raise HTTPException(
+            status_code=400, detail="card not awaiting an upkeep decision"
+        )
+    if match.get("permanent_id") is not None:
+        raise HTTPException(
+            status_code=400,
+            detail="prompt_permanent_id is required to answer this decision",
+        )
+    return match, upkeep_prompt_key(match)
 
 
 @action_handler("end_turn", human_only=HUMAN_ONLY)
@@ -238,23 +284,20 @@ def _action_pay_upkeep(session, req, seat_type):
         raise HTTPException(status_code=400, detail="not your turn")
     if not _upkeep_pay_pending(session):
         raise HTTPException(status_code=400, detail="no upkeep payment required")
-    if not req.card_name:
-        raise HTTPException(status_code=400, detail="card_name is required")
 
-    pending = {c["card_name"]: c for c in _upkeep_pay_pending(session)}
-    if req.card_name not in pending:
-        raise HTTPException(status_code=400, detail="card not awaiting upkeep payment")
-
-    choice = pending[req.card_name]
+    choice, key = _answered_upkeep_prompt(_upkeep_pay_pending(session), req)
     controller = session.game.players[req.seat]
     # The whole cost, not its mana half: an upkeep may print life or a
     # sacrifice beside the mana (CR 702.24a), and a gate that reads one part
     # lets a player pay a cost they cannot afford.
     cost = cost_from_payload(choice.get("cost") or {})
     if not session.game.can_pay_upkeep_cost(controller, cost):
-        raise HTTPException(status_code=400, detail=f"cannot pay upkeep cost for {req.card_name}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"cannot pay upkeep cost for {choice['card_name']}",
+        )
 
-    session.upkeep_resolved_choices[req.card_name] = True
+    session.upkeep_resolved_choices[key] = True
 
     if not _upkeep_decisions_pending(session):
         _advance_after_upkeep_choices(session)
@@ -265,14 +308,9 @@ def _action_sacrifice_upkeep(session, req, seat_type):
         raise HTTPException(status_code=400, detail="not your turn")
     if not _upkeep_pay_pending(session):
         raise HTTPException(status_code=400, detail="no upkeep payment required")
-    if not req.card_name:
-        raise HTTPException(status_code=400, detail="card_name is required")
 
-    pending = {c["card_name"]: c for c in _upkeep_pay_pending(session)}
-    if req.card_name not in pending:
-        raise HTTPException(status_code=400, detail="card not awaiting upkeep payment")
-
-    session.upkeep_resolved_choices[req.card_name] = False
+    _choice, key = _answered_upkeep_prompt(_upkeep_pay_pending(session), req)
+    session.upkeep_resolved_choices[key] = False
 
     if not _upkeep_decisions_pending(session):
         _advance_after_upkeep_choices(session)
@@ -283,19 +321,13 @@ def _action_resolve_optional_trigger(session, req, seat_type):
         raise HTTPException(status_code=400, detail="not your turn")
     if not _optional_trigger_pending(session):
         raise HTTPException(status_code=400, detail="no optional trigger pending")
-    if not req.card_name:
-        raise HTTPException(status_code=400, detail="card_name is required")
     if req.accept is None:
         raise HTTPException(status_code=400, detail="accept (true/false) is required")
-
-    pending = {c["card_name"]: c for c in _optional_trigger_pending(session)}
-    if req.card_name not in pending:
-        raise HTTPException(status_code=400, detail="card not awaiting an optional trigger decision")
 
     # A target-bearing trigger (Vesuvan Doppelganger's re-copy, Erhnam
     # Djinn's forestwalk grant) requires the chosen creature alongside an
     # accept. Mandatory triggers can't be declined — only targeted.
-    choice = pending[req.card_name]
+    choice, key = _answered_upkeep_prompt(_optional_trigger_pending(session), req)
     if choice.get("mandatory") and not req.accept:
         raise HTTPException(status_code=400, detail="this trigger is mandatory and can't be declined")
     if choice.get("needs_target") and req.accept:
@@ -307,9 +339,9 @@ def _action_resolve_optional_trigger(session, req, seat_type):
         }
         if (req.target_seat, req.target_permanent_index) not in valid:
             raise HTTPException(status_code=400, detail="invalid target for this trigger")
-        session.optional_trigger_targets[req.card_name] = (req.target_seat, req.target_permanent_index)
+        session.optional_trigger_targets[key] = (req.target_seat, req.target_permanent_index)
 
-    session.optional_trigger_resolved[req.card_name] = bool(req.accept)
+    session.optional_trigger_resolved[key] = bool(req.accept)
 
     if not _upkeep_decisions_pending(session):
         _advance_after_upkeep_choices(session)
@@ -323,16 +355,14 @@ def _action_pay_upkeep_prevention(session, req, seat_type):
         raise HTTPException(status_code=400, detail="not your turn")
     if not _upkeep_mana_prevention_pending(session):
         raise HTTPException(status_code=400, detail="no upkeep prevention pending")
-    if not req.card_name:
-        raise HTTPException(status_code=400, detail="card_name is required")
-    pending = {c["card_name"]: c for c in _upkeep_mana_prevention_pending(session)}
-    if req.card_name not in pending:
-        raise HTTPException(status_code=400, detail="card not awaiting an upkeep prevention decision")
+    choice, key = _answered_upkeep_prompt(
+        _upkeep_mana_prevention_pending(session), req
+    )
     amount = max(0, int(req.amount or 0))
     controller = session.game.players[req.seat]
     available = sum(controller.mana_pool.get(s, 0) for s in controller.mana_pool)
-    amount = min(amount, int(pending[req.card_name].get("damage", 0)), available)
-    session.upkeep_mana_prevention_resolved[req.card_name] = amount
+    amount = min(amount, int(choice.get("damage", 0)), available)
+    session.upkeep_mana_prevention_resolved[key] = amount
 
     if not _upkeep_decisions_pending(session):
         _advance_after_upkeep_choices(session)

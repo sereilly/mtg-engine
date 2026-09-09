@@ -28,8 +28,8 @@ from dataclasses import replace
 from . import ast
 from .errors import GrammarError
 from .nouns import parse_object_filter
-from .rebinding import (rebind_pronoun_to_condition_target,
-                        rebind_pronoun_to_delay_target)
+from .rebinding import rebind_pronoun_to_condition_target
+from .sentence_rebinding import rebind_pronoun_to_delay_target
 from .statements import parse_statement
 from .stream import TokenStream
 

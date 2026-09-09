@@ -331,6 +331,14 @@ class GameActionRequest(BaseModel):
     # an error rather than a silent fallback — falling back to the index would
     # reintroduce exactly the mistake the id exists to prevent.
     permanent_id: int | None = Field(default=None, ge=1)
+    # The permanent whose *upkeep prompt* this action answers (`pay_upkeep`,
+    # `sacrifice_upkeep`, `resolve_optional_trigger`, `pay_upkeep_prevention`).
+    # Separate from `permanent_id`, which the dispatch preamble resolves into
+    # `permanent_index` and a seat: this one is never an index, it is checked
+    # against the *pending prompt list* instead, and a stale one is a 400 there
+    # rather than a 404 here. Required whenever the prompt carries one — a
+    # card name cannot say which of two Breeding Pits is being paid for.
+    prompt_permanent_id: int | None = Field(default=None, ge=1)
     target_permanent_id: int | None = Field(default=None, ge=1)
     target_permanent_ids: list[int] | None = Field(default=None)
     source_permanent_id: int | None = Field(default=None, ge=1)

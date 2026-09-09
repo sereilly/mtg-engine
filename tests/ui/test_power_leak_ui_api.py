@@ -58,12 +58,28 @@ def test_power_leak_surfaces_a_prevention_prompt():
     assert info["available_mana"] == 2
 
 
+def _power_leak_prompt_id(session):
+    """The Aura's permanent id, which is what its prompt is addressed by.
+
+    Two Power Leaks on two of one player's creatures are two prompts and two
+    payments; the printed name was one key for both. See
+    tests/rules/test_upkeep_prompt_identity.py.
+    """
+    return next(
+        c["permanent_id"] for c in session.upkeep_mana_prevention_choices
+        if c["card_name"] == "Power Leak"
+    )
+
+
 def test_paying_full_prevents_all_damage():
     sid, session, game = _power_leak_session(prevention_mana=2)
 
     resp = client.post(
         f"/api/sessions/{sid}/action",
-        json={"seat": 0, "action": "pay_upkeep_prevention", "card_name": "Power Leak", "amount": 2},
+        json={
+            "seat": 0, "action": "pay_upkeep_prevention", "card_name": "Power Leak",
+            "prompt_permanent_id": _power_leak_prompt_id(session), "amount": 2,
+        },
     )
     assert resp.status_code == 200, resp.text
     assert game.players[0].life == 20  # all 2 damage prevented
@@ -75,7 +91,10 @@ def test_paying_nothing_takes_full_damage():
 
     resp = client.post(
         f"/api/sessions/{sid}/action",
-        json={"seat": 0, "action": "pay_upkeep_prevention", "card_name": "Power Leak", "amount": 0},
+        json={
+            "seat": 0, "action": "pay_upkeep_prevention", "card_name": "Power Leak",
+            "prompt_permanent_id": _power_leak_prompt_id(session), "amount": 0,
+        },
     )
     assert resp.status_code == 200, resp.text
     assert game.players[0].life == 18  # took the full 2 damage (nothing prevented)

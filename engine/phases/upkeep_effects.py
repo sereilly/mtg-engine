@@ -18,6 +18,11 @@ so they resolve inline while that answer is in hand. Folding them into the
 generic pending-choice queue is phase 4's job; giving them a registry is not
 blocked on it.
 
+**Every one of those five maps is keyed by ``Permanent.permanent_id``**, read
+through :func:`upkeep_answer` and nothing else — see its docstring for the two
+copies of one card that could not be answered separately while the key was a
+printed name.
+
 Everything a handler may read arrives on :class:`UpkeepContext` — including the
 five prompt channels, so a new effect can join the protocol without changing
 this seam.
@@ -59,14 +64,40 @@ class UpkeepContext:
     enqueue_damage: Callable
 
 
+def upkeep_answer(answers: dict | None, permanent):
+    """What *permanent*'s prompt was answered with, or None for "not asked".
+
+    **Keyed by ``Permanent.permanent_id``, never by printed card name.** Two
+    copies of one upkeep card print two abilities; CR 603.3 puts both on the
+    stack and each carries its own "unless you pay" decision, so a name-keyed
+    answer is one answer for two decisions and there is no way to say "pay for
+    this one, let that one go". Measured on a board before it was fixed: two
+    Breeding Pits and four black mana, ``{"Breeding Pit": True}``, both paid.
+    That is CLAUDE.md's "address a permanent by its id, not its slot" with a
+    name in place of the number, and it fails in the same direction — the
+    look-alike answers too.
+
+    ``resolve_upkeep`` normalises every answer map before a handler sees it
+    (:meth:`UpkeepStepMixin._upkeep_answers_by_permanent`), so a caller may
+    still key by printed name and mean "every copy of it"; by the time the map
+    reaches here the ids are the only keys that matter. The raw value is
+    returned rather than a bool because one channel carries a number
+    (``mana_prevention``'s "how much did you pay").
+
+    One reader for every handler, rather than the ``name in map`` /
+    ``map[name]`` pair each of them used to spell for itself — an address read
+    in ten places is an address that can be corrected in nine.
+    """
+    if not answers:
+        return None
+    return answers.get(permanent.permanent_id)
+
+
 def offer_declined(human_choices: dict | None, permanent) -> bool:
     """Whether the controller answered "no" at *permanent*'s upkeep prompt.
 
-    The prompt protocol is keyed by printed card name on **both** sides — the
-    arming side in ``upkeep_step.get_upkeep_pay_triggers`` and the reading side
-    here — so the name is read once, in one place, rather than twice per
-    handler in every handler. A seat that was never asked has not declined,
-    which is what makes the headless and AI paths pay by default.
+    A seat that was never asked has not declined, which is what makes the
+    headless and AI paths pay by default.
 
     Written as "declined" rather than "chose": the two are not complements for
     a seat with no entry, and every caller wants the same reading — *this*
@@ -74,10 +105,8 @@ def offer_declined(human_choices: dict | None, permanent) -> bool:
     with one meaning, where the if/else it replaces spelled the affordability
     test twice and could drift between the branches.
     """
-    if human_choices is None:
-        return False
-    name = permanent.card.name
-    return name in human_choices and not human_choices[name]
+    answer = upkeep_answer(human_choices, permanent)
+    return answer is not None and not answer
 
 
 UpkeepEffect = Callable[[Any, UpkeepContext], None]
@@ -245,12 +274,9 @@ class UpkeepEffectsMixin:
         # free — and a partly generic {1}{U} charged the {U} and waived the {1}.
         # The helpers know that generic mana can come from floating mana *or*
         # from tapping a land during upkeep, which a pool read cannot see.
-        if human_choices is not None and permanent.card.name in human_choices:
-            paid = bool(human_choices[permanent.card.name]) and self.can_pay_upkeep_mana(
-                controller, mana
-            )
-        else:
-            paid = self.can_pay_upkeep_mana(controller, mana)
+        paid = not offer_declined(human_choices, permanent) and self.can_pay_upkeep_mana(
+            controller, mana
+        )
         if paid:
             self._spend_upkeep_mana(controller, mana)
             self.log.append(f"{controller.name} paid upkeep for {permanent.card.name}")
@@ -422,9 +448,12 @@ class UpkeepEffectsMixin:
         # (`upkeep._parse_pay_mana_to_prevent_upkeep_damage`) and stamps
         # this key, so what is offered is exactly what was read.
         if trig.instruction.payload.get("prevent_up_to_paid_mana"):
-            requested = 0
-            if mana_prevention is not None and permanent.card.name in mana_prevention:
-                requested = max(0, int(mana_prevention[permanent.card.name]))
+            # The amount this Aura's prompt was answered with. Keyed by the
+            # Aura's permanent id like every other upkeep answer: two Power
+            # Leaks on two of one player's creatures are two prompts and two
+            # payments, and a name key made them one.
+            committed = upkeep_answer(mana_prevention, permanent)
+            requested = 0 if committed is None else max(0, int(committed))
             available = sum(victim.mana_pool.get(s, 0) for s in victim.mana_pool)
             paid = min(requested, amount, available)
             remaining = paid
@@ -555,12 +584,9 @@ class UpkeepEffectsMixin:
         # pool could cover it — so the price was unpayable on every AI turn
         # however many lands stood untapped, and free for a human with an
         # empty pool.
-        if human_choices is not None and permanent.card.name in human_choices:
-            paid = bool(human_choices[permanent.card.name]) and self.can_pay_upkeep_mana(
-                controller, mana
-            )
-        else:
-            paid = self.can_pay_upkeep_mana(controller, mana)
+        paid = not offer_declined(human_choices, permanent) and self.can_pay_upkeep_mana(
+            controller, mana
+        )
         if paid:
             self._spend_upkeep_mana(controller, mana)
             self.log.append(f"{controller.name} paid upkeep for {permanent.card.name}")
@@ -584,10 +610,10 @@ class UpkeepEffectsMixin:
         # A human accept is honored only when the cost is actually
         # payable — choosing "pay" with no mana must not untap for free.
         mana = trig.instruction.payload.get("mana", {})
-        if human_choices is not None and permanent.card.name in human_choices:
-            paid = human_choices[permanent.card.name]
-        else:
-            paid = True
+        # No consequence on decline, so "not asked" and "said yes" are the same
+        # answer and `offer_declined` reads both — the same one line the
+        # pay-or-consequence handlers use, against the same id-keyed map.
+        paid = not offer_declined(human_choices, permanent)
         paid = paid and self.can_pay_upkeep_mana(controller, mana)
         if paid and permanent.tapped:
             self._spend_upkeep_mana(controller, mana)
@@ -610,10 +636,10 @@ class UpkeepEffectsMixin:
             return
         payer = self.players[player_index]
         mana = trig.instruction.payload.get("mana", {})
-        if human_choices is not None and permanent.card.name in human_choices:
-            paid = human_choices[permanent.card.name]
-        else:
-            paid = True
+        # No consequence on decline, so "not asked" and "said yes" are the same
+        # answer and `offer_declined` reads both — the same one line the
+        # pay-or-consequence handlers use, against the same id-keyed map.
+        paid = not offer_declined(human_choices, permanent)
         paid = paid and self.can_pay_upkeep_mana(payer, mana)
         if paid and attached.tapped:
             self._spend_upkeep_mana(payer, mana)
@@ -628,12 +654,9 @@ class UpkeepEffectsMixin:
         trig = ctx.trig
         mana = trig.instruction.payload.get("mana", {})
         # The shared pair, for the reason the pay-or-deal-damage handler gives.
-        if human_choices is not None and permanent.card.name in human_choices:
-            paid = bool(human_choices[permanent.card.name]) and self.can_pay_upkeep_mana(
-                controller, mana
-            )
-        else:
-            paid = self.can_pay_upkeep_mana(controller, mana)
+        paid = not offer_declined(human_choices, permanent) and self.can_pay_upkeep_mana(
+            controller, mana
+        )
         if paid:
             self._spend_upkeep_mana(controller, mana)
             self.log.append(f"{controller.name} paid upkeep for {permanent.card.name}")
@@ -673,12 +696,9 @@ class UpkeepEffectsMixin:
         trig = ctx.trig
         mana = trig.instruction.payload.get("mana", {})
         # The shared pair, for the reason the pay-or-deal-damage handler gives.
-        if human_choices is not None and permanent.card.name in human_choices:
-            paid = bool(human_choices[permanent.card.name]) and self.can_pay_upkeep_mana(
-                controller, mana
-            )
-        else:
-            paid = self.can_pay_upkeep_mana(controller, mana)
+        paid = not offer_declined(human_choices, permanent) and self.can_pay_upkeep_mana(
+            controller, mana
+        )
         if paid:
             self._spend_upkeep_mana(controller, mana)
             self.log.append(f"{controller.name} paid upkeep for {permanent.card.name}")
@@ -732,7 +752,7 @@ class UpkeepEffectsMixin:
         controller = ctx.controller
         permanent = ctx.permanent
         target_perm = self._resolve_upkeep_trigger_target(
-            permanent.card.name,
+            permanent,
             ctx.trigger_targets,
             self._base_pt_copy_candidates(permanent),
         )
@@ -773,12 +793,9 @@ class UpkeepEffectsMixin:
         # free — and a partly generic {1}{U} charged the {U} and waived the {1}.
         # The helpers know that generic mana can come from floating mana *or*
         # from tapping a land during upkeep, which a pool read cannot see.
-        if human_choices is not None and permanent.card.name in human_choices:
-            paid = bool(human_choices[permanent.card.name]) and self.can_pay_upkeep_mana(
-                controller, mana
-            )
-        else:
-            paid = self.can_pay_upkeep_mana(controller, mana)
+        paid = not offer_declined(human_choices, permanent) and self.can_pay_upkeep_mana(
+            controller, mana
+        )
         if paid:
             self._spend_upkeep_mana(controller, mana)
             self.log.append(f"{controller.name} paid upkeep for {permanent.card.name}")
@@ -894,12 +911,9 @@ class UpkeepEffectsMixin:
         # upkeep cost in this file uses, and never a hand-rolled pool read —
         # they know that generic mana can come from floating mana *or* from
         # tapping a land during upkeep.
-        if human_choices is not None and permanent.card.name in human_choices:
-            paid = bool(human_choices[permanent.card.name]) and self.can_pay_upkeep_cost(
-                controller, cost
-            )
-        else:
-            paid = self.can_pay_upkeep_cost(controller, cost)
+        paid = not offer_declined(human_choices, permanent) and self.can_pay_upkeep_cost(
+            controller, cost
+        )
         if paid:
             self.pay_upkeep_cost(controller, cost, reason=permanent.card.name)
             self.log.append(f"{controller.name} paid upkeep for {permanent.card.name}")
