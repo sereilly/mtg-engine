@@ -944,6 +944,22 @@ def subject_matches(
         # these cards are played the active player *is* an opponent, but only
         # one of them — a duel makes the two readings agree and a third seat
         # makes the sweep twice the size the card names.
+        # "target artifact **a player controls**" (Goblin Welder). The
+        # indefinite seat: every permanent on the battlefield has a controller
+        # (CR 110.2a), so the answer is yes for anything still there and no for
+        # anything that has left. Answered rather than left out, because a
+        # value with no branch of its own falls into the relative comparison at
+        # the bottom and reads as "you control" — which would hide every
+        # opponent's artifact from a picker the card offers them to.
+        #
+        # What the phrase is *for* is the binding it leaves behind, and that is
+        # not this predicate's business: a later slot narrowed to "that
+        # player's graveyard" is a relation between two chosen objects, which
+        # ``targeting.ROLE_RELATION_TESTS`` answers and ``subject_matches``
+        # never sees.
+        elif controller == "any_player":
+            if game.controller_index_of(obj) is None:
+                return False
         elif controller == "active_player":
             active = game.active_player_index
             if not (0 <= active < len(game.players)):

@@ -98,6 +98,12 @@ class ActivationAction:
     # whose handlers pick for themselves, which is every other one this policy
     # activates today.
     target_permanent_index: int | None = None
+    # One chosen object per **role**, for an ability naming several targets of
+    # different kinds (Goblin Welder's artifact and artifact card). The field
+    # beside this one cannot carry them: they may sit on two battlefields, or —
+    # here for the first time — in two different *zones*, which one seat and one
+    # index cannot say. None for every other ability.
+    target_role_refs: list[dict] | None = None
 
 
 @dataclass(frozen=True)
@@ -514,6 +520,23 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
         # worth (or legal) to target, so the AI does not burn a turn on an
         # ability it cannot resolve.
         spec = derive_activation_spec(ability)
+        # An ability naming several targets of *different* kinds, chosen in
+        # dependency order (CR 602.2b reaches CR 601.2c). Asked before the
+        # single-target block below, which has no arm for it: the kind is
+        # "roles", so that block leaves the announcement empty and the ability
+        # goes on the stack with no targets — an activation that resolves and
+        # does nothing, which is the shape `refused_casts` exists to make
+        # visible one step later.
+        target_role_refs: list[dict] | None = None
+        if spec_roles(spec):
+            target_role_refs = _choose_activation_role_targets(
+                game, player_index, permanent_index
+            )
+            if target_role_refs is None:
+                # No legal chain. Skipped rather than proposed: CR 602.2b fills
+                # every role or the activation is refused with nothing paid,
+                # and the gate would refuse it.
+                continue
         object_kinds = {"creature", "artifact", "land", "permanent", "planeswalker"}
         if (
             target_permanent_index is None
@@ -562,11 +585,50 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
             land_tap_indices=land_taps,
             score=score,
             target_permanent_index=target_permanent_index,
+            target_role_refs=target_role_refs,
         )
         if best is None or candidate.score > best.score:
             best = candidate
 
     return best
+
+
+def _choose_activation_role_targets(
+    game: Game, player_index: int, permanent_index: int
+) -> "list[dict] | None":
+    """One object per **role** for an activated ability, or None when no legal
+    chain exists.
+
+    ``_choose_role_targets``' twin on the activation side, and it is a twin
+    rather than a shared body for the reason the two specs are derived
+    separately: a spell's roles come from the card and an ability's from *that
+    ability* (CR 602.2b), so the walks start from different calls. What they
+    share is the policy — take the first option at each level — and it is safe
+    for that function's stated reason: a first choice that leaves a later role
+    with nothing is not in the list ``_role_target_walk`` returns.
+
+    The answer is in the wire's own shape (``target_role_refs``) because a role
+    here may be a card in a graveyard, which has no permanent id to send.
+    """
+    options = game.activation_target_spec(
+        player_index, permanent_index, ability_index=0,
+    ).get("valid_targets") or []
+    refs: list[dict] = []
+    while options:
+        pick = options[0]
+        if pick.get("kind") == "graveyard":
+            refs.append({
+                "graveyard_seat": pick.get("seat"),
+                "graveyard_index": pick.get("index"),
+            })
+        else:
+            permanent = game.permanent_at(pick.get("seat"), pick.get("index"))
+            permanent_id = game.permanent_id_of(permanent)
+            if not isinstance(permanent_id, int):
+                return None
+            refs.append({"permanent_id": permanent_id})
+        options = pick.get("next") or []
+    return refs or None
 
 
 def choose_hand_activation_action(

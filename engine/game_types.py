@@ -311,6 +311,19 @@ class OracleExecutionContext:
     # over the index, which is why a handler needs no new code to stop being
     # positional — it already asks ``resolve_target_permanent``.
     target_permanent_id: int | list[int | None] | None = None
+    # The same, for a target that is a **card in a graveyard** — carried over
+    # from ``StackItem.target_graveyard_card`` unchanged (see there for why a
+    # graveyard needs its own identity at all).
+    #
+    # A one-target graveyard spell never needed it: the resolution re-locates
+    # the stamp into ``target_permanent_index`` before any handler runs, and
+    # ``target`` says whose pile. A **roles** announcement can mix the two
+    # zones — Goblin Welder names an artifact on a battlefield and an artifact
+    # card in a graveyard — and then the index alone cannot say which slot
+    # counts into which list, nor whose graveyard the second one is. So the
+    # stamps travel, positionally, in role order, with ``None`` in every slot
+    # whose object is a permanent.
+    target_graveyard_card: object = None
     x_value: int | None = None
     source_permanent: Permanent | None = None
     # The printed line of the activated ability being resolved, carried through

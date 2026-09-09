@@ -27,7 +27,8 @@ from . import ast
 from .errors import GrammarError
 from .paragraphs import (_parse_reassign_blockers_between_attackers,
                          _parse_cast_from_exiled_with)
-from .choices import _parse_choose_target, _parse_choose_then_gain
+from .choices import (_parse_choose_target, _parse_choose_then_gain,
+                      _parse_choose_then_swap)
 from .delay_openers import parse_trailing_delay
 from .delayed import _parse_create_delayed_trigger, wrap_in_trailing_delay
 from .references import parse_player_ref
@@ -338,6 +339,15 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     reassigned_blocks = _parse_reassign_blockers_between_attackers(stream)
     if reassigned_blocks is not None:
         return reassigned_blocks
+    # "Choose target artifact a player controls and target artifact card in
+    # that player's graveyard. … that player simultaneously sacrifices the
+    # artifact and returns the artifact card to the battlefield." (Goblin
+    # Welder.) Two sentences and one announcement, read before the single-slot
+    # "choose" reader below because that one's binder probe cannot see a
+    # sentence naming *both* chosen objects.
+    swapped = _parse_choose_then_swap(stream)
+    if swapped is not None:
+        return swapped
     # "Choose target creature." (Reincarnation, Glyph of Life) — the targeting
     # half of a two-sentence spell. Read before anything else that opens with
     # "choose", and it declines unless the sentence binding what it chose

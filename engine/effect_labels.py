@@ -247,6 +247,13 @@ ACTIVATED_LABELS: dict[str, str] = {
     # the whole zone. Same bucket for the reason the three above share one:
     # what the ability is for is that the graveyard stops holding it.
     "exile_graveyard_position": "activated_recursion",
+    # Goblin Welder. The bucket the six above share, and it is the right one
+    # for the same reason: what the ability is *for* is that a graveyard stops
+    # holding an artifact card. The sacrifice beside it is the price the card
+    # charges for that, and paying it out of the same sentence does not make
+    # this a destruction ability — a bucket keyed on the price rather than on
+    # the point is how a label stops being a description of what the card does.
+    "sacrifice_and_return_targets": "activated_recursion",
     # Urza's Saga's three, added at its promotion — the moment
     # `load_catalog()` first sees them, which is what this file's own note two
     # hundred lines down says promotion is for. All three take the same bucket

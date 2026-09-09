@@ -199,6 +199,7 @@ def _ai_step(session: Session) -> bool:
             target_player_index=activation_action.target_player_index,
             permanent_index=activation_action.permanent_index,
             target_permanent_index=activation_action.target_permanent_index,
+            target_role_refs=activation_action.target_role_refs,
         )
         _auto_resolve_ai_pending(session)
 

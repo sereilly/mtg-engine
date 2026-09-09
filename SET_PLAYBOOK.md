@@ -856,6 +856,43 @@ carry a seat beside permanent ids, (3) a relation entry for "controlled by the
 seat an earlier role chose", and (4) the client walking a role list whose first
 entry is a seat picker.
 
+**Updated at ULG wave 2: three of those four pieces now exist, built for a
+*card* rather than for a seat.** Goblin Welder is the same shape one zone over
+— "Choose target artifact a player controls **and target artifact card in that
+player's graveyard**" — two slots where the first is a permanent, the second is
+**not on a battlefield at all**, and the second's pile is decided by the first.
+What it needed and what it left:
+
+* *built* — a role the walk can resolve outside the battlefield.
+  `legality.role_object_at` is the one place a candidate becomes an object, and
+  CR 115.3's distinctness is now an identity *key* (`_role_object_key`) rather
+  than `id(perm)`, because two copies of one card in one graveyard are literally
+  one `CardDefinition`.
+* *built* — `ROLE_RELATION_TESTS["in_graveyard_of_role"]`, the first relation
+  whose two sides are not both permanents. The table's `(earlier, candidate,
+  game)` signature took it unchanged, which is the finding: the shape was
+  general and only its three call sites were not.
+* *built* — an announcement field that can name something other than a
+  permanent. `target_role_refs` (`web/schemas.TargetRoleRef`) describes **every**
+  role of one announcement, each entry naming a `permanent_id` **or** a
+  graveyard `(seat, index)`; `target_permanent_ids` is untouched and is still
+  what every all-permanent roles ability sends. Adding a *seat* to it is one
+  more optional field, not a new channel — which is the piece Keeper of the Dead
+  was missing.
+* *built* — the client walking a role list whose entries are not all board
+  clicks (`revealRoleGraveyards` opens the pile panel at whichever step of the
+  walk asks for one).
+* *not built* — a **player** role. Nothing here makes a seat an object the walk
+  can hold, and Keeper of the Dead needs a second thing besides: its two targets
+  are announced by two *instructions* of a sequence (`choose_target_player`,
+  then a destroy narrowed by `that_player`), so converting it moves a **shipped**
+  card's compiled program. That is a differential over the shipped pool and
+  wants its own round.
+
+So the entry is not closed, and it is a smaller entry: the pipeline no longer
+assumes a role is a permanent, and what is left is one more kind of object plus
+one shipped card's re-lowering.
+
 **The picker sweep's question stops one level above all of this**, and its
 docstring now says so.
 

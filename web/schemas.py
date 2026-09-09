@@ -270,6 +270,35 @@ class DividedTargetRef(BaseModel):
     amount: int | None = Field(default=None, ge=1)
 
 
+class TargetRoleRef(BaseModel):
+    """One slot of a several-**role** announcement, naming the object chosen
+    for it.
+
+    A roles ability has always sent ``target_permanent_ids`` — one stable
+    permanent id per slot, in role order. Goblin Welder is the first whose
+    slots sit in two *zones*: "Choose target artifact a player controls and
+    target artifact card in **that player's graveyard**". A card in a graveyard
+    has no ``permanent_id`` to send — the loader dedupes by ``oracle_id``, so
+    two copies of one card in one pile are literally one object — and it is
+    addressed by its pile and its slot instead.
+
+    Sent as a list describing **every** role rather than as a second list
+    interleaving with the first, because "which list does slot 1 come from?"
+    is a question a wire must not be left to answer. A client whose slots are
+    all permanents keeps sending ``target_permanent_ids`` and nothing about it
+    changes.
+    """
+
+    # The chosen permanent (see GameActionRequest.target_permanent_id).
+    permanent_id: int | None = Field(default=None, ge=1)
+    # …or the chosen card in a graveyard: whose pile, and its slot in the list
+    # the state payload serialized. The pair is resolved to a stamp as the
+    # ability goes on the stack, which is where a graveyard slot stops being
+    # safe to hold (CR 601.2c, and see engine/game_types.GraveyardTarget).
+    graveyard_seat: int | None = Field(default=None, ge=0)
+    graveyard_index: int | None = Field(default=None, ge=0)
+
+
 class SearchPickRef(BaseModel):
     # One pick of a two-zone exile search: which zone, and the card's index in
     # that zone's list as the prompt serialized it.
@@ -333,6 +362,11 @@ class GameActionRequest(BaseModel):
     permanent_id: int | None = Field(default=None, ge=1)
     target_permanent_id: int | None = Field(default=None, ge=1)
     target_permanent_ids: list[int] | None = Field(default=None)
+    # One entry per **role** of a several-role announcement, in role order, for
+    # an ability whose slots do not all sit on a battlefield (Goblin Welder).
+    # Authoritative over ``target_permanent_ids`` when present; absent for
+    # every roles ability whose slots are all permanents.
+    target_role_refs: list[TargetRoleRef] | None = Field(default=None)
     source_permanent_id: int | None = Field(default=None, ge=1)
     # Fireball and other "divided among any number of targets" spells: the list
     # of battlefield indices (on target_seat) the damage is split among. Takes

@@ -534,6 +534,30 @@ def _announced_target_slots(instruction) -> list[tuple]:
     return slots
 
 
+def _role_object_key(obj) -> tuple:
+    """*obj*'s identity for CR 115.3, whichever zone it is in.
+
+    A roles announcement chooses one object per role and the same object may
+    not answer two of them, so the walk carries a set of what is already taken.
+    That set was ``{id(perm)}``, which is exactly right for a battlefield
+    permanent and has no answer at all for a card in a graveyard: two copies of
+    one card there are literally one ``CardDefinition`` object (the loader
+    dedupes by ``oracle_id``), so ``id`` cannot tell them apart and ``is``
+    would refuse the second copy for being the first.
+
+    :class:`GraveyardTarget` is what can — it carries the pile and *which copy*
+    — so its three fields are the key. Spread rather than used whole because
+    the stamp holds a ``CardDefinition``, which has dict-valued fields and is
+    therefore unhashable; ``id`` answers for the card because the loader shares
+    one object per printing, which is the very fact that made ``id`` useless
+    for the *copies*. The tag in front keeps the two kinds from ever colliding,
+    which they could not anyway but which a reader should not have to prove.
+    """
+    if isinstance(obj, Permanent):
+        return ("permanent", id(obj))
+    return ("graveyard", obj.seat, id(obj.card), obj.ordinal)
+
+
 class LegalityMixin:
     """Backend legality queries surfaced to the web UI. Composed onto ``Game``."""
 
@@ -1125,6 +1149,69 @@ class LegalityMixin:
         return min(bounds) if bounds else None
 
     # -- Several targets of different kinds (CR 601.2c) ---------------------
+    def named_role_objects(self, target_permanent_ids, target_role_refs) -> list:
+        """The objects an activator named for a roles announcement, in role order.
+
+        **Two spellings of one announcement, and only one of them can say
+        "graveyard".** ``target_permanent_ids`` is what every roles ability
+        before Goblin Welder sends and is a permanent id per slot; a slot whose
+        object is a card in a graveyard has no id to send — two copies of one
+        card there are literally one ``CardDefinition`` — so it arrives as its
+        pile and its slot instead.
+
+        Rather than let the two lists interleave by position (which would make
+        "which list does slot 1 come from?" a question with no answer on the
+        wire), ``target_role_refs`` describes **every** role when it is present
+        at all: one entry per slot, naming a permanent id or a graveyard
+        address. The older list is what a caller sends when no slot needs the
+        wider shape, which is every roles ability the pool had before this one.
+
+        An entry that names nothing resolves to ``None``, which
+        :meth:`_role_targets_legal` already refuses — an announcement with a
+        hole in it is not one.
+        """
+        if target_role_refs:
+            named = []
+            for ref in target_role_refs:
+                ref = ref if isinstance(ref, dict) else {}
+                permanent_id = ref.get("permanent_id")
+                if isinstance(permanent_id, int):
+                    named.append(self.permanent_by_id(permanent_id))
+                    continue
+                named.append(
+                    self.graveyard_target_at(
+                        ref.get("graveyard_seat"), ref.get("graveyard_index")
+                    )
+                )
+            return named
+        return [
+            self.permanent_by_id(pid)
+            for pid in (target_permanent_ids or [])
+            if isinstance(pid, int)
+        ]
+
+    def role_object_at(self, candidate: dict):
+        """The object a role candidate names — a permanent, or a card in a
+        graveyard — or None when the slot no longer holds one.
+
+        **A role is not always a battlefield permanent**, and this is the one
+        place that stops being an assumption. "Choose target artifact a player
+        controls **and target artifact card in that player's graveyard**"
+        (Goblin Welder) walks the same roles the picker walks for Fumarole, and
+        every step of the walk used to resolve its candidate through
+        ``permanent_at`` alone — so a graveyard candidate came back ``None`` and
+        was dropped, which is a slot the activator could never fill.
+
+        The kind is the candidate's own, written by the enumerator that
+        produced it (``_enumerate_targets``), so the walk does not have to know
+        which spec kinds read which zone.
+        """
+        if candidate.get("kind") == "graveyard":
+            return self.graveyard_target_at(
+                candidate.get("seat"), candidate.get("index")
+            )
+        return self.permanent_at(candidate.get("seat"), candidate.get("index"))
+
     def role_target_options(
         self, caster_index: int, card: CardDefinition, spec: dict,
         chosen: tuple, *, for_cast: bool, source_permanent=None,
@@ -1174,14 +1261,14 @@ class LegalityMixin:
             ability_instruction=ability_instruction,
             source_permanent=source_permanent, ability_source=ability_source,
         )
-        taken = {id(perm) for perm in chosen if perm is not None}
+        taken = {_role_object_key(obj) for obj in chosen if obj is not None}
         related = self._role_relation_test(role, roles, chosen)
         options: list[dict] = []
         for candidate in candidates:
-            perm = self.permanent_at(candidate.get("seat"), candidate.get("index"))
-            if perm is None or id(perm) in taken:
+            obj = self.role_object_at(candidate)
+            if obj is None or _role_object_key(obj) in taken:
                 continue
-            if related is not None and not related(perm):
+            if related is not None and not related(obj):
                 continue
             options.append({**candidate, "role": role.get("role")})
         return options
@@ -1244,7 +1331,7 @@ class LegalityMixin:
         )
         walked: list[dict] = []
         for option in options:
-            perm = self.permanent_at(option.get("seat"), option.get("index"))
+            perm = self.role_object_at(option)
             following = self._role_target_walk(
                 caster_index, card, spec, chosen + (perm,), for_cast=for_cast,
                 source_permanent=source_permanent,
@@ -1277,10 +1364,11 @@ class LegalityMixin:
                 ability_instruction=ability_instruction,
                 ability_source=ability_source,
             )
+            wanted = _role_object_key(chosen[index])
             if not any(
-                self.permanent_at(option.get("seat"), option.get("index"))
-                is chosen[index]
+                _role_object_key(self.role_object_at(option)) == wanted
                 for option in options
+                if self.role_object_at(option) is not None
             ):
                 return False
         return True
@@ -1537,6 +1625,7 @@ class LegalityMixin:
         self, controller_index: int, source_permanent, ability, *,
         target_player_index=None, target_permanent_index=None,
         target_permanent_ids=None, target_stack_item=None,
+        target_role_refs=None,
     ) -> str | None:
         """CR 602.2b/601.2c enforced once, before any cost is paid: an ability
         that targets cannot be activated unless a legal target exists, and a
@@ -1595,11 +1684,9 @@ class LegalityMixin:
             # walk the picker was built from.
             ability_instruction = targeting_instruction(instruction)
             refused = f"no valid target for {card.name}"
-            named = [
-                self.permanent_by_id(pid)
-                for pid in (target_permanent_ids or [])
-                if isinstance(pid, int)
-            ]
+            named = self.named_role_objects(
+                target_permanent_ids, target_role_refs
+            )
             if named:
                 legal = self._role_targets_legal(
                     controller_index, card, spec, named, for_cast=False,

@@ -63,6 +63,25 @@ def accept_seat_relation(stream: TokenStream, d) -> bool:
     if stream.accept_phrase("you", "don't", "control"):
         d.controller = "not_you"
         return True
+    # "target artifact **a player controls**" (Goblin Welder). The *indefinite*
+    # seat, and the one reading here that narrows nothing: every permanent on
+    # the battlefield is controlled by somebody (CR 110.2a), so the set the
+    # phrase leaves behind is the set the noun already named.
+    #
+    # It is still recorded rather than consumed and dropped, because the phrase
+    # is the sentence's **binding site**: the words behind it point back at the
+    # seat it named ("…and target artifact card in **that player's**
+    # graveyard"). Dropping the phrase and dropping the binding are the same
+    # edit, and only the second one is wrong — the card would then let the
+    # returned card come out of anybody's graveyard.
+    #
+    # Read before "an opponent controls" only for tidiness; the two share no
+    # prefix. It is emphatically *not* "you control" — a value this key has no
+    # branch for falls through to that comparison below, which is the reading
+    # that would take the opponent's artifacts away from the picker.
+    if stream.accept_phrase("a", "player", "controls"):
+        d.controller = "any_player"
+        return True
     if stream.accept_phrase("an", "opponent", "controls"):
         d.controller = "opponent"
         return True
