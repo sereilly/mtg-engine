@@ -23,6 +23,7 @@ from ..linked_exile import LEAVES, UNTAPPED
 from ..models import Permanent, PlayerState, next_permanent_id
 from ..game_types import GraveyardTarget
 from ..oracle import compile_card_oracle
+from ..oracle_types import EXILED_BY_SEAT
 from ..phasing_locks import phase_out_forbidden
 from ..replacements import apply_entry_riders, apply_replacements
 from ..regeneration import regeneration_replaces_destruction
@@ -2140,6 +2141,20 @@ class GameHelpersMixin:
         if context is not None:
             context.results.setdefault("exiled_cards", []).extend(taken)
             context.results.setdefault("exiled_entries", []).extend(entries)
+            # …and the same cards keyed by **seat**, which is a fourth question
+            # and the one "each player … returns to their hand each card
+            # **they** exiled this way" (Memory Jar) asks. The flat list cannot
+            # answer it: read once per player it would hand every seat the whole
+            # table's hands. Seeded for this seat even when it exiled nothing,
+            # for the reason the graveyard sweep seeds its own — a seat the map
+            # never mentioned falls through to a `.get` default, and the honest
+            # default for "what did this player exile" is an empty pile rather
+            # than somebody else's. Written here rather than in the one caller
+            # that needs it, because the seat is this function's own parameter
+            # and a record kept in one of two callers is the shape this file
+            # exists to prevent.
+            by_seat = context.results.setdefault(EXILED_BY_SEAT, {})
+            by_seat.setdefault(seat, []).extend(taken)
             # …and the *number*, which is a third question and the one "put
             # that many cards from the top of your library into your hand"
             # (Scroll Rack) asks. Its own key because a bare back-reference

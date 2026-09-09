@@ -377,6 +377,24 @@ def _lower_return_to_zone(
         and filt.subtypes
     ):
         gated = dataclasses.replace(gated, subtypes=())
+    # "Return target creature card **with mana value 3 or less** from your
+    # graveyard to the battlefield." (Unearth.) The fourth narrowing the
+    # graveyard family reads, lifted out of the blanket refusal for the three
+    # above it rather than weakened inside it. It travels as
+    # ``graveyard_mana_value`` and the picker, the cast-time re-check and the
+    # handler all test it through the one predicate
+    # (``graveyard_card_matches``) — which can answer it at all because CR 202.3
+    # computes a mana value from the printed cost, so a card in a graveyard has
+    # one where it has no power and no keyword. Scoped to the reanimation, so
+    # every other zone-change handler goes on refusing a bound it cannot honour.
+    if (
+        node.from_zone is not None
+        and node.from_zone.name == "graveyard"
+        and node.to.name == "battlefield"
+        and node.attached_to is None
+        and filt.mana_value is not None
+    ):
+        gated = dataclasses.replace(gated, mana_value=None)
     # "…**attached to** <something>" on a *targeted* return. Exactly one pair of
     # zones below reads it (the Aura reanimation), and this is what keeps the
     # phrase from being dropped by any of the others: an Aura that arrived
@@ -497,6 +515,27 @@ def _lower_return_to_zone(
             payload: dict[str, object] = (
                 {"colors": tuple(filt.colors)} if filt.colors else {}
             )
+            # "…**with mana value 3 or less**" (Unearth). Emitted only when the
+            # card prints a bound, so every reanimation written before this
+            # keeps a byte-identical payload and no behaviour signature moves.
+            # On the key ``graveyard_card_matches`` reads, which is what the
+            # picker, the CR 601.2c re-check and the handler all ask — a bound
+            # only one of the three knew about is a target one offers and
+            # another declines.
+            if filt.mana_value is not None:
+                bound = filt.mana_value.value
+                if not isinstance(bound, ast.Fixed):
+                    # An X-valued bound is a number nobody knows until the cast
+                    # is announced, and the picker enumerates before that. It
+                    # refuses rather than being dropped, which would return a
+                    # card of any cost.
+                    raise LoweringError(
+                        "the reanimation reads a printed mana value, not an X",
+                        node=node,
+                    )
+                payload["graveyard_mana_value"] = {
+                    "op": filt.mana_value.op, "value": bound.value,
+                }
             # Emitted only when the card prints something other than "creature",
             # so every reanimation written before this keeps a byte-identical
             # payload and no behaviour signature moves. The handler, the picker

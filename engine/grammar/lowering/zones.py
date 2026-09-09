@@ -113,6 +113,40 @@ def _lower_put_on_library_top(
         bound.update(described)
         return (OracleInstruction("put_target_on_library_top", "", bound),)
 
+    # "Put **all enchantments** on top of their owners' libraries." (Harmonic
+    # Convergence.) The sweep twin of the tuck below, and its own kind for
+    # ``return_all_matching``'s reason one family over: nothing is chosen, so no
+    # picker is derived and the target description that would raise one is not
+    # emitted. A count on the tuck would have been a spell whose client asks for
+    # a target it never names.
+    if (
+        isinstance(node.target, ast.TargetSpec)
+        and node.target.quantifier in ("all", "each")
+        and not node.target.targeted
+    ):
+        if node.bottom_instead_colors or node.to_owner != "owner":
+            # Both riders are about **one** object — an end swap asks a colour
+            # of the card it is moving, and a fixed seat contradicts a sweep
+            # that follows each object to its own owner (CR 400.3). Refused
+            # rather than dropped: a dropped rider is a card that never offers
+            # the choice it prints.
+            raise LoweringError(
+                "the sweep tuck reads no end swap and no fixed seat", node=node
+            )
+        filt = node.target.filter
+        if filt.zone != "battlefield" or filt.is_card:
+            raise LoweringError(
+                "the sweep tuck moves permanents, not cards in a zone", node=node
+            )
+        swept = _filter_payload(filt)
+        refuse_untestable(
+            swept, refusal="the sweep tuck cannot narrow by", node=node
+        )
+        return (
+            OracleInstruction(
+                "put_all_matching_on_library_top", "", {"filter": swept}
+            ),
+        )
     if not _is_target(node.target):
         raise LoweringError("the tuck handler resolves one chosen creature", node=node)
     assert isinstance(node.target, ast.TargetSpec)

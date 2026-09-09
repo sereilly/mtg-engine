@@ -54,8 +54,14 @@ from ._events import (
 #: which is the one predicate the engine, the AI and the web picker all answer
 #: with. A field admitted here without that reader behind it would be a picker
 #: offering the whole hand while the card named less of it.
+#: ``card_types`` is the fourth, and it is the *positive* form of the first —
+#: "You choose **a creature card** from it" (Ostracize) asks the same question
+#: as "a **noncreature, nonland** card" with the answer the other way up, and
+#: ``search_matches`` answers it under ``card_type``. Admitted only because that
+#: reader was already there: a positive type narrowing the picker could not test
+#: would be Ostracize discarding a land.
 _REVEALED_HAND_FIELDS = frozenset(
-    {"excluded_types", "is_card", "excluded_basic_lands"}
+    {"excluded_types", "is_card", "excluded_basic_lands", "card_types"}
 )
 
 
@@ -230,7 +236,24 @@ def _lower_reveal_hand_and_choose(
             "the revealed-hand picker cannot narrow by: " + ", ".join(leftover),
             node=node,
         )
+    if node.filter.type_match != "any":  # pragma: no cover - no card prints it
+        # A printed type *union* is an OR everywhere in this engine, and
+        # ``search_matches`` reads ``card_type`` that way. An "all" match would
+        # be a narrower question than the predicate behind the picker asks, so
+        # it refuses rather than being widened to the union.
+        raise LoweringError(
+            "the revealed-hand picker reads a type union, not an intersection",
+            node=node,
+        )
     payload: dict[str, object] = {"fate": node.fate}
+    if node.filter.card_types:
+        # "You choose **a creature card** from it." (Ostracize.) The positive
+        # twin of ``exclude_types`` below, emitted only when the card prints it
+        # so Duress's payload stays byte-identical — and emitted at all for that
+        # key's reason: what the picker offers and what an answer is checked
+        # against are one predicate, so a type only the handler knew about is a
+        # client offering the whole hand.
+        payload["card_types"] = list(node.filter.card_types)
     if node.filter.excluded_types:
         payload["exclude_types"] = list(node.filter.excluded_types)
     if node.filter.excluded_basic_lands:

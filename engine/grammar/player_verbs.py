@@ -60,7 +60,7 @@ from .effects import (
     parse_keep_then_sacrifice_rest,
     _parse_play_with_hand_revealed,
     _parse_player_adds_mana,
-    _parse_player_exiles_graveyard,
+    _parse_player_exiles_pile,
     _parse_player_exiles_target_spell,
     _parse_player_puts_hand_cards_on_library,
     _parse_player_puts_whole_hand_on_library,
@@ -189,7 +189,7 @@ def parse_player_subject_verb(
         # consuming, so a printed exile this cannot read still fails as an
         # unrecognized verb rather than inside a production that never had
         # its sentence.
-        from_graveyard = _parse_player_exiles_graveyard(stream, source_spec)
+        from_graveyard = _parse_player_exiles_pile(stream, source_spec)
         if from_graveyard is not None:
             return from_graveyard
         # "**Target spell's controller** exiles it with X delay counters on
@@ -254,6 +254,15 @@ def parse_player_subject_verb(
     # control of (CR 110.2), and dropping it would give one player the
     # table's graveyards.
     if token.text in ("returns", "return") and isinstance(source_spec, ast.PlayerRef):
+        # "…and **returns to their hand each card they exiled this way**."
+        # (Memory Jar.) The verb's object is a *record* rather than a noun
+        # phrase, which is why the shared return production cannot read it —
+        # "each card they exiled this way" is not a characteristic of a card.
+        # Tried first and non-consuming on refusal, so every ordinary "that
+        # player returns …" keeps its own reading and its own refusal site.
+        exiled_pile = _parse_put_exiled_this_way(stream, source_spec)
+        if exiled_pile is not None:
+            return exiled_pile
         return _parse_return(stream, source_spec)
     # "Target player **chooses a card name**, then reveals the top card of
     # their library…" (Petra Sphinx) — a paragraph, because the two

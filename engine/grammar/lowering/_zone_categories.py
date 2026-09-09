@@ -192,6 +192,11 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     "each_player_discards_a_card": "zones",
     "discard_hand": "zones",
     "put_target_on_library_top": "zones",
+    # The sweep twin of the row above (Harmonic Convergence). Same zone change
+    # and the same category — what differs is that a printed noun phrase names
+    # the set instead of a player choosing one object, which is the payload's
+    # business, so GRAMMAR_CATEGORIES is unchanged.
+    "put_all_matching_on_library_top": "zones",
     # The self twin of the row above (Thalakos Mistfolk, Avenging Angel). Same
     # zone change, and the only thing that differs is that the object is named
     # rather than chosen.

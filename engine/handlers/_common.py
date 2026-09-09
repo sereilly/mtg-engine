@@ -1384,6 +1384,18 @@ def graveyard_card_matches(spec: dict, card) -> bool:
         held = printed_supertypes(card.type_line)
         if not all(word in held for word in wanted_supertypes):
             return False
+    # "target creature card **with mana value 3 or less**" (Unearth). Mana value
+    # is one of the few characteristics a card has in *every* zone — CR 202.3
+    # computes it from the printed mana cost, so unlike power or a keyword it
+    # needs no battlefield object to be asked of, which is what makes it
+    # answerable here at all. Same bound reader ``card_matches_filter`` uses one
+    # zone over, so "3 or less" means one thing wherever it is printed. Asked
+    # before the any-card exit for the supertype's reason: it narrows a phrase
+    # that already names a type rather than replacing one.
+    if not _comparison_holds(
+        spec.get("graveyard_mana_value"), int(getattr(card, "cmc", 0) or 0)
+    ):
+        return False
     if card_types or spec.get("any_card"):
         return True
     card_type = spec.get("card_type")
