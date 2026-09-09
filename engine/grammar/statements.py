@@ -6,6 +6,18 @@ subject. The `<subject> <verb> …` opening moved to `subject_verb` at the
 thousand-line guard, and `_parse_condition` to `conditions` before it; both are
 handed back what they need from here rather than importing upward.
 
+Two more left at Urza's Legacy's Phase 0, and only one of them needed a new
+file. **The sentences opening on "if"** — nine spellings that only wear the
+word and the intervening-if that means it — are `if_openings`, cut where the
+cascade had already drawn the line and taking the generic conditional with
+them, so this module reads no "if" opener at all. **The trailing delay's node
+assembly** went back to `delayed`, which was never a split so much as a
+correction: that module defines `resolve_that_turn`, `fold_flip_stakes` and
+`delay_binds_an_object`, called them out to nothing but this file, and called
+its own `_parse_create_delayed_trigger` "the one place the rows become a node"
+while a second place sat here. Ask where a block already belongs before asking
+what to name a file for it.
+
 The narrow waist of the parser — below is a fragment, above is a *line*.
 """
 
@@ -17,45 +29,37 @@ from .paragraphs import (_parse_reassign_blockers_between_attackers,
                          _parse_cast_from_exiled_with)
 from .choices import _parse_choose_target, _parse_choose_then_gain
 from .delay_openers import parse_trailing_delay
-from .delayed import (_parse_create_delayed_trigger, delay_binds_an_object,
-                      fold_flip_stakes, resolve_that_turn)
+from .delayed import _parse_create_delayed_trigger, wrap_in_trailing_delay
 from .references import parse_player_ref
 from .stream import TokenStream
 from .conditions import _parse_condition
 from .where_x import accept_cast_time_marker, parse_where_x_definition
 from .subject_verb import parse_subject_verb
 from .leading_iteration import parse_leading_iteration
+from .if_openings import parse_if_opening
 from .rebinding import (rebind_alternative_pronoun_to_choice_target,
-                        rebind_counter_pronoun_to_bound_target,
-                        rebind_player_pronoun_to_condition_target,
-                        rebind_pronoun_to_condition_target)
+                        rebind_counter_pronoun_to_bound_target)
 from .phrases import (_accept_conjoined_life_cost, _accept_life_only_offer,
                       _parse_duration, _parse_mana_payment)
 from .effects import (_parse_damage_becomes_counter_removal,
                       _parse_destroy_chosen_that_didnt_attack,
                       _parse_untap_chosen_by_paying,
                       _parse_cast_permission,
-                      _parse_optional_damage_redirect, _parse_attacking_doesnt_tap,
-                      _parse_bound_targeting_prevention, _parse_damage_dealt_riders,
+                      _parse_attacking_doesnt_tap,
                       _parse_reveal_hand_and_choose,
                       _parse_return_instead_of_untapping,
-                      _parse_reveal_hand_and_choose,
-                      _parse_count_objects, _parse_produces_instead,
+                      _parse_count_objects,
                       _parse_tapped_lands_produce_chosen,
-                      _parse_tapper_produces_instead, _parse_spend_mana_as_though,
-                      _parse_choose_blocks_for_defenders, _parse_sacrifice,
+                      _parse_spend_mana_as_though,
+                      _parse_choose_blocks_for_defenders,
                       _parse_sacrifice_expansion_permanents,
                       parse_create_token_with_stated_pt,
                       _parse_delayed_self_action, _parse_shuffle_graveyard_into_library,
                       _parse_shuffle_hand_into_library, _parse_shuffle_library,
-                      parse_graveyard_top_to_library,
                       _parse_bound_permanent_activation_ban,
                       _parse_targeting_ban)
 from .sacrifices import _parse_counted_sacrifice
-from .effects.exile import (_parse_bin_unplayed_exiled_card,
-                            parse_exile_graveyard_arrivals_this_turn)
 from .effects.game import parse_extra_land_plays, parse_extra_phases
-from .effects.stack import _parse_conditional_retarget
 
 
 from .sentence_clauses import (
@@ -156,119 +160,21 @@ def parse_statement(stream: TokenStream, *, top_level: bool = True) -> ast.State
             stream.reset(tail_mark)
     if delay is None:
         return statement
-    event, once, duration, binds, watches = delay
-    if definition is not None:
-        # "…, where X is the number of lands you control **at that time**."
-        # The words decide which of two different cards this is. Inside the
-        # delay the count is taken when the ability *resolves*, which is what
-        # "at that time" says; a card meaning the count as it stood when the
-        # ability was created would need the number frozen at arming time, and
-        # this engine has nowhere to freeze it. So the phrase is required
-        # rather than tolerated, and its absence refuses the line instead of
-        # counting the wrong board.
-        if not stream.accept_phrase("at", "that", "time"):
-            raise stream.error(
-                "a delayed sentence's X must say when it is counted"
-            )
-    statement = resolve_that_turn(statement) or statement
-    # "…you gain 2 life, **and** you return this card from your graveyard to
-    # your hand **at the beginning of the next end step**." (Mangara's
-    # Blessing.) A trailing delay attaches to the clause it follows, not to
-    # the whole sentence: Magic prints a whole-sentence delay as an *opener*
-    # ("At the beginning of …, do X"), which is what `_DELAYED_OPENERS`
-    # reads. So the steps in front of the last one stay where they are, and
-    # the Blessing gains its 2 life as the trigger resolves rather than an
-    # end step later — which on a card printed to be discarded is the
-    # difference between surviving the turn and not.
-    #
-    # Only a sequence built **inside one sentence** is split here, which is
-    # the only kind that reaches this point: sentences separated by a full
-    # stop are joined one layer up, by `_statements_from_sentences`, after
-    # each has already been through this function.
-    #
-    # Split **before** `fold_flip_stakes` below, and that order is the whole
-    # of its safety: that fold *creates* a sequence by pulling the sentence
-    # behind the delay into it (Goblin Kites), and a split run afterwards
-    # would leave the coin flip happening now and delay only the sacrifice.
-    leading: tuple = ()
-    if isinstance(statement, ast.Sequence) and len(statement.steps) > 1:
-        leading, statement = statement.steps[:-1], statement.steps[-1]
-    # "Flip a coin at the beginning of the next end step. **If you lose the
-    # flip, sacrifice that creature.**" (Goblin Kites.) The sentence behind the
-    # delay reads a value only the delayed effect produces, so it belongs inside
-    # the ability rather than beside it — folded before the node is built, which
-    # is what lets `delay_binds_an_object` below see the "that creature" it now
-    # contains.
-    statement = fold_flip_stakes(stream, statement, parse_statement)
-
-    # "…at the beginning of their next upkeep **unless they pay {2} before that
-    # step**." (Sabertooth Cobra.) The toll printed behind the delay rather than
-    # behind the body, so the reader around the body has already stopped by the
-    # time the word arrives. Folded *inside* the delayed ability, because that
-    # is when the offer is made — wrapped around the delay it would ask for the
-    # payment now and delay only the penalty.
-    tolled = accept_delayed_toll(_parse_statement_body, stream, statement)
-    if tolled is not None:
-        statement = tolled
-
-    def _delay(effect: ast.Statement) -> ast.CreateDelayedTrigger:
-        return ast.CreateDelayedTrigger(
-            event=event, effect=effect,
-            once=once, duration=duration,
-            # A permission, not the answer — see ``delay_binds_an_object``.
-            binds_target=delay_binds_an_object(binds, effect),
-            subject=None, agent=None,
-            watches=watches,
-        )
-
-    # "**For each** +1/+1 counter you put on a creature this way, remove a +1/+1
-    # counter from that creature **at the beginning of the next cleanup step**."
-    # (Bounty of the Hunt.) The delay is printed after the loop but modifies the
-    # verb *inside* it, so the ability is created once per member (CR 603.7) and
-    # each one is about that member — which is also the only reading that can
-    # work here: left wrapped around the loop, the loop would run a turn later,
-    # by which time the record it iterates is long out of scope and "that
-    # creature" names nobody.
-    if isinstance(statement, ast.ForEach):
-        delayed = dataclasses.replace(statement, effect=_delay(statement.effect))
-    else:
-        delayed = _delay(statement)
-    joined = _accept_conjunct_after_delay(stream, delayed)
-    # The steps the delay does not govern, back in front of it and in the
-    # order they were printed.
-    return ast.Sequence((*leading, joined)) if leading else joined
-
-
-def _accept_conjunct_after_delay(
-    stream: TokenStream, delayed: ast.CreateDelayedTrigger
-) -> ast.Statement:
-    """``… <delay> and <effect>.`` — a second effect the delay does **not**
-    govern.
-
-    "When this creature dies, return it to the battlefield under its owner's
-    control **at the beginning of the next end step** and you skip your next
-    draw step." (Ivory Gargoyle.) The delay is a postfix on the first conjunct
-    and the second belongs to the trigger itself: the skip happens as the death
-    trigger resolves, not at the end step.
-
-    Read here, after the node is built, because that is the only place the
-    scope is unambiguous — the body parser has already stopped, so an "and" it
-    could see would have been swallowed into the delayed half. Before this the
-    word was simply unconsumed text and took the whole line down.
-
-    Returns *delayed* unchanged when no conjunct follows, so every line that
-    parsed before this existed parses identically.
-    """
-    mark = stream.mark()
-    if not stream.accept_word("and"):
-        stream.reset(mark)
-        return delayed
-    try:
-        second = parse_statement(stream, top_level=False)
-    except GrammarError:
-        stream.reset(mark)
-        return delayed
-    return ast.Conjunction((delayed, second))
+    # The delay was printed *behind* its effect. Both word orders build the same
+    # node out of the same rows, so the construction lives beside the leading
+    # spelling's in `delayed` — where the three walks over the wrapped sentence
+    # were already defined and called from nowhere but here. It crossed out of
+    # this module at Urza's Legacy's Phase 0 (see that file's docstring); the
+    # callables it needs are handed down, because this is the layer above it.
+    return wrap_in_trailing_delay(
+        stream,
+        statement,
+        delay,
+        definition,
+        parse_statement=parse_statement,
+        parse_body=_parse_statement_body,
+        accept_delayed_toll=accept_delayed_toll,
+    )
 
 
 def _parse_statement_body(stream: TokenStream) -> ast.Statement:
@@ -601,123 +507,16 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
         if no_tap is not None:
             return no_tap
 
-    # "If target Plains is tapped for mana, it produces colorless mana instead
-    # of white mana." (Quarum Trench Gnomes.) The printed shape opens like an
-    # ordinary conditional, but its "condition" is not one: nothing is tested
-    # when the ability resolves, and the arm is a standing change to what the
-    # land will produce later. Read before the conditional below, which would
-    # take the clause as an intervening-if over a sentence it has no production
-    # for — and refuses without consuming, so every other "if" keeps its
-    # reading.
-    if stream.at_word("if"):
-        # "If you haven't played it, put it into its owner's graveyard."
-        # (Grinning Totem, inside its delay.) Read here rather than as an
-        # ordinary conditional because the condition is what binds the pronoun
-        # in its arm: "put it into its owner's graveyard" on its own is All
-        # Hallow's Eve's sentence about the ability's own source, and nothing
-        # else in the words tells the two referents apart. Refuses without
-        # consuming, so every other "If …" keeps its reading.
-        binned = _parse_bin_unplayed_exiled_card(stream)
-        if binned is not None:
-            return binned
-        # "If target spell has only one target and that target is a creature,
-        # change that spell's target to another creature." (Meddle.) Read here
-        # for the reason the two below it are: what looks like a condition is
-        # not one — nothing about the *board* is tested, and both halves are
-        # questions about the announced target of another object, which the
-        # picker has to ask before the spell is cast at all. Refuses without
-        # consuming, so every other "If …" keeps its reading.
-        retarget = _parse_conditional_retarget(stream)
-        if retarget is not None:
-            return retarget
-        # "If the top card of target player's graveyard is a creature card, put
-        # that card on top of that player's library." (Guiding Spirit.) Read
-        # here for the two above's reason: the printed "if" is part of the
-        # effect rather than a condition over it — both halves name the top card
-        # of one graveyard, and split into a condition and an arm neither half
-        # can say which card it means. Refuses without consuming, so every other
-        # "If …" keeps its reading.
-        graveyard_top = parse_graveyard_top_to_library(stream)
-        if graveyard_top is not None:
-            return graveyard_top
-        produces = _parse_produces_instead(stream)
-        if produces is not None:
-            return produces
-        # "…if **you tap** a land you control for mana, it produces {U} instead
-        # of any other type." (Deep Water.) "…if **a player taps** a Mountain
-        # for mana, that Mountain produces colorless mana instead of any other
-        # type." (Chaos Moon.) The active-voice spellings of the same swap,
-        # beside it and refusing the same way.
-        produces = _parse_tapper_produces_instead(stream)
-        if produces is not None:
-            return produces
-
-    # "If a card would be put into your graveyard from anywhere this turn,
-    # exile that card instead." (Yawgmoth's Will.) A CR 614 replacement a
-    # *spell* creates, which is what makes it a production: the unbounded
-    # spelling is a permanent's static ability and the registry claims that one
-    # off the card's text, where a sorcery is on no battlefield when the
-    # replacement is meant to apply. Read here beside the other
-    # replacement-shaped "If …" clauses and refusing without consuming, so the
-    # registry's line keeps its claim.
-    graveyard_exile = parse_exile_graveyard_arrivals_this_turn(stream)
-    if graveyard_exile is not None:
-        return graveyard_exile
-
-    # "If a spell or ability that targets that creature would cause a source to
-    # deal damage to that creature this turn, prevent that damage."
-    # (Silhouette.) A *replacement* condition — what would happen, not what is
-    # true — so the generic conditional below cannot read it; tried first and
-    # refusing without consuming, so every other "If …" is untouched.
-    bound_shield = _parse_bound_targeting_prevention(stream)
-    if bound_shield is not None:
-        return bound_shield
-
-    # "If the creature deals damage to a creature this turn, the creature dealt
-    # damage can't be regenerated this turn." (Runesword.) The other side of
-    # the same verb, and not a conditional either: the sentence grants a
-    # standing property to the creature the ability targeted. Read here, beside
-    # the shield above and before the generic conditional, and refusing without
-    # consuming.
-    dealt_riders = _parse_damage_dealt_riders(stream)
-    if dealt_riders is not None:
-        return dealt_riders
-
-    # "If damage would be dealt to any creature, you may have that damage dealt
-    # to you instead." (Blood of the Martyr.) A replacement condition too, and
-    # here for the same reason as the shield above: the generic conditional
-    # below tests what is *true* when the sentence resolves, and this one is
-    # about what *would happen* later in the turn. Refuses without consuming.
-    optional_redirect = _parse_optional_damage_redirect(stream)
-    if optional_redirect is not None:
-        return optional_redirect
-
-    # "if <condition>, <statement>"
-    if stream.at_word("if"):
-        mark = stream.mark()
-        stream.advance()
-        try:
-            condition = _parse_condition(stream)
-            stream.accept_punct(",")
-            then = parse_statement(stream, top_level=False)
-            # "If **target creature** has toughness 5 or greater, **it** gets
-            # +4/-4…" (Blood Lust). The condition announced the spell's target
-            # (CR 601.2c), so the pronoun in the arm names that choice — without
-            # this the arm reads "it" as the spell itself and lowers to a pump
-            # of a card on the stack, which is a supported card that does
-            # nothing.
-            # "…is 5 or less, exchange life totals with **that player**"
-            # (Psychic Transfer). The same substitution for the *player*
-            # pronoun, run after the object one: a condition that announced a
-            # targeted seat has chosen it, and "that player" names that choice.
-            return ast.Conditional(
-                condition,
-                rebind_player_pronoun_to_condition_target(
-                    condition, rebind_pronoun_to_condition_target(condition, then)
-                ),
-            )
-        except GrammarError:
-            stream.reset(mark)
+    # Every sentence whose printed first word is "if" — nine spellings that only
+    # wear the word and the one intervening-if that means it — read in
+    # `if_openings`, which crossed out of this module at Urza's Legacy's Phase 0
+    # (see that file's docstring). The generic conditional went with them
+    # because it is the fall-through the other nine exist to get in front of,
+    # and an ordering split across two files is an ordering neither can state.
+    # It declines without consuming, so everything below keeps its reading.
+    if_opening = parse_if_opening(stream, parse_statement=parse_statement)
+    if if_opening is not None:
+        return if_opening
 
     # "**Unless you sacrifice an Island**, sacrifice this creature and it deals
     # 6 damage to you." (Elder Spawn.) The same offer-with-a-penalty
