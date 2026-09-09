@@ -64,7 +64,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
 from .damage_source_colors import damage_source_colors
-from .effect_ordering import Candidate
+from .effect_ordering import Candidate, affected_seat
 from .models import PlayerState
 from .named_counters import add_counters, counters_on, remove_counters
 from .next_damage import DAMAGE_PREVENTED_NEXT, armed, spend as spend_next_damage
@@ -78,7 +78,18 @@ from .shields import (END_OF_TURN as SHIELD_END_OF_TURN, PREVENT_ALL_BUT,
                       PREVENT_WHOLE, PREVENT_AND_EXILE,
                       PREVENT_TEAM, Shield, drop_spent, shields_on)
 
-# Order bands. Blanket combat shields run first: they are flags rather than
+# Order bands. Protection runs first of all: it is the widest free shield on the
+# list — it takes the whole instance, it is never used up, and a recipient that
+# has it has it against every point the source could ever deal — so letting it
+# go first is the blanket band's own argument at its strongest. A consumable
+# spent ahead of it would be spent on damage that was never going to land.
+# Zero rather than a free slot in the middle: the damage replacements
+# (``engine/replacements.py``) share this one order space and already occupy
+# 1-8, and protection has to be ahead of *those* too — a redirect chosen first
+# (Jade Monolith, order 1) would move the event onto a player who is not
+# protected and land damage the rule prevented.
+PROTECTION = 0  # CR 702.16e
+# Blanket combat shields run next: they are flags rather than
 # charges, so applying one costs the recipient nothing, and letting it go first
 # keeps a consumable shield from being spent on damage that was never going to
 # be dealt. Caps run before whole-event shields so a capped event can still be
@@ -922,6 +933,75 @@ def _applies_combat_to_and_by(game, event: dict) -> bool:
 # remaining-uses bookkeeping for a Shield to carry. The directional one also has
 # to be readable off the damage's *source* ("dealt to and dealt by"), which a
 # recipient-keyed collection cannot express.
+
+def _applies_protection(game, event: dict) -> bool:
+    """CR 702.16e: is the recipient protected from a quality this source has?
+
+    **The one place the damage half of protection is asked**, and it took the
+    engine until now to have one. It used to be four early returns inside the
+    combat damage step and a fifth inside the player-damage path, each of which
+    skipped the damage event entirely rather than preventing it — so a Black
+    Knight took its full 3 from a Pestilence, an Earthquake and a Ankh of
+    Mishra, and had done for the life of this engine. ``deal_damage`` is the
+    seam every damage path goes through (CR 120.4), and this is the rule read
+    there instead.
+
+    Prevention rather than a skip, because that is the rule's own word: "Any
+    damage that would be dealt … **is prevented**". Two consequences fall out
+    of taking it literally and both are correct. Damage that *can't* be
+    prevented (Whippoorwill's marker, Lava Burst's rider) beats protection,
+    because ``damage_candidates`` drops every ``prevents_or_redirects``
+    contender and every entry in this file is one. And protection joins
+    CR 616.1's contention set, so a recipient holding a second applicable
+    shield is asked which applies first — the answer cannot change the damage,
+    since protection takes the whole instance either way, but which shield is
+    *spent* is the affected player's choice and the rules give it to them.
+
+    Both kinds of recipient, because CR 702.16e says "a permanent **or
+    player**". A permanent answers through ``_protection_qualities``; a player
+    can only have this pool's one printing of player protection (Runed Halo,
+    CR 702.16i, a card *name* rather than a quality), which
+    ``engine/named_protection.py`` derives. Two derivations because the two
+    bearers genuinely have nothing in common — one reads a permanent's layers,
+    the other scans a seat's board for a chosen name — but one place they are
+    *asked*, which is what was missing.
+    """
+    source = event.get("source")
+    if source is None:
+        return False
+    recipient = event["recipient"]
+    if isinstance(recipient, PlayerState):
+        from .named_protection import protected_from
+
+        seat = affected_seat(game, recipient)
+        return seat is not None and protected_from(game, seat, source)
+    if not hasattr(recipient, "metadata"):
+        return False
+    return game._is_protected_from(recipient, source, as_damage_source=True)
+
+
+@prevention_effect(PROTECTION, applies=_applies_protection)
+def _protection_prevents_damage(game, event: dict) -> PreventionOutcome | None:
+    """Protection: "Any damage that would be dealt by sources that have the
+    stated quality to a permanent or player with protection is prevented."
+    (CR 702.16e.)
+
+    The whole instance, and nothing is consumed — protection is a static
+    ability, so the next point from the same source is prevented too.
+    """
+    game.log.append(
+        f"{recipient_label(event['recipient'])} has protection from "
+        f"{_source_label(event.get('source'))}"
+    )
+    return PreventionOutcome(prevented=event["amount"])
+
+
+def _source_label(source) -> str:
+    """A damage source's name for the log, whichever of CR 109.5's two shapes it
+    is — ``recipient_label``'s twin at the other end of the event."""
+    card = getattr(source, "effective_card", None) or getattr(source, "card", source)
+    return getattr(card, "name", None) or "that source"
+
 
 @prevention_effect(COMBAT_BLANKET, applies=_applies_all_combat)
 def _prevent_all_combat_damage(game, event: dict) -> PreventionOutcome | None:

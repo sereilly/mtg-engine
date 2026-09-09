@@ -381,3 +381,56 @@ def test_w1g5_memory_jar_still_deals_seven_to_a_seat_that_held_nothing(set_pool)
     # Nothing came back for the seat that exiled nothing; its hand is empty.
     assert game.players[1].hand == []
     assert [c.name for c in game.players[0].hand] == ["Black Lotus"]
+
+
+# --- W2G4: Crawlspace against the seat that has to attack under it ---
+#
+# The card's own rule is covered by W1G4's block above: three attackers at the
+# Crawlspace's seat is refused, two is not, and the cap is per defender rather
+# than over the declaration. What was missing is the other side of the same
+# sentence — a seat that has to *build* a declaration under it.
+#
+# `engine.legality.attack_declaration_refusal` is the predicate the AI prunes
+# against, and it did not carry either attack cap: they were checked inline in
+# `declare_attackers` and nowhere else. So an AI facing a Crawlspace proposed
+# three attackers, the declaration refused the set *whole*, and
+# `web/combat_prompts._ai_declare_attackers` fell through its superset fallback
+# — three attackers again — to `[]`. The seat attacked with nobody, this combat
+# and every later one, and nothing anywhere said so: no rule was broken and
+# nothing was spent.
+#
+# The pool-wide census lives in `tests/ai/test_ai_declaration_legality.py`; this
+# is the ULG card that occasioned it.
+from engine.ai_policy import choose_attackers as _w2g4_choose_attackers
+
+
+def _w2g4_duel_under_crawlspace(set_pool):
+    """Seat 0 has three untapped attackers; seat 1 has a Crawlspace. Stops at
+    declare_attackers, with summoning sickness cleared after the turn starts."""
+    attackers = [Permanent(card=_g4_body(f"Attacker {i}")) for i in range(3)]
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=attackers),
+        PlayerState(name="P2", battlefield=[
+            Permanent(card=set_pool("ULG")["Crawlspace"])
+        ]),
+    ])
+    game.start_turn(0)
+    for permanent in attackers:
+        permanent.metadata["summoning_sickness_turn"] = -99
+    game._close_current_priority_step()
+    game.advance_combat_phase()   # beginning_of_combat
+    game.advance_combat_phase()   # declare_attackers
+    return game
+
+
+def test_an_ai_seat_attacks_under_crawlspace_rather_than_not_at_all(set_pool):
+    """The AI proposes a set the declaration accepts, and it is two creatures —
+    the cap — rather than zero."""
+    game = _w2g4_duel_under_crawlspace(set_pool)
+
+    proposed = _w2g4_choose_attackers(game, 0)
+    ok, msg = game.declare_attackers(0, proposed, defending_player_index=1)
+
+    assert ok, msg
+    assert len(proposed) == 2, proposed
+    assert len(game.combat_attackers) == 2

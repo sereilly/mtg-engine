@@ -1976,3 +1976,162 @@ def test_609_4_a_shroud_exception_applies_only_to_the_seat_it_names():
         "CR 609.4: the permission is not a removal — the creature still has "
         "shroud for everything that asks"
     )
+
+
+# --- W2G4: CR 702.16e, protection's damage half at the one damage seam ------
+#
+# `engine/keywords._is_protected_from` was called from the combat damage step
+# and the declare-blockers step and from nowhere else, so `deal_damage` — the
+# seam CR 120.4 says every damage event goes through — never asked it. A shipped
+# Black Knight took its full point from a shipped Pestilence for the life of
+# this engine, and the same for every one of the pool's untargeted burn spells,
+# sweepers and damage-dealing artifacts.
+#
+# The fix is a `@prevention_effect` in `engine/prevention.py`, because CR 702.16e
+# says the damage "is prevented" rather than "is not dealt". These tests are the
+# rule's four consequences: it works off the combat path, it works for a spell
+# source as well as a permanent one, unpreventable damage beats it, and the
+# player half (CR 702.16b/e says "permanent **or player**") still holds.
+
+from engine.damage_events import DAMAGE_LOCK  # noqa: E402
+from tests.helpers import _damage_dealt, resolve_stack  # noqa: E402
+
+
+def _w2g4_board(*, mine=(), theirs=()):
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=list(mine)),
+        PlayerState(name="P2", battlefield=list(theirs)),
+    ])
+    game.enforce_mana_costs = False
+    return game, game.players[0], game.players[1]
+
+
+@pytest.mark.cr("702.16e")
+def test_702_16e_protection_prevents_noncombat_damage_from_a_permanent(set_pool):
+    """Pestilence ({B}: "deals 1 damage to each creature and each player") is a
+    black source, and White Knight has protection from black.
+
+    Driven through the real activated ability rather than through
+    ``deal_damage``: this is the shipped interaction, and it has been wrong
+    since the engine had both cards.
+    """
+    lea = set_pool("LEA")
+    pestilence = Permanent(card=lea["Pestilence"])
+    knight = Permanent(card=lea["White Knight"])       # protection from black
+    grizzly = Permanent(card=lea["Grizzly Bears"])     # the control: no protection
+    game, p1, p2 = _w2g4_board(mine=[pestilence], theirs=[knight, grizzly])
+
+    assert game.activate_permanent_ability(0, "Pestilence").supported
+    resolve_stack(game)
+
+    assert knight.damage_marked == 0, "CR 702.16e: black source, protection from black"
+    assert grizzly.damage_marked == 1, "the same event still damages everything else"
+
+
+@pytest.mark.cr("702.16e")
+def test_702_16e_protection_prevents_damage_from_a_spell_source(set_pool):
+    """Earthquake is a *spell*, so its damage source is the printed
+    ``CardDefinition`` (CR 109.5) and not a permanent.
+
+    The four combat call sites could only ever hand over a creature, so the
+    quality reader had a permanent-shaped signature and ``has_type`` would have
+    raised on a card. A spell is a damage source exactly as a permanent is.
+    """
+    lea = set_pool("LEA")
+    mir = set_pool("MIR")
+    spirit = Permanent(card=mir["Subterranean Spirit"])   # protection from red
+    grizzly = Permanent(card=lea["Grizzly Bears"])
+    game, p1, p2 = _w2g4_board(mine=[], theirs=[spirit, grizzly])
+
+    quake = lea["Earthquake"]
+    assert _damage_dealt(game, spirit, 2, source=quake) == 0
+    assert _damage_dealt(game, grizzly, 2, source=quake) == 2
+
+
+@pytest.mark.cr("702.16e", "615.6")
+def test_702_16e_damage_that_cant_be_prevented_beats_protection(set_pool):
+    """CR 702.16e's verb is "is prevented", so Whippoorwill's "damage … can't be
+    prevented or dealt instead to another permanent or player" gets through.
+
+    That is a behaviour change and the reason to state the rule in the rule's
+    own words: the five early returns this replaced skipped the damage event
+    outright, which no "can't be prevented" clause could ever have reached.
+    """
+    lea = set_pool("LEA")
+    knight = Permanent(card=lea["White Knight"])
+    pestilence = Permanent(card=lea["Pestilence"])
+    game, _p1, _p2 = _w2g4_board(mine=[pestilence], theirs=[knight])
+
+    assert _damage_dealt(game, knight, 2, source=pestilence) == 0
+    knight.metadata[DAMAGE_LOCK] = True
+    assert _damage_dealt(game, knight, 2, source=pestilence) == 2
+
+
+@pytest.mark.cr("702.16e")
+def test_702_16e_a_players_protection_still_prevents_the_damage(set_pool):
+    """The player half (Runed Halo, CR 702.16i) used to be a sixth early return
+    inside ``_deal_damage_to_player``, under a comment claiming "protection is
+    not prevention". It is the same interceptor now; it must still work."""
+    m21 = set_pool("M21")
+    lea = set_pool("LEA")
+    halo = Permanent(card=m21["Runed Halo"])
+    halo.metadata["chosen_card_name"] = "Pestilence"
+    pestilence = Permanent(card=lea["Pestilence"])
+    game, p1, p2 = _w2g4_board(mine=[pestilence], theirs=[halo])
+
+    assert _damage_dealt(game, p2, 3, source=pestilence) == 0
+    assert _damage_dealt(game, p1, 3, source=pestilence) == 3
+
+
+@pytest.mark.cr("702.16e", "120.4")
+def test_702_16e_a_prevented_event_reports_zero_dealt_and_zero_lost(set_pool):
+    """CR 120.4's two numbers, on an event protection took to nothing.
+
+    ``deal_damage`` returns both because Ali from Cairo caps the life lost
+    without capping the damage dealt, and lifelink reads the former. A shield
+    that emptied the event has to answer 0 to *both*, or a lifelinking Pestilence
+    would gain life for damage CR 615.6 says was never dealt.
+    """
+    from engine.damage_events import deal_damage
+
+    lea = set_pool("LEA")
+    knight = Permanent(card=lea["White Knight"])
+    pestilence = Permanent(card=lea["Pestilence"])
+    game, _p1, _p2 = _w2g4_board(mine=[pestilence], theirs=[knight])
+
+    outcome = deal_damage(game, {
+        "recipient": knight, "amount": 4, "source": pestilence, "combat": False,
+    })
+    assert (outcome.dealt, outcome.result) == (0, 0)
+    assert outcome.consumed is False, (
+        "CR 615 prevention empties the event; it does not replace it"
+    )
+    assert knight.damage_marked == 0
+
+
+@pytest.mark.cr("616.1e")
+def test_616_1e_protection_joins_the_contention_set_and_is_the_default(set_pool):
+    """Protection is a CR 615 prevention effect, so a recipient holding a second
+    applicable shield has a CR 616.1e choice to make.
+
+    Measured rather than assumed: the trace names both contenders, and the
+    default a non-interactive seat takes is protection — order 0, ahead of every
+    consumable, so no shield is spent on damage that was never going to land.
+    """
+    from engine.damage_events import damage_candidates
+    from engine.effect_ordering import apply_in_order
+    from engine.shields import PREVENT_NEXT_N, Shield, add_shield, shields_on
+
+    lea = set_pool("LEA")
+    knight = Permanent(card=lea["White Knight"])
+    pestilence = Permanent(card=lea["Pestilence"])
+    game, _p1, _p2 = _w2g4_board(mine=[pestilence], theirs=[knight])
+    add_shield(knight, Shield(kind=PREVENT_NEXT_N, amount=4, source_name="a pool"))
+
+    event = {"recipient": knight, "amount": 2, "source": pestilence, "combat": False}
+    trace = apply_in_order(game, event, damage_candidates(knight, event))
+
+    assert trace.contended[0] == ("_protection_prevents_damage", "_prevention_pool")
+    assert trace.applied == ["_protection_prevents_damage"]
+    # The pool was not touched, which is the point of protection running first.
+    assert sum(shield.amount for shield in shields_on(knight)) == 4

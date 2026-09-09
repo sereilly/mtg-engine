@@ -1401,20 +1401,16 @@ class EffectsMixin:
         than this call: the combat damage step does, because it applies the life
         loss and tallies lifelink from the same outcome.
         """
-        # Protection from the source's *name* (Runed Halo, CR 702.16i): the
-        # player is dealt none of it. Before the face-up flip and before any
-        # shield, because protection is not prevention — nothing is consumed and
-        # no replacement contends; the damage simply is not dealt.
-        from ..named_protection import protected_from
-
-        if amount > 0 and protected_from(self, self.players.index(target), source):
-            self.log.append(
-                f"{target.name} has protection from "
-                f"{getattr(getattr(source, 'card', source), 'name', 'that source')}"
-            )
-            if then is not None:
-                then(0)
-            return 0
+        # Protection from the source's *name* (Runed Halo, CR 702.16i) used to be
+        # read here, ahead of the face-up flip and ahead of every shield, under
+        # a comment claiming "protection is not prevention". CR 702.16e says the
+        # opposite in as many words — "Any damage that would be dealt … is
+        # prevented" — so it is a CR 615 shield like every other, registered in
+        # ``engine/prevention.py`` and asked at the one seam every damage event
+        # passes through. Two consequences of moving it, both the rule's:
+        # unpreventable damage (Whippoorwill, Lava Burst) gets through, and
+        # protection contends under CR 616.1 with whatever else applies.
+        #
         # Illusionary Mask: a face-down creature that would deal damage (e.g.
         # unblocked combat damage to a player) is turned face up first.
         if amount > 0:

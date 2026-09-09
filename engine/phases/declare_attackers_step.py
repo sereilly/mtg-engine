@@ -105,17 +105,17 @@ class DeclareAttackersStepMixin:
             if target not in living_opponents_set:
                 return False, "that player has already left the game"
 
+        # The two caps are read here because the CR 508.1d requirement loop
+        # below needs the numbers, **not** because they are refused here: both
+        # are CR 508.1c restrictions on the declaration and both now live behind
+        # `attack_declaration_refusal` with the other three, so the seat that
+        # has to *build* a legal declaration can ask the same question the
+        # engine will. See that method for what the split used to cost.
+        #
         # "No more than two creatures can attack each combat." (Caverns of
-        # Despair.) CR 508.1c is a restriction on the *declaration*, not on any
-        # one creature, so it cannot live in `can_attack` — a per-creature
-        # predicate has no way to say "and no more of you". Read off the board
-        # rather than off the attacker, because the enchantment is a permanent
-        # nobody is attacking with.
+        # Despair.) Read off the board rather than off the attacker, because the
+        # enchantment is a permanent nobody is attacking with.
         attack_cap = participation_cap(self.all_permanents(), "attack")
-        if attack_cap is not None and len(unique_indices) > attack_cap:
-            return False, (
-                f"no more than {attack_cap} creature(s) can attack each combat"
-            )
 
         # "No more than two creatures can attack **you** each combat."
         # (Crawlspace.) The same CR 508.1c restriction on the declaration,
@@ -142,12 +142,6 @@ class DeclareAttackersStepMixin:
             if idx in per_attacker_walker:
                 continue
             aimed_at_player[seat] = aimed_at_player.get(seat, 0) + 1
-        for seat, cap in per_defender_caps.items():
-            if cap is not None and aimed_at_player.get(seat, 0) > cap:
-                return False, (
-                    f"no more than {cap} creature(s) can attack "
-                    f"{self.players[seat].name} each combat"
-                )
 
         # The permanents this declaration names, needed *before* the requirement
         # loop below: "If a creature you control attacks, this creature also
@@ -160,11 +154,34 @@ class DeclareAttackersStepMixin:
         # Through the seam (`permanent_at`), never `controller.battlefield[i]`:
         # a slot is what the wire carries and this is the module that turns one
         # into a permanent.
-        declared_now = [
-            perm
-            for perm in (self.permanent_at(controller_index, i) for i in unique_indices)
-            if perm is not None
-        ]
+        #
+        # Who each of them is aimed at travels beside it, keyed by
+        # `permanent_id` rather than by slot for the reason every other identity
+        # in this engine is keyed that way: a slot renumbers the moment anything
+        # leaves. `None` means "at a planeswalker", which is not attacking the
+        # player (CR 508.1b) and so is outside the per-defender cap.
+        declared_now: list[Permanent] = []
+        declared_defenders: dict[int, int | None] = {}
+        for idx in unique_indices:
+            perm = self.permanent_at(controller_index, idx)
+            if perm is None:
+                continue
+            declared_now.append(perm)
+            declared_defenders[perm.permanent_id] = (
+                None if idx in per_attacker_walker else per_attacker_defender[idx]
+            )
+
+        # Every CR 508.1c restriction, in one predicate and before any
+        # per-creature question below — because the rule refuses the declaration
+        # *whole*, so the offending creature is the only useful thing to say
+        # about it and the caps have exactly as much claim to be said here as
+        # Errantry does.
+        refusal = self.attack_declaration_refusal(
+            declared_now, defenders=declared_defenders
+        )
+        if refusal is not None:
+            return False, refusal[1]
+
         required_attackers: list[str] = []
         for idx, attacker in enumerate(controller.battlefield):
             if not self._is_creature(attacker) or attacker.tapped:
@@ -224,14 +241,6 @@ class DeclareAttackersStepMixin:
                 attacking_planeswalker=idx in per_attacker_walker,
             ):
                 return False, f"{attacker.card.name} cannot attack"
-
-        # The restrictions that are about the **set** (CR 508.1c) rather than
-        # about any one creature — the same reason the attack cap above is
-        # checked here. They live behind one named predicate because the AI asks
-        # it too; see `attack_declaration_refusal`.
-        refusal = self.attack_declaration_refusal(declared_attackers)
-        if refusal is not None:
-            return False, refusal[1]
 
         # CR 702.22c: validate any declared attacking bands before committing.
         validated_bands, band_error = self._validate_attacking_bands(
@@ -1327,15 +1336,19 @@ class DeclareAttackersStepMixin:
         return False
 
     def attack_declaration_refusal(
-        self, declared_attackers: list[Permanent]
+        self,
+        declared_attackers: list[Permanent],
+        *,
+        defenders: "dict[int, int | None] | None" = None,
     ) -> "tuple[Permanent, str] | None":
         """Which declared attacker's restriction this **set** disobeys, and why.
 
         CR 508.1c asks its restrictions of the declaration as a whole — "if any
-        restrictions are being disobeyed, the declaration is illegal" — so
-        neither of these can live in `can_attack`, a per-creature predicate with
-        no way to say "and nobody else" (Errantry's "can only attack alone") or
-        "and at least two more of you" (Orcish Conscripts).
+        restrictions are being disobeyed, the declaration is illegal" — so none
+        of these can live in `can_attack`, a per-creature predicate with no way
+        to say "and nobody else" (Errantry's "can only attack alone"), "and at
+        least two more of you" (Orcish Conscripts), or "and no more of you"
+        (Caverns of Despair, Crawlspace).
 
         **Public, and returning the offending permanent, because the AI asks it
         too.** `ai_policy.choose_attackers` builds its set out of
@@ -1345,9 +1358,49 @@ class DeclareAttackersStepMixin:
         inside the AI would drift from this one; the permanent is what lets the
         AI drop the creature it named instead.
 
+        **The two caps used to be outside this predicate, and that is what W2G4
+        fixed.** They were checked inline in `declare_attackers` and nowhere
+        else, so the AI's prune could not see them: it proposed an over-cap set,
+        the declaration refused it whole, and
+        `web/combat_prompts._ai_declare_attackers` fell through its superset
+        fallback (also over the cap) to `[]` — the seat attacked with nobody,
+        for the rest of the game. The failure is *conservative*, no rule is
+        broken and nothing is spent, which is exactly why it went unnoticed
+        under both a shipped card (Caverns of Despair, since Legends) and a new
+        one (Crawlspace).
+
+        *defenders* maps a declared attacker's `permanent_id` to the seat it is
+        attacking, or to `None` when it is attacking a planeswalker (CR 508.1b —
+        not attacking the player, so outside a per-defender cap). It is a
+        keyword because the two caps ask different questions: the global one
+        needs no map at all, and the per-defender one cannot be answered without
+        it. A caller that omits it in a game with exactly one living opponent
+        gets that opponent, which is every two-player game and therefore every
+        declaration the AI builds today; a caller that omits it with a genuine
+        multi-seat choice gets the global cap only, and the declaration's own
+        call always supplies the map, so the *gate* is never the one falling
+        back.
+
         Asked of the collected `Permanent` objects rather than of indices: an
         index is unstable, and both callers have the objects already.
         """
+        # The board-wide cap first: it is the widest restriction here — it does
+        # not care who is attacking or whom — so it is the cheapest true answer
+        # and naming any other offender under it would be arbitrary in a
+        # different way.
+        cap = participation_cap(self.all_permanents(), "attack")
+        if cap is not None and len(declared_attackers) > cap:
+            return declared_attackers[-1], (
+                f"no more than {cap} creature(s) can attack each combat"
+            )
+        aimed = self._attacks_per_defender(declared_attackers, defenders)
+        for seat, attackers in sorted(aimed.items()):
+            seat_cap = defender_attack_cap(self.controlled_by(seat))
+            if seat_cap is not None and len(attackers) > seat_cap:
+                return attackers[-1], (
+                    f"no more than {seat_cap} creature(s) can attack "
+                    f"{self.players[seat].name} each combat"
+                )
         if len(declared_attackers) > 1:
             for lone in declared_attackers:
                 if self._can_only_attack_alone(lone):
@@ -1381,6 +1434,41 @@ class DeclareAttackersStepMixin:
                     "greater power beside it"
                 )
         return None
+
+    def _attacks_per_defender(
+        self,
+        declared_attackers: list[Permanent],
+        defenders: "dict[int, int | None] | None",
+    ) -> "dict[int, list[Permanent]]":
+        """Which declared attackers are attacking each defending **player**.
+
+        The per-defender cap's tally, and only its tally: an attacker aimed at a
+        planeswalker is not attacking the player (CR 508.1b) and is left out, so
+        a Crawlspace never refuses a declaration whose extra attackers are all
+        pointed at a Garruk.
+
+        With no map, every attacker is aimed at the one living opponent when
+        there is exactly one — the same shorthand `declare_attackers` itself
+        takes for a two-player game — and at nobody when the choice is genuine,
+        because guessing a seat there would refuse a legal declaration.
+        """
+        if defenders is not None:
+            aimed: dict[int, list[Permanent]] = {}
+            for attacker in declared_attackers:
+                seat = defenders.get(attacker.permanent_id)
+                if seat is None:
+                    continue
+                aimed.setdefault(seat, []).append(attacker)
+            return aimed
+        if not declared_attackers:
+            return {}
+        controller = self.controller_index_of(declared_attackers[0])
+        if controller is None:
+            return {}
+        living = self.opponents_of(controller)
+        if len(living) != 1:
+            return {}
+        return {living[0]: list(declared_attackers)}
 
     def _can_only_attack_alone(self, attacker: Permanent) -> bool:
         """CR 506.5 — whether *attacker* may attack only as the sole attacker.

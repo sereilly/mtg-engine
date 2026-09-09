@@ -81,20 +81,28 @@ def test_an_activated_sweep_deals_as_the_permanent_so_lifelink_gains(set_pool):
     """Subterranean Spirit: "{T}: This creature deals 1 damage to each creature
     without flying."
 
-    Two creatures are dealt to — the opponent's Bear and the Spirit itself,
-    which the printed line does not exclude — so a lifelinking Spirit gains 2.
-    Dealing as the printed card gained nothing at all, because a card has no
-    keywords to read.
+    Two creatures are dealt to, so a lifelinking Spirit gains 2. Dealing as the
+    printed card gained nothing at all, because a card has no keywords to read.
+
+    The two are **the opponent's**, and that is W2G4's correction rather than
+    the original shape of this test. It used to count the Spirit's own point:
+    the printed line excludes nothing, so the Spirit sweeps itself. But the
+    Spirit's first printed line is "Protection from red" and the Spirit is a red
+    source, so CR 702.16e prevents that point — which the engine did not do for
+    any non-combat damage until protection reached ``deal_damage``. Prevented
+    damage was never dealt (CR 615.6), so no lifelink comes with it either. Two
+    opposing creatures keep this test asking what it was written to ask.
     """
     spirit = _w3g5_ready(_w3g5_lifelinking(set_pool("MIR")["Subterranean Spirit"]))
-    game, p1, p2 = _w3g5_board(spirit)
+    game, p1, p2 = _w3g5_board(spirit, victims=(("Bear", 2, 2), ("Ogre", 3, 3)))
     before = p1.life
 
     assert game.activate_permanent_ability(0, "Subterranean Spirit").supported
     resolve_stack(game)
 
-    assert p2.battlefield[0].damage_marked == 1
-    assert spirit.damage_marked == 1
+    assert [perm.damage_marked for perm in p2.battlefield] == [1, 1]
+    # CR 702.16e: the Spirit is protected from red and is a red source.
+    assert spirit.damage_marked == 0
     assert p1.life == before + 2
 
 
