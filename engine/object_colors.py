@@ -78,7 +78,7 @@ def color_override_for_seat(game, seat) -> tuple[str, ...] | None:
         # effective card folds in abilities these very statics grant, so asking
         # it here would make the answer depend on itself.
         static = global_static_for(getattr(permanent.card, "oracle_text", "") or "")
-        if static is None or not static.sets_colors:
+        if static is None or static.sets_colors is None:
             continue
         if not static.extends_to_spells_and_cards:
             continue
@@ -87,7 +87,13 @@ def color_override_for_seat(game, seat) -> tuple[str, ...] | None:
             for word in static.sets_colors
             if word in _COLOR_WORD_SYMBOLS
         )
-        if symbols:
+        # Completeness rather than truth, for the reason ``sets_colors`` is
+        # ``None`` when a static says nothing about colour: ``()`` is
+        # CR 105.2c's colourless and a real answer, so "did anything survive
+        # the map?" is the wrong question -- a printed word this map could not
+        # read would fall through to the *printed* colours, which is a hand
+        # recoloured by half a sentence.
+        if len(symbols) == len(static.sets_colors):
             return symbols
     return None
 

@@ -146,6 +146,25 @@ class CostModifier:
     #: recognise an ability *by* after CR 702.29a's rewrite has erased the
     #: word. A second keyword needs its own derivation, not a second string.
     ability_keyword: str | None = None
+    #: "Each spell costs {3} more to cast **except during its controller's
+    #: turn**." (Defense Grid.) The first modifier in this table whose subject
+    #: is every spell there is and whose narrowing is not about the object at
+    #: all: what decides is *when* the spell is cast, which no read of the card
+    #: can answer.
+    #:
+    #: A condition the charging sites evaluate rather than a second table, for
+    #: the reason every other field here is payload: the sentence is Sphere of
+    #: Resistance's with a clause on the end, and it is charged by the same
+    #: arithmetic through the same loop. Evaluated where ``controller`` and
+    #: ``targets_source`` are -- see :func:`_timing_holds`, which is the one
+    #: reader, because a condition read at one charging site and not another is
+    #: a tax collected in mana and not in coloured pips.
+    #:
+    #: "Its controller" is the **spell's** controller (CR 109.5), which at
+    #: CR 601.2f is the player casting it -- not this permanent's controller.
+    #: Read the other way round, a Defense Grid would tax its own player's
+    #: spells on everybody's turn and nobody else's.
+    off_controllers_turn: bool = False
 
 
 @dataclass(frozen=True)
@@ -180,9 +199,26 @@ class CostReduction:
 # increase once, and this is one static ability describing a set of spells by
 # two phrases; two modifiers from one permanent would tax a spell that is both
 # green and white {4}.
-_SPELL_SUBJECT_TEXT = rf"(?:(?:{_COLOURS}) )?(?:(?:{_TYPE_LIST}) )?spells"
+#
+# **The quantifier is payload too.** "**Each spell costs** {3} more to cast."
+# (Defense Grid.) CR 109.2 draws no distinction between the set "each spell"
+# names and the one "spells" names, which is the reading
+# ``global_statics._TEMPLATES`` already makes of "each creature has …" against
+# "all creatures have …" -- so the printed word and the singular noun and verb
+# that come with it are an alternation here rather than a template of their own.
+#
+# Number **agreement** is checked in ``_spell_tax_modifier`` rather than spelled
+# into the pattern, because the alternation is three-way (quantifier, noun,
+# verb) and a regex that enumerated the legal combinations would be the
+# quadratic template list the subject list above exists to avoid. What it buys
+# is a refusal: "this spell costs {1} more to cast for each target beyond the
+# first" (Fireball's surcharge, charged in ``mixins/stack/``) now *matches* this
+# pattern part-way through, and only the agreement check keeps it from being
+# read as a tax on every spell in the game.
+_SPELL_SUBJECT_TEXT = rf"(?:(?:{_COLOURS}) )?(?:(?:{_TYPE_LIST}) )?spells?"
 _SPELL_SUBJECT = re.compile(
-    rf"^(?:(?P<colour>{_COLOURS}) )?(?:(?P<type>{_TYPE_LIST}) )?spells$"
+    rf"^(?:(?P<colour>{_COLOURS}) )?(?:(?P<type>{_TYPE_LIST}) )?"
+    r"spell(?P<plural>s)?$"
 )
 # Split only where the "and" separates two *whole* subjects. `_TYPE_LIST`
 # spells its own alternation with the same word -- "Instant and enchantment
@@ -198,10 +234,18 @@ _SUBJECT_SPLIT = re.compile(r"(?<=spells) and ")
 # reason directly above: who casts it and what it is called are independent
 # axes, and pairing them as templates is quadratic in the phrases that exist.
 _SPELL_TAX = re.compile(
+    rf"(?P<each>each )?"
     rf"(?P<subjects>{_SPELL_SUBJECT_TEXT}(?: and {_SPELL_SUBJECT_TEXT})*)"
     r"(?: with (?P<keyword>[a-z]+))?"
-    r"(?:(?P<controller> you| your opponents) cast)? cost "
+    r"(?:(?P<controller> you| your opponents) cast)? cost(?P<verb_s>s)? "
     r"(?P<amount>(?:\{(?:\d+|[wubrgc])\})+) (?P<direction>more|less) to cast"
+    # "…**except during its controller's turn**." (Defense Grid.) A timing
+    # condition on the tax, optional because every other card printing this
+    # sentence prints it without one -- and read here rather than left to a
+    # trailing-sentence claim, because a clause this pattern did not consume
+    # would leave the line unclaimed and the card unsupported while the tax it
+    # narrows was charged on every turn.
+    r"(?P<off_turn> except during its controller's turn)?"
 )
 
 #: Which seat a printed caster clause names. A table rather than a truth test on
@@ -502,7 +546,12 @@ def _spell_tax_modifier(match: "re.Match[str]") -> CostModifier | None:
       in this path applies;
     * a conjunct the subject reader cannot read, which takes the **whole**
       clause with it (idiom 38) -- half a sentence enforced is the failure that
-      refusal exists to prevent.
+      refusal exists to prevent;
+    * a subject, quantifier and verb that do not **agree** in number. "Each
+      spell costs" and "spells cost" are the two printed spellings of one set
+      (CR 109.2); "this spell costs" is a sentence about one object and is a
+      different rule, and reading it here would tax every spell in the game on
+      the strength of a fragment.
     """
     generic, pips = _tax_symbols(match.group("amount"))
     if generic < 0:
@@ -510,16 +559,34 @@ def _spell_tax_modifier(match: "re.Match[str]") -> CostModifier | None:
     if pips and match.group("direction") == "less":
         return None
     subjects: list[tuple[str | None, tuple[str, ...]]] = []
+    singular = False
     for printed in _SUBJECT_SPLIT.split(match.group("subjects")):
         read = _SPELL_SUBJECT.match(printed.strip())
         if read is None:
             return None
+        singular = singular or not read.group("plural")
         subjects.append(
             (
                 _COLOR_WORD_TO_SYMBOL.get(read.group("colour") or ""),
                 _types_named(read.group("type")),
             )
         )
+    # The quantifier, the noun and the verb are one agreement, checked in one
+    # place: "each" comes with a singular noun and "costs", and its absence
+    # comes with a plural noun and "cost". A sentence mixing them is not this
+    # template -- most often because the match began part-way through a longer
+    # one, which is exactly how "this spell costs {1} more to cast for each
+    # target beyond the first" reaches here.
+    quantified = bool(match.group("each"))
+    singular_verb = bool(match.group("verb_s"))
+    if quantified:
+        # "Each <one thing> costs …". One subject, because the quantifier is
+        # printed once and distributes over what follows it; a list would need
+        # a second one to be a list of subjects rather than of nouns.
+        if not (singular and singular_verb and len(subjects) == 1):
+            return None
+    elif singular or singular_verb:
+        return None
     colour, card_types = subjects[0]
     return CostModifier(
         amount=generic,
@@ -531,6 +598,7 @@ def _spell_tax_modifier(match: "re.Match[str]") -> CostModifier | None:
         controller=_TAX_CASTERS.get(match.group("controller") or ""),
         symbols=pips,
         alternative_subjects=tuple(subjects[1:]),
+        off_controllers_turn=bool(match.group("off_turn")),
     )
 
 
@@ -680,6 +748,29 @@ def _matches(modifier: CostModifier, card) -> bool:
             *modifier.alternative_subjects,
         )
     )
+
+
+def _timing_holds(game, modifier: CostModifier, caster_index: int | None) -> bool:
+    """Whether *modifier*'s printed timing clause lets it charge right now.
+
+    True for every modifier that prints none, which is all but Defense Grid's.
+    "**Except during its controller's turn**" is a fact about the *spell* being
+    cast -- CR 109.5's controller, who at CR 601.2f is the player casting it --
+    so the comparison is that seat against the active player and never against
+    the taxing permanent's controller.
+
+    A caller that cannot say who is casting answers **False**, which for an
+    increase is the direction a cost must never move on its own: unable to tell
+    whose turn it is, this declines to charge rather than charging a tax the
+    card may not impose. Unreachable today -- every "cast" caller carries the
+    caster -- and asserted here rather than assumed, because the field is
+    payload and the next card printing it may arrive on a path that does not.
+    """
+    if not modifier.off_controllers_turn:
+        return True
+    if caster_index is None:
+        return False
+    return getattr(game, "active_player_index", None) != caster_index
 
 
 def _names_a_permanent(modifier: CostModifier) -> bool:
@@ -833,6 +924,12 @@ def _tax_floored(
                 aimed is permanent for aimed in targeted
             ):
                 continue
+            # "…**except during its controller's turn**" (Defense Grid), asked
+            # beside the two seat comparisons above because it is the third
+            # narrowing that is not about the taxed object -- see
+            # :func:`_timing_holds`.
+            if not _timing_holds(game, modifier, controller_index):
+                continue
             total += modifier.amount
             floor = max(floor, modifier.floor)
             names.append(permanent.card.name)
@@ -875,6 +972,8 @@ def _stack_tax(
             if modifier.targets_source and not any(
                 aimed is item for aimed in targeted_stack
             ):
+                continue
+            if not _timing_holds(game, modifier, caster_index):
                 continue
             total += modifier.amount
             names.append(item.card.name)
@@ -940,6 +1039,8 @@ def spell_symbol_tax(
             if modifier.targets_source and not any(
                 aimed is permanent for aimed in targeted
             ):
+                continue
+            if not _timing_holds(game, modifier, caster_index):
                 continue
             for symbol, count in modifier.symbols:
                 total[symbol] = total.get(symbol, 0) + count
@@ -1050,6 +1151,8 @@ def sacrifice_taxes(
             if modifier.sacrifice_filter is None or modifier.per_symbol is None:
                 continue
             if modifier.applies_to != applies_to:
+                continue
+            if not _timing_holds(game, modifier, payer_index):
                 continue
             count = _symbols_in(cost, modifier.per_symbol)
             if count:

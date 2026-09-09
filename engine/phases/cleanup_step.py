@@ -15,6 +15,7 @@ from ..cast_timing import CAST_AT_INSTANT_SPEED
 from ..hand_size import maximum_hand_size
 from ..models import Permanent
 from ..auras import clear_ignored_restrictions
+from ..cast_restrictions import clear_ignored_play_bans
 from ..keywords import (clear_granted_ability_lines,
                         clear_granted_keywords,
                         clear_removed_ability_keywords,
@@ -269,6 +270,10 @@ class CleanupStepMixin:
                 # fourth channel, swept beside the other three because a
                 # duration means one moment however it was bought.
                 clear_ignored_restrictions(permanent)
+                # …and the board-wide half of the same subrule (Damping
+                # Engine), swept beside it because one printed duration ends at
+                # one moment however the offer was shaped.
+                clear_ignored_play_bans(permanent)
                 # "Change the text of target permanent … **until end of turn**."
                 # (Whim of Volrath.) CR 612's rewrite with a printed duration —
                 # the first in the pool — and it is filtered rather than popped

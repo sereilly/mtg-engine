@@ -6156,6 +6156,8 @@ def _derived_static_claims(
     from .cost_modifiers import cost_modifier_claims_line
     from .cost_x_definitions import (cast_x_ceiling_line,
                                      cast_x_definition_line, cast_x_floor_line)
+    from .cast_restrictions import (MOST_PERMANENTS_PLAY_BAN_CLAIM,
+                                    most_permanents_play_ban_line)
     from .damage_source_colors import CLAIM as DAMAGE_SOURCE_COLORS_CLAIM
     from .damage_source_colors import colorless_source_line
     from .draw_step_modifiers import (draw_step_bonus_for, draw_step_skip_for,
@@ -6365,6 +6367,19 @@ def _derived_static_claims(
     # working perfectly.
     if global_static_for(oracle_text) is not None:
         claims.append("global_statics")
+    # "A player who controls more permanents than each other player can't play
+    # lands or cast artifact, creature, or enchantment spells. That player may
+    # sacrifice a permanent…" (Damping Engine.) CR 601.3a over a seat the board
+    # names, with CR 116.2d's escape hatch behind it: two gates and a registered
+    # special action carry it out and none of them produces an instruction, so
+    # without this claim the card reports unsupported while working exactly as
+    # printed. Asked of the reader that requires *both* sentences, so a claim
+    # cannot be taken on half the line.
+    if any(
+        most_permanents_play_ban_line(line) is not None
+        for line in (oracle_text or "").splitlines()
+    ):
+        claims.append(MOST_PERMANENTS_PLAY_BAN_CLAIM)
     # An Aura this module implements in full. Its ``Enchant <subject>`` line is
     # a keyword ability (CR 702.5) that produces no instruction and its effects
     # are continuous, derived from the attachment — so without this the card had

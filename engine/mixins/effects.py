@@ -11,6 +11,7 @@ from ..auras import attached_subject_triggers
 from ..damage_events import EVENT_LOCK, damage_source_seat, deal_damage, lifelink_life_gained
 from ..events import emit
 from ..life_prohibitions import life_gain_banned
+from ..cast_restrictions import most_permanents_land_ban
 from ..land_play_allowance import (
     LandPlayAllowance, extra_land_plays_this_turn, land_play_allowance_for,
     land_plays_forbidden_this_turn, land_play_prohibition, prohibition_holds,
@@ -1845,6 +1846,19 @@ class EffectsMixin:
         )
         if banning is not None:
             return f"no player can play lands ({banning[0].card.name})"
+        # "A player who controls more permanents than each other player **can't
+        # play lands** or cast artifact, creature, or enchantment spells."
+        # (Damping Engine.) The land half of a sentence whose casting half is
+        # enforced in `mixins/stack/casting.py`, asked here because this is the
+        # one gate every land drop goes through — the arrangement Null
+        # Chamber's two-verb sentence already has, and for its reason: one
+        # printed rule enforced in one place per action.
+        leading = most_permanents_land_ban(self, player_index)
+        if leading is not None:
+            return (
+                f"the player controlling the most permanents can't play lands "
+                f"({leading})"
+            )
         # "Target player can't play lands this turn." (Solfatara.) The same
         # withdrawal for one seat and one turn, asked in the same place and for
         # the same reason: no number of extra plays adds up to one a prohibited

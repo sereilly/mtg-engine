@@ -243,6 +243,26 @@ _PERMANENT_ACTION_SENTENCES: tuple[tuple[re.Pattern[str], str], ...] = (
         ),
         "ignore_attached_static_until_eot",
     ),
+    # CR 116.2d again, with the offer made to a player the sentence in front of
+    # it *described* rather than to the controller of a permanent it named:
+    # "A player who controls more permanents than each other player can't play
+    # lands or cast artifact, creature, or enchantment spells. **That player
+    # may sacrifice a permanent of their choice for that player to ignore this
+    # effect until end of turn.**" (Damping Engine.)
+    #
+    # Its own row and its own kind rather than an alternation on the one above,
+    # for the reason that one is not an alternation on the Licids': what
+    # differs is who is offered and by what, and the two are answered by two
+    # registered offers — an Aura asks its host who controls it, and this asks
+    # the board who is ahead. One kind with two answers would be a branch
+    # inside the offer, which is the shape this file is a registry instead of.
+    (
+        re.compile(
+            r"^that player may sacrifice a permanent of their choice for that "
+            r"player to ignore this effect until end of turn$"
+        ),
+        "ignore_board_static_until_eot",
+    ),
 )
 
 
@@ -293,10 +313,14 @@ class PermanentSpecialAction:
     take: "Callable[[Game, int, Permanent], None]"
 
 
-#: Registered by the modules that create the effects these offers end.
-#: `engine/auras.py` holds the only entry today — it owns the record a
-#: became-an-Aura permanent carries, so it is the only place that can say
-#: whether the effect is still running or take it back.
+#: Registered by the modules that create the effects these offers end — never
+#: here, because whether an offer still stands is a question only the module
+#: owning that effect's record can answer. `engine/auras.py` holds the two
+#: attached ones: it owns the record a became-an-Aura permanent carries, so it
+#: is the only place that can say whether the effect is still running or take
+#: it back. `engine/cast_restrictions.py` holds the board-wide one (Damping
+#: Engine), for the same reason one zone out: it owns the prohibition and the
+#: record of who has bought a turn off it.
 PERMANENT_SPECIAL_ACTIONS: dict[str, PermanentSpecialAction] = {}
 
 
@@ -318,6 +342,7 @@ def _load_registrations() -> None:
     depending on import order.
     """
     from . import auras  # noqa: F401
+    from . import cast_restrictions  # noqa: F401
 
 
 def _split_sentences(line: str) -> list[str]:

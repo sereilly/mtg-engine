@@ -1004,7 +1004,12 @@ def collect_color_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
     # true, and is why the timestamp is the source's own rather than a constant:
     # `static_source_timestamp` is the same ordering layer 4's statics use.
     for static in global_statics_applying_to(perm):
-        if not static.sets_colors:
+        # ``is not None``, not truthiness, for the reason the override channel
+        # above states in as many words: the **empty tuple** is CR 105.2c's
+        # colourless ("All permanents are colorless", Thran Lens) -- an object
+        # with no colours, rather than a static that says nothing about colour.
+        # A falsy test reads the two as one and drops the whole effect.
+        if static.sets_colors is None:
             continue
         effects.append(
             set_colors(

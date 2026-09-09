@@ -38,6 +38,8 @@ from ..cast_restrictions import (CAST_RESTRICTIONS, COMBAT_PLAY_BAN_CLAIM,
                                  cast_opponent_cast_line,
                                  cast_own_cast_line,
                                  chosen_name_ban_line,
+                                 MOST_PERMANENTS_PLAY_BAN_CLAIM,
+                                 most_permanents_play_ban_line,
                                  OWN_CAST_BAN_CLAIM,
                                  own_cast_ban_line,
                                  SPELL_CAP_CLAIM,
@@ -181,6 +183,16 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # enforces it, so the claim cannot outlive the ban.
     if chosen_name_ban_line(normalized):
         return "cast_restrictions"
+
+    # engine/cast_restrictions.py — the same rule over a seat the *board* names
+    # rather than the sentence: "A player who controls more permanents than
+    # each other player can't play lands or cast artifact, creature, or
+    # enchantment spells. That player may sacrifice a permanent…" (Damping
+    # Engine.) Two printed sentences on one line, claimed through the reader
+    # that requires both — so a claim cannot be taken on the prohibition while
+    # the escape hatch behind it goes unread.
+    if most_permanents_play_ban_line(normalized) is not None:
+        return MOST_PERMANENTS_PLAY_BAN_CLAIM
 
     # engine/cast_restrictions.py — the *timing* half of CR 601.3a and CR
     # 602.5 at once: "Players can cast spells and activate abilities only

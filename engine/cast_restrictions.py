@@ -1253,6 +1253,272 @@ def spell_cap_ban(game: "Game", caster_index: int) -> str | None:
     return None
 
 
+#: A printed run of card types: "artifact, creature, or enchantment"
+#: (Damping Engine). Any number of alternatives with any of the printed
+#: separators, because the count and the punctuation are facts about one card
+#: rather than about the template -- the reading
+#: ``cost_modifiers._TYPE_LIST`` already makes of the same English one file
+#: over.
+_BANNABLE_TYPE_LIST = (
+    rf"{_BANNABLE_SPELL_TYPES}(?:,? (?:and |or )?{_BANNABLE_SPELL_TYPES})*"
+)
+
+#: "**A player who controls more permanents than each other player** can't play
+#: lands or cast artifact, creature, or enchantment spells." (Damping Engine.)
+#: The fifth scope this file reads CR 601.3a in, and the first whose subject is
+#: not a seat any sentence names but one *derived from the board*: whoever is
+#: strictly ahead on permanents right now, which may be nobody and may change
+#: between one spell and the next.
+#:
+#: One row for both halves of the printed sentence, for ``_CHOSEN_NAME_BAN``'s
+#: reason: a land drop and a cast are one prohibition here, and claiming the
+#: casting half alone would ship an artifact that stops a Wrath of God and lets
+#: the same player's Island through -- which on a card that exists to slow the
+#: player who is ahead is not a card doing less, it is a card doing something
+#: else.
+#:
+#: The types are payload, like every other printed word in this table.
+_MOST_PERMANENTS_PLAY_BAN = re.compile(
+    r"^a player who controls more permanents than each other player can't "
+    rf"play lands or cast (?P<types>{_BANNABLE_TYPE_LIST}) spells$"
+)
+
+#: The claim name the support gate and ``engine/grammar/registries.py`` use for
+#: the row above. Its own, for :data:`OWN_CAST_BAN_CLAIM`'s reason: those bans
+#: name the seat in the sentence and this one derives it from the board.
+MOST_PERMANENTS_PLAY_BAN_CLAIM = "most_permanents_play_ban"
+
+#: Where the permanent records the seats that have bought a turn off its
+#: prohibition (CR 116.2d). On the **source**, not on the player, because the
+#: offer is the source's and a second Damping Engine is a second prohibition to
+#: buy off -- and swept by the cleanup step like every other "until end of
+#: turn" record in this engine, which is what the printed duration is.
+IGNORED_PLAY_BAN_SEATS = "ignored_play_ban_seats_until_eot"
+
+
+def _types_in(clause: str) -> tuple[str, ...]:
+    """The card types a printed run names, in order.
+
+    Split here rather than in the pattern so the count stays payload: a card
+    printing four would need no change.
+    """
+    parts = re.split(r",| and | or ", clause or "")
+    return tuple(word for part in parts if (word := part.strip()))
+
+
+@lru_cache(maxsize=None)
+def most_permanents_play_ban_sentence(sentence: str) -> tuple[str, ...] | None:
+    """The spell types one printed *sentence* forbids the leading player, or
+    None.
+
+    The **sentence**, where every other reader in this file takes a line,
+    because this prohibition is printed with its CR 116.2d escape hatch behind
+    it on the same line -- and the two are read by two tables, so the line
+    reader below asks this one and ``special_actions`` for the other half.
+    """
+    match = _MOST_PERMANENTS_PLAY_BAN.match(
+        sentence.strip().lower().rstrip(".")
+    )
+    if match is None:
+        return None
+    return _types_in(match.group("types"))
+
+
+@lru_cache(maxsize=None)
+def most_permanents_play_ban_line(line: str) -> tuple[str, ...] | None:
+    """The spell types a whole printed *line* forbids the leading player.
+
+    Both sentences must be accounted for, for ``_ABILITY_REDUCTION``'s reason
+    in ``cost_modifiers``: the offer behind the prohibition is not decoration,
+    it is what the player who is ahead can do about it, and a reader claiming
+    only the first sentence would ship a permanent that stops a player with no
+    way out. The second is read by the table that *performs* it
+    (``special_actions``) rather than by a copy of its sentence here, so the
+    claim and the offer cannot describe different words.
+
+    A line carrying only the prohibition is a complete, harsher effect and is
+    read as one -- the arrangement the Celestial Dawn row in
+    ``global_statics`` makes of its own optional second sentence.
+    """
+    from .special_actions import permanent_special_action_sentence
+
+    sentences = [
+        part.strip() for part in (line or "").split(".") if part.strip()
+    ]
+    if not sentences:
+        return None
+    banned = most_permanents_play_ban_sentence(sentences[0])
+    if banned is None:
+        return None
+    for extra in sentences[1:]:
+        found = permanent_special_action_sentence(extra)
+        if found is None or found[0] != IGNORE_BOARD_STATIC:
+            return None
+    return banned
+
+
+def _most_permanents_ban_sources(game: "Game", seat: int):
+    """Every permanent currently forbidding *seat* to play, with what it stops.
+
+    Yields ``(permanent, banned types)``. A permanent stops *seat* only while
+    that seat is the one the sentence describes — strictly ahead of every other
+    living player on permanents — and only while that seat has not bought the
+    turn off it (CR 116.2d).
+
+    Every battlefield and no seat comparison, for :func:`global_play_timing`'s
+    reason: the sentence names nobody's side, so a Damping Engine stops its own
+    controller exactly as readily as anybody else.
+
+    The board is asked for a *source* before anybody is asked who is ahead.
+    This runs at every cast and at every land drop in every game, and counting
+    two players' permanents to discover that nobody printed the sentence is a
+    tally taken on every board that has never seen the card.
+    """
+    from .handlers.control_flow import most_permanents_seat
+
+    sources = [
+        (permanent, banned)
+        for _controller, permanent in game.permanents_with_controller()
+        for raw_line in (permanent.effective_card.oracle_text or "").splitlines()
+        if (banned := most_permanents_play_ban_line(raw_line)) is not None
+    ]
+    if not sources or most_permanents_seat(game) != int(seat):
+        return
+    for permanent, banned in sources:
+        if int(seat) in (permanent.metadata.get(IGNORED_PLAY_BAN_SEATS) or ()):
+            continue
+        yield permanent, banned
+
+
+def most_permanents_cast_ban(game: "Game", caster_index: int, card) -> str | None:
+    """The name of a permanent forbidding *caster_index* to cast *card*, or None.
+
+    The type test is :func:`search_filters.card_has_type` for
+    :func:`global_cast_ban`'s reason: a card has **every** type its line names
+    (CR 205.2), so an artifact creature is stopped by a ban on either word.
+    """
+    from .search_filters import card_has_type
+
+    for permanent, banned in _most_permanents_ban_sources(game, caster_index):
+        if any(card_has_type(card, wanted) for wanted in banned):
+            return permanent.card.name
+    return None
+
+
+def most_permanents_land_ban(game: "Game", seat: int) -> str | None:
+    """The name of a permanent forbidding *seat* to play a land, or None.
+
+    The other half of the same printed sentence, asked by ``_land_play_refusal``
+    — the one gate every land drop goes through — for ``_CHOSEN_NAME_BAN``'s
+    reason: one sentence, one reader, two gates, and neither half able to be
+    enforced without the other.
+    """
+    for permanent, _banned in _most_permanents_ban_sources(game, seat):
+        return permanent.card.name
+    return None
+
+
+# --- CR 116.2d: what the player who is ahead may do about it ----------------
+
+#: The kind of battlefield special action the offer below registers.
+#: ``auras.py`` holds the *attached* twin ("that creature's controller may
+#: sacrifice…", Volrath's Curse); this is the board-wide one, and they are two
+#: kinds rather than one because what makes the offer is different — an Aura
+#: asks its host who controls it, and this asks the board who is ahead.
+IGNORE_BOARD_STATIC = "ignore_board_static_until_eot"
+
+
+@lru_cache(maxsize=None)
+def _line_prints_the_escape_hatch(line: str) -> bool:
+    """Whether *line* carries CR 116.2d's offer sentence as well as the
+    prohibition.
+
+    Asked separately from :func:`most_permanents_play_ban_line`, which accepts
+    a line printing the prohibition **alone** — a complete and harsher effect,
+    read as one for the reason the Celestial Dawn row in ``global_statics``
+    reads its own optional second sentence. The offer must not be inferred from
+    the restriction: a card printing only the first sentence gives the player
+    who is ahead no way out, and offering one would be this module handing back
+    what that card took.
+    """
+    from .special_actions import permanent_special_action_sentence
+
+    if most_permanents_play_ban_line(line) is None:
+        return False
+    return any(
+        (found := permanent_special_action_sentence(part.strip())) is not None
+        and found[0] == IGNORE_BOARD_STATIC
+        for part in (line or "").split(".") if part.strip()
+    )
+
+
+def _ignore_board_static_offer(game, permanent):
+    """What *permanent* is offering the leading player right now, or None."""
+    from .handlers.control_flow import most_permanents_seat
+    from .special_actions import SpecialActionOffer
+
+    if not any(
+        _line_prints_the_escape_hatch(raw_line)
+        for raw_line in (permanent.effective_card.oracle_text or "").splitlines()
+    ):
+        return None
+    seat = most_permanents_seat(game)
+    if seat is None:
+        return None
+    if seat in (permanent.metadata.get(IGNORED_PLAY_BAN_SEATS) or ()):
+        # Already bought this turn. Offering it again would let a seat pay
+        # twice for one turn's relief, which the printed duration does not do —
+        # ``auras._ignore_static_offer``'s rule, and the same one.
+        return None
+    # "…**a permanent** of their choice", which is CR 110.1's whole noun: an
+    # empty filter is every permanent, and a narrower phrase on a later card is
+    # the same field with data in it.
+    return SpecialActionOffer(seat=seat, sacrifice={})
+
+
+def _take_ignore_board_static(game, seat: int, permanent) -> None:
+    kept = set(permanent.metadata.get(IGNORED_PLAY_BAN_SEATS) or ())
+    permanent.metadata[IGNORED_PLAY_BAN_SEATS] = sorted(kept | {int(seat)})
+    game.log.append(
+        f"{game.players[seat].name} ignores {permanent.card.name}'s effect "
+        "until end of turn (CR 116.2d)"
+    )
+
+
+def clear_ignored_play_bans(permanent) -> bool:
+    """CR 514.2's cleanup: an "until end of turn" suspension ends.
+
+    Beside ``auras.clear_ignored_restrictions`` in the same sweep, because that
+    is what the printed duration is and the two records are one rule bought in
+    two shapes. Returns whether anything was cleared.
+    """
+    return permanent.metadata.pop(IGNORED_PLAY_BAN_SEATS, None) is not None
+
+
+def _register_board_static_special_action() -> None:
+    """Register CR 116.2d's board-wide offer, once.
+
+    Guarded rather than bare, exactly as ``auras`` guards its own:
+    ``engine/special_actions.py`` imports this module from inside its seam to
+    make sure the registration has happened, and a duplicate kind raises there
+    by design.
+    """
+    from .special_actions import (PERMANENT_SPECIAL_ACTIONS,
+                                  PermanentSpecialAction,
+                                  register_permanent_special_action)
+
+    if IGNORE_BOARD_STATIC in PERMANENT_SPECIAL_ACTIONS:
+        return
+    register_permanent_special_action(PermanentSpecialAction(
+        kind=IGNORE_BOARD_STATIC,
+        offer=_ignore_board_static_offer,
+        take=_take_ignore_board_static,
+    ))
+
+
+_register_board_static_special_action()
+
+
 def global_cast_ban(game: "Game", card) -> str | None:
     """The name of a permanent forbidding *card* from being cast, or None.
 
