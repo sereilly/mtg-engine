@@ -15,7 +15,9 @@ is for.
 from . import ast
 from ..oracle_types import DREW_COUNT
 from .amounts import accept_counters_on_source
-from .records import accept_added_base, accept_damage_dealt_this_turn, accept_exiled_for_cost, accept_sacrificed_for_cost
+from .records import (accept_added_base, accept_cost_characteristic_of,
+                      accept_damage_dealt_this_turn, accept_exiled_for_cost,
+                      accept_sacrificed_for_cost)
 
 from .errors import GrammarError
 from .lexer import NUMBER
@@ -371,6 +373,15 @@ def parse_where_x_definition_body(stream: TokenStream) -> "ast.Amount":
     # characteristic of what the ability's own *cost* ate rather than an
     # aggregate over anything a zone still holds, so it is read beside the
     # damage history above and through the same reader `parse_amount` uses.
+    # "…the **mana value of the discarded card**" — the same four payment
+    # channels as the two readers below, in the genitive English writes with
+    # "of". Read here as well as in the "equal to" front end for the reason
+    # those two readers are shared at all: two front ends print the same phrases
+    # about the same records, and a spelling taught to one of them is how the
+    # two come to disagree about what a card may say.
+    inverted = accept_cost_characteristic_of(stream)
+    if inverted is not None:
+        return inverted
     exiled = accept_exiled_for_cost(stream)
     if exiled is not None:
         return exiled

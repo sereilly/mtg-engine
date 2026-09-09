@@ -228,6 +228,39 @@ def _lower_cost_counters_removed_damage(
     )
 
 
+#: The characteristics of a **cost-discarded** card ``count_from_payload`` reads
+#: back. Mana value alone, and the narrowest of the four channels for a reason
+#: CR 613.1 states outright: what the record holds is a *card* in a graveyard,
+#: which has no computed characteristics at all — its printed mana value is a
+#: characteristic of the card (CR 202.3) and its power is not.
+_READABLE_COST_DISCARD_CHARACTERISTICS = frozenset({"mana_value"})
+
+
+def _lower_cost_discard_damage(
+    node: ast.DealDamage,
+) -> tuple[OracleInstruction, ...]:
+    """"This enchantment deals damage to any target equal to **the mana value of
+    the discarded card**." (Pyromancy.)
+
+    The fourth payment channel, beside its three siblings and for their reason:
+    a quantity the ability's own cost produced rather than a count of anything on
+    a board. CR 601.2h discards the card before the ability is on the stack, so
+    by resolution it is one card among everything else that ever reached that
+    graveyard — the payment path's record (``discarded_for_cost``) is the only
+    thing that says which.
+    """
+    assert isinstance(node.amount, ast.DiscardedForCost)
+    characteristic = node.amount.characteristic
+    if characteristic not in _READABLE_COST_DISCARD_CHARACTERISTICS:
+        raise LoweringError(
+            f"no handler reads the discarded card's {characteristic!r}",
+            node=node,
+        )
+    return _payment_channel_damage(
+        node, {"cost_discard_characteristic": characteristic}
+    )
+
+
 def _lower_cost_sacrifice_damage(
     node: ast.DealDamage,
 ) -> tuple[OracleInstruction, ...]:

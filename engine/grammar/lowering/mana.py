@@ -22,7 +22,7 @@ from ._common import (
 )
 from ._events import (_DEFENDING_PLAYER_EVENTS, _EVENT_SUBJECT_PLAYERS,
                       _RECORDED_PERMANENTS)
-from ._records import SACRIFICED_FOR_COST, UNTAPPED_FOR_COST
+from ._cost_records import SACRIFICED_FOR_COST, UNTAPPED_FOR_COST
 
 #: Which cost payment each printed back-reference names, and how to say so when
 #: the ability makes no such payment: ``{node value: (scratchpad key, printed

@@ -38,7 +38,7 @@ from .. import ast
 from ..errors import LoweringError
 from ._common import _filter_payload
 from ._events import _COUNTERS_PLACED_THIS_WAY
-from ._records import optional_cost_key
+from ._cost_records import optional_cost_key
 
 
 def _lower_for_each_player(

@@ -1094,6 +1094,40 @@ CHOSEN_CARD_TYPE_THIS_WAY = "chosen_card_type_this_way"
 #: ``grammar/lowering/_records._PRODUCES`` declares it.
 SACRIFICED_CARDS_BY_SEAT = "sacrificed_cards_by_seat"
 
+#: **How many** permanents a sacrifice step actually ate, beside the list of
+#: what they were.
+#:
+#: "Sacrifice any number of creatures. Last-Ditch Effort deals **that much**
+#: damage to any target." A *bare* back-reference resolves against the effect's
+#: one produced **quantity** (``_record_keys._PRODUCED_QUANTITIES``), and a list
+#: is not one — admitting ``sacrificed_cards`` there would let "that much" name
+#: a pile, which is the same argument ``exiled_count`` already carries beside
+#: ``exiled_cards`` one zone over.
+#:
+#: A second key rather than a length taken at the reader, for that pair's reason
+#: exactly: the two questions have different answers the moment a card asks
+#: *which* were sacrificed with a narrowing on it. Written at the one place both
+#: sacrifice paths record a card (``mixins/stack/choices._record_sacrificed_card``),
+#: so an interactive seat's answer and a non-interactive seat's inline
+#: resolution cannot record different numbers.
+SACRIFICED_COUNT = "sacrificed_count"
+
+#: How much life a life-loss step actually took, in total across every seat it
+#: took it from.
+#:
+#: "At the beginning of your upkeep, each opponent loses 1 life. You gain life
+#: equal to **the life lost this way**." (Subversion.) The printed 1 is what
+#: each opponent loses; what the gain reads is the *sum*, which in a two-player
+#: game is 1 and at a four-player table is 3 — so nothing about the printed
+#: sentence can supply it and no board read can either, life totals having moved
+#: by the time the second sentence runs.
+#:
+#: Written by ``handlers/life_and_game.target_loses_life`` at the one place it
+#: subtracts, declared by ``grammar/lowering/_records._PRODUCES`` and named as a
+#: quantity by ``_record_keys._PRODUCED_QUANTITIES``, which is the three-way
+#: agreement every other record on this channel has.
+LIFE_LOST_THIS_WAY = "life_lost_this_way"
+
 
 #: How many cards a "puts the cards from their hand on top of their library"
 #: step moved (Jester's Mask). The ``results`` key the handler writes and the

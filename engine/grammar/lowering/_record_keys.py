@@ -50,7 +50,9 @@ from ...oracle_types import (BASE_PT_SET_PERMANENTS,
                              CONTROL_EXCHANGED_PERMANENTS,
                              COUNTERS_PLACED_THIS_WAY,
                              COUNTERS_REMOVED, HAND_CARDS_TO_LIBRARY,
-                             PER_OBJECT_SEAT_RECORDS, SEARCHED_PERMANENTS)
+                             LIFE_LOST_THIS_WAY,
+                             PER_OBJECT_SEAT_RECORDS, SACRIFICED_COUNT,
+                             SEARCHED_PERMANENTS)
 from ...oracle_types import (
     REMOVED_FROM_COMBAT_PERMANENTS as _REMOVED_FROM_COMBAT_PERMANENTS,
 )
@@ -220,6 +222,17 @@ _PRODUCED_QUANTITIES: frozenset[str] = frozenset({
     # step moved (Jester's Mask), which is what the search behind it counts.
     HAND_CARDS_TO_LIBRARY,
     CHOSEN_CAST_DAMAGE,
+    # How many permanents a sacrifice step actually ate (Last-Ditch Effort's
+    # "that much"). Its own key beside ``sacrificed_cards`` for ``exiled_count``'s
+    # reason word for word: a list is not a quantity, and this set is what a
+    # *bare* back-reference resolves against — admitting the list would let
+    # "that much" name a pile.
+    SACRIFICED_COUNT,
+    # How much life a life-loss step took, summed over the seats it took it from
+    # (Subversion). A quantity like every other member here, and the reason it
+    # has to be a record rather than a board read is the loop: the printed
+    # number is per seat and the sentence behind it reads the total.
+    LIFE_LOST_THIS_WAY,
 })
 
 # The scratchpad keys that hold *permanents*, by id — what an earlier step of

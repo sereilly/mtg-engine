@@ -121,3 +121,91 @@ def test_hope_and_glory_asks_for_its_two_targets_once(set_pool):
     assert {target["name"] for target in spec["valid_targets"]} == {
         "Grizzly Bears", "Hill Giant"
     }
+
+
+# --- W1G1: a quantity the sentence that spends it produced ---
+#
+# Last-Ditch Effort — "Sacrifice any number of creatures. Last-Ditch Effort
+# deals that much damage to any target." "Any number" prints no count, so the
+# number the damage reads exists nowhere until the seat has answered — and by
+# then the creatures are cards in a graveyard (CR 400.7).
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+
+from tests.helpers import resolve_stack as _g1i_resolve
+
+
+def _g1i_board(set_pool, creatures=3, *, interactive=()):
+    """Seat 0 holding Last-Ditch Effort behind *creatures* bodies.
+
+    ``_g1i_`` prefixed and ending on ``return game, game.players[0], game.players[1]``
+    — SET_PLAYBOOK.md's note about a union splicing one helper onto another.
+    """
+    bear = set_pool("LEA")["Grizzly Bears"]
+    seat0 = PlayerState(
+        name="G1I-A",
+        hand=[set_pool("ULG")["Last-Ditch Effort"]],
+        battlefield=[Permanent(card=bear) for _ in range(creatures)],
+    )
+    seat1 = PlayerState(name="G1I-B")
+    game = Game(players=[seat0, seat1])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    return game, game.players[0], game.players[1]
+
+
+def test_g1_last_ditch_effort_deals_one_per_creature_given_up(set_pool):
+    """"That much" names the sacrifice in front of it, and what it counts is
+    what the seat actually gave up rather than what it was offered — two of the
+    three go, and two damage lands."""
+    game, mine, theirs = _g1i_board(set_pool, interactive=(0,))
+
+    game.cast_from_hand(0, "Last-Ditch Effort", target_player_index=1)
+    offer = game.pending_sacrifice_state()
+    assert offer["up_to"] is True and offer["count"] == 3, (
+        '"any number" is a ceiling the whole board answers, not an amount'
+    )
+    assert game.confirm_sacrifice(0, [0, 1])
+    _g1i_resolve(game)
+
+    assert len(list(game.controlled_by(0))) == 1, "two went"
+    assert theirs.life == 18
+
+
+def test_g1_last_ditch_effort_gives_up_the_whole_board(set_pool):
+    """The control on the count: three creatures is three damage, so nothing
+    about the number is the printed one — the card prints none."""
+    game, mine, theirs = _g1i_board(set_pool, interactive=(0,))
+
+    game.cast_from_hand(0, "Last-Ditch Effort", target_player_index=1)
+    assert game.confirm_sacrifice(0, [0, 1, 2])
+    _g1i_resolve(game)
+
+    assert list(game.controlled_by(0)) == []
+    assert theirs.life == 17
+
+
+def test_g1_last_ditch_effort_declined_by_a_headless_seat_deals_none(set_pool):
+    """"Any number" includes none, which is the stated ``up_to`` policy — a
+    seat merely offered the chance gives up nothing, and the count behind it is
+    zero rather than the board's size."""
+    game, mine, theirs = _g1i_board(set_pool)
+
+    game.cast_from_hand(0, "Last-Ditch Effort", target_player_index=1)
+    _g1i_resolve(game)
+
+    assert len(list(game.controlled_by(0))) == 3, "nothing was given up"
+    assert theirs.life == 20
+
+
+def test_g1_last_ditch_effort_over_an_empty_board_deals_none(set_pool):
+    """Nothing to offer, nothing asked, and a count off a record nothing wrote
+    is zero rather than a number the card never named."""
+    game, mine, theirs = _g1i_board(set_pool, creatures=0, interactive=(0,))
+
+    game.cast_from_hand(0, "Last-Ditch Effort", target_player_index=1)
+    _g1i_resolve(game)
+
+    assert game.pending_sacrifice_state() is None
+    assert theirs.life == 20

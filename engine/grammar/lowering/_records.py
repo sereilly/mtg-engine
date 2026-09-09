@@ -25,7 +25,6 @@ what a step of that kind always writes when it does.
 from __future__ import annotations
 
 from .. import ast
-from ..errors import LoweringError
 from ...oracle_types import (CHOSEN_CREATURE_TYPE_THIS_WAY,
                              CHOSEN_TARGET_GRAVEYARD_SLOTS,
                              CHOSEN_TARGET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
@@ -42,6 +41,8 @@ from ...oracle_types import (CHOSEN_CREATURE_TYPE_THIS_WAY,
                              MILLED_THIS_WAY,
                              PER_OBJECT_SEAT_RECORDS,
                              SACRIFICED_CARDS_BY_SEAT,
+                             SACRIFICED_COUNT,
+                             LIFE_LOST_THIS_WAY,
                              MANA_LOST_COUNT, MANA_LOST_THIS_WAY,
                              TAPPED_THIS_WAY, TAPPED_THIS_WAY_OBJECTS)
 from ._events import (ATTACHED_PERMANENT_CONTROLLER,
@@ -235,6 +236,13 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # would test — and the count rides beside it so a reader wanting a number
     # need not know the dict's shape.
     "lose_all_unspent_mana": (MANA_LOST_THIS_WAY, MANA_LOST_COUNT),
+    # "…each opponent loses 1 life. You gain life equal to **the life lost this
+    # way**." (Subversion.) How much the step really took, summed across its
+    # victims — the printed number is what *each* of them loses, so at any table
+    # bigger than two the sentence behind it names a number the card never
+    # prints. Nor can a board read supply it: by then the life totals are the
+    # ones this step left behind.
+    "target_loses_life": LIFE_LOST_THIS_WAY,
     "flip_coin": "coin_flip",
     # "Target opponent puts the cards from their hand on top of their library.
     # Search that player's library for **that many** cards." (Jester's Mask.)
@@ -483,8 +491,18 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # each player who sacrificed a Plains this way" (Desolation) is one
     # sentence about several payers, and the flat list would answer it for
     # every seat at once the moment any one of them lost a Plains.
+    #
+    # ``SACRIFICED_COUNT`` is the fourth and the only one that is a *number*:
+    # "Sacrifice any number of creatures. Last-Ditch Effort deals **that much**
+    # damage to any target." A bare back-reference resolves against the effect's
+    # produced quantities, and neither the boolean nor either list is one — so
+    # without this row the sentence had no producer to name and refused, while
+    # Reprocess's "for each permanent sacrificed this way" (which names its
+    # producer outright) worked from the list. Last, so ``primary_produced``
+    # still answers "did the sacrifice happen" with the boolean it always has.
     "sacrifice_matching_permanent": (
         "sacrificed_this_way", "sacrificed_cards", SACRIFICED_CARDS_BY_SEAT,
+        SACRIFICED_COUNT,
     ),
     # "…that creature's controller sacrifices it at end of combat. **If the
     # player does**, **they** create a 0/2 … Wall …" (Basalt Golem.) The same
@@ -828,56 +846,6 @@ def primary_produced(kind: str) -> str | None:
     return recorded if isinstance(recorded, str) else (recorded[0] if recorded else None)
 
 
-#: Which scratchpad key an activation **cost** writes when it is paid. The twin
-#: of ``_PRODUCES`` for the cost side of a colon, and separate from it for the
-#: same reason the two sides are separate: a cost is charged by
-#: ``engine/mixins/stack/activation.py`` rather than by an instruction, so there
-#: is no instruction kind to key it on. Land's Edge's "the discarded card" reads
-#: the record this names; a cost added here needs the activation path to record
-#: it under the same key, or the condition would compile and read nothing.
-#:
-#: Beside ``_PRODUCES`` because it is the same question about the other side of
-#: the colon, and this module is the one home for "what does a step record?".
-#: It sat in `lower.py` while that file was the only reader; the table is a
-#: registry either way, and `lower.py` is dispatch.
-#: The scratchpad key an untap cost writes. Named rather than spelled twice
-#: because three files read it — the table below, the mana lowering's gate and
-#: the activation path that writes it — and the failure a third spelling
-#: produces is a gate that always refuses.
-UNTAPPED_FOR_COST = "untapped_for_cost"
-#: The scratchpad key a sacrifice cost writes, named here for
-#: ``UNTAPPED_FOR_COST``'s reason one line up: the mana lowering gates on it now
-#: ("Add one mana of any type **the sacrificed land** could produce",
-#: Squandered Resources), so a second spelling would be a gate that always
-#: refuses.
-SACRIFICED_FOR_COST = "sacrificed_for_cost"
-
-_COST_PRODUCES: dict[type, str] = {
-    ast.DiscardCost: "discarded_cards",
-    # "Sacrifice a creature: … **If the sacrificed creature was a Thrull**, …"
-    # (Ebon Praetor.) The activation path records the permanent the cost ate
-    # under ``sacrificed_for_cost``, and the cast path records the same key
-    # for an additional cost (``engine/mixins/stack/casting.py``).
-    #
-    # **Nothing gates on this row today, and that is the honest state rather
-    # than an oversight.** ``CostObjectWas`` reads both this channel and the
-    # exile one, and it cannot use ``produced``: for a *spell* the cost is a
-    # different printed line of the card, which the clause being lowered
-    # cannot see, so the gate would refuse Soul Exchange outright. The row
-    # stays because it states what the payment path writes, and the reader
-    # that would use it is named: ``SacrificedForCost`` (the *amount* — Life
-    # Chisel, Diamond Valley) has no check that its ability sacrifices
-    # anything at all, and threading ``produced`` into that branch is what
-    # this row is for.
-    ast.SacrificeCost: SACRIFICED_FOR_COST,
-    # "{T}, **Untap a tapped land an opponent controls**: Add one mana of any
-    # type **that land** could produce." (Benthic Explorers.) The land the cost
-    # untapped, recorded by the activation path so the effect's back-reference
-    # has something to name — and, unlike the two rows above, this row really is
-    # a gate: the phrase is only meaningful on an ability whose own cost untaps
-    # something, and `_lower_add_mana` refuses it without this key.
-    ast.UntapPermanentCost: UNTAPPED_FOR_COST,
-}
 
 
 def names_the_shielded_object(subject) -> bool:
@@ -931,37 +899,3 @@ def counts_prevented_damage(node) -> bool:
         isinstance(count, ast.ThatMuch)
         and count.source == PREVENTION_SHIELD_RECORD
     )
-
-
-def optional_cost_key(symbols: str) -> str:
-    """The canonical spelling a CR 601.2b optional additional cost is recorded
-    and read back under.
-
-    Here rather than in either family that needs it — ``loops`` lowers "for each
-    additional {1}{R} you paid" and ``game`` lowers "plus an additional 3 life
-    for each …" — because a fragment two families need cannot live in one of
-    them. And here rather than in ``_common`` because it is the same question
-    this module already answers: what a step wrote down and how a later sentence
-    names it. The step in this case is the *cast* (CR 601.2b), and the record is
-    on the stack item's choices rather than in the resolution scratchpad,
-    because the mana pool that paid the cost empties at the end of that step
-    (CR 500.5).
-
-    Through the same two functions ``cast_costs`` spells its offers with
-    (``mana_cost_from_symbols`` then ``mana_cost_label``), so the sentence that
-    spends the count and the payment that made it name the offer identically
-    however the card printed it. Two readers would be two answers, and the quiet
-    one is a loop that never runs.
-
-    Raises when the printed run holds a symbol no payment can spend ({X}, a
-    hybrid): the same refusal ``cast_costs`` makes of the offer itself, so a
-    sentence cannot read back a cost that side declined to charge.
-    """
-    from ...mana_payment import mana_cost_from_symbols, mana_cost_label
-
-    parsed = mana_cost_from_symbols(symbols)
-    if not parsed:
-        raise LoweringError(
-            f"no payment spends {symbols!r}, so nothing records paying it"
-        )
-    return mana_cost_label(parsed)

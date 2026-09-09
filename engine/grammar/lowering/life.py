@@ -23,7 +23,7 @@ from ...oracle_types import (COUNTERED_SPELL_CONTROLLER, LAST_TARGET_CONTROLLER,
                              X_FROM_COUNT_PER_RECIPIENT)
 from .. import ast
 from ..errors import LoweringError
-from ._records import optional_cost_key
+from ._cost_records import optional_cost_key
 from ._seats import _player_recipient
 from ._amounts import count_spec, halved_count_spec, x_offset_amount
 from ._common import (

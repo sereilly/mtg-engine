@@ -1474,7 +1474,7 @@ def test_layers_only_import_downward(layers):
     "package,shared,roof",
     [
         ("effects", (), ()),
-        ("lowering", ("_common", "_filters", "_events", "_deaths", "_delays", "_amounts", "_counted_damage", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_conjuncts", "_bound_returns", "_bound_exiles", "_described_returns", "_piles", "_counter_stores", "_plus_one_counters", "_blankets", "_pump_categories", "_zone_categories", "_record_keys", "_record_conditions", "_superlatives", "_collapses", "categories", "conditions"), ()),
+        ("lowering", ("_common", "_filters", "_events", "_deaths", "_delays", "_amounts", "_counted_damage", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_conjuncts", "_bound_returns", "_bound_exiles", "_described_returns", "_piles", "_counter_stores", "_plus_one_counters", "_blankets", "_pump_categories", "_zone_categories", "_record_keys", "_record_conditions", "_cost_records", "_superlatives", "_recipients", "_collapses", "categories", "conditions"), ()),
         # `costs` is shared beside `_core` rather than a family: a cost is
         # charged on the way to the stack and never lowered, so it has no
         # `effects/` or `lowering/` twin to be a family of — and both
@@ -1728,6 +1728,28 @@ def test_every_grammar_module_is_placed_or_exempt():
 # `UNLAYERED` is — see the test below.
 FAMILY_SHARED = {
     "_common", "_core", "_events", "conditions", "categories", "statements",
+    # `_recipients` split out of `lowering/damage.py` at ULG wave 1, when that
+    # module sat 24 lines under the size guard with a new counted-amount branch
+    # to land. The seam is the one that module's own docstring already drew
+    # twice — the computed amounts left for `_amounts`, the prevention shields
+    # for `prevention` — and what stayed was "a damage event happening", which
+    # has exactly two halves: how much, and to whom. This is the second.
+    # A single-importer floor, precedented by `_bites` and `_conjuncts` beside
+    # it: `damage` is the only family that asks, and the module exists because
+    # that family crossed the guard. It is *not* folded into `_seats`, which
+    # answers a narrower question for three families and must not carry one
+    # family's dispatch.
+    "_recipients",
+    # `_cost_records` split out of `_records` in the same wave and for the same
+    # reason, along the seam that module's own docstring has drawn since it was
+    # written: `_PRODUCES` is keyed by *instruction kind*, and nothing about a
+    # cost can be — a cost is charged by `mixins/stack/activation.py` on the way
+    # to the stack (CR 601.2h) rather than by anything the dispatcher runs. Six
+    # families and `lower.py` read it and it reads nothing back. Its importers
+    # were repointed rather than re-exported through `_records`, which is that
+    # module's own complaint about the key names it used to reach through
+    # `_events`.
+    "_cost_records",
     # `_payloads` split out of `ast/_references` at Exodus's Phase 0, when that
     # module sat three lines under the size guard with five groups about to
     # land noun-phrase work on it. It is `ObjectFilter.to_payload`'s 307-line

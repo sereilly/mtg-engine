@@ -285,6 +285,25 @@ def count_from_payload(
             value = getattr(tapped, f"effective_{cost_tap}", None)
             return max(0, _scaled(int(value or 0), spec))
         return 0
+    # "…equal to **the mana value of the discarded card**" (Pyromancy). The
+    # fourth payment channel, beside the three above and for their reason: the
+    # card was discarded before the ability reached the stack (CR 601.2h), so
+    # nothing at resolution can say which of a graveyard's cards it was.
+    #
+    # The channel is a **list** — both discard-cost spellings feed it, and a
+    # cost that discarded a whole hand would put several cards on it — so the
+    # sum is what the words mean whatever the cost took: one card is its own
+    # mana value, and none is zero rather than a guess. Read off the *card*
+    # (CR 202.3): a card in a graveyard has no computed characteristics at all
+    # (CR 613.1), which is why the lowering admits mana value and nothing else.
+    cost_discard = spec.get("cost_discard_characteristic")
+    if cost_discard is not None:
+        discarded = (context.choices or {}).get("discarded_for_cost") or []
+        if cost_discard != "mana_value":
+            return 0
+        return max(0, _scaled(
+            sum(int(getattr(card, "cmc", 0) or 0) for card in discarded), spec
+        ))
     # "…equal to **the number of pain counters removed this way**" (Torture
     # Chamber); "You gain 2 life **for each elixir counter removed this way**"
     # (Essence Bottle). How many counters the ability's own cost took off,
