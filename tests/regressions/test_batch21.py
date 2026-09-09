@@ -91,9 +91,17 @@ class TestUpkeepPriorityHold:
         # The mana floated during the window is still there to pay with — the
         # deferred resolution must not have ended the step out from under it.
         assert p0.mana_pool["U"] == 1
+        stasis_prompt = next(
+            c for c in info["choices"] if c["card_name"] == "Stasis"
+        )
         paid = client.post(
             f"/api/sessions/{sid}/action",
-            json={"seat": 0, "action": "pay_upkeep", "card_name": "Stasis"},
+            json={
+                "seat": 0, "action": "pay_upkeep", "card_name": "Stasis",
+                # Which permanent is being paid for — see
+                # tests/rules/test_upkeep_prompt_identity.py.
+                "prompt_permanent_id": stasis_prompt["permanent_id"],
+            },
         )
         assert paid.status_code == 200, paid.text
         assert any(perm.card.name == "Stasis" for perm in p0.battlefield)

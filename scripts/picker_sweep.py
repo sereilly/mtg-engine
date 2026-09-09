@@ -58,11 +58,37 @@ _REMINDER = re.compile(r"\([^)]*\)")
 #: the Dead's −7 is the shipped example.
 _QUOTED = re.compile(r'"[^"]*"')
 
-#: Cards the sweep would flag whose picker really is absent for a reason —
-#: mirrors ``_NO_PICKER`` in tests/engine/test_targeting.py, which is the
-#: reviewed list; a new entry belongs there first.
+#: Cards whose **cast** picker really is absent for a reason — mirrors
+#: ``_NO_PICKER`` in tests/engine/test_targeting.py, which is the reviewed
+#: list; a new entry belongs there first.
 ACKNOWLEDGED = {
     "Darkpact": "the ante zone has no picker (tests/engine/test_targeting.py)",
+}
+
+#: The same for an **activated ability**, keyed ``(card name, ability index)``
+#: — mirrors ``_UNANNOUNCEABLE_TARGETS`` in
+#: tests/engine/test_activation_targeting.py.
+#:
+#: Two dicts rather than one because the two reviewed lists are keyed
+#: differently, and a script that flattened them would be a third list with its
+#: own opinion. ``tests/engine/test_picker_sweep_acknowledgements.py`` holds
+#: both to their reviewed originals in **both** directions: an acknowledgement
+#: only this script carries would be a finding silenced without review, and one
+#: only the tests carry would leave the script reporting a decline that has
+#: already been made.
+#:
+#: Carrion Beetles is the entry that showed the gap. It is the sole shipped
+#: card in this list, has been reported by this script since Urza's Saga was
+#: ingested, and had been reviewed and ratcheted in the test file the whole
+#: time — the script simply had nowhere to say so, and no branch that would
+#: have read it if it had: ``ACKNOWLEDGED`` was consulted for the cast finding
+#: only. A standing advisory finding that is *known* to be a decline trains
+#: the reader to skim the report, which is how the next real one is missed.
+ACKNOWLEDGED_ABILITIES = {
+    ("Carrion Beetles", 0): (
+        "a graveyard target is chosen at resolution, not announced "
+        "(tests/engine/test_activation_targeting.py)"
+    ),
 }
 
 
@@ -83,7 +109,10 @@ def sweep(cards):
     - ``activation_no_picker``: an activated ability whose printed line says
       "target" while ``derive_activation_spec`` returns None — the ability
       the web picker cannot ask about.
-    - ``acknowledged``: matched ``no_picker`` but stands acknowledged above.
+    - ``acknowledged``: matched ``no_picker`` or ``activation_no_picker`` but
+      stands acknowledged above. Both branches consult their own list; the
+      activation one used to consult none, so a reviewed decline went on being
+      reported as a finding for a whole set's lifetime.
     """
     findings = {
         "no_picker": [],
@@ -106,7 +135,7 @@ def sweep(cards):
                 )
         if derives and not card_names_a_chooser(card, program):
             findings["phantom_picker"].append((card.name, str(spec)))
-        for ability in program.activated_abilities:
+        for index, ability in enumerate(program.activated_abilities):
             line = _QUOTED.sub("", _REMINDER.sub("", ability.source_line or "")).lower()
             if "of an opponent's choice" in line or (
                 # The same fact in the other printed word order, with the
@@ -122,9 +151,13 @@ def sweep(cards):
                 # from the program (tests/engine/test_activation_targeting.py).
                 continue
             if "target" in line and derive_activation_spec(ability) is None:
-                findings["activation_no_picker"].append(
-                    (card.name, ability.source_line)
-                )
+                acknowledged = ACKNOWLEDGED_ABILITIES.get((card.name, index))
+                if acknowledged is not None:
+                    findings["acknowledged"].append((card.name, acknowledged))
+                else:
+                    findings["activation_no_picker"].append(
+                        (card.name, ability.source_line)
+                    )
     return findings
 
 

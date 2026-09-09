@@ -10,6 +10,7 @@ up when the answer arrives.
 
 from __future__ import annotations
 
+from engine.phases.upkeep_step import upkeep_prompt_key
 from engine.upkeep_costs import cost_from_payload
 
 from .session_store import Session
@@ -71,12 +72,20 @@ def _has_island_sanctuary(game, player_index: int) -> bool:
 
 
 def _upkeep_pay_pending(session: Session) -> list[dict]:
-    """Return pay-or-sacrifice choices that still need a player decision."""
+    """Return pay-or-sacrifice choices that still need a player decision.
+
+    Filtered by ``upkeep_prompt_key`` — the permanent id, for all but the two
+    prompts that have none. This read the printed card name, so two copies of
+    one upkeep card were one entry as far as "still pending" was concerned:
+    answering either cleared both, and the second permanent's decision was
+    never asked. The engine's half of that is
+    ``upkeep_effects.upkeep_answer``.
+    """
     if session.game.current_step != "upkeep":
         return []
     return [
         c for c in session.upkeep_pay_choices
-        if c["card_name"] not in session.upkeep_resolved_choices
+        if upkeep_prompt_key(c) not in session.upkeep_resolved_choices
     ]
 
 
@@ -86,7 +95,7 @@ def _optional_trigger_pending(session: Session) -> list[dict]:
         return []
     return [
         c for c in session.optional_trigger_choices
-        if c["card_name"] not in session.optional_trigger_resolved
+        if upkeep_prompt_key(c) not in session.optional_trigger_resolved
     ]
 
 
@@ -97,7 +106,7 @@ def _upkeep_mana_prevention_pending(session: Session) -> list[dict]:
         return []
     return [
         c for c in session.upkeep_mana_prevention_choices
-        if c["card_name"] not in session.upkeep_mana_prevention_resolved
+        if upkeep_prompt_key(c) not in session.upkeep_mana_prevention_resolved
     ]
 
 
@@ -220,14 +229,18 @@ def _advance_after_upkeep_choices(session: Session) -> None:
     mana_prevention = dict(session.upkeep_mana_prevention_resolved)
     # Split the Nafs Asp answers back out — resolve_upkeep knows nothing about
     # them; they belong to the draw step that _finish_beginning_phase runs next.
-    life_loss_names = {
-        c["card_name"] for c in session.upkeep_pay_choices
+    # Split on the prompt *key*, not on the card name: an upkeep answer is
+    # filed under a permanent id now and a Nafs Asp obligation under its source
+    # name (it has no permanent — the source may have left), so the two
+    # channels no longer share a key space at all.
+    life_loss_keys = {
+        upkeep_prompt_key(c) for c in session.upkeep_pay_choices
         if c.get("kind") == "draw_step_life_loss_unless_pay"
     }
     session.draw_step_life_loss_choices = {
-        name: paid for name, paid in choices.items() if name in life_loss_names
+        key: paid for key, paid in choices.items() if key in life_loss_keys
     }
-    choices = {name: paid for name, paid in choices.items() if name not in life_loss_names}
+    choices = {key: paid for key, paid in choices.items() if key not in life_loss_keys}
     _clear_upkeep_pay_choices(session)
     session.game.resolve_upkeep(
         session.current_turn,
@@ -255,8 +268,11 @@ def _build_upkeep_pay_info(session: Session, viewer_seat: int | None) -> dict | 
     can_pay: dict[str, bool] = {}
     if 0 <= session.current_turn < len(session.game.players):
         payer = session.game.players[session.current_turn]
+        # Keyed by the prompt key, which JSON renders as a string for the
+        # permanent ids — ``app.js`` indexes it with the same value it sends
+        # back, and JavaScript stringifies a numeric index for free.
         can_pay = {
-            c["card_name"]: session.game.can_pay_upkeep_cost(
+            upkeep_prompt_key(c): session.game.can_pay_upkeep_cost(
                 payer, cost_from_payload(c.get("cost") or {})
             )
             for c in session.upkeep_pay_choices

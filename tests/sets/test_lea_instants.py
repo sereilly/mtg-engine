@@ -231,9 +231,17 @@ def test_stasis_upkeep_sacrifice_removes_stasis(all_cards):
 
     assert session.game.current_step == "upkeep"
 
+    # See tests/rules/test_upkeep_prompt_identity.py: the prompt is addressed
+    # by permanent id, because two copies of one upkeep card are two decisions.
+    stasis_prompt = next(
+        c for c in session.upkeep_pay_choices if c["card_name"] == "Stasis"
+    )
     sacrifice_resp = client.post(
         f"/api/sessions/{sid}/action",
-        json={"seat": 0, "action": "sacrifice_upkeep", "card_name": "Stasis"},
+        json={
+            "seat": 0, "action": "sacrifice_upkeep", "card_name": "Stasis",
+            "prompt_permanent_id": stasis_prompt["permanent_id"],
+        },
     )
     assert sacrifice_resp.status_code == 200
     assert not any(p.card.name == "Stasis" for p in p1.battlefield), \

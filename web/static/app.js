@@ -3344,6 +3344,8 @@ function getPromptBoardTargeting(state = currentState) {
           seat,
           action: "resolve_optional_trigger",
           card_name: current.card_name,
+          // Which trigger is being answered, as opposed to what it is aimed at.
+          prompt_permanent_id: current.permanent_id ?? null,
           accept: true,
           target_seat: targetSeat,
           target_permanent_index: idx,
@@ -4094,9 +4096,18 @@ function applyUpkeepPayPrompt(upkeepInfo) {
     ? `${cardName} damaged you — pay before your draw step or lose ${current?.life_loss || 1} life.${howToPay}`
     : `${cardName} requires a payment at the beginning of your upkeep.${howToPay}`;
 
+  // Which permanent this prompt is about (CR 400.7's identity). Two copies of
+  // one upkeep card produce two prompts with the same `card_name`, so the id is
+  // what the answer is filed under; the two prompts that have no permanent
+  // behind them (Nether Shadow in a graveyard, a Nafs Asp obligation) send
+  // `null` and are still answered by name.
+  const promptPermanentId = current?.permanent_id ?? null;
   // Server-computed affordability (pool + untapped mana lands): a payment the
-  // engine would reject is greyed out instead of offered.
-  const canPay = upkeepInfo.can_pay?.[cardName] !== false;
+  // engine would reject is greyed out instead of offered. Keyed by the same
+  // value the answer is — JSON turned the ids into strings and a numeric index
+  // stringifies to match.
+  const canPayKey = promptPermanentId === null ? cardName : promptPermanentId;
+  const canPay = upkeepInfo.can_pay?.[canPayKey] !== false;
   // The imperative is the server's too: "Pay {U}" and "Sacrifice a land" are
   // the same cost, and only the cost knows which of its parts it has.
   const payLabel = current?.cost_pay_label || `Pay ${costLabel}`;
@@ -4118,12 +4129,22 @@ function applyUpkeepPayPrompt(upkeepInfo) {
   const sacBtnEl = document.getElementById("upkeepSacBtn");
   if (payBtnEl) {
     payBtnEl.addEventListener("click", async () => {
-      await sendAction({ seat, action: "pay_upkeep", card_name: cardName });
+      await sendAction({
+        seat,
+        action: "pay_upkeep",
+        card_name: cardName,
+        prompt_permanent_id: promptPermanentId,
+      });
     });
   }
   if (sacBtnEl) {
     sacBtnEl.addEventListener("click", async () => {
-      await sendAction({ seat, action: "sacrifice_upkeep", card_name: cardName });
+      await sendAction({
+        seat,
+        action: "sacrifice_upkeep",
+        card_name: cardName,
+        prompt_permanent_id: promptPermanentId,
+      });
     });
   }
 }
@@ -4141,6 +4162,9 @@ function applyOptionalTriggerPrompt(info) {
   const pending = info.pending || [];
   const current = pending[0];
   const cardName = current?.card_name || "Unknown";
+  // See applyUpkeepPayPrompt: two Vesuvan Doppelgangers or two Erhnam Djinns
+  // are two triggers with one card name, and the id is what tells them apart.
+  const promptPermanentId = current?.permanent_id ?? null;
   const promptText = current?.prompt || `Resolve ${cardName}'s triggered ability?`;
 
   panel.classList.remove("hidden");
@@ -4181,12 +4205,24 @@ function applyOptionalTriggerPrompt(info) {
   const noEl = document.getElementById("optionalTriggerNoBtn");
   if (yesEl) {
     yesEl.addEventListener("click", async () => {
-      await sendAction({ seat, action: "resolve_optional_trigger", card_name: cardName, accept: true });
+      await sendAction({
+        seat,
+        action: "resolve_optional_trigger",
+        card_name: cardName,
+        prompt_permanent_id: promptPermanentId,
+        accept: true,
+      });
     });
   }
   if (noEl) {
     noEl.addEventListener("click", async () => {
-      await sendAction({ seat, action: "resolve_optional_trigger", card_name: cardName, accept: false });
+      await sendAction({
+        seat,
+        action: "resolve_optional_trigger",
+        card_name: cardName,
+        prompt_permanent_id: promptPermanentId,
+        accept: false,
+      });
     });
   }
 }
@@ -4240,6 +4276,7 @@ function applyUpkeepPreventionPrompt(info) {
         seat,
         action: "pay_upkeep_prevention",
         card_name: cardName,
+        prompt_permanent_id: current?.permanent_id ?? null,
         amount,
       });
     });

@@ -384,12 +384,21 @@ class TestErhnamDjinnTargetPrompt:
             [Permanent(card=arn_by_name["Erhnam Djinn"])],
             [Permanent(card=_C["Grizzly Bears"])],
         )
+        prompt = next(
+            c for c in session.optional_trigger_choices
+            if c["card_name"] == "Erhnam Djinn"
+        )
         resp = client.post(
             f"/api/sessions/{sid}/action",
             json={
                 "seat": 0,
                 "action": "resolve_optional_trigger",
                 "card_name": "Erhnam Djinn",
+                # *Which* Djinn's trigger is being answered, as opposed to what
+                # it is aimed at. Two Erhnam Djinns are two triggers choosing
+                # two targets (CR 603.3d) — see
+                # tests/rules/test_upkeep_prompt_identity.py.
+                "prompt_permanent_id": prompt["permanent_id"],
                 "accept": True,
                 "target_seat": 1,
                 "target_permanent_index": 0,

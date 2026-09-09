@@ -36,17 +36,27 @@ by ``tests/rules/test_copy_effects.py``'s "copied name" section:
   * Goblin Artisans' "another creature named ~" rival scan
     (``handlers/stack.py``).
 
+**One family has since been drained, and it is worth reading why.** The
+interactive upkeep prompt protocol (``phases/upkeep_step.py``,
+``phases/upkeep_effects.py``) held 25 of these reads: ``human_choices`` /
+``trigger_targets`` / ``optional_choices`` dicts keyed by card name on *both*
+the arming side and the reading side. The entry above said they would convert
+"together (to permanent ids) or not at all", and that ``no card in the pool can
+demonstrate a wrong answer`` — **which was wrong, and the reason it was wrong is
+the useful part**. No *card* demonstrates it; two copies of a perfectly ordinary
+card do. Two Breeding Pits and four black mana, ``{"Breeding Pit": True}``, and
+both were paid for. Two Erhnam Djinns produced a single prompt and the second
+trigger's target was never asked for (CR 603.3d). The census that built this
+guard asked which name reads could be *wrong about the card*, and this family's
+defect was never about the card at all — it was about which **permanent**, and
+that is a question a name cannot answer however faithfully it is copied.
+``tests/rules/test_upkeep_prompt_identity.py`` is the rule; the two modules are
+gone from the dict below.
+
 The rest are ratcheted below rather than fixed, because no card in the pool
 can demonstrate a wrong answer for them — this repo's rule is that a fix with
-no card to verify it is a guess. They fall into three families:
+no card to verify it is a guess. They fall into two families:
 
-  * **The interactive upkeep prompt protocol** (``phases/upkeep_step.py``,
-    ``phases/upkeep_effects.py``): ``human_choices`` / ``trigger_targets`` /
-    ``optional_choices`` dicts keyed by card name on *both* the arming side
-    and the reading side, in the same files. Printed-name keys are consistent
-    with the printed-name labels beside them; converting one side alone
-    desyncs the wire, so they convert together (to permanent ids) or not at
-    all — the combat-map story in ``test_control_reads.py``.
   * **Wire/test addressing** (``mixins/helpers.py``'s
     ``_find_controlled_permanent``, ``phases/beginning_phase.py``,
     ``web/action_helpers.py``): a client or a test names a permanent by the
@@ -138,9 +148,9 @@ def _dispatch_reads(path: pathlib.Path) -> tuple[tuple[int, str], ...]:
 # Which family each module belongs to — and why it is ratcheted rather than
 # fixed — is in the module docstring above.
 PRINTED_NAME_DISPATCH_BASELINE: dict[str, int] = {
-    # The interactive upkeep prompt protocol: name-keyed on both sides.
-    "engine/phases/upkeep_effects.py": 18,
-    "engine/phases/upkeep_step.py": 7,
+    # The interactive upkeep prompt protocol used to hold 25 of these, 18 in
+    # `upkeep_effects.py` and 7 in `upkeep_step.py`. Both reached zero when the
+    # protocol moved to permanent ids — see the docstring above.
     # Wire/test addressing by the printed name serialization handed out.
     "engine/mixins/helpers.py": 2,
     "engine/phases/beginning_phase.py": 2,

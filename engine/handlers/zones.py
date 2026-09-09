@@ -5702,10 +5702,21 @@ def discard_hand(game: Game, instruction: OracleInstruction, context: OracleExec
     """
     caster = context.caster
     if instruction.payload.get("who") == "each_player":
-        # "**Each player** discards their hand…" (Windfall.) Every living seat
-        # in CR 101.4's order, which is the order every other each-player loop
-        # in this engine walks — nothing here is a decision, but a seeded run
-        # still has to replay identically.
+        # "**Each player** discards their hand…" (Windfall, Ill-Gotten Gains.)
+        # Every living seat in CR 101.4's order, which is the order every other
+        # each-player loop in this engine walks — nothing here is a decision,
+        # but a seeded run still has to replay identically. A player who has
+        # left the game is not one of them (CR 800.4a). One loop for the whole
+        # family, which is why "each player" is a value of ``who`` and not a
+        # second handler.
+        #
+        # It was, briefly, *two* copies of this block — a parallel-round merge
+        # unioned both rewrites of this function and the second sat after this
+        # one's ``return``, unreachable. The two differed by a single line and
+        # it was this one's ``by_seat`` write, so the wrong survivor would have
+        # made the sentence behind Windfall's read a zero with nothing failing.
+        # `tests/engine/test_no_function_re_asks_a_settled_dispatch.py` is the
+        # guard that now sees it; a repeated *top-level* name never could.
         #
         # The tally is recorded **per seat**, under the key the per-seat
         # discards already write: the sentence behind this one asks for "the
@@ -5766,32 +5777,6 @@ def discard_hand(game: Game, instruction: OracleInstruction, context: OracleExec
             )
             return True, "resolved"
         caster = target
-    # "**Each player** discards their hand" (Ill-Gotten Gains). A set of seats
-    # rather than one, in CR 101.4's order and skipping a player who has left
-    # the game (CR 800.4a). The loop is the same body either way, which is why
-    # it is a value of ``who`` and not a second handler.
-    if instruction.payload.get("who") == "each_player":
-        total = len(game.players)
-        active = game.active_player_index or 0
-        emptied = 0
-        for seat in sorted(
-            (i for i, p in enumerate(game.players) if not p.lost),
-            key=lambda i: ((i - active) % total, i),
-        ):
-            player = game.players[seat]
-            gone = list(player.hand)
-            player.hand = []
-            for card in gone:
-                game._discard_card(player, card)
-            emptied += len(gone)
-            game.log.append(
-                f"{player.name} discarded their hand ({len(gone)} card(s))"
-            )
-        # Under the key every other discard in this file writes, so "…then
-        # draws that many cards" behind one of these reads one number however
-        # the sentence named its seats.
-        context.results["discarded_count"] = emptied
-        return True, "resolved"
     discarded = list(caster.hand)
     caster.hand = []
     for card in discarded:

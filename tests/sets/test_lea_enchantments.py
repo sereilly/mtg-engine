@@ -353,9 +353,19 @@ def test_stasis_upkeep_prompts_human_player(all_cards):
     )
     assert tap_resp.status_code == 200
 
+    # `prompt_permanent_id` names *which* permanent is being paid for. Two
+    # copies of one upkeep card are two decisions (CR 603.3), so the printed
+    # name is no longer an address — see
+    # tests/rules/test_upkeep_prompt_identity.py.
+    stasis_prompt = next(
+        c for c in session.upkeep_pay_choices if c["card_name"] == "Stasis"
+    )
     pay_resp = client.post(
         f"/api/sessions/{sid}/action",
-        json={"seat": 0, "action": "pay_upkeep", "card_name": "Stasis"},
+        json={
+            "seat": 0, "action": "pay_upkeep", "card_name": "Stasis",
+            "prompt_permanent_id": stasis_prompt["permanent_id"],
+        },
     )
     assert pay_resp.status_code == 200
     assert any(p.card.name == "Stasis" for p in p1.battlefield), \
