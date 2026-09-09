@@ -650,6 +650,13 @@ def _fused_tap_then_bite(
                         _filter_payload(bitten.filter),
                     ],
                     "count": 2,
+                    # The printed "another" the branch above requires, carried
+                    # into the payload the announcement gate reads — the same
+                    # rider ``_fused_two_target_pump`` records and this fusion
+                    # dropped. Deadshot without it taps a creature and has it
+                    # bite itself for nothing, which is a legal announcement of
+                    # a card that does not exist.
+                    "distinct": True,
                     **_optional_slot_key((first.subject, bitten)),
                 },
             }),

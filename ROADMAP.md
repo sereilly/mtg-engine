@@ -236,60 +236,65 @@ one card prints this") reads as a work item long after it stopped being true.
   that must flip. Recorded 2026-09-02; no other pool interaction is known to
   need it.
 
-- **CR 602.3 is not implemented, and the code says so citing the wrong rule
-  (found 2026-09-08, same round).** "Some abilities specify that one of their
-  controller's opponents does something the controller would normally do while
-  it's being activated, such as choose a mode or choose targets. In these cases,
-  the opponent does so when the ability's controller normally would do so."
+- **CR 602.3's timing half is still owed (recorded 2026-09-08, half fixed the
+  same day).** "Some abilities specify that one of their controller's opponents
+  does something the controller would normally do while it's being activated,
+  such as choose a mode or choose targets. In these cases, the opponent does so
+  when the ability's controller normally would do so."
 
-  Two pool cards print it. Echo Chamber (TMP): "An opponent chooses target
-  creature they control." Mogg Assassin (EXO): "You choose target creature an
-  opponent controls, and that opponent chooses target creature." Both lower the
-  opponent's pick to a resolution-time `permanent_choice` prompt, so the word
-  "target" announces nothing and the cost is paid before the opponent has
-  chosen. On Mogg Assassin that hands the opponent a pick made after the coin
-  flip's context exists, which CR 602.3's "when the controller normally would"
-  denies them.
+  Two pool cards print it: Echo Chamber ("An opponent chooses target creature
+  they control") and Mogg Assassin ("…and that opponent chooses target
+  creature"). Both model the opponent's pick as a value chosen while the ability
+  *resolves*.
 
-  **The comment beside the Echo Chamber row in
-  `engine/grammar/lowering/attachments.py` argues it from CR 601.2c** — "the
-  rules would have the *controller* choose (CR 601.2c does not apply, so it is
-  an ordinary choice made on resolution)". Both halves are wrong about the
-  subject: the card names the opponent, and 602.3 is the rule that has room for
-  exactly that. This is the VIS wave 4 class (a citation that is real, and about
-  something else) surviving in a *justification* rather than in a cross-
-  reference, which is the shape no citation guard can catch — `rules_gaps.py`
-  checks that a number exists and that its subrule letter does, and
-  `test_cr_citation_subjects.py` checks subjects only inside the 701 block.
-  Recorded rather than fixed: honouring 602.3 means an announcement-time prompt
-  owed by a seat that is not the activator, which `pending_choices` has no
-  shape for yet.
+  **Fixed:** the legality half. A printed "target" carries CR 601.2c with it
+  however answers it, so an ability whose announced target has no legal object
+  cannot be activated — Echo Chamber used to pay {4} and {T} into a choice with
+  no candidates, and the gate above it could not see the problem because an
+  ability whose target an opponent announces has no spec for it to read.
+  `legality._announced_choice_refusal` reads the `announced_target` key the
+  lowering now carries, and asks the chooser's own battlefield, which is the
+  board the resolution's candidate rule will ask.
 
-- **CR 115.3 is unenforced for a pluralised single "target" (found 2026-09-08,
-  by the CR-coverage round rather than by any census).** "The same target can't
-  be chosen multiple times for any one instance of the word 'target'." The gate
-  exists — `legality.cast_target_refusal` refuses a repeat when the spec carries
-  `distinct_targets` — but `targeting.py` derives that flag for the
-  `cost_targets` shape alone, so the flat `exact_targets` / `max_targets`
-  family has **no distinctness check at all**. The pool prints "two target ..."
-  on 24 cards.
+  **Still owed:** the timing. The pick happens as the ability resolves, so it is
+  not in the announcement — nothing can be held in response to a target that has
+  not been named yet, and CR 608.2b never re-checks it. Closing that needs a
+  prompt owed *during an announcement* by a seat that is not the activator,
+  which `pending_choices` has no shape for: every kind it registers is armed
+  from a resolution's execution context. The same gap covers Cuombajj Witches'
+  "any target of an opponent's choice", which is the third printing and a
+  triggered one.
 
-  The mild reading is a spell that under-delivers: Ashes to Ashes naming one
-  creature twice resolves and exiles one. The sharp one is that the spell
-  becomes castable when it is not — with a single creature on the battlefield
-  Ashes to Ashes has no legal announcement (CR 601.2c wants two legal targets),
-  and the engine casts it, exiles that creature and charges the printed 5 life.
-  A player who wants the last blocker gone gets it for a cost the card does not
-  offer. Reproduced on Ashes to Ashes, Dust to Dust and Cannibalize, and on
-  Elven Rite and Contagion through `divided_targets`.
+  **One thing this entry claimed and measured wrong.** It said Mogg Assassin
+  hands the opponent a pick made after the coin flip's context exists. It does
+  not: the flip is a later step of the same resolution and the engine holds the
+  whole resolution for the prompt, so the choice is made first. The rest of the
+  entry stood; that sentence was a consequence reasoned from the divergence
+  rather than read off the game, which is the thing this list exists to stop.
 
-  **The ability half is already right**, which is what makes this a derivation
-  gap rather than a missing rule: Sorrow's Path refuses the same blocker twice
-  with nothing paid, and `tests/rules/test_targets_and_costs.py` now holds it
-  there. The fix is `distinct_targets` derived for a pluralised instance of the
-  word rather than only for the printed "another", beside the existing check at
-  `legality.py:1802`. `engine/divided_damage.py:268-286` already records the
-  divided half of this as standing looseness; the flat half was undocumented.
+- **CR 115.3 — fixed 2026-09-08, and the shape of it is worth keeping.** "The
+  same target can't be chosen multiple times for any one instance of the word
+  'target'." The gate existed; what was missing was the *derivation* telling it
+  when to fire. `targeting.py` set `distinct_targets` for one target shape only
+  (the cost-sized announcement's printed "another"), so the flat
+  `exact_targets`/`max_targets` family — 24 pool cards printing "two target …" —
+  had no distinctness check at all, and neither did the graveyard family, the
+  announced-X family or every division but two.
+
+  The sharp case was not the repeat but what the repeat bought: Ashes to Ashes
+  needs two legal targets to have any legal announcement, and with one creature
+  on the battlefield naming it twice cast the spell, exiled that creature and
+  charged the printed 5 life. Two more of the same class came out with it —
+  Deadshot's fusion *required* the printed "another" to build its instruction
+  and then dropped it from the payload, so a creature could be tapped and sent
+  to bite itself, and the `_bites.py` builder said in a comment that it refused
+  exactly that.
+
+  **The lesson is about where a rider dies.** All three sites read the printed
+  word to make a decision and then did not write it down, and the two gates that
+  would have enforced it were already there. A check that is never reached
+  cannot be distinguished from a check that passes, which is why the derivation
+  and not the gate is where this had to be fixed.
 
 - **CR 608.2b is enforced for instants and sorceries only.** "If all its
   targets are now illegal, the spell or ability doesn't resolve" is one gate,

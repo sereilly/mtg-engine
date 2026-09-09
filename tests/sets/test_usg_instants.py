@@ -419,7 +419,9 @@ def test_w2g1_redeem_shields_both_chosen_creatures(set_pool):
 
     card = pool["Redeem"]
     program = _g1i_compile(card)
-    assert _g1i_spec(card, program) == {"kind": "creature", "max_targets": 2}
+    assert _g1i_spec(card, program) == {
+        "kind": "creature", "max_targets": 2, "distinct_targets": True,
+    }
 
     context = _G1iContext(
         card=card, caster=game.players[0], target=game.players[0],

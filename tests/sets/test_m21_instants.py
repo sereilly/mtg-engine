@@ -831,18 +831,27 @@ def test_rookie_mistake_drops_a_slot_that_stopped_answering(set_pool):
 
 
 def test_rookie_mistake_never_boosts_and_shrinks_the_same_creature(set_pool):
-    """The printed "another" at resolution (CR 601.2c/608.2b).
+    """The printed "another" at the **announcement** (CR 115.3/601.2c).
 
-    The picker cannot select one permanent twice, but the enumeration is a hint
-    and the engine re-checks the answer: a client sending the same id in both
-    slots gets the first slot only, never both effects on one creature."""
+    The picker cannot select one permanent twice, and the enumeration is only a
+    hint - so a client sending the same id in both slots is answered by the
+    announcement gate, which refuses with nothing cast. This card prints two
+    instances of the word "target", which CR 115.3 would let one creature fill
+    both of; what forbids it is the printed "another", carried into the payload
+    as ``distinct`` and read by ``legality`` as ``distinct_targets``.
+
+    ``handlers/pump.py`` still folds a repeat at resolution. That is no longer
+    reachable through a legal announcement, and it is kept as the second line of
+    defence behind a gate rather than as the answer.
+    """
     pool = set_pool("M21")
     only = Permanent(card=pool["Concordia Pegasus"])
     p1 = PlayerState(name="P1", hand=[pool["Rookie Mistake"]], battlefield=[only])
     game = Game(players=[p1, PlayerState(name="P2")])
     game.enforce_mana_costs = False
+    before = (only.effective_power, only.effective_toughness)
 
-    game.cast_from_hand(
+    result = game.cast_from_hand(
         0, "Rookie Mistake",
         target_player_index=0,
         target_permanent_index=[0, 0],
@@ -850,8 +859,12 @@ def test_rookie_mistake_never_boosts_and_shrinks_the_same_creature(set_pool):
     )
     game._settle()
 
-    assert (only.effective_power, only.effective_toughness) == (1, 5), \
-        "the +0/+2 alone; the second slot named a creature the first already took"
+    assert not result.supported
+    assert "same target" in result.details
+    assert (only.effective_power, only.effective_toughness) == before, (
+        "nothing was cast, so neither half of the sentence happened"
+    )
+    assert [c.name for c in p1.hand] == ["Rookie Mistake"]
 
 
 def test_two_targeted_pumps_without_another_refuse():

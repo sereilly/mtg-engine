@@ -733,6 +733,10 @@ def test_w2g5_reckless_spite_carries_its_printed_count_and_its_exclusion(set_poo
         "kind": "creature",
         "max_targets": 2,
         "exact_targets": True,
+        # A third half, and the one the count alone cannot carry: two slots of
+        # one printed instance of "target" want two different creatures
+        # (CR 115.3).
+        "distinct_targets": True,
         "filter": {"exclude_colors": ["B"]},
     }
 

@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**410 / 617 tracked rules covered (66%)** — 2370 tests, 0 unannotated.
+**411 / 617 tracked rules covered (66%)** — 2379 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -72,7 +72,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [513. End Step](#513-end-step) | 1/2 | 50% |
 | [514. Cleanup Step](#514-cleanup-step) | 3/3 | 100% |
 | [601. Casting Spells](#601-casting-spells) | 4/7 | 57% |
-| [602. Activating Activated Abilities](#602-activating-activated-abilities) | 3/5 | 60% |
+| [602. Activating Activated Abilities](#602-activating-activated-abilities) | 4/5 | 80% |
 | [603. Handling Triggered Abilities](#603-handling-triggered-abilities) | 11/12 | 91% |
 | [604. Handling Static Abilities](#604-handling-static-abilities) | 3/7 | 42% |
 | [605. Mana Abilities](#605-mana-abilities) | 5/5 | 100% |
@@ -265,7 +265,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **115.1** Some spells and abilities require their controller to choose one or more targets for them. The ta... *(25 tests, subrules abcd)*
 - [x] **115.2** Only permanents are legal targets for spells and abilities, unless a spell or ability (a) specifi... *(3 tests)*
-- [x] **115.3** The same target can’t be chosen multiple times for any one instance of the word “target” on a spe... *(2 tests)*
+- [x] **115.3** The same target can’t be chosen multiple times for any one instance of the word “target” on a spe... *(9 tests)*
 - [x] **115.4** Some spells and abilities that refer to damage require “any target,” “another target,” “two targe... *(6 tests)*
 - [ ] **115.5** A spell or ability on the stack is an illegal target for itself.
 - [x] **115.6** A spell or ability that requires targets may allow zero targets to be chosen. Such a spell or abi... *(4 tests)*
@@ -666,7 +666,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(235 tests, subrules abcdefghi)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(239 tests, subrules abcdefghi)*
 - [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(26 tests, subrules a)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [x] **601.5** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*
@@ -676,8 +676,8 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 602. Activating Activated Abilities
 
 - [x] **602.1** Activated abilities have a cost and an effect. They are written as “[Cost]: [Effect.] [Activation... *(14 tests, subrules ab)*
-- [x] **602.2** To activate an ability is to put it onto the stack and pay its costs, so that it will eventually ... *(35 tests, subrules ab)*
-- [ ] **602.3** Some abilities specify that one of their controller’s opponents does something the controller wou...
+- [x] **602.2** To activate an ability is to put it onto the stack and pay its costs, so that it will eventually ... *(36 tests, subrules ab)*
+- [x] **602.3** Some abilities specify that one of their controller’s opponents does something the controller wou... *(3 tests)*
 - [ ] **602.4** Activating an ability that alters costs won’t affect spells and abilities that are already on the...
 - [x] **602.5** A player can’t begin to activate an ability that’s prohibited from being activated. *(39 tests, subrules ace)*
 

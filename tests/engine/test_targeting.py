@@ -130,9 +130,12 @@ def test_an_aura_on_a_graveyard_card_is_not_a_battlefield_target(supported_cards
         # count is the announced X, and the subtype rides ``filter`` so the
         # enumeration offers exactly the Mountains. The hand-written "divided"
         # spec retired with the card's hook.
+        # "Destroy **X target Mountains**": one printed instance of the word,
+        # pluralised, so CR 115.3 forbids one Mountain filling two of its slots
+        # and the spec says so beside the count.
         ("Volcanic Eruption", {
             "kind": "land", "filter": {"subtype_filter": "mountain"},
-            "x_targets": True,
+            "x_targets": True, "distinct_targets": True,
         }),
         # "…divided **as you choose**" (Pyrotechnics) against Fireball's
         # "divided evenly" above: one printed sentence asks the caster for a

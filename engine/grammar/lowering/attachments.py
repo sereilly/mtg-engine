@@ -442,6 +442,24 @@ def _lower_choose_permanent(
         # The singular's half of the plural's announcement above, and the same
         # reason: a printed "target" is a seat the caster chooses.
         scoped["targets"] = dict(announced)
+    if node.spec.targeted:
+        # "An opponent chooses **target** creature they control." (Echo
+        # Chamber.) The word is printed on the *permanent* here, not on the
+        # chooser, and CR 602.3 is the rule that makes sense of the pair: an
+        # ability may say an opponent does what its controller normally would —
+        # choosing targets among them — and "the opponent does so when the
+        # ability's controller normally would do so", which CR 601.2c puts at
+        # the announcement.
+        #
+        # This engine still makes the pick at resolution, so the word buys one
+        # thing rather than all of it: CR 601.2c's legality. An ability whose
+        # announced target has no legal object cannot be activated at all, and
+        # without this key nothing could tell that Echo Chamber's {4} and {T}
+        # were being paid into a choice with no candidates. The rest of 602.3 —
+        # the choice made in the announcement, so it can be responded to and
+        # re-checked under CR 608.2b — needs a prompt owed by a seat that is not
+        # the activator, which is recorded in ROADMAP.md rather than faked here.
+        scoped["announced_target"] = True
     seat = _CHOOSER_SEATS[node.chooser.kind]
     if node.chooser.kind == "that_player" and CHOSEN_PLAYER in produced:
         # "You choose target creature an opponent controls, and **that
@@ -526,11 +544,29 @@ _CHOOSER_SEATS = {
     # re-derived from a board the resolution has already changed.
     "defending_player": "trigger_defending_player",
     # "**An opponent** chooses target creature they control." (Echo Chamber.)
-    # The *untargeted* spelling, and the one row that really does mean
-    # "whichever opponent there is": nothing is announced, so ``_chooser_seat``
-    # answers with the first live opponent when the ability resolves. That is a
-    # narrowing at three seats — the rules would have the *controller* choose
-    # (CR 601.2c does not apply, so it is an ordinary choice made on
-    # resolution) — and it is this row's, not the targeted row's above.
+    # The row where the *chooser* is not announced: no "target opponent" here,
+    # so ``_chooser_seat`` answers with the first live opponent rather than
+    # reading a seat off the announcement, and it is this row's narrowing at
+    # three seats, not the targeted row's above.
+    #
+    # **The rule it narrows is CR 602.3, and this comment used to name the wrong
+    # one.** It read "the rules would have the *controller* choose (CR 601.2c
+    # does not apply, so it is an ordinary choice made on resolution)". Both
+    # halves are about a different sentence than the one printed here: the card
+    # says an opponent chooses, and CR 602.3 is the rule that has room for
+    # exactly that — "some abilities specify that one of their controller's
+    # opponents does something the controller would normally do while it's being
+    # activated, such as choose a mode or choose targets. In these cases, the
+    # opponent does so when the ability's controller normally would do so." So
+    # CR 601.2c *does* apply; 602.3 only moves who answers it.
+    #
+    # What is really narrowed here is **which** opponent: the ability's
+    # controller chooses that, and this takes the first live one. What was
+    # narrowed as well — and is now fixed — is that a printed "target" carries
+    # CR 601.2c's legality with it, so the ability cannot be activated when the
+    # chooser has nothing to choose (``legality._announced_choice_refusal``).
+    # What is still narrowed is the *timing*: the pick happens as the ability
+    # resolves rather than in its announcement, so nothing can be held in
+    # response to it. ROADMAP.md carries that with what closing it needs.
     "opponent": "opponent",
 }

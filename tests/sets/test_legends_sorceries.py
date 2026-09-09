@@ -635,7 +635,12 @@ def test_part_water_tells_the_picker_its_count_is_the_announced_x(set_pool):
     for name in ("Part Water", "Winter Blast"):
         card = set_pool("LEG")[name]
         spec = derive_cast_spec(card, compile_card_oracle(card))
-        assert spec == {"kind": "creature", "x_targets": True}, name
+        # ``distinct_targets`` beside the count, and for the same reason it
+        # exists: one printed instance of the word, pluralised by the X, so
+        # CR 115.3 forbids naming one creature for two of its slots.
+        assert spec == {
+            "kind": "creature", "x_targets": True, "distinct_targets": True,
+        }, name
 
 
 # ---------------------------------------------------------------------------

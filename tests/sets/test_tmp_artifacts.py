@@ -905,16 +905,68 @@ def test_echo_chamber_copies_the_creature_the_opponent_picked(set_pool):
 
 def test_echo_chamber_offers_no_target_picker(set_pool):
     """The printed word is "target" and the seat that picks is not the ability's
-    controller, which CR 601.2c has no room for — so the pick is made at
-    resolution, exactly as ``lowering/control_changes.py`` records for Preacher.
+    controller — which is CR **602.3**, not a gap in CR 601.2c: "some abilities
+    specify that one of their controller's opponents does something the
+    controller would normally do while it's being activated, such as choose a
+    mode or choose targets."
 
-    The consequence is asserted rather than assumed: an activation spec here
-    would make the *controller* announce the creature, which is the one seat the
-    card says must not choose.
+    So the assertion is unchanged and its reason is the opposite of what this
+    docstring used to say. An activation spec here would hand the *controller* a
+    picker for the creature, and the controller is the one seat the card says
+    must not choose. What the printed word does buy is the gate below.
     """
     program = compile_card_oracle(set_pool("TMP")["Echo Chamber"])
     ability = program.activated_abilities[0]
     assert derive_activation_spec(ability) is None
+
+
+def test_echo_chamber_cannot_be_activated_when_the_opponent_has_no_creature(
+    set_pool,
+):
+    """CR 602.3 carries CR 601.2c with it: the opponent chooses the target "when
+    the ability's controller normally would", and an ability whose target has no
+    legal object cannot be activated at all.
+
+    It could be, and the {4} and the {T} were paid into a choice with no
+    candidates — invisible to the gate above, because an ability whose target
+    the *opponent* announces has no spec for it to read. The refusal is the
+    ordinary one, so nothing is paid (CR 733.1).
+    """
+    chamber = _nosick(Permanent(card=set_pool("TMP")["Echo Chamber"]))
+    game = _w3g3_game([chamber], [])
+
+    result = game.activate_permanent_ability(0, "Echo Chamber", ability_index=0)
+
+    assert not result.supported
+    assert "no valid target" in result.details
+    assert not chamber.tapped
+    assert not game.stack
+
+
+def test_echo_chamber_reads_the_choosers_battlefield_not_the_activators(set_pool):
+    """"target creature **they** control" is the chooser's board, so the
+    activator's own creature is not a legal target and does not make the ability
+    activatable.
+
+    The gate and the resolution have to agree about that or the refusal is
+    worse than the bug: this is the same ``controlled_by`` scoping the candidate
+    rule applies, asked one announcement earlier.
+    """
+    chamber = _nosick(Permanent(card=set_pool("TMP")["Echo Chamber"]))
+    mine = Permanent(card=_mk_creature_card("Mine", 2, 2))
+    game = _w3g3_game([chamber, mine], [])
+
+    refused = game.activate_permanent_ability(0, "Echo Chamber", ability_index=0)
+    assert not refused.supported
+    assert not chamber.tapped
+
+    # The control: one creature on the *opponent's* side is what the card asks
+    # for, and the ability is activatable the moment it exists.
+    chamber2 = _nosick(Permanent(card=set_pool("TMP")["Echo Chamber"]))
+    theirs = Permanent(card=_mk_creature_card("Theirs", 2, 2))
+    other = _w3g3_game([chamber2], [theirs])
+    ok = other.activate_permanent_ability(0, "Echo Chamber", ability_index=0)
+    assert ok.supported, ok.details
 
 
 def test_echo_chamber_exiles_its_token_at_the_next_end_step(set_pool):

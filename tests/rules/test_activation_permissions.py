@@ -162,3 +162,99 @@ def test_a_card_with_an_unimplementable_permission_is_unsupported():
 
     assert compile_card_oracle(readable).supported
     assert not compile_card_oracle(unreadable).supported
+
+
+# ---------------------------------------------------------------------------
+# CR 602.3 — an ability that hands one of its controller's opponents a choice
+# the controller would normally make.
+#
+# One question over from the rest of this file again: those tests are about who
+# may *activate*, this one about who answers a question inside an activation
+# somebody else made. "In these cases, the opponent does so when the ability's
+# controller normally would do so" — which for a target is the announcement
+# (CR 601.2c), and that is the half of the rule this engine still owes.
+# ---------------------------------------------------------------------------
+
+
+def _cr602_3_board(pool, *, opposing_creatures: int, own_creatures: int = 0):
+    from tests.helpers import _mk_creature_card, _nosick
+
+    chamber = _nosick(Permanent(card=pool["Echo Chamber"]))
+    mine = [
+        Permanent(card=_mk_creature_card(f"Mine {i}", 2, 2))
+        for i in range(own_creatures)
+    ]
+    theirs = [
+        Permanent(card=_mk_creature_card(f"Theirs {i}", 2, 2))
+        for i in range(opposing_creatures)
+    ]
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[chamber, *mine]),
+        PlayerState(name="P2", battlefield=theirs),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0, 1}
+    game._settle()
+    return game, chamber, theirs
+
+
+@pytest.mark.cr("602.3", "601.2c")
+def test_602_3_an_opponents_announced_target_still_has_to_exist(set_pool):
+    """Echo Chamber is the pool's activated printing of this rule: "An opponent
+    chooses **target** creature they control."
+
+    The word "target" is printed, so CR 601.2c applies and CR 602.3 only moves
+    who answers it — which means an ability whose announced target has no legal
+    object cannot be activated. It could be: the pick is modelled as a value
+    chosen during the resolution, so the announcement gate had no spec to read
+    and the {4} and the {T} were paid into a choice with no candidates.
+    """
+    game, chamber, _ = _cr602_3_board(set_pool("TMP"), opposing_creatures=0)
+
+    refused = game.activate_permanent_ability(0, "Echo Chamber", ability_index=0)
+
+    assert not refused.supported
+    assert "no valid target" in refused.details
+    assert not chamber.tapped, "the cost was paid for a refused activation"
+
+
+@pytest.mark.cr("602.3")
+def test_602_3_the_choice_is_the_opponents_and_so_is_the_board_it_is_made_from(
+    set_pool,
+):
+    """"…**they** control": the seat that chooses and the battlefield chosen
+    from are one answer, and it is not the activator's.
+
+    Both halves are asserted because either alone would pass a wrong engine —
+    offering the activator's creatures to the opponent, or asking the activator
+    about the opponent's.
+    """
+    game, chamber, theirs = _cr602_3_board(
+        set_pool("TMP"), opposing_creatures=2, own_creatures=1
+    )
+
+    assert game.activate_permanent_ability(
+        0, "Echo Chamber", ability_index=0
+    ).supported
+    game.resolve_top_of_stack()
+
+    prompt = next(iter(game.pending_choices_of("permanent_choice")))
+    assert prompt.player_index == 1, "the activator was asked"
+    offered = {perm.card.name for perm in game.live_permanent_choices(prompt)}
+    assert offered == {"Theirs 0", "Theirs 1"}
+
+
+@pytest.mark.cr("602.3")
+def test_602_3_the_activators_own_creature_does_not_make_it_activatable(set_pool):
+    """The gate has to read the same battlefield the resolution will, or a
+    refusal is worse than the bug it fixes: a creature the *activator* controls
+    is not something the opponent may choose, so it cannot be what makes the
+    ability legal to activate."""
+    game, chamber, _ = _cr602_3_board(
+        set_pool("TMP"), opposing_creatures=0, own_creatures=2
+    )
+
+    refused = game.activate_permanent_ability(0, "Echo Chamber", ability_index=0)
+
+    assert not refused.supported
+    assert not chamber.tapped

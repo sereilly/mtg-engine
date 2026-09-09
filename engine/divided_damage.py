@@ -264,7 +264,7 @@ def division_refusal(
             f"this spell has at most {max_targets} targets "
             f"({len(entries)} named, CR 601.2c)"
         )
-    if division in CARD_DIVIDED and _repeats_a_target(entries):
+    if _repeats_a_target(entries):
         # The two members of this family reach the same answer by two different
         # halves of CR 601.2c, which is worth writing down because the rule's
         # default is *not* what forbids Cone of Flame's repeat.
@@ -278,12 +278,17 @@ def division_refusal(
         #   is the card: "**another** target", "a **third** target". Reading
         #   601.2c alone here would be reading it backwards.
         #
-        # Asked of these two divisions only, which is a smaller claim than the
-        # rule makes. "Any number of targets" is one instance of the word too
-        # and nothing here checks it; that is a standing looseness this round
-        # inherits rather than introduces, and widening it would change what
-        # every shipped divided spell accepts on a round that is about two new
-        # ones.
+        # Asked of **every** division, which is what the rule says. It was asked
+        # of these two alone for a while, on the reasoning that widening it
+        # would change what every shipped divided spell accepts on a round that
+        # was about two new ones — a scope argument, correct at the time and
+        # never a claim that the others were exempt. The looseness it named out
+        # loud ("any number of targets" is one instance of the word too, and
+        # nothing here checks it) is closed by the same sentence that closes it
+        # for the flat family in ``legality._repeated_target_refusal``: one
+        # printed instance, however many slots it opens, may not be filled twice
+        # by one object. Elven Rite and Contagion are :data:`CHOSEN` and were
+        # the cards it was costing.
         return "each target must be a different one (CR 601.2c)"
     amounts = announced_division(entries)
     if amounts is None:

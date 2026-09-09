@@ -1393,6 +1393,18 @@ def _graveyard_return_spec(payload: dict) -> dict:
         # Left off, the spec fell back to its one-target default and the
         # browser offered one card for a spell paid for X of them.
         spec["x_targets"] = True
+    if spec.get("max_targets") not in (None, 1) or spec.get("x_targets"):
+        # CR 115.3, the same derivation ``_from_targets_payload`` makes for a
+        # permanent and for the same reason: "**two** target creature cards"
+        # (Victimize) is one printed instance of the word made plural, so no
+        # card may be named twice. This builder settles its own spec, so the
+        # generic reading never runs and the flag has to be lifted here — the
+        # arrangement ``max_targets`` and ``exact_targets`` above already have.
+        #
+        # Unconditional here, unlike the permanent side: a graveyard target is
+        # named by a *card*, and no printing in this pool spells one sentence
+        # with two instances of "target ... card" in it.
+        spec["distinct_targets"] = True
     if payload.get("card_types"):
         # "target instant or sorcery card" (Shipwreck Dowser) — the union the
         # round-19 graveyard picker already tests by primary type.
@@ -1836,6 +1848,11 @@ def _graveyard_to_library_spec(payload: dict) -> dict:
         spec["unbounded_targets"] = True
     else:
         spec["count"] = int(described.get("count") or 1)
+    if spec.get("unbounded_targets") or spec.get("count", 1) > 1:
+        # CR 115.3 again, for "**any number of** target artifact cards"
+        # (Drafna's Restoration) and its counted siblings — one instance of the
+        # printed word, so one card cannot fill two of its slots.
+        spec["distinct_targets"] = True
     return spec
 
 
@@ -2932,6 +2949,15 @@ def _from_targets_payload(targets) -> dict | None:
     # instruction's own lowering refuses to emit until a handler reads a list.
     # Absent for every one-target description, so nothing downstream has to
     # special-case the common shape.
+    # **How many printed instances of the word "target" this description is.**
+    # CR 115.3 turns on exactly that: "the same target can't be chosen multiple
+    # times for any one instance of the word 'target'", and one object may be
+    # chosen once per instance where a sentence prints several. A slot list is
+    # the several-instance shape ("target creature you control ... up to one
+    # target creature you don't control", Primal Might), and a bare plural count
+    # is the one-instance shape ("**two target** nonartifact creatures", Ashes
+    # to Ashes). So the list is the discriminator, and it is already here.
+    several_instances = isinstance(slot_filters, list) and len(slot_filters) > 1
     count = targets.get("count")
     if isinstance(count, int) and count > 1:
         flags = {**flags, "max_targets": count}
@@ -2987,6 +3013,26 @@ def _from_targets_payload(targets) -> dict | None:
         # this into a `max_targets` once it knows how many legal targets exist,
         # which is the same route Drafna's Restoration's "any number of" takes.
         flags = {**flags, "unbounded_targets": True}
+    # CR 115.3, for every shape above that lets one announcement name more than
+    # one object: the plural count, the announced X ("**X** target creatures",
+    # Winter Blast) and the unbounded list ("**one or more** target creatures").
+    # All three are one printed instance of the word, so no object may be named
+    # twice — and the gates read this one flag rather than re-deriving the
+    # question from three different keys.
+    #
+    # Where the sentence really does print several instances, the default flips
+    # to the rule's other half (one object may be chosen once per instance) and
+    # only the card's own "**another** target" forbids a repeat, which is the
+    # ``distinct`` the grammar has always carried. The ``cost_targets`` branch
+    # above sets this from that same key and is left alone: it is several
+    # instances by construction ("destroy another target artifact", Primitive
+    # Justice).
+    if (
+        flags.get("max_targets") not in (None, 1)
+        or flags.get("x_targets")
+        or flags.get("unbounded_targets")
+    ) and (targets.get("distinct") if several_instances else True):
+        flags = {**flags, "distinct_targets": True}
     type_filter = filt.get("type_filter")
     if not type_filter:
         # "X target **Mountains**" (Volcanic Eruption) prints no card type at

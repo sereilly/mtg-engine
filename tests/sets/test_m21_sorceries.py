@@ -504,16 +504,34 @@ def test_sanguine_indulgence_refuses_a_slot_that_is_not_a_creature_card(set_pool
     assert any(c.name == "Sanguine Indulgence" for c in p1.hand), "the spell was not cast"
 
 
-def test_sanguine_indulgence_returns_one_card_for_a_repeated_slot(set_pool):
-    """CR 601.2c: one instance of "target" cannot name the same object twice, so
-    a doubled index is one choice however it arrives."""
+def test_sanguine_indulgence_refuses_a_repeated_slot(set_pool):
+    """CR 115.3: one instance of "target" cannot name the same object twice, so
+    a doubled index is not a smaller announcement — it is not an announcement.
+
+    "Return **up to two** target creature cards" is one printed instance made
+    plural, and the rule is about the instance rather than about how many slots
+    it opens. Refused rather than folded to one card, which is the same answer
+    ``legality`` gives every other repeat: a caster who wanted one card may name
+    one, and the engine must not choose that for them.
+    """
     game, p1 = _indulgence_game(set_pool, ["Alpine Watchdog", "Garruk's Warsteed"])
 
     result = game.cast_from_hand(
         0, "Sanguine Indulgence", target_player_index=0, target_permanent_index=[0, 0],
     )
 
-    assert result.supported, result.details
+    assert not result.supported
+    assert "same target" in result.details
+    assert [c.name for c in p1.hand] == ["Sanguine Indulgence"], "the spell was cast"
+    assert [c.name for c in p1.graveyard] == ["Alpine Watchdog", "Garruk's Warsteed"]
+
+    # The control: naming that one card *once* is a legal announcement, which is
+    # what the refusal above leaves the caster free to make.
+    game, p1 = _indulgence_game(set_pool, ["Alpine Watchdog", "Garruk's Warsteed"])
+    one = game.cast_from_hand(
+        0, "Sanguine Indulgence", target_player_index=0, target_permanent_index=[0],
+    )
+    assert one.supported, one.details
     assert [c.name for c in p1.hand] == ["Alpine Watchdog"]
 
 

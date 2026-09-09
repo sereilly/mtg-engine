@@ -96,6 +96,19 @@ def lower_bite(
                             _filter_payload(node.recipients[0].filter),
                         ],
                         "count": 2,
+                        # The printed "another" (CR 115.3/601.2c), **carried**
+                        # rather than only checked. The branch above already
+                        # requires it — an unqualified second "target" is a
+                        # different card and refuses here — and the comment
+                        # below says this kind "refuses a second target equal to
+                        # the first". It did not: the word was read to decide
+                        # whether to build this instruction and then dropped, so
+                        # the announcement gate had nothing to enforce and a
+                        # creature could be sent to bite itself for its own
+                        # power. One instance of the word may name one object
+                        # once; two instances may name it twice *unless* the
+                        # card says otherwise, and this is the card saying so.
+                        "distinct": True,
                         **_optional_slot_key(
                             (node.source, node.recipients[0])
                         ),

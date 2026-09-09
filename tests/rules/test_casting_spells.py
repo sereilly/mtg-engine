@@ -894,11 +894,21 @@ def test_601_2c_a_variable_number_of_targets_may_be_announced_as_none():
     assert [c.name for c in p1.graveyard] == ["Dredge Up"]
 
 
-@pytest.mark.cr("601.2c")
-def test_601_2c_one_instance_of_target_cannot_name_the_same_object_twice():
+@pytest.mark.cr("115.3", "601.2c")
+def test_115_3_one_instance_of_target_cannot_name_the_same_object_twice():
     """"The same target can't be chosen multiple times for any one instance of
-    the word 'target'." Two slots naming one object are one choice, so the
-    effect happens once — not twice, and not to a second object nobody named."""
+    the word 'target'." Two slots of one instance naming one object is not a
+    smaller announcement — it is an illegal one, so the cast is refused with
+    nothing spent.
+
+    This test used to assert the other reading: the cast succeeded and the
+    effect happened once. That is the *resolution* being tidy about an
+    announcement the rules never allowed, and it is how a two-target spell came
+    to be castable with only one legal target on the board — name it twice, and
+    the spell resolves for half its printed effect and all of its printed cost.
+    Refusing is also what every neighbouring gate here already did for the
+    printed "another"; this instance of the rule simply had no gate.
+    """
     dredge = _mk_card(
         "Dredge Up",
         "Sorcery",
@@ -913,9 +923,19 @@ def test_601_2c_one_instance_of_target_cannot_name_the_same_object_twice():
         0, "Dredge Up", target_player_index=0, target_permanent_index=[0, 0],
     )
 
-    assert result.supported, result.details
+    assert not result.supported
+    assert "same target" in result.details
+    assert [c.name for c in p1.hand] == ["Dredge Up"], "nothing was cast"
+    assert [c.name for c in p1.graveyard] == ["Bear", "Ogre"]
+
+    # "Up to two" may legally name one, which is the announcement the caster is
+    # left free to make — the refusal above withholds a choice, it does not make
+    # one for them.
+    one = game.cast_from_hand(
+        0, "Dredge Up", target_player_index=0, target_permanent_index=[0],
+    )
+    assert one.supported, one.details
     assert [c.name for c in p1.hand] == ["Bear"]
-    assert [c.name for c in p1.graveyard] == ["Ogre", "Dredge Up"]
 
 
 @pytest.mark.cr("601.2c", "115.2")

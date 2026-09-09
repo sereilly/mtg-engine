@@ -2012,3 +2012,187 @@ def test_115_3_two_instances_of_target_may_each_name_the_same_creature(catalog_b
 
     assert victim.damage_marked == 2, "once for each instance of the word"
     assert (p1.life, p2.life) == (20, 20), "neither instance went to a face"
+
+
+# ---------------------------------------------------------------------------
+# Rule 115.3, the half that had no gate: one printed instance of the word
+# "target", made plural, over a spell rather than an ability.
+#
+# The distinction the whole family turns on is how many times the sentence
+# prints the word. "Exile **two target** nonartifact creatures" prints it once
+# and opens two slots, so no creature may fill both; "target creature you
+# control ... up to one **target** creature you don't control" prints it twice
+# and one creature could legally fill both, were the two filters not disjoint.
+# ``targeting.py`` answers that question off the payload's per-slot filter list
+# and ``legality._repeated_target_refusal`` enforces the answer.
+# ---------------------------------------------------------------------------
+
+
+def _cr115_3_pool(catalog_by_name, spell, *creatures, own=()):
+    """*spell* in hand, *creatures* on the opponent's battlefield."""
+    p1 = PlayerState(
+        name="P1",
+        hand=[catalog_by_name[spell]],
+        battlefield=[_perm(catalog_by_name[name]) for name in own],
+    )
+    theirs = [_perm(catalog_by_name[name]) for name in creatures]
+    p2 = PlayerState(name="P2", battlefield=theirs)
+    game = _two_player_game(p1, p2)
+    game._settle()
+    return game, p1, p2, theirs
+
+
+@pytest.mark.cr("115.3", "601.2c")
+def test_115_3_a_two_target_spell_is_not_castable_with_one_legal_target(
+    catalog_by_name,
+):
+    """The sharp end of the rule, and the reason it is a refusal rather than a
+    tidy-up at resolution.
+
+    "Exile **two** target nonartifact creatures" needs two legal targets to have
+    any legal announcement at all (CR 601.2c). With one creature on the
+    battlefield there is none — and naming that creature twice used to be
+    accepted, exiling it and charging the caster the printed 5 life. A spell the
+    board cannot pay for, cast anyway for half its effect.
+    """
+    game, p1, p2, (only,) = _cr115_3_pool(
+        catalog_by_name, "Ashes to Ashes", "Grizzly Bears"
+    )
+
+    result = game.cast_from_hand(
+        0, "Ashes to Ashes", target_permanent_ids=[only.permanent_id] * 2
+    )
+
+    assert not result.supported
+    assert "same target" in result.details
+    assert p1.life == 20, "the printed 5 damage was charged for a refused cast"
+    assert [perm.card.name for perm in p2.battlefield] == ["Grizzly Bears"]
+    assert [card.name for card in p1.hand] == ["Ashes to Ashes"]
+
+
+@pytest.mark.cr("115.3")
+def test_115_3_the_same_spell_with_two_legal_targets_is_unaffected(
+    catalog_by_name,
+):
+    """The control the refusal above needs: the gate must not have made the card
+    harder to cast, only impossible to cast illegally."""
+    game, p1, p2, (bear, giant) = _cr115_3_pool(
+        catalog_by_name, "Ashes to Ashes", "Grizzly Bears", "Hill Giant"
+    )
+
+    result = game.cast_from_hand(
+        0, "Ashes to Ashes",
+        target_permanent_ids=[bear.permanent_id, giant.permanent_id],
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+
+    assert p2.battlefield == []
+    assert p1.life == 15, "the printed cost is still charged for a legal cast"
+
+
+@pytest.mark.cr("115.3")
+def test_115_3_several_printed_instances_may_still_name_one_object(
+    catalog_by_name,
+):
+    """The rule's other half, which the fix must not overreach into. Primal
+    Might prints "target" twice — "**target** creature you control ... up to one
+    **target** creature you don't control" — so the default is that one object
+    could fill both slots, and only a printed "another" would forbid it. Here
+    the two filters are disjoint, so a legal announcement names two creatures
+    and the gate stays out of the way.
+    """
+    from engine.oracle import compile_card_oracle
+    from engine.targeting import derive_cast_spec
+
+    card = catalog_by_name["Primal Might"]
+    spec = derive_cast_spec(card, compile_card_oracle(card))
+
+    assert spec.get("max_targets") == 2
+    assert not spec.get("distinct_targets"), (
+        "two printed instances of the word are not one instance made plural"
+    )
+
+
+@pytest.mark.cr("115.3", "601.2c")
+def test_115_3_the_printed_another_forbids_the_repeat_two_instances_allow(
+    catalog_by_name,
+):
+    """Deadshot prints the word twice and then says "**another** target
+    creature", which is the card doing what CR 115.3 does not.
+
+    The fusion that builds this instruction has always *required* the word — an
+    unqualified second "target" is a different card and refuses — and then
+    dropped it, so the gate had nothing to read and the announcement naming one
+    creature twice was legal. It tapped that creature and had it bite itself for
+    its own power, which the handler scored as no damage at all.
+    """
+    game, _p1, p2, (only,) = _cr115_3_pool(
+        catalog_by_name, "Deadshot", "Grizzly Bears"
+    )
+
+    result = game.cast_from_hand(
+        0, "Deadshot", target_permanent_ids=[only.permanent_id] * 2
+    )
+
+    assert not result.supported
+    assert "same target" in result.details
+    assert not only.tapped, "the tap half of the sentence happened anyway"
+
+
+@pytest.mark.cr("115.3", "602.2b")
+def test_115_3_an_activated_ability_refuses_the_repeat_before_paying(
+    catalog_by_name,
+):
+    """CR 602.2b routes an activation through CR 601.2c, so the ability half of
+    this rule is the same question asked one announcement over — and refused
+    with nothing paid, which on a {T} ability is visible on the source."""
+    elder = _perm(catalog_by_name["Argothian Elder"])   # {T}: Untap two target lands.
+    forest = _perm(catalog_by_name["Forest"], tapped=True)
+    island = _perm(catalog_by_name["Island"], tapped=True)
+    p1 = PlayerState(name="P1", battlefield=[elder, forest, island])
+    game = _two_player_game(p1, PlayerState(name="P2"))
+    game._settle()
+
+    refused = game.activate_permanent_ability(
+        0, "Argothian Elder", target_permanent_ids=[forest.permanent_id] * 2
+    )
+
+    assert not refused.supported
+    assert "same target" in refused.details
+    assert not elder.tapped, "{T} was paid for a refused activation (CR 733.1)"
+    assert forest.tapped and island.tapped
+
+    ok = game.activate_permanent_ability(
+        0, "Argothian Elder",
+        target_permanent_ids=[forest.permanent_id, island.permanent_id],
+    )
+    assert ok.supported, ok.details
+    game.resolve_stack()
+    assert not forest.tapped and not island.tapped
+
+
+@pytest.mark.cr("115.3", "601.2d")
+def test_115_3_a_divided_spell_asks_the_same_question_of_its_own_channel(
+    catalog_by_name,
+):
+    """A division names its targets on their own channel, so the rule has to be
+    asked there too. "Distribute two +1/+1 counters among **one or two target**
+    creatures" is one printed instance, and the gate that already refused a
+    repeat for the card-divided family now refuses it for every division —
+    which is what the family's own comment said was still missing.
+    """
+    game, p1, _p2, (only,) = _cr115_3_pool(
+        catalog_by_name, "Elven Rite", "Grizzly Bears"
+    )
+
+    refused = game.cast_from_hand(
+        0, "Elven Rite", divided_targets=[(1, 0, 1), (1, 0, 1)]
+    )
+    assert not refused.supported
+    assert "different" in refused.details
+
+    # One target taking both counters is the legal way to say it, and the
+    # refusal must leave that alone: "one or two" prints the choice.
+    ok = game.cast_from_hand(0, "Elven Rite", divided_targets=[(1, 0, 2)])
+    assert ok.supported, ok.details

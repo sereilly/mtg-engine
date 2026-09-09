@@ -54,6 +54,7 @@ from .modal_triggers import modal_trigger_mode_spec, modal_trigger_modes
 from .targeting import (
     GRAVEYARD_TARGET_KIND,
     ROLES_TARGET_KIND,
+    _nested_steps,
     derive_activation_spec,
     derive_cast_spec,
     derive_instruction_spec,
@@ -61,6 +62,23 @@ from .targeting import (
     spec_roles,
     usable_activated_abilities,
 )
+
+
+def _iter_instruction_tree(instruction):
+    """*instruction* and every instruction nested inside it.
+
+    Through ``targeting._nested_steps``, which is the one table saying which
+    payload keys a wrapper carries its children under — a second walker beside
+    it would answer differently the day a wrapper kind is added, and that table
+    exists because exactly that happened to ``if_then``.
+    """
+    if instruction is None:
+        return
+    stack = [instruction]
+    while stack:
+        step = stack.pop()
+        yield step
+        stack.extend(_nested_steps(step))
 
 # An oracle line whose cost is followed by a colon is an activated ability
 # (CR 602.1), not a cast-time effect. The cost may mix symbols with prose
@@ -1525,6 +1543,15 @@ class LegalityMixin:
         source = source_permanent if hasattr(
             source_permanent, "permanent_id"
         ) else None
+        # CR 602.3's legality half, asked first because it is asked of an
+        # ability this gate otherwise has no spec for: the target is announced
+        # by an **opponent**, so ``derive_activation_spec`` describes no picker
+        # for the activator and every check below is skipped.
+        announced = self._announced_choice_refusal(
+            controller_index, card, getattr(ability, "instruction", None), source
+        )
+        if announced is not None:
+            return announced
         spec, _ = _activation_spec([ability])
         kind = spec.get("kind")
         if kind in ("none", "modal", "hand_card"):
@@ -1591,6 +1618,18 @@ class LegalityMixin:
             and len(target_permanent_ids) > maximum
         ):
             return f"too many targets for {card.name}"
+        # CR 115.3's twin on this side, beside the count gate for the same
+        # reason the count gate is here: an activation announces its targets
+        # (CR 602.2b routes through CR 601.2c), so a repeat is refused before
+        # any cost is paid rather than dropped at resolution. Only a *list* is
+        # checked, which is what keeps ``_enumerate_targets``' per-candidate
+        # probe out of it — that probe re-enters with one slot, never several.
+        if isinstance(target_permanent_ids, list):
+            repeated = self._repeated_target_refusal(
+                card, spec, target_permanent_ids, [], None
+            )
+            if repeated is not None:
+                return repeated
         quantifiers = _ability_target_quantifiers(instruction)
         mandatory = "target" in quantifiers
         if not mandatory:
@@ -1694,6 +1733,118 @@ class LegalityMixin:
         if not valid:
             return refused
         return None
+
+    def _announced_choice_refusal(
+        self, controller_index: int, card, instruction, source
+    ) -> str | None:
+        """CR 602.3: a target one of the controller's **opponents** chooses.
+
+        "Some abilities specify that one of their controller's opponents does
+        something the controller would normally do while it's being activated,
+        such as choose a mode or **choose targets**. In these cases, the
+        opponent does so when the ability's controller normally would do so."
+
+        Echo Chamber is the pool's one activated printing — "An opponent chooses
+        target creature they control" — and the word "target" is what brings
+        CR 601.2c with it: an ability whose announced target has no legal object
+        cannot be activated at all. It could be, and paid {4} and {T} into a
+        choice with no candidates, because the pick is modelled as a
+        resolution-time value and so has no spec for the gate above to read.
+
+        **This is the rule's legality half and not the whole rule.** The choice
+        is still made as the ability resolves rather than in the announcement,
+        so it cannot be responded to and CR 608.2b never re-checks it; that is
+        recorded in ROADMAP.md with what closing it needs. What is fixed here is
+        the half that costs a player their mana for nothing.
+
+        Deliberately narrow, and silent about every payload it cannot answer
+        *exactly*: the resolution's candidate rule reads relative objects,
+        recorded sets and Aura legality, and a gate that guessed at those would
+        refuse an activation the resolution would have found a choice for. Only
+        a plain filter scoped to the chooser's own battlefield is judged here,
+        which is the shape both printings have.
+        """
+        from .subject_filters import subject_matches
+
+        for step in _iter_instruction_tree(instruction):
+            payload = step.payload if isinstance(step.payload, dict) else {}
+            if step.kind != "choose_permanent" or not payload.get("announced_target"):
+                continue
+            if payload.get("controlled_by") != "chooser":
+                # "…chooses **target creature**", unscoped (Mogg Assassin's
+                # second half). The candidates are every creature on the table,
+                # which cannot be empty while the ability's own source is one —
+                # and the chooser is a seat an earlier step of the resolution
+                # records, so there is nothing to resolve here yet either.
+                continue
+            if payload.get("among_record") or payload.get("legal_host_for_source"):
+                continue
+            seat = next(
+                (
+                    index
+                    for index, player in enumerate(self.players)
+                    if index != controller_index and not player.lost
+                ),
+                None,
+            )
+            # The same seat ``handlers/permanent_choices._chooser_seat`` will
+            # pick, so the gate and the resolution cannot disagree about whose
+            # board was asked. No opponent at all is a choice nobody can make,
+            # which the resolution already reports and this must not turn into
+            # a refusal.
+            if seat is None:
+                continue
+            described = payload.get("filter") or {}
+            if any(
+                subject_matches(
+                    self, perm, described, observer=seat, source=source
+                )
+                for perm in self.controlled_by(seat)
+            ):
+                continue
+            return f"no valid target for {getattr(card, 'name', '')}"
+        return None
+
+    def _repeated_target_refusal(
+        self,
+        card,
+        spec: dict,
+        named_ids: list,
+        indices: list,
+        target_player_index: int | None,
+    ) -> str | None:
+        """CR 115.3: one object may not fill two slots of a single announcement.
+
+        "The same target can't be chosen multiple times for any one instance of
+        the word 'target'" — so a sentence printing the word once and pluralised
+        ("**two** target nonartifact creatures") wants two different objects,
+        and a sentence printing it twice may name one object once per instance
+        unless the card says "**another**". Which of the two a description is
+        was decided in ``targeting.py``; ``distinct_targets`` is that answer,
+        and this gate only enforces it.
+
+        Asked of the *announcement*, above the enumeration, because a repeat is
+        illegal however legal each named object is on its own — the per-candidate
+        walk below says yes to the same creature twice and is right to. Refused
+        rather than deduplicated: with a single creature on the battlefield,
+        naming it twice is how Ashes to Ashes ("exile **two** target nonartifact
+        creatures") came to be castable at all, exiling that one creature and
+        charging its printed 5 life for a spell that had no legal announcement.
+
+        Both channels, in their own vocabulary: an id addresses a permanent
+        across seats (CR 400.7) and an index is a slot on one player's
+        battlefield or in one player's graveyard, so a bare index is only the
+        same target as another when the seat beside it agrees.
+        """
+        if not spec.get("distinct_targets"):
+            return None
+        keys: list = (
+            list(named_ids) if named_ids
+            else [(target_player_index, index) for index in indices]
+        )
+        if len(set(keys)) == len(keys):
+            return None
+        return f"{card.name} can't name the same target twice"
 
     def cast_target_refusal(
         self, caster_index: int, card: CardDefinition, *,
@@ -1843,6 +1994,11 @@ class LegalityMixin:
                 # its own pick and the "does any legal target exist?" half
                 # stays the per-kind arms' question, as everywhere else here.
                 return None
+            repeated = self._repeated_target_refusal(
+                card, spec, [], indices, target_player_index
+            )
+            if repeated is not None:
+                return repeated
             valid = self._enumerate_targets(caster_index, card, spec, for_cast=True)
             legal_slots = {
                 (t["seat"], t["index"]) for t in valid
@@ -1858,6 +2014,10 @@ class LegalityMixin:
             return None
         if not named_ids and not indices:
             return None
+        repeated = self._repeated_target_refusal(card, spec, named_ids, indices,
+                                                 target_player_index)
+        if repeated is not None:
+            return repeated
         valid = self._enumerate_targets(caster_index, card, spec, for_cast=True)
         legal = {
             (t["seat"], t["index"]) for t in valid

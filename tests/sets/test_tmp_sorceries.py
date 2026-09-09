@@ -108,6 +108,7 @@ def test_w2g5_dregs_of_sorrow_offers_only_the_nonblack_creatures(set_pool):
     assert spec == {
         "kind": "creature",
         "x_targets": True,
+        "distinct_targets": True,
         "filter": {"exclude_colors": ["B"]},
     }
 
@@ -529,7 +530,11 @@ def test_w2g2_deadshot_taps_one_target_and_bites_with_it(set_pool):
     deadshot = set_pool("TMP")["Deadshot"]
     program = compile_card_oracle(deadshot)
     assert program.supported
-    assert derive_cast_spec(deadshot, program) == {"kind": "creature", "max_targets": 2}
+    assert derive_cast_spec(deadshot, program) == {
+        # The printed "another" (CR 115.3/601.2c), which this fusion checks
+        # for and used to drop before the payload reached the gate.
+        "kind": "creature", "max_targets": 2, "distinct_targets": True,
+    }
 
     game, p0, p1 = _w2g2_spell_board(
         deadshot, [_mk_creature_card("Ogre", 4, 4)], [_mk_creature_card("Squire", 1, 2)]
