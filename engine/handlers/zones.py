@@ -5771,7 +5771,7 @@ def each_player_discards_up_to_cards(game: Game, instruction: OracleInstruction,
     order (CR 101.4). The ceiling *is* the offer — a player may answer with
     none — which is why the "may" in front of it collapses into this rather than
     arming a yes/no offer of its own
-    (``engine/grammar/lowering/control_flow._each_player_optional_discard``).
+    (``engine/grammar/lowering/_collapses._each_player_optional_discard``).
 
     Every seat is recorded, including the ones with nothing to discard, because
     "3 minus the number of cards **they** discarded this way" is a number for
@@ -5825,7 +5825,7 @@ def each_player_draws_up_to_cards(game: Game, instruction: OracleInstruction, co
     the printed ceiling, offered in turn order (CR 101.4); the ceiling *is* the
     offer, since a player may answer with none, which is why the "may" in front
     of it collapses into this rather than arming a yes/no of its own
-    (``engine/grammar/lowering/control_flow._each_player_optional_draw``).
+    (``engine/grammar/lowering/_collapses._each_player_optional_draw``).
 
     Every seat is recorded, including one that draws nothing, because "for each
     card less than two **a player** draws this way" is a number for every player
@@ -5867,7 +5867,7 @@ def draw_up_to_cards(game: Game, instruction: OracleInstruction, context: Oracle
     through the same ``draw_up_to`` prompt: the printed ceiling *is* the offer,
     since a player may answer with none, which is why the "may" in front of it
     collapses into this rather than arming a yes/no of its own
-    (``engine/grammar/lowering/control_flow._referent_seat_optional_draw``).
+    (``engine/grammar/lowering/_collapses._referent_seat_optional_draw``).
 
     The seat comes off the record named in the payload, never off
     ``context.target``. This sentence is printed inside a delay: it fires a turn

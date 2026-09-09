@@ -2425,7 +2425,7 @@ def _offer_to_seat(
     tested the offered player's board and hand. Both are now rebinding offers —
     see ``_EVENT_ACTORS`` — and Mind Bomb, the card the note said would have
     been the third, is still collapsed into a per-seat prompt before it reaches
-    here (``grammar/lowering/control_flow._each_player_optional_discard``).
+    here (``grammar/lowering/_collapses._each_player_optional_discard``).
     """
     player = game.players[player_index]
     # **The offer is about the board as it stands now**, and the entry outlives
