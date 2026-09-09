@@ -35,15 +35,34 @@ def _ai_declare_attackers(session: Session) -> None:
         attacker_indices = legal_attackers(game, game.active_player_index, against=target)
     else:
         attacker_indices = choose_attackers(game, game.active_player_index)
-    ok, _ = game.declare_attackers(game.active_player_index, attacker_indices, defending_player_index=target)
+    ok, why = game.declare_attackers(game.active_player_index, attacker_indices, defending_player_index=target)
     if not ok:
         # The chosen set was rejected (e.g. it omitted a creature that must attack
-        # if able). Attacking with every legal attacker is always a valid superset:
-        # it includes every forced creature, and a forced creature that can't
-        # legally attack is never required. Declaring [] would fail identically.
+        # if able). Attacking with every legal attacker is a superset that fixes
+        # exactly that: it includes every forced creature, and a forced creature
+        # that can't legally attack is never required.
+        #
+        # **It fixes nothing else, and the log line below is why this is now
+        # said out loud.** A superset cannot satisfy a *restriction* — a cap, an
+        # Errantry, a Conscripts — so for those the fallback is refused for the
+        # same reason the proposal was, and the seat ends up declaring `[]`:
+        # attacking with nobody, this combat and every later one, with no rule
+        # broken, nothing spent and nothing raised. That silence is the whole
+        # reason both attack caps went unnoticed for the life of this engine;
+        # `attack_declaration_refusal` now carries them, so `choose_attackers`
+        # prunes to a legal set and this path is not reached for a cap — but the
+        # next restriction the AI cannot see would arrive exactly here, and a
+        # log line costs nothing and is the only place it can be seen.
+        game.log.append(
+            f"AI attack declaration refused ({why}); falling back to every legal attacker"
+        )
         fallback = legal_attackers(game, game.active_player_index, against=target)
-        ok, _ = game.declare_attackers(game.active_player_index, fallback, defending_player_index=target)
+        ok, why = game.declare_attackers(game.active_player_index, fallback, defending_player_index=target)
         if not ok:
+            game.log.append(
+                f"AI fallback attack declaration also refused ({why}); "
+                "this seat attacks with nobody"
+            )
             game.declare_attackers(game.active_player_index, [], defending_player_index=target)
 
 

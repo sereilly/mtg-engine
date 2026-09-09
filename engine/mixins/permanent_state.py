@@ -2815,11 +2815,26 @@ class PermanentStateMixin:
             return source.has_type(value)
         return False
 
-    def _card_has_quality(self, card: CardDefinition, quality: tuple[str, str]) -> bool:
+    def _card_has_quality(
+        self, card: CardDefinition, quality: tuple[str, str], *,
+        as_damage_source: bool = False,
+    ) -> bool:
         """The same question of a *card* — a spell on the stack, which has no
-        permanent to ask the layers about."""
+        permanent to ask the layers about.
+
+        *as_damage_source* means the same thing here as it does one method up,
+        and it is not decoration: a spell is a damage source as readily as a
+        permanent is (CR 109.5), so Ghostly Flame rewrites a red *burn spell*
+        into a colorless source exactly as it rewrites a red creature. Reading
+        ``card.colors`` for a damage question would have left protection from
+        red stopping a Lightning Bolt the board had made colorless.
+        """
         kind, value = quality
         if kind == "color":
+            if as_damage_source:
+                from ..damage_source_colors import damage_source_colors
+
+                return value in damage_source_colors(self, card)
             return value in card.colors
         if kind == "multicolored":
             return len(set(card.colors)) >= 2
@@ -2827,21 +2842,57 @@ class PermanentStateMixin:
             return value in (card.type_line or "").lower().split()
         return False
 
+    def _source_has_quality(
+        self, source, quality: tuple[str, str], *, as_damage_source: bool = False,
+    ) -> bool:
+        """Whether a damage source of **either** shape has *quality*.
+
+        CR 109.5 gives a damage event two kinds of source: a ``Permanent`` for a
+        permanent's combat damage or ability, and the printed
+        ``CardDefinition`` for a spell. The two answer different methods — a
+        permanent's type resolves through the layer system, a card's is read off
+        its printed line — and until CR 702.16e reached the damage seam only the
+        permanent half was ever asked, because the four combat call sites can
+        only ever hand over a creature.
+
+        Dispatched on ``has_type``, which is what a ``Permanent`` has and a
+        ``CardDefinition`` does not, rather than on an ``isinstance``: a token,
+        an animated land and a copy are all permanents by that question and the
+        import stays out.
+        """
+        if source is None:
+            return False
+        if hasattr(source, "has_type"):
+            return self._permanent_has_quality(
+                source, quality, as_damage_source=as_damage_source
+            )
+        card = getattr(source, "card", source)
+        if not hasattr(card, "colors"):
+            return False
+        return self._card_has_quality(
+            card, quality, as_damage_source=as_damage_source
+        )
+
     def _is_protected_from(
-        self, victim: Permanent, source: Permanent, *, as_damage_source: bool = False,
+        self, victim: Permanent, source, *, as_damage_source: bool = False,
     ) -> bool:
         """True if *victim* has protection from a quality *source* has
         (CR 702.16e/f).
 
         *as_damage_source* is passed by the damage half of protection
-        (CR 702.16e, the combat damage step) and **not** by the blocking half
-        (CR 702.16d/509.1b, the declare-blockers step): a static that rewrites a
-        source's colour *for damage* changes which damage is prevented and not
-        which creatures may block, and reading it at both would be a strictly
-        different card.
+        (CR 702.16e, ``engine/prevention.py``'s interceptor) and **not** by the
+        blocking half (CR 702.16d/509.1b, the declare-blockers step): a static
+        that rewrites a source's colour *for damage* changes which damage is
+        prevented and not which creatures may block, and reading it at both
+        would be a strictly different card.
+
+        *source* is whatever a damage event carries (CR 109.5) — a permanent or
+        a spell's printed card — because the damage half is now asked of every
+        damage event rather than only of the four combat sites, and those were
+        the only callers that could guarantee a permanent.
         """
         return any(
-            self._permanent_has_quality(
+            self._source_has_quality(
                 source, quality, as_damage_source=as_damage_source
             )
             for quality in self._protection_qualities(victim)

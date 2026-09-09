@@ -687,8 +687,6 @@ class CombatDamageStepMixin:
             if amount <= 0 or not (0 <= member_idx < len(attacker_controller.battlefield)):
                 return
             member = attacker_controller.battlefield[member_idx]
-            if self._is_protected_from(member, blocker, as_damage_source=True):
-                return
             self._mark_damage_on_permanent(
                 member, amount, source=blocker, combat=True,
                 then=_dealt_to_creature(member, blocker, defending_idx), asks=True,
@@ -703,7 +701,8 @@ class CombatDamageStepMixin:
                 return
             # CR 702.22j/k: an explicit division of this blocker's damage among the
             # band members it blocks (validated above) wins over the single-target
-            # default. Each portion is dealt separately, honoring protection.
+            # default. Each portion is dealt separately, so each is its own CR
+            # 120.4 event and protection (CR 702.16e) is asked of each.
             # Falls back to the defender's pre-committed CR 510.1d division for a
             # creature blocking multiple attackers (Two-Headed Giant of Foriys).
             split = (blocker_damage_split or {}).get(blocker_idx)
@@ -744,9 +743,6 @@ class CombatDamageStepMixin:
                 return
             if not self._strikes_in_pass(blocker, run_first_pass, has_first_strike_pass):
                 return
-            # CR 702.16e: damage from a source of the protected quality is prevented.
-            if self._is_protected_from(attacker, blocker, as_damage_source=True):
-                return
             self._mark_damage_on_permanent(
                 attacker, blocker_assigns, source=blocker, combat=True,
                 then=_dealt_to_creature(attacker, blocker, defending_idx), asks=True,
@@ -780,11 +776,6 @@ class CombatDamageStepMixin:
                 if 0 <= a_idx < len(attacker_controller.battlefield)
                 else None
             )
-            # CR 702.16e: protection prevents damage from the protected quality.
-            if source_attacker is not None and self._is_protected_from(
-                blocker_perm, source_attacker, as_damage_source=True,
-            ):
-                return
             self._mark_damage_on_permanent(
                 blocker_perm, damage, source=source_attacker, combat=True,
                 then=_dealt_to_creature(
@@ -814,10 +805,6 @@ class CombatDamageStepMixin:
                 # nothing at all if it has left the battlefield (CR 510.1b).
                 walker = self.permanent_by_id(attacked_walker_id)
                 if walker is None:
-                    return
-                if source_attacker is not None and self._is_protected_from(
-                    walker, source_attacker, as_damage_source=True,
-                ):
                     return
                 self._mark_damage_on_permanent(
                     walker, damage, source=source_attacker, combat=True,
