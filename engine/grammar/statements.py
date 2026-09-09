@@ -488,8 +488,10 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
 
     # "Until end of turn, **lands tapped for mana produce mana of the chosen
     # color** instead of any other color." (Hall of Gemstone.) The passive
-    # voice of the two swaps above, with the lands in the subject slot — so it
-    # is read here, ahead of the subject-verb reader that would take "lands"
+    # voice of the two swaps `if_openings` reads — Deep Water's and Chaos
+    # Moon's, which print the same exchange with an "If" in front of it — with
+    # the lands in the subject slot and no "if" for that module to gate on. So
+    # it is read here, ahead of the subject-verb reader that would take "lands"
     # for an ordinary noun phrase and fail on "tapped". Declines without
     # consuming, leaving every other sentence opening with a noun untouched.
     chosen_swap = _parse_tapped_lands_produce_chosen(stream)
