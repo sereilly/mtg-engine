@@ -536,6 +536,26 @@ def run_ai_simulation(
                 game.resolve_untap_step(active)
                 game.resolve_upkeep(active)
                 game.resolve_draw_step(active)
+                # CR 505: the phase the casts below actually happen in. This
+                # loop went bookkeeping -> untap -> upkeep -> draw -> cast with
+                # no main-phase entry at all, so every `main_phase_first` /
+                # `main_phase_each_yours` trigger in the pool had never fired in
+                # an AI game — Sanctum of Fruitful Harvest, Eladamri's Vineyard,
+                # Carpet of Flowers — and a test routed through the simulator to
+                # exercise one silently exercised nothing. Not a wrong result,
+                # an absent one, which is why no guard saw it: the run
+                # completes, the interaction count is non-zero, the issue list
+                # is empty. Same shape and same function as the
+                # `begin_turn_bookkeeping` omission above.
+                #
+                # The drain is the half `_close_or_defer_step` does for every
+                # other step and `_enter_main_phase` does not, because a main
+                # phase is not closed before the active player acts in it: the
+                # entry opens a priority window, and the triggers it announced
+                # have to resolve before the cast below sees the board.
+                game._enter_main_phase(precombat=True)
+                game._resolve_priority_window()
+                _resolve_pending_choices(game)
 
                 cast_action = choose_cast_action(game, active)
                 if cast_action is not None:
