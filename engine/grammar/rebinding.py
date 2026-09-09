@@ -67,24 +67,26 @@ def _walk_specs(node, rewrite, kind=ast.TargetSpec):
     return node
 
 
-def statement_bound_target(statement: ast.Statement) -> ast.TargetSpec | None:
-    """The chosen target a following pronoun sentence refers back to, or None.
+def _bound_target(statement: ast.Statement, accept) -> "ast.TargetSpec | None":
+    """The nearest preceding chosen target *accept* says yes to, or None.
 
-    "Put a +1/+1 counter on up to one target creature. **It** gains
-    indestructible until end of turn." — the pronoun names the previous
-    sentence's target, not the ability's source. Walks a Sequence or
-    Conjunction from its last step, because the pronoun binds to the nearest
-    preceding choice.
+    One walk, asked twice. The pronoun binds to the nearest preceding choice, so
+    a Sequence or a Conjunction is searched from its last step; what differs
+    between the two readers below is only **which** chosen spec counts, and that
+    is the callback. Written as two walks it was two copies of the recursion,
+    which is the fork-in-a-fragment shape this package keeps finding: the
+    singular reader already carries a case (`DealDamage`'s own recipient tuple)
+    that a second copy has no reason to remember.
     """
-    if isinstance(statement, (ast.Sequence,)):
+    if isinstance(statement, ast.Sequence):
         for step in reversed(statement.steps):
-            found = statement_bound_target(step)
+            found = _bound_target(step, accept)
             if found is not None:
                 return found
         return None
     if isinstance(statement, ast.Conjunction):
         for step in reversed(statement.effects):
-            found = statement_bound_target(step)
+            found = _bound_target(step, accept)
             if found is not None:
                 return found
         return None
@@ -94,14 +96,63 @@ def statement_bound_target(statement: ast.Statement) -> ast.TargetSpec | None:
     # the field scan below cannot see.
     if isinstance(statement, ast.DealDamage):
         for recipient in reversed(statement.recipients):
-            if isinstance(recipient, ast.TargetSpec) and recipient.quantifier in ("target", "up_to"):
+            if isinstance(recipient, ast.TargetSpec) and accept(recipient):
                 return recipient
         return None
     for field_name in ("subject", "target"):
         candidate = getattr(statement, field_name, None)
-        if isinstance(candidate, ast.TargetSpec) and candidate.quantifier in ("target", "up_to"):
+        if isinstance(candidate, ast.TargetSpec) and accept(candidate):
             return candidate
     return None
+
+
+def statement_bound_target(statement: ast.Statement) -> "ast.TargetSpec | None":
+    """The chosen target a following pronoun sentence refers back to, or None.
+
+    "Put a +1/+1 counter on up to one target creature. **It** gains
+    indestructible until end of turn." — the pronoun names the previous
+    sentence's target, not the ability's source.
+
+    "Up to one" qualifies and a counted plural does not: every rider reading
+    this hands the spec to a lowering that resolves **one** permanent, so a
+    two-target spec arriving here would act on two where the pronoun named one.
+    The plural has its own reader below.
+    """
+    return _bound_target(
+        statement, lambda spec: spec.quantifier in ("target", "up_to")
+    )
+
+
+def _names_several(spec: "ast.TargetSpec") -> bool:
+    """Whether *spec* is a printed choice of **more than one** object.
+
+    The question ``lowering/_targets._names_several_targets`` asks, answered
+    again here rather than imported: this module is in the parse half and that
+    one in the lowering half, and neither may reach the other. A quantifier
+    missing here costs a rebinding rather than widening one — a line refuses,
+    which is the safe direction. "One or more" and "any number of" print no
+    number and qualify on the quantifier alone; the counted spellings carry
+    theirs, and a printed one is not several.
+    """
+    if not spec.targeted:
+        return False
+    if spec.quantifier in ("one_or_more", "any_number"):
+        return True
+    if spec.quantifier not in ("exactly", "up_to"):
+        return False
+    return bool(spec.count_from_x) or spec.count > 1
+
+
+def statement_bound_several_targets(
+    statement: ast.Statement,
+) -> "ast.TargetSpec | None":
+    """The **several** chosen targets a following "each of them" refers back to.
+
+    "Untap two target creatures. **Each of them** gets +1/+1 until end of turn."
+    (Hope and Glory.) :func:`statement_bound_target`'s plural twin, through the
+    same walk with the other half of the quantifiers.
+    """
+    return _bound_target(statement, _names_several)
 
 
 def rebind_pronoun_to_condition_target(

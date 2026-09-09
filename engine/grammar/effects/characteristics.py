@@ -413,7 +413,7 @@ def _parse_gains(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
     loss_mark = stream.mark()
     if stream.accept_word("and") and stream.at_word("loses", "lose"):
         stream.advance()
-        lost, _disjunctive = parse_keyword_list(stream)
+        lost, lost_disjunctive = parse_keyword_list(stream)
         loss_duration = _parse_duration(stream)
         if duration.kind is None and loss_duration.kind is not None:
             grant = ast.GainKeyword(
@@ -422,7 +422,14 @@ def _parse_gains(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
         elif loss_duration.kind is None:
             loss_duration = duration
         return ast.Conjunction((
-            grant, ast.LoseKeyword(subject, lost, loss_duration),
+            # The right half carries its own connective, for the reason the
+            # bare loss below reads one: "and loses A or B" takes one away and
+            # "and loses A and B" takes both, and a dropped flag is a removal
+            # the card never printed.
+            grant,
+            ast.LoseKeyword(
+                subject, lost, loss_duration, choose_one=lost_disjunctive
+            ),
         ))
     stream.reset(loss_mark)
 
@@ -691,9 +698,24 @@ def _parse_loses(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
         stream.reset(base_mark)
         return stripped
     stream.reset(all_mark)
-    keywords = _parse_keywords(stream)
+    # "loses **your choice of** flying, first strike, or trample" (Walking
+    # Sponge) — the mirror of the four words :func:`_parse_gains` reads for
+    # Alchemist's Gift, and read here for that branch's reason exactly: CR
+    # 608.2d announces the pick while the effect is applied, so the connective
+    # is *read* rather than normalised away.
+    #
+    # It was not, and the disjunction went with it. ``_parse_keywords`` throws
+    # away the flag ``parse_keyword_list`` returns, so "loses flying, first
+    # strike, or trample" removed all three — the same near miss the grant's
+    # own docstring records on the other side of the layer, and the one word
+    # away from being a card that does more than it prints.
+    choose_one = bool(stream.accept_phrase("your", "choice", "of"))
+    keywords, disjunctive = parse_keyword_list(stream)
+    choose_one = choose_one or disjunctive
     duration = _parse_duration(stream)
-    return ast.LoseKeyword(subject, keywords, duration)
+    if choose_one and len(keywords) < 2:
+        raise stream.error("a choice of keywords needs more than one")
+    return ast.LoseKeyword(subject, keywords, duration, choose_one=choose_one)
 
 
 def _parse_has(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:

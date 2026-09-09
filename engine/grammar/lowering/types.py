@@ -36,9 +36,9 @@ from .. import ast
 from ..errors import LoweringError
 from ...subject_filters import untestable_filter_keys
 from ...oracle_types import BLOCK_PAIR_SUBJECT, SUBJECT_FROM_TRIGGER
-from ._common import (_describe_several_targets, _describe_targets,
-                      _filter_payload, _is_enchanted, _is_source, _is_target,
-                      _names_several_targets)
+from ._common import (_check_grantable, _describe_several_targets,
+                      _describe_targets, _filter_payload, _is_enchanted,
+                      _is_source, _is_target, _names_several_targets)
 from ._events import _EVENT_SUBJECT_OBJECTS, binds_block_pair
 
 
@@ -184,6 +184,17 @@ def _animation_payload(node: ast.BecomeCreature) -> dict[str, object]:
     same claim as "no colours" (CR 105.2c's colourless), and a key that was
     always present could not tell the two apart.
     """
+    # "…a 3/3 Knight creature **with first strike**" (Opal Champion), "…a 2/1
+    # red Warrior creature **with first strike**" (Ghitu Encampment). The words
+    # go onto CR 613 layer 6 through `layer_bridge`'s animation collector, which
+    # is the same channel a printed "gains first strike" writes — so they pass
+    # the same gate, and for the reason `_check_grantable` states: a word with no
+    # behaviour behind it is a grant of nothing, and inside a creature body it
+    # is a grant of nothing that reads as having worked. The parse side admits
+    # any keyword the catalog holds; this is what decides which of them the
+    # engine can actually give.
+    for keyword in node.keywords:
+        _check_grantable(keyword, node)
     payload: dict[str, object] = {
         "power": node.power,
         "toughness": node.toughness,

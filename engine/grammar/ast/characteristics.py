@@ -205,6 +205,15 @@ class LoseKeyword:
     # can spell — an empty ``keywords`` already means "the chosen one" under the
     # flag above, and would mean "nothing at all" here.
     all_abilities: bool = False
+    # "Target creature **loses your choice of** flying, first strike, or
+    # trample until end of turn." (Walking Sponge.) The mirror of
+    # :class:`GainKeyword`'s field of the same name, and it exists for the
+    # reason that one does: CR 608.2d makes the pick an announcement while the
+    # effect is applied, so "loses A, B, or C" takes **one** of them away and
+    # "loses A, B, and C" takes all three. One word apart and two different
+    # cards — and without the field the parser normalised both into the same
+    # tuple, which is a removal of three abilities where the card removes one.
+    choose_one: bool = False
 
 
 @dataclass(frozen=True)

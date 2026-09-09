@@ -188,9 +188,20 @@ def _parse_emblem_line(line: str) -> "ast.CreateEmblem | None":
 #: ``head`` is non-greedy so the split falls at the **first** joining word a
 #: quote follows: Veiled Apparition prints "with flying and "…"", where "with"
 #: is followed by a keyword and only "and" by the quote.
+#:
+#: ``tail`` is everything printed **after** the closing quote, and it is why
+#: this is no longer anchored at the end of the line. A creature body prints
+#: its duration and its retention clause behind the quoted ability — "…with
+#: "{B}: Regenerate this creature" **until end of turn. It's still a land.**"
+#: (Spawning Pool) — and an end-anchored pattern does not match those at all,
+#: so the line fell through to the raw-quote refusal ("granted ability in
+#: quotes") with nothing having read it. The tail is *rejoined to the head*
+#: below rather than parsed apart: "until end of turn" is the animation's own
+#: duration and "It's still a land" is CR 205.1b's retention clause, and both
+#: belong to the sentence the body is in.
 _BECOMES_WITH_GRANTED_ABILITY_RE = re.compile(
     r'(?P<head>^.*\bbecomes an? .*?)\s+(?:and|with)\s+'
-    r'["“](?P<granted>.+?)["”]\.?\s*$',
+    r'["“](?P<granted>.+?)["”](?P<tail>.*?)\s*$',
     re.IGNORECASE | re.DOTALL,
 )
 
@@ -226,6 +237,21 @@ def _parse_becomes_with_granted_ability(
     if '"' in granted or "“" in granted or "”" in granted:
         return None
     head = match.group("head").strip()
+    # The words printed after the closing quote belong to the creature body, so
+    # the line handed on is the head **with the tail put back**: "This land
+    # becomes a 1/1 black Skeleton creature until end of turn. It's still a
+    # land." Dropping them instead would take Spawning Pool's duration with it
+    # and animate the land for the rest of the game — a rider consumed and
+    # discarded, which is the bug class this package refuses by construction.
+    #
+    # A leading period is the sentence break the quote swallowed and is not
+    # re-added; anything else is glued back on with a space, because the quote
+    # is one item of the body and what follows it continues that sentence.
+    tail = (match.group("tail") or "").strip()
+    if tail.startswith("."):
+        tail = tail[1:].strip()
+    if tail:
+        head = f"{head} {tail}"
     if not head.endswith("."):
         head += "."
     try:

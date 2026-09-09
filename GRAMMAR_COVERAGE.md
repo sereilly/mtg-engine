@@ -38,7 +38,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | EXO | 143 | 207 | 90.3% | 90.3% | 66.2% | 127 |
 | USG | 335 | 486 | 87.2% | 87.2% | 63.0% | 266 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| ULG *(measured)* | 143 | 227 | 75.3% | 72.2% | 48.9% | 101 |
+| ULG *(measured)* | 143 | 227 | 78.0% | 74.9% | 51.5% | 105 |
 | **All (shipped)** | **5208** | **7725** | **90.6%** | **89.8%** | **60.3%** | **3916** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -51,10 +51,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 438 | 191 | expected a subject |  |
+| 436 | 189 | expected a subject |  |
 | 121 | 65 | unrecognized effect verb |  |
 | 86 | 42 | unconsumed text |  |
-| 41 | 25 | granted ability in quotes | phase 3 (quoted abilities) |
+| 40 | 24 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 15 | 14 | expected 'unless defending player controls' |  |
 | 13 | 8 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
@@ -71,11 +71,11 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 4 | 1 | expected a destination zone after 'return' |  |
 | 3 | 1 | expected 'of' |  |
 | 3 | 3 | unrecognized "can't be" restriction |  |
-| 3 | 3 | expected a keyword ability |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 2 | expected 'counter or counters' |  |
 | 2 | 1 | expected 'the number of' in a where-clause |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
+| 2 | 2 | expected 'a' |  |
 
 ## Cards executing through the grammar
 
@@ -2595,6 +2595,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, if a player has more life than each other player, the player with the most life gains control of this creature.`
 - **Ghitu Encampment**
   - `{T}: Add {R}.`
+  - `{1}{R}: This land becomes a 2/1 red Warrior creature with first strike until end of turn. It's still a land. (It deals combat damage before creatures without first strike.)`
 - **Ghitu Fire-Eater**
   - `{T}, Sacrifice this creature: It deals damage equal to its power to any target.`
 - **Ghitu Slinger**
@@ -3091,6 +3092,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `• Target creature gains first strike until end of turn.`
   - `• Target player gains 2 life.`
   - `• Destroy target Aura.`
+- **Hope and Glory**
+  - `Untap two target creatures. Each of them gets +1/+1 until end of turn.`
 - **Hopping Automaton**
   - `{0}: This creature gets -1/-1 and gains flying until end of turn.`
 - **Horn of Deafening**
@@ -4569,8 +4572,12 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{0}: This permanent becomes an enchantment.`
 - **Opal Archangel**
   - `When an opponent casts a creature spell, if this permanent is an enchantment, it becomes a 5/5 Angel creature with flying and vigilance.`
+- **Opal Avenger**
+  - `When you have 10 or less life, if this permanent is an enchantment, it becomes a 3/5 Soldier creature.`
 - **Opal Caryatid**
   - `When an opponent casts a creature spell, if this permanent is an enchantment, it becomes a 2/2 Soldier creature.`
+- **Opal Champion**
+  - `When an opponent casts a creature spell, if this permanent is an enchantment, it becomes a 3/3 Knight creature with first strike.`
 - **Opal Gargoyle**
   - `When an opponent casts a creature spell, if this permanent is an enchantment, it becomes a 2/2 Gargoyle creature with flying.`
 - **Opal Titan**
@@ -6221,6 +6228,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Pay 1 life: Until your next upkeep, target permanent can't phase out.`
 - **Spawning Pool**
   - `{T}: Add {B}.`
+  - `{1}{B}: This land becomes a 1/1 black Skeleton creature with "{B}: Regenerate this creature" until end of turn. It's still a land. (If it regenerates, the next time it would be destroyed this turn, instead tap it, remove it from combat, and heal all damage on it.)`
 - **Speaker of the Heavens**
   - `{T}: Create a 4/4 white Angel creature token with flying. Activate only if you have at least 7 life more than your starting life total and only as a sorcery.`
 - **Spectral Bears**
@@ -7332,6 +7340,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}{U}, Discard this card: Look at the top two cards of your library. Put one of them into your hand and the other into your graveyard.`
 - **Walking Dead**
   - `{B}: Regenerate this creature.`
+- **Walking Sponge**
+  - `{T}: Target creature loses your choice of flying, first strike, or trample until end of turn.`
 - **Walking Wall**
   - `{3}: This creature gets +3/-1 until end of turn and can attack this turn as though it didn't have defender. Activate only once each turn.`
 - **Wall of Blossoms**

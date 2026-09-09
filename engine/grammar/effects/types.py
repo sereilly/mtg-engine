@@ -24,12 +24,13 @@ caller is the same dispatcher.
 from .. import ast
 from ..amounts import expect_pt
 from ..errors import GrammarError
+from ..keywords import parse_keyword_list
 from ..phrases import _parse_duration
 from ..back_references import _parse_that_object
 from ..stream import TokenStream
-from ..vocabulary import (CARD_TYPES, COLOR_WORDS, IMPLEMENTED_KEYWORDS,
-                          LAND_TYPES, SUBTYPE_INDEX, TYPE_LINE_SUPERTYPES,
-                          match_longest, singular as _singular_type)
+from ..vocabulary import (CARD_TYPES, COLOR_WORDS, LAND_TYPES, SUBTYPE_INDEX,
+                          TYPE_LINE_SUPERTYPES, match_longest,
+                          singular as _singular_type)
 
 
 def _parse_becomes(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
@@ -492,17 +493,38 @@ def _parse_become_creature(
                 return None
             protection_from_spell = True
         else:
-            while True:
-                keyword = stream.peek_word()
-                if keyword is None or keyword not in IMPLEMENTED_KEYWORDS:
-                    break
-                keywords.append(keyword)
-                stream.advance()
-                if not (stream.accept_word("and") or stream.accept_punct(",")):
-                    break
-            if not keywords:
+            # The **shared** keyword-list reader, not a loop of this
+            # production's own. There was one here, and it read
+            # ``stream.peek_word()`` — one token — against
+            # ``IMPLEMENTED_KEYWORDS``, whose entries are ability *names*: so
+            # "flying" matched and "first strike" did not, because "first" is
+            # not a keyword and the loop stopped on it with nothing consumed.
+            # A fork in a fragment, and the shape SET_PLAYBOOK.md names — which
+            # definitions a card could use depended on which sentence it printed
+            # them in. Opal Champion (parse-refused) and Ghitu Encampment (a
+            # hollow line on a supported card) are the same word away from
+            # Opal Gargoyle and Mishra's Factory, which work.
+            #
+            # ``parse_keyword_list`` reads a multiword name, protection's
+            # quality and rampage's N, and answers whether the list was joined
+            # with "or"; the gate that the ability is one the engine can
+            # actually give is ``_check_grantable``, in the lowering, which is
+            # the same gate every other grant of a printed keyword passes.
+            try:
+                parsed, disjunctive = parse_keyword_list(stream)
+            except GrammarError:
                 stream.reset(mark)
                 return None
+            if disjunctive:
+                # "…becomes a 3/3 creature with flying **or** trample" would be
+                # CR 608.2d's choice made while the effect is applied, and the
+                # animation record holds a *list* of granted words with nowhere
+                # to put a choice. Nothing in the pool prints it; refusing keeps
+                # it a sentence nobody has read rather than an animation that
+                # silently grants all of them.
+                stream.reset(mark)
+                return None
+            keywords = list(parsed)
     if power is None and not pt_from_spell:
         # A creature body with no size at all — "becomes a Beast creature" —
         # is a 0/0 the next state-based check bins (CR 704.5f). Refusing keeps

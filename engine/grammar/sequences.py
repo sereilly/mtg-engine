@@ -60,6 +60,7 @@ from .pronouns import (_RIDER_FOLDED, _attach_returned_text_change,
                        _parse_conditional_quoted_grant_rider,
                        _parse_exile_instead_of_leaving_rider,
                        _parse_pronoun_counter_rider,
+                       _parse_plural_pronoun_pump_rider,
                        _parse_pronoun_grant_rider, _parse_pronoun_verb_rider)
 from .rebinding import (rebind_alternative_pronoun_to_choice_target,
                         rebind_delayed_pronoun_to_sentence_target,
@@ -431,6 +432,16 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             pronoun_verb = _parse_pronoun_verb_rider(stream, steps)
             if pronoun_verb is not None:
                 steps.append(pronoun_verb)
+                continue
+            # "Untap two target creatures. **Each of them** gets +1/+1 until
+            # end of turn." (Hope and Glory.) The plural of the pronoun the
+            # riders around it bind, and read here beside them because its
+            # antecedent is the same thing: the several targets the sentence
+            # before it chose. Parsed fresh, "each of them" is not a subject
+            # this grammar reads at all and the whole line refuses.
+            plural_pump = _parse_plural_pronoun_pump_rider(stream, steps)
+            if plural_pump is not None:
+                steps.append(plural_pump)
                 continue
             # "…and put a -1/-0 counter on **it**." (Jabari's Influence.) The
             # counter's own pronoun, beside the imperative one above: parsed
