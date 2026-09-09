@@ -59,6 +59,12 @@ from .. import ast
 from ..errors import LoweringError
 from ._common import _filter_payload, _restrictions_beyond
 from ._events import COUNTED_NUMBER
+# The one name this file shares with the table that declares it: which key a
+# discard cost writes. Imported rather than spelled, because a producer gate and
+# the declaration it reads are exactly the pair a second spelling makes vacuous —
+# which is what these two files did to each other until Pyromancy gave the
+# channel a second reader.
+from ._cost_records import DISCARDED_FOR_COST
 
 
 def lower_record_condition(
@@ -282,7 +288,7 @@ def lower_record_condition(
         # card compiled clean. The one producer today is the ability's own
         # discard cost (CR 601.2h / 602.2b), seeded by `lower_ability` off the
         # cost clause — the only place the cost and the effect are both in view.
-        if "discarded_cards" not in produced:
+        if DISCARDED_FOR_COST not in produced:
             raise LoweringError(
                 "'the discarded card' with nothing in this ability that "
                 "discarded one",

@@ -10,6 +10,7 @@ from ..named_counters import counters_on
 from ..oracle_types import (COUNTERED_ABILITY_SOURCE,
                             COUNTERED_SPELL_CONTROLLER, COUNTERS_REMOVED,
                             LAST_TARGET_CONTROLLER, LAST_TARGET_OWNER,
+                            LIFE_LOST_THIS_WAY,
                             PER_OBJECT_SEAT_RECORDS,
                             X_FROM_COUNT_PER_RECIPIENT)
 from .registry import effect_handler
@@ -282,6 +283,16 @@ def target_loses_life(game: Game, instruction: OracleInstruction, context: Oracl
             )
         before = victim.life
         victim.life -= loss
+        # "…each opponent loses 1 life. You gain life equal to **the life lost
+        # this way**." (Subversion.) The *total*, accumulated across the victims
+        # this one step visited — at a four-player table the printed 1 is what
+        # each opponent loses and 3 is what the sentence behind it reads. Written
+        # here, at the one subtraction, so the several recipient branches above
+        # cannot each answer differently; and accumulated rather than assigned,
+        # because a loop is what makes the number more than the printed one.
+        context.results[LIFE_LOST_THIS_WAY] = (
+            int(context.results.get(LIFE_LOST_THIS_WAY, 0) or 0) + loss
+        )
         game.log.append(
             f"{card.name}: {victim.name} lost {loss} life ({before} -> {victim.life})"
         )

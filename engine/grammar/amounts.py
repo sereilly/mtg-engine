@@ -8,7 +8,7 @@ place here and an unknown quantity word is an error, not a zero.
 
 from __future__ import annotations
 
-from ..oracle_types import MANA_PAID_BY_SEAT
+from ..oracle_types import LIFE_LOST_THIS_WAY, MANA_PAID_BY_SEAT
 from . import ast
 from .errors import GrammarError
 from .lexer import GToken, NUMBER, PT, WORD
@@ -17,6 +17,7 @@ from .lexer import GToken, NUMBER, PT, WORD
 # by what the quantity *is* rather than by which reader asks for it.
 from .records import (accept_damage_dealt_by_chosen_cast,
                       accept_counters_removed_for_cost,
+                      accept_cost_characteristic_of,
                       accept_exiled_for_cost, accept_sacrificed_for_cost,
                       accept_tapped_for_cost)
 from .stream import TokenStream
@@ -574,7 +575,15 @@ def _parse_equal_to_body(stream: TokenStream) -> ast.Amount | None:
     if named is not None:
         return named
 
-    stream.accept_word("the")
+    # Remembered rather than discarded, because two branches below need to know
+    # whether the sentence printed a determiner at all: "**the** artifact's mana
+    # value" (Viashino Heretic) arrives here with its article already eaten, and
+    # the possessive reader at the foot of this function was written to require
+    # one. Read there as "no determiner", the card refused its whole ability
+    # while the identical sentence written "**that** artifact's mana value"
+    # parsed — one printed possessive with two readings, which is the fork
+    # SET_PLAYBOOK records from Revised's round 8.
+    had_article = bool(stream.accept_word("the"))
 
     if stream.accept_phrase("number", "of"):
         # "…equal to **the number of pain counters removed this way**"
@@ -629,6 +638,19 @@ def _parse_equal_to_body(stream: TokenStream) -> ast.Amount | None:
     # shape one zone over. Its own reader so both front ends (this one and the
     # where-clause in `where_x.py`) ask one function: two copies of a phrase
     # that names a payment channel is how the two come to name different ones.
+    # "…equal to **the mana value of the discarded card**." (Pyromancy.) The
+    # same four payment channels the possessive readers below name, with the
+    # genitive the other way round — English puts a possessor in front of its
+    # noun or behind it with "of", and a card prints whichever it likes. One
+    # reader for both orders (``records.accept_cost_characteristic_of``), so a
+    # channel taught to one spelling is not a channel the other cannot find.
+    #
+    # Read before the possessives because the two cannot collide: this one opens
+    # on a characteristic word and each of those opens on a participle.
+    inverted = accept_cost_characteristic_of(stream)
+    if inverted is not None:
+        return inverted
+
     exiled = accept_exiled_for_cost(stream)
     if exiled is not None:
         return exiled
@@ -658,6 +680,18 @@ def _parse_equal_to_body(stream: TokenStream) -> ast.Amount | None:
         if stream.accept_phrase("paid", "this", "way"):
             return ast.ThatMuch(MANA_PAID_BY_SEAT)
     stream.reset(mark_mana)
+
+    # "…each opponent loses 1 life. You gain life equal to **the life lost this
+    # way**." (Subversion.) A back-reference to what the sentence in front of
+    # this one took, and "this way" is what makes it one: the printed 1 is per
+    # opponent, so the number the gain reads is a sum that exists nowhere but
+    # the record the loss wrote. Read beside "the damage dealt" below and in the
+    # same shape, because it is the same question about the other of CR 120.3's
+    # two ways a life total goes down — and like that one it needs no producer
+    # check here, the lowering's own gate refusing the words when no step of
+    # this effect took any life.
+    if stream.accept_phrase("life", "lost", "this", "way"):
+        return ast.ThatMuch(LIFE_LOST_THIS_WAY)
 
     if stream.accept_phrase("damage", "dealt"):
         # "…equal to the damage dealt **this way**" (Syphon Soul). "This way"
@@ -773,7 +807,12 @@ def _parse_equal_to_body(stream: TokenStream) -> ast.Amount | None:
     # still refuses by name. The noun is required to be one, and is not carried:
     # there is exactly one record to read.
     noun_mark = stream.mark()
-    if stream.accept_word("that", "the"):
+    # The determiner is required and may already have been consumed: the "the"
+    # branch at the head of this function eats one, so "the artifact's mana
+    # value" reaches this point with the noun first. ``had_article`` is what
+    # says a determiner was printed — accepting a bare "artifact's mana value"
+    # instead would read a possessive that names no antecedent at all.
+    if stream.accept_word("that", "the") or had_article:
         noun = stream.peek_word()
         if noun is not None and _singular(noun) in _POSSESSIVE_NOUNS:
             stream.advance()

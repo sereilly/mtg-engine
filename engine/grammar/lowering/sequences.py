@@ -48,7 +48,8 @@ from ._common import (
     _is_target, _names_several_targets, _restrictions_beyond,
     SEVERAL_DESTROY_NARROWINGS, _signed, testable_filter_payload
 )
-from ._records import optional_cost_key, primary_produced, produced_keys
+from ._cost_records import optional_cost_key
+from ._records import primary_produced, produced_keys
 
 #: The branches of a ``may`` whose records are visible to the steps *after* it.
 #: The offer's action and its "if you do" consequence are steps of this same

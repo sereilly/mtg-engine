@@ -193,6 +193,23 @@ def accept_zone_scope(stream: TokenStream, d) -> bool | None:
         # would name two scopes.
         if stream.accept_word("all"):
             every = True
+            # "in **all players'** hands" (Multani, Maro-Sorcerer). CR 400.1
+            # gives every player their own hand, library and graveyard, so
+            # "all hands" and "all players' hands" name the same set of piles —
+            # the possessive is the phrase spelled with its owners in it, and
+            # the pool prints both spellings ("in all graveyards" is Kindle's).
+            # Consumed rather than left for the noun check below, which would
+            # find "players" where a zone noun has to be and refuse the whole
+            # line.
+            #
+            # Only behind "all", and only the plural: "a player's hand" is a
+            # different scope with its own branch above, and a singular here
+            # would let the word be read off a phrase that scoped one seat.
+            #
+            # One token: the lexer splits a singular "'s" off its noun and
+            # leaves a plural's bare apostrophe attached, so the word to accept
+            # is "players'" rather than a noun and a punctuation mark.
+            stream.accept_word("players'")
         else:
             stream.accept_word("a", "an", "the")
     noun = stream.peek_word()

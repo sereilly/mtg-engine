@@ -20,7 +20,7 @@ the halving over it), how big a printed P/T change is, and where an X definition
 is written onto the sentence that reads one.
 """
 
-from ...oracle_types import OracleInstruction, X_FROM_COUNT
+from ...oracle_types import OracleInstruction, TAPPED_THIS_WAY, X_FROM_COUNT
 from .. import ast
 from ..errors import LoweringError
 from ._common import dropped_narrowings
@@ -327,6 +327,50 @@ def recorded_count_spec(
         # written before the factor existed stays byte-identical.
         spec["multiplier"] = multiplier
     return spec
+
+
+def tapped_this_way_record(filt: "ast.ObjectFilter", produced, node) -> str:
+    """The record "the number of <noun> **tapped this way**" reads, or a refusal.
+
+    "…, where X is the number of Islands tapped this way" (Monsoon) and "…deals
+    damage to the player equal to the number of creatures tapped this way"
+    (Angel's Trumpet) are the same quantity in the two printed positions a
+    quantity can occupy, so they ask one reader. Written twice they would
+    eventually disagree, and the direction that fails is silent: the where-clause
+    form refuses a narrowing and the "equal to" form, had it grown its own copy,
+    would have been free to admit one.
+
+    Two refusals, both of them the fourth idiom's:
+
+    * **Only the bare head noun.** What the tap recorded is a *number*, not the
+      set, so a narrower noun phrase would be counted as though the narrowing
+      were not there. The sweep's own narrowings ("untapped", "that player
+      controls", "that didn't attack this turn") are exactly the ones the card
+      leaves off the counting clause, which is why the head noun is enough.
+    * **A step of this same effect must have tapped something.** What the board
+      now holds tapped is not what this effect turned — a creature that was
+      already tapped is not one the sweep tapped, and CR 611.2c fixed the set
+      when the effect began — so with no producer the words name nothing and the
+      count would be a zero the card never printed.
+
+    A floor rather than a helper in either family, for this module's own reason:
+    ``lowering/where_x`` and ``lowering/damage`` both ask it and neither may
+    import the other.
+    """
+    described = filt.to_payload()
+    if filt.zone != "battlefield" or set(described) - {
+        "type_filter", "subtype_filter"
+    } or len(described) != 1:
+        raise LoweringError(
+            "'tapped this way' counts what the earlier step tapped and cannot "
+            "be narrowed further", node=node,
+        )
+    if TAPPED_THIS_WAY not in produced:
+        raise LoweringError(
+            "'tapped this way' with no earlier step in this effect that tapped "
+            "anything", node=node,
+        )
+    return TAPPED_THIS_WAY
 
 
 def halved_count_spec(amount: "ast.Amount", node) -> dict | None:

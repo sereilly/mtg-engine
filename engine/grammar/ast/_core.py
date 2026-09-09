@@ -306,6 +306,30 @@ class TappedForCost:
 
 
 @dataclass(frozen=True)
+class DiscardedForCost:
+    """A characteristic of what the ability's **own cost** discarded — "This
+    enchantment deals damage to any target equal to **the mana value of the
+    discarded card**" (Pyromancy).
+
+    :class:`SacrificedForCost`'s fourth sibling, one zone over again, and the
+    same channel argument: the card is in a graveyard before the ability reached
+    the stack (CR 601.2h), so nothing at resolution answers for it and the number
+    is last-known information (CR 608.2h) the payment path recorded under
+    ``discarded_for_cost`` — the channel Land's Edge's "if the discarded card was
+    a land card" has read since that card landed.
+
+    Its own node for :class:`ExiledForCost`'s reason exactly: four records, four
+    payments, and a card printing two of them would have them disagree.
+
+    The card prints it in the *other* genitive from its three siblings — "the
+    mana value of the discarded card", not "the discarded card's mana value" —
+    which is a fact about the sentence and not about the channel, so it is the
+    reader that carries both word orders and this node that carries neither.
+    """
+    characteristic: str   # "power" | "toughness" | "mana_value"
+
+
+@dataclass(frozen=True)
 class CountersRemovedForCost:
     """How many counters the ability's **own cost** took off — "You gain 2 life
     **for each elixir counter removed this way**" (Essence Bottle), "…equal to

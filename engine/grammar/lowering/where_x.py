@@ -25,7 +25,7 @@ import dataclasses
 from ...oracle_types import OracleInstruction, X_FROM_COUNT
 from .. import ast
 from ..errors import LoweringError
-from ._amounts import TARGET_OPPONENT_SCOPE, count_spec
+from ._amounts import TARGET_OPPONENT_SCOPE, count_spec, tapped_this_way_record
 from ._amounts import _mentions_x, _stamp_x_from_count
 from ._counted_damage import _READABLE_COST_SACRIFICE_CHARACTERISTICS
 from ._records import produced_keys
@@ -729,23 +729,12 @@ def _lower_where_x_tapped_this_way(
     ("untapped", "that player controls") are exactly the ones the card leaves
     off the where-clause, which is why the head noun is enough.
     """
-    filt = node.definition.filter
-    described = filt.to_payload()
-    if filt.zone != "battlefield" or set(described) - {
-        "type_filter", "subtype_filter"
-    } or len(described) != 1:
-        raise LoweringError(
-            "'tapped this way' counts what the earlier step tapped and cannot "
-            "be narrowed further", node=node,
-        )
-    if "tapped_this_way" not in (produced | _records_within(inner)):
-        raise LoweringError(
-            "'tapped this way' with no earlier step in this effect that tapped "
-            "anything", node=node,
-        )
+    record = tapped_this_way_record(
+        node.definition.filter, produced | _records_within(inner), node,
+    )
     if not _mentions_x(inner):
         raise LoweringError("a where-clause defined an X nothing reads", node=node)
-    return _stamp_x_from_count(inner, {"back_reference": "tapped_this_way"})
+    return _stamp_x_from_count(inner, {"back_reference": record})
 
 
 def _damage_dealt_definition(definition) -> "tuple[ast.DamageDealtThisTurn, int] | None":

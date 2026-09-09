@@ -674,10 +674,17 @@ _PATTERNS: tuple[tuple[re.Pattern[str], object], ...] = (
         # point of the row — An-Havva Inn prints An-Havva Constable's count as
         # a life gain, and the two must be one number or the pair is two
         # readings of one sentence.
+        # "…equal to **the total number of** cards in all players' hands."
+        # (Multani, Maro-Sorcerer.) The word is emphasis on a count that spans
+        # several piles, not a different quantity: CR 400.1 gives every player
+        # their own hand, so a card counting all of them says "total" where a
+        # card counting one does not. Optional and unread, exactly as "the" is —
+        # what it would have to change is the count, and the count is already
+        # the whole of what the noun phrase behind it says.
         re.compile(
             rf"^{_SUBJECT} (?P<half>power and toughness are each|power is|"
-            r"toughness is) equal to (?:(?P<plus>\d+) plus )?the number of "
-            r"(?P<counted>.+)$"
+            r"toughness is) equal to (?:(?P<plus>\d+) plus )?the (?:total )?"
+            r"number of (?P<counted>.+)$"
         ),
         _counted_noun_phrase,
     ),

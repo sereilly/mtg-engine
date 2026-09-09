@@ -45,7 +45,8 @@ from ...replacement_choices import pending_choices_for
 from ...resumption import resume_after_answer, run_resumable
 from ...mana_payment import (generic_cost, mana_cost_label, plan_payment,
                             untapped_mana_lands)
-from ...oracle_types import SACRIFICED_CARDS_BY_SEAT, SEARCHED_PERMANENTS
+from ...oracle_types import (SACRIFICED_CARDS_BY_SEAT, SACRIFICED_COUNT,
+                             SEARCHED_PERMANENTS)
 from ...search_filters import landing_seat, search_matches, searched_seat
 from ...handlers.zones import FORGOTTEN_PICKS
 from ...oracle_types import OracleInstruction
@@ -74,6 +75,12 @@ def _record_sacrificed_card(record, player_index: int, card) -> None:
     record.setdefault(SACRIFICED_CARDS_BY_SEAT, {}).setdefault(
         player_index, []
     ).append(card)
+    # …and the *number*, which is what a bare "that much" reads (Last-Ditch
+    # Effort). Kept in step with the list here rather than measured at the
+    # reader, for the reason :data:`SACRIFICED_COUNT` gives — and written at
+    # this one function because that is what makes the interactive and the
+    # inline path record the same thing.
+    record[SACRIFICED_COUNT] = len(record["sacrificed_cards"])
 
 
 def _entry_choice_option_allowed(choice: PendingChoice, answer: str) -> bool:

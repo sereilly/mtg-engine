@@ -21,7 +21,7 @@ from __future__ import annotations
 from ..oracle_types import EXILED_THIS_WAY
 from .errors import GrammarError
 from . import ast
-from .lexer import MANA, NUMBER, SELF, WORD
+from .lexer import MANA, NUMBER, PT, SELF, WORD
 from .readers import accept_source_reference
 from .stream import TokenStream
 from .vocabulary import CARD_TYPES, NUMBER_WORDS
@@ -118,6 +118,104 @@ def accept_damage_dealt_by_chosen_cast(
     return ast.DamageDealtByChosenCast(singular(word))
 
 
+#: The four **payment channels** a printed genitive may name, keyed by the
+#: participle the card prints and mapped to the node it becomes.
+#:
+#: One table rather than four copies of one branch, and it earned that the day a
+#: fourth channel arrived: the three readers below were byte-identical apart from
+#: the word and the class, so a characteristic taught to one of them was a
+#: characteristic the other two silently could not read. What separates the four
+#: is *which record the payment path wrote*, which is the class — everything
+#: else about the phrase is the same phrase.
+_COST_CHANNEL_NODES: dict[str, type] = {
+    "sacrificed": ast.SacrificedForCost,
+    "exiled": ast.ExiledForCost,
+    "tapped": ast.TappedForCost,
+    # "…equal to the mana value of **the discarded card**." (Pyromancy.) The
+    # fourth, and the only one no card prints in the possessive — it is in the
+    # table anyway, because which genitive a card prints is a fact about the
+    # sentence and this table is about the channel.
+    "discarded": ast.DiscardedForCost,
+}
+
+
+def _accept_characteristic(stream: "TokenStream") -> str | None:
+    """The characteristic word a cost-channel genitive names, or None.
+
+    Named once because both genitives read it — "the sacrificed creature's
+    **power**" and "the **mana value** of the discarded card" ask for the same
+    three things in the two positions English allows. Which of them a given
+    channel's evaluator can actually answer is the lowering's question, exactly
+    as it was when each reader carried its own copy of this branch.
+    """
+    if stream.accept_phrase("mana", "value"):
+        return "mana_value"
+    word = stream.peek_word()
+    if word in ("power", "toughness"):
+        stream.advance()
+        return str(word)
+    return None
+
+
+def _accept_possessive_cost_channel(stream: "TokenStream", participle: str):
+    """``<participle> <noun>'s <characteristic>`` — or None, cursor unmoved.
+
+    The shared body of the three named readers below. The noun is read as
+    printed and not carried: "the sacrificed **artifact's** mana value" is the
+    same production as "the sacrificed **creature's**", because what the words
+    name is the one thing that payment ate.
+    """
+    node_cls = _COST_CHANNEL_NODES[participle]
+    mark = stream.mark()
+    if stream.accept_word(participle):
+        noun = stream.peek_word()
+        if noun is not None:
+            stream.advance()
+            if stream.accept_word("'s"):
+                characteristic = _accept_characteristic(stream)
+                if characteristic is not None:
+                    return node_cls(characteristic)
+    stream.reset(mark)
+    return None
+
+
+def accept_cost_characteristic_of(stream: "TokenStream"):
+    """``<characteristic> of [the] <participle> <noun>`` — or None, unmoved.
+
+    The **other** genitive, and the only one Pyromancy prints: "equal to the
+    mana value of the discarded card". English puts a possessor either in front
+    of its noun or behind it with "of", and a card is free to print either — so
+    the alternation is read here, once, over the same channel table the
+    possessive readers use, rather than as a fourth copy of a branch that
+    already exists three times.
+
+    The leading "the" is the caller's, as it is for every reader in this module;
+    the determiner in front of the *participle* is this one's and is optional,
+    because "of the discarded card" and "of discarded cards" are the same phrase
+    to a channel that holds exactly what one payment took.
+
+    Refuses without moving the cursor whenever any part is absent, so a sentence
+    that opens "the power of a creature you control" — a board read, not a
+    payment — keeps whatever reading the productions behind this one give it.
+    """
+    mark = stream.mark()
+    characteristic = _accept_characteristic(stream)
+    if characteristic is None or not stream.accept_word("of"):
+        stream.reset(mark)
+        return None
+    stream.accept_word("the")
+    node_cls = _COST_CHANNEL_NODES.get(stream.peek_word() or "")
+    if node_cls is None:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    if stream.peek_word() is None:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    return node_cls(characteristic)
+
+
 def accept_sacrificed_for_cost(stream: "TokenStream") -> "ast.SacrificedForCost | None":
     """``the sacrificed <noun>'s <characteristic>`` — or None, cursor unmoved.
 
@@ -138,20 +236,7 @@ def accept_sacrificed_for_cost(stream: "TokenStream") -> "ast.SacrificedForCost 
     a payment channel is how the two come to name different ones. The leading
     "the" is the caller's.
     """
-    mark = stream.mark()
-    if stream.accept_word("sacrificed"):
-        noun = stream.peek_word()
-        if noun is not None:
-            stream.advance()
-            if stream.accept_word("'s"):
-                if stream.accept_phrase("mana", "value"):
-                    return ast.SacrificedForCost("mana_value")
-                characteristic = stream.peek_word()
-                if characteristic in ("power", "toughness"):
-                    stream.advance()
-                    return ast.SacrificedForCost(str(characteristic))
-    stream.reset(mark)
-    return None
+    return _accept_possessive_cost_channel(stream, "sacrificed")
 
 
 def accept_tapped_for_cost(stream: "TokenStream") -> "ast.TappedForCost | None":
@@ -164,20 +249,7 @@ def accept_tapped_for_cost(stream: "TokenStream") -> "ast.TappedForCost | None":
     front ends read the phrase, so two copies is how they come to name two
     channels. The leading "the" is the caller's.
     """
-    mark = stream.mark()
-    if stream.accept_word("tapped"):
-        noun = stream.peek_word()
-        if noun is not None:
-            stream.advance()
-            if stream.accept_word("'s"):
-                if stream.accept_phrase("mana", "value"):
-                    return ast.TappedForCost("mana_value")
-                characteristic = stream.peek_word()
-                if characteristic in ("power", "toughness"):
-                    stream.advance()
-                    return ast.TappedForCost(str(characteristic))
-    stream.reset(mark)
-    return None
+    return _accept_possessive_cost_channel(stream, "tapped")
 
 
 def accept_counters_removed_for_cost(
@@ -209,6 +281,23 @@ def accept_counters_removed_for_cost(
     """
     mark = stream.mark()
     kind = stream.peek_word()
+    if kind is None:
+        # "…equal to the number of **+1/+1** counters removed this way."
+        # (Molten Hydra.) A CR 122.1a counter names itself with a power/toughness
+        # pair rather than an invented word, so the lexer hands it over as a
+        # ``PT`` token and ``peek_word`` answers None — which dropped the phrase
+        # through to the noun parser, where "+1/+1" is not an object and the
+        # whole ability refused.
+        #
+        # Read here rather than by a second production, for this function's own
+        # stated reason: three front ends print this clause, and what separates
+        # "+1/+1" from "pain" is which token kind carries the word, not the
+        # question being asked. The kind travels as the printed text, which is
+        # what ``named_counters.counters_on`` and ``pt.pt_counter_key`` already
+        # key the store on — so no channel learns a new spelling.
+        token = stream.peek()
+        if token is not None and token.kind == PT:
+            kind = token.text
     if kind is not None and kind not in ("counter", "counters"):
         stream.advance()
         if (
@@ -227,20 +316,7 @@ def accept_exiled_for_cost(stream: "TokenStream") -> "ast.ExiledForCost | None":
     function for the same reason: two front ends read it, an "equal to" amount
     and a where-clause. The leading "the" is the caller's.
     """
-    mark = stream.mark()
-    if stream.accept_word("exiled"):
-        noun = stream.peek_word()
-        if noun is not None:
-            stream.advance()
-            if stream.accept_word("'s"):
-                if stream.accept_phrase("mana", "value"):
-                    return ast.ExiledForCost("mana_value")
-                characteristic = stream.peek_word()
-                if characteristic in ("power", "toughness"):
-                    stream.advance()
-                    return ast.ExiledForCost(str(characteristic))
-    stream.reset(mark)
-    return None
+    return _accept_possessive_cost_channel(stream, "exiled")
 
 
 # ---------------------------------------------------------------------------
