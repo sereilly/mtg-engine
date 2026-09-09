@@ -97,7 +97,12 @@ def test_validator_detects_a_silently_dropped_sentence(pc):
         produced_mana=(),
         raw={"name": "Coverage Self-Test", "type_line": "Sorcery"},
     )
-    coverage = pc.analyze_card(fake, hooked=set())
+    # No hook of either shape: `HookClaims` replaced the flat name set at
+    # Urza's Legacy's promotion gate, so an empty one is an empty mapping
+    # plus an empty whole-card set rather than an empty `set()`.
+    coverage = pc.analyze_card(
+        fake, hooked=pc.HookClaims(lines={}, whole_card=frozenset())
+    )
     assert coverage.unclaimed == ["flurble the wumbus"]
     assert any("destroy_target_permanent" in channel for _, channel in coverage.claims)
 
@@ -228,3 +233,75 @@ def test_the_gate_is_the_shipped_pool_and_measured_sets_are_reported(pc, pool_co
 
     backlog = pc.collect_measured_findings(coverages)
     assert all(name in measured_names for name, _ in backlog)
+
+
+def test_a_hooks_claim_reaches_only_the_lines_that_hook_compiles(pc):
+    """A `card_hooks` entry may not blanket-claim its card's other sentences.
+
+    This is the hole that hid inside the instrument built to find it. Before
+    Urza's Legacy's promotion gate, `parse_coverage` claimed **every** sentence
+    of any card carrying **any** hook entry — so an unimplemented printed line
+    on one of the 53 hooked cards was structurally invisible to the one script
+    in the repo whose job is to find one. It surfaced only by *retiring* a hook:
+    dropping Drop of Honey's entry exposed a second line ("when there are no
+    creatures on the battlefield, sacrifice this enchantment") that nothing had
+    ever implemented and that this script had been reporting as claimed.
+
+    A hole that shrinks every time a hook is retired is the wrong direction for
+    a guard — the fewer hooks there are, the more it looks like the instrument
+    is working — which is why it is asserted here rather than left to the
+    report's own numbers.
+
+    The rule, checked against `City in a Bottle`, the card the narrowing caught:
+    `CARD_LINE_INSTRUCTIONS` names its trigger line and **not** its cast-ban
+    line, so the hook claims the first and must not claim the second.
+    """
+    claims = pc._hooked_names()
+
+    trigger_line = (
+        "whenever one or more other nontoken permanents with a name originally "
+        "printed in the arabian nights expansion are on the battlefield, their "
+        "controllers sacrifice them"
+    )
+    ban_line = (
+        "players can't cast spells or play lands with a name originally printed "
+        "in the arabian nights expansion"
+    )
+
+    assert claims.claim_for("City in a Bottle", trigger_line) is not None, (
+        "the hook compiles this line and must claim it"
+    )
+    assert claims.claim_for("City in a Bottle", ban_line) is None, (
+        "the hook does not compile this line and must not claim it — a blanket "
+        "claim here is what hid Drop of Honey's second line for the life of "
+        "this script"
+    )
+    assert "City in a Bottle" not in claims.whole_card, (
+        "a line-keyed hook must not also be read as a whole-card one"
+    )
+
+
+def test_only_the_event_keyed_hook_registries_claim_a_whole_card(pc):
+    """The blanket claim survives for exactly the registries that have no line.
+
+    `ON_LEAVE_BATTLEFIELD`, `ON_SELF_RESOLVED`, `ON_SPELL_COUNTERED` and
+    `DRAW_STEP_MODIFIERS` are keyed by card name alone because each implements an
+    *event* rather than a sentence, so there is nothing finer to attribute to.
+    That is a real exception and it is small; this test is what keeps it small,
+    by failing if a new line-keyed registry is quietly folded back into it and
+    handed the blanket this narrowing removed.
+    """
+    from engine import card_hooks
+
+    for attr in pc._WHOLE_CARD_HOOK_REGISTRIES:
+        registry = getattr(card_hooks, attr, None)
+        assert isinstance(registry, dict), f"{attr} is not a card_hooks registry"
+        sample = next(iter(registry), None)
+        assert sample is None or isinstance(sample, str), (
+            f"{attr} is not keyed by card name alone; if it names a line, it "
+            "belongs in HookClaims.lines rather than in the whole-card set"
+        )
+
+    assert "CARD_LINE_INSTRUCTIONS" not in pc._WHOLE_CARD_HOOK_REGISTRIES, (
+        "the line-keyed registry must never be read as a whole-card one"
+    )

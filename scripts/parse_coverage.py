@@ -975,14 +975,89 @@ def _probe(
     return tuple(ignored)
 
 
-def _hooked_names() -> set[str]:
-    """Card names with a bespoke card_hooks registry entry."""
-    names: set[str] = set()
-    for attr in dir(card_hooks):
-        value = getattr(card_hooks, attr)
-        if isinstance(value, dict):
-            names.update(k for k in value if isinstance(k, str))
-    return names
+@dataclass(frozen=True)
+class HookClaims:
+    """What a `card_hooks` entry is allowed to claim, per registry.
+
+    Two registries, two shapes, and the difference is the whole point of this
+    class. `CARD_LINE_INSTRUCTIONS` is keyed by **(name, normalized line)**, so
+    it says exactly which printed line it compiles and can claim that line and
+    no other. Every other hook registry is keyed by name alone — it implements
+    an *event* on the card (leaving the battlefield, being countered, resolving,
+    a draw-step modification) rather than a sentence — so it has no line to
+    point at and its claim is necessarily the whole card.
+
+    Before Urza's Legacy's promotion gate this was one flat name set and **any**
+    hook entry blanket-claimed **every** sentence of its card. That made this
+    script — the one instrument in the repo built to find an unimplemented
+    printed line — structurally blind to one on any of the 53 hooked cards. It
+    surfaced only by *retiring* a hook: Urza's Saga's W3G3 dropped Drop of
+    Honey's entry and the retirement exposed a second printed line ("when there
+    are no creatures on the battlefield, sacrifice this enchantment") that
+    nothing had ever implemented and this script had been reporting as claimed.
+
+    A hole in a guard that shrinks every time a hook is retired is the wrong
+    direction for a guard: the fewer hooks there are, the more it looks like the
+    instrument is working. `card_hooks.card_line_instruction`'s own docstring had
+    already written down the rule this class enforces — "keying on the name alone
+    would claim every line of the card, including the ones a production already
+    reads."
+    """
+
+    #: card name -> the normalized lines `CARD_LINE_INSTRUCTIONS` compiles.
+    lines: dict[str, frozenset[str]]
+    #: card names whose hook is an event rather than a line, and so claims whole.
+    whole_card: frozenset[str]
+
+    def claim_for(self, card_name: str, sentence: str) -> str | None:
+        """The claim string for *sentence* on *card_name*, or None.
+
+        None is the answer that matters: it lets the sentence fall through to
+        the checks below rather than being absorbed by the card's hook.
+
+        A `CARD_LINE_INSTRUCTIONS` key is a whole printed **line** and this
+        script claims per **sentence**, so the test is containment rather than
+        equality: a hook that compiles "{X}, {T}: the next time you would draw a
+        card this turn, instead look at the top X cards …, then draw a card"
+        really does implement every sentence of it, and demanding equality would
+        report the body of a hooked line as unclaimed. Containment is still
+        exact in the direction that matters — a sentence the hook's line does
+        not contain is a sentence the hook does not compile, which is the case
+        this class exists to stop absorbing.
+        """
+        for line in self.lines.get(card_name, ()):  # noqa: SIM110 - reads better
+            if sentence and sentence in line:
+                return "card_hooks CARD_LINE_INSTRUCTIONS (this printed line)"
+        if card_name in self.whole_card:
+            return "card_hooks bespoke (name-keyed, whole card)"
+        return None
+
+
+#: The registries keyed by card name alone. Each implements an event on the
+#: card rather than one of its printed lines, so there is nothing finer to
+#: attribute to and the claim covers the card. Listed by name rather than
+#: discovered, so that a *new* line-keyed registry is not silently folded in
+#: here and handed back the blanket this class exists to remove.
+_WHOLE_CARD_HOOK_REGISTRIES = (
+    "ON_LEAVE_BATTLEFIELD",
+    "ON_SELF_RESOLVED",
+    "ON_SPELL_COUNTERED",
+    "DRAW_STEP_MODIFIERS",
+)
+
+
+def _hooked_names() -> HookClaims:
+    """What each card_hooks registry may claim (see :class:`HookClaims`)."""
+    lines = {
+        name: frozenset(entries)
+        for name, entries in card_hooks.CARD_LINE_INSTRUCTIONS.items()
+    }
+    whole: set[str] = set()
+    for attr in _WHOLE_CARD_HOOK_REGISTRIES:
+        registry = getattr(card_hooks, attr, None)
+        if isinstance(registry, dict):
+            whole.update(k for k in registry if isinstance(k, str))
+    return HookClaims(lines=lines, whole_card=frozenset(whole))
 
 
 # Channels whose predicate needs the **whole card**, not the sentence alone.
@@ -1028,6 +1103,34 @@ def _delayed_trigger_rider_sentences(oracle_text: str) -> set[str]:
 
 
 CARD_CHANNELS: tuple[tuple[str, object], ...] = (
+    (
+        # "Players can't cast spells or play lands with a name originally
+        # printed in the Arabian Nights expansion." (City in a Bottle.)
+        #
+        # Implemented, and by nothing that reads this sentence:
+        # `mixins/effects._set_lockout_banning_card` scans the battlefield for a
+        # compiled `ban_and_sacrifice_set_permanents` instruction — which the
+        # card's *other* line produces — and `mixins/stack/casting` refuses the
+        # cast from it. So the behaviour is real (drive it: an Arabian Nights
+        # spell is refused "banned by City in a Bottle") and the sentence had no
+        # claim of its own.
+        #
+        # It was invisible until the Urza's Legacy promotion gate, because a
+        # hooked card's every sentence used to be blanket-claimed by its hook —
+        # see :class:`HookClaims`. This is the one finding that survived
+        # narrowing that claim to the lines the hook actually compiles, and it
+        # is a *reporting* gap rather than a missing implementation, which is
+        # exactly what a claim table is for.
+        "mixins/effects.py (_set_lockout_banning_card)",
+        lambda card, s: (
+            "can't cast spells or play lands with a name originally printed"
+            in s
+            and any(
+                instr.kind == "ban_and_sacrifice_set_permanents"
+                for instr in compile_card_oracle(card).instructions
+            )
+        ),
+    ),
     (
         # CR 113.6b: a static ability that functions while the card is a spell
         # **on the stack** ("As long as Kaervek's Torch is on the stack, …").
@@ -1106,7 +1209,7 @@ def _kinds_of(instruction) -> set[str]:
     return kinds
 
 
-def analyze_card(card, hooked: set[str], run_probe: bool = True) -> CardCoverage:
+def analyze_card(card, hooked: HookClaims, run_probe: bool = True) -> CardCoverage:
     coverage = CardCoverage(card.name, supported=True)
     program = compile_card_oracle(card)
     if not program.supported:
@@ -1166,8 +1269,9 @@ def analyze_card(card, hooked: set[str], run_probe: bool = True) -> CardCoverage
         if sentence in acknowledged_map:
             coverage.acknowledged.append((sentence, acknowledged_map[sentence]))
             return
-        if card.name in hooked:
-            coverage.claims.append((sentence, "card_hooks bespoke (name-keyed)"))
+        hook_claim = hooked.claim_for(card.name, sentence)
+        if hook_claim is not None:
+            coverage.claims.append((sentence, hook_claim))
             return
         # The last question, and the strongest evidence there is: **did the
         # compiler build an ability out of this line?** Every channel above
@@ -1331,8 +1435,10 @@ def analyze_card(card, hooked: set[str], run_probe: bool = True) -> CardCoverage
                 channel = _channel_for(normalized)
                 if channel is not None:
                     coverage.claims.append((normalized, channel))
-                elif card.name in hooked:
-                    coverage.claims.append((normalized, "card_hooks bespoke (name-keyed)"))
+                elif hooked.claim_for(card.name, normalized) is not None:
+                    coverage.claims.append(
+                        (normalized, hooked.claim_for(card.name, normalized))
+                    )
                 elif normalized in acknowledged_map:
                     coverage.acknowledged.append((normalized, acknowledged_map[normalized]))
                 else:

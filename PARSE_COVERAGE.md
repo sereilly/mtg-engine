@@ -427,7 +427,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | keyword table | 694 |
 | aura enchant noun (oracle_instructions attach) | 240 |
 | activation_restrictions.py | 121 |
-| card_hooks bespoke (name-keyed) | 80 |
+| card_hooks CARD_LINE_INSTRUCTIONS (this printed line) | 76 |
 | cast_costs.py | 72 |
 | loyalty cost | 33 |
 | oracle.py (modal trigger head) | 29 |
@@ -448,6 +448,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | modal machinery | 4 |
 | auras.py (board-counted clamped penalty) | 4 |
 | cost_x_definitions.py | 3 |
+| card_hooks bespoke (name-keyed, whole card) | 3 |
 | lord_buffs.py (state trigger) | 2 |
 | mana_spending.py | 2 |
 | activation_restrictions.py (board-wide ban) | 2 |
@@ -457,6 +458,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | cast_permissions.py (board-wide free cast) | 1 |
 | cast_restrictions.py (per-turn spell cap) | 1 |
 | special_actions.py | 1 |
+| mixins/effects.py (_set_lockout_banning_card) | 1 |
 | cast_restrictions.py (board-wide own-turn window) | 1 |
 | alternative_costs.py (granted) | 1 |
 | target_restrictions.py | 1 |
