@@ -297,6 +297,24 @@ class LordBuffFilter:
     # the safe direction — a dropped narrowing would phase out every land on
     # the board.
     chosen_land_type: bool = False
+    # "All creatures **of the chosen type** get -1/-1." (Engineered Plague.)
+    # The field above's twin one card type over, and its own field for exactly
+    # that field's reason: there is no word to put in ``subtypes`` until the
+    # permanent enters and CR 614.1c's entry choice records one, and a sentinel
+    # there would be compared against every real subtype by every reader.
+    #
+    # Two fields rather than one "chosen type" flag because the two questions
+    # are asked of different catalogs — ``chosen_creature_type`` is CR 205.3m's
+    # creature types and ``chosen_land_type`` is CR 205.3i's land types — and
+    # the grammar has already split them one package over
+    # (``grammar/seat_relations.py`` picks the key off the noun's card type).
+    # A single flag would have to re-derive that split at match time from a
+    # noun the payload no longer carries.
+    #
+    # ``_lord_buff_matches`` holds the source, which is what lets it answer;
+    # a buff carrying this with nothing chosen yet reaches nothing, the safe
+    # direction — a dropped narrowing would shrink every creature on the board.
+    chosen_creature_type: bool = False
 
 
 @dataclass(frozen=True)
@@ -911,6 +929,12 @@ def lord_buff_payload(buff: LordBuff) -> dict[str, object]:
     # the table can carry a restriction, not that the instruction does.
     if buff.filter.chosen_land_type:
         payload["chosen_land_type"] = True
+    # "All creatures **of the chosen type**…" (Engineered Plague). The row
+    # above's twin, emitted for its reason exactly: the word lives on the
+    # source and the payload is the only thing the consumer sees, so dropping
+    # the flag here is an anthem over every creature rather than over one type.
+    if buff.filter.chosen_creature_type:
+        payload["chosen_creature_type"] = True
     if buff.keywords:
         payload["keywords"] = list(buff.keywords)
     if buff.lost_keywords:
@@ -945,6 +969,7 @@ def lord_buff_from_payload(payload: dict) -> LordBuff:
             card_types=tuple(payload.get("card_types") or ("creature",)),
             excluded_types=tuple(payload.get("exclude_types") or ()),
             chosen_land_type=bool(payload.get("chosen_land_type")),
+            chosen_creature_type=bool(payload.get("chosen_creature_type")),
         ),
         power=int(payload.get("power", 0)),
         toughness=int(payload.get("toughness", 0)),

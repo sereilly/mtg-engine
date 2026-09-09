@@ -166,6 +166,10 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     "spell_cast": "whenever a player casts a spell",
     "opponent_casts_spell": "whenever an opponent casts a spell",
     "you_cast_spell": "whenever you cast a spell",
+    # Multani's Presence. CR 701.6a's cancel rather than a cast, and the one
+    # condition in the pool whose event happens after its spell has left the
+    # stack (CR 603.10e: such an ability looks back in time).
+    "your_spell_countered": "whenever a spell you've cast is countered",
     # Juju Bubble prints "when", which this table rewrites to "whenever"
     # (CR 603.1 makes them one kind of ability), so the canonical example
     # is the whenever spelling both front ends actually match on.

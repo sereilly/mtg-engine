@@ -628,3 +628,388 @@ def test_g1_subversion_gains_the_table_total_not_the_printed_one(set_pool):
     game._settle()
 
     assert [p.life for p in seats] == [23, 19, 19, 19]
+
+
+# --- W2G3: a redirect off the host, a countered-spell trigger, and a chosen-type anthem ---
+#
+# Three enchantments whose machinery all sat one word short of existing:
+#
+# * Treacherous Link    CR 614.9's static Aura redirect, in the direction
+#                       ``damage_redirects`` refused -- off the enchanted
+#                       permanent and onto a *player*
+# * Multani's Presence  a trigger on CR 701.6a's cancel, which had no
+#                       announcement anywhere because countering had three
+#                       call sites and no seam
+# * Engineered Plague   CR 613 layer 7c narrowed by a word the sentence never
+#                       prints, recorded on the source as it entered
+#
+# Every test drives the real event -- a damage event, a counterspell resolving,
+# a layer recompute -- and reads life totals, hands and effective P/T
+# afterwards. Two of these three compiled to plausible-looking output before
+# they did anything: Engineered Plague reported *supported* on the strength of
+# its entry line alone while its only effect sentence went unread, and
+# Multani's Presence is the shape `test_trigger_dispatchers.py` exists for.
+from engine import Game, PlayerState
+from engine.auras import attach_aura, detach_aura
+from engine.control import change_control
+from engine.game_types import CardDefinition
+from engine.models import Permanent
+from tests.helpers import resolve_stack
+
+
+def _w2g3_creature(name: str, subtype: str, power: int = 2, toughness: int = 2):
+    """A vanilla creature with a printed creature type -- the whole of what a
+    chosen-type anthem and a redirect Aura ask about."""
+    type_line = f"Creature - {subtype}"
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line=type_line, oracle_text="",
+        colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={
+            "name": name, "type_line": type_line,
+            "power": str(power), "toughness": str(toughness),
+        },
+    )
+
+
+def _w2g3_board(*seats: PlayerState) -> Game:
+    """A costs-free game over *seats* with the layer pass already run.
+
+    Shaped for this block alone (SET_PLAYBOOK.md's block convention: a helper
+    whose closing lines match another group's is spliceable by a mechanical
+    union), which is why the log clear is the last statement rather than the
+    customary bare ``return game``.
+    """
+    game = Game(players=list(seats))
+    game.enforce_mana_costs = False
+    game._refresh_dynamic_creatures()
+    game.log.clear()
+    return game
+
+
+# ---------------------------------------------------------------------------
+# Treacherous Link -- "All damage that would be dealt to enchanted creature is
+# dealt to its controller instead."
+# ---------------------------------------------------------------------------
+
+def _w2g3_linked(set_pool, *, also=()):
+    """A Bear an opponent controls wearing this block's Auras.
+
+    The Aura is under seat 0 and the creature under seat 1 deliberately: "its
+    controller" is the *creature's*, and a board where the two seats agree
+    cannot tell the two readings apart.
+    """
+    bears = Permanent(card=_w2g3_creature("Linked Bear", "Bear"))
+    auras = [Permanent(card=set_pool("ULG")["Treacherous Link"])]
+    auras += [Permanent(card=card) for card in also]
+    mine = PlayerState(name="A", battlefield=list(auras))
+    theirs = PlayerState(name="B", battlefield=[bears])
+    game = _w2g3_board(mine, theirs)
+    for aura in auras:
+        attach_aura(aura, bears)
+    game._refresh_dynamic_creatures()
+    game.log.clear()
+    return game, mine, theirs, bears, auras[0]
+
+
+def test_w2g3_treacherous_link_moves_the_damage_onto_the_creatures_controller(set_pool):
+    """CR 614.9: the damage is *dealt*, to somebody else -- so nothing is marked
+    on the creature and a whole life total moves.
+
+    The direction ``damage_redirects.attached_static_redirects`` refused before
+    this: Pariah's printing protects a player and hands the damage to a
+    permanent, and this one is the mirror, which is a different scan rather than
+    the same one with its ends swapped.
+    """
+    game, mine, theirs, bears, _ = _w2g3_linked(set_pool)
+
+    game._mark_damage_on_permanent(bears, 3, source=None)
+
+    assert bears.damage_marked == 0
+    assert (mine.life, theirs.life) == (20, 17)
+
+
+def test_w2g3_treacherous_link_reads_its_as_the_creatures_controller(set_pool):
+    """The possessive takes the noun phrase the sentence has just named, and
+    that is the whole card: a {1}{B} Aura you put on an *opponent's* creature so
+    that damage aimed at it lands on them. Read as the Aura's controller it
+    would be a card that damages you, which is what the split seats are there to
+    catch -- asserted here as the negative, so the reading is checked rather
+    than the arithmetic."""
+    game, mine, theirs, bears, _ = _w2g3_linked(set_pool)
+
+    game._mark_damage_on_permanent(bears, 5, source=None)
+
+    assert mine.life == 20, "the Aura's controller must not take it"
+    assert theirs.life == 15
+
+
+def test_w2g3_treacherous_link_follows_a_control_change(set_pool):
+    """"Its controller" is a live question (CR 613 layer 2), asked through
+    ``controller_index_of`` at the damage event rather than frozen when the
+    Aura attached -- so a creature that has changed hands routes its damage to
+    whoever holds it now."""
+    game, mine, theirs, bears, aura = _w2g3_linked(set_pool)
+
+    change_control(bears, 0, source=aura)
+    game._refresh_dynamic_creatures()
+    game._mark_damage_on_permanent(bears, 2, source=None)
+
+    assert (mine.life, theirs.life) == (18, 20)
+
+
+def test_w2g3_treacherous_link_stops_the_moment_it_is_unattached(set_pool):
+    """The Aura ceasing to be attached is the whole of the removal -- the record
+    is derived on every damage event rather than armed, so there is no
+    remembered delta to subtract and the very next point of damage is marked
+    normally."""
+    game, mine, theirs, bears, aura = _w2g3_linked(set_pool)
+
+    detach_aura(aura, bears)
+    game._refresh_dynamic_creatures()
+    game._mark_damage_on_permanent(bears, 2, source=None)
+
+    assert bears.damage_marked == 2
+    assert (mine.life, theirs.life) == (20, 20)
+
+
+def test_w2g3_pariah_and_treacherous_link_hand_off_once_each(set_pool):
+    """CR 614.5: a replacement effect gets one opportunity at an event and the
+    modified events resulting from it.
+
+    Both directions of this family on one creature is the loop the re-used
+    derived record exists to survive -- Pariah moves your damage onto the
+    creature, this Aura moves the creature's onto its controller, and each
+    hand-off re-runs the whole contention set. Each applies once and the damage
+    lands on the creature's controller, which is where the rule says the chain
+    stops. A fresh record per event would have recursed until the interpreter
+    gave up.
+    """
+    game, mine, theirs, bears, _ = _w2g3_linked(
+        set_pool, also=[set_pool("USG")["Pariah"]]
+    )
+
+    game._deal_damage_to_player(mine, 3)
+
+    assert bears.damage_marked == 0
+    assert (mine.life, theirs.life) == (20, 17)
+
+
+# ---------------------------------------------------------------------------
+# Multani's Presence -- "Whenever a spell you've cast is countered, draw a card."
+# ---------------------------------------------------------------------------
+
+def _w2g3_counter_table(set_pool, *, watcher_seat=0, counter="Counterspell"):
+    """Seat 0 holds a Bolt to cast, seat 1 the counter, and *watcher_seat* the
+    enchantment. The library is stocked so a draw is visible as a card arriving
+    in a hand rather than as an empty-library loss."""
+    lea = set_pool("LEA")
+    seats = [
+        PlayerState(name="A", hand=[lea["Lightning Bolt"]], library=[lea["Forest"]] * 3),
+        PlayerState(name="B", hand=[lea[counter]], library=[lea["Island"]] * 3),
+    ]
+    seats[watcher_seat].battlefield.append(
+        Permanent(card=set_pool("ULG")["Multani's Presence"])
+    )
+    game = _w2g3_board(*seats)
+    game.active_player_index = 0
+    return game, seats
+
+
+def test_w2g3_multanis_presence_draws_when_your_own_spell_is_countered(set_pool):
+    """The card, end to end. Nothing announced CR 701.6a before this: countering
+    had three call sites spelling out their own ``stack.remove``, so the
+    condition parsed on both front ends and fired nowhere."""
+    game, (mine, theirs) = _w2g3_counter_table(set_pool)
+
+    game.queue_from_hand(0, "Lightning Bolt", target_player_index=1)
+    assert game.cast_from_hand(1, "Counterspell", target_stack_index=0).supported
+    resolve_stack(game)
+
+    assert [c.name for c in mine.hand] == ["Forest"]
+    assert len(mine.library) == 2
+
+
+def test_w2g3_multanis_presence_is_silent_for_an_opponents_countered_spell(set_pool):
+    """"A spell **you've** cast" is CR 109.5's "you" -- the enchantment's
+    controller -- matched against the seat that cast the countered spell. The
+    same board with the enchantment on the other side of the table is the whole
+    difference, and an unscoped announcement would draw for both."""
+    game, (mine, theirs) = _w2g3_counter_table(set_pool, watcher_seat=1)
+
+    game.queue_from_hand(0, "Lightning Bolt", target_player_index=1)
+    assert game.cast_from_hand(1, "Counterspell", target_stack_index=0).supported
+    resolve_stack(game)
+
+    assert theirs.hand == []
+    assert len(theirs.library) == 3
+
+
+def test_w2g3_multanis_presence_is_silent_when_a_spell_merely_fizzles(set_pool):
+    """CR 608.2b never says "counter": a spell whose every target has become
+    illegal "doesn't resolve. It's removed from the stack and, if it's a spell,
+    put into its owner's graveyard."
+
+    This engine's log line for it still reads "was countered by the rules",
+    which is the pre-M2010 wording -- so the one thing that could have made this
+    card wrong is a seam that took the log at its word. The Bolt goes to the
+    graveyard and no card is drawn.
+    """
+    lea = set_pool("LEA")
+    bears = Permanent(card=_w2g3_creature("Doomed Bear", "Bear"))
+    mine = PlayerState(
+        name="A", hand=[lea["Lightning Bolt"]], library=[lea["Forest"]] * 3,
+        battlefield=[Permanent(card=set_pool("ULG")["Multani's Presence"])],
+    )
+    theirs = PlayerState(name="B", battlefield=[bears])
+    game = _w2g3_board(mine, theirs)
+    game.active_player_index = 0
+
+    game.queue_from_hand(0, "Lightning Bolt", target_player_index=1,
+                         target_permanent_index=0)
+    game.remove_from_battlefield(bears)
+    resolve_stack(game)
+
+    assert mine.hand == []
+    assert len(mine.library) == 3
+    assert [c.name for c in mine.graveyard] == ["Lightning Bolt"]
+
+
+def test_w2g3_multanis_presence_draws_off_an_unpaid_power_sink(set_pool):
+    """The second counter site: a spell countered for an unpaid cost is
+    countered exactly as one countered by a Counterspell is (CR 701.6a makes no
+    distinction), which is what routing both through one seam buys. The seat
+    cannot pay, so the pending payment defaults to declining."""
+    game, (mine, theirs) = _w2g3_counter_table(set_pool, counter="Power Sink")
+
+    game.queue_from_hand(0, "Lightning Bolt", target_player_index=1)
+    game.queue_from_hand(1, "Power Sink", target_stack_index=0, x_value=3)
+    resolve_stack(game)
+    game.auto_resolve_pending_choices()
+
+    assert [c.name for c in mine.graveyard] == ["Lightning Bolt"]
+    assert [c.name for c in mine.hand] == ["Forest"]
+
+
+# ---------------------------------------------------------------------------
+# Engineered Plague -- "As this enchantment enters, choose a creature type." /
+# "All creatures of the chosen type get -1/-1."
+# ---------------------------------------------------------------------------
+
+def _w2g3_plague_board(set_pool, creatures, *, interactive=False):
+    """Engineered Plague in hand over an opponent's *creatures*, named and typed."""
+    permanents = [
+        Permanent(card=_w2g3_creature(name, subtype, power, toughness))
+        for name, subtype, power, toughness in creatures
+    ]
+    mine = PlayerState(name="A", hand=[set_pool("ULG")["Engineered Plague"]])
+    theirs = PlayerState(name="B", battlefield=permanents)
+    game = Game(players=[mine, theirs])
+    game.enforce_mana_costs = False
+    if interactive:
+        game.interactive_seats = {0}
+    game.start_turn(0)
+    return game, mine, permanents
+
+
+def test_w2g3_engineered_plague_shrinks_only_the_chosen_type(set_pool):
+    """The set the anthem reaches is named by a word the sentence never prints:
+    it is chosen as the permanent enters (CR 614.1c) and recorded on it, so
+    layer 7c has to read it off the *source*. The Bear beside the Zombies is the
+    control -- a narrowing the matcher could not test would shrink the whole
+    board."""
+    game, mine, (zombie, other_zombie, bear) = _w2g3_plague_board(
+        set_pool,
+        [("Zombie One", "Zombie", 2, 2), ("Zombie Two", "Zombie", 3, 3),
+         ("Bear One", "Bear", 2, 2)],
+    )
+
+    assert game.cast_from_hand(0, "Engineered Plague").supported
+    game._settle()
+
+    assert mine.battlefield[-1].metadata["chosen_creature_type"] == "zombie"
+    assert (zombie.effective_power, zombie.effective_toughness) == (1, 1)
+    assert (other_zombie.effective_power, other_zombie.effective_toughness) == (2, 2)
+    assert (bear.effective_power, bear.effective_toughness) == (2, 2)
+
+
+def test_w2g3_engineered_plague_follows_the_chosen_word_not_the_default(set_pool):
+    """The default is stamped before the prompt so a headless seat never blocks;
+    an interactive controller's answer overwrites it, and the layer pass reads
+    the new word. Two types on the board is what makes the two answers
+    different."""
+    game, mine, (zombie, bear) = _w2g3_plague_board(
+        set_pool, [("Zombie One", "Zombie", 2, 2), ("Bear One", "Bear", 2, 2)],
+        interactive=True,
+    )
+
+    assert game.cast_from_hand(0, "Engineered Plague").supported
+    game._settle()
+    assert game.pending_enter_choice["needs_creature_type"]
+    assert game.confirm_enter_choice(0, creature_type="Bear")
+    game._settle()
+
+    assert (bear.effective_power, bear.effective_toughness) == (1, 1)
+    assert (zombie.effective_power, zombie.effective_toughness) == (2, 2)
+
+
+def test_w2g3_engineered_plague_kills_a_one_toughness_creature_of_the_type(set_pool):
+    """-1/-1 is a layer-7c contribution like any other, so a 1/1 of the chosen
+    type dies to the state-based actions the moment they are checked. The
+    printed sign is what makes this the pool's anthem whose *effect* is a
+    death."""
+    game, mine, (rat, other_rat, bear) = _w2g3_plague_board(
+        set_pool,
+        [("Rat One", "Rat", 1, 1), ("Rat Two", "Rat", 1, 1),
+         ("Bear One", "Bear", 1, 1)],
+    )
+
+    assert game.cast_from_hand(0, "Engineered Plague").supported
+    game._settle()
+    assert mine.battlefield[-1].metadata["chosen_creature_type"] == "rat"
+    game.check_state_based_actions()
+
+    names = [p.card.name for p in game.players[1].battlefield]
+    assert names == ["Bear One"]
+
+
+def test_w2g3_engineered_plague_reaches_every_battlefield(set_pool):
+    """"**All** creatures", not "creatures you control" -- the anthem carries no
+    controller scope, so its own controller's creatures of the chosen type are
+    shrunk too. Dropping that would be a strictly one-sided card."""
+    game, mine, (zombie,) = _w2g3_plague_board(
+        set_pool, [("Zombie One", "Zombie", 2, 2)],
+    )
+    ours = Permanent(card=_w2g3_creature("Zombie Three", "Zombie", 4, 4))
+    mine.battlefield.append(ours)
+
+    assert game.cast_from_hand(0, "Engineered Plague").supported
+    game._settle()
+
+    assert (ours.effective_power, ours.effective_toughness) == (3, 3)
+    assert (zombie.effective_power, zombie.effective_toughness) == (1, 1)
+
+
+def test_w2g3_engineered_plague_with_no_word_recorded_shrinks_nothing(set_pool):
+    """A buff carrying the narrowing with nothing chosen yet reaches nothing,
+    which is the safe direction and the one the field comment claims: a dropped
+    narrowing would put -1/-1 on every creature on the battlefield. Reached by
+    clearing the record rather than by never making the choice, because the
+    entry replacement stamps a default precisely so that cannot happen."""
+    game, mine, (zombie, bear) = _w2g3_plague_board(
+        set_pool, [("Zombie One", "Zombie", 2, 2), ("Bear One", "Bear", 2, 2)],
+    )
+    assert game.cast_from_hand(0, "Engineered Plague").supported
+    game._settle()
+
+    # The board is deliberately mixed, so whichever word the default picked one
+    # of these two was shrunk before this line and neither is after it.
+    assert {
+        (zombie.effective_power, zombie.effective_toughness),
+        (bear.effective_power, bear.effective_toughness),
+    } == {(1, 1), (2, 2)}
+
+    mine.battlefield[-1].metadata["chosen_creature_type"] = ""
+    game._settle()
+
+    assert (zombie.effective_power, zombie.effective_toughness) == (2, 2)
+    assert (bear.effective_power, bear.effective_toughness) == (2, 2)

@@ -1068,6 +1068,20 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      r"whenever an opponent casts a spell that targets "
      r"(?P<targets_you_or_your_creature>)you or a creature you control"),
     ("opponent_casts_spell",        r"whenever an opponent casts a spell"),
+    # "Whenever a spell you've cast is countered" (Multani's Presence).
+    # CR 701.6a's cancel rather than CR 701.5's cast — the announcement is made
+    # where a spell is taken off the stack cancelled
+    # (``mixins/stack/resolution.counter_stack_object``), which is neither of
+    # the two moments the cast rows above name. Below them because it shares no
+    # prefix with any of them and this table is ordered longest-first only where
+    # one pattern could claim another's line.
+    #
+    # No narrowing group: the printed seat word is the whole of the condition
+    # and it is answered by the announcement's ``seat``
+    # (``events._SEAT_SCOPED_EVENTS``), not by a payload key — CR 109.5's "you"
+    # is the watching permanent's controller, and the caster is what the event
+    # already carries.
+    ("your_spell_countered",        r"whenever a spell you've cast is countered"),
     # A colour-list narrowing ("…a spell that's white, blue, black, or red",
     # Quirion Dryad). The list is condition payload, read by the you_cast_spell
     # event filter; must precede its unnarrowed prefix below.

@@ -78,6 +78,12 @@ def _lord_filter(filt: ast.ObjectFilter) -> LordBuffFilter:
         # through like every other field, so the round trip below is what
         # decides whether the table can express it.
         chosen_land_type=filt.chosen_land_type,
+        # "All creatures **of the chosen type** get -1/-1." (Engineered
+        # Plague.) The line above's twin, carried for its reason exactly: the
+        # round trip below is what decides whether the table can express it,
+        # and probing field by field is how a field added later slips past a
+        # check written before it existed.
+        chosen_creature_type=filt.chosen_creature_type,
     )
 
 
@@ -95,6 +101,7 @@ def _object_filter_of(lord: LordBuffFilter) -> ast.ObjectFilter:
         "with_keywords": lord.with_keywords,
         "without_keywords": lord.without_keywords,
         "chosen_land_type": lord.chosen_land_type,
+        "chosen_creature_type": lord.chosen_creature_type,
     }
     for qualifier in lord.qualifiers:
         field_name, value = QUALIFIER_FIELDS[qualifier]

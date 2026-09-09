@@ -417,7 +417,10 @@ def counter_stack_ability(game: Game, instruction: OracleInstruction, context: O
             _new=True,
         )
         return True, "resolved"
-    game.stack.remove(chosen)
+    # The same seam the spell counter uses: an ability is countered by the same
+    # rule (CR 701.6a) and the seam is what knows an ability makes no
+    # announcement, so this handler does not have to.
+    game.counter_stack_object(chosen)
     # "**That permanent's** activated abilities can't be activated this turn."
     # (Interdict.) The permanent the countered ability came from, recorded here
     # because this is the only step that knows it: the spell targeted the
@@ -790,7 +793,10 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
             )
             return True, "resolved"
 
-        game.stack.remove(target)
+        # CR 701.6a's cancel, through the one seam that makes it — which also
+        # announces it, so "whenever a spell you've cast is countered" fires
+        # here without this handler knowing the condition exists.
+        game.counter_stack_object(target)
         countered = target
         # "…add an amount of {C} equal to **that spell's** mana value." (Mana
         # Drain.) The countered spell's mana value, recorded in the resolution
