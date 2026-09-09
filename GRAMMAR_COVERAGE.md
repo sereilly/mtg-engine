@@ -38,7 +38,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | EXO | 143 | 207 | 90.3% | 90.3% | 66.2% | 127 |
 | USG | 335 | 486 | 87.2% | 87.2% | 63.0% | 266 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| ULG *(measured)* | 143 | 227 | 75.3% | 72.2% | 48.9% | 101 |
+| ULG *(measured)* | 143 | 227 | 76.7% | 73.6% | 50.2% | 104 |
 | **All (shipped)** | **5208** | **7725** | **90.6%** | **89.8%** | **60.3%** | **3916** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -51,9 +51,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 438 | 191 | expected a subject |  |
+| 437 | 190 | expected a subject |  |
 | 121 | 65 | unrecognized effect verb |  |
-| 86 | 42 | unconsumed text |  |
+| 85 | 41 | unconsumed text |  |
 | 41 | 25 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 15 | 14 | expected 'unless defending player controls' |  |
@@ -820,6 +820,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Brine Shaman**
   - `{T}, Sacrifice a creature: Target creature gets +2/+2 until end of turn.`
   - `{1}{U}{U}, Sacrifice a creature: Counter target creature spell.`
+- **Brink of Madness**
+  - `At the beginning of your upkeep, if you have no cards in hand, sacrifice this enchantment and target opponent discards their hand.`
 - **Broken Fall**
   - `Return this enchantment to its owner's hand: Regenerate target creature.`
 - **Broken Visage**
@@ -1542,6 +1544,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{U}: This creature gains shroud until end of turn and doesn't untap during your next untap step. Tap this creature. (A creature with shroud can't be the target of spells or abilities.)`
 - **Deep Water**
   - `{U}: Until end of turn, if you tap a land you control for mana, it produces {U} instead of any other type.`
+- **Defense of the Heart**
+  - `At the beginning of your upkeep, if an opponent controls three or more creatures, sacrifice this enchantment, search your library for up to two creature cards, put those cards onto the battlefield, then shuffle.`
 - **Defiant Strike**
   - `Target creature gets +1/+0 until end of turn.`
   - `Draw a card.`
@@ -5429,6 +5433,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this Aura enters, draw a card at the beginning of the next turn's upkeep.`
 - **Ritual of the Machine**
   - `Gain control of target nonartifact, nonblack creature.`
+- **Rivalry**
+  - `At the beginning of each player's upkeep, if that player controls more lands than each other player, this enchantment deals 2 damage to them.`
 - **Riven Turnbull**
   - `{T}: Add {B}.`
 - **River Boa**

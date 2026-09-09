@@ -746,7 +746,15 @@ def _parse_counted_search(
                 )
     stream.reset(top_mark)
     stream.expect_word("put")
-    if stream.accept_word("them"):
+    # "put **them** …" / "put **those cards** …" — one referent, two printed
+    # spellings, and the same pair the reveal clause above and the shuffle-then-
+    # place clause between them already read. It was read here as "them" alone,
+    # which is the fork this production's own docstring warns against one clause
+    # up: a reader admitting fewer spellings here than there refuses a line
+    # whose halves agree with each other. Defense of the Heart prints "search
+    # your library for up to two creature cards, **put those cards** onto the
+    # battlefield, then shuffle" and failed on the second word.
+    if stream.accept_word("them") or stream.accept_phrase("those", "cards"):
         stream.expect_word("into", "onto")
         destination = _parse_zone(stream, self_possessive=possessive)
         tapped = bool(stream.accept_word("tapped"))

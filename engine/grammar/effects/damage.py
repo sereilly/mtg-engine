@@ -122,6 +122,25 @@ def _parse_damage_recipient(stream: TokenStream) -> ast.Recipient | None:
     several = _accept_several_any_targets(stream)
     if several is not None:
         return several
+    # "…this enchantment deals 2 damage to **them**." (Rivalry.) Singular
+    # "they" in the accusative, naming the seat the trigger froze — which is
+    # what ``that_player`` means to every consumer downstream, and exactly what
+    # the nominative spelling of the same sentence ("…deals 2 damage to **that
+    # player**") already produced. One referent, two printed word forms.
+    #
+    # Read here rather than in ``parse_player_ref``, beside the "or
+    # planeswalker" union below and for the identical reason: the word is
+    # ambiguous *in this grammar* in a way its nominative is not. "Them" after
+    # a verb is also how a card names a set of cards an earlier clause produced
+    # — "Create three … tokens. Exile **them**" (Waylay) — so a general reading
+    # takes those for a seat. A damage recipient cannot be a pile of cards in a
+    # library, so here the seat is the only thing it can be.
+    #
+    # Before ``parse_recipient`` because that reader would not claim the word
+    # at all; the position is what makes the branch legible next to the two
+    # narrowings below, not a precedence.
+    if stream.accept_word("them"):
+        return ast.PlayerRef("that_player")
     recipient = parse_recipient(stream)
     # "target player **or planeswalker**" (Chandra's Magmutt). Two words behind
     # the noun phrase, read by ``phrases`` because prevention prints them too

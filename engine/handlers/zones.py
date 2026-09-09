@@ -5666,6 +5666,29 @@ def discard_hand(game: Game, instruction: OracleInstruction, context: OracleExec
             game.log.append(f"{context.card.name}: no recorded player, no discard")
             return True, "resolved"
         caster = game.players[seat]
+    if instruction.payload.get("who") == "target":
+        # "…**target opponent** discards their hand." (Brink of Madness.) The
+        # seat the announcement chose (CR 601.2c, and CR 603.3d for the trigger
+        # this one is printed on), which arrives as ``context.target`` exactly
+        # as it does for ``discard_target_cards`` beside this handler.
+        #
+        # A resolution carrying no player is a target nobody named, and
+        # ``caster`` above it is the ability's *controller* — the one seat this
+        # effect must not empty. So it refuses rather than falling back, which
+        # is the rule the ``damaged_player`` branch above states in its own
+        # words and the one the whole ``who`` family is written to.
+        # Identity, never ``in``: :class:`PlayerState` is a plain dataclass, so
+        # equality compares its fields and two seats holding equal state answer
+        # the same — ``game.seat_index`` states the rule and this is its
+        # membership half.
+        target = context.target
+        if target is None or not any(seat is target for seat in game.players):
+            game.log.append(
+                f"{context.card.name if context.card else 'the ability'}: "
+                "no player was named to discard"
+            )
+            return True, "resolved"
+        caster = target
     # "**Each player** discards their hand" (Ill-Gotten Gains). A set of seats
     # rather than one, in CR 101.4's order and skipping a player who has left
     # the game (CR 800.4a). The loop is the same body either way, which is why

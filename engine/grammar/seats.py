@@ -127,6 +127,19 @@ def parse_player_ref(stream: TokenStream) -> ast.PlayerRef | None:
     # a fourth referent. `nouns.py` set the precedent the other way round when
     # it read "they control" as a `that_player` narrowing; the two spellings
     # disagreeing about the same word is the fork this repo closes elsewhere.
+    #
+    # **The accusative "them" is deliberately not here**, and the asymmetry is
+    # the grammar's rather than English's. "They" only ever opens a predicate,
+    # and no plural set of *cards* is ever a sentence subject in this pool — so
+    # the nominative has one possible referent and belongs in the shared
+    # reader. "Them" sits after a verb or a preposition, which is exactly where
+    # a set of cards an earlier clause produced also sits: "Create three …
+    # tokens. Exile **them**" (Waylay), "…reveal **them**, put **them** into
+    # your hand" (Cultivate). Claiming it here took Waylay's tokens for a seat
+    # and cost the card its support. So the word is read where the *consumer*
+    # needs a player and nothing else could be meant — `effects/damage.py` for
+    # Rivalry's recipient, `paragraphs.py` for Vexing Arcanix's — which is the
+    # same arrangement damage's "or planeswalker" union already has.
     if stream.accept_word("they"):
         return ast.PlayerRef("that_player")
     # "…**the player** discards it unless they pay …" (Wand of Ith). The

@@ -536,6 +536,24 @@ def _lower_discard(node: ast.Discard, event: str | None = None) -> tuple[OracleI
             return (
                 OracleInstruction("discard_hand", "", {"who": "each_player"}),
             )
+        # "…**target opponent** discards their hand." (Brink of Madness.) The
+        # same emptying aimed at a seat the *announcement* chose (CR 601.2c /
+        # 603.3d) rather than at one an event froze, so it is the same
+        # instruction with a third ``who`` — a second kind would be a second
+        # copy of emptying a hand, which is what the two branches above already
+        # refuse to be.
+        #
+        # ``who`` says which seat the handler reads rather than leaving it to
+        # the key's absence: an unkeyed payload is the controller's own hand
+        # one branch up, and that is the one player this effect must not hit.
+        # The ``targets`` description beside it is what raises the picker —
+        # ``targeting._from_instruction`` reads it generically, so the trigger
+        # announces an opponent (``_choose_trigger_targets``) instead of
+        # falling through to the first living one.
+        if node.player.kind in ("target_player", "target_opponent"):
+            payload: dict[str, object] = {"who": "target"}
+            _describe_targets(payload, node.player)
+            return (OracleInstruction("discard_hand", "", payload),)
         raise LoweringError(
             f"no whole-hand discard handler for {node.player.kind!r}", node=node
         )
