@@ -33,7 +33,7 @@ Do not edit by hand — re-run the script instead.
 | 19 | Stronghold | STH | 1998-03-02 | 143 | 137 | Complete (143/143 supported) |
 | 20 | Exodus | EXO | 1998-06-15 | 143 | 138 | Complete (143/143 supported) |
 | 21 | Urza's Saga | USG | 1998-10-12 | 335 | 309 | Complete (335/335 supported) |
-| 22 | Urza's Legacy | ULG | 1999-02-15 | 143 | 140 | Measured (115/143 supported, not shipped) |
+| 22 | Urza's Legacy | ULG | 1999-02-15 | 143 | 140 | Measured (128/143 supported, not shipped) |
 | 23 | Classic Sixth Edition | 6ED | 1999-04-21 | 335 | 0 | Not Implemented |
 | 24 | Urza's Destiny | UDS | 1999-06-07 | 143 | 142 | Not Implemented |
 | 25 | Mercadian Masques | MMQ | 1999-10-04 | 335 | 309 | Not Implemented |
