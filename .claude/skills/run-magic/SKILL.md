@@ -189,6 +189,23 @@ That rewrites `CARD_VERIFICATION.md` and `card_verification.json` on disk.
 
 ## Gotchas
 
+- **`fill` on the Debug Menu's card box does not select the card.**
+  `#debugCardSearch` is an `<input>` backed by a `<datalist>`, and the app arms
+  "Cast Selected Card For Free" from an `input`/`change` handler that
+  `playwright-cli fill` does not trigger — so the button stays enabled, the click
+  returns 200, and **nothing reaches the battlefield**. Set the value and
+  dispatch both events:
+  ```powershell
+  & $pw --raw eval "(()=>{const i=document.querySelector('#debugCardSearch'); i.value='Yavimaya Scion'; i.dispatchEvent(new Event('input',{bubbles:true})); i.dispatchEvent(new Event('change',{bubbles:true})); return i.value;})()"
+  ```
+  The same applies to `#verifyCardName` on the Mark Test Result form. Always
+  confirm against the state API that the permanent actually arrived, rather than
+  trusting the click.
+- **Driving an activated ability over HTTP beats clicking the canvas.** The
+  action body is `{"seat":0,"action":"activate","permanent_index":N,"id":M}` —
+  note `action`, not `kind` (the schema rejects `kind` with a 422 naming the
+  missing field). `"tap"` with the same shape taps a land for mana, which is how
+  you pay for the ability without hunting for the debug mana rail.
 - **Clicking a permanent means clicking a coordinate.** There is no selector for
   one, so read the position off a screenshot and use real mouse events:
   `mousemove <x> <y>`, then `mousedown`, then `mouseup` (three separate
