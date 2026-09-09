@@ -371,6 +371,21 @@ PARSE_LAYERS = [
     # body, this one the clauses `_parse_condition` reads *inside* one. Below
     # `conditions`, which calls it and is never imported back.
     "condition_clauses",
+    # The conditions that are a **count** — what a seat controls, how tall a
+    # pile is, a life total, what the battlefield holds, the parity of a number
+    # an earlier sentence already took. Pre-split out of `conditions` at Urza's
+    # Legacy's Phase 0, when that module sat 19 lines under the guard below with
+    # three of the wave's groups each about to add an intervening-if to it — a
+    # module more than one group reaches is pre-split, because none of them will
+    # cross it alone. The cut is by *subject* where `condition_clauses`' was by
+    # shape: what stays in the dispatcher is asked of one object — this source,
+    # this spell, this flip, this turn — and everything that asks "how many?" of
+    # a set is here, which the two modules' imports show rather than assert.
+    # No mirror name to reuse: `lowering/conditions.py` lowers both halves and
+    # has never split, so nothing over there is forked by taking one. Above
+    # `condition_clauses`, whose blocker count it reads, and below `conditions`,
+    # which calls it and is never imported back.
+    "condition_counts",
     "effects", "conditions",
     # The trailing clauses that share a sentence's printed subject — "…gets
     # +2/+0 **and deals 1 damage to you**", "…gains shroud **and doesn't untap
