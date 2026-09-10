@@ -1990,16 +1990,15 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
         # spells "creature" here exactly as the default did.
         spec["card_type"] = card_type
     # "…onto the battlefield under your control **attached to this creature**."
-    # (Iridescent Drake.) CR 303.4f: an Aura put onto the battlefield attached
-    # to something it cannot legally enchant *stays in its current zone*, so the
-    # host is not a step behind the move — it is part of which cards this
-    # sentence can move at all, and it therefore rides the same filter the
-    # picker and the resolution share.
+    # (Iridescent Drake.) CR 303.4g: an Aura entering with no legal object to
+    # enchant *remains in its current zone* — so the host is not a step behind
+    # the move, it is part of which cards this sentence can move at all, and it
+    # therefore rides the same filter the picker and the resolution share.
     #
-    # A source that has left the battlefield names no host, and CR 303.4a then
-    # leaves nothing that could legally arrive: the effect does nothing rather
-    # than putting an Aura into play attached to nothing for the next
-    # state-based sweep to bin (CR 704.5m).
+    # A source that has left the battlefield names no host, so 303.4g leaves
+    # nothing that could legally arrive: the effect does nothing rather than
+    # putting an Aura into play attached to nothing for the next state-based
+    # sweep to bin (CR 704.5m).
     attach_host = None
     if instruction.payload.get("attach_to") == "source":
         attach_host = context.source_permanent

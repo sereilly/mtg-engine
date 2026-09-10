@@ -237,7 +237,7 @@ def _parse_put_counter(stream: TokenStream) -> ast.Statement:
             # This branch was guarded by ``not under and not owners``, which
             # is true of Academy Researchers and of no rule: "under your
             # control" says whose permanent it is (CR 400.3) and "attached to
-            # this creature" says what it is attached to (CR 303.4f), and a
+            # this creature" says what it is attached to (CR 303.4), and a
             # sentence may print both. Iridescent Drake does -- "…onto the
             # battlefield **under your control attached to this creature**" --
             # and refused on the last four words, which reads as a missing

@@ -552,17 +552,13 @@ def _lower_put_onto_battlefield(
             raise LoweringError("the reanimation handler reads one chosen card", node=node)
         # "target **Aura** card from a graveyard" (Iridescent Drake). CR 205.3b
         # makes "Aura" a subtype, so the phrase narrows by neither of the two
-        # things this branch used to be able to read: it refused with "only
-        # moves creature cards" on a filter whose ``card_types`` was empty.
-        #
-        # What the handler actually reads is a ``card_type`` word plus a
-        # ``graveyard_card_matches`` spec, and both readers go through
-        # ``card_has_type`` / ``printed_shape`` — which answer a subtype as
-        # readily as a card type. So the narrowing is carried rather than
-        # widened away, and the guard below is what makes that safe: anything
-        # the phrase says beyond a type, a subtype and the zone refuses, because
-        # a narrowing dropped here is a card the picker offers that the sentence
-        # never named.
+        # things this branch could read: it refused with "only moves creature
+        # cards" on a filter whose ``card_types`` was empty. What the handler
+        # reads is a type word plus a ``graveyard_card_matches`` spec, and both
+        # go through readers that answer a subtype as readily as a card type —
+        # so the narrowing is carried rather than widened away, and the guard
+        # below is what makes that safe: a narrowing dropped here is a card the
+        # picker offers that the sentence never named.
         if _restrictions_beyond(
             filt,
             frozenset({"is_card", "zone", "zone_owner", "card_types", "subtypes"}),
@@ -592,25 +588,24 @@ def _lower_put_onto_battlefield(
         if filt.card_types and filt.card_types != ("creature",):
             payload["card_type"] = filt.card_types[0]
         if filt.subtypes:
-            # The subtype travels on the key ``graveyard_card_matches`` reads,
-            # which is the one predicate the picker, the re-check and this
-            # handler all ask — so "Aura card" cannot mean one thing to the
-            # offer and another to the resolution.
+            # On the key ``graveyard_card_matches`` reads — the one predicate
+            # the picker, the re-check and the handler all ask, so "Aura card"
+            # cannot mean one thing to the offer and another to the resolution.
+            # With no card type printed the subtype is also the word the
+            # handler *searches* by: ``card_has_type`` reads the printed line
+            # (CR 613.1 leaves a card in a graveyard nothing else), and that
+            # line names the subtype, so the two readers ask one question.
             payload["graveyard_subtypes"] = list(filt.subtypes)
             if not filt.card_types:
-                # No card type printed, so the *word the handler searches by* is
-                # the subtype itself. ``card_has_type`` reads the printed line
-                # (CR 613.1: a card in a graveyard has nothing else), and that
-                # line names the subtype — so this is the same question the
-                # spec above asks, not a second one that could disagree.
                 payload["card_type"] = filt.subtypes[0]
         if node.attached_to_source:
             # "…onto the battlefield under your control **attached to this
-            # creature**." (Iridescent Drake.) CR 303.4f: the Aura arrives
-            # already attached, so this rides the entry rather than being a
-            # step behind it — the same key and the same word the from-hand
-            # pick above carries, because it is the same clause about the same
-            # host.
+            # creature**." (Iridescent Drake.) CR 303.4: an Aura *enters*
+            # attached, so this rides the entry rather than being a step behind
+            # it — the same key the from-hand pick above carries, because it is
+            # the same clause about the same host. (That pick's comment cites
+            # 303.4f, which is the rule for an effect that names **no** host and
+            # leaves the choice to the player; both of these name one.)
             payload["attach_to"] = "source"
         return (OracleInstruction("reanimate_creature", "", payload),)
     raise LoweringError("no handler for this battlefield entry", node=node)
