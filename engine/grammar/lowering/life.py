@@ -25,7 +25,8 @@ from .. import ast
 from ..errors import LoweringError
 from ._cost_records import optional_cost_key
 from ._seats import _player_recipient
-from ._amounts import count_spec, halved_count_spec, x_offset_amount
+from ._amounts import (count_spec, halved_count_spec, recorded_count_spec,
+                       x_offset_amount)
 from ._common import (
     _amount_payload,
     _describe_targets,
@@ -310,6 +311,35 @@ def _lower_gain_life(
                 },
             ),
         )
+    # "You gain **2** life for each card revealed this way." (Jasmine Seer and
+    # Scent of Jasmine.) A *rate* over a record an earlier step of this same
+    # effect wrote: the parse multiplies the printed number by the count
+    # (``records.scaled_by_recorded_count``) and this reads the product through
+    # the one spec that already spends a recorded count — the same
+    # ``back_reference`` the branch below writes, with the factor on it, so the
+    # arithmetic happens where every other scaled count's does
+    # (``handlers/_common._scaled``).
+    #
+    # Gated on ``ast.Times`` rather than on the helper's own answer, which also
+    # accepts a bare ``ThatMuch``: taking that here would move every "gain life
+    # equal to the damage dealt" in the pool off the payload it has always had,
+    # for no card.
+    if isinstance(node.amount, ast.Times):
+        recorded = recorded_count_spec(node.amount, produced, node)
+        if recorded is not None:
+            if node.capped_by or node.per_each is not None:
+                # No card prints either on top of a rate, and a cap dropped on
+                # the way past is the direction that gains more than the card
+                # says.
+                raise LoweringError(
+                    "a life gain per recorded unit is gained uncapped", node=node
+                )
+            return (
+                OracleInstruction(
+                    "target_gains_life", "",
+                    {"amount": "x", X_FROM_COUNT: recorded, "recipient": recipient},
+                ),
+            )
     if isinstance(node.amount, ast.ThatMuch):
         # "You gain life equal to the damage dealt" — reads the value the
         # preceding damage instruction recorded in the resolution scratchpad,

@@ -27,6 +27,7 @@ from ..references import parse_player_ref, parse_target_spec
 from ..stream import TokenStream
 from ..phrases import (_accept_conjoined_life_cost, _accept_mana_alternatives,
                        _parse_mana_payment, _parse_zone)
+from ..records import _parse_for_each_this_way
 from ..sacrifices import _parse_counted_sacrifice
 from ..vocabulary import NUMBER_WORDS
 
@@ -189,6 +190,25 @@ def _parse_counter(stream: TokenStream) -> ast.Statement:
 
     payment, payment_life = _parse_unless_pays(stream)
     if payment is not None:
+        # "…pays {1} **for each card revealed this way**." (Brine Seer, Scent
+        # of Brine.) A rate over a record an earlier step of this same effect
+        # wrote, through the one reader every family spends this clause with
+        # (``records._parse_for_each_this_way``) — so a record added for the
+        # life gain or the mana addition is one a cost can multiply by too.
+        #
+        # Read here rather than inside ``_parse_unless_pays``, which answers
+        # "what is the price" for the ability counter as well: no card prints
+        # the clause on that one, and a reader wired into both would admit a
+        # sentence with nothing behind it. Read before "instead" for the same
+        # reason the alternatives are read after it — the three clauses are
+        # about different things and the card prints this one against the cost.
+        per_recorded = _parse_for_each_this_way(stream)
+        if per_recorded is not None and (
+            per_recorded.source is None or per_recorded.bonus
+        ):
+            raise stream.error(
+                "a counter cost per recorded unit names its producer"
+            )
         # "…pays {4} **instead**" (Lofty Denial). The word is the whole
         # difference between a second counter and a replacement amount for the
         # first, so it is what sets the flag. Refused on the chosen form:
@@ -203,6 +223,9 @@ def _parse_counter(stream: TokenStream) -> ast.Statement:
         return ast.CounterSpell(
             subject, unless_pays=payment,
             unless_pays_life=payment_life,
+            unless_pays_per_recorded=(
+                per_recorded.source if per_recorded is not None else None
+            ),
             # "…pays {B} **or {3}**" (Thrull Wizard). Read here rather than
             # before "instead" above because the two clauses are about
             # different things: "instead" replaces an amount an earlier

@@ -5443,8 +5443,30 @@ class PendingChoicesMixin:
 
     def _how_many_cards_to_choose(self, choice: PendingChoice) -> int:
         """How many the seat owes: the printed number, or every eligible card
-        when the hand holds fewer (CR 608.2, do as much as possible)."""
-        return min(int(choice.data.get("count", 1)), len(self.live_choose_cards_in_hand(choice)))
+        when the hand holds fewer (CR 608.2, do as much as possible).
+
+        For a printed "**any number of**" (Metalworker and the eleven Urza's
+        Destiny cards printed with it) the sentence names no count at all, so
+        this answers the *maximum* and :meth:`_may_choose_fewer_cards_in_hand`
+        is what tells a caller the pick may stop short of it. One number and one
+        flag rather than a second method, because every reader — the resolve,
+        the default and the prompt — needs both halves and a reader that got one
+        of them would gate a Confirm the engine then refuses.
+        """
+        live = len(self.live_choose_cards_in_hand(choice))
+        if self._may_choose_fewer_cards_in_hand(choice):
+            return live
+        return min(int(choice.data.get("count", 1)), live)
+
+    def _may_choose_fewer_cards_in_hand(self, choice: PendingChoice) -> bool:
+        """Whether the printed offer is "any number of …" rather than a count.
+
+        Read off the payload the lowering wrote rather than inferred from the
+        count, because nought is a legal answer to "any number" and an illegal
+        one to "choose two": the two offers are told apart by the words the card
+        prints, not by how many cards happen to be in the hand.
+        """
+        return bool((choice.data.get("_payload") or {}).get("any_number"))
 
     def confirm_choose_cards_in_hand(self, player_index: int, hand_indices) -> bool:
         return self.resolve_pending_choice(
@@ -5453,11 +5475,28 @@ class PendingChoicesMixin:
 
     def _record_chosen_cards_in_hand(self, choice: PendingChoice, cards: list) -> None:
         context = choice.data["_context"]
-        key = str((choice.data.get("_payload") or {}).get("result_key") or "chosen_hand_cards")
+        payload = choice.data.get("_payload") or {}
+        key = str(payload.get("result_key") or "chosen_hand_cards")
         # The card objects, not their hand slots: the step that reads this
         # record moves cards out of the hand, and an index stops naming the
         # same card the moment one leaves.
         context.results[key] = list(cards)
+        # "**Reveal** any number of blue cards in your hand." (Brine Seer.) The
+        # count the sentence behind it spends, beside the cards themselves —
+        # two records for one step, because "for each card revealed this way"
+        # asks a number and "for each blue instant card revealed this way"
+        # (Sirocco) asks the cards. Written even for an empty pick, because an
+        # absent key is a back-reference with no producer — a different thing
+        # from a reveal that showed nothing.
+        count_key = payload.get("count_key")
+        if count_key:
+            context.results[str(count_key)] = len(cards)
+        # …and the making-public itself (CR 701.20a), through the one feed the
+        # web layer reads. Keyed on the printed verb rather than on the count
+        # above, because those are two questions: a pick that records a number
+        # need not be public, and Sylvan Library's is not.
+        if payload.get("reveal") and cards:
+            self.record_reveal(choice.player_index, [card.name for card in cards])
         self.discard_pending_choice(choice)
 
     def _resolve_choose_cards_in_hand(self, choice: PendingChoice, hand_indices) -> bool:
@@ -5465,15 +5504,31 @@ class PendingChoicesMixin:
         live = self.live_choose_cards_in_hand(choice)
         wanted = self._how_many_cards_to_choose(choice)
         picks = list(hand_indices or [])
-        if len(picks) != wanted or len(set(picks)) != len(picks):
+        if len(set(picks)) != len(picks):
+            return False
+        # "Any number" makes *wanted* a ceiling and nought a legal answer; a
+        # printed count makes it exact. Checked here rather than left to the
+        # client, for the reason the candidate list is re-derived above: the
+        # list an answer is checked against and the offer a board rendered have
+        # to be one rule.
+        if self._may_choose_fewer_cards_in_hand(choice):
+            if len(picks) > wanted:
+                return False
+        elif len(picks) != wanted:
             return False
         if any(index not in live for index in picks):
             return False
         cards = [player.hand[index] for index in picks]
         self._record_chosen_cards_in_hand(choice, cards)
         name = choice.data.get("card_name", "Effect")
+        verb = (
+            "revealed"
+            if (choice.data.get("_payload") or {}).get("reveal")
+            else "chose"
+        )
         self.log.append(
-            f"{player.name} chose {', '.join(c.name for c in cards) or 'no cards'} ({name})"
+            f"{player.name} {verb} "
+            f"{', '.join(c.name for c in cards) or 'no cards'} ({name})"
         )
         return True
 
@@ -5487,6 +5542,11 @@ class PendingChoicesMixin:
         """
         live = self.live_choose_cards_in_hand(choice)
         wanted = self._how_many_cards_to_choose(choice)
+        # For "any number of" that is every eligible card, which is the offer's
+        # ceiling rather than a valuation: nothing is spent to reveal, and every
+        # sentence in the pool that reads the count reads it upward. Stated here
+        # so a seat that should reveal fewer needs a weight in
+        # ``engine/ai_valuation.py`` and not a branch in this method.
         if not self._resolve_choose_cards_in_hand(choice, live[:wanted]):
             self._record_chosen_cards_in_hand(choice, [])
 

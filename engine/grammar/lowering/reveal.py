@@ -23,7 +23,8 @@ anything here, which is what lets the two sit side by side as families.
 
 from __future__ import annotations
 
-from ...oracle_types import LAST_TARGET_CONTROLLER, OracleInstruction
+from ...oracle_types import (LAST_TARGET_CONTROLLER, OracleInstruction,
+                             REVEALED_HAND_CARDS, REVEALED_THIS_WAY)
 from ...subject_filters import card_only_filter
 from .. import ast
 from ..errors import LoweringError
@@ -288,3 +289,69 @@ def _lower_put_revealed_card_onto_battlefield(
             node=node,
         )
     return (OracleInstruction("put_revealed_card_onto_battlefield", "", {}),)
+
+
+def _lower_reveal_cards_from_hand(
+    node: ast.RevealCardsFromHand,
+) -> tuple[OracleInstruction, ...]:
+    """"Reveal any number of artifact cards in your hand." (Metalworker.)
+
+    The reveal alone: nothing moves and nothing is spent, and the sentence
+    after it reads the count off the record this writes. Two records for the
+    one step, because the two questions a following sentence can ask are
+    different ones — see ``oracle_types.REVEALED_THIS_WAY``.
+
+    ``zone`` and ``zone_owner`` are honoured **by construction** rather than
+    carried in the payload — this instruction reads one hand and it is the hand
+    of the seat performing the effect — so they are dropped here and everything
+    else in the printed phrase has to survive ``card_only_filter``. A narrowing
+    that cannot be tested refuses the line rather than being dropped, because a
+    prompt offering a wider set than the card prints is a card that reports
+    supported and cheats: "reveal any number of blue cards" that offered the
+    whole hand is Brine Seer countering for the size of a hand.
+    """
+    from ._common import _restrictions_beyond, _PAYLOAD_HONOURED_FILTER_FIELDS
+
+    filt = node.filter
+    # The gate ``card_only_filter`` below cannot supply: ``to_payload`` emits
+    # **nothing** for a relative narrowing, so a phrase this cannot honour
+    # would arrive here already reduced to the bare noun and the reveal would
+    # offer a wider set than the card prints. Refused rather than widened —
+    # the same check ``_lower_choose_cards_in_hand`` makes of the same zone.
+    leftover = _restrictions_beyond(
+        filt,
+        _PAYLOAD_HONOURED_FILTER_FIELDS | {"is_card", "zone", "zone_owner"},
+    )
+    if leftover:
+        raise LoweringError(
+            f"the reveal does not honour {leftover[0]!r}", node=node
+        )
+    payload_filter = filt.to_payload()
+    payload_filter.pop("zone", None)
+    payload_filter.pop("zone_owner", None)
+    described = card_only_filter(payload_filter)
+    if described is None:
+        raise LoweringError(
+            "the reveal cannot test this restriction on a card in a hand",
+            node=node,
+        )
+    return (
+        OracleInstruction(
+            "reveal_cards_from_hand", "",
+            {
+                "card_filter": described,
+                # The printed offer: nought to as many as answer the phrase.
+                # A key rather than a count of -1, because "how many may I
+                # pick" and "how many must I pick" are two questions and the
+                # prompt has to gate on both.
+                "any_number": True,
+                # CR 701.20a: what is picked is shown to *all* players. Its own
+                # key rather than the count below, because the two are separate
+                # questions — Sylvan Library's pick records a set and is not
+                # public — and the shared prompt reads this one to say so.
+                "reveal": True,
+                "result_key": REVEALED_HAND_CARDS,
+                "count_key": REVEALED_THIS_WAY,
+            },
+        ),
+    )

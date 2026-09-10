@@ -121,6 +121,7 @@ from .effects import (
     _parse_return,
     _parse_reveal_hand,
     _parse_reveal_top,
+    parse_reveal_any_number_from_hand,
     _parse_sacrifice,
     _parse_scry,
     _parse_search_library,
@@ -696,6 +697,15 @@ def parse_imperative(
         # reveal production declines *without consuming* when the reveal names
         # something other than a hand — so "reveal the top card of your
         # library" keeps its own reading and its own error.
+        # "**Reveal any number of blue cards in your hand.**" (Brine Seer and
+        # the eleven cards printed with it.) Read first, and non-consuming on
+        # refusal: the hand reveal below opens on the same verb and reads the
+        # possessive straight after it, so "any" would send it back with the
+        # line half-claimed — and the top-of-library reveal under that would
+        # then fail on "any" four words from a production that exists.
+        chosen = parse_reveal_any_number_from_hand(stream)
+        if chosen is not None:
+            return chosen
         hand = _parse_reveal_hand(stream, ast.PlayerRef("you"))
         if hand is not None:
             return hand

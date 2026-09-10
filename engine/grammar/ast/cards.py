@@ -206,6 +206,30 @@ class RevealHand:
 
 
 @dataclass(frozen=True)
+class RevealCardsFromHand:
+    """``Reveal any number of <filter> cards in your hand.`` (Metalworker and
+    the ten Urza's Destiny cards printed around it.)
+
+    Not a :class:`RevealHand` narrowed by a filter, and the difference is the
+    whole card: that one shows **every** card in the hand and nobody chooses,
+    while this one shows a subset the hand's owner picks — so the count the
+    sentence behind it spends is a decision, not a hand size. Read as a hand
+    reveal, Metalworker would add two mana for every card its controller held
+    including the lands.
+
+    "Any number" is carried by construction rather than as a count field:
+    every printing of this sentence is "any number of", the offer is 0 to as
+    many as answer the phrase, and a node with a number on it would be a
+    printed count no card has.
+
+    *filter* is the printed noun phrase, and it is what the seat is offered
+    rather than a check applied afterwards — a prompt listing a wider set than
+    the card names is a card that reports supported and cheats.
+    """
+    filter: ObjectFilter
+
+
+@dataclass(frozen=True)
 class RevealRandomFromHand:
     """``<player> reveals a card at random from their hand.`` (Wand of Ith.)
 

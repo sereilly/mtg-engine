@@ -759,6 +759,19 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
                 game, context, conditional.get("condition") or {}
             ):
                 cost = max(0, int(conditional["amount"]))
+            # "…pays {1} **for each card revealed this way**." (Brine Seer,
+            # Scent of Brine.) The printed cost is a *rate*: what the payer
+            # owes is that price once per unit an earlier step of this same
+            # resolution recorded. Read here, where CR 608.2 takes the count —
+            # the reveal happened a step ago and its record is in this
+            # resolution's scratchpad, which nothing at lowering time could see.
+            #
+            # Nought revealed is a price of {0}, which every board covers: the
+            # spell is not countered, which is exactly what the card says a
+            # Seer that showed nothing does.
+            per_recorded = instruction.payload.get("unless_pays_per_recorded")
+            if per_recorded is not None:
+                cost *= max(0, int(context.results.get(str(per_recorded), 0) or 0))
             # "…and 1 life" (Mundungu). The life half of one offer, sent on
             # the same prompt: what the payer decides is whether to pay the
             # whole price, so a second prompt would be a second decision and a

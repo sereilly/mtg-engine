@@ -253,6 +253,25 @@ def _lower_add_mana(
             # from the payment above — and carried as the counter's kind, so a
             # card printing another word is data.
             payload["per_each_counter_on_source"] = node.per_each_counter_on_source
+        if node.per_each_recorded is not None:
+            # "Add {C}{C} **for each card revealed this way**." (Metalworker.)
+            # The multiplier is a step of *this same resolution* — the reveal
+            # in front of the sentence — so it travels the ``back_reference``
+            # key ``count_from_payload`` already reads, on the same
+            # ``per_each`` spec the board count below writes. One evaluator for
+            # both, which is what stops "for each" meaning two arithmetics.
+            #
+            # Refused without a producer, like every back-reference in this
+            # grammar: with no reveal in front of it the words name nothing and
+            # the spec would answer 0 — a Metalworker that reports supported and
+            # adds no mana at all.
+            if node.per_each_recorded not in produced:
+                raise LoweringError(
+                    f"back-reference to {node.per_each_recorded!r} with no "
+                    "producer in this effect",
+                    node=node,
+                )
+            payload["per_each"] = {"back_reference": node.per_each_recorded}
         if node.per_each is not None:
             # The count is taken at resolution through the one evaluator every
             # computed amount shares, so "creature with power 4 or greater you

@@ -53,6 +53,7 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_add_mana_for_tappe
                        _lower_exile_cost_sacrifices, _lower_exile_graveyard,
                        _lower_exile_graveyard_arrivals_this_turn,
                        _lower_reveal_hand, _lower_reveal_random_from_hand,
+                       _lower_reveal_cards_from_hand,
                        _lower_graveyard_top_to_library,
                        _lower_reveal_top_sorting_by_filter,
                        _lower_look_at_hand, _lower_look_at_library_top,
@@ -213,7 +214,6 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.DamageCantBePreventedOrRedirected: _lower_damage_cant_be_prevented,
     ast.Regenerate: _lower_regenerate,
     ast.CounterAbility: _lower_counter_ability,
-    ast.CounterSpell: _lower_counter_spell,
     ast.ChangeTarget: _lower_change_target,
     ast.CantPhaseOut: _lower_cant_phase_out,
     ast.LandTypeSwap: _lower_land_type_swap,
@@ -238,6 +238,10 @@ _BY_NODE_TYPE: dict[type, object] = {
     # node is exactly what this table is for.
     ast.RevealTop: _lower_reveal_top_of_library,
     ast.RevealHand: _lower_reveal_hand,
+    # "Reveal any number of blue cards in your hand." (Brine Seer.) The
+    # chosen-subset reveal beside the whole-hand one, and a different node
+    # for a different effect - see `ast.RevealCardsFromHand`.
+    ast.RevealCardsFromHand: _lower_reveal_cards_from_hand,
     ast.RevealRandomFromHand: _lower_reveal_random_from_hand,
     ast.ExileCostSacrifices: _lower_exile_cost_sacrifices,
     ast.ExileGraveyard: _lower_exile_graveyard,
@@ -426,6 +430,13 @@ _BY_NODE_TYPE_WITH_EVENT_AND_PRODUCED: dict[type, object] = {
 #: consulted first.
 _BY_NODE_TYPE_WITH_PRODUCED: dict[type, object] = {
     ast.Attach: _lower_attach,
+    # "Counter target spell unless its controller pays {1} **for each card
+    # revealed this way**." (Brine Seer, Scent of Brine.) It left the name-only
+    # table above for ``ast.Attach``'s reason: the price is a rate over a record
+    # an earlier step of this same effect wrote, and with no such step the words
+    # name nothing — an offer of {0} every board covers, which is a counterspell
+    # that never counters.
+    ast.CounterSpell: _lower_counter_spell,
     # "Put **it** into your graveyard" is All Hallow's Eve's own card or Call of
     # the Wild's revealed one, and only a reveal earlier in the same effect
     # tells them apart. It left the name-only table above for ``ast.Attach``'s

@@ -18,7 +18,7 @@ dealt") states its own bound and stays behind with the vocabulary.
 
 from __future__ import annotations
 
-from ..oracle_types import EXILED_THIS_WAY
+from ..oracle_types import EXILED_THIS_WAY, REVEALED_THIS_WAY
 from .errors import GrammarError
 from . import ast
 from .lexer import MANA, NUMBER, PT, SELF, WORD
@@ -346,6 +346,15 @@ _THIS_WAY_COUNTS: dict[tuple[str, str], str] = {
     # table reads it, and a second spelling is how a producer gate goes vacuous
     # while the amount reads an empty record.
     ("card", "exiled"): EXILED_THIS_WAY,
+    # "Reveal any number of blue cards in your hand. **… for each card revealed
+    # this way.**" (Brine Seer and the eleven Urza's Destiny cards printed with
+    # it — a life gain, a mana addition, a cost multiplier and a repeated
+    # return, all reading one row.) The count the reveal in front of the
+    # sentence recorded, and the reason the row is keyed on the *pair* rather
+    # than on the participle: "card revealed" is this record and "damage
+    # prevented" one row down is a shield, so a table keyed on the verb alone
+    # would answer one sentence with the other's producer.
+    ("card", "revealed"): REVEALED_THIS_WAY,
     # "…for each 1 **damage prevented** this way." (Sacred Boon.) What the
     # earlier step recorded here is the *shield*, not a number — the total is
     # not known when the spell resolves and goes on accumulating all turn — so

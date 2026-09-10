@@ -1453,6 +1453,21 @@ def _choose_cards_in_hand(ctx: PromptContext, choices: list) -> dict:
         "player_seat": choice.player_index,
         "card_name": choice.data.get("card_name", ""),
         "count": ctx.game._how_many_cards_to_choose(choice),
+        # "Reveal **any number of** blue cards in your hand." (Brine Seer and
+        # the eleven cards printed with it.) The count above is then a ceiling
+        # rather than a debt, and nought is a legal answer — so the board needs
+        # both halves or it gates Confirm on a pick the engine would accept.
+        # Read off the engine's own predicate, so the offer rendered and the
+        # answer checked are one rule.
+        "any_number": ctx.game._may_choose_fewer_cards_in_hand(choice),
+        # CR 701.20a: the cards become public. The word the panel uses, because
+        # "choose" and "reveal" are different promises to the player about what
+        # the rest of the table is about to see.
+        "verb": (
+            "reveal"
+            if (choice.data.get("_payload") or {}).get("reveal")
+            else "choose"
+        ),
         "choices": [
             {"hand_index": index, "name": owner.hand[index].name} for index in live
         ],

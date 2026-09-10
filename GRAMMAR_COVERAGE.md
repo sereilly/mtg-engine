@@ -40,7 +40,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ULG | 143 | 227 | 84.1% | 84.1% | 59.5% | 121 |
 | 6ED | 335 | 404 | 95.5% | 95.5% | 65.8% | 243 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| UDS *(measured)* | 143 | 204 | 75.0% | 72.1% | 48.0% | 85 |
+| UDS *(measured)* | 143 | 204 | 80.9% | 77.9% | 53.9% | 97 |
 | **All (shipped)** | **5686** | **8356** | **90.6%** | **89.9%** | **60.6%** | **4280** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -61,7 +61,6 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 16 | 14 | expected 'unless defending player controls' |  |
 | 13 | 8 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
 | 12 | 3 | expected what this creature can't block, or a duration |  |
-| 12 | 12 | expected 'the' |  |
 | 7 | 1 | no lowering for RawEffect |  |
 | 6 | 2 | expected 'card' |  |
 | 6 | 1 | no handler for this battlefield entry |  |
@@ -78,6 +77,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 1 | expected 'the number of' in a where-clause |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
+| 2 | 1 | expected 'top' |  |
 
 ## Cards executing through the grammar
 
@@ -874,6 +874,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this Aura is put into a graveyard from the battlefield, return it to its owner's hand.`
 - **Brine Hag**
   - `When this creature dies, change the base power and toughness of all creatures that dealt damage to it this turn to 0/2. (This effect lasts indefinitely.)`
+- **Brine Seer**
+  - `{2}{U}, {T}: Reveal any number of blue cards in your hand. Counter target spell unless its controller pays {1} for each card revealed this way.`
 - **Brine Shaman**
   - `{T}, Sacrifice a creature: Target creature gets +2/+2 until end of turn.`
   - `{1}{U}{U}, Sacrifice a creature: Counter target creature spell.`
@@ -1145,6 +1147,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Cinder Marsh**
   - `{T}: Add {C}.`
   - `{T}: Add {B} or {R}. This land doesn't untap during your next untap step.`
+- **Cinder Seer**
+  - `{2}{R}, {T}: Reveal any number of red cards in your hand. This creature deals X damage to any target, where X is the number of cards revealed this way.`
 - **Cinder Wall**
   - `When this creature blocks, destroy it at end of combat.`
 - **Circle of Despair**
@@ -3596,6 +3600,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Ivory Guardians**
   - `Creatures named Ivory Guardians get +1/+1 as long as an opponent controls a nontoken red permanent.`
   - `Creatures named Ivory Guardians get +1/+1 as long as an opponent controls a nontoken red permanent.`
+- **Ivy Seer**
+  - `{2}{G}, {T}: Reveal any number of green cards in your hand. Target creature gets +X/+X until end of turn, where X is the number of cards revealed this way.`
 - **Jabari's Banner**
   - `{1}, {T}: Target creature gains flanking until end of turn. (Whenever a creature without flanking blocks this creature, the blocking creature gets -1/-1 until end of turn.)`
 - **Jabari's Influence**
@@ -3628,6 +3634,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{3}, {T}: Untap target creature.`
 - **Jangling Automaton**
   - `Whenever this creature attacks, untap all creatures defending player controls.`
+- **Jasmine Seer**
+  - `{2}{W}, {T}: Reveal any number of white cards in your hand. You gain 2 life for each card revealed this way.`
 - **Jayemdae Tome**
   - `{4}, {T}: Draw a card.`
   - `{4}, {T}: Draw a card.`
@@ -4446,6 +4454,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}{W}: This creature gets +0/+1 until end of turn.`
 - **Mesmeric Trance**
   - `{U}, Discard a card: Draw a card.`
+- **Metalworker**
+  - `{T}: Reveal any number of artifact cards in your hand. Add {C}{C} for each card revealed this way.`
 - **Meteor Shower**
   - `Meteor Shower deals X plus 1 damage divided as you choose among any number of targets.`
 - **Meteorite**
@@ -4788,6 +4798,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever Nicol Bolas deals damage to an opponent, that player discards their hand.`
 - **Night Soil**
   - `{1}, Exile two creature cards from a single graveyard: Create a 1/1 green Saproling creature token.`
+- **Nightshade Seer**
+  - `{2}{B}, {T}: Reveal any number of black cards in your hand. Target creature gets -X/-X until end of turn, where X is the number of cards revealed this way.`
 - **Nine Lives**
   - `When there are nine or more incarnation counters on this enchantment, exile it.`
   - `When this enchantment leaves the battlefield, you lose the game.`
@@ -5846,6 +5858,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{3}, {T}: This artifact deals 1 damage to any target.`
   - `{3}, {T}: This artifact deals 1 damage to any target.`
   - `{3}, {T}: This artifact deals 1 damage to any target.`
+- **Rofellos's Gift**
+  - `Reveal any number of green cards in your hand. Return an enchantment card from your graveyard to your hand for each card revealed this way.`
 - **Rofellos, Llanowar Emissary**
   - `{T}: Add {G} for each Forest you control.`
 - **Rogue Elephant**
@@ -6075,6 +6089,16 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Remove a corpse counter from this creature: Regenerate this creature.`
 - **Scavenging Ooze**
   - `{G}: Exile target card from a graveyard. If it was a creature card, put a +1/+1 counter on this creature and you gain 1 life.`
+- **Scent of Brine**
+  - `Reveal any number of blue cards in your hand. Counter target spell unless its controller pays {1} for each card revealed this way.`
+- **Scent of Cinder**
+  - `Reveal any number of red cards in your hand. Scent of Cinder deals X damage to any target, where X is the number of cards revealed this way.`
+- **Scent of Ivy**
+  - `Reveal any number of green cards in your hand. Target creature gets +X/+X until end of turn, where X is the number of cards revealed this way.`
+- **Scent of Jasmine**
+  - `Reveal any number of white cards in your hand. You gain 2 life for each card revealed this way.`
+- **Scent of Nightshade**
+  - `Reveal any number of black cards in your hand. Target creature gets -X/-X until end of turn, where X is the number of cards revealed this way.`
 - **School of Piranha**
   - `At the beginning of your upkeep, sacrifice this creature unless you pay {1}{U}.`
 - **School of the Unseen**

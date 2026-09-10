@@ -323,6 +323,7 @@ from .library import (
 # docstring for the line.
 from .reveal import (
     _lower_bin_revealed_card,
+    _lower_reveal_cards_from_hand,
     _lower_graveyard_top_opponent_chooses,
     _lower_put_revealed_card_onto_battlefield,
     _lower_reveal_top,
@@ -534,6 +535,7 @@ __all__ = [
     "_lower_put_source_into_zone",
     "_lower_return_self_instead_of_untapping",
     "_lower_reveal_top",
+    "_lower_reveal_cards_from_hand",
     "_lower_reveal_until",
     "_lower_simultaneous_untap_and_tap",
     "_lower_tap_or_untap",

@@ -30,6 +30,7 @@ from ...oracle_types import (CHOSEN_CREATURE_TYPE_THIS_WAY,
                              CHOSEN_TARGET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
                              MILLED_THIS_WAY,
                              REVEALED_HAND_CARDS,
+                             REVEALED_THIS_WAY,
                              SEARCHED_PERMANENTS,
                              COUNTERED_ABILITY_SOURCE,
                              COUNTERED_SPELL_CONTROLLER, DISCARDED_BY_SEAT,
@@ -681,6 +682,18 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # was shown, for the sentence that narrows it — see
     # ``_events.REVEALED_HAND_CARDS``.
     "reveal_hand": REVEALED_HAND_CARDS,
+    # "Reveal any number of blue cards in your hand." (Brine Seer and the
+    # eleven cards printed with it.) **Two** records from one step, and the
+    # count is the primary: every sentence in the pool that follows this one
+    # spends "the number of cards revealed this way", and a narrowed reading
+    # ("for each **blue instant** card revealed this way", Sirocco) can only be
+    # answered off the cards. See ``oracle_types.REVEALED_THIS_WAY``.
+    #
+    # Deliberately **not** in ``_record_keys._PRODUCED_QUANTITIES``: no card
+    # prints a bare "that much" after a reveal, so admitting it there would be
+    # a reading nothing exercises — and a second candidate for every bare
+    # back-reference in a sentence that also reveals.
+    "reveal_cards_from_hand": (REVEALED_THIS_WAY, REVEALED_HAND_CARDS),
     "reveal_top_of_library": "revealed_card",
     # "Target player reveals a card at random from their hand." (Wand of
     # Ith.) The same record, from a different zone: the sentences behind it

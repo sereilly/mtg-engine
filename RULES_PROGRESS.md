@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**411 / 617 tracked rules covered (66%)** — 2409 tests, 0 unannotated.
+**411 / 617 tracked rules covered (66%)** — 2414 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -734,7 +734,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 608. Resolving Spells and Abilities
 
 - [x] **608.1** Each time all players pass in succession, the spell or ability on top of the stack resolves. (See... *(1 tests)*
-- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(74 tests, subrules bcdhn)*
+- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(77 tests, subrules bcdhn)*
 - [x] **608.3** If the object that’s resolving is a permanent spell, its resolution may involve several steps. Th... *(3 tests, subrules ab)*
 
 ### 609. Effects
@@ -862,7 +862,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **701.17** Mill *(6 tests, subrules a)*
 - [x] **701.18** Play *(6 tests, subrules ab)*
 - [x] **701.19** Regenerate *(29 tests, subrules abc)*
-- [x] **701.20** Reveal *(2 tests, subrules a)*
+- [x] **701.20** Reveal *(6 tests, subrules ab)*
 - [x] **701.21** Sacrifice *(13 tests, subrules a)*
 - [x] **701.22** Scry *(8 tests, subrules ab)*
 - [x] **701.23** Search *(4 tests, subrules ad)*

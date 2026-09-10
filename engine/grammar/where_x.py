@@ -13,7 +13,7 @@ is for.
 """
 
 from . import ast
-from ..oracle_types import DREW_COUNT
+from ..oracle_types import DREW_COUNT, REVEALED_THIS_WAY
 from .amounts import accept_counters_on_source
 from .records import (accept_added_base, accept_cost_characteristic_of,
                       accept_damage_dealt_this_turn, accept_exiled_for_cost,
@@ -515,6 +515,24 @@ def accept_this_way_count(stream: TokenStream, filt) -> "ast.Amount | None":
     # reading the wrong seat's answer is the failure. This record is one number
     # written by the one draw the effect performed, so the seat is the step's
     # and the pronoun only repeats it.
+    # "…, where X is the number of cards **revealed this way**." (Cinder Seer,
+    # Ivy Seer, Nightshade Seer and their three Scents.) The fourth participle,
+    # and the second whose record is a plain number rather than a set — so it
+    # produces the ordinary back-reference :class:`ast.ThatMuch`, and the
+    # producer gate in the lowering is what refuses it under a sentence with no
+    # reveal in front of it.
+    #
+    # No pronoun, because the card prints none: the reveal is the effect's own
+    # controller's and the participle attaches straight to the noun. The noun is
+    # checked for the reason the draw below checks its own — the record holds
+    # how many cards were shown and not what they were, so "the number of blue
+    # cards revealed this way" is a question it cannot answer and refuses here
+    # rather than counting every card.
+    revealed = stream.mark()
+    if stream.accept_phrase("revealed", "this", "way"):
+        if filt.is_card and _names_only_cards(filt):
+            return ast.ThatMuch(REVEALED_THIS_WAY)
+    stream.reset(revealed)
     drew = stream.mark()
     if stream.accept_word("they", "you") and stream.accept_phrase("drew", "this", "way"):
         if filt.is_card and _names_only_cards(filt):

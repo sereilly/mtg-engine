@@ -261,7 +261,13 @@ def lower_statement(
         # It left `_BY_NODE_TYPE` for that: the name-only table is for a node
         # whose lowering decides nothing, and a pump now picks between two
         # engine kinds by what the firing event bound.
-        return _lower_pump(statement, event, event_subject)
+        # …and *produced*, because "+X/+X until end of turn, where X is the
+        # number of cards revealed this way" (Ivy Seer) reads a record an
+        # earlier step of this same effect wrote. Only the durational reading
+        # can: a layer 7c contribution is rebuilt on every recompute, when no
+        # scratchpad exists — which is why the set is threaded rather than the
+        # gate being dropped.
+        return _lower_pump(statement, event, event_subject, produced)
     if isinstance(statement, ast.LoseKeyword):
         # The **unfiltered** event and its subject, for `_lower_destroy`'s
         # reason below: the removal asks whether the trigger bound exactly one

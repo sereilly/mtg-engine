@@ -210,6 +210,11 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     # pick out of a hidden zone that moves nothing; the sentence after it is
     # what moves anything.
     "choose_cards_in_hand": "zones",
+    # "Reveal any number of artifact cards in your hand." (Metalworker.) The
+    # same shape one verb over: a pick out of a hidden zone that moves nothing
+    # and makes what it picked public (CR 701.20a), and the sentence after it
+    # is what spends the count.
+    "reveal_cards_from_hand": "zones",
     "put_iterated_card_on_library": "zones",
     "put_graveyard_card_on_library_bottom": "zones",
     "put_top_of_graveyard_on_library_bottom": "zones",
