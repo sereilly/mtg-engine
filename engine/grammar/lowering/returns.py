@@ -95,6 +95,43 @@ def _record_optional_card_target(
         }
 
 
+def subject_names_another(subject) -> bool:
+    """Whether this return's object was printed "**another**".
+
+    Read off the ``TargetSpec`` rather than off its filter because that is where
+    the parser puts it: ``references.parse_target_spec`` records the printed
+    word as ``distinct_from_prior`` on the spec, and the filter's
+    ``other_than_source`` is the *other* spelling of the same restriction ("up
+    to two **other** target creatures", "target creature other than this
+    creature"). Both are asked, so a sentence printing either reaches the same
+    answer here.
+    """
+    return bool(
+        isinstance(subject, ast.TargetSpec)
+        and (subject.distinct_from_prior or subject.filter.other_than_source)
+    )
+
+
+def _honours_printed_another(node: ast.ReturnToZone) -> bool:
+    """Whether this return's zone pair has a reader for the printed "another".
+
+    Exactly one does: the *one-card* targeted graveyard-to-hand return, whose
+    payload carries ``exclude_source_card`` and whose three readers — the
+    picker, the CR 608.2b re-check and the handler — all resolve it through
+    ``handlers/_common.excluded_graveyard_slot``. The several-card branch is
+    deliberately **not** here: its handler resolves a list of slots through
+    ``_resolve_graveyard_slots``, which reads a per-card predicate and has
+    nowhere to put a per-slot exclusion, and no card in either manifest role
+    prints the pair.
+    """
+    return bool(
+        node.from_zone is not None
+        and node.from_zone.name == "graveyard"
+        and node.to.name == "hand"
+        and not _names_several_targets(node.subject)
+    )
+
+
 def _lower_return_self_instead_of_untapping(
     node,
 ) -> tuple[OracleInstruction, ...]:
@@ -190,6 +227,41 @@ def _lower_return_to_zone(
     if node.also_stack:
         return (OracleInstruction("return_spell_or_creature_to_hand", "", {}),)
     subject = node.subject
+    # "Return **another** target artifact card from your graveyard to your
+    # hand." (Junk Diver; Sylvan Hierophant one card type over.) CR 113.7 —
+    # **not** CR 109.5, which is about the words "you" and "your" and is what
+    # the neighbouring comments in this engine miscite for this: "the source of
+    # a triggered ability … is the object whose ability triggered". With
+    # no earlier choice in the sentence for "another" to differ from — and
+    # ``_lower_steps``'s ``_refuse_unfused_distinctness`` is what guarantees
+    # there is none by the time a lowering sees the word — the only object left
+    # for it to exclude is the ability's own source, which for a dies-trigger
+    # is a card sitting in the very graveyard being searched.
+    #
+    # Refused for every *graveyard* zone pair but the one below, and refused
+    # rather than dropped because dropping it is the direction that matters: the
+    # word is on the ``TargetSpec`` and not on the ``ObjectFilter``, so
+    # ``_reads_no_return_restriction`` — which does refuse ``other_than_source``
+    # — never saw it, and Junk Diver returned **itself** to its owner's hand
+    # from an otherwise empty graveyard.
+    #
+    # Scoped to the graveyard family for that blanket refusal's own reason (see
+    # its comment below): the **bounce** gates itself against what
+    # ``subject_matches`` can test and has carried this word since
+    # ``_targets_payload`` learned it — Niambi, Esteemed Speaker's "return
+    # another target creature you control to its owner's hand" already lowers
+    # with ``exclude_self`` on the chosen slot, and refusing it here would take
+    # a shipped card's only ability away.
+    if (
+        subject_names_another(subject)
+        and node.from_zone is not None
+        and node.from_zone.name == "graveyard"
+        and not _honours_printed_another(node)
+    ):
+        raise LoweringError(
+            'only a one-card graveyard-to-hand return reads a printed "another"',
+            node=node,
+        )
     if node.repetitions is not None:
         # "Return a card from your graveyard to your hand **for each card
         # discarded this way**." (Recall.) A count nobody knows until an earlier
@@ -443,6 +515,18 @@ def _lower_return_to_zone(
             if destination.owner is None or destination.owner.kind != "you":
                 raise LoweringError("this handler returns cards to your own hand", node=node)
             to_hand = _graveyard_to_hand_payload(filt)
+            if subject_names_another(subject):
+                # The printed "another", on the key the picker
+                # (``targeting._graveyard_return_spec``), the announcement gate
+                # and the handler all read through one predicate
+                # (``handlers/_common.excluded_graveyard_slot``). Its own key
+                # rather than the ``exclude_self`` a *permanent* narrowing
+                # lowers to, because the two matchers are different: this one
+                # is asked about a card in a zone, which has no
+                # ``permanent_id`` and no controller, and a key
+                # ``graveyard_card_matches`` did not know would be dropped in
+                # silence — which is the bug this line exists to close.
+                to_hand["exclude_source_card"] = True
             _record_optional_card_target(to_hand, subject)
             return (
                 OracleInstruction(

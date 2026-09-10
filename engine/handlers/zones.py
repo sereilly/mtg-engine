@@ -17,6 +17,7 @@ from ._common import (
     evaluate_count,
     per_recipient_amount,
     frozen_that_player_seat,
+    excluded_graveyard_slot,
     graveyard_card_matches,
     permanent_matches_filter,
     resolve_amount,
@@ -1705,11 +1706,32 @@ def return_creature_from_graveyard_to_hand(game: Game, instruction: OracleInstru
     card_type = instruction.payload.get("card_type")
     card_types = tuple(instruction.payload.get("card_types") or ())
 
+    # "Return **another** target artifact card from your graveyard to your
+    # hand." (Junk Diver.) CR 113.7's source, and a *slot* rather than a kind
+    # of card — so it is asked beside the predicate through the one reader the
+    # picker also asks, and never folded into ``_eligible``: two copies of one
+    # card in one graveyard are the same ``CardDefinition`` object, and a
+    # per-card test would take both away where the sentence takes one.
+    #
+    # ``context.card`` is the ability's own source (CR 113.7), which for the
+    # dies-trigger printing this sentence is a card sitting in the very pile
+    # being searched. Without it Junk Diver returned **itself** out of an
+    # otherwise empty graveyard.
+    excluded = excluded_graveyard_slot(
+        instruction.payload, caster.graveyard, context.card
+    )
+
     def _eligible(card) -> bool:
         # The picker's predicate, not a third spelling of it. The payload and
         # the spec carry the same key names because one is derived from the
         # other, so there is one answer to "may this card be chosen?".
         return graveyard_card_matches(instruction.payload, card)
+
+    def _eligible_slot(index: int) -> bool:
+        """The same question asked of a *position*, which is what the printed
+        "another" narrows. Every scan below goes through this rather than
+        through ``_eligible`` alone."""
+        return index != excluded and _eligible(caster.graveyard[index])
 
     # "Return up to two target creature cards from your graveyard to your hand."
     # (Sanguine Indulgence.) The several-targets description says a list was
@@ -1767,8 +1789,8 @@ def return_creature_from_graveyard_to_hand(game: Game, instruction: OracleInstru
     # Honor the caster's chosen graveyard card (Rule 601.2c). Regrowth
     # (any_card) accepts any type; Raise Dead only a creature card.
     idx = context.target_permanent_index
-    if isinstance(idx, int) and 0 <= idx < len(caster.graveyard) and _eligible(
-        caster.graveyard[idx]
+    if isinstance(idx, int) and 0 <= idx < len(caster.graveyard) and _eligible_slot(
+        idx
     ):
         chosen = caster.graveyard.pop(idx)
         game.put_card_into_hand(caster, chosen)
@@ -1776,7 +1798,7 @@ def return_creature_from_graveyard_to_hand(game: Game, instruction: OracleInstru
         return True, "resolved"
     if card_types:
         chosen_index = next(
-            (i for i, c in enumerate(caster.graveyard) if _eligible(c)), None
+            (i for i in range(len(caster.graveyard)) if _eligible_slot(i)), None
         )
         if chosen_index is None:
             game.log.append(f"No {' or '.join(card_types)} card in graveyard to return")
@@ -1787,7 +1809,7 @@ def return_creature_from_graveyard_to_hand(game: Game, instruction: OracleInstru
         return True, "resolved"
     if card_type is not None and card_type != "creature":
         chosen_index = next(
-            (i for i, c in enumerate(caster.graveyard) if _eligible(c)), None
+            (i for i in range(len(caster.graveyard)) if _eligible_slot(i)), None
         )
         if chosen_index is None:
             game.log.append(f"No {card_type} card in graveyard to return")
@@ -1797,6 +1819,22 @@ def return_creature_from_graveyard_to_hand(game: Game, instruction: OracleInstru
         game.log.append(f"Returned {chosen.name} from graveyard to hand")
         return True, "resolved"
 
+    # The unnarrowed creature return, and the last place the printed "another"
+    # has to be honoured: with an exclusion in force the generic scan would take
+    # the source itself, so the slot walk above is used instead. Without one the
+    # call is left exactly as it was, so every card written before this keeps
+    # its behaviour byte for byte.
+    if excluded is not None:
+        chosen_index = next(
+            (i for i in range(len(caster.graveyard)) if _eligible_slot(i)), None
+        )
+        if chosen_index is None:
+            game.log.append("No creature to return")
+            return True, "resolved"
+        chosen = caster.graveyard.pop(chosen_index)
+        game.put_card_into_hand(caster, chosen)
+        game.log.append(f"Returned {chosen.name} from graveyard to hand")
+        return True, "resolved"
     returned = game._return_creature_from_graveyard(caster)
     if not returned and any_card and caster.graveyard:
         chosen = caster.graveyard.pop(0)

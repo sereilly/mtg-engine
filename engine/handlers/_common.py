@@ -1429,6 +1429,47 @@ def graveyard_card_matches(spec: dict, card) -> bool:
     return card_has_type(card, "creature")
 
 
+def excluded_graveyard_slot(spec: dict, graveyard, source_card) -> int | None:
+    """The graveyard slot a printed "**another**" takes out of the choice, or None.
+
+    :func:`graveyard_card_matches`'s companion, and separate from it because the
+    two answer different questions. That predicate is asked about a *card* —
+    "may a card like this be chosen?" — and the printed word excludes **one
+    object**, not one kind of card: "return another target artifact card from
+    your graveyard to your hand" (Junk Diver) rules out the ability's own
+    source and nothing else, and CR 113.7 is what says which object that is —
+    "the source of a triggered ability … is the object whose ability
+    triggered". Not CR 109.5, which several comments in this engine cite for
+    the word and which is about "you" and "your".
+
+    So the answer is a **slot**, not a predicate over cards. ``load_cards``
+    dedupes by ``oracle_id``, so two copies of one card in one graveyard are
+    literally one ``CardDefinition`` object — the residual
+    :class:`engine.game_types.GraveyardTarget` documents — and a per-card
+    exclusion would take *both* copies away where the sentence takes one. The
+    first matching slot is the same reading ``handlers/zones.exile_self``
+    already gives "exile **it**" for a dies-trigger whose source is in the pile.
+
+    One reader for both callers, for the reason ``graveyard_card_matches`` is
+    one: ``legality._enumerate_graveyard_creatures`` offers the choice and the
+    handler performs it, and a second copy of "which slot is the source's" is
+    how a picker comes to offer what resolution then refuses. The announcement
+    gates (CR 601.2c for a spell, CR 602.2b for an ability) need no third call
+    — they check what was named against that same enumeration.
+
+    None whenever the sentence printed no such word, whenever the caller has no
+    source card to compare against, and whenever no copy of that card is in the
+    pile — three ways of saying "nothing is excluded", which is the honest
+    answer rather than a guess at a slot.
+    """
+    if not (spec or {}).get("exclude_source_card") or source_card is None:
+        return None
+    return next(
+        (index for index, held in enumerate(graveyard) if held is source_card),
+        None,
+    )
+
+
 #: What each printed state adjective asks of a permanent. One table, because
 #: the union above and the singular narrowings below it are the same words —
 #: two readers would be two answers to "is this creature blocking?".
