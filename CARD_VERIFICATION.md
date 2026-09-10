@@ -3,10 +3,10 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **3572**
-- Passed: **601** (402 checked in-game, 199 auto-passed)
+- Passed: **602** (403 checked in-game, 199 auto-passed)
 - Failed: **0**
 - Equivalent to a passing card: **47**
-- Untested: **2924**
+- Untested: **2923**
 
 An *auto-pass* is derived, never recorded: the card has no abilities, or nothing but keywords the engine implements, so its behaviour is the generic combat and keyword code plus its printed numbers, and there is no card-specific path for a manual check to exercise. The note names which. A result recorded in-game always takes precedence over it.
 
@@ -307,7 +307,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Blanchwood Treefolk | ✅ pass | auto-pass: no abilities |
 | Blanket of Night | ⬜ untested |  |
 | Blasted Landscape | ⬜ untested |  |
-| Blaze | ⬜ untested |  |
+| Blaze | ✅ pass |  |
 | Blaze of Glory | ✅ pass |  |
 | Blazing Effigy | ⬜ untested |  |
 | Blessed Reversal | ⬜ untested |  |
