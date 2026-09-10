@@ -502,8 +502,10 @@ def test_forget_waits_for_the_discard_before_it_draws(set_pool):
     game.interactive_seats = {1}
 
     game.cast_from_hand(0, "Forget", target_player_index=1)
-    while game.stack:
-        game.resolve_top_of_stack()
+    # No drain: the resolution is held on the stack while a seat owes its
+    # answer (CR 608.2). `resolve_stack` answers what blocks the stack, and a
+    # bare `while game.stack` loop spins on it — both would take the decision
+    # this test makes itself.
 
     assert [(c.kind, c.player_index) for c in game.pending_choices] == [("discard", 1)]
     assert len(victim.library) == 10          # nothing drawn while the prompt stands
@@ -542,8 +544,10 @@ def test_retribution_lets_the_opponent_pick_which_of_the_two_dies(set_pool):
         0, "Retribution",
         target_permanent_ids=[big.permanent_id, small.permanent_id],
     )
-    while game.stack:
-        game.resolve_top_of_stack()
+    # No drain: the resolution is held on the stack while a seat owes its
+    # answer (CR 608.2). `resolve_stack` answers what blocks the stack, and a
+    # bare `while game.stack` loop spins on it — both would take the decision
+    # this test makes itself.
 
     assert result.supported, result.details
     assert [(c.kind, c.player_index) for c in game.pending_choices] == [
@@ -573,8 +577,10 @@ def test_retribution_offers_only_the_two_creatures_it_targeted(set_pool):
         0, "Retribution",
         target_permanent_ids=[big.permanent_id, small.permanent_id],
     )
-    while game.stack:
-        game.resolve_top_of_stack()
+    # No drain: the resolution is held on the stack while a seat owes its
+    # answer (CR 608.2). `resolve_stack` answers what blocks the stack, and a
+    # bare `while game.stack` loop spins on it — both would take the decision
+    # this test makes itself.
 
     choice = game.pending_choices[0]
     assert {p.permanent_id for p in game.live_permanent_choices(choice)} == {

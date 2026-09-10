@@ -956,7 +956,10 @@ def test_orcish_librarian_exiles_four_at_random_and_stacks_the_other_four(set_po
 
     random.seed(7)
     assert game.activate_permanent_ability(0, "Orcish Librarian").supported
-    resolve_stack(game)
+    # No drain: the resolution is held on the stack while a seat owes its
+    # answer (CR 608.2). `resolve_stack` answers what blocks the stack, and a
+    # bare `while game.stack` loop spins on it — both would take the decision
+    # this test makes itself.
 
     assert len(p1.exile) == 4
     assert len(p1.library) == 5, "four exiled, four back on top, one untouched"

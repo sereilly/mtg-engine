@@ -63,6 +63,10 @@ _QUOTED = re.compile(r'"[^"]*"')
 #: list; a new entry belongs there first.
 ACKNOWLEDGED = {
     "Darkpact": "the ante zone has no picker (tests/engine/test_targeting.py)",
+    "Rapid Decay": (
+        "a graveyard target is chosen at resolution, not announced "
+        "(tests/engine/test_targeting.py)"
+    ),
 }
 
 #: The same for an **activated ability**, keyed ``(card name, ability index)``

@@ -401,7 +401,9 @@ def test_w1g2_avenging_druid_declined_leaves_the_library_alone(set_pool):
 
     game._deal_damage_to_player(bob, 2, source=druid)
     game._settle()
-    resolve_stack(game)
+    # No drain: the resolution is held on the stack while this seat owes its
+    # answer (CR 608.2), and `resolve_stack` answers what blocks the stack —
+    # it would take the default out from under the confirm below.
     assert game.confirm_optional_pay(0, "Avenging Druid", accept=False)
     game._settle()
 

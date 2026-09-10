@@ -243,8 +243,9 @@ def test_truce_lets_each_seat_take_its_own_number_of_cards(set_pool):
     game = _w2g1_game(caster, other, interactive=(0, 1))
 
     result = game.cast_from_hand(0, "Truce")
-    while game.stack:
-        game.resolve_top_of_stack()
+    # No drain: ``cast_from_hand`` resolves the spell, and Truce is still
+    # resolving while both seats owe their answer (CR 608.2), so it is held on
+    # the stack. A bare ``while game.stack`` loop here spins forever.
 
     assert result.supported, result.details
     assert {(c.kind, c.player_index) for c in game.pending_choices} == {
@@ -272,7 +273,9 @@ def test_truce_pays_two_life_for_each_card_a_seat_leaves(set_pool):
     game = _w2g1_game(caster, other, interactive=(0, 1))
 
     game.cast_from_hand(0, "Truce")
-    resolve_stack(game)
+    # Nor ``resolve_stack``: it answers what blocks the stack, and Truce being
+    # held for these two prompts is exactly that — the helper would take both
+    # defaults out from under the confirms below.
     assert game.confirm_draw_up_to(0, 1)
     assert game.confirm_draw_up_to(1, 1)
     game._settle()
@@ -292,8 +295,6 @@ def test_truce_refuses_a_number_above_the_printed_ceiling(set_pool):
     game = _w2g1_game(caster, other, interactive=(0, 1))
 
     game.cast_from_hand(0, "Truce")
-    while game.stack:
-        game.resolve_top_of_stack()
 
     assert game.confirm_draw_up_to(0, 3) is False
     assert len(caster.hand) == 0

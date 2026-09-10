@@ -496,7 +496,8 @@ def test_goblin_festival_asks_which_opponent_at_three_seats(set_pool):
         assert game.activate_permanent_ability(
             0, "Goblin Festival", target_player_index=1
         ).supported
-        resolve_stack(game)
+        # No drain — see the note on Urza's Incubator: the activation is held
+        # while seat 0 owes the pick, and `resolve_stack` would answer it.
 
     assert [c.kind for c in game.pending_choices] == ["player_choice"]
     assert game.controller_index_of(festival) == 0, game.log

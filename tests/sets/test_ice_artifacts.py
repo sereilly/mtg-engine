@@ -1423,8 +1423,8 @@ def test_w3g2_refusing_the_whistles_price_forces_the_attack(set_pool):
     game, whistle, victim, _wall, _newcomer = _w3g2_whistle_board(set_pool)
 
     assert _w3g2_blow_the_whistle(game, whistle, victim).supported
-    while game.stack:
-        game.resolve_top_of_stack()
+    # No drain: the ability is held on the stack while seat 1 owes the offer
+    # (CR 608.2), so a bare `while game.stack` loop here spins forever.
     game._settle()
 
     owed = game.pending_choices_of("optional_pay")
@@ -1446,7 +1446,10 @@ def test_w3g2_paying_the_whistles_price_buys_the_creature_off(set_pool):
     game, whistle, victim, _wall, _newcomer = _w3g2_whistle_board(set_pool)
 
     _w3g2_blow_the_whistle(game, whistle, victim)
-    resolve_stack(game)
+    # No drain: the resolution is held on the stack while a seat owes its
+    # answer (CR 608.2). `resolve_stack` answers what blocks the stack, and a
+    # bare `while game.stack` loop spins on it — both would take the decision
+    # this test makes itself.
     game._settle()
     game.confirm_optional_pay(1, "Arcum's Whistle", accept=True)
     game._settle()

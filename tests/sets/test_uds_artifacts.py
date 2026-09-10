@@ -130,7 +130,9 @@ def test_urzas_incubator_discounts_only_the_chosen_types_creature_spells(set_poo
     game.interactive_seats = {0}
     game.start_turn(0)
     game.cast_from_hand(0, "Urza's Incubator")
-    resolve_stack(game)
+    # No drain: the resolution is held on the stack while this seat owes its
+    # answer (CR 608.2), and `resolve_stack` answers what blocks the stack —
+    # it would take the default out from under the confirm below.
     assert game.confirm_enter_choice(0, creature_type="sliver"), game.log
 
     sliver = next(c for c in set_pool("TMP").values() if "Sliver" in c.type_line)
@@ -159,7 +161,9 @@ def test_urzas_incubator_discounts_every_seats_creature_spells(set_pool):
     game.interactive_seats = {0}
     game.start_turn(0)
     game.cast_from_hand(0, "Urza's Incubator")
-    resolve_stack(game)
+    # No drain: the resolution is held on the stack while this seat owes its
+    # answer (CR 608.2), and `resolve_stack` answers what blocks the stack —
+    # it would take the default out from under the confirm below.
     assert game.confirm_enter_choice(0, creature_type="sliver"), game.log
 
     sliver = next(c for c in set_pool("TMP").values() if "Sliver" in c.type_line)
