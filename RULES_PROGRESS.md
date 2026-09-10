@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**411 / 617 tracked rules covered (66%)** — 2435 tests, 0 unannotated.
+**411 / 617 tracked rules covered (66%)** — 2447 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -284,7 +284,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **117.1** Unless a spell or ability is instructing a player to take an action, which player can take action... *(3 tests, subrules a)*
 - [x] **117.2** Other kinds of abilities and actions are automatically generated or performed by the game rules, ... *(1 tests, subrules c)*
-- [x] **117.3** Which player has priority is determined by the following rules: *(18 tests, subrules abcd)*
+- [x] **117.3** Which player has priority is determined by the following rules: *(19 tests, subrules abcd)*
 - [x] **117.4** If all players pass in succession (that is, if all players pass without taking any actions in bet... *(3 tests)*
 - [x] **117.5** Each time a player would get priority, the game first performs all applicable state-based actions... *(1 tests)*
 - [x] **117.7** If a player with priority casts a spell or activates an activated ability while another spell or ... *(1 tests)*
@@ -580,8 +580,8 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 502. Untap Step
 
 - [x] **502.1** First, all phased-in permanents with phasing that the active player controls phase out, and all p... *(1 tests)*
-- [x] **502.3** Third, the active player determines which permanents they control will untap. Then they untap the... *(29 tests)*
-- [x] **502.4** No player receives priority during the untap step, so no spells can be cast or resolve and no abi... *(2 tests)*
+- [x] **502.3** Third, the active player determines which permanents they control will untap. Then they untap the... *(40 tests)*
+- [x] **502.4** No player receives priority during the untap step, so no spells can be cast or resolve and no abi... *(3 tests)*
 
 ### 503. Upkeep Step
 
