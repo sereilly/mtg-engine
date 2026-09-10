@@ -2653,6 +2653,18 @@ function getCreatureTypeChoiceInfo(state = currentState) {
   return info;
 }
 
+// Scrying Glass / Chromatic Armor / Hall of Gemstone: "Choose a color." made
+// while an ability resolves (CR 608.2d). Its own prompt rather than a shape of
+// the enter-choice one below, because the sentence that reads the answer may be
+// a later step of the same resolution and has to wait for it.
+function getColorChoiceInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.color_choice;
+  if (!info || info.player_index !== seat) return null;
+  if (!Array.isArray(info.colors) || info.colors.length === 0) return null;
+  return info;
+}
+
 // Black Vise / Jihad: the "as this enters, choose an opponent [and a color]" prompt.
 function getEnterChoiceInfo(state = currentState) {
   if (!state || seat === null) return null;
@@ -5819,6 +5831,55 @@ function applyCreatureTypeChoicePrompt(info) {
       seat,
       action: "creature_type_choice_confirm",
       creature_type: picker.value,
+    });
+  });
+}
+
+const COLOR_CHOICE_WORDS = { W: "White", U: "Blue", B: "Black", R: "Red", G: "Green" };
+
+function applyColorChoicePrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  const cardName = info.card_name || "an effect";
+  title.textContent = "Choose a color";
+  body.textContent = `${cardName}: name one of the five colors.`;
+  // A row of buttons rather than the creature-type prompt's select: CR 105.1
+  // has five colours and a list that short reads better as buttons.
+  steps.innerHTML =
+    `<div class="prompt-choice-column">` +
+    info.colors
+      .map((symbol) => {
+        const label = COLOR_CHOICE_WORDS[symbol] || symbol;
+        const mark = symbol === info.default_color ? " (default)" : "";
+        return (
+          `<button type="button" class="prompt-choice-btn" data-choice-color="${escapeHtml(symbol)}">` +
+          `${escapeHtml(label + mark)}</button>`
+        );
+      })
+      .join("") +
+    `</div>`;
+
+  steps.querySelectorAll("[data-choice-color]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await sendAction({
+        seat,
+        action: "color_choice_confirm",
+        mana_color: btn.dataset.choiceColor,
+      });
     });
   });
 }
@@ -9547,6 +9608,12 @@ function renderActivationPrompt() {
   const creatureTypeChoiceInfo = getCreatureTypeChoiceInfo();
   if (creatureTypeChoiceInfo) {
     applyCreatureTypeChoicePrompt(creatureTypeChoiceInfo);
+    return;
+  }
+
+  const colorChoiceInfo = getColorChoiceInfo();
+  if (colorChoiceInfo) {
+    applyColorChoicePrompt(colorChoiceInfo);
     return;
   }
 

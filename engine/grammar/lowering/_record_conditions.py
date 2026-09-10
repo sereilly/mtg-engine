@@ -53,7 +53,8 @@ reader is ``conditions``, and it reads nothing back.
 from __future__ import annotations
 
 from ...damage_deaths import DAMAGED_BY_SOURCE_DIED
-from ...oracle_types import MILLED_THIS_WAY
+from ...oracle_types import (CHOSEN_COLOR_THIS_WAY, CHOSEN_NUMBER_THIS_WAY,
+                             MILLED_THIS_WAY, REVEALED_HAND_CARDS)
 from ...subject_filters import card_only_filter, untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
@@ -372,6 +373,38 @@ def lower_record_condition(
                 node=condition,
             )
         return {"kind": "revealed_card_has_chosen_name"}
+    if isinstance(condition, ast.RevealedChosenColorCount):
+        # "**If that opponent reveals exactly the chosen number of cards of the
+        # chosen color**, you draw a card." (Scrying Glass.) *Three* producers,
+        # all demanded, which is the rule every back-reference above follows
+        # multiplied by the number of records the sentence reads.
+        #
+        # Each absence fails a different way and all of them silently: with no
+        # number the comparison is against nothing, with no colour every card
+        # counts or none does, and with no reveal the count is taken over an
+        # empty record. Every one of them answers the branch False (or, worse,
+        # True on an empty hand) while the card reports itself supported — so
+        # the clause refuses here instead, naming what is missing.
+        missing = sorted(
+            {CHOSEN_NUMBER_THIS_WAY, CHOSEN_COLOR_THIS_WAY, REVEALED_HAND_CARDS}
+            - set(produced)
+        )
+        if missing:
+            raise LoweringError(
+                "'reveals … the chosen number of cards of the chosen color' "
+                "with no "
+                + " and no ".join(
+                    {
+                        CHOSEN_NUMBER_THIS_WAY: "number chosen",
+                        CHOSEN_COLOR_THIS_WAY: "colour chosen",
+                        REVEALED_HAND_CARDS: "hand revealed",
+                    }[key]
+                    for key in missing
+                )
+                + " before it in this effect",
+                node=condition,
+            )
+        return {"kind": "revealed_chosen_color_count", "op": condition.op}
     if isinstance(condition, ast.ChosenNameMilledThisWay):
         # Two producers, both demanded: a back-reference names its producers or
         # refuses. Without the name the comparison is against nothing and

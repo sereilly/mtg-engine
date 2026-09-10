@@ -2980,6 +2980,80 @@ class PendingChoicesMixin:
         self.discard_pending_choice(choice)
         return True
 
+    # -- "Choose a color." at resolution (CR 608.2d) -------------------------
+
+    def arm_color_choice(
+        self, player_index: int, *, card_name: str, permanent, result_key: str,
+        context, default: str,
+    ):
+        """Queue "choose a color" for the seat the resolving ability names.
+
+        **Its own kind rather than a seventh shape of ``enter_choice``**, and
+        for ``_resolve_card_type_choice``'s reason one characteristic over: this
+        choice is made while a spell or ability *resolves*, not as a permanent
+        enters, so a sentence later in the same resolution may be what reads it
+        back — and that sentence cannot run before the answer arrives. So the
+        kind ``suspends``, where ``enter_choice`` does not and must not: the
+        readers it serves are continuous effects that re-read the record on
+        every recompute, and a late answer there really does take effect.
+
+        The answer goes to **both** records. ``chosen_color`` on the permanent
+        is the standing one — the colour Chromatic Armor's shield and Hall of
+        Gemstone's mana swap keep asking about for as long as they last — and
+        the scratchpad key is what a later step of *this* resolution reads. Two
+        writers would be a permanent with two chosen colours; one writer with
+        two records is one answer in the two places its two kinds of reader
+        look.
+        """
+        return self.arm_pending_choice(
+            "color_choice", player_index,
+            card_name=card_name,
+            permanent=permanent,
+            result_key=result_key,
+            default_color=default,
+            _context=context,
+        )
+
+    def confirm_color_choice(self, player_index: int, mana_color: str) -> bool:
+        """Answer "choose a color" with one colour word or symbol."""
+        return self.resolve_pending_choice(
+            "color_choice", player_index, mana_color=mana_color
+        )
+
+    def _resolve_color_choice(self, choice: PendingChoice, mana_color) -> bool:
+        """Record the chosen colour for the readers behind this step.
+
+        CR 105.1 bounds the answer to the five colours, checked through the same
+        normaliser the picker's option list comes from (idiom 9), and refused
+        rather than repaired — quietly keeping the default would tell the player
+        they had chosen something they had not.
+
+        An empty answer keeps whatever the handler stamped before arming, which
+        is a real choice already recorded rather than none at all.
+        """
+        word = mana_color
+        if word is not None and str(word).strip():
+            try:
+                symbol = self._normalize_mana_color(word)
+            except ValueError:
+                return False
+            if not symbol:
+                return False
+            permanent = choice.data.get("permanent")
+            if permanent is not None and self.is_on_battlefield(permanent):
+                permanent.metadata["chosen_color"] = symbol
+            context = choice.data.get("_context")
+            result_key = choice.data.get("result_key")
+            if context is not None and result_key is not None:
+                context.results[str(result_key)] = symbol
+            self.log.append(f"{choice.data.get('card_name', '')}: chose {symbol}")
+            # A chosen colour can condition a static (Jihad's anthem), and the
+            # board was last computed against the default — the same recompute
+            # ``_resolve_enter_choice`` makes for its own colour branch.
+            self._recalculate_lord_buffs()
+        self.discard_pending_choice(choice)
+        return True
+
     # -- "You may draw up to N cards" ----------------------------------------
 
     def confirm_draw_up_to(self, player_index: int, number: int) -> bool:
@@ -3127,15 +3201,30 @@ class PendingChoicesMixin:
         Out of range is a **rejection**, not a clamp: the prompt names the range
         the card prints, and silently repairing an answer would let a caller ask
         for a 12/-5 body and be told it worked.
+
+        A ``maximum`` of None is a printed range with no ceiling — "choose a
+        number **greater than 0**" (Scrying Glass), CR 107.1 — so only the floor
+        is enforced. None is the card's own answer and not a missing bound; read
+        as zero it would refuse every legal answer there is.
+
+        The number also goes into the **resolution's scratchpad** when the
+        arming carried a ``result_key``, which is what a later step of the same
+        resolution reads: a permanent's ``chosen_number`` is its standing answer
+        and outlives this resolution, and a sentence asking about "the chosen
+        number" means the one *this* activation just named.
         """
         try:
             value = int(number)
         except (TypeError, ValueError):
             return False
         low = int(choice.data.get("minimum", 0))
-        high = int(choice.data.get("maximum", 0))
-        if not (low <= value <= high):
+        high = choice.data.get("maximum")
+        if value < low or (high is not None and value > int(high)):
             return False
+        result_key = choice.data.get("result_key")
+        context = choice.data.get("_context")
+        if result_key is not None and context is not None:
+            context.results[str(result_key)] = value
         permanent = choice.data.get("permanent")
         if permanent is not None:
             if choice.data.get("exile_own_tokens"):
@@ -9169,6 +9258,31 @@ register_choice(
     suspends=True,
     # Which creature type a player named is announced in the open (CR 608.2d is
     # applied where everyone can see), so a seatless viewer may see the question.
+    spectator_visible=True,
+)
+
+register_choice(
+    "color_choice",
+    resolve=lambda game, choice, r: game._resolve_color_choice(
+        choice, r.get("mana_color")
+    ),
+    # The handler stamps its deterministic default on the source and in the
+    # scratchpad before arming, so a non-interactive seat has nothing left to
+    # apply and whatever reads the colour runs at once with that answer —
+    # ``card_type_choice``'s arrangement, and for its reason.
+    default=lambda game, choice: game.discard_pending_choice(choice),
+    action="color_choice_confirm",
+    prompt_key="color_choice",
+    blocked_detail="choose a color before other actions",
+    default_at_arm=True,
+    # And an interactive seat's answer has to arrive before the step behind it
+    # runs: Scrying Glass counts the revealed hand against the chosen colour in
+    # the same resolution, and an answer that landed after the count would
+    # change nothing at all — a prompt that lies.
+    suspends=True,
+    # Which colour a player named is announced in the open (CR 608.2d is applied
+    # where everyone can see), so a seatless viewer may see the question — the
+    # same reading ``creature_type_choice`` takes of the same rule.
     spectator_visible=True,
 )
 

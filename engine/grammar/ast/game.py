@@ -314,9 +314,17 @@ class ChooseNumber:
     about *what the number is for* is here — Shapeshifter's P/T reads it back
     through a characteristic-defining line, which is a separate sentence and a
     separate rule (CR 604.3).
+
+    ``Choose a number **greater than 0**.`` (Scrying Glass.) The other printed
+    spelling of a range, and the one with no ceiling at all: ``maximum`` is
+    None, which is not "unknown" but the card's own answer — CR 107.1 puts no
+    upper bound on a number a player may choose, and only a printed "between"
+    supplies one. A ceiling invented here would be a legal answer the card does
+    not refuse, so the prompt and its resolver read None as "no upper bound"
+    rather than as zero.
     """
     minimum: int
-    maximum: int
+    maximum: int | None = None
 
 
 @dataclass(frozen=True)

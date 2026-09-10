@@ -25,7 +25,9 @@ what a step of that kind always writes when it does.
 from __future__ import annotations
 
 from .. import ast
-from ...oracle_types import (CHOSEN_CREATURE_TYPE_THIS_WAY,
+from ...oracle_types import (CHOSEN_COLOR_THIS_WAY,
+                             CHOSEN_CREATURE_TYPE_THIS_WAY,
+                             CHOSEN_NUMBER_THIS_WAY,
                              CHOSEN_TARGET_GRAVEYARD_SLOTS,
                              CHOSEN_TARGET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
                              MILLED_THIS_WAY,
@@ -697,6 +699,20 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # was shown, for the sentence that narrows it — see
     # ``_events.REVEALED_HAND_CARDS``.
     "reveal_hand": REVEALED_HAND_CARDS,
+    # "**Choose a number greater than 0 and a color.** … If that opponent
+    # reveals exactly **the chosen number** of cards of **the chosen color**,
+    # you draw a card." (Scrying Glass.) Two steps, two records, and until this
+    # row neither of them recorded anything at all: both handlers wrote their
+    # answer onto the source permanent, where a *continuous* reader finds it
+    # (Chromatic Armor's shield, Shapeshifter's characteristic-defining P/T)
+    # and a later step of the same resolution does not.
+    #
+    # Declared unconditionally, the way ``count_objects`` declares the number
+    # it takes: what a step records is a property of the step, and a producer
+    # that only sometimes wrote its record would be a gate that only sometimes
+    # protected the reader behind it.
+    "choose_number": CHOSEN_NUMBER_THIS_WAY,
+    "choose_color": CHOSEN_COLOR_THIS_WAY,
     # "Reveal any number of blue cards in your hand." (Brine Seer and the
     # eleven cards printed with it.) **Two** records from one step, and the
     # count is the primary: every sentence in the pool that follows this one

@@ -463,6 +463,16 @@ def test_the_kinds_that_suspend_are_the_ones_that_shape_a_later_step():
         # resolution scratchpad rather than onto a permanent — the card is a
         # sorcery and has none.
         "creature_type_choice",
+        # "Choose a number greater than 0 and a color. Target opponent reveals
+        # their hand. **If that opponent reveals exactly the chosen number of
+        # cards of the chosen color**, you draw a card." (Scrying Glass.) The
+        # colour's turn at the same shape: the count behind it is a step of the
+        # same resolution and reads exactly this answer, so an answer arriving
+        # after the count would change nothing. Its own kind rather than
+        # `enter_choice`'s colour branch for that branch's own stated reason --
+        # that one's readers are continuous effects, and it neither suspends nor
+        # may start.
+        "color_choice",
     }, suspending
 
 

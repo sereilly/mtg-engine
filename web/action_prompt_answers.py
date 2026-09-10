@@ -680,6 +680,19 @@ def _action_creature_type_choice_confirm(session, req, seat_type):
             status_code=400, detail="no creature-type choice pending for you"
         )
 
+@action_handler("color_choice_confirm")
+def _action_color_choice_confirm(session, req, seat_type):
+    # "Choose a color." made at resolution (CR 608.2d) — the colour travels on
+    # the same `mana_color` field every other colour answer in this API uses,
+    # and is checked against CR 105.1's five by the resolver, which is the list
+    # the prompt offered.
+    if not req.mana_color:
+        raise HTTPException(status_code=400, detail="mana_color is required")
+    if not session.game.confirm_color_choice(req.seat, req.mana_color):
+        raise HTTPException(
+            status_code=400, detail="no color choice pending for you"
+        )
+
 @action_handler("confirm_mana_payment")
 def _action_confirm_mana_payment(session, req, seat_type):
     # Power Sink: the targeted spell's controller pays {X} to keep their spell,
