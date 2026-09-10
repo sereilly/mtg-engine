@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**411 / 617 tracked rules covered (66%)** — 2409 tests, 0 unannotated.
+**411 / 617 tracked rules covered (66%)** — 2422 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -205,7 +205,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **109.2** If a spell or ability uses a description of an object that includes a card type or subtype, but d... *(1 tests)*
 - [ ] **109.3** An object’s characteristics are name, mana cost, color, color indicator, card type, subtype, supe...
 - [x] **109.4** Only objects on the stack or on the battlefield have a controller. Objects that are neither on th... *(2 tests, subrules b)*
-- [x] **109.5** The words “you” and “your” on an object refer to the object’s controller, its would-be controller... *(23 tests)*
+- [x] **109.5** The words “you” and “your” on an object refer to the object’s controller, its would-be controller... *(24 tests)*
 
 ### 110. Permanents
 
@@ -416,7 +416,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **301.2** When an artifact spell resolves, its controller puts it onto the battlefield under their control.
 - [ ] **301.3** Artifact subtypes are always a single word and are listed after a long dash: “Artifact — Equipmen...
 - [ ] **301.4** Artifacts have no characteristics specific to their card type. Most artifacts have no colored man...
-- [x] **301.5** Some artifacts have the subtype “Equipment.” An Equipment can be attached to a creature. It can’t... *(14 tests, subrules abcdf)*
+- [x] **301.5** Some artifacts have the subtype “Equipment.” An Equipment can be attached to a creature. It can’t... *(15 tests, subrules abcdf)*
 - [ ] **301.6** Some artifacts have the subtype “Fortification.” A Fortification can be attached to a land. It ca...
 - [ ] **301.7** Some artifacts have the subtype “Vehicle.” Most Vehicles have a crew ability which allows them to...
 
@@ -435,7 +435,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **303.1** A player who has priority may cast an enchantment card from their hand during a main phase of the... *(2 tests)*
 - [x] **303.2** When an enchantment spell resolves, its controller puts it onto the battlefield under their control. *(4 tests)*
 - [x] **303.3** Enchantment subtypes are always a single word and are listed after a long dash: “Enchantment — Sh... *(3 tests)*
-- [x] **303.4** Some enchantments have the subtype “Aura.” An Aura enters the battlefield attached to an object o... *(42 tests, subrules abcdefghijm)*
+- [x] **303.4** Some enchantments have the subtype “Aura.” An Aura enters the battlefield attached to an object o... *(46 tests, subrules abcdefghijm)*
 - [x] **303.5** Some enchantments have the subtype “Saga.” See rule 714 for more information about Saga cards. *(2 tests)*
 - [x] **303.6** Some enchantments have the subtype “Class.” See rule 716 for more information about Class cards. *(2 tests)*
 - [x] **303.7** Some Aura enchantments also have the subtype “Role.” *(3 tests, subrules a)*
@@ -686,11 +686,11 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **603.1** Triggered abilities have a trigger condition and an effect. They are written as “[When/Whenever/A... *(2 tests, subrules b)*
 - [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(27 tests, subrules bd)*
 - [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(56 tests, subrules bcd)*
-- [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(14 tests)*
+- [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(15 tests)*
 - [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(9 tests)*
 - [x] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit... *(3 tests, subrules c)*
 - [x] **603.7** An effect may create a delayed triggered ability that can do something at a later time. A delayed... *(36 tests, subrules bcde)*
-- [x] **603.8** Some triggered abilities trigger when a game state (such as a player controlling no permanents of... *(6 tests)*
+- [x] **603.8** Some triggered abilities trigger when a game state (such as a player controlling no permanents of... *(8 tests)*
 - [ ] **603.9** Some triggered abilities trigger specifically when a player loses the game. These abilities trigg...
 - [x] **603.10** Normally, objects that exist immediately after an event are checked to see if the event matched a... *(10 tests, subrules a)*
 - [x] **603.11** Some objects have a static ability that’s linked to one or more triggered abilities. (See rule 60... *(1 tests)*
@@ -759,7 +759,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **611.1** A continuous effect modifies characteristics of objects, modifies control of objects, or affects ... *(3 tests)*
 - [x] **611.2** A continuous effect may be generated by the resolution of a spell or ability. *(48 tests, subrules abc)*
-- [x] **611.3** A continuous effect may be generated by the static ability of an object. *(55 tests, subrules abc)*
+- [x] **611.3** A continuous effect may be generated by the static ability of an object. *(56 tests, subrules abc)*
 
 ### 612. Text-Changing Effects
 
@@ -776,10 +776,10 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 613. Interaction of Continuous Effects
 
-- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(106 tests, subrules abcdefg)*
+- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(110 tests, subrules abcdefg)*
 - [x] **613.2** Within layer 1, apply effects in a series of sublayers in the order described below. Within each ... *(17 tests, subrules ac)*
 - [x] **613.3** Within layers 2–6, apply effects from characteristic-defining abilities first (see rule 604.3), t... *(2 tests)*
-- [x] **613.4** Within layer 7, apply effects in a series of sublayers in the order described below. Within each ... *(73 tests, subrules abcd)*
+- [x] **613.4** Within layer 7, apply effects in a series of sublayers in the order described below. Within each ... *(76 tests, subrules abcd)*
 - [x] **613.5** The application of continuous effects as described by the layer system is continually and automat... *(2 tests)*
 - [x] **613.6** If an effect should be applied in different layers and/or sublayers, the parts of the effect each... *(1 tests)*
 - [x] **613.7** Within a layer or sublayer, determining which order effects are applied in is usually done using ... *(32 tests, subrules abe)*
@@ -885,7 +885,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.12** Indestructible *(3 tests, subrules b)*
 - [x] **702.14** Landwalk *(17 tests, subrules abc)*
 - [x] **702.15** Lifelink *(11 tests, subrules b)*
-- [x] **702.16** Protection *(51 tests, subrules abcdefgmn)*
+- [x] **702.16** Protection *(53 tests, subrules abcdefgmn)*
 - [x] **702.17** Reach *(3 tests, subrules b)*
 - [x] **702.18** Shroud *(4 tests, subrules a)*
 - [x] **702.19** Trample *(9 tests, subrules bf)*

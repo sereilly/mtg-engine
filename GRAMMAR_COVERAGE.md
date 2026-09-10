@@ -40,7 +40,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ULG | 143 | 227 | 84.1% | 84.1% | 59.5% | 121 |
 | 6ED | 335 | 404 | 95.5% | 95.5% | 65.8% | 243 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| UDS *(measured)* | 143 | 204 | 75.0% | 72.1% | 48.0% | 85 |
+| UDS *(measured)* | 143 | 204 | 76.5% | 73.5% | 49.0% | 87 |
 | **All (shipped)** | **5686** | **8356** | **90.6%** | **89.9%** | **60.6%** | **4280** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -53,9 +53,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 456 | 195 | expected a subject |  |
+| 455 | 194 | expected a subject |  |
 | 129 | 67 | unrecognized effect verb |  |
-| 96 | 47 | unconsumed text |  |
+| 94 | 45 | unconsumed text |  |
 | 41 | 25 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 16 | 14 | expected 'unless defending player controls' |  |
@@ -3546,6 +3546,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever an opponent casts a creature spell that doesn't share a color with a creature you control, counter that spell unless that player pays {X}, where X is its mana value.`
 - **Invulnerability**
   - `The next time a source of your choice would deal damage to you this turn, prevent that damage.`
+- **Iridescent Drake**
+  - `When this creature enters, put target Aura card from a graveyard onto the battlefield under your control attached to this creature.`
 - **Iron Maiden**
   - `At the beginning of each opponent's upkeep, this artifact deals X damage to that player, where X is the number of cards in their hand minus 4.`
 - **Iron Star**
@@ -4202,6 +4204,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `You may put a green creature card from your hand onto the battlefield.`
 - **Lurking Evil**
   - `Pay half your life, rounded up: This enchantment becomes a 4/4 Phyrexian Horror creature with flying.`
+- **Lurking Jackals**
+  - `When an opponent has 10 or less life, if this permanent is an enchantment, it becomes a 3/2 Jackal creature.`
 - **Lurking Skirge**
   - `When a creature is put into an opponent's graveyard from the battlefield, if this permanent is an enchantment, it becomes a 3/2 Phyrexian Imp creature with flying.`
 - **Maddening Imp**
