@@ -1,14 +1,18 @@
 # Scaling Roadmap
 
-Target: grow the card pool from **3,427** unique cards — twenty-two sets,
+Target: grow the card pool from **3,572** unique cards — twenty-four sets,
 LEA/LEB/2ED/ARN/ATQ/3ED/LEG/DRK/FEM/4ED/ICE/HML/ALL/MIR/VIS/5ED/WTH/TMP/STH/EXO/
-USG/M21, all shipped and all supported — to the full release line: **140 sets,
-33,594 printings, 26,113 unique cards** per `set_progress.json`.
+USG/ULG/6ED/M21, all shipped and all supported — to the full release line:
+**140 sets, 33,594 printings, 26,113 unique cards** per `set_progress.json`.
 
 **The reprint shape recurs and is worth planning for.** `set_progress.json`
-records thirteen sets in the release line with zero new cards, and nine are
+records thirteen sets in the release line with zero new cards, and eight are
 still ahead: the foreign-language base sets (FBB, SUM, 4BB), the rest of the
-core-set line (6ED through 10E) and Timeshifted. Each promotes the way 4ED and
+core-set line (7ED through 10E) and Timeshifted. **Read "zero new cards" as a
+claim about the whole release line, not about this pool** — 6ED is recorded there
+with 0 and brought **two**, Blaze and Regal Unicorn, because their earlier
+printing was Portal and Portal is not here. A reprint set reprints from *this*
+manifest; the difference is however many of its sources are still unshipped. Each promotes the way 4ED and
 5ED did — an ingest and a rehearsal rather than a set of rounds — provided it is
 sequenced *after* the sets it reprints from. Ingested before them it arrives
 carrying cards nothing supports, with their origins mis-stamped, and the shape
@@ -836,11 +840,12 @@ expire:
 > what is already there); `test_the_shipped_sets_are_in_printing_order` is the
 > assertion that can.
 
-Run against `set_progress.json` on 2026-09-08, with USG shipped, it answers
-**Urza's Legacy** (ULG, 1999-02-15, 143 cards), then 6ED — dated 1999-04-21 with
-**0** new cards against the shipped pool, so it waits for the whole Urza block
-the way it waited for the Mirage and Tempest ones — then Urza's Destiny and
-Mercadian Masques. Every ingest estimate this file has carried was stale by the
+Run against `set_progress.json` on 2026-09-09, with 6ED shipped, it answers
+**Urza's Destiny** (UDS, 1999-06-07, 143 cards, 142 of them new to the release
+line), then Mercadian Masques, Nemesis and Prophecy. 6ED itself was the previous
+answer and is the caution to read beside the rule: `set_progress.json` said **0**
+new cards and it brought two, because that column counts against the release
+line and this manifest is a subset of it. Every ingest estimate this file has carried was stale by the
 time it was read, so no candidate table is kept: measure at Phase 1, against the
 compiler of that day.
 
@@ -941,6 +946,7 @@ a wave is five parallel worktree groups integrated serially.
 | EXO | 143 | 63.6% | 2 waves + 1 closer |
 | USG | 335 | 60.9% | 3 waves |
 | ULG | 143 | 80.4% | 2 waves |
+| 6ED | 335 | 100% | 0 (2 new cards, both already parsed) |
 
 Three data points shape an estimate. **Legends** is the warning: the lowest
 starting coverage and the flattest ranking — after eight rounds, 113 of its 135
@@ -956,17 +962,17 @@ mis-playing along the way, which every set since Ice Age has repeated and which
 is the argument for the Rock Hydra step.
 
 **Where the pool stands** (regenerate rather than trust these; read
-2026-09-09): 3,570 unique cards over 23 sets, 5,747 printings, 100% supported.
-Grammar parses 90.4% of lines, lowers 89.7% and executes 60.3%
+2026-09-09): 3,572 unique cards over 24 sets, 6,098 printings, 100% supported.
+Grammar parses 90.6% of lines, lowers 89.9% and executes 60.6%
 (`GRAMMAR_COVERAGE.md`). **1.5%** of supported cards carry a name-keyed hook —
 53 cards, 59 entries in 6 registries (`HOOK_RELIANCE.md`) — and the projection
 that implies for the release line has fallen from 1,195 hand-written entries to
 **432**, across eleven consecutive sets that added no hook and retired several.
 That is the measure moving the way the architecture needs it to. Parse
-coverage: 3,568 of 3,570 supported cards fully claimed, 2 acknowledged, **0
+coverage: 3,570 of 3,572 supported cards fully claimed, 2 acknowledged, **0
 unclaimed** (`PARSE_COVERAGE.md`). `RULES_PROGRESS.md` is the CR coverage
-tracker. `CARD_VERIFICATION.md` is a log, not a target: 600 passed (402
-in-game, 198 auto), 47 equivalent, 0 failed, 2,923 untested.
+tracker. `CARD_VERIFICATION.md` is a log, not a target: 602 passed (403
+in-game, 199 auto), 47 equivalent, 0 failed, 2,923 untested.
 
 **A hook count is only as honest as what claims a hooked card's other lines.**
 `parse_coverage` blanket-claimed *every* sentence of any card carrying *any*
