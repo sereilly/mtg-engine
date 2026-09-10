@@ -2841,7 +2841,7 @@ def aura_continuous_claim(line: str) -> str | None:
     # Imported here rather than at module scope: `prevention` reads this
     # module's attachment record, so the two are mutually recursive at import.
     from .prevention import (
-        attached_combat_shield_direction as _attached_combat_shield_direction,
+        attached_damage_shield as _attached_damage_shield_line,
         attached_prevent_all_from_source_type as _attached_prevent_all_from_source_type,
     )
     from .target_immunity import immunity_claims_line
@@ -2877,8 +2877,8 @@ def aura_continuous_claim(line: str) -> str | None:
         return "target/enchant/source-class immunity — target_immunity"
     if _attached_prevent_all_from_source_type(normalized) is not None:
         return "prevention from a source class — prevention._source_type_shielded_by"
-    if _attached_combat_shield_direction(normalized) is not None:
-        return "combat-damage shield — prevention._attached_combat_shield"
+    if _attached_damage_shield_line(normalized) is not None:
+        return "damage shield — prevention._attached_damage_shields"
     if _PROTECTION_LINE.match(normalized):
         return "protection grant — auras.aura_protection_colors"
     if _CARD_TYPE_ADDITION_GRANT.match(normalized):
@@ -2909,7 +2909,7 @@ def aura_continuous_claim(line: str) -> str | None:
 #: ability: it lasts exactly as long as the Aura is attached, which is why it
 #: is derived here on every damage event rather than armed as a record —
 #: removal is the Aura ceasing to be attached, and there is no remembered
-#: delta to undo. The same shape ``prevention._attached_combat_shield`` has one
+#: delta to undo. The same shape ``prevention._attached_damage_shields`` has one
 #: module over, and for the same reason.
 #:
 #: "You" is CR 109.5's controller of the **Aura**, not of the creature: an

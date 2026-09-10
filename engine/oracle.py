@@ -5256,7 +5256,7 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
     # CR 615's shields, asked the same way and for the same reason: a creature
     # printing a static prevention line works through the interceptor and would
     # otherwise report unsupported.
-    if prevention_claims_line(normalized):
+    if prevention_claims_line(normalized, card_name):
         return True
     # A board-wide static contributed through the layer bridge (Titania's Song,
     # and the Pirate's "Creatures you control attack each combat if able"). The
@@ -6735,7 +6735,10 @@ def _derived_static_claims(
     # Lives) applies from its own text at damage time and produces no
     # instruction either. Asked as the registry, for the reason the line above
     # gives — a literal copied here could claim a wording nothing intercepts.
-    if any(prevention_claims_line(line) for line in oracle_text.splitlines()):
+    if any(
+        prevention_claims_line(line, card_name)
+        for line in oracle_text.splitlines()
+    ):
         claims.append("prevention")
     # "You have protection from the chosen card name." (Runed Halo.) A player's
     # protection, derived from the controlling permanents' own text at each of

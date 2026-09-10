@@ -184,6 +184,17 @@ DAMAGE_TO_COUNTER_REMOVAL = 7  # Soul Echo
 # going to be marked. CR 616.1e lets the affected player choose either; the
 # default should not be the one that costs them a shield for nothing.
 DAMAGE_BECOMES_COUNTERS = 8  # Lichenthrope
+# "If damage would be dealt to a player, that player exiles that many cards from
+# the top of their library instead." (Crumbling Sanctuary.) The third of these
+# substitutions and the widest: neither end of the event is narrowed, so it
+# covers every player at the table, and what the damage becomes is a *cost paid
+# out of a library* rather than a counter. Beside the two above and one step
+# later for their reason — "that many" is the amount every effect at 5-6 has
+# already settled — and ahead of the prevention shields at 10-600 for
+# `DAMAGE_BECOMES_COUNTERS`' reason, which reads the same here: this consumes
+# the whole event, so a shield spent first is spent on damage that was never
+# going to be dealt.
+DAMAGE_BECOMES_LIBRARY_EXILE = 9  # Crumbling Sanctuary
 
 # …and multipliers go *after* the shields, at the far end of the shared space.
 # CR 616.1e gives the choice to the affected player, and this is the order they
@@ -1626,6 +1637,84 @@ def _damage_becomes_counters(game, payload: dict) -> ReplacementOutcome | None:
     game.log.append(
         f"{recipient.card.name}: {amount} damage becomes {amount} {kind} "
         "counter(s) instead"
+    )
+    return ReplacementOutcome(replaced=True)
+
+
+#: "If damage would be dealt to a player, that player exiles that many cards
+#: from the top of their library instead." (Crumbling Sanctuary.)
+#:
+#: A constant rather than a shape, unlike the multiplier below: the sentence has
+#: no payload at all — no source narrowing, no seat, no number — so a matcher
+#: would have nothing to capture and the phrase *is* the rule.
+DAMAGE_BECOMES_LIBRARY_EXILE_TEXT = (
+    "if damage would be dealt to a player, that player exiles that many cards "
+    "from the top of their library instead"
+)
+
+
+def _library_exile_source(game, payload: dict):
+    """The permanent whose text substitutes this damage, or None. Pure.
+
+    Every battlefield, because the sentence names no controller and no
+    recipient: "a player" is either of them, and the permanent is only the place
+    the rule is *written*. That is what makes the card symmetric — its own
+    controller pays out of their library too.
+
+    Read off ``effective_card`` for ``_counters_instead_of_damage``'s reason one
+    reader up: a copy of this artifact carries the sentence (CR 707.2) and one
+    whose text was changed does not.
+    """
+    if payload["amount"] <= 0 or not isinstance(payload["recipient"], PlayerState):
+        return None
+    for permanent in game.all_permanents():
+        for line in (permanent.effective_card.oracle_text or "").splitlines():
+            if line.strip().lower().rstrip(".") == DAMAGE_BECOMES_LIBRARY_EXILE_TEXT:
+                return permanent
+    return None
+
+
+def _applies_damage_becomes_library_exile(game, payload: dict) -> bool:
+    return _library_exile_source(game, payload) is not None
+
+
+@replacement_effect(
+    "damage_to_player", DAMAGE_BECOMES_LIBRARY_EXILE,
+    applies=_applies_damage_becomes_library_exile,
+)
+def _damage_becomes_library_exile(game, payload: dict) -> ReplacementOutcome | None:
+    """Crumbling Sanctuary: "If damage would be dealt to a player, that player
+    exiles that many cards from the top of their library instead."
+
+    CR 614's substitution rather than CR 615's prevention, and the difference is
+    the whole card: the damage is **not dealt**, so no life is lost and nothing
+    that watches damage being dealt to a player fires — but the exile happens
+    even where the library cannot pay for it in full.
+
+    ``replaced=True`` whatever was exiled, which is CR 609.3 read literally: an
+    effect that cannot do all of something does as much as possible, and "as
+    much as possible" is a statement about the *cards*, not about the damage —
+    CR 614.6 has already said the replaced event never happens. A library with
+    two cards left against six damage exiles two and the player still takes
+    nothing —
+    which is what makes this artifact a way to lose by decking rather than a way
+    to survive one more turn. An empty library is not a loss until a draw is
+    attempted (CR 104.3c), and this is not a draw.
+    """
+    permanent = _library_exile_source(game, payload)
+    if permanent is None:  # pragma: no cover - the predicate just said otherwise
+        return None
+    recipient = payload["recipient"]
+    amount = int(payload["amount"])
+    taken = min(amount, len(recipient.library))
+    exiled = [recipient.library.pop(0) for _ in range(taken)]
+    recipient.exile.extend(exiled)
+    game.log.append(
+        f"{permanent.card.name}: {amount} damage to {recipient.name} becomes "
+        + (
+            f"{taken} card(s) exiled from the top of their library"
+            if exiled else "no cards, their library being empty"
+        )
     )
     return ReplacementOutcome(replaced=True)
 
@@ -4137,6 +4226,10 @@ REPLACEMENT_LINES: tuple[tuple[str, str], ...] = (
     # _one_more_plus1_counter (Conclave Mentor): the phrase is the whole line,
     # matched against the counter-placing seam in mixins/effects.py.
     (EXTRA_PLUS1_COUNTER_TEXT, ""),
+    # _damage_becomes_library_exile (Crumbling Sanctuary): the phrase is the
+    # whole line, and the interceptor performs the whole of it — the exile, and
+    # the damage not being dealt.
+    (DAMAGE_BECOMES_LIBRARY_EXILE_TEXT, ""),
     # _draw_two_cards_instead (Teferi's Ageless Insight): the phrase is the whole
     # line, rider included — the exemption is implemented, not ignored, so the
     # claim covers the words that state it.

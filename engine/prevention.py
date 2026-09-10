@@ -438,86 +438,133 @@ def _shield_lifetime(entry) -> str:
 #: than one permissive matcher, for `prevent_all_from_source_type`'s reason
 #: exactly: an Aura is itself a permanent, so a single reader would have
 #: Gaseous Form shielding *itself* from combat damage — a card nobody printed.
-_STATIC_COMBAT_SHIELD_RE = re.compile(
-    r"^prevent all combat damage that would be dealt "
+#:
+#: **The printed word "combat" is payload here too**, exactly as it is on the
+#: marker form above. It was part of the pattern until Mercadian Masques, which
+#: prints the same two sentences one word narrower — Inviolability ("Prevent all
+#: damage that would be dealt to enchanted creature") beside Prismatic Ward's
+#: shape and Muzzle beside Demonic Torment's — and the width has to reach
+#: ``_shield_directions`` rather than be a second pattern, for the reason
+#: ``add_directional_shield`` gives: a second matcher per width is a second
+#: mechanism for a narrowing, and the wide one would then have to be remembered
+#: everywhere the narrow one already is.
+_STATIC_DAMAGE_SHIELD_RE = re.compile(
+    r"^prevent all (?P<combat>combat )?damage that would be dealt "
     r"(?P<direction>to and dealt by|to|by) "
     r"(?P<subject>this|enchanted|equipped) (?:artifact )?creature$"
 )
 
 
-def _static_combat_shield_match(line: str):
-    return _STATIC_COMBAT_SHIELD_RE.match(
-        " ".join(line.strip().lower().rstrip(".").split())
-    )
+def _static_shield_match(line: str, card_name: str | None = None):
+    """The static shield pattern against one printed line.
+
+    *card_name* collapses CR 201.5's self-reference first: pre-modern and
+    legendary templating write "Prevent all damage that would be dealt to
+    **Cho-Manno**" where modern templating writes "this creature", and the
+    pattern is anchored on the modern wording. The same rewrite
+    ``oracle._restriction_line`` makes for the combat-restriction table, at the
+    one consult that needs it — a caller naming no card gets today's answer
+    unchanged, which is what every reader asking about a *line* rather than a
+    card wants.
+    """
+    normalized = " ".join((line or "").strip().lower().rstrip(".").split())
+    if card_name:
+        from .oracle import _collapse_self_references
+
+        normalized = _collapse_self_references(
+            normalized, card_name, "this creature"
+        )
+    return _STATIC_DAMAGE_SHIELD_RE.match(normalized)
 
 
-def _shield_direction_from_match(match) -> str:
+def _shield_from_static_match(match) -> dict:
     printed = match.group("direction")
-    return COMBAT_SHIELD_BOTH if printed == "to and dealt by" else printed
+    return {
+        "direction": (
+            COMBAT_SHIELD_BOTH if printed == "to and dealt by" else printed
+        ),
+        "combat_only": bool(match.group("combat")),
+    }
 
 
-def attached_combat_shield_direction(line: str) -> str | None:
-    """Which end of a combat damage event one printed **Aura** line shields, or
-    None.
+def attached_damage_shield(line: str, card_name: str | None = None) -> dict | None:
+    """Which end of a damage event one printed **Aura** line shields, and how
+    wide the shield is — ``{"direction", "combat_only"}`` — or None.
 
     One matcher, asked by the interceptor below and by ``engine/auras.py``'s
     support gate, so what is claimed and what is carried out are one rule.
     """
-    match = _static_combat_shield_match(line)
+    match = _static_shield_match(line, card_name)
     if match is None or match.group("subject") == "this":
         return None
-    return _shield_direction_from_match(match)
+    return _shield_from_static_match(match)
 
 
-def self_combat_shield_direction(line: str) -> str | None:
+def self_damage_shield(line: str, card_name: str | None = None) -> dict | None:
     """The same answer for the form a creature prints about **itself** (Fog
     Bank: "Prevent all combat damage that would be dealt to and dealt by this
-    creature").
+    creature"; Cho-Manno, Revolutionary, by its own name).
 
     Exported for ``prevention_claims_line``, which is what admits a creature
     whose only ability is this one: the sentence has no duration and never
     resolves, so nothing in the compiled program can stand for it.
     """
-    match = _static_combat_shield_match(line)
+    match = _static_shield_match(line, card_name)
     if match is None or match.group("subject") != "this":
         return None
-    return _shield_direction_from_match(match)
+    return _shield_from_static_match(match)
 
 
-def _attached_combat_shield(perm) -> str | None:
-    """The direction an Aura attached to *perm* — or *perm*'s own text —
-    shields it in, if any.
+def _attached_damage_shields(perm) -> list[dict]:
+    """Every static shield *perm* carries — from its own text and from each Aura
+    or Equipment attached to it.
 
     Both readings answer here rather than at two call sites, because they are
     one question with two places the sentence can be printed: the same read
     ``_source_type_shielded_by`` makes of a damaged permanent's own text and of
-    what is attached to it. The permanent's own line is asked **first**, since
-    it is the cheaper read and neither can be true of the same object.
+    what is attached to it.
+
+    **Every one of them, not the first.** This returned one answer and stopped
+    at it, which was invisible while the pattern demanded the word "combat":
+    the pool's static shields were Gaseous Form and Fog Bank, both already
+    two-way, so a second one could add nothing. Mercadian Masques prints the two
+    halves as separate Auras — Inviolability shields its host from damage and
+    Muzzle shields everything *from* its host — and a creature carrying both is
+    an ordinary board on which the first-match reading silently dropped one of
+    them.
+
+    The permanent's *effective* name goes with its effective text, which is what
+    lets a self-referencing line survive a copy (CR 706.2: the copy's name is
+    the copied one, so "dealt to Cho-Manno" still names the object it is on).
     """
     if not hasattr(perm, "metadata"):
-        return None
+        return []
     from .auras import auras_attached_to
 
+    found: list[dict] = []
     own = getattr(perm, "effective_card", None) or getattr(perm, "card", None)
+    own_name = getattr(own, "name", None)
     for line in (getattr(own, "oracle_text", "") or "").splitlines():
-        direction = self_combat_shield_direction(line)
-        if direction is not None:
-            return direction
+        shield = self_damage_shield(line, own_name)
+        if shield is not None:
+            found.append(shield)
     for aura in auras_attached_to(perm):
-        for line in (aura.effective_card.oracle_text or "").splitlines():
-            direction = attached_combat_shield_direction(line)
-            if direction is not None:
-                return direction
-    return None
+        card = aura.effective_card
+        for line in (card.oracle_text or "").splitlines():
+            shield = attached_damage_shield(line, card.name)
+            if shield is not None:
+                found.append(shield)
+    return found
 
 
 def _shield_directions(perm, *, combat: bool) -> frozenset[str]:
     """Every direction *perm* is currently shielded in against an event of this
     width, from any of the three places a directional shield is recorded.
 
-    *combat* is the event's own ``combat`` flag. The Aura form is printed
-    "combat damage", so it answers nothing at all for a burn spell; the marker
-    records its width per entry.
+    *combat* is the event's own ``combat`` flag. Both forms record their width:
+    the marker per entry, the static form per line — "…dealt by **enchanted
+    creature**" (Muzzle) covers the creature's ping ability and Demonic
+    Torment's "…**combat** damage…" does not, one printed word apart.
 
     Accepts None and non-permanent damage sources (a spell's
     ``CardDefinition``), which carry no shield at all.
@@ -536,10 +583,12 @@ def _shield_directions(perm, *, combat: bool) -> frozenset[str]:
             # strictly larger effect than the card prints.
             continue
         directions.add(str(direction))
-    if combat:
-        attached = _attached_combat_shield(perm)
-        if attached is not None:
-            directions.add(attached)
+    # Asked whatever the event's width, and narrowed by the line's own printed
+    # word rather than by the caller's: this read used to sit behind ``if
+    # combat:``, which was right only while the pattern demanded the word.
+    for attached in _attached_damage_shields(perm):
+        if combat or not attached["combat_only"]:
+            directions.add(attached["direction"])
     return frozenset(directions)
 
 
@@ -2361,8 +2410,19 @@ def _prevent_all_from_spell_class(game, event: dict) -> PreventionOutcome | None
 #: source-narrowed readers above own — cannot reach this shield. Without it
 #: both would reduce to a bare ``{"type_filter": "creature"}`` and one Aura
 #: would make every creature in the game unkillable.
+#:
+#: **The direction is captured, and only two of the three are here.** Statecraft
+#: prints "…dealt **to and dealt by** creatures you control", which is this
+#: blanket read at both ends of the event — the same widening
+#: ``_STATIC_DAMAGE_SHIELD_RE`` carries for the singular subjects, one screen
+#: up. A bare "by" is deliberately *not* an alternative: "Prevent all damage
+#: that would be dealt **by instant and sorcery spells**" (Energy Storm) is a
+#: narrowing of the *source class* with no recipient at all, and it has its own
+#: reader below — admitted here it would read the source description as a set of
+#: protected permanents and shield whatever happened to match it.
 _PREVENT_ALL_TO_MATCHING_RE = re.compile(
-    r"^prevent all (?P<combat>combat )?damage that would be dealt to "
+    r"^prevent all (?P<combat>combat )?damage that would be dealt "
+    r"(?P<direction>to and dealt by|to) "
     r"(?P<subject>.+)$"
 )
 
@@ -2388,7 +2448,11 @@ def prevent_all_to_matching(line: str) -> dict | None:
     # ever kill.
     if not described:
         return None
-    return {"filter": described, "combat_only": bool(match.group("combat"))}
+    return {
+        "filter": described,
+        "combat_only": bool(match.group("combat")),
+        "two_way": match.group("direction") == "to and dealt by",
+    }
 
 
 def _matching_blanket_for(game, event: dict) -> str | None:
@@ -2400,15 +2464,28 @@ def _matching_blanket_for(game, event: dict) -> str | None:
     rather than on who owns the enchantment. ``observer`` is therefore the seat
     controlling the *printing* permanent (CR 109.5) and ``source`` is that
     permanent, which is what makes "you control" mean the Sanctum's controller.
+
+    **Both ends are asked when the line prints both.** Statecraft's "…to and
+    dealt by creatures you control" covers the damage one of those creatures
+    *deals* as well, and that half of the event is the only one a player can be
+    on — so a ``PlayerState`` recipient is no longer an early return, it simply
+    fails the recipient half and is carried by the source half or by nothing.
+    The set is matched at the damage event rather than when the enchantment
+    entered (CR 611.2c), so a creature that changed hands since is read the way
+    the board reads now.
     """
-    recipient = event["recipient"]
-    if isinstance(recipient, PlayerState) or event["amount"] <= 0:
-        # A player is the controller blanket's business, one reader up: the
-        # noun phrase here describes permanents, and asking `subject_matches`
-        # about a `PlayerState` is a question it has no answer for.
+    if event["amount"] <= 0:
         return None
+    from .models import Permanent
     from .subject_filters import subject_matches
 
+    recipient = event["recipient"]
+    # A player is the controller blanket's business, one reader up: the noun
+    # phrase here describes permanents, and asking `subject_matches` about a
+    # `PlayerState` is a question it has no answer for.
+    protected = None if isinstance(recipient, PlayerState) else recipient
+    source = event.get("source")
+    dealer = source if isinstance(source, Permanent) else None
     for seat, permanent in game.permanents_with_controller():
         for line in permanent.effective_card.oracle_text.splitlines():
             described = prevent_all_to_matching(line)
@@ -2416,11 +2493,15 @@ def _matching_blanket_for(game, event: dict) -> str | None:
                 continue
             if described["combat_only"] and not event.get("combat"):
                 continue
-            if subject_matches(
-                game, recipient, dict(described["filter"]),
-                observer=seat, source=permanent,
-            ):
-                return permanent.card.name
+            ends = [protected]
+            if described["two_way"]:
+                ends.append(dealer)
+            for end in ends:
+                if end is not None and subject_matches(
+                    game, end, dict(described["filter"]),
+                    observer=seat, source=permanent,
+                ):
+                    return permanent.card.name
     return None
 
 
@@ -2431,6 +2512,8 @@ def _applies_matching_blanket(game, event: dict) -> bool:
 @prevention_effect(MATCHING_BLANKET, applies=_applies_matching_blanket)
 def _prevent_all_to_matching(game, event: dict) -> PreventionOutcome | None:
     """Bubble Matrix: "Prevent all damage that would be dealt to creatures."
+    Statecraft: "…combat damage that would be dealt to and dealt by creatures
+    you control."
 
     Every point, from every source, for as long as the permanent printing it is
     on the battlefield. Nothing is spent and nothing recorded — the next event
@@ -2440,8 +2523,11 @@ def _prevent_all_to_matching(game, event: dict) -> PreventionOutcome | None:
     name = _matching_blanket_for(game, event)
     if name is None:  # pragma: no cover - the predicate just said otherwise
         return None
+    # ``recipient_label`` rather than ``.card.name``: the two-way reading above
+    # covers an event whose recipient is a *player* (a creature you control
+    # attacking one), and a player has no card.
     game.log.append(
-        f"{event['amount']} damage to {event['recipient'].card.name} is "
+        f"{event['amount']} damage to {recipient_label(event['recipient'])} is "
         f"prevented ({name})"
     )
     return PreventionOutcome(prevented=event["amount"])
@@ -2480,7 +2566,7 @@ def _prevent_next_damage_from_chosen_source(game, event: dict) -> PreventionOutc
     return PreventionOutcome(prevented=amount)
 
 
-def prevention_claims_line(line: str) -> bool:
+def prevention_claims_line(line: str, card_name: str | None = None) -> bool:
     """Whether one printed line is, in full, a static prevention effect
     implemented above.
 
@@ -2491,6 +2577,13 @@ def prevention_claims_line(line: str) -> bool:
     three other lines, so it reported supported with this one silently doing
     nothing; a card printing only this one would have reported unsupported while
     working perfectly, which is the other half of the same hole.
+
+    *card_name* is optional for the reason ``counter_cap_line``'s is, one gate
+    over: the self-referencing form only exists on a card, so a reader asking
+    about a bare line still gets the answer it always got, and the two callers
+    that hold a card pass it. The runtime read is
+    ``_attached_damage_shields``'s, which takes the name off the permanent it is
+    already looking at.
     """
     return (
         prevent_and_count_kind(line) is not None
@@ -2498,8 +2591,8 @@ def prevention_claims_line(line: str) -> bool:
         or per_damage_counter_kind(line) is not None
         or prevent_all_from_source_type(line) is not None
         or attached_prevent_all_from_source_type(line) is not None
-        or attached_combat_shield_direction(line) is not None
-        or self_combat_shield_direction(line) is not None
+        or attached_damage_shield(line, card_name) is not None
+        or self_damage_shield(line, card_name) is not None
         or prevent_all_to_controller(line) is not None
         or prevent_all_to_matching(line) is not None
         or prevent_all_from_spell_class(line) is not None

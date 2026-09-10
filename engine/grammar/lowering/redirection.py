@@ -147,6 +147,36 @@ def _lower_redirect_damage(node: ast.RedirectDamage) -> tuple[OracleInstruction,
         # player's.
         payload["new_recipient"] = "chosen"
         payload["result_key"] = _REDIRECT_RECIPIENT_KEY
+    elif (
+        node.from_chosen_source
+        and isinstance(recipient, ast.TargetSpec)
+        and recipient.quantifier == "target"
+    ):
+        # "{3}: The next time a source of your choice would deal damage to you
+        # this turn, that damage is dealt to **target creature you control**
+        # instead." (General's Regalia.) The branch above with the pick made by
+        # the *activating* player rather than by an opponent — so it is a target
+        # (CR 601.2c), announced with the ability, and not a prompt the
+        # resolution arms.
+        #
+        # Restricted to the **chosen-source** shape, because the targeted-source
+        # arm below writes its own ``targets`` description of the moved damage's
+        # source onto this same payload: two target descriptions on one
+        # instruction is one of them silently overwriting the other, and the
+        # picker reads whichever survived.
+        payload["new_recipient"] = "target"
+        _describe_targets(payload, recipient)
+        untestable = untestable_filter_keys(
+            (payload.get("targets") or {}).get("filter") or {}
+        )
+        if untestable:
+            # The picker offers this description and the resolution re-checks
+            # it (CR 608.2b), so a narrowing the matcher cannot answer is a
+            # redirect onto a creature the printed phrase excludes.
+            raise LoweringError(
+                "a redirect cannot test " + ", ".join(sorted(untestable)),
+                node=node,
+            )
     else:
         raise LoweringError(
             "no handler resolves this redirect's new recipient", node=node

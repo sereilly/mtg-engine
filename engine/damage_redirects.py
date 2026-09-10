@@ -401,7 +401,7 @@ def attached_static_redirects(game, recipient) -> list[DamageRedirect]:
     the Aura is attached, and deriving it here on each event is what makes
     removal free (``engine/auras.py``: the Aura ceasing to be attached is the
     whole of the removal, and there is no remembered delta). The same shape
-    ``prevention._attached_combat_shield`` has, one module over.
+    ``prevention._attached_damage_shields`` has, one module over.
 
     "You" is CR 109.5's controller of the **Aura**, which is why the scan is
     over the permanents *recipient* controls rather than over the battlefield

@@ -493,8 +493,9 @@ def chosen_shield_source(game, context, *, from_target_channel: bool = True):
     )
 
 
-def _shield_target(game, context):
-    """The player or permanent an "any target" shield protects, or None.
+def _shield_target(game, context, *, allow_player: bool = True):
+    """The player or permanent a shield with an announced recipient protects,
+    or None.
 
     CR 115.4's "any target" is a creature, a planeswalker, a battle or a player,
     and the two halves arrive on different channels — a permanent through the
@@ -502,6 +503,13 @@ def _shield_target(game, context):
     that order because a permanent target also fills the player slot with
     whoever controls it, so the player reading alone would put the shield around
     the wrong object every time a creature was named.
+
+    *allow_player* is off for a printed noun that admits no player ("target
+    **creature**", Charm Peddler). ``context.target`` is filled on every
+    announcement — it is the seat whose battlefield the permanent was chosen
+    from — so a card whose creature target could not be resolved would otherwise
+    fall through and shield that seat, which is a recipient its sentence never
+    names.
     """
     permanent = resolve_target_permanent(
         game, context, predicate=lambda p: True, fallback_players=(),
@@ -509,7 +517,7 @@ def _shield_target(game, context):
     )
     if permanent is not None:
         return permanent
-    return context.target
+    return context.target if allow_player else None
 
 
 def _arm_chosen_source_shield(
@@ -730,7 +738,15 @@ def grant_whole_prevention_shield(game: Game, instruction: OracleInstruction, co
         # announcement's own ``chosen_source`` field carries it instead — the
         # second prompt `targeting._whole_prevention_shield_spec` asks for, and
         # the one Jade Monolith has run for its two choices all along.
-        protected = _shield_target(game, context)
+        #
+        # Charm Peddler prints the same shield over "target **creature**", so
+        # the player half of CR 115.4's union is admitted only where the
+        # description says the union was printed.
+        protected = _shield_target(
+            game, context,
+            allow_player=(instruction.payload.get("targets") or {}).get("kind")
+            == "any",
+        )
         if protected is None:
             game.log.append(f"{granted_by}: nothing is there to protect")
             return True, "resolved"
@@ -1150,6 +1166,23 @@ def prevent_damage_by_target_until_eot(game: Game, instruction: OracleInstructio
         if perm is None or not game.is_on_battlefield(perm):
             game.log.append(f"{context.card.name}: its source is gone, nothing is silenced")
             return True, "resolved"
+    elif instruction.payload.get("bound_or_source"):
+        # "…prevent all combat damage that would be dealt by **it** this turn."
+        # (Ignoble Soldier.) The pronoun names whatever the sentence in front of
+        # it named: the chosen target if the effect chose one, and otherwise the
+        # ability's own permanent. Only the resolution knows which, which is why
+        # the instruction names neither — the reading the recipient half of this
+        # pair has always taken for the same pronoun.
+        #
+        # With the fallback scan **off**, unlike the bound-object arm below: a
+        # targetless trigger has no announced choice at all, so the scan would
+        # be the whole battlefield and would silence whichever creature it
+        # reached first instead of the creature that became blocked.
+        perm = bound_permanent(
+            game, context, predicate=lambda p: p.is_creature, fallback_players=(),
+        )
+        if perm is None:
+            perm = context.source_permanent
     else:
         perm = bound_permanent(
             game, context,

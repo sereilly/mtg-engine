@@ -24,3 +24,159 @@ Cards come from `set_pool("MMQ")` / `set_cards("MMQ")` — never a new
 never a bare `while game.stack:` loop — that spins forever once a seat is owed
 a prompt.
 """
+
+
+# --- W1G3: prevention shields and damage redirection ---
+from engine import Game as _G3aGame
+from engine import PlayerState as _G3aPlayerState
+from engine.damage_redirects import redirects_on as _g3a_redirects_on
+from engine.models import CardDefinition as _G3aCard
+from engine.models import Permanent as _G3aPermanent
+from tests.helpers import _damage_dealt as _g3a_dealt
+from tests.helpers import resolve_stack as _g3a_resolve
+
+
+def _g3a_creature(name, power=2, toughness=2):
+    """A vanilla creature to take redirected damage, or to deal it."""
+    line = "Creature - Test"
+    return _G3aCard(
+        name=name, mana_cost="", cmc=0.0, type_line=line, oracle_text="",
+        colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": name, "type_line": line,
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def _g3a_board(seat0=(), seat1=()):
+    """A two-seat game with the permanents already on the battlefield."""
+    made = _G3aGame(players=[
+        _G3aPlayerState(name="P0", battlefield=list(seat0)),
+        _G3aPlayerState(name="P1", battlefield=list(seat1)),
+    ])
+    made.enforce_mana_costs = False
+    made.interactive_seats = set()
+    return made
+
+
+def test_generals_regalia_moves_a_chosen_sources_damage_onto_a_named_creature(
+    set_pool,
+):
+    """"{3}: The next time a source of your choice would deal damage to you this
+    turn, that damage is dealt to target creature you control instead."
+
+    CR 614.9's redirection, not a shield: the damage is still dealt, in full, by
+    the same source, and only its recipient changes. Two announcements again —
+    CR 609.7's chosen source and CR 601.2c's target — so an unnamed source is
+    checked as well as the named one, because a record that answered to every
+    source would move a whole turn's damage onto one creature.
+    """
+    regalia = _G3aPermanent(card=set_pool("MMQ")["General's Regalia"])
+    taker = _G3aPermanent(card=_g3a_creature("Taker", 1, 9))
+    named = _G3aPermanent(card=_g3a_creature("Named Source", 3, 3))
+    other = _G3aPermanent(card=_g3a_creature("Other Source", 3, 3))
+    game = _g3a_board((regalia, taker), (named, other))
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.players[0].mana_pool.update({"generic": 3})
+
+    result = game.activate_permanent_ability(
+        0, "General's Regalia",
+        target_player_index=0,
+        target_permanent_ids=[taker.permanent_id],
+        source_seat=1, source_permanent_index=0,
+    )
+    assert result.supported, result
+    _g3a_resolve(game)
+    assert [r.uses for r in _g3a_redirects_on(game.players[0])] == [1]
+
+    before = game.players[0].life
+    game._deal_damage_to_player(game.players[0], 2, source=other)
+    assert game.players[0].life == before - 2, "an unnamed source is untouched"
+    assert taker.damage_marked == 0
+
+    game._deal_damage_to_player(game.players[0], 3, source=named)
+    assert game.players[0].life == before - 2, "the named source's damage moved"
+    assert taker.damage_marked == 3, "and was dealt in full to the creature"
+
+
+def test_generals_regalia_will_not_move_its_damage_onto_an_opponents_creature(
+    set_pool,
+):
+    """The printed "you control" is re-checked at resolution (CR 608.2b).
+
+    Dropped, the ability would hand an opponent's creature the damage its
+    controller was about to take, which is a strictly better card — and the
+    activation, the log and the board all look the same at the moment it is
+    announced.
+    """
+    regalia = _G3aPermanent(card=set_pool("MMQ")["General's Regalia"])
+    mine = _G3aPermanent(card=_g3a_creature("Mine", 1, 9))
+    theirs = _G3aPermanent(card=_g3a_creature("Theirs", 1, 9))
+    game = _g3a_board((regalia, mine), (theirs,))
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.players[0].mana_pool.update({"generic": 3})
+
+    game.activate_permanent_ability(
+        0, "General's Regalia",
+        target_player_index=1,
+        target_permanent_ids=[theirs.permanent_id],
+        source_seat=1, source_permanent_index=0,
+    )
+    _g3a_resolve(game)
+
+    assert _g3a_redirects_on(game.players[0]) == []
+
+
+def test_crumbling_sanctuary_exiles_a_library_instead_of_dealing_damage(
+    set_pool,
+):
+    """"If damage would be dealt to a player, that player exiles that many cards
+    from the top of their library instead."
+
+    CR 614's substitution: the damage never happens, so no life is lost and
+    nothing that watches damage to a player fires. The sentence narrows neither
+    end, so it is symmetric — both seats pay — which is the half a reader keyed
+    to the artifact's controller would drop while the card still looked right
+    from one side of the table.
+    """
+    sanctuary = _G3aPermanent(card=set_pool("MMQ")["Crumbling Sanctuary"])
+    bear = _G3aPermanent(card=_g3a_creature("Bear"))
+    game = _g3a_board((sanctuary,), (bear,))
+    for seat in game.players:
+        seat.library = [_g3a_creature(f"Card{n}") for n in range(10)]
+
+    assert _g3a_dealt(game, game.players[0], 4, source=bear) == 0
+    assert len(game.players[0].library) == 6
+    assert len(game.players[0].exile) == 4
+
+    assert _g3a_dealt(game, game.players[1], 3, source=bear) == 0, "symmetric"
+    assert len(game.players[1].exile) == 3
+
+    assert _g3a_dealt(game, bear, 4, source=bear) == 4, (
+        "the sentence names a player, not a permanent"
+    )
+
+
+def test_crumbling_sanctuary_exiles_what_is_there_and_replaces_the_rest(
+    set_pool,
+):
+    """CR 609.3: an effect that cannot do all of something does as much as it
+    can — and "as much as it can" is a statement about the *cards*.
+
+    A library shorter than the damage exiles its whole self and the player still
+    takes nothing, which is what makes this artifact a way to lose by decking
+    rather than a way to survive one more turn. Running out is not a loss until
+    a draw is attempted (CR 104.3c), and this is not a draw.
+    """
+    sanctuary = _G3aPermanent(card=set_pool("MMQ")["Crumbling Sanctuary"])
+    bear = _G3aPermanent(card=_g3a_creature("Bear"))
+    game = _g3a_board((sanctuary,), (bear,))
+    game.players[0].library = [_g3a_creature("Last")]
+
+    before = game.players[0].life
+    assert _g3a_dealt(game, game.players[0], 6, source=bear) == 0
+    assert game.players[0].life == before, "the whole event was replaced"
+    assert game.players[0].library == []
+    assert len(game.players[0].exile) == 1
+# --- end W1G3 ---
