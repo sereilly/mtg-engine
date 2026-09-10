@@ -24,3 +24,190 @@ Cards come from `set_pool("UDS")` / `set_cards("UDS")` — never a new
 never a bare `while game.stack:` loop — that spins forever once a seat is owed
 a prompt.
 """
+
+
+# --- W1G4: eight new trigger conditions and what announces them ---
+import pytest
+
+from engine import Game
+from engine.models import CardDefinition, Permanent, PlayerState
+from engine.oracle import compile_card_oracle
+
+from tests.helpers import resolve_stack
+
+
+def _g4e_card(name: str, type_line: str = "Creature - Test",
+              colors=(), produced=()) -> CardDefinition:
+    """A fixture card. Colour and produced mana matter here — Compost narrows on
+    the first and Sanctimony's Mountain has to actually tap for the second."""
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line=type_line, oracle_text="",
+        colors=colors, color_identity=colors, keywords=(), produced_mana=produced,
+        raw={"name": name, "type_line": type_line, "power": "1", "toughness": "1"},
+    )
+
+
+def _g4e_land(name: str, subtype: str, symbol: str) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0,
+        type_line=f"Basic Land - {subtype}",
+        oracle_text=f"({{T}}: Add {{{symbol}}}.)",
+        colors=(), color_identity=(symbol,), keywords=(),
+        produced_mana=(symbol,),
+        raw={"name": name, "type_line": f"Basic Land - {subtype}"},
+    )
+
+
+def _g4e_duel(library: int = 9) -> Game:
+    seats = [
+        PlayerState(name=name,
+                    library=[_g4e_card(f"{name}-lib{i}") for i in range(library)],
+                    hand=[], battlefield=[])
+        for name in ("A", "B")
+    ]
+    game = Game(players=seats)
+    game.enforce_mana_costs = False
+    return game
+
+
+def _g4e_place(game: Game, seat: int, card: CardDefinition) -> Permanent:
+    """Put *card* on *seat*'s battlefield, ready to be used this turn."""
+    perm = Permanent(card=card)
+    perm.metadata["summoning_sickness_turn"] = -99
+    game.players[seat].battlefield.append(perm)
+    game._sync_control()
+    return perm
+
+
+def _g4e_answer(game: Game, *, accept: bool = True) -> None:
+    """Resolve the stack and answer every optional offer (CR 603.5)."""
+    for _ in range(8):
+        resolve_stack(game)
+        owed = [c for c in game.pending_choices if c.kind == "optional_pay"]
+        if not owed:
+            return
+        for choice in owed:
+            game.resolve_pending_choice(
+                choice.kind, choice.player_index, accept=accept
+            )
+
+
+def _g4e_uds(set_pool, name: str) -> CardDefinition:
+    return set_pool("UDS")[name]
+
+
+@pytest.mark.parametrize("name", ["Compost", "Sanctimony", "Impatience"])
+def test_w1g4_enchantments_compile_supported(set_pool, name):
+    assert compile_card_oracle(_g4e_uds(set_pool, name)).supported
+
+
+# -- Compost: one event, two printed narrowings -----------------------------
+
+@pytest.mark.parametrize("seat,colors,fires", [
+    (1, ("B",), True),    # a black card, an opponent's graveyard
+    (1, ("W",), False),   # the wrong colour
+    (1, (), False),       # colourless is not black
+    (0, ("B",), False),   # the right colour, the controller's own graveyard
+])
+def test_compost_narrowings(set_pool, seat, colors, fires):
+    """"a **black** card" and "**an opponent's** graveyard" are both data on one
+    condition. Either one dropped is a strictly larger card, and a larger card
+    reads to every census in the repo as an implemented one."""
+    game = _g4e_duel()
+    _g4e_place(game, 0, _g4e_uds(set_pool, "Compost"))
+    before = len(game.players[0].hand)
+    game.put_card_into_graveyard(
+        game.players[seat], _g4e_card("G4 Victim", colors=colors)
+    )
+    _g4e_answer(game)
+    assert (len(game.players[0].hand) - before == 1) is fires
+
+
+def test_compost_is_optional(set_pool):
+    """CR 603.5: the ability goes on the stack whatever its controller intends;
+    the choice is made as it resolves."""
+    game = _g4e_duel()
+    _g4e_place(game, 0, _g4e_uds(set_pool, "Compost"))
+    before = len(game.players[0].hand)
+    game.put_card_into_graveyard(
+        game.players[1], _g4e_card("G4 Victim", colors=("B",))
+    )
+    _g4e_answer(game, accept=False)
+    assert len(game.players[0].hand) == before
+
+
+# -- Sanctimony: a seat narrowing on a tap-for-mana trigger ------------------
+
+@pytest.mark.parametrize("tapper,subtype,symbol,fires", [
+    (1, "Mountain", "R", True),    # an opponent, the named land type
+    (0, "Mountain", "R", False),   # the controller's own Mountain
+    (1, "Forest", "G", False),     # an opponent, the wrong land type
+])
+def test_sanctimony_narrowings(set_pool, tapper, subtype, symbol, fires):
+    """"Whenever **an opponent** taps a **Mountain** for mana."
+
+    The seat is asked of whoever tapped against the *watching permanent's*
+    controller (CR 109.5). Dropped, Sanctimony would gain its controller life
+    for their own Mountains.
+    """
+    game = _g4e_duel()
+    _g4e_place(game, 0, _g4e_uds(set_pool, "Sanctimony"))
+    land = _g4e_place(game, tapper, _g4e_land(f"G4 {subtype}", subtype, symbol))
+    before = game.players[0].life
+    game.tap_land_for_mana(
+        tapper, land.card.name, symbol, permanent_id=land.permanent_id
+    )
+    _g4e_answer(game)
+    assert (game.players[0].life - before == 1) is fires
+
+
+def test_sanctimony_is_optional(set_pool):
+    game = _g4e_duel()
+    _g4e_place(game, 0, _g4e_uds(set_pool, "Sanctimony"))
+    land = _g4e_place(game, 1, _g4e_land("G4 Mountain", "Mountain", "R"))
+    before = game.players[0].life
+    game.tap_land_for_mana(1, "G4 Mountain", "R", permanent_id=land.permanent_id)
+    _g4e_answer(game, accept=False)
+    assert game.players[0].life == before
+
+
+# -- Impatience: CR 603.4's intervening if ----------------------------------
+
+@pytest.mark.parametrize("caster,damaged", [
+    (None, True),   # nobody cast: the active player takes 2
+    (0, False),     # the player whose end step it is cast: no damage
+    (1, True),      # somebody else cast: the condition is about *that* player
+])
+def test_impatience_intervening_if(set_pool, caster, damaged):
+    """"…**if that player didn't cast a spell this turn**" (CR 603.4).
+
+    The seat the condition is about is the one the trigger's event named — the
+    same seat the damage is dealt to. Read as the source's controller instead,
+    the card would be right only on its own end step.
+    """
+    game = _g4e_duel()
+    _g4e_place(game, 0, _g4e_uds(set_pool, "Impatience"))
+    game.active_player_index = 0
+    if caster is not None:
+        game.players[caster].spells_cast_this_turn.append(_g4e_card("G4 Spell"))
+    before = game.players[0].life
+    game.enter_turn_phase("ending")
+    resolve_stack(game)
+    assert (before - game.players[0].life == 2) is damaged
+
+
+def test_impatience_reads_the_record_and_not_the_board(set_pool):
+    """The condition's own payload names the per-seat, per-turn cast record.
+
+    Asserted on the compiled program rather than only through play, because the
+    whole point is *which* record answers it: nothing on the battlefield can,
+    since a resolved spell has left the stack and a permanent that entered from
+    a cast looks exactly like a reanimated one.
+    """
+    program = compile_card_oracle(_g4e_uds(set_pool, "Impatience"))
+    gate = program.triggered_abilities[0].instruction.payload["intervening_if"]
+    assert gate == {
+        "kind": "seat_cast_spell_this_turn",
+        "who": "that_player",
+        "negated": True,
+    }

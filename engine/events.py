@@ -424,6 +424,40 @@ def _card_put_into_graveyard_filter(
         return game.controller_index_of(permanent) == event.payload.get("owner_index")
     if "another_card" in payload:
         return event.subject is not permanent.card
+    # "Whenever **a black card** is put into **an opponent's** graveyard from
+    # anywhere." (Compost.) The third printed narrowing of this one condition,
+    # and the first that is two narrowings at once — what the card is, and whose
+    # pile it landed in. Both are tested here for the reason the two above are:
+    # the move is one event and one seam, and what differs between the cards is
+    # only which arrivals each sentence admits.
+    #
+    # **whose pile**: an opponent of the *watching permanent's* controller
+    # (CR 109.5), read through the control seam so a Compost somebody has taken
+    # control of watches their opponents from the moment they take it (CR 613
+    # layer 2). Never the seat that caused the move — a player milling their own
+    # library fills their own graveyard, and it is the pile the sentence names.
+    #
+    # **what the card is**: the phrase, through the card matcher, because the
+    # object is in a graveyard and has no controller, no layers and no board
+    # position. Dropped, Compost would draw on every card reaching any
+    # opponent's pile, which is a strictly larger card than the one printed and
+    # one every census in this repo reads as implemented.
+    described = payload.get("graveyard_card_filter")
+    if "opponent_graveyard" in payload or described:
+        watcher = game.controller_index_of(permanent)
+        owner = event.payload.get("owner_index")
+        if "opponent_graveyard" in payload:
+            if watcher is None or owner is None or watcher == owner:
+                return False
+        if described:
+            from .handlers._common import _card_matches_filter
+
+            card = event.subject
+            if card is None or not _card_matches_filter(
+                card, described, game=game,
+                owner=game.players[owner] if isinstance(owner, int) else None,
+            ):
+                return False
     return True
 
 
@@ -871,7 +905,37 @@ def _self_becomes_target_filter(
             return False
         if not host.has_type(str(attached_noun)):
             return False
+    elif "targets_you_or_your_permanent" in trig.condition.payload:
+        # "Whenever **you or a permanent you control** becomes the target of a
+        # spell or ability an opponent controls" (Rayne, Academy Chancellor).
+        # The **third dispatch scope** for this event: an observer that is
+        # neither the targeted object nor attached to it, so neither branch
+        # above can reach it — exactly Death Pits of Rath's position on
+        # `creature_dealt_damage`, and admitted the same way, by a narrowing the
+        # condition carries as data.
+        #
+        # Two halves, because the printed subject really is two things. The
+        # **player** half is the seat the announcement names when a spell or
+        # ability targeted a face at all; the **permanent** half is the targeted
+        # object tested for whose it is, through the control seam (CR 613 layer
+        # 2), so a permanent that changed hands is counted where it is now.
+        #
+        # "A permanent", not "a creature": CR 110.1's word covers the whole
+        # board, and the noun is what makes this Rayne rather than Reparations.
+        observer = game.players.index(_controller_of(game, permanent))
+        seat = event.payload.get("targeted_seat")
+        subject = event.subject
+        if isinstance(seat, int):
+            if seat != observer:
+                return False
+        elif subject is None or not game.controls(observer, subject):
+            return False
     elif event.subject is not permanent:
+        # The **self** scope, and the last branch rather than the first because
+        # the two above are the narrowed readings: "this creature" means the
+        # very permanent whose ability this is, by identity, because a
+        # look-alike on the same battlefield is a different permanent and would
+        # otherwise draw its controller two cards.
         return False
     wanted = trig.condition.payload.get("targeted_by")
     if wanted in ("a spell", "an ability"):

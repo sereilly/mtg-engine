@@ -4218,6 +4218,7 @@ def test_a_narrowed_trigger_reads_the_same_subject_on_both_sides():
     """
     from engine.card_loader import load_cards, manifest_set_paths
     from engine.grammar.lexer import tokenize
+    from engine.grammar.lowering._filters import chargeable_card_filter
     from engine.grammar.lowering._common import _filter_payload
     from engine.grammar.triggers import _parse_trigger_event
     from engine.grammar.stream import TokenStream
@@ -4274,20 +4275,44 @@ def test_a_narrowed_trigger_reads_the_same_subject_on_both_sides():
             # phrase out to two keys on purpose ("blocks or becomes blocked by
             # a non-Wall creature" describes both halves of one relation), and
             # two keys holding the same filter are still one subject.
+            #
+            # The stem is kept beside the value because it says **which matcher**
+            # the phrase was destined for, which decides how it is read back
+            # below.
             remaining = []
             for stem, value in described.items():
-                if stem not in named and value not in remaining:
-                    remaining.append(value)
+                if stem not in named and value not in [v for _s, v in remaining]:
+                    remaining.append((stem, value))
             if len(remaining) > 1:
                 disagreements.append(
                     f"{card.name}: {line}\n    the table read {len(remaining)} "
                     "unnamed subjects; the grammar has one"
                 )
-            elif remaining and _filter_payload(subject) != remaining[0]:
-                disagreements.append(
-                    f"{card.name}: {line}\n    table:   {remaining[0]}"
-                    f"\n    grammar: {_filter_payload(subject)}"
+            elif remaining:
+                # A **card** subject is read by the card matcher, not the
+                # battlefield one: "a black card" (Compost) names an object in a
+                # graveyard, which has no controller, no layer-computed types
+                # and no board position — and `_filter_payload` refuses it for
+                # exactly that reason, which is why this cannot be one reader.
+                # The table resolves such a phrase through `card_filter_payload`,
+                # so the honest comparison is that function's own last step.
+                #
+                # The stem says which: `engine/oracle.py` spells the group
+                # `<name>_card_subject` when the phrase is about a card, and
+                # resolves it to `<name>_card_filter`. The invariant is the same
+                # one either way — one printed phrase, one filter, read the same
+                # by both front ends — and this only picks the reader it was
+                # written for.
+                stem, expected = remaining[0]
+                read = (
+                    chargeable_card_filter if stem.endswith("_card")
+                    else _filter_payload
                 )
+                if read(subject) != expected:
+                    disagreements.append(
+                        f"{card.name}: {line}\n    table:   {expected}"
+                        f"\n    grammar: {read(subject)}"
+                    )
     assert not disagreements, (
         "the two front ends read one printed subject differently:\n"
         + "\n".join(disagreements)

@@ -57,7 +57,15 @@ MODAL_INSTRUCTION_KIND = "choose_one"
 #: The set is read by the compiler's gate (which refuses such a card) and by the
 #: inline path itself (which is what makes the claim true), so the two cannot
 #: drift. It shrinks — to empty — the day an ETB trigger uses the stack.
-INLINE_TRIGGER_CONDITIONS = frozenset({"enters_battlefield"})
+#: ``enters_or_dies`` (Goblin Marshal, Hunting Moa) is here for its **entry**
+#: half only. Its death half is announced by `_permanent_to_graveyard` and goes
+#: on the stack like any other death trigger; membership here is the claim that
+#: the *entry* announcement is carried out inline, which is exactly the claim
+#: ``enters_battlefield`` above makes and exactly as approximate. Left out, the
+#: entry half would be announced by nothing at all — the card would make its
+#: Goblins when it died and not when it arrived, which is a supported card
+#: playing as half of itself.
+INLINE_TRIGGER_CONDITIONS = frozenset({"enters_battlefield", "enters_or_dies"})
 
 
 def modal_trigger_modes(instruction: OracleInstruction | None) -> tuple[dict, ...]:

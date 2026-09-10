@@ -289,6 +289,19 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("card_put_into_graveyard",
      r"whenever (?P<another_card>)another card is put into a graveyard "
      r"from anywhere"),
+    # "Whenever **a black card** is put into **an opponent's** graveyard from
+    # anywhere, you may draw a card." (Compost.) The same event and the same
+    # seam as the two rows around it, with two more printed narrowings — what
+    # the card is, and whose pile it landed in — and both ride as data for the
+    # reason `_card_put_into_graveyard_filter`'s docstring already gives about
+    # its own pair: two kinds here would be two names for one event.
+    #
+    # Above the "another card" row is unnecessary (neither is the other's
+    # prefix) and it is placed here anyway, beside the sibling it shares a
+    # filter with, so the three spellings of one condition read together.
+    ("card_put_into_graveyard",
+     r"whenever (?P<graveyard_card_subject>an? [a-z]+ card) is put into "
+     r"(?P<opponent_graveyard>)an opponent's graveyard from anywhere"),
     # "Whenever **you** discard a card" (Necropotence) beside "whenever **an
     # opponent** discards a card" (Megrim). CR 701.9a's discard is an action
     # abilities watch, and the two discard seams announce it — the random/forced
@@ -840,6 +853,30 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      r"the target of (?P<targeted_by>a spell or ability|an aura spell|a spell"
      r"|an ability)"
      r"(?: (?P<targeting_controller>an opponent controls|you control))?"),
+    # "Whenever **you or a permanent you control** becomes the target of a spell
+    # or ability an opponent controls, you may draw a card." (Rayne, Academy
+    # Chancellor.)
+    #
+    # The **third dispatch scope** for one event, and the shape Death Pits of
+    # Rath already forced on `creature_dealt_damage`: the two rows above watch
+    # the targeted permanent itself and the thing attached to it, and this one
+    # watches neither — Rayne is a third party, and what it is about is a seat's
+    # whole side of the board. So it is a narrowing on the same kind rather than
+    # a kind of its own, which is this table's standing rule, and
+    # `events._self_becomes_target_filter` is where the three scopes are told
+    # apart.
+    #
+    # Its subject is the one thing none of the rows above can express: it spans
+    # a **player** and a set of permanents at once. That is why the marker is an
+    # empty group rather than a `_subject` phrase — there is no single noun
+    # phrase to hand the noun parser, because half of what it names is not an
+    # object at all. `targeted_seats`' twin one screen up (Reparations'
+    # `targets_you_or_your_creature`) says the same thing about a *cast*.
+    ("self_becomes_target",
+     r"whenever (?P<targets_you_or_your_permanent>)you or a permanent you "
+     r"control becomes the target of (?P<targeted_by>a spell or ability"
+     r"|an aura spell|a spell|an ability)"
+     r"(?: (?P<targeting_controller>an opponent controls|you control))?"),
     # "Whenever this creature becomes untapped" (Ghostly Pilferer). CR 701.26b's
     # event, announced by the one untap seam — which is why the seam had to
     # exist first: eleven places set the flag, and a trigger wired into one of
@@ -984,6 +1021,24 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # mana" are both shapes the rows above answer more exactly.
     ("land_tapped_for_mana",
      r"whenever a player taps an? (?P<tapped_land_subtype>[a-z]+) for mana"),
+    # "Whenever **an opponent** taps a Mountain for mana, you may gain 1 life."
+    # (Sanctimony.) The active voice again with CR 109.5's seat printed where
+    # the rows above print "a player" — so the *seat* is the narrowing and the
+    # land type stays the same payload group the row above it carries. One kind,
+    # two printed narrowings, which is CLAUDE.md's rule stated the usual way
+    # round: a narrowing is data, not a kind.
+    #
+    # ``tapped_by_opponent`` is an empty named group, the spelling this table
+    # already uses for a marker with nothing to capture (``another_card``,
+    # ``your_graveyard``). It is tested at the tap seam against the *watching
+    # permanent's* controller, never against the active player: dropped, a
+    # Sanctimony would gain its controller life for their own Mountains, which
+    # is a strictly better card than the one printed and one nothing in this
+    # repo could see — the trigger fires, the life is gained, and every census
+    # reads the card as implemented.
+    ("land_tapped_for_mana",
+     r"whenever an opponent(?P<tapped_by_opponent>) taps an? "
+     r"(?P<tapped_land_subtype>[a-z]+) for mana"),
     # "Whenever **a land an opponent controls** is tapped for mana" (Mana Web).
     # The passive voice with a whole *noun phrase* where the three rows above
     # carry a single word — so it is a `_subject` group read by the noun parser,
@@ -1423,6 +1478,18 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # that kind already reads the noun phrase. The bare `.+` still covers a card
     # naming itself by a short form the self-reference collapse leaves behind
     # ("when barrin enters"), which is the source and belongs to this kind.
+    # "When this creature **enters or dies**, create two 1/1 red Goblin
+    # creature tokens." (Goblin Marshal; Hunting Moa prints the same condition.)
+    # CR 603.1's one ability with two trigger events, as one kind announced at
+    # both fire sites — `creature_attacks_or_blocks`' arrangement.
+    #
+    # **Above** the bare entry row, which is its strict prefix and which claimed
+    # these lines: that row's span ended at "enters" and left "or dies, create
+    # …" as the effect clause, so the grammar refused the remainder and the
+    # cards were reported unsupported. Ordered the other way this row would
+    # never be reached, which is this table's standing longest-first rule.
+    ("enters_or_dies",
+     r"when (?!(?:a|an|another) )(?:this|.+?) enters(?: the battlefield)? or dies"),
     ("enters_battlefield",
      r"when (?!(?:a|an|another) )(?:this|.+) enters(?: the battlefield)?"),
     # "When **the token** leaves the battlefield, sacrifice this enchantment."
@@ -3154,6 +3221,21 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
 # approximating what the grammar does.
 _SUBJECT_GROUP_SUFFIX = "_subject"
 
+# The same noun phrase where the object is a **card** rather than a permanent:
+# "whenever **a black card** is put into an opponent's graveyard from anywhere"
+# (Compost). A card in a graveyard, a hand or a library is not on a battlefield,
+# so it has no controller, no layer-computed types and no board position —
+# `subject_filter_payload` answers None for the phrase and the whole condition
+# would refuse. The card twin `card_filter_payload` is the reader, gated on
+# `CARD_ONLY_FILTER_KEYS`, which is exactly the set `_card_matches_filter` can
+# answer about an object in a pile.
+#
+# A suffix of its own rather than a second reading of `_subject`, because which
+# matcher a phrase is destined for is a fact about the *condition* — the same
+# words describe a different testable set in the two zones, and a group that
+# guessed would hand a graveyard filter to a battlefield matcher.
+_CARD_SUBJECT_GROUP_SUFFIX = "_card_subject"
+
 # The same idea for a printed *number*: "whenever you attack with **two** or
 # more creatures with flying". The regex delimits the word and `_NUMBER_WORDS`
 # reads it, so a count is data on the condition rather than a pattern per
@@ -3237,7 +3319,7 @@ def _resolve_subject_groups(payload: dict) -> dict | None:
     fires on one attacker where the card says three is the same silent widening
     an ignored filter would be.
     """
-    from .grammar import subject_filter_payload
+    from .grammar import card_filter_payload, subject_filter_payload
     from .subject_filters import untestable_filter_keys
 
     resolved = dict(payload)
@@ -3257,6 +3339,23 @@ def _resolve_subject_groups(payload: dict) -> dict | None:
             return None
         resolved[key] = count
     for key, phrase in payload.items():
+        # "…**a black card** is put into an opponent's graveyard" (Compost).
+        # Read by the card matcher's own reader, which already refuses a phrase
+        # naming anything a card in a pile cannot answer — so the gate the
+        # battlefield branch below applies by hand is applied inside this one.
+        # Resolved before those branches because its suffix ends in `_subject`
+        # and would otherwise be claimed by them and handed to the wrong matcher.
+        if key.endswith(_CARD_SUBJECT_GROUP_SUFFIX):
+            described = card_filter_payload(str(phrase))
+            if not described:
+                # None is "not a phrase the noun parser reads" and `{}` is "a
+                # phrase that reduced to no restriction at all" — a black card
+                # with the colour dropped is every card, which is a trigger
+                # firing on the whole game. Both refuse the condition.
+                return None
+            del resolved[key]
+            resolved[key[: -len(_CARD_SUBJECT_GROUP_SUFFIX)] + "_card_filter"] = described
+            continue
         pair_plural = key.endswith(_PLURAL_PAIR_SUBJECT_GROUP_SUFFIX)
         if pair_plural or key.endswith(_PAIR_SUBJECT_GROUP_SUFFIX):
             described = subject_filter_payload(str(phrase), plural=pair_plural)

@@ -37,7 +37,7 @@ from ._sacrifices import _forced_sacrifice_filter
 from ._common import (_describe_targets, _filter_payload,
                       _is_enchanted, _is_source, _is_target,
                       player_deed_payload)
-from ._events import (CHOSEN_PLAYER, LOOP_BOUND_OBJECT, OTHER_CHOSEN_PERMANENT, _EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER, names_attached_permanent, CHOSEN_PERMANENT, _RECORDED_PERMANENTS)
+from ._events import (CHOSEN_PLAYER, LOOP_BOUND_OBJECT, OTHER_CHOSEN_PERMANENT, _EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER, names_attached_permanent, CHOSEN_PERMANENT, _RECORDED_PERMANENTS, _back_reference_payload)
 from ._delays import (_BOUND_OBJECT_DELAYED_EVENTS)
 
 
@@ -425,6 +425,26 @@ def _lower_sacrifice(
             # resolution knows it. The word carries its own "may" — none is a
             # legal answer — which is what ``up_to`` means on that prompt.
             payload["any_number"] = True
+        elif node.subject.count_amount is not None:
+            # "Whenever this creature is dealt damage, sacrifice **that many**
+            # permanents." (Phyrexian Negator.) The count is the firing event's
+            # own number, so it is asked of the one reader that decides where a
+            # back-reference lives — the scratchpad of this resolution, or the
+            # context the fire site froze. Asking it here rather than assuming
+            # the trigger is what makes the refusal honest: an event that
+            # freezes no quantity raises `LoweringError` and the card is
+            # reported unsupported, where a hard-coded trigger key would read an
+            # absent record as **zero** and sacrifice nothing while logging
+            # itself resolved.
+            #
+            # The keys are the pool's existing ones (`amount_from_trigger` /
+            # `amount_from`) rather than a `count_`-prefixed fork: four handlers
+            # already read that vocabulary for the same question — "the number
+            # this sentence spends, named by something outside it" — and a
+            # second spelling would be a second answer.
+            payload.update(
+                _back_reference_payload(node.subject.count_amount, produced, event)
+            )
         elif node.subject.count != 1:
             # "Sacrifice **two** Swamps" (Mold Demon). How many is payload on
             # the one prompt, never a second kind: the forced-sacrifice queue

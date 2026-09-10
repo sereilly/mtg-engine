@@ -1207,8 +1207,22 @@ class GameHelpersMixin:
         # it. Both characteristics, for the same reason there is one read
         # rather than one per card — a fire site that freezes only what
         # today's cards ask for is a fire site the next card has to edit.
+        # ``enters_or_dies`` beside ``dies``: "When this creature **enters or
+        # dies**, create two 1/1 red Goblin creature tokens." (Goblin Marshal,
+        # Hunting Moa.) CR 603.1's one ability with two trigger events, and the
+        # engine's answer to that shape is one condition kind named at both fire
+        # sites — the arrangement ``creature_attacks_or_blocks`` has in the two
+        # declaration steps, and ``phases_out_or_leaves_battlefield`` has beside
+        # its own announcement.
+        #
+        # Named **here** rather than aliased into ``dies`` at the compiler,
+        # because the two halves are dispatched by different mechanisms: the
+        # entry half is carried out inline by
+        # ``stack/resolution._apply_self_enters_battlefield_triggers`` and this
+        # half goes on the stack (CR 603.3). A single kind that meant "dies" to
+        # the compiler would have no entry half at all.
         for trig in matching_triggers(
-            permanent.effective_card, condition_kinds={"dies"},
+            permanent.effective_card, condition_kinds={"dies", "enters_or_dies"},
         ):
             if trig.instruction is None or trig.instruction.kind in _INLINE_DIES_KINDS:
                 continue
@@ -2725,6 +2739,7 @@ class GameHelpersMixin:
         """
         from ..events import emit
 
+        self._announce_targeted_player(item)
         ids = item.target_permanent_id
         if ids is None:
             return
@@ -2748,6 +2763,62 @@ class GameHelpersMixin:
                 targeted_by_card=item.card,
                 event_subject_player=item.caster_index,
             )
+
+    def _announce_targeted_player(self, item) -> None:
+        """The **player** half of CR 603.2's "becomes the target of".
+
+        "Whenever **you** or a permanent you control becomes the target of a
+        spell or ability an opponent controls, you may draw a card." (Rayne,
+        Academy Chancellor.) CR 115.1 lets a spell or ability target a player,
+        and until this existed the engine announced targeting for permanents
+        alone — so a card watching for a seat being targeted had no event at
+        all, however well its condition compiled.
+
+        Announced beside the permanent loop rather than inside it, because the
+        two are different objects: a seat has no ``permanent_id`` and nothing
+        downstream could recover one. The seat rides its own key, so the filter
+        that reads it cannot mistake it for a targeted permanent.
+
+        **Whether the seat is a target at all is asked, never assumed.**
+        ``target_player_index`` doubles as a *battlefield* index beside a
+        permanent index — the hazard ``spell_targets`` documents one module over
+        — so a removal spell aimed at a creature carries a seat that targets
+        nobody. Read without the check, Rayne would draw a card off every spell
+        an opponent pointed at anything. The compiled program is what answers:
+        a spec whose kind is a player kind is a spell or ability that CR 601.2c
+        actually let choose a face.
+
+        Asked through ``stack_object_target_spec``, which answers for an
+        **ability** as well as a spell — ``spell_targets`` deliberately returns
+        nothing for one, because its caller (Reparations) watches casts. This
+        condition says "a spell **or ability**", so the ability half is half the
+        card.
+        """
+        from ..events import emit
+        from ..targeting import _PLAYER_TARGET_SPEC_KINDS, stack_object_target_spec
+
+        seat = getattr(item, "target_player_index", None)
+        if not isinstance(seat, int) or not (0 <= seat < len(self.players)):
+            return
+        spec = stack_object_target_spec(item)
+        if spec is None or spec.get("kind") not in _PLAYER_TARGET_SPEC_KINDS:
+            return
+        if spec.get("land_filter"):
+            # Volcanic Eruption's "X target Mountains": the seat beside them is
+            # a battlefield, exactly as it is above.
+            return
+        emit(
+            self, "self_becomes_target",
+            # No subject: a seat is not an object, and the two scopes that read
+            # ``event.subject`` by identity must not be handed a permanent that
+            # was never targeted.
+            subject=None,
+            targeted_seat=seat,
+            source_seat=item.caster_index,
+            targeted_by="an ability" if item.is_ability else "a spell",
+            targeted_by_card=item.card,
+            event_subject_player=item.caster_index,
+        )
 
     def _destroy_swept_permanents(
         self,

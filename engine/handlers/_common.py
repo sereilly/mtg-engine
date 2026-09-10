@@ -1439,6 +1439,22 @@ _STATE_TESTS = {
     "blocking": lambda perm: perm.blocking_attacker_index is not None,
     "blocked": lambda perm: bool(perm.blocked),
     "unblocked": lambda perm: not perm.blocked,
+    # "You may draw an additional card **if Rayne is enchanted**." (Rayne,
+    # Academy Chancellor.) CR 303.4a: a permanent is enchanted when an Aura is
+    # attached to it — and an **Aura**, not merely something attached, because
+    # this engine shares the attachment record with Equipment (CR 301.5f) and an
+    # equipped creature is not an enchanted one.
+    #
+    # The same reading as the ``enchanted_only`` filter key in
+    # ``permanent_matches_filter`` below, deliberately spelled through the same
+    # test rather than beside it: "destroy target **enchanted** creature"
+    # (Ramses Overdark) and "if this creature is enchanted" are one question
+    # asked of one permanent, and two spellings of it is how a card ends up
+    # disagreeing with a sweep about what "enchanted" means.
+    "enchanted": lambda perm: any(
+        attached.has_type("aura")
+        for attached in (perm.metadata.get("attached_auras") or [])
+    ),
 }
 
 
@@ -1721,10 +1737,9 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     # something attached, because this engine shares the attachment record with
     # Equipment (CR 301.5f) and an equipped creature is not an enchanted one.
     if payload.get("enchanted_only"):
-        if not any(
-            attached.has_type("aura")
-            for attached in (perm.metadata.get("attached_auras") or [])
-        ):
+        # Through the state table above, so the filter key and the printed
+        # condition "if this creature is enchanted" cannot come apart.
+        if not _STATE_TESTS["enchanted"](perm):
             return False
 
     def _has_type(name: str) -> bool:
