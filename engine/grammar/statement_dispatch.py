@@ -343,7 +343,13 @@ def lower_statement(
     # untapped, so this left `by_node.py` the day it stopped being a lowering
     # that needs nothing but its node.
     if isinstance(statement, ast.PreventDamage):
-        return _lower_prevent_damage(statement, produced)
+        # The **event** goes with it for `_lower_destroy`'s reason one branch
+        # down: a bare "it" on the source end of a shield names the ability's
+        # own permanent when a trigger is what fired the clause, and a trigger's
+        # stack item carries a *bookkeeping* target (the blocker, under
+        # `creature_becomes_blocked`) that the ordinary bound reading would
+        # resolve to instead.
+        return _lower_prevent_damage(statement, produced, event=event)
     # Beside the shield above, and here rather than in `by_node.py` for its
     # reason: the source it names is one a step in front of it chose (idiom 7).
     if isinstance(statement, ast.ChosenSourceNextDamage):

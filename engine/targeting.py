@@ -898,9 +898,11 @@ _KIND_TO_SPEC: dict[str, dict] = {
     # be a permanent on any battlefield or a spell on the stack. It names no
     # recipient at all, which changes what the *record* watches and nothing
     # about what the caster is asked for.
-    "redirect_damage_from_chosen_source_until_eot": {
-        "kind": "permanent", "source_of_choice": True, "also_stack": True,
-    },
+    # Nova Pentacle and Reflect Damage keep that flat spec through
+    # `_chosen_source_redirect_spec`, which reads the payload: General's Regalia
+    # prints the same first half and then announces a **target creature you
+    # control** to take the damage, so the kind can no longer settle its own
+    # picker. See that function.
     # "As an additional cost to cast this spell, sacrifice a creature" used to
     # be keyed here, by the instruction Sacrifice and Metamorphosis compile to.
     # It is a *cost*, so `derive_cast_spec` now reads it off `cast_costs` and
@@ -1545,7 +1547,15 @@ def _whole_prevention_shield_spec(payload: dict) -> dict | None:
         # The source cannot ride ``source_of_choice`` here as it does below,
         # because that flag makes the *only* prompt a source picker and this
         # card has a real target to announce (CR 601.2c).
-        return {"kind": "any", "requires_source": True}
+        #
+        # The target half is read off the description the lowering wrote rather
+        # than fixed at "any": Charm Peddler prints the same shield over
+        # **target creature**, and a picker offering CR 115.4's whole union
+        # would let the announcement name a player the ability cannot shield.
+        # Circle of Despair's own description reduces to ``{"kind": "any"}``, so
+        # its spec is unchanged.
+        described = _from_targets_payload(payload.get("targets"))
+        return {**(described or {"kind": "any"}), "requires_source": True}
     return {"kind": "permanent", "source_of_choice": True, "also_stack": True}
 
 
@@ -1952,6 +1962,28 @@ def _retarget_spec(payload: dict) -> dict:
     return spec
 
 
+def _chosen_source_redirect_spec(payload: dict) -> dict:
+    """Nova Pentacle's source picker, and General's Regalia's two announcements.
+
+    One kind, two printings, exactly as ``_whole_prevention_shield_spec`` is one
+    kind over two: "The next time a source of your choice would deal damage to
+    you this turn, that damage is dealt to **target creature you control**
+    instead" (General's Regalia) announces a target as well, while Nova
+    Pentacle's taker is picked by an *opponent* as the ability resolves and
+    Reflect Damage names no taker at all. So the payload decides — a ``targets``
+    description means a target to announce, and its absence is the source-only
+    prompt those two have always run.
+
+    ``source_of_choice`` makes the *only* prompt a source picker, which is why
+    the announcing printing cannot use it: it has a real target to name first
+    (CR 601.2c), and ``requires_source`` is what adds the second stage.
+    """
+    described = _off_target_chosen_source_redirect_spec(payload)
+    if described is not None:
+        return described
+    return {"kind": "permanent", "source_of_choice": True, "also_stack": True}
+
+
 def _off_target_chosen_source_redirect_spec(payload: dict) -> dict | None:
     """Shaman en-Kor's second ability: "The next time **a source of your
     choice** would deal damage to **target creature** this turn…" — and Kor
@@ -1987,6 +2019,7 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     "redirect_chosen_source_damage_between_targets_until_eot": (
         _off_target_chosen_source_redirect_spec
     ),
+    "redirect_damage_from_chosen_source_until_eot": _chosen_source_redirect_spec,
     "choose_new_spell_target": _retarget_spec,
     "change_target_spell_target": _retarget_spec,
     "put_graveyard_cards_on_library_top": _graveyard_to_library_spec,

@@ -2007,6 +2007,29 @@ def redirect_damage_until_eot(
         return True, "resolved"
     if payload.get("new_recipient") == "source":
         new_recipient = context.source_permanent
+    elif payload.get("new_recipient") == "target":
+        # "…that damage is dealt to **target creature you control** instead."
+        # (General's Regalia.) The taker is a target the *activating* player
+        # announced (CR 601.2c), re-checked here against the printed noun phrase
+        # (CR 608.2b) through `subject_matches` rather than the pure matcher:
+        # "you control" is a seat, which only the game can answer.
+        #
+        # No scan-the-board fallback, for the reason the source arm below gives
+        # in the other direction: a redirect onto a creature nobody named moves
+        # damage onto a permanent the player never chose.
+        from ..subject_filters import subject_matches
+
+        described = (payload.get("targets") or {}).get("filter") or {}
+        observer = game.players.index(caster) if caster in game.players else None
+        new_recipient = resolve_target_permanent(
+            game,
+            context,
+            predicate=lambda perm: subject_matches(
+                game, perm, described, observer=observer,
+                source=context.source_permanent,
+            ),
+            fallback_players=(),
+        )
     else:
         chosen_id = context.results.get(payload.get("result_key"))
         new_recipient = (

@@ -96,7 +96,10 @@ def _lower_prevent_from_subject(
 
 
 def _lower_prevent_all(
-    node: ast.PreventDamage, produced: frozenset[str] = frozenset()
+    node: ast.PreventDamage,
+    produced: frozenset[str] = frozenset(),
+    *,
+    event: str | None = None,
 ) -> tuple[OracleInstruction, ...]:
     """"Prevent all combat damage that would be dealt this turn." (Fog.)
 
@@ -167,13 +170,63 @@ def _lower_prevent_all(
             and spec.quantifier == "this"
             and _is_source(spec)
         )
+        # "…prevent all combat damage that would be dealt by **it** this turn."
+        # (Ignoble Soldier, under its own becomes-blocked trigger.) The mirror
+        # of the pronoun the recipient branch below already admits, and it is
+        # read the same way: the pronoun names whatever the sentence in front of
+        # it named — the chosen target if the effect chose one, otherwise the
+        # ability's own source — and **only the resolution knows which**.
+        #
+        # Deliberately not folded into ``source_scoped``: the parser sets
+        # ``is_source`` on every bare "it" as its default reading (a bare "it"
+        # on the *recipient* end carries it too), so the flag is not a claim
+        # about this sentence and treating it as one would silence the ability's
+        # own permanent on a spell that targeted something else.
+        bound_pronoun = (
+            isinstance(spec, ast.TargetSpec) and spec.quantifier == "it"
+        )
         if not isinstance(spec, ast.TargetSpec) or (
-            not source_scoped and spec.quantifier not in ("target", "that")
+            not source_scoped
+            and not bound_pronoun
+            and spec.quantifier not in ("target", "that")
         ):
             raise LoweringError(
                 "no handler prevents the damage of an untargeted source", node=node
             )
         payload: dict[str, object] = {"combat_only": bool(node.combat_only)}
+        if bound_pronoun:
+            if _restrictions_beyond(
+                spec.filter, frozenset({"card_types", "is_source"})
+            ):
+                # A pronoun names an object an earlier clause already chose, so
+                # a restated adjective has nothing left to narrow — and would be
+                # dropped rather than honoured. The bound-object arm below
+                # refuses for the same reason. Under a **board-wide** trigger
+                # this is also the refusal that catches a rebound pronoun:
+                # `grammar/rebinding.py` rewrites "it" into the trigger's own
+                # printed subject when that subject is not the source, and a
+                # narrowed subject lands here rather than being silently read as
+                # one object.
+                raise LoweringError(
+                    "a bound object carries no narrowing the shield could "
+                    "honour", node=node,
+                )
+            if event is not None and _is_source(spec):
+                # "Whenever this creature becomes blocked, prevent all combat
+                # damage that would be dealt by **it** this turn." (Ignoble
+                # Soldier.) Under a source-scoped trigger the pronoun is the
+                # ability's own permanent, and it has to be read *here* rather
+                # than left to the resolution: a trigger's stack item carries a
+                # bookkeeping target — for `creature_becomes_blocked` that is
+                # the **blocker** — so the bound reading below resolves to the
+                # creature on the other end of the event and silences it
+                # instead. Observed, not assumed: the first run of this card
+                # logged "all combat damage Blocker would deal this turn is
+                # prevented (Ignoble Soldier)".
+                payload["on_source"] = True
+                source_scoped = True
+            else:
+                payload["bound_or_source"] = True
         if source_scoped:
             # "…prevent all combat damage that would be dealt by **this
             # creature** this turn." (Mtenda Lion, under its own attack
@@ -270,7 +323,7 @@ def _lower_prevent_all(
         # ``targets`` description is emitted and the handler shields the
         # ability's one target. A bound object carries no narrowing to honour,
         # which is why a restated adjective refuses rather than being dropped.
-        elif not source_scoped and _restrictions_beyond(
+        elif not source_scoped and not bound_pronoun and _restrictions_beyond(
             spec.filter, frozenset({"card_types"})
         ):
             raise LoweringError(
