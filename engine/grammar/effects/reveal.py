@@ -666,3 +666,53 @@ def accept_subject_reveals_top_of_library(
         stream.reset(mark)
         return None
     return ast.RevealTop(subject)
+
+
+def parse_reveal_any_number_from_hand(
+    stream: TokenStream,
+) -> "ast.RevealCardsFromHand | None":
+    """``Reveal any number of <filter> cards in your hand.`` (CR 701.20a.)
+
+    Urza's Destiny's five Seers, their five Scents, Metalworker and Rofellos's
+    Gift: twelve cards, one sentence, and seven printed noun phrases between
+    them. The count the sentence *behind* it spends is what the reveal records
+    — see ``oracle_types.REVEALED_THIS_WAY`` — so the reveal is its own step
+    and everything printed after it is an ordinary sentence reading a
+    back-reference.
+
+    Refuses **without consuming** when the words are not this template, so
+    "Reveal your hand …" (Manabond) and "Reveal the top card of your library"
+    (Prophecy) keep the readings and the errors they already had. The verb is
+    consumed here rather than by the dispatcher for that reason.
+
+    Three things are required rather than defaulted, and each is a different
+    card if it is dropped:
+
+    * **"any number of"**. A printed count ("reveal two cards from your hand")
+      is a different offer, and one this node cannot carry.
+    * **The hand, and the revealer's own**. CR 400.2 makes a hand hidden, and
+      a reveal out of somebody else's is a sentence with a different actor;
+      neither is printed here, so both refuse rather than being read as this.
+    * **Cards**. The noun parser answers "blue permanents in your hand" the
+      same way it answers "blue cards", and only the second is a card.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("reveal"):
+        return None
+    if not stream.accept_phrase("any", "number", "of"):
+        stream.reset(mark)
+        return None
+    try:
+        filt = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not (
+        filt.is_card
+        and filt.zone == "hand"
+        and filt.zone_owner is not None
+        and filt.zone_owner.kind == "you"
+    ):
+        stream.reset(mark)
+        return None
+    return ast.RevealCardsFromHand(filt)

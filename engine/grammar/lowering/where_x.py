@@ -121,6 +121,13 @@ def lower_where_x(
         return _lower_where_x_this_way(node, inner, produced)
     if isinstance(node.definition, ast.CountOfTapsThisWay):
         return _lower_where_x_tapped_this_way(node, inner, produced)
+    # "…, where X is the number of cards **revealed this way**." (Cinder Seer,
+    # Ivy Seer, Nightshade Seer and their three Scents.) The one definition
+    # here that is a plain number rather than a set or a characteristic: the
+    # parse resolved the printed noun and participle to a scratchpad key, so
+    # what is left to check is that a step of this effect writes it.
+    if isinstance(node.definition, ast.ThatMuch):
+        return _lower_where_x_recorded(node, inner, produced)
     if isinstance(node.definition, ast.ExiledForCost):
         return _lower_where_x_exiled_for_cost(node, inner)
     if isinstance(node.definition, ast.SacrificedForCost):
@@ -708,6 +715,44 @@ def _records_within(instructions: tuple[OracleInstruction, ...]) -> frozenset[st
             ):
                 keys |= _records_within(nested)
     return frozenset(keys)
+
+
+def _lower_where_x_recorded(
+    node: ast.WhereX,
+    inner: tuple[OracleInstruction, ...],
+    produced: frozenset[str],
+) -> tuple[OracleInstruction, ...]:
+    """"…, where X is the number of cards **revealed this way**." (Cinder Seer.)
+
+    ``_lower_where_x_this_way`` with the narrowing question already settled:
+    the parse resolved the printed noun *and* participle together against
+    ``where_x.accept_this_way_count``'s table, so by the time the node is built
+    the words have been checked against the record they name and what arrives
+    is a key. What is left is the gate every back-reference in this file
+    carries — a step of this same effect has to write it — and it is asked of
+    ``produced`` **and** of the sentence being stamped, because a card may
+    print the producer and the reader as two sentences (the five Seers, whose
+    activated ability is a paragraph) or as one.
+
+    A printed bonus refuses: "where X is the number of cards revealed this way
+    **plus one**" is a number no card prints here, and the ``x_from_count``
+    spec's ``plus`` is written by the arithmetic unwrapping in
+    :func:`lower_where_x`, not by this channel.
+    """
+    if node.definition.source is None or node.definition.bonus:
+        raise LoweringError(
+            "a where-clause reads a named record with no printed bonus",
+            node=node,
+        )
+    if node.definition.source not in (produced | _records_within(inner)):
+        raise LoweringError(
+            f"back-reference to {node.definition.source!r} with no producer in "
+            "this effect",
+            node=node,
+        )
+    if not _mentions_x(inner):
+        raise LoweringError("a where-clause defined an X nothing reads", node=node)
+    return _stamp_x_from_count(inner, {"back_reference": node.definition.source})
 
 
 def _lower_where_x_tapped_this_way(

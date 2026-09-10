@@ -100,6 +100,25 @@ class AddMana:
     #: what is sitting on the source right now — and a card whose cost adds a
     #: counter would have the two disagree by exactly one.
     per_each_counter_on_source: str | None = None
+    #: "Add {C}{C} **for each card revealed this way**." (Metalworker.) The
+    #: resolution-scratchpad key an earlier step of this same effect wrote, as
+    #: the record's name.
+    #:
+    #: A third sibling of the two fields above rather than a value on either,
+    #: and for their reason exactly: what tells these multipliers apart is
+    #: *where the number comes from*, and the three come from three places — a
+    #: cost payment, the source's own counters, and a step of the effect. Not a
+    #: ``per_each`` filter either, for that field's stated reason one screen up:
+    #: there is nothing on a board to scan, and read as one the clause would
+    #: count every card in the hand rather than the ones the seat revealed.
+    #:
+    #: Carried as the :class:`ThatMuch` ``records._parse_for_each_this_way``
+    #: mints rather than as the bare key it holds, so the lowering spends it
+    #: through ``lowering/_amounts.recorded_count_spec`` — the one reader that
+    #: turns a recorded quantity into a count spec and demands its producer.
+    #: A string here would have been the same fact spelled twice, with the
+    #: producer gate written out a second time beside it.
+    per_each_recorded: "Amount | None" = None
     #: "Add one mana of any color **that a land an opponent controls could
     #: produce**." (Fellwar Stone.) Which board decides the colours available -
     #: ``"opponent_lands"`` today, and a value rather than a flag because the

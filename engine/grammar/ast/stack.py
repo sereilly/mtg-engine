@@ -134,6 +134,23 @@ class CounterSpell:
     # three positional arguments), so a field inserted in the middle silently
     # re-reads an existing caller's argument as this one.
     unless_pays_alternatives: tuple[ManaCost, ...] = ()
+    # "…unless its controller pays {1} **for each card revealed this way**."
+    # (Brine Seer, Scent of Brine.) The resolution-scratchpad key an earlier
+    # step of this same effect wrote; the printed cost is a *rate*, so what the
+    # payer owes is that cost times the record.
+    #
+    # A back-reference rather than a multiplied ``ManaCost``, because the
+    # number does not exist yet: the reveal in front of the sentence has not
+    # happened when the line is lowered, and CR 608.2 takes the count when the
+    # spell resolves. Carried as the :class:`ThatMuch`
+    # ``records._parse_for_each_this_way`` mints, so the lowering spends it
+    # through ``lowering/_amounts.recorded_count_spec`` like every other
+    # recorded quantity — a bare key would be the same fact spelled twice, with
+    # the producer gate written out a second time beside it.
+    #
+    # **Appended, not slotted beside its siblings** — see
+    # ``unless_pays_alternatives`` above for why.
+    unless_pays_per_recorded: "Amount | None" = None
     # "**If that spell is countered this way, put it on top of its owner's
     # library instead of into that player's graveyard.**" (Memory Lapse;
     # Remand's destination is the hand.) CR 614.1 — where the countered card

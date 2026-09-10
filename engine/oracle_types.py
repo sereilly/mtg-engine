@@ -163,6 +163,24 @@ DREW_COUNT = "drew_count"
 # a reader handed the wrong one would ask a list what its mana value is.
 REVEALED_HAND_CARDS = "revealed_hand_cards"
 
+# "Reveal any number of blue cards in your hand. **Counter target spell unless
+# its controller pays {1} for each card revealed this way.**" (Brine Seer and
+# the eleven cards printed with it.) How many cards the reveal in front of the
+# sentence showed — a *number*, where the key above is the cards themselves.
+#
+# Two records for one step, exactly as ``TAPPED_THIS_WAY`` and
+# ``TAPPED_THIS_WAY_OBJECTS`` are two: a "for each card revealed this way"
+# spends a count and nothing re-asks what the cards were, while a sentence that
+# narrows ("for each **blue instant** card revealed this way", Sirocco) can only
+# be answered off the cards. A reader handed the wrong one would ask a list how
+# large it is or a number what colour it is.
+#
+# Here rather than beside either end for ``DREW_COUNT``'s reason: the handler
+# writes it, ``lowering/_records`` declares it and ``grammar/records`` reads it
+# back, and a second spelling is what makes a producer gate vacuous while the
+# amount reads an empty record.
+REVEALED_THIS_WAY = "revealed_this_way"
+
 # The payload key an effect carries when the object it acts on was **bound by
 # the firing trigger** rather than chosen as a target — "…that creature becomes
 # green" under a block trigger (Aisling Leprechaun). Here for the same reason as

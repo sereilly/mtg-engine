@@ -17,6 +17,7 @@ from ...oracle_types import OracleInstruction
 from ...subject_filters import CARD_ONLY_FILTER_KEYS
 from .. import ast
 from ..errors import LoweringError
+from ._amounts import recorded_count_spec
 from .conditions import _lower_condition
 from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS, _restrictions_beyond, is_mana_value_x,
@@ -330,7 +331,9 @@ def _counter_targets_filter(
     return payload, targets_source
 
 
-def _lower_counter_spell(node: ast.CounterSpell) -> tuple[OracleInstruction, ...]:
+def _lower_counter_spell(
+    node: ast.CounterSpell, produced: frozenset[str] = frozenset()
+) -> tuple[OracleInstruction, ...]:
     """"Counter target spell", with the colour, mana-value and "unless … pays"
     riders the pool's counterspells carry. The handler chooses the spell to
     counter itself, so a restriction it cannot honour must be refused rather
@@ -519,6 +522,36 @@ def _lower_counter_spell(node: ast.CounterSpell) -> tuple[OracleInstruction, ...
             payload["unless_pays_cost"] = dict(node.unless_pays.pips)
             if alternatives:
                 payload["unless_pays_cost_alternatives"] = alternatives
+        if node.unless_pays_per_recorded is not None:
+            # "…pays {1} **for each card revealed this way**." (Brine Seer.)
+            # The printed cost is a rate and the record is the multiplier, read
+            # at resolution — the counter flow is where the two meet, because
+            # CR 608.2 takes the count then and the reveal in front of this
+            # sentence has not happened when the line is lowered.
+            #
+            # Through ``recorded_count_spec``, the one reader that turns a
+            # recorded quantity into a count spec: the counter flow then asks
+            # ``count_from_payload`` for the number, which is the same
+            # evaluator the life gain and the mana addition spend this record
+            # on. Refused without a producer, like every back-reference in this
+            # grammar — with no reveal the record reads 0, the offer becomes
+            # {0}, every board covers it and the counter never counters.
+            spec = recorded_count_spec(node.unless_pays_per_recorded, produced, node)
+            if spec is None:
+                raise LoweringError(
+                    "a counter price per recorded unit names its producer",
+                    node=node,
+                )
+            if "unless_pays_amount" not in payload:
+                # Only the bare generic cost is a rate the flow can multiply.
+                # A coloured or chosen-X price times a count is arithmetic the
+                # payment prompt does not do, and dropping the multiplier would
+                # ask for one card's worth however many were shown.
+                raise LoweringError(
+                    "only a printed generic cost is paid per recorded unit",
+                    node=node,
+                )
+            payload["unless_pays_per_recorded"] = spec
     if node.unpaid_penalty is not None:
         if node.unless_pays is None:
             raise LoweringError("a decline penalty with no cost to decline", node=node)

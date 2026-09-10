@@ -30,7 +30,8 @@ from ..amounts import parse_amount
 from ..errors import GrammarError
 from ..lexer import (MANA, render)
 from ..nouns import parse_object_filter
-from ..records import accept_counters_removed_for_cost
+from ..records import (_parse_for_each_this_way,
+                       accept_counters_removed_for_cost)
 from ..references import parse_player_ref
 from ..stream import TokenStream
 
@@ -113,6 +114,26 @@ def _parse_removed_counter_multiplier(stream: TokenStream) -> str | None:
         return removed.counter
     stream.reset(mark)
     return None
+
+
+def _parse_recorded_multiplier(stream: TokenStream) -> "ast.Amount | None":
+    """``for each <noun> <participle> this way`` after a mana clause
+    (Metalworker), as the record's key.
+
+    Read **before** :func:`_parse_mana_multiplier`, and for
+    :func:`_parse_removed_counter_multiplier`'s reason one function up: the
+    noun-phrase reader there takes "card" happily and then leaves "revealed
+    this way" as unconsumed text, which refuses the whole line for a clause the
+    engine can answer.
+
+    The phrase is ``records._parse_for_each_this_way``'s — the same reader the
+    life gain, the counter placement and the repeated return already spend this
+    clause with — so a record added for one of them is a record every family
+    can read. The node travels whole rather than unwrapped to its key: the
+    lowering hands it to ``recorded_count_spec``, which is where a recorded
+    quantity becomes a count spec and where its producer is demanded.
+    """
+    return _parse_for_each_this_way(stream)
 
 
 def _parse_combination_symbols(stream: TokenStream) -> tuple[str, ...]:
@@ -276,6 +297,10 @@ def _parse_add_mana(stream: TokenStream) -> ast.Statement:
         on_source = (
             _parse_source_counter_multiplier(stream) if removed is None else None
         )
+        recorded = (
+            _parse_recorded_multiplier(stream)
+            if removed is None and on_source is None else None
+        )
         return ast.AddMana(
             tuple(sorted(pips.items())),
             choice=choice,
@@ -283,9 +308,11 @@ def _parse_add_mana(stream: TokenStream) -> ast.Statement:
             additional=additional,
             per_each_counter_removed=removed,
             per_each_counter_on_source=on_source,
+            per_each_recorded=recorded,
             per_each=(
                 _parse_mana_multiplier(stream)
-                if removed is None and on_source is None else None
+                if removed is None and on_source is None and recorded is None
+                else None
             ),
         )
 

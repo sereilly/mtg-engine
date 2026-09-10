@@ -256,19 +256,25 @@ def _parse_gains(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
                 # Read after the history clause above, which declines without
                 # consuming. The printed number is a **rate**: "gain 1 life for
                 # each card exiled this way" (Rysorian Badger) is the record
-                # itself and "**gain 2 life** for each enchantment destroyed
-                # this way" (Multani's Decree) is twice it. Both go through
+                # itself, "**gain 2 life** for each enchantment destroyed this
+                # way" (Multani's Decree) is twice it, and so is "You gain **2**
+                # life for each card revealed this way" (Jasmine Seer, Scent of
+                # Jasmine). All three go through
                 # ``records.scaled_by_recorded_count``, the reader the counter
                 # family one file over already uses for the same clause — so the
                 # two effects cannot come to read one printed sentence as two
                 # numbers, and a printed 1 still folds away to the bare record
                 # rather than to ``Times(1, …)``.
                 #
-                # This refused a printed 2 outright until Multani's Decree, on
-                # the reading that ``ThatMuch`` cannot carry a multiplication.
-                # True of that node and beside the point: ``ast.Times`` is the
-                # node for one and the shared reader had been minting it for the
-                # counter spelling of this very clause since Mind Maggots.
+                # This refused a printed 2 outright until those cards, on the
+                # reading that ``ThatMuch`` cannot carry a multiplication. True
+                # of that node and beside the point: ``ast.Times`` is the node
+                # for one and the shared reader had been minting it for the
+                # counter spelling of this very clause since Mind Maggots. Two
+                # groups of one wave found it independently and wrote the same
+                # three lines of code; refusing had kept it loud rather than
+                # wrong, which is why the fix is the multiplier and not a wider
+                # gate.
                 if per_each is None:
                     counted = _parse_for_each_this_way(stream)
                     if counted is not None:

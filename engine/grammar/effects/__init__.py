@@ -192,6 +192,7 @@ from .library import (
 # CR 701.20a's public half of the look, split off `library` at Tempest's second
 # wave — see that module's docstring for the line.
 from .reveal import (
+    parse_reveal_any_number_from_hand,
     _parse_reveal_top,
     accept_subject_reveals_top_of_library,
     parse_bin_revealed_card,
@@ -394,6 +395,7 @@ __all__ = [
     "_parse_fight",
     "_parse_look_at_hand",
     "_parse_reveal_top",
+    "parse_reveal_any_number_from_hand",
     "_parse_search_library",
     "parse_player_looks_at_own_library_top",
     "parse_player_separates_your_library_top",

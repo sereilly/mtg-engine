@@ -194,6 +194,7 @@ def _lower_pump(
     node: ast.Pump,
     event: str | None = None,
     event_subject: object | None = None,
+    produced: frozenset[str] = frozenset(),
 ) -> tuple[OracleInstruction, ...]:
     """The printed P/T modification, and which permanent it lands on.
 
@@ -515,7 +516,15 @@ def _lower_pump(
         # builder rather than a type test here, which is what kept "where X is
         # its mana value" out of a sentence that reads a where-clause perfectly
         # well; `_x_definition_spec` refuses what it cannot build.
-        definition_spec = _x_definition_spec(node.x_definition, node)
+        # ``recorded=produced``: this branch has a *duration*, so the count is
+        # taken once when the ability resolves and the resolution's own
+        # scratchpad is there to be read — and what it may read is exactly what
+        # a step of this effect wrote. The durationless branch above passes
+        # nothing, which refuses the shape outright — see
+        # ``_x_definition_spec``.
+        definition_spec = _x_definition_spec(
+            node.x_definition, node, recorded=produced
+        )
         # Only the characteristics the card writes as X are variable: "+X/+0"
         # pumps power alone, so the literal half stays literal.
         payload: dict[str, object] = {

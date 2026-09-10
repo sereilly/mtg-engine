@@ -474,8 +474,28 @@ def _per_each_amount(amount: ast.Amount, negative: bool, node) -> dict | int:
     return {"times_x": value} if value else 0
 
 
-def _x_definition_spec(definition: ast.Amount, node) -> dict:
-    """The spec behind a where-clause's X, whichever aggregate it names."""
+def _x_definition_spec(
+    definition: ast.Amount, node, *, recorded: "frozenset[str] | None" = None
+) -> dict:
+    """The spec behind a where-clause's X, whichever aggregate it names.
+
+    *recorded* is the set of scratchpad keys steps of this same effect write,
+    and passing one admits a back-reference — "…, where X is the number of
+    cards **revealed this way**" (Ivy Seer, Nightshade Seer and their two
+    Scents). ``None`` means no back-reference may define an X here at all, and
+    it is the default because the two callers ask different questions of one
+    helper. A **durational** pump is evaluated once, at resolution, where the
+    record the reveal wrote is sitting in the scratchpad; a durationless one is
+    a CR 613 layer 7c contribution the P/T refresh rebuilds on every recompute,
+    and a scratchpad key is not there to be read the second time. A continuous
+    effect sized by a frozen record is the failure
+    ``characteristics._lower_pump_per_milled`` refuses in its own words.
+
+    One parameter rather than a flag beside a set, because the two questions
+    are one: may a record define this X, and which records exist. A caller that
+    answered the first and not the second would admit a clause naming a step
+    nothing performs, which is a pump of zero on a card reporting supported.
+    """
     # "…, where X is **half** the creature's power, **rounded down**."
     # (Catacomb Dragon.) The halving rides on the spec rather than on the
     # definition, so every alternative below carries it without knowing it can
@@ -483,7 +503,7 @@ def _x_definition_spec(definition: ast.Amount, node) -> dict:
     # multiplier and the offset already have. Unwrapped first because it is not
     # a definition at all: it is an arithmetic over whichever one follows.
     if isinstance(definition, ast.Half):
-        spec = _x_definition_spec(definition.of, node)
+        spec = _x_definition_spec(definition.of, node, recorded=recorded)
         spec["half"] = definition.rounding
         # Omitted at 2, so every spec written before fractions existed stays
         # byte-identical (see `ast.Half`).
@@ -530,6 +550,30 @@ def _x_definition_spec(definition: ast.Amount, node) -> dict:
                 "offset": definition.offset,
             }
         }
+    if recorded is not None and isinstance(definition, ast.ThatMuch):
+        # "…, where X is the number of cards **revealed this way**." The parse
+        # resolved the printed noun and participle against
+        # ``records._THIS_WAY_COUNTS`` and what arrives is the key, so this
+        # reads it onto the ``back_reference`` channel ``count_from_payload``
+        # already answers — the same one the damage and the life gain spend the
+        # identical clause on, so one evaluator answers all three.
+        #
+        # A printed bonus refuses: "…plus one" over a record is arithmetic this
+        # spec has no key for, and dropping it is a pump one smaller than the
+        # card.
+        if definition.source is None or definition.bonus:
+            raise LoweringError(
+                "a recorded X names its producer and carries no bonus", node=node
+            )
+        if definition.source not in recorded:
+            # The gate every back-reference in this grammar carries: with no
+            # step in front of it the words name nothing, and the spec would be
+            # answered 0 — a card that reports supported and pumps by nothing.
+            raise LoweringError(
+                f"back-reference to {definition.source!r} with no producer in "
+                "this effect", node=node,
+            )
+        return {"back_reference": definition.source}
     raise LoweringError("only a count or a maximum can define X here", node=node)
 
 

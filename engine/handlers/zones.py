@@ -34,6 +34,7 @@ from ..oracle_types import (DISCARDED_BY_SEAT, DREW_BY_SEAT, DREW_COUNT,
                            LAST_TARGET_CONTROLLER,
                             LAST_TARGET_NAME,
                             REVEALED_HAND_CARDS,
+                            REVEALED_THIS_WAY,
                             EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS,
                             HAND_CARDS_TO_LIBRARY, MILLED_THIS_WAY,
                             PER_OBJECT_SEAT_RECORDS,
@@ -8382,6 +8383,43 @@ def choose_cards_in_hand(game: Game, instruction: OracleInstruction, context: Or
         context.results[result_key] = []
         game.log.append(
             f"{context.card.name}: {player.name} has no card to choose"
+        )
+        return True, "resolved"
+    game.arm_choose_cards_in_hand(seat, payload, context)
+    return True, "resolved"
+
+
+@effect_handler("reveal_cards_from_hand")
+def reveal_cards_from_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Reveal any number of artifact cards in your hand." (Metalworker, the
+    five Urza's Destiny Seers, their five Scents and Rofellos's Gift.)
+
+    Nothing moves and nothing is spent: the seat picks a subset of its own
+    hand, those cards become public (CR 701.20a), and the sentence after this
+    one reads the count off the record. The pick goes through the same queued
+    choice Sylvan Library's does — one prompt for "which cards in your hand",
+    with the printed offer ("any number of" against a count) and the printed
+    verb as payload — because what differs between the two sentences is data
+    and not a mechanism.
+
+    ``chosen_hand_card_candidates`` is the one rule that says which cards the
+    printed noun phrase admits, so the list offered and the list an answer is
+    checked against cannot be two lists.
+
+    An empty candidate set answers itself: nought is a legal answer to "any
+    number", so there is nothing to ask and both records are written where the
+    effect stands. Written rather than left absent, because an absent key is a
+    back-reference with no producer — which is a refusal, not a zero.
+    """
+    payload = instruction.payload
+    player = context.caster
+    seat = game.players.index(player)
+    candidates = chosen_hand_card_candidates(game, payload, player)
+    if not candidates:
+        context.results[str(payload.get("result_key") or REVEALED_HAND_CARDS)] = []
+        context.results[str(payload.get("count_key") or REVEALED_THIS_WAY)] = 0
+        game.log.append(
+            f"{context.card.name}: {player.name} reveals no cards"
         )
         return True, "resolved"
     game.arm_choose_cards_in_hand(seat, payload, context)

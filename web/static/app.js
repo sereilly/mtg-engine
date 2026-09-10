@@ -6894,9 +6894,15 @@ function applyChooseCardsInHandPrompt(info) {
   const offered = new Set(info.choices.map((c) => c.hand_index));
   chooseCardsInHandSelected = chooseCardsInHandSelected.filter((i) => offered.has(i));
   const wanted = Number(info.count) || 0;
+  // "Reveal any number of blue cards in your hand." The count is then a
+  // ceiling rather than a debt, so Confirm is live from nought upward.
+  const anyNumber = Boolean(info.any_number);
+  const verb = info.verb === "reveal" ? "reveal" : "choose";
 
-  title.textContent = `${info.card_name} — choose cards in your hand`;
-  body.textContent = `Choose ${wanted} card${wanted === 1 ? "" : "s"} in your hand.`;
+  title.textContent = `${info.card_name} — ${verb} cards in your hand`;
+  body.textContent = anyNumber
+    ? `${verb === "reveal" ? "Reveal" : "Choose"} any number of the cards in your hand (up to ${wanted}).`
+    : `${verb === "reveal" ? "Reveal" : "Choose"} ${wanted} card${wanted === 1 ? "" : "s"} in your hand.`;
   const buttons = info.choices
     .map(
       (c) =>
@@ -6905,7 +6911,9 @@ function applyChooseCardsInHandPrompt(info) {
         ` data-cch-hand="${c.hand_index}">${escapeHtml(c.name)}</button>`
     )
     .join("");
-  const ready = chooseCardsInHandSelected.length === wanted;
+  const ready = anyNumber
+    ? chooseCardsInHandSelected.length <= wanted
+    : chooseCardsInHandSelected.length === wanted;
   steps.innerHTML =
     `<div class="prompt-choice-column">${buttons}</div>` +
     `<div class="prompt-choice-row"><button type="button" class="prompt-choice-btn"` +
@@ -6922,7 +6930,12 @@ function applyChooseCardsInHandPrompt(info) {
     });
   });
   steps.querySelector("[data-cch-confirm]")?.addEventListener("click", async () => {
-    if (chooseCardsInHandSelected.length !== wanted) return;
+    if (
+      anyNumber
+        ? chooseCardsInHandSelected.length > wanted
+        : chooseCardsInHandSelected.length !== wanted
+    )
+      return;
     const picks = [...chooseCardsInHandSelected];
     chooseCardsInHandSelected = [];
     await sendAction({ seat, action: "choose_cards_in_hand_confirm", hand_indices: picks });
