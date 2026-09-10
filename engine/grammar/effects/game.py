@@ -154,16 +154,54 @@ def _parse_choose_number(stream: TokenStream) -> ast.Statement | None:
     the naming and modal productions beside it keep the ones they own. Both
     bounds must be printed numbers: a range with a word in it would be a
     different sentence, and reading only the first would silently halve the card.
+
+    ``Choose a number greater than 0 and a color.`` (Scrying Glass.) Two
+    printed variations on the same sentence, and both are read here rather than
+    in productions of their own.
+
+    The **bound** is one word where "between" is three, and it has no ceiling:
+    "greater than 0" is CR 107.1's whole range from 1 upward, which the node
+    carries as a None maximum. Read as a floor rather than folded into a
+    "between" with an invented ceiling, because an invented ceiling is an
+    answer the card would have accepted and the prompt would refuse.
+
+    The **trailing conjunct** is an elision: "and a color" is "and choose a
+    color" with the verb left out, so the general sentence joiner cannot read
+    it — it looks for a statement after the "and" and finds a noun phrase. The
+    verb is this production's, so supplying it is this production's job, and
+    what comes back is the ordinary :class:`ast.Conjunction` of the two choices
+    the joiner would have built. Both remain separate statements: they are
+    answered separately, recorded separately and read back separately, and a
+    fused node would be a kind whose only card is this one.
+
+    Read only after a number bound, never as a way into the colour on its own:
+    "choose a color" alone is ``_parse_choose_color``'s sentence below and must
+    stay so, or the two productions compete for the same tokens.
     """
     mark = stream.mark()
+    bounds: tuple[int, int | None] | None = None
     if stream.accept_phrase("choose", "a", "number", "between"):
         low = parse_amount(stream)
         if isinstance(low, ast.Fixed) and stream.accept_word("and"):
             high = parse_amount(stream)
             if isinstance(high, ast.Fixed) and low.value <= high.value:
-                return ast.ChooseNumber(low.value, high.value)
-    stream.reset(mark)
-    return None
+                bounds = (low.value, high.value)
+    elif stream.accept_phrase("choose", "a", "number", "greater", "than"):
+        floor = parse_amount(stream)
+        if isinstance(floor, ast.Fixed):
+            # "Greater than 0" is strict (CR 107.1), so the smallest legal
+            # answer is one above the printed number — the floor the prompt
+            # offers and the resolver enforces.
+            bounds = (floor.value + 1, None)
+    if bounds is None:
+        stream.reset(mark)
+        return None
+    chosen: ast.Statement = ast.ChooseNumber(bounds[0], bounds[1])
+    conjunct = stream.mark()
+    if stream.accept_phrase("and", "a", "color"):
+        return ast.Conjunction((chosen, ast.ChooseColor()))
+    stream.reset(conjunct)
+    return chosen
 
 
 def _parse_count_objects(stream: TokenStream) -> "ast.CountObjects | None":

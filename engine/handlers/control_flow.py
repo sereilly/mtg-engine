@@ -28,7 +28,9 @@ from typing import TYPE_CHECKING
 from ..damage_deaths import DAMAGED_BY_SOURCE_DIED
 from ..exiled_records import is_live, record_in_context, source_object
 from ..named_counters import counters_on
-from ..oracle_types import (CHOSEN_CARD_TYPE_THIS_WAY, CHOSEN_COLOR_THIS_WAY, MANA_PAID_BY_SEAT,
+from ..oracle_types import (CHOSEN_CARD_TYPE_THIS_WAY, CHOSEN_COLOR_THIS_WAY,
+                            CHOSEN_NUMBER_THIS_WAY, MANA_PAID_BY_SEAT,
+                            REVEALED_HAND_CARDS,
                             MILLED_THIS_WAY,
                             PER_OBJECT_SEAT_RECORDS,
                             OracleInstruction)
@@ -810,6 +812,42 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
                 counts[color] += 1
         return any(seen >= wanted for seen in counts.values())
 
+    if kind == "revealed_chosen_color_count":
+        # "**If that opponent reveals exactly the chosen number of cards of the
+        # chosen color**, you draw a card." (Scrying Glass.) Three records, all
+        # written by earlier steps of this same resolution: the number a seat
+        # named, the colour they named beside it, and the hand the reveal showed.
+        #
+        # The **record**, never the hand as it stands now. "Reveals" is what the
+        # step in front of this one did, and by the time a longer card asked the
+        # question the hand could have changed — the same rule every "this way"
+        # test above follows.
+        #
+        # An absent record is not zero. With no reveal at all the count is not
+        # "no cards of that colour", it is a question that was never asked, and
+        # answering it False is the only honest reading — otherwise a chosen
+        # number of zero would draw a card off a reveal that never happened.
+        # (The lowering refuses the clause without all three producers, so this
+        # is the belt to that braces.)
+        wanted = context.results.get(CHOSEN_NUMBER_THIS_WAY)
+        color = context.results.get(CHOSEN_COLOR_THIS_WAY)
+        revealed = context.results.get(REVEALED_HAND_CARDS)
+        if wanted is None or not color or revealed is None:
+            return False
+        # Whose cards these are, for the colour read: CR 105 is answered for an
+        # object outside the battlefield by ``object_colors.card_colors``, which
+        # needs the owner because a board-wide static can recolour a hand
+        # (Celestial Dawn). The seat is the one the reveal named — the same
+        # ``context.target`` that handler read — and never the printed noun
+        # phrase, which restates it.
+        owner = context.target if context.target is not None else context.caster
+        described = {"color_filter": str(color)}
+        count = sum(
+            1 for card in revealed
+            if _card_matches_filter(card, described, game=game, owner=owner)
+        )
+        return _compare_count(count, str(payload.get("op", "eq")), int(wanted))
+
     if kind == "revealed_card_has_chosen_name":
         # "**If that card has the chosen name**, this artifact deals 2 damage
         # to any target." (Cursed Scroll.) The two records an earlier step of
@@ -1479,21 +1517,46 @@ def choose_number(game: Game, instruction: OracleInstruction, context: OracleExe
     asked and every other seat takes the default the queue's resolver applies —
     which for a "you may" upkeep is *not changing the number*, the honest
     reading of declining the offer.
+
+    **And into the resolution's scratchpad as well**, because a permanent is not
+    the only kind of reader. "Choose a number greater than 0 and a color. …If
+    that opponent reveals exactly **the chosen number** of cards of the chosen
+    color, you draw a card." (Scrying Glass.) That reader is a later step of
+    *this* resolution and asks once, so the permanent's standing answer is the
+    wrong record for it twice over: the number this activation asked for is not
+    necessarily the number the last one did, and the question is over before a
+    permanent can be consulted again. Both records are written by this one step
+    — the same discipline the colour handler below states — because a step that
+    wrote only one of them would leave the other reader with nothing and no
+    error, which is the shape this repo keeps finding.
+
+    ``maximum`` may be None, which is a printed range with no ceiling ("greater
+    than 0", CR 107.1) and not a missing bound. It travels as None to the prompt
+    and to its resolver rather than being repaired into a number here: an
+    invented ceiling is an answer the card would have accepted and the prompt
+    would refuse.
     """
     permanent = context.source_permanent
     if permanent is None:
         game.log.append(f"{context.card.name}: no permanent to choose a number for")
         return True, "resolved"
     low = int(instruction.payload.get("minimum", 0))
-    high = int(instruction.payload.get("maximum", 0))
+    printed_high = instruction.payload.get("maximum")
+    high = None if printed_high is None else int(printed_high)
     seat = game.controller_index_of(permanent)
     if seat is None:
         return True, "resolved"
+    default = int(permanent.metadata.get("chosen_number", low))
+    # Stamped **before** the prompt is armed, the discipline every other choice
+    # in this file follows: a headless or AI seat is never blocked and the step
+    # behind this always has a number to spend.
+    context.results[CHOSEN_NUMBER_THIS_WAY] = default
     game.arm_pending_choice(
         "number_choice", seat,
         card_name=permanent.card.name, permanent=permanent,
         minimum=low, maximum=high,
-        default_number=int(permanent.metadata.get("chosen_number", low)),
+        default_number=default,
+        result_key=CHOSEN_NUMBER_THIS_WAY, _context=context,
     )
     return True, "resolved"
 
@@ -1509,10 +1572,28 @@ def choose_color(game: Game, instruction: OracleInstruction, context: OracleExec
     the permanent rather than in this resolution's scratchpad, and "last" is
     what overwriting means.
 
-    The **same** prompt CR 614.1c's entry-state version arms, on the same
-    metadata key: a card may print both (this one does), and two prompts writing
-    two keys would be a permanent with two chosen colours and a shield reading
-    whichever one its author remembered.
+    The same metadata key CR 614.1c's entry-state version writes: a card may
+    print both (this one does), and two keys would be a permanent with two
+    chosen colours and a shield reading whichever one its author remembered.
+
+    Its **own prompt** rather than that version's, though, for the reason
+    ``choose_card_type`` beside it states one characteristic over: a choice made
+    while an ability resolves may be read back by a later step of the *same*
+    resolution, so it has to hold that resolution open until it is answered.
+    ``enter_choice`` does not suspend and must not start — its readers are
+    continuous effects that re-read the record on every recompute, so a late
+    answer there really does take effect. This one is ``color_choice``, and the
+    two cards already in the pool lose nothing by the move: Chromatic Armor's
+    choose is the last step of its ability, and Hall of Gemstone's mana swap
+    follows the permanent rather than snapshotting its answer.
+
+    **And the answer is recorded in the resolution's scratchpad as well**, which
+    is what the second kind of reader asks. "…If that opponent reveals exactly
+    the chosen number of cards of **the chosen color**, you draw a card."
+    (Scrying Glass.) That reader runs once, inside this resolution, and asking a
+    permanent for its standing answer would be asking about whichever activation
+    last set it. One step writes both records, because a step that wrote only
+    one of them would leave the other reader with nothing and no error.
 
     A deterministic default is stamped first — the colour the controller's
     opponents hold most of among nontoken permanents, the same policy the entry
@@ -1578,11 +1659,12 @@ def choose_color(game: Game, instruction: OracleInstruction, context: OracleExec
                 counts[color] = counts.get(color, 0) + 1
     default_color = max(sorted(counts), key=lambda c: counts[c]) if counts else "W"
     permanent.metadata["chosen_color"] = default_color
-    game.arm_pending_choice(
-        "enter_choice", seat,
+    context.results[CHOSEN_COLOR_THIS_WAY] = default_color
+    game.arm_color_choice(
+        seat,
         card_name=permanent.card.name, permanent=permanent,
-        needs_color=True, opponents=[], default_seat=None,
-        default_color=default_color,
+        result_key=CHOSEN_COLOR_THIS_WAY, context=context,
+        default=default_color,
     )
     game.log.append(f"{card_name}: {game.players[seat].name} chooses a color")
     return True, "resolved"

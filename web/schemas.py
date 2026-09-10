@@ -127,6 +127,7 @@ ActionKind = Literal[
     "enter_choice_confirm",
     "card_type_choice_confirm",
     "creature_type_choice_confirm",
+    "color_choice_confirm",
     "land_type_swap_confirm",
     "body_choice_confirm",
     "entry_exile_confirm",

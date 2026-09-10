@@ -91,6 +91,34 @@ def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
     # the dispatcher resets to its own mark immediately before calling here.
     mark = stream.mark()
 
+    # "if **that opponent reveals exactly the chosen number of cards of the
+    # chosen color**" (Scrying Glass). A count of a *record* rather than of a
+    # zone: the hand this asks about was shown by the sentence in front, and
+    # what is counted in it are cards nobody may look at again once the
+    # resolution is over.
+    #
+    # Read first, before every branch below that opens on a player reference:
+    # "that opponent" is one, and the readers under this would each consume it,
+    # fail on "reveals" and reset — which is correct but leaves the refusal
+    # naming whichever of them happened to be last. This one is settled by the
+    # verb straight after the seat and consumes nothing when it is not there.
+    #
+    # The seat is read and dropped. It restates the reveal's own target, which
+    # is the only hand the record holds, so carrying it would be a second
+    # answer to a question that already has one — but it is *read*, because a
+    # production that skipped the words would claim a sentence naming somebody
+    # else.
+    reveal_mark = stream.mark()
+    revealer = parse_player_ref(stream)
+    if revealer is not None and revealer.kind in ("that_player", "target_opponent"):
+        if stream.accept_word("reveals", "reveal") and stream.accept_word("exactly"):
+            if stream.accept_phrase(
+                "the", "chosen", "number", "of", "cards", "of", "the", "chosen",
+                "color",
+            ):
+                return ast.RevealedChosenColorCount("eq")
+    stream.reset(reveal_mark)
+
     # "if **the difference between your life total and target player's life
     # total is 5 or less**" (Psychic Transfer). Read before the zone count and
     # the player reference below because it opens on "the", which neither of

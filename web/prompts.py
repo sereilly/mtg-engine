@@ -1145,13 +1145,36 @@ def _bid_life(ctx: PromptContext, choices: list) -> dict:
 
 @prompt_renderer("number_choice")
 def _number_choice(ctx: PromptContext, choices: list) -> dict:
+    """"Choose a number between 0 and 7" (Shapeshifter) — and "choose a number
+    **greater than 0**" (Scrying Glass), which prints no ceiling at all.
+
+    ``maximum`` is None for the open form, and it stays None in the payload
+    because the *rule* has no ceiling: CR 107.1 puts no upper bound on a number
+    a player may choose, and ``_resolve_number_choice`` accepts any answer above
+    the floor. What needs a bound is the **offer**, since a list of options is
+    how this prompt is shown and an empty one is a prompt armed and never
+    displayed.
+
+    So the offer's ceiling comes from the board, exactly as ``pay_any_amount``'s
+    does one prompt over: the largest hand at the table, because every open
+    "choose a number" in this pool is matched against a count of cards in one
+    (Scrying Glass), and a number above the biggest hand cannot be matched by
+    any of them. A one-card span is the floor, so the picker always offers
+    something even with every hand empty.
+    """
     data = choices[0].data
-    low, high = int(data["minimum"]), int(data["maximum"])
+    low = int(data["minimum"])
+    printed_high = data.get("maximum")
+    if printed_high is None:
+        span = max(1, max((len(p.hand) for p in ctx.game.players), default=1))
+        offered_high = low + span
+    else:
+        offered_high = int(printed_high)
     return {
         "card_name": data["card_name"],
         "minimum": low,
-        "maximum": high,
-        "options": list(range(low, high + 1)),
+        "maximum": None if printed_high is None else offered_high,
+        "options": list(range(low, offered_high + 1)),
         "default": int(data.get("default_number", low)),
     }
 
@@ -1797,6 +1820,30 @@ def _creature_type_choice(ctx: PromptContext, choices: list) -> dict:
         "card_name": data.get("card_name", ""),
         "creature_types": sorted(CREATURE_TYPES),
         "default_creature_type": data.get("default_creature_type"),
+    }
+
+
+@prompt_renderer("color_choice")
+def _color_choice(ctx: PromptContext, choices: list) -> dict:
+    """"**Choose a color.**" made while an ability resolves (CR 608.2d) —
+    Chromatic Armor's re-choice, Hall of Gemstone's upkeep, Scrying Glass's
+    guess.
+
+    The offered list is CR 105.1's five and nothing else, which is the same set
+    the resolver normalises the answer against (idiom 9), so the picker cannot
+    show a colour the answer path would refuse. Colourless is not on it: CR
+    105.2c is the absence of a colour, and "choose a color" names one.
+
+    The default travels beside it — the handler recorded it before arming — so a
+    seat that dismisses the prompt has the answer the step behind it will use
+    rather than none.
+    """
+    data = choices[0].data
+    return {
+        "player_index": choices[0].player_index,
+        "card_name": data.get("card_name", ""),
+        "colors": ["W", "U", "B", "R", "G"],
+        "default_color": data.get("default_color"),
     }
 
 

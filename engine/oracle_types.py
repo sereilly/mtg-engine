@@ -1080,6 +1080,20 @@ CHOSEN_CREATURE_TYPE_THIS_WAY = "chosen_creature_type_this_way"
 #: resolution and has no permanent at all.
 CHOSEN_COLOR_THIS_WAY = "chosen_color_this_way"
 
+#: What "**the chosen number**" names (Scrying Glass). One number, chosen by
+#: the controller of the resolving ability (CR 608.2d) in the sentence in
+#: front, and read back by the sentence that spends it.
+#:
+#: The scratchpad twin of the ``chosen_number`` metadata key, and the fourth of
+#: the pairs above. That key is a permanent's own standing answer -- the number
+#: Shapeshifter's characteristic-defining P/T keeps reading for as long as the
+#: permanent lives -- where this one is made and spent inside a single
+#: resolution, and a resolution is the only window in which "the chosen number"
+#: can mean the number *this* activation asked for. Both are written by one
+#: step, because a permanent that prints both readings would otherwise hold two
+#: numbers and each reader would take whichever its author remembered.
+CHOSEN_NUMBER_THIS_WAY = "chosen_number_this_way"
+
 #: What "**the chosen type**" / "**that type**" names when the ability that
 #: chose it is a *spell* (Turnabout). One card type, chosen by the controller of
 #: the resolving spell (CR 608.2d) in the sentence in front, and read back by

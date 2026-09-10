@@ -133,6 +133,38 @@ class RevealedCardHasChosenName:
 
 
 @dataclass(frozen=True)
+class RevealedChosenColorCount:
+    """``if that opponent reveals exactly the chosen number of cards of the
+    chosen color`` (Scrying Glass).
+
+    :class:`RevealedCardHasChosenName`'s sibling with two chosen values instead
+    of one, and a *count* rather than a match: three records written by three
+    earlier steps of the same resolution — the number, the colour, and the hand
+    a reveal step showed — read together in one question.
+
+    Nothing about which seat revealed is a field, for :class:`MilledThisWay`'s
+    reason exactly: "that opponent" is the one the reveal in front of this
+    sentence targeted and there is nothing else it could be, so the words are
+    consumed as a restatement rather than carried as a second answer free to
+    disagree with the record.
+
+    ``op`` is the printed comparison. "Exactly" is the only printing, and it is
+    a field rather than a constant because the question the evaluator asks is
+    "does the count compare this way against the chosen number" — a card
+    printed "or more" would be the same question with one word changed, which
+    is what makes a printed word data here.
+
+    Neither chosen value is a field either. Which number and which colour are
+    always the ones this resolution's own choose steps recorded, and the
+    lowering refuses the clause unless both producers are in front of it —
+    a back-reference with no producer answers False forever on a card that
+    reports itself supported.
+    """
+
+    op: str = "eq"
+
+
+@dataclass(frozen=True)
 class ChosenNameMilledThisWay:
     """``if a card with the chosen name was milled this way`` (Foreshadow).
 
