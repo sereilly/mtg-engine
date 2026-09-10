@@ -157,10 +157,11 @@ def accept_name_comparison(
 ) -> str | None:
     """A noun phrase's **name comparison**, or None with nothing consumed.
 
-    "…with the same name as another permanent" (Eye of Singularity) and
-    "…with that name" (its second line). CR 201.2 in its two printed forms:
-    against the rest of the board, and against the object the firing event was
-    about. Here rather than in ``postmodifiers`` for this module's own reason —
+    "…with the same name as another permanent" (Eye of Singularity), "…with
+    that name" (its second line) and "…with the same name as that card"
+    (Assembly Hall). CR 201.2 in its three printed forms: against the rest of
+    the board, against the object the firing event was about, and against a card
+    an earlier step of this same effect turned face up. Here rather than in ``postmodifiers`` for this module's own reason —
     a name is a literal, not a description of a set, and neither of these reads
     a type line, a subtype or a nested phrase. ``accept_original_expansion``
     below is the same shape: a name-shaped narrowing the postmodifier scan
@@ -197,6 +198,18 @@ def accept_name_comparison(
     # creature-death trigger still refuses rather than being taken as this
     # phrase with a word ignored.
     same_as_that = stream.mark()
+    # "…a card **with the same name as that card**" (Assembly Hall). A third
+    # referent, and its own return value because it is its own relation: "that
+    # **creature**" below names the object the firing *event* was about, and
+    # "that **card**" names one an earlier step of this same effect turned face
+    # up. One word apart, two different places the name comes from, and reading
+    # either as the other is a search for a name nobody wrote down.
+    #
+    # Read before the branch below rather than folded into it: "card" is not a
+    # card type (CR 205.2 lists none), so that branch already refuses the word,
+    # and the two cannot both claim it.
+    if stream.accept_phrase("the", "same", "name", "as", "that", "card"):
+        return "recorded"
     if stream.accept_phrase("the", "same", "name", "as", "that"):
         from .vocabulary import CARD_TYPES
 

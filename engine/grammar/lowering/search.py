@@ -21,7 +21,7 @@ reported supported.
 
 from ...oracle_types import (COUNTERED_SPELL_CONTROLLER, COUNTERED_SPELL_NAME,
                              LAST_TARGET_CONTROLLER, LAST_TARGET_NAME,
-                             OracleInstruction)
+                             REVEALED_HAND_CARDS, OracleInstruction)
 from ...search_filters import SEARCH_COMPARISONS, SEARCH_RESTRICTIONS
 from ._deaths import BOUND_CARD_EVENTS
 from .. import ast
@@ -51,13 +51,20 @@ _SEARCH_HONOURED_FILTER_FIELDS = (
         # gated on the event below, since the field on its own says nothing
         # about whether anything recorded one.
         "name_from_event",
+        # "…a card **with the same name as that card**" (Assembly Hall). The
+        # name of a card an earlier step of this same effect turned face up —
+        # honoured here and gated on ``produced`` below, since the field on its
+        # own says nothing about whether any step recorded one.
+        "name_from_recorded_card",
     })
     | SEARCH_RESTRICTIONS
 )
 
 
 def _lower_search_library(
-    node: ast.SearchLibrary, event: str | None = None,
+    node: ast.SearchLibrary,
+    event: str | None = None,
+    produced: frozenset[str] = frozenset(),
 ) -> tuple[OracleInstruction, ...]:
     """"Search your library for a card, put that card into your hand, then
     shuffle." (Demonic Tutor.)
@@ -184,6 +191,28 @@ def _lower_search_library(
         if filt.named is not None:
             raise LoweringError("one find is named once", node=node)
         restrictions["named_from_event"] = True
+    if filt.name_from_recorded_card:
+        # "…a card **with the same name as that card**" (Assembly Hall). The
+        # name is a *record* rather than a target or an event — the card the
+        # reveal one sentence up turned face up — and it is turned into an
+        # ordinary ``named`` where the search is armed
+        # (``handlers/zones._search_restrictions``), exactly as the two readings
+        # around it are, so every seat answers the same search.
+        #
+        # Gated on the record actually being written by a step in front of this
+        # one, which is the ``produced`` set's whole job: with no such step
+        # "that card" names nothing, and a search for a name nobody wrote down
+        # would be a tutor for any card at all. That is the direction a dropped
+        # narrowing must never fail in, so it refuses instead.
+        if REVEALED_HAND_CARDS not in produced:
+            raise LoweringError(
+                "\"that card\" names a card an earlier step of this effect "
+                "revealed, and no step of it revealed one",
+                node=node,
+            )
+        if filt.named is not None:
+            raise LoweringError("one find is named once", node=node)
+        restrictions["named_from_record"] = REVEALED_HAND_CARDS
     if filt.mana_value is not None:
         # A comparison the predicate cannot apply, or a bound that is not a
         # number ("with mana value X"), refuses rather than lowering to a search
@@ -388,7 +417,11 @@ _SEARCH_DESTINATIONS = {
 #: searched player's rather than the searcher's — which is what
 #: `search_filters.landing_seat` already answers, so the zone name is the whole
 #: of the difference.
-_OTHER_SEARCH_DESTINATIONS = frozenset({"exile", "hand"})
+#: "battlefield" joined them for Bribery — "put that card onto the battlefield
+#: under your control" — which is the first printing here whose find does not
+#: stay with the player whose library was opened. It is admitted only with a
+#: printed controller, at the branch below.
+_OTHER_SEARCH_DESTINATIONS = frozenset({"exile", "hand", "battlefield"})
 
 #: The player references whose seat the search flow can name. "You" is
 #: deliberately absent: that sentence is `_lower_search_library`'s, and reaching
@@ -432,6 +465,22 @@ def _lower_search_player_library(
             "this search puts its finds into the searched player's own hand",
             node=node,
         )
+    # "…put that card onto the battlefield **under your control**." (Bribery.)
+    # CR 110.2a's controller, and the only seat this flow cannot work out for
+    # itself: ``search_filters.landing_seat`` follows the *zone* by default, so
+    # a battlefield destination with no printed controller would put the find
+    # onto the searched player's own side — which for this card is the whole
+    # effect backwards. Refused rather than defaulted, because "under the
+    # control of <somebody else>" is a card nothing here implements and a
+    # silently-dropped possessive is a permanent under the wrong player.
+    controller = (
+        node.under_control_of.kind if node.under_control_of is not None else None
+    )
+    if node.to.name == "battlefield" and controller != "you":
+        raise LoweringError(
+            "this search puts its find onto the battlefield under your control",
+            node=node,
+        )
     leftover = _restrictions_beyond(node.filter, _SEARCH_HONOURED_FILTER_FIELDS)
     if leftover:
         raise LoweringError(
@@ -448,6 +497,13 @@ def _lower_search_player_library(
         # and the web picker all already ask.
         "zone_owner_target": True,
     }
+    if node.to.name == "battlefield":
+        # The seat the find enters under, said as a flag rather than a seat
+        # number because a lowering has no board to count seats on. The handler
+        # turns it into ``battlefield_seat``, which is the key
+        # ``search_filters.landing_seat`` already asks — one answer to "whose
+        # battlefield", not a second reading beside it.
+        payload["battlefield_under_caster"] = True
     if isinstance(node.count, ast.ThatMuch):
         # "for **that many** cards" (Jester's Mask): the size of a hand an
         # earlier step of this same effect emptied. Demanded of that step rather

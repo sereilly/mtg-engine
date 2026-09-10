@@ -194,6 +194,7 @@ from .library import (
 from .reveal import (
     parse_reveal_any_number_from_hand,
     _parse_reveal_top,
+    accept_subject_reveals_counted_top_sorted,
     accept_subject_reveals_top_of_library,
     parse_bin_revealed_card,
     parse_graveyard_top_opponent_chooses,
@@ -367,6 +368,7 @@ __all__ = [
     "_parse_play_with_hand_revealed",
     "parse_exile_random_card_from_hand",
     "_parse_reveal_hand",
+    "accept_subject_reveals_counted_top_sorted",
     "accept_subject_reveals_top_of_library",
     "_parse_reveal_hand_and_choose",
     "_parse_exile_graveyard_position",

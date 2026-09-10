@@ -535,11 +535,23 @@ def _lower_look_at_library_top(
             raise LoweringError(
                 "the own-library look only rearranges what it saw", node=node
             )
-        if not isinstance(node.count, ast.Fixed):
-            raise LoweringError("the library look needs a printed number", node=node)
+        # "{X}: Look at the top **X** cards of your library, then put them back
+        # in any order." (Soothsaying.) The announced X (CR 601.2b via
+        # CR 602.2b), which is not a number until the ability is on the stack —
+        # so it travels as the string every amount in this engine travels as
+        # and ``handlers/_common.resolve_amount`` turns it into one at
+        # resolution, which the handler already asks it to do.
+        #
+        # This refused outright before, and the refusal was invisible: the
+        # *line* still classified as an activated ability, so the card compiled
+        # supported carrying an ability part with no instruction behind it. It
+        # activated, charged X mana and did nothing at all —
+        # ``support_report --hollow-lines`` and ``parse_coverage`` were the only
+        # two instruments that could see it.
         return (
             OracleInstruction(
-                "reorder_own_library_top", "", {"amount": node.count.value}
+                "reorder_own_library_top", "",
+                {"amount": _amount_payload(node.count)},
             ),
         )
     # "…of **target opponent's** library" (Precognition). The same targeted

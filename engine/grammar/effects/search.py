@@ -435,7 +435,36 @@ def _parse_search_other_library(stream: TokenStream) -> ast.Statement:
     if not filt.is_card:
         raise stream.error("a library holds cards, not permanents")
     to: ast.Zone | None = None
-    if stream.accept_phrase("and", "exile", "them"):
+    under_control_of: ast.PlayerRef | None = None
+    if isinstance(count, ast.Fixed) and count.value == 1 and stream.accept_phrase(
+        "and", "put", "that", "card", "onto", "the", "battlefield"
+    ):
+        # "Search **target opponent's** library for a creature card and put that
+        # card onto the battlefield **under your control**." (Bribery.) The
+        # third destination this production reads, and the first that separates
+        # the seat whose library is opened from the seat the find lands under —
+        # CR 110.2a's controller, which is what the printed phrase is there to
+        # say.
+        #
+        # The controller is **required**, not optional: CR 110.2 would default
+        # it to the spell's controller and so would happen to be right here,
+        # but ``search_filters.landing_seat`` does not — its default follows the
+        # *zone*, so a phrase consumed into nothing would put the creature back
+        # onto the battlefield of the player whose library it came out of. A
+        # printed seat read and dropped is the rider bug this grammar refuses by
+        # construction, so the words are consumed and checked.
+        to = ast.Zone("battlefield")
+        if stream.accept_phrase("under", "your", "control"):
+            under_control_of = ast.PlayerRef("you")
+        elif stream.accept_phrase("under", "the", "control", "of"):
+            under_control_of = parse_player_ref(stream)
+            if under_control_of is None:
+                raise stream.error("expected a player after 'under the control of'")
+        else:
+            raise stream.error(
+                "expected whose battlefield this search's find enters"
+            )
+    elif stream.accept_phrase("and", "exile", "them"):
         to = ast.Zone("exile")
     elif isinstance(count, ast.Fixed) and count.value == 1 and stream.accept_phrase(
         "and", "exile", "it"
@@ -458,7 +487,7 @@ def _parse_search_other_library(stream: TokenStream) -> ast.Statement:
         if shuffler is None:
             raise stream.error("expected who shuffles after this search")
         stream.expect_word("shuffles")
-        return ast.SearchPlayerLibrary(player, count, filt, to)
+        return ast.SearchPlayerLibrary(player, count, filt, to, under_control_of)
     # "**That player puts those cards into their hand, then shuffles.**"
     holder = parse_player_ref(stream)
     if holder is None:

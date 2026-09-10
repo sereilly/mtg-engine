@@ -193,6 +193,8 @@ def object_filter_payload(self: "ObjectFilter") -> dict[str, object]:
         payload["shares_name_with_another"] = True
     if self.name_from_event:
         payload["name_from_event"] = True
+    if self.name_from_recorded_card:
+        payload["name_from_recorded_card"] = True
     if self.excluded_basic_lands:
         payload["exclude_basic_lands"] = True
     if self.not_enchanted:

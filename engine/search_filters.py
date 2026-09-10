@@ -220,6 +220,13 @@ def search_matches(card, data: dict, *, game=None, owner=None) -> bool:
     # search finds no card rather than every card.
     if restrictions.get("named_from_event") and named is None:
         return False
+    # "…a card **with the same name as that card**" (Assembly Hall). The same
+    # rule one referent over again: ``handlers/zones._search_restrictions`` turns
+    # the record into a ``named`` as the search is armed, and the key surviving
+    # without one means the step in front of it revealed nothing — so the search
+    # finds no card rather than every card.
+    if restrictions.get("named_from_record") and named is None:
+        return False
     # "a card named Alpine Watchdog **and/or** a card named Igneous Cur"
     # (Alpine Houndmaster). Each find has its own name; this is the union the
     # *picker* offers, and which name each find actually consumed is settled by

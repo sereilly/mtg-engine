@@ -687,8 +687,26 @@ class PendingChoicesMixin:
             from ...models import Permanent as _Permanent
 
             found = _Permanent(card=card, tapped=enters_tapped)
+            # **Who owns it** (CR 108.3), which for a card out of a library or
+            # a graveyard is the player whose zone it was in — ``caster`` here,
+            # the *searched* seat and not the searching one.
+            #
+            # Recorded on the permanent because ``owner_index_of`` otherwise
+            # answers with the base controller, on a stated assumption that
+            # "every way a permanent enters play in this pool puts it under its
+            # owner's control". Bribery is the first card that makes that false:
+            # it opens an opponent's library and puts the creature onto **your**
+            # battlefield (CR 110.2a), so with nothing written here the Angel
+            # would go to the thief's graveyard when it died rather than to its
+            # owner's (CR 404.1). Written on every path rather than only where
+            # the two seats differ — for every card before this one they are the
+            # same seat, so the recorded answer is the one already given.
+            found.metadata["owner_player_index"] = self.players.index(caster)
             # "…under the control of that creature's owner." Whose battlefield
-            # again defaults to the chooser's, which is every other card.
+            # again defaults to the chooser's, which is every other card — and
+            # Bribery is the one that separates it from the line above: "put
+            # that card onto the battlefield **under your control**" is the
+            # searcher's side, out of the searched player's deck.
             self._put_permanent_onto_battlefield(
                 landing_seat(choice.data, choice.player_index), found, None
             )
@@ -759,8 +777,16 @@ class PendingChoicesMixin:
             self._record_search_exile(choice.data, card)
         else:
             self.put_card_into_hand(caster, card)
+        # **Who searched**, which is the seat that answered the prompt and not
+        # the seat whose zone was opened — two questions this line answered with
+        # one name, so Bribery logged "Bob searched library and put Serra Angel
+        # onto the battlefield" for a search Alice made onto Alice's side. Where
+        # they are the same seat (every card before this one) the sentence is
+        # byte-identical.
+        searcher = self.players[choice.player_index]
+        whose = "" if searcher is caster else f"{caster.name}'s "
         self.log.append(
-            f"{caster.name} searched {zone} and put {card.name} "
+            f"{searcher.name} searched {whose}{zone} and put {card.name} "
             + (
                 "onto the battlefield" if destination == "battlefield"
                 else "into exile" if destination == "exile"

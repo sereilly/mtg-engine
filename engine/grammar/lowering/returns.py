@@ -433,6 +433,34 @@ def _lower_return_to_zone(
         and filt.subtypes
     ):
         gated = dataclasses.replace(gated, subtypes=())
+    # "Return target **green** card from your graveyard to your hand." (Revive.)
+    # The colour the reanimation one branch up has read since Dreams of the
+    # Dead, on the *other* graveyard destination — and lifted rather than
+    # weakened for that branch's reason: it travels as ``graveyard_colors``, and
+    # the picker, the cast gate and the handler all test it through the one
+    # predicate (``graveyard_card_matches``). Scoped to this zone pair, so every
+    # other zone-change handler goes on refusing an adjective it cannot read.
+    if (
+        node.from_zone is not None
+        and node.from_zone.name == "graveyard"
+        and node.to.name == "hand"
+        and filt.colors
+    ):
+        gated = dataclasses.replace(gated, colors=())
+    # "Return target **basic** land card from your graveyard to your hand."
+    # (Groundskeeper.) CR 205.4a's supertype, on the same key
+    # ``graveyard_card_matches`` already reads for Lodestone Bauble and
+    # ``_graveyard_to_hand_payload`` already emits — so the phrase was carried
+    # onto the payload all along and only this gate stood in front of it. Read
+    # off the printed type line, which for a card in a graveyard is the whole of
+    # what there is (CR 613.1).
+    if (
+        node.from_zone is not None
+        and node.from_zone.name == "graveyard"
+        and node.to.name == "hand"
+        and filt.supertypes
+    ):
+        gated = dataclasses.replace(gated, supertypes=())
     # "Return target **Aura** card from your graveyard to the battlefield
     # attached to Hakim." The third adjective the graveyard family reads, lifted
     # out of the blanket refusal for the colour's and the subtype's reason above

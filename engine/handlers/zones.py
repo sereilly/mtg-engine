@@ -499,6 +499,26 @@ def _search_restrictions(game: Game, payload: dict, context) -> dict:
         name = getattr(recorded, "name", None)
         if name is not None:
             restrictions["named"] = name
+    # "…a card **with the same name as that card**" (Assembly Hall). The name of
+    # a card an earlier step of *this same effect* turned face up, read out of
+    # the resolution's own scratchpad under the key the lowering named — the
+    # third referent this function resolves, and it goes through the same
+    # ``named`` for the two above's reason: every seat that answers this search
+    # reads the armed restrictions, and none of them has the scratchpad.
+    #
+    # The record is a list (a reveal may turn up several), and the name is the
+    # first entry's: the sentence says "that **card**", singular, and the only
+    # printing of it reveals exactly one. A record that is empty — nothing was
+    # revealed, because the hand held no card the phrase admits — leaves the key
+    # in place with no name behind it, and ``search_matches`` then matches
+    # nothing: the search finds no card rather than every card.
+    record_key = restrictions.get("named_from_record")
+    if record_key:
+        revealed = context.results.get(str(record_key)) or ()
+        first = next(iter(revealed), None)
+        name = getattr(first, "name", None)
+        if name is not None:
+            restrictions["named"] = name
     if not restrictions.get("named_from_target"):
         return restrictions
     # Through the seam every handler resolves a chosen permanent by, so the
@@ -561,6 +581,16 @@ def search_library(game: Game, instruction: OracleInstruction, context: OracleEx
     if instruction.payload.get("zone_owner_target") and context.target is not None:
         if context.target in game.players:
             seats["zone_seat"] = game.players.index(context.target)
+    # "…put that card onto the battlefield **under your control**." (Bribery.)
+    # CR 110.2a's controller, and the one seat neither of the two readings above
+    # can supply: it is not a record a trigger wrote and it is not the seat whose
+    # library was opened — it is the ability's own controller, which is exactly
+    # the seat ``landing_seat`` stops defaulting to the moment ``zone_seat`` is
+    # set. Read after that block for that reason: written the other way round,
+    # the searched player's seat would overwrite it and the creature would enter
+    # on the side it came from.
+    if instruction.payload.get("battlefield_under_caster"):
+        seats["battlefield_seat"] = caster_index
     # "…for **that many** cards" — the number an earlier step of this same
     # resolution recorded (Jester's Mask's emptied hand). Read here rather than
     # baked into the payload, because the count is a fact about the board.
@@ -966,6 +996,23 @@ def _place_sorted_reveal(game, caster, revealed, payload, matches) -> None:
         zone = match_zone if matches(card) else rest_zone
         if zone == "hand":
             game.put_card_into_hand(caster, card)
+        elif zone == "battlefield":
+            # "…puts all land cards revealed this way onto the battlefield
+            # **tapped**." (Clear the Land.) CR 110.2 gives a permanent nobody
+            # was told to control to its owner, which here is the player whose
+            # library it came out of — the same seat that revealed it, because
+            # the printed subject of both clauses is one player. ``tapped`` is
+            # CR 110.5b and only ever rides the match half, which is where the
+            # word is printed.
+            game._put_permanent_onto_battlefield(
+                game.players.index(caster),
+                Permanent(card=card, tapped=bool(payload.get("match_tapped"))),
+                None,
+            )
+        elif zone == "exile":
+            # CR 406.3: an exiled card goes to its owner's exile, which for a
+            # card off the top of a library is the seat whose library it was.
+            caster.exile.append(card)
         else:
             game.put_card_into_graveyard(caster, card, from_zone="library")
 
@@ -985,27 +1032,42 @@ def reveal_top_sorting_by_filter(game: Game, instruction: OracleInstruction, con
     the library here and every card is placed by this handler. Fewer cards than
     the printed number is an ordinary board — the reveal shows what is there.
     """
-    caster = context.caster
-    seat = game.players.index(caster)
     count = resolve_amount(
         instruction.payload.get("amount", 0) or 0, context.x_value
     )
-    revealed = caster.library[:max(int(count), 0)]
-    if not revealed:
-        game.log.append(f"{caster.name} has no cards to reveal")
-        return True, "resolved"
-    del caster.library[:len(revealed)]
-    game.record_reveal(seat, [card.name for card in revealed])
-    game.log.append(
-        f"{caster.name} revealed {', '.join(card.name for card in revealed)}"
-    )
     described = dict(instruction.payload.get("filter") or {})
-    _place_sorted_reveal(
-        game, caster, revealed, instruction.payload,
-        lambda card: _card_matches_filter(
-            card, described, game=game, owner=caster
-        ),
-    )
+    # "**Each player** reveals the top five cards of **their** library."
+    # (Clear the Land.) One seat or every seat, and the procedure below is
+    # identical either way — which is why this is a loop over a seat list
+    # rather than a second handler. In APNAP order (CR 101.4), because the
+    # sentence is one effect several players perform and the turn order is what
+    # decides who reveals first.
+    if instruction.payload.get("whose") == "each_player":
+        table = len(game.players)
+        active = (
+            game.active_player_index
+            if game.active_player_index is not None else 0
+        )
+        seats = [(active + offset) % table for offset in range(table)]
+    else:
+        seats = [game.players.index(context.caster)]
+    for seat in seats:
+        looked = game.players[seat]
+        revealed = looked.library[:max(int(count), 0)]
+        if not revealed:
+            game.log.append(f"{looked.name} has no cards to reveal")
+            continue
+        del looked.library[:len(revealed)]
+        game.record_reveal(seat, [card.name for card in revealed])
+        game.log.append(
+            f"{looked.name} revealed {', '.join(card.name for card in revealed)}"
+        )
+        _place_sorted_reveal(
+            game, looked, revealed, instruction.payload,
+            lambda card, _owner=looked: _card_matches_filter(
+                card, described, game=game, owner=_owner
+            ),
+        )
     return True, "resolved"
 
 
@@ -4091,6 +4153,16 @@ def exile_graveyard_cards(game: Game, instruction: OracleInstruction, context: O
     by_seat = context.results.setdefault(EXILED_BY_SEAT, {})
     for seat in seats:
         by_seat.setdefault(seat, [])
+    # The flat pair beside the per-seat map, seeded before anything moves for
+    # the same reason: "you gain 1 life **for each card exiled this way**"
+    # (Honor the Fallen) is a later step of this same resolution, and a sweep
+    # that emptied every pile of nothing has to answer it with a zero rather
+    # than with whatever a `.get` default is. Three records, three questions —
+    # whose, how many, which — and the map cannot answer the last two without a
+    # reader that knows its shape.
+    all_taken: list = []
+    context.results[EXILED_THIS_WAY_OBJECTS] = all_taken
+    context.results[EXILED_THIS_WAY] = 0
     exiled = 0
     for seat in seats:
         owner = game.players[seat]
@@ -4108,11 +4180,13 @@ def exile_graveyard_cards(game: Game, instruction: OracleInstruction, context: O
         owner.graveyard[:] = kept
         owner.exile.extend(taken)
         by_seat[seat].extend(taken)
+        all_taken.extend(taken)
         exiled += len(taken)
         game.log.append(
             f"{context.card.name} exiled {len(taken)} card(s) from "
             f"{owner.name}'s graveyard"
         )
+    context.results[EXILED_THIS_WAY] = exiled
     if not exiled:
         game.log.append(f"{context.card.name}: no card in that graveyard to exile")
     return True, "resolved"
@@ -4235,6 +4309,37 @@ def exile_cards_from_graveyard(game: Game, instruction: OracleInstruction, conte
             game.arm_graveyard_pile_choice(
                 caster_index, dict(instruction.payload), context
             )
+        return True, "resolved"
+    # "Exile **X target** creature cards from **your** graveyard." (Midnight
+    # Ritual.) The one pile of the three whose seat is known when the spell goes
+    # on the stack, so the cards are *announced* (CR 601.2c) rather than chosen
+    # as it resolves — which is why this is the branch that resolves slots
+    # instead of arming a prompt.
+    #
+    # Through ``_resolve_graveyard_slots``, the same reader the graveyard return
+    # uses for Shattered Crypt's identical "X target … cards from your
+    # graveyard": a graveyard slot is not an identity (two copies of one card in
+    # one pile are literally one ``CardDefinition``), so what tells them apart is
+    # the order of removal, and a second copy of that reasoning here is how one
+    # of the two ends up popping the wrong card.
+    #
+    # A count of zero is a legal outcome, not a reason to guess: X may be 0, and
+    # CR 608.2b says an announcement naming nothing exiles nothing.
+    if owner == "you":
+        count = instruction.payload.get("count")
+        wanted = int(context.x_value or 0) if count == "x" else int(count or 1)
+        taken = _resolve_graveyard_slots(
+            context.caster, context, wanted,
+            lambda card: graveyard_card_matches(instruction.payload, card),
+        )
+        context.caster.exile.extend(taken)
+        context.results[EXILED_THIS_WAY_OBJECTS] = list(taken)
+        context.results[EXILED_THIS_WAY] = len(taken)
+        game.log.append(
+            f"{context.card.name} exiled "
+            + (", ".join(card.name for card in taken) or "nothing")
+            + f" from {context.caster.name}'s graveyard"
+        )
         return True, "resolved"
     if owner != "defending_player":
         game.log.append(f"{context.card.name}: no graveyard named")

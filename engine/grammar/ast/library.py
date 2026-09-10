@@ -50,11 +50,21 @@ class SearchPlayerLibrary:
     in front of it emptied. ``to`` is where every find goes: the pool's two
     printings send them all to one place, so there is one zone rather than the
     per-find list Cultivate needs.
+
+    ``under_control_of`` is the seat a find that goes to the **battlefield**
+    enters under (CR 110.2a), and it exists because this node's whole point is
+    that two seats are involved: "put that card onto the battlefield **under
+    your control**" (Bribery) opens an opponent's library and puts the creature
+    on the *searcher's* side, where ``search_filters.landing_seat`` would
+    otherwise follow the zone and hand it back to the player whose library was
+    searched. None everywhere else, which is CR 110.2's default said by saying
+    nothing.
     """
     player: PlayerRef
     count: Amount
     filter: ObjectFilter
     to: Zone
+    under_control_of: PlayerRef | None = None
 
 @dataclass(frozen=True)
 class SeparateLibraryTopIntoPiles:
@@ -638,12 +648,25 @@ class RevealTopSortingByFilter:
     pile the wrong way. ``filter`` is that test, in the ordinary object-filter
     vocabulary, so a card printing "all creature cards" is this production
     unchanged.
+
+    ``whose`` is the seat whose library is turned over. "Your" is the pool's
+    usual printing and "**each player** reveals the top five cards of **their**
+    library" (Clear the Land) is the other — one node rather than two, because
+    what the sentence does with the pile is identical and only the number of
+    piles differs.
+
+    ``tapped`` is CR 110.5b, and it belongs to the *match* half: "puts all land
+    cards revealed this way onto the battlefield **tapped**". Carried rather
+    than dropped for the reason every rider here is — a land that arrives
+    untapped is a strictly better card than the one printed.
     """
 
     count: Amount
     filter: ObjectFilter
     match_zone: str = "hand"
     rest_zone: str = "graveyard"
+    whose: PlayerRef | None = None
+    tapped: bool = False
 
 
 @dataclass(frozen=True)

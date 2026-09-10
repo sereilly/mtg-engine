@@ -1362,3 +1362,84 @@ def test_cornered_market_claims_both_of_its_printed_lines(set_pool):
 
     assert halves == ["cast spells", "play nonbasic lands"]
     assert compile_card_oracle(market).supported
+
+
+# --- W2G2: libraries and graveyards ---
+# Soothsaying: the hollow line. The card compiled *supported* with an ability
+# part carrying no instruction, so activating it charged X mana and did nothing.
+from engine import Game, PlayerState
+from engine.card_loader import load_cards, manifest_set_path
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+from tests.helpers import resolve_stack
+
+_W2G2_LEA_ENCH = {c.name: c for c in load_cards(manifest_set_path("LEA"))}
+
+
+def _w2g2_ench_board(card):
+    """A two-seat game with *card* on seat 0's battlefield, ready to act."""
+    game = Game(players=[PlayerState(name="Alice"), PlayerState(name="Bob")])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    perm = Permanent(card=card)
+    perm.metadata["summoning_sickness_turn"] = -99
+    game._put_permanent_onto_battlefield(0, perm, None)
+    return game, perm, game.players[0]
+    # end of _w2g2_ench_board
+
+
+def test_w2g2_soothsaying_x_look_carries_an_instruction(set_pool):
+    """"{X}: Look at the top X cards of your library, then put them back in any
+    order."
+
+    The own-library look demanded a *printed* number, so the announced X
+    (CR 601.2b via CR 602.2b) refused -- and the refusal was invisible, because
+    the line still classified as an activated ability. The card read supported
+    with an ability part behind which there was nothing at all.
+
+    Asserted on the compiled program rather than only on the board, because that
+    is where the hole was: the two instruments that could see it
+    (``support_report --hollow-lines`` and ``parse_coverage``) both work off
+    exactly this.
+    """
+    pool = set_pool("MMQ")
+    program = compile_card_oracle(pool["Soothsaying"])
+    assert program.supported
+    looks = [
+        ability for ability in program.activated_abilities
+        if ability.instruction is not None
+        and ability.instruction.kind == "reorder_own_library_top"
+    ]
+    assert len(looks) == 1
+    assert looks[0].instruction.payload["amount"] == "x"
+    assert all(
+        ability.instruction is not None
+        for ability in program.activated_abilities
+    ), "every ability part of this card carries an instruction"
+    # end of test_w2g2_soothsaying_x_look_carries_an_instruction
+
+
+def test_w2g2_soothsaying_looks_at_exactly_x_cards(set_pool):
+    """The announced X reaches the prompt, and it is the number the seat paid.
+
+    ``resolve_amount`` has read the letter all along -- the handler needed no
+    change -- so what this pins is that the lowering hands it the letter rather
+    than a zero, which is what a literal ``node.count.value`` would have sent.
+    """
+    pool = set_pool("MMQ")
+    game, _perm, caster = _w2g2_ench_board(pool["Soothsaying"])
+    caster.library.extend([
+        _W2G2_LEA_ENCH["Forest"], _W2G2_LEA_ENCH["Grizzly Bears"],
+        _W2G2_LEA_ENCH["Mountain"], _W2G2_LEA_ENCH["Black Lotus"],
+    ])
+
+    result = game.activate_permanent_ability(
+        0, "Soothsaying", ability_index=1, x_value=3,
+    )
+
+    assert result.supported, result.details
+    resolve_stack(game)
+    owed = [c for c in game.pending_choices if c.kind == "reorder_library"]
+    assert owed, "the look should owe its seat an ordering"
+    assert owed[0].data["top_count"] == 3
+    # end of test_w2g2_soothsaying_looks_at_exactly_x_cards

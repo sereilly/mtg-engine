@@ -416,6 +416,12 @@ def _parse_postmodifiers(
             if comparison == "event":
                 d.name_from_event = True
                 continue
+            # "…**with the same name as that card**" (Assembly Hall) — the
+            # card an earlier step of this same effect revealed, which is a
+            # different place to look than the firing event's object above.
+            if comparison == "recorded":
+                d.name_from_recorded_card = True
+                continue
             # "…with **lesser power**" (No Quarter). A bound stated against the
             # other object the sentence is about, with no number and no
             # possessive — so it opens on the *adjective* rather than on the
