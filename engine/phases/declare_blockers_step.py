@@ -19,7 +19,8 @@ from ..combat_permissions import (ADDITIONAL_BLOCKS_UNTIL_EOT,
                                   MUST_BLOCK_ATTACKERS_UNTIL_EOT,
                                   MUST_BLOCK_UNTIL_EOT,
                                   CANT_BLOCK_ATTACKERS_UNTIL_EOT,
-                                  CANT_BLOCK_UNTIL_EOT)
+                                  CANT_BLOCK_UNTIL_EOT,
+                                  printed_block_ceiling)
 from ..combat_restrictions import (declaration_company_required,
                                   declaration_greater_power_required,
                                   participation_cap,
@@ -115,9 +116,8 @@ class DeclareBlockersStepMixin:
         """
         if blocker.metadata.get(CAN_BLOCK_ANY_NUMBER_UNTIL_EOT):
             return 1_000_000
-        printed = sum(
-            line.count("can block an additional creature")
-            for line in compile_card_oracle(blocker.effective_card).static_lines
+        printed = printed_block_ceiling(
+            compile_card_oracle(blocker.effective_card).static_lines
         )
         # "That creature can block up to two additional creatures this turn."
         # (Yare.) A granted ceiling, added to the printed one for CR 509.1b's

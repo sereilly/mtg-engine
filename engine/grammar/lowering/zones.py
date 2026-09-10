@@ -29,8 +29,9 @@ from ...damage_deaths import DAMAGED_BY_SOURCE_DIED
 from ._deaths import BOUND_CARD_EVENTS
 from ._events import binds_block_pair
 from ._common import (
-    _PAYLOAD_HONOURED_FILTER_FIELDS, dropped_narrowings, _describe_targets,
-    _filter_payload, _is_source, _is_target, _restrictions_beyond, _targets_only,
+    _PAYLOAD_HONOURED_FILTER_FIELDS, dropped_narrowings, _describe_several_targets,
+    _describe_targets, _filter_payload, _is_source, _is_target,
+    _names_several_targets, _restrictions_beyond, _targets_only,
     graveyard_position_payload, refuse_untestable
 )
 
@@ -147,6 +148,35 @@ def _lower_put_on_library_top(
                 "put_all_matching_on_library_top", "", {"filter": swept}
             ),
         )
+    # "Put **two target lands** on top of their owners' libraries." (Plow
+    # Under.) A chosen *list*, which is the same shape "up to two target
+    # creatures" is one family over — so it opts into the several-target
+    # description rather than the singular one, and the handler's list branch
+    # reads it. Without the opt-in ``_describe_targets`` emits nothing at all
+    # and the card would tuck one land of the two it names.
+    if _names_several_targets(node.target):
+        assert isinstance(node.target, ast.TargetSpec)
+        if node.bottom_instead_colors or node.to_owner != "owner":
+            # Both riders are about **one** object, the reason the sweep above
+            # refuses them: an end swap asks a colour of the card it is moving,
+            # and a fixed seat contradicts a list that follows each object to
+            # its own owner (CR 400.3).
+            raise LoweringError(
+                "the several-target tuck reads no end swap and no fixed seat",
+                node=node,
+            )
+        if node.target.filter.zone != "battlefield" or node.target.filter.is_card:
+            raise LoweringError(
+                "the several-target tuck moves permanents, not cards in a zone",
+                node=node,
+            )
+        several: dict[str, object] = {}
+        _describe_several_targets(several, node.target)
+        refuse_untestable(
+            (several.get("targets") or {}).get("filter") or {},
+            refusal="the several-target tuck cannot narrow by", node=node,
+        )
+        return (OracleInstruction("put_target_on_library_top", "", several),)
     if not _is_target(node.target):
         raise LoweringError("the tuck handler resolves one chosen creature", node=node)
     assert isinstance(node.target, ast.TargetSpec)

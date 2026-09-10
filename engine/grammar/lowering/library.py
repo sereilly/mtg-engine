@@ -60,8 +60,15 @@ from ._events import (
 #: ``search_matches`` answers it under ``card_type``. Admitted only because that
 #: reader was already there: a positive type narrowing the picker could not test
 #: would be Ostracize discarding a land.
+#: ``excluded_supertypes`` is the fifth, and it arrived with Encroach's "a
+#: **nonbasic** land card". A supertype exclusion rather than the basic-land
+#: pair beside it: the noun phrase has already said "land", so what the "non"
+#: excludes is CR 205.4a's word alone — and ``search_matches`` reads it off the
+#: printed type line's supertype half, which is what a card outside the
+#: battlefield has instead of characteristics (CR 613.1).
 _REVEALED_HAND_FIELDS = frozenset(
-    {"excluded_types", "is_card", "excluded_basic_lands", "card_types"}
+    {"excluded_types", "is_card", "excluded_basic_lands", "card_types",
+     "excluded_supertypes"}
 )
 
 
@@ -256,6 +263,13 @@ def _lower_reveal_hand_and_choose(
         payload["card_types"] = list(node.filter.card_types)
     if node.filter.excluded_types:
         payload["exclude_types"] = list(node.filter.excluded_types)
+    if node.filter.excluded_supertypes:
+        # "…a **nonbasic** land card from it." (Encroach.) Emitted only when the
+        # card prints it, so every earlier printing's payload stays
+        # byte-identical — and emitted at all for the reason the two keys around
+        # it are: a phrase the production consumes and the payload drops is a
+        # picker offering a Plains while the card says otherwise.
+        payload["exclude_supertypes"] = list(node.filter.excluded_supertypes)
     if node.filter.excluded_basic_lands:
         # Emitted only when the card prints it, so Duress's payload stays
         # byte-identical — and emitted at all, because a phrase the production

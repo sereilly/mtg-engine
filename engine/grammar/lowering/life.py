@@ -25,7 +25,8 @@ from .. import ast
 from ..errors import LoweringError
 from ._cost_records import optional_cost_key
 from ._seats import _player_recipient
-from ._amounts import count_spec, halved_count_spec, x_offset_amount
+from ._amounts import (count_spec, halved_count_spec, recorded_count_spec,
+                       x_offset_amount)
 from ._common import (
     _amount_payload,
     _describe_targets,
@@ -307,6 +308,43 @@ def _lower_gain_life(
                         "cost_sacrifice_characteristic": node.amount.characteristic
                     },
                     "recipient": "caster",
+                },
+            ),
+        )
+    # "You gain **2 life for each** enchantment destroyed this way."
+    # (Multani's Decree.) The bare record one branch down with a printed rate on
+    # it, so it goes through ``recorded_count_spec`` — the one reader that
+    # unwraps a factor, checks the producer really ran and lands the number on
+    # ``x_from_count``, where ``handlers/_common._scaled`` applies the
+    # multiplier. Written here as its own arithmetic it would be a second
+    # answer to "two life per what?", and the direction that fails is silent:
+    # a factor read by one spender and dropped by the next gains half what the
+    # card prints.
+    #
+    # Above the bare-``ThatMuch`` branch and never through it, so every card
+    # written before a rate existed compiles to the byte-identical program —
+    # ``scaled_by_recorded_count`` folds a printed 1 away rather than minting
+    # ``Times(1, …)``, so nothing that used to reach that branch reaches this.
+    if isinstance(node.amount, ast.Times):
+        if node.per_each is not None:
+            raise LoweringError(
+                "a life gain reads one multiplier, not two", node=node
+            )
+        spec = recorded_count_spec(node.amount, produced, node)
+        if spec is None:
+            # A factor over something that is not a recorded count — the same
+            # refusal ``_lower_recorded_count_placement`` makes of the same
+            # node, and for its reason: reading it as the bare quantity would
+            # gain a fraction of what the card says.
+            raise LoweringError(
+                "a multiplied life gain reads a recorded count", node=node
+            )
+        return (
+            OracleInstruction(
+                "target_gains_life", "",
+                {
+                    "amount": "x", X_FROM_COUNT: spec,
+                    "recipient": recipient, **cap_payload,
                 },
             ),
         )

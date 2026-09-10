@@ -1203,6 +1203,22 @@ def _extra_turn_spec(payload: dict) -> dict | None:
     return _from_targets_payload(payload.get("targets")) or {"kind": "player"}
 
 
+def _skipped_seat_spec(payload: dict) -> dict | None:
+    """Whose step is skipped, or None when the sentence chooses nobody.
+
+    :func:`_extra_turn_spec`'s reading directly above, one turn structure over:
+    "You skip your next draw step" (Ivory Gargoyle) names CR 109.5's controller
+    and picks nothing, "**Target player** skips their next draw step" (Fatigue)
+    picks a seat, and one instruction kind carries both — so only the payload
+    can tell them apart. A flat ``{"kind": "player"}`` row would raise a picker
+    in front of the Gargoyle, whose handler ignores whatever was clicked.
+
+    Read through :func:`player_pronoun_spec` rather than compared here, because
+    the word means the same thing wherever a payload keeps it.
+    """
+    return player_pronoun_spec(payload.get("seat"))
+
+
 def _look_top_pick_spec(payload: dict) -> dict | None:
     """The seat this look-top pick chooses, or None for the cards choosing none.
 
@@ -2020,6 +2036,7 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     "target_loses_life": _player_recipient_spec,
     "mill_target_player": _player_recipient_spec,
     "grant_extra_turn": _extra_turn_spec,
+    "skip_next_step": _skipped_seat_spec,
     "counter_top_stack_spell": _counter_spec,
     "counter_stack_ability": _counter_ability_spec,
     "choose_permanent": _chosen_permanent_spec,
