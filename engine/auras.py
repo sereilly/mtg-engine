@@ -91,10 +91,25 @@ _COLORS = "white|blue|black|red|green"
 # `protection from [a-z]+` here would claim them, which is precisely the kind
 # of over-broad entry that made "enchant creature" sufficient in the first
 # place. Widen it when the check behind it widens, not before.
+#: "protection from black **and from red**" (Mask of Law and Grace). CR 702.16g:
+#: that clause is shorthand for **two** protection abilities, not one ability
+#: with a compound quality -- which is why the conjunction is spelled once here
+#: and split by :func:`aura_protection_colors` rather than being matched as an
+#: opaque phrase.
+#:
+#: One alternation shared by the gate (``_TEMPLATES``) and the grant
+#: (``_PROTECTION_GRANT``) below, for this file's standing reason: the sentence
+#: that decides whether the card is supported and the sentence that decides what
+#: it does have to be the same sentence. Written as a name because it is read
+#: from two patterns, which is exactly when a literal starts drifting.
+_PROTECTION_QUALITIES = (
+    rf"(?:{_COLORS}|the chosen color)(?: and from (?:{_COLORS}|the chosen color))*"
+)
+
 _KEYWORDS = (
     r"flying|fear|first strike|double strike|trample|vigilance|haste|reach|"
     r"banding|defender|indestructible|swampwalk|forestwalk|islandwalk|"
-    rf"mountainwalk|plainswalk|desertwalk|protection from (?:{_COLORS})"
+    rf"mountainwalk|plainswalk|desertwalk|protection from (?:{_PROTECTION_QUALITIES})"
 )
 
 # "Enchanted creature gets +2/+2, has first strike, and is a Knight in addition
@@ -2258,9 +2273,16 @@ def aura_counter_untap_condition(line: str) -> tuple[str, str] | None:
 #: choice was recorded on.
 CHOSEN_PROTECTION_COLOR = "chosen"
 
+#: The P/T prefix is optional for :data:`_COLOR_GRANT`'s reason exactly: one
+#: printed line can carry a layer-7c bonus and a layer-6 grant, and each half is
+#: read by the reader that owns its layer. Without it a card printing "enchanted
+#: creature gets +1/+1 and has protection from black" would be *claimed* by the
+#: keyword row above -- ``_KEYWORDS`` is an alternative there -- and granted
+#: nothing, which is this module's own defining failure with an anchor as its
+#: cause.
 _PROTECTION_GRANT = re.compile(
-    rf"^{_ATTACHED} {_NOUN} has protection from "
-    rf"(?P<color>{_COLORS}|the chosen color)\b"
+    rf"^{_ATTACHED} {_NOUN}(?: gets [+-]\d+/[+-]\d+ and)? has protection from "
+    rf"(?P<colors>{_PROTECTION_QUALITIES})\b"
 )
 
 
@@ -2383,10 +2405,19 @@ def aura_protection_colors(oracle_text: str) -> frozenset[str]:
     for raw_line in oracle_text.splitlines():
         match = _PROTECTION_GRANT.match(_line_text(raw_line))
         if match is not None:
-            word = match.group("color")
-            found.add(
-                CHOSEN_PROTECTION_COLOR if word == "the chosen color" else word
-            )
+            # CR 702.16g: "protection from black **and from red**" (Mask of Law
+            # and Grace) is two protection abilities. Split here rather than
+            # returned as a phrase, because every consumer of this frozenset
+            # maps one word to one quality -- a joined string maps to none of
+            # them and the Aura would protect from nothing at all. That is what
+            # the pattern already did while its alternation was one colour wide
+            # and its tail unanchored: it matched Mask's line and returned
+            # ``{"black"}``, dropping red in silence.
+            for word in match.group("colors").split(" and from "):
+                word = word.strip()
+                found.add(
+                    CHOSEN_PROTECTION_COLOR if word == "the chosen color" else word
+                )
     return frozenset(found)
 
 

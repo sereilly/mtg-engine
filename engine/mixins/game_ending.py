@@ -1294,15 +1294,26 @@ class GameEndingMixin:
                     # empty hand exactly as it does for an opponent's.
                     holds = any(not player.hand for player in self.players)
                     key = ("empty_hand", trig.source_line)
-                elif kind == "controller_life_at_most":
+                elif kind == "life_at_most":
                     if trig.instruction is None:
                         continue
                     # "**When you have 10 or less life**" (Opal Avenger).
-                    # CR 603.8 off a life total, and "you" is the source's
-                    # own controller — the seat this loop already resolved —
-                    # where the empty-hand row above it asks every seat.
-                    # That difference is the printed word, not a policy:
-                    # "a player" is everyone and "you" is one seat.
+                    # "**When an opponent has 10 or less life**" (Lurking
+                    # Jackals). CR 603.8 off a life total, and *which* total
+                    # is the printed word rather than a policy — the same
+                    # reading the `controls_matching_permanent` row above
+                    # gives its own seat, and the reason the seat is payload
+                    # there too. "You" is the source's own controller, the
+                    # seat this loop already resolved; "an opponent" is
+                    # **any** other live seat, which is what makes the
+                    # narrowed reading wrong rather than merely inverted at
+                    # a table of three.
+                    #
+                    # A seat that has lost is skipped, exactly as the
+                    # `controls` branch's opponent list skips nothing it
+                    # cannot see: a dead player's life total is frozen at or
+                    # below zero, so counting them would hold the state true
+                    # for the rest of the game.
                     #
                     # The threshold is payload, so a card printing another
                     # number needs no code. A row that somehow arrives
@@ -1313,7 +1324,14 @@ class GameEndingMixin:
                     threshold = trig.condition.payload.get("life_count")
                     if not isinstance(threshold, int):
                         continue
-                    holds = self.players[observer].life <= threshold
+                    if trig.condition.payload.get("life_seat") == "an opponent":
+                        holds = any(
+                            player.life <= threshold
+                            for index, player in enumerate(self.players)
+                            if index != observer and not player.lost
+                        )
+                    else:
+                        holds = self.players[observer].life <= threshold
                     key = ("life_at_most", trig.source_line)
                 else:
                     continue

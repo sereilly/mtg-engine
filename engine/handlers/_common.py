@@ -1439,7 +1439,34 @@ _STATE_TESTS = {
     "blocking": lambda perm: perm.blocking_attacker_index is not None,
     "blocked": lambda perm: bool(perm.blocked),
     "unblocked": lambda perm: not perm.blocked,
+    # "…as long as it's **enchanted**" (Fledgling Osprey, Metathran Elite,
+    # Thran Golem). CR 303.4: a permanent is enchanted while an *Aura* is
+    # attached to it — so this is not "has anything attached". Equipment
+    # attaches through the same record (``engine/equipment.py`` keeps
+    # ``attached_auras`` as the one attachment list, and CR 301.5f gives the
+    # host the word "equipped" instead), so a bare truthiness test on that list
+    # would make a Bone Saw grant Fledgling Osprey flying.
+    #
+    # The type is asked through ``has_type``, not off ``card.type_line``: an
+    # Aura the layers have turned into something else is still an Aura by
+    # subtype, and a Licid — an enchantment creature that becomes an Aura —
+    # answers the question the layers give rather than the one it was printed
+    # with.
+    "enchanted": lambda perm: _is_enchanted(perm),
 }
+
+
+def _is_enchanted(perm) -> bool:
+    """Whether an Aura is attached to *perm* (CR 303.4).
+
+    Beside the table it answers rather than inside the lambda so the Equipment
+    exclusion has somewhere to be written down.
+    """
+    from ..auras import auras_attached_to
+
+    return any(
+        attachment.has_type("aura") for attachment in auras_attached_to(perm)
+    )
 
 
 def permanent_state_holds(perm, state: str) -> bool:
