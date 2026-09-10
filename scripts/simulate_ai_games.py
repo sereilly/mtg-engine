@@ -48,6 +48,24 @@ def main() -> int:
     print(f"Interactions logged: {report.interaction_count}")
     print(f"Log file: {log_path}")
 
+    # What combat did. Reported beside the interaction count and for the same
+    # reason: before this simulator had a combat phase, every run in its history
+    # reported "no illegal interactions" over games in which nobody had ever
+    # attacked — a true statement about nothing. A zero here now means either a
+    # pool that cannot attack or a regression, and either is worth seeing.
+    print(
+        f"Combat: {report.attacks_declared} declaration(s), "
+        f"{report.attackers_declared} attacker(s), "
+        f"{report.blockers_declared} blocker(s), "
+        f"{report.manual_damage_splits} manual damage split(s)"
+    )
+
+    if report.refused_attacks:
+        total = sum(report.refused_attacks.values())
+        print(f"Attack declarations the engine declined: {total} (the AI proposed an illegal set)")
+        for reason, count in report.refused_attacks.most_common(5):
+            print(f"  {count}x {reason}")
+
     if report.refused_casts:
         total = sum(report.refused_casts.values())
         print(f"Casts the engine declined: {total} (the cast gate working, not a failure)")

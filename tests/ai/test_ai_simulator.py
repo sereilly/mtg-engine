@@ -1,5 +1,6 @@
 import ast
 import pathlib
+from collections import Counter
 
 import pytest
 
@@ -303,3 +304,58 @@ def test_the_simulator_advances_the_per_seat_turn_ordinal():
     assert max(counts.values()) > 1, (
         f"the per-seat turn ordinal never advanced past its first turn: {counts}"
     )
+
+
+def test_the_simulator_actually_plays_a_combat_phase():
+    """The simulated turn has a combat phase, and creatures use it.
+
+    This is the guard for an **absent** result, which is the only kind this
+    script's own output cannot show. Before combat was driven here the turn loop
+    went bookkeeping -> untap -> upkeep -> draw -> main -> cast -> activate ->
+    next seat, so no simulated game had ever declared an attacker, declared a
+    block or run a combat damage step — and every run still reported games
+    completed, a non-zero interaction count and "no illegal or unexpected
+    interactions detected". Nothing failed, because nothing was wrong; what was
+    missing was half a turn.
+
+    It is the third omission of that exact shape in this one function
+    (`begin_turn_bookkeeping`, then the main phase, then this), which is why the
+    assertion is on the *count* rather than on any particular card: a number
+    that must stay above zero is the only thing that catches the fourth.
+    """
+    report = run_ai_simulation(LEA_PATH, games=4, seed=1337, max_turns=14)
+
+    assert report.attacks_declared > 0, (
+        "no attack declaration in four games — the combat phase is not being "
+        "entered, and every 'no illegal interactions' this script prints is a "
+        "true statement about a turn that skipped combat"
+    )
+    assert report.attackers_declared > 0, (
+        "attackers were declared but every declaration was empty"
+    )
+    assert not report.issues, report.issues
+
+    # A declaration the engine refuses is not an issue and not a failure — it is
+    # the attack-side twin of `refused_casts`, counted because the AI proposes
+    # the same illegal set again next turn. Alpha prints no attack restriction,
+    # so on this pool it should be empty; the assertion is that the channel
+    # exists and is read, which is what stops it going the way `refused_attacks`
+    # nearly did (a counter that could only ever have read zero).
+    assert isinstance(report.refused_attacks, Counter)
+    assert sum(report.refused_attacks.values()) == 0, dict(report.refused_attacks)
+
+
+def test_combat_damage_in_the_simulator_actually_moves_a_life_total():
+    """Attacking is not the assertion; connecting is.
+
+    A declaration that never resolves into damage would satisfy the counts above
+    while changing nothing about the game, so this reads the one number a player
+    would: somebody's life total. Alpha's decks are creature-heavy enough that
+    over eight games at least one attacker gets through.
+    """
+    report = run_ai_simulation(LEA_PATH, games=8, seed=1337, max_turns=16)
+
+    assert any("combat damage" in line for line in report.log_lines), (
+        "no combat damage was dealt across eight games"
+    )
+    assert not report.issues, report.issues

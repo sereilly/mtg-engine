@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Sequence
 import random
 
+from .ai_combat import run_ai_combat_phase
 from .ai_policy import (choose_activation_action, choose_cast_action,
                         choose_hand_activation_action)
 from .card_loader import load_cards
@@ -35,6 +36,24 @@ class SimulationReport:
     #: a seat doing nothing all game — which no other number in this report
     #: shows.
     refused_casts: Counter[str] = field(default_factory=Counter)
+    #: The attack-side twin of the above, and it could not exist until this
+    #: simulator had a combat phase: a declaration the engine refuses costs
+    #: nothing and breaks no rule, so it fails no assertion — the seat just does
+    #: not attack, and proposes the same illegal set again next turn. A non-zero
+    #: count means the AI is choosing sets a restriction forbids; a *silent*
+    #: one (even the fallback refused) is an issue rather than a count, because
+    #: that seat attacks with nobody for the rest of the game.
+    refused_attacks: Counter[str] = field(default_factory=Counter)
+    #: How much combat actually happened. Reported for the reason
+    #: `interaction_count` is: "no illegal interactions" over a run where nobody
+    #: ever attacked is a true statement about nothing, and that was every run
+    #: this script produced before combat existed here.
+    attacks_declared: int = 0
+    attackers_declared: int = 0
+    blockers_declared: int = 0
+    #: See `ai_combat.CombatOutcome`: the multi-blocked / banding splits, not
+    #: every combat that dealt damage.
+    manual_damage_splits: int = 0
 
     @property
     def ok(self) -> bool:
@@ -688,6 +707,39 @@ def run_ai_simulation(
                         f"activate {hand_activation.card_name} from hand "
                         f"-> {result.details}"
                     )
+
+                # CR 506-511, the half of a turn this loop did not have. It went
+                # main phase -> cast -> activate -> next seat, so no simulated
+                # game had ever declared an attacker, declared a block or run a
+                # combat damage step — which is why `refused_attacks` below could
+                # not have been measured before, and why "run the sim" was never
+                # an end-to-end check for combat work however green it came back.
+                #
+                # The same shape as the two omissions above it and found the same
+                # way: the run completes, the interaction count is non-zero and
+                # the issue list is empty, so nothing fails. What is absent is
+                # every creature that ever attacked, and the only proof is to
+                # count the log lines that are not there.
+                #
+                # Driven through `engine/ai_combat.py`, which the web layer's AI
+                # attack declaration also goes through — a refused declaration is
+                # silent, and a second copy of that fallback chain would be a
+                # second place for the silence to live.
+                if not game.is_game_over():
+                    combat = run_ai_combat_phase(game, active)
+                    report.attacks_declared += combat.attacks_declared
+                    report.attackers_declared += combat.attackers
+                    report.blockers_declared += combat.blockers
+                    report.manual_damage_splits += combat.manual_damage_splits
+                    for seat_name, why in combat.refused_attacks:
+                        report.refused_attacks[f"{seat_name}: {why}"] += 1
+                    for seat_name, why in combat.silent_attacks:
+                        report.issues.append(InteractionIssue(
+                            game_index, turn,
+                            f"{seat_name} attacked with nobody: even the "
+                            f"every-legal-attacker fallback was refused ({why})",
+                        ))
+                    _resolve_pending_choices(game)
 
                 new_logs = game.log[log_cursor:]
                 report.log_lines.extend(f"  {line}" for line in new_logs)
