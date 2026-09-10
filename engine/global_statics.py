@@ -283,6 +283,45 @@ _TEMPLATES: tuple[tuple[re.Pattern[str], GlobalStatic], ...] = (
             pt_from_mana_value=True,
         ),
     ),
+    (
+        # Opalescence. Titania's Song's sentence one card type over: the same
+        # layer-4 addition (CR 613.1d) and the same layer-7b setting from a
+        # mana value (CR 613.4b), with the ability removal absent and the noun
+        # changed. That is exactly why it is a row here and not a mechanism of
+        # its own -- both readers in ``layer_bridge`` already answer these two
+        # flags, so what this row adds is a sentence and a scope.
+        #
+        # The differences from that row are the two words in front of the noun,
+        # and each is stated rather than assumed:
+        #
+        # * "**other**" is CR 109.5's exclusion, and it rides ``other_than_source``
+        #   for Aura Flux's reason -- ``_apply_global_statics`` applies every
+        #   template to its own source unless the card says not to, and
+        #   Opalescence emphatically does say not to: applied to itself it
+        #   would be a 4/4 creature that dies to the state-based sweep the
+        #   moment its own effect ended, taking the board with it.
+        # * "**non-Aura**" is a narrowing on the noun, so it goes in the scope
+        #   name beside ``noncreature_artifact`` rather than being dropped. An
+        #   Aura that became a creature would stop being attached (CR 704.5n)
+        #   and be put into a graveyard, which is the card printing the
+        #   opposite of what it says.
+        #
+        # Whole-line and anchored, like every template above: the P/T half and
+        # the type half are one sentence in one layer pair with one timestamp,
+        # and a card carrying only one of them is not this ability.
+        re.compile(
+            r"^each other non-aura enchantment is a creature in addition to "
+            r"its other types and has base power and base toughness each "
+            r"equal to its mana value$"
+        ),
+        GlobalStatic(
+            name="opalescence",
+            applies_to="non_aura_enchantment",
+            adds_creature_type=True,
+            pt_from_mana_value=True,
+            other_than_source=True,
+        ),
+    ),
 )
 
 

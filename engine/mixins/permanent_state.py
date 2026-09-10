@@ -2095,6 +2095,19 @@ class PermanentStateMixin:
         if static.applies_to == "noncreature_artifact":
             printed = permanent.card.type_line.lower()
             return "artifact" in printed and "creature" not in printed
+        if static.applies_to == "non_aura_enchantment":
+            # "Each other **non-Aura** enchantment …" (Opalescence.) Both halves
+            # through the layer-4 accessor, which is the *opposite* choice from
+            # the printed read one branch up and for a reason that is about the
+            # sentence rather than about taste: the artifact row's creature half
+            # names the very type its own static adds, so asking the layers
+            # would make the answer depend on whether it had already been asked.
+            # Nothing here is self-referential -- this static adds "creature",
+            # and neither "enchantment" nor "aura" is a type it can grant -- so
+            # the layers are safe and are what the words mean. A Licid that has
+            # become an Aura is out while it is one, and an enchantment an
+            # effect has turned into something else is judged on what it is now.
+            return permanent.has_type("enchantment") and not permanent.has_type("aura")
         if static.applies_to == "nonland_permanent_you_control":
             # "**Nonland** permanents you control are white." (Celestial Dawn.)
             # The type half through the layer accessor, so a land this very

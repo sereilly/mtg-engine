@@ -550,22 +550,69 @@ def _lower_put_onto_battlefield(
             )
         if not _is_target(target) or not filt.is_card:
             raise LoweringError("the reanimation handler reads one chosen card", node=node)
-        if filt.card_types != ("creature",):
-            raise LoweringError("the reanimation handler only moves creature cards", node=node)
-        return (
-            OracleInstruction(
-                "reanimate_creature",
-                "",
-                {
-                    # "from a graveyard" (no owner) widens the search to every
-                    # player's graveyard; "under your control" is CR 400.3's
-                    # exception spelled out, honored by the handler.
-                    "any_graveyard": filt.zone_owner is None,
-                    "under_your_control": node.under_your_control,
-                    "gains": list(node.gains),
-                },
-            ),
-        )
+        # "target **Aura** card from a graveyard" (Iridescent Drake). CR 205.3b
+        # makes "Aura" a subtype, so the phrase narrows by neither of the two
+        # things this branch used to be able to read: it refused with "only
+        # moves creature cards" on a filter whose ``card_types`` was empty.
+        #
+        # What the handler actually reads is a ``card_type`` word plus a
+        # ``graveyard_card_matches`` spec, and both readers go through
+        # ``card_has_type`` / ``printed_shape`` — which answer a subtype as
+        # readily as a card type. So the narrowing is carried rather than
+        # widened away, and the guard below is what makes that safe: anything
+        # the phrase says beyond a type, a subtype and the zone refuses, because
+        # a narrowing dropped here is a card the picker offers that the sentence
+        # never named.
+        if _restrictions_beyond(
+            filt,
+            frozenset({"is_card", "zone", "zone_owner", "card_types", "subtypes"}),
+        ):
+            raise LoweringError(
+                "the reanimation handler cannot test that card phrase", node=node
+            )
+        if len(filt.card_types) > 1:
+            raise LoweringError(
+                "the reanimation handler moves one kind of card", node=node
+            )
+        if not filt.card_types and not filt.subtypes:
+            raise LoweringError(
+                "the reanimation handler reads a described card", node=node
+            )
+        payload: dict[str, object] = {
+            # "from a graveyard" (no owner) widens the search to every
+            # player's graveyard; "under your control" is CR 400.3's
+            # exception spelled out, honored by the handler.
+            "any_graveyard": filt.zone_owner is None,
+            "under_your_control": node.under_your_control,
+            "gains": list(node.gains),
+        }
+        # Written only when the phrase is not the creature the handler already
+        # defaults to, so every reanimation compiled before this one keeps a
+        # byte-identical payload.
+        if filt.card_types and filt.card_types != ("creature",):
+            payload["card_type"] = filt.card_types[0]
+        if filt.subtypes:
+            # The subtype travels on the key ``graveyard_card_matches`` reads,
+            # which is the one predicate the picker, the re-check and this
+            # handler all ask — so "Aura card" cannot mean one thing to the
+            # offer and another to the resolution.
+            payload["graveyard_subtypes"] = list(filt.subtypes)
+            if not filt.card_types:
+                # No card type printed, so the *word the handler searches by* is
+                # the subtype itself. ``card_has_type`` reads the printed line
+                # (CR 613.1: a card in a graveyard has nothing else), and that
+                # line names the subtype — so this is the same question the
+                # spec above asks, not a second one that could disagree.
+                payload["card_type"] = filt.subtypes[0]
+        if node.attached_to_source:
+            # "…onto the battlefield under your control **attached to this
+            # creature**." (Iridescent Drake.) CR 303.4f: the Aura arrives
+            # already attached, so this rides the entry rather than being a
+            # step behind it — the same key and the same word the from-hand
+            # pick above carries, because it is the same clause about the same
+            # host.
+            payload["attach_to"] = "source"
+        return (OracleInstruction("reanimate_creature", "", payload),)
     raise LoweringError("no handler for this battlefield entry", node=node)
 
 def _lower_shuffle_graveyard_into_library(

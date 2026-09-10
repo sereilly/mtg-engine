@@ -232,14 +232,23 @@ def _parse_put_counter(stream: TokenStream) -> ast.Statement:
             # printed name are one phrase here as everywhere else, and a card
             # naming some *other* permanent refuses rather than being read as
             # this one.
+            #
+            # Read **after** the control riders and not instead of them.
+            # This branch was guarded by ``not under and not owners``, which
+            # is true of Academy Researchers and of no rule: "under your
+            # control" says whose permanent it is (CR 400.3) and "attached to
+            # this creature" says what it is attached to (CR 303.4f), and a
+            # sentence may print both. Iridescent Drake does -- "…onto the
+            # battlefield **under your control attached to this creature**" --
+            # and refused on the last four words, which reads as a missing
+            # production rather than as a rider that could not be reached.
             attached = False
-            if not under and not owners:
-                host = stream.mark()
-                if stream.accept_phrase("attached", "to"):
-                    if accept_source_reference(stream):
-                        attached = True
-                    else:
-                        stream.reset(host)
+            host = stream.mark()
+            if stream.accept_phrase("attached", "to"):
+                if accept_source_reference(stream):
+                    attached = True
+                else:
+                    stream.reset(host)
             return ast.PutOntoBattlefield(
                 moved, under_your_control=under, under_owners_control=owners,
                 attached_to_source=attached,

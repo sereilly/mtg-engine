@@ -495,7 +495,7 @@ def test_opal_avengers_threshold_is_payload(set_pool):
 
     (trigger,) = program.triggered_abilities
 
-    assert trigger.condition.kind == "controller_life_at_most"
+    assert trigger.condition.kind == "life_at_most"
     assert trigger.condition.payload["life_count"] == 10
 
 

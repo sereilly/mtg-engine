@@ -1349,6 +1349,7 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      r"whenever this creature has (?P<keyword_name>[a-z]+)"),
     # "**When you have 10 or less life**, if this permanent is an
     # enchantment, it becomes a 3/5 Soldier creature." (Opal Avenger.)
+    # "**When an opponent has 10 or less life**, …" (Lurking Jackals.)
     # CR 603.8 asked of a **life total** — the fourth thing this family
     # reads a state off, beside a counter store, a characteristic and a
     # hand. Its own kind rather than a seat on `player_has_no_cards_in_hand`
@@ -1356,11 +1357,18 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # thing, and the sweep that answers it reads `player.life` rather than
     # `player.hand`.
     #
-    # "**You**" is the source's controller and not every seat, which is the
-    # difference from that row and is why the seat is in the pattern rather
-    # than in the payload: Opal Avenger wakes when *its* controller is low,
-    # and a reading that fired on an opponent's life total would animate it
-    # at exactly the wrong moment.
+    # **The seat is payload**, the `controls_seat` idiom one row down, and
+    # the kind is named for the state rather than for one of the two seats
+    # that can be in it. It was `controller_life_at_most` with "you" baked
+    # into the pattern and the comment here recording that as deliberate —
+    # true while Opal Avenger was the only printing, and a *narrowing* the
+    # moment a second one arrived: a card whose card reads "an opponent"
+    # matched no row at all and refused with its effect already implemented.
+    # Which seat is asked is the printed word, exactly as it is for
+    # `controls_matching_permanent`, and the sweep reads it: Opal Avenger
+    # wakes when its own controller is low and Lurking Jackals when anyone
+    # across the table is, and the group is present in the groupdict exactly
+    # when the second spelling matched.
     #
     # The threshold is delimited and read by `_NUMBER_WORDS`, so a card
     # printing another number is payload rather than a second row — and the
@@ -1370,8 +1378,9 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # In the whenever table under the "when" the card prints, like every
     # state trigger above it: a kind lives in one table, and this is the one
     # both printed words reach.
-    ("controller_life_at_most",
-     r"whenever you have (?P<life_count>[a-z0-9]+) or less life"),
+    ("life_at_most",
+     r"whenever (?:you have|(?P<life_seat>an opponent) has) "
+     r"(?P<life_count>[a-z0-9]+) or less life"),
     # "**When** a player doesn't pay this enchantment's cumulative upkeep, …"
     # (Thought Lash.) Not a state trigger: CR 702.24a's ability resolves and
     # *fails to be paid* at one identifiable moment, so this is announced from

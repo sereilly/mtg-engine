@@ -1967,10 +1967,68 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
     # effect then declines to affect. A card with no printed colour hands over
     # no filter at all, so every reanimation written before this is unchanged.
     colors = tuple(instruction.payload.get("colors") or ())
-    card_filter = None
+    # "target **Aura** card from a graveyard" (Iridescent Drake). CR 205.3b: a
+    # subtype, carried on the key ``graveyard_card_matches`` reads it under, so
+    # the same predicate answers the colour narrowing beside it. The two are
+    # gathered into one spec rather than into two lambdas because a card must
+    # satisfy every word the phrase printed.
+    subtypes = tuple(instruction.payload.get("graveyard_subtypes") or ())
+    spec: dict[str, object] = {}
     if colors:
-        spec = {"graveyard_colors": list(colors)}
-        card_filter = lambda card: graveyard_card_matches(spec, card)
+        spec["graveyard_colors"] = list(colors)
+    if subtypes:
+        spec["graveyard_subtypes"] = list(subtypes)
+    if spec:
+        # The type word travels with the narrowings rather than being left to
+        # the predicate's default. ``graveyard_card_matches`` ends "a spec that
+        # names no type is about a creature card" — right for the reanimation
+        # Auras it was written for, and wrong for "target **Aura** card", whose
+        # subtype narrows a phrase that names no card type at all: the subtype
+        # test passed and the creature default then refused every Aura in the
+        # pile. Written as the word this handler is already searching by, so
+        # the two readers ask one question; a payload with no ``card_type`` key
+        # spells "creature" here exactly as the default did.
+        spec["card_type"] = card_type
+    # "…onto the battlefield under your control **attached to this creature**."
+    # (Iridescent Drake.) CR 303.4f: an Aura put onto the battlefield attached
+    # to something it cannot legally enchant *stays in its current zone*, so the
+    # host is not a step behind the move — it is part of which cards this
+    # sentence can move at all, and it therefore rides the same filter the
+    # picker and the resolution share.
+    #
+    # A source that has left the battlefield names no host, and CR 303.4a then
+    # leaves nothing that could legally arrive: the effect does nothing rather
+    # than putting an Aura into play attached to nothing for the next
+    # state-based sweep to bin (CR 704.5m).
+    attach_host = None
+    if instruction.payload.get("attach_to") == "source":
+        attach_host = context.source_permanent
+        if attach_host is None or not game.is_on_battlefield(attach_host):
+            game.log.append(
+                f"{context.card.name}: it is no longer on the battlefield"
+            )
+            context.results[REANIMATED_PERMANENTS] = ()
+            return True, "resolved"
+    card_filter = None
+    if spec or attach_host is not None:
+        from ..auras import enchant_card_refusal
+
+        caster_seat = (
+            game.players.index(caster) if caster in game.players else None
+        )
+
+        def card_filter(card, _spec=spec, _host=attach_host, _seat=caster_seat):
+            if _spec and not graveyard_card_matches(_spec, card):
+                return False
+            if _host is None:
+                return True
+            # The one enchant gate the cast, the sweep and both pickers ask —
+            # so "can this Aura enchant that creature?" has one answer here as
+            # everywhere else.
+            return (
+                _seat is not None
+                and enchant_card_refusal(game, card, _seat, _host) is None
+            )
     if any_graveyard and not _holds_a_reanimable_card(
         source_player, idx, card_filter, card_type
     ):
@@ -2016,6 +2074,15 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
     # does not exist until this step runs, and read off the arrival itself
     # rather than off "the newest permanent the caster controls", which an
     # enters-trigger creating a token makes wrong.
+    # "…**attached to this creature**." (Iridescent Drake.) CR 303.4f attaches
+    # the Aura as part of the same move, inside this one resolution — nothing
+    # checks state-based actions between the arrival and this line, so the Aura
+    # is never an unattached one for CR 704.5m to find. Through ``attach_aura``,
+    # which stamps the CR 613.7e timestamp and records both directions.
+    if reanimated is not None and attach_host is not None:
+        from ..auras import attach_aura
+
+        attach_aura(reanimated, attach_host)
     gains = tuple(instruction.payload.get("gains") or ())
     if reanimated is not None and gains:
         for keyword in gains:

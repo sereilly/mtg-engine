@@ -134,9 +134,14 @@ _CONTROLS_POWER_CONDITION = re.compile(
 #: The words are exactly ``_STATE_TESTS``', because that is what will answer
 #: this at every recompute; an unlisted one refuses the line rather than
 #: producing a condition nothing can test.
+#: ``enchanted`` joined the alternation with Urza's Destiny's "enchanted
+#: matters" cycle (Fledgling Osprey, Metathran Elite, Thran Golem). It is the
+#: same shape as every other word here — a state read off the permanent itself
+#: — and its test lives beside them in ``_STATE_TESTS``, which is what stops
+#: "is an Aura attached?" being answered twice.
 _STATE_CONDITION = re.compile(
     r"^(?:it's|this creature is) "
-    r"(?P<state>tapped|untapped|attacking|blocking|blocked|unblocked)$"
+    r"(?P<state>tapped|untapped|attacking|blocking|blocked|unblocked|enchanted)$"
 )
 
 # "as long as an opponent has eight or more cards in their graveyard"
@@ -149,10 +154,18 @@ _GRAVEYARD_SIZE_CONDITION = re.compile(
     r"(?:their|your) graveyard$"
 )
 
+# The keyword group admits commas because the printed list uses them: "it gets
+# +2/+2 and has **flying, first strike, and trample**" (Thran Golem). The
+# character class was `[a-z ]+`, which is the two-keyword spelling only — a
+# three-keyword grant fell out of the pattern entirely and the whole line
+# refused, which reads as an unimplemented effect rather than as a missing
+# comma. Nothing is admitted by widening it: `_keyword_list` splits on the same
+# commas and holds every word to `IMPLEMENTED_KEYWORDS`, so a comma-joined list
+# containing a word with no behaviour behind it still refuses.
 _EFFECT_PT = re.compile(
-    r"^gets \+(?P<power>\d+)/\+(?P<toughness>\d+)(?: and has (?P<keywords>[a-z ]+))?$"
+    r"^gets \+(?P<power>\d+)/\+(?P<toughness>\d+)(?: and has (?P<keywords>[a-z, ]+))?$"
 )
-_EFFECT_KEYWORDS = re.compile(r"^has (?P<keywords>[a-z ]+)$")
+_EFFECT_KEYWORDS = re.compile(r"^has (?P<keywords>[a-z, ]+)$")
 # "…this creature **has protection from white**" (Escaped Shapeshifter). Read
 # before the keyword form above would see it: "protection from white" is not a
 # word `IMPLEMENTED_KEYWORDS` holds, so `_keyword_list` refuses it and the whole
@@ -377,12 +390,27 @@ def conditional_static_for(normalized_line: str) -> StaticBonus | None:
             "conditional_static", {**effect, "condition": {"kind": "your_turn"}}
         )
     if line.startswith("as long as "):
-        # "As long as <condition>, this creature <effect>" (Gnarled Sage).
+        # "As long as <condition>, this creature <effect>" (Gnarled Sage) —
+        # and "As long as this creature is enchanted, **it** gets +2/+2 and has
+        # flying, first strike, and trample" (Thran Golem), where the fronted
+        # condition has already named the subject and the effect half wears a
+        # pronoun. Both spellings are the same sentence about the same
+        # permanent: the condition is read off the source and so is the effect,
+        # so the pronoun has exactly one referent and admitting it adds no
+        # ambiguity. (The trailing word order is the mirror image and has
+        # always read the pronoun — "this creature gets +2/+2 as long as
+        # **it's** untapped" — so refusing it here was the two-orders drift
+        # this table's own docstring exists to prevent.)
         rest = line[len("as long as "):]
         condition_text, separator, effect_clause = rest.partition(", ")
-        if not separator or not effect_clause.startswith(subject):
+        if not separator:
             return None
-        effect_text = effect_clause[len(subject):]
+        for pronoun in (subject, "it "):
+            if effect_clause.startswith(pronoun):
+                effect_text = effect_clause[len(pronoun):]
+                break
+        else:
+            return None
     else:
         # "This creature <effect> as long as <condition>" (Sigiled Contender,
         # Tome Anima, Predatory Wurm).

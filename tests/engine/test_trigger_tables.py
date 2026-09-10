@@ -369,12 +369,12 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     "controls_no_matching": "when you control no lands",
     "controls_matching_permanent": "when you control a dwarf",
     "player_has_no_cards_in_hand": "when a player has no cards in hand",
-    # Opal Avenger. CR 603.8 off a life total, in the *whenever* table for
-    # every other state trigger's reason — the card prints "when" and a kind
-    # lives in the table both printed words reach — so the whenever spelling
-    # is the one that table is asked about and the printed one is here
-    # because the pool prints it.
-    "controller_life_at_most": (
+    # Opal Avenger, and Lurking Jackals for the opponent's seat. CR 603.8 off
+    # a life total, in the *whenever* table for every other state trigger's
+    # reason — the card prints "when" and a kind lives in the table both
+    # printed words reach — so the whenever spelling is the one that table is
+    # asked about and the printed one is here because the pool prints it.
+    "life_at_most": (
         "whenever you have 10 or less life",
         "when you have 10 or less life",
     ),
