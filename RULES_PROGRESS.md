@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**411 / 617 tracked rules covered (66%)** — 2398 tests, 0 unannotated.
+**411 / 617 tracked rules covered (66%)** — 2402 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -685,11 +685,11 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **603.1** Triggered abilities have a trigger condition and an effect. They are written as “[When/Whenever/A... *(2 tests, subrules b)*
 - [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(26 tests, subrules bd)*
-- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(54 tests, subrules bcd)*
+- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(56 tests, subrules bcd)*
 - [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(14 tests)*
-- [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(6 tests)*
+- [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(9 tests)*
 - [x] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit... *(3 tests, subrules c)*
-- [x] **603.7** An effect may create a delayed triggered ability that can do something at a later time. A delayed... *(34 tests, subrules bcde)*
+- [x] **603.7** An effect may create a delayed triggered ability that can do something at a later time. A delayed... *(36 tests, subrules bcde)*
 - [x] **603.8** Some triggered abilities trigger when a game state (such as a player controlling no permanents of... *(6 tests)*
 - [ ] **603.9** Some triggered abilities trigger specifically when a player loses the game. These abilities trigg...
 - [x] **603.10** Normally, objects that exist immediately after an event are checked to see if the event matched a... *(10 tests, subrules a)*
