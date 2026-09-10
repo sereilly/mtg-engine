@@ -36,7 +36,7 @@ Do not edit by hand — re-run the script instead.
 | 22 | Urza's Legacy | ULG | 1999-02-15 | 143 | 140 | Complete (143/143 supported) |
 | 23 | Classic Sixth Edition | 6ED | 1999-04-21 | 335 | 0 | Complete (335/335 supported) |
 | 24 | Urza's Destiny | UDS | 1999-06-07 | 143 | 142 | Complete (143/143 supported) |
-| 25 | Mercadian Masques | MMQ | 1999-10-04 | 335 | 309 | Measured (263/335 supported, not shipped) |
+| 25 | Mercadian Masques | MMQ | 1999-10-04 | 335 | 309 | Measured (273/335 supported, not shipped) |
 | 26 | Nemesis | NEM | 2000-02-14 | 143 | 143 | Not Implemented |
 | 27 | Prophecy | PCY | 2000-06-05 | 143 | 143 | Not Implemented |
 | 28 | Invasion | INV | 2000-10-02 | 335 | 310 | Not Implemented |

@@ -41,7 +41,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 6ED | 335 | 404 | 95.5% | 95.5% | 65.8% | 243 |
 | UDS | 143 | 204 | 91.7% | 91.2% | 65.7% | 121 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| MMQ *(measured)* | 335 | 465 | 80.9% | 75.7% | 51.8% | 218 |
+| MMQ *(measured)* | 335 | 465 | 81.3% | 77.8% | 54.0% | 227 |
 | **All (shipped)** | **5829** | **8560** | **90.6%** | **90.0%** | **60.7%** | **4401** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -54,9 +54,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 477 | 216 | expected a subject |  |
+| 476 | 215 | expected a subject |  |
 | 144 | 74 | unrecognized effect verb |  |
-| 119 | 63 | unconsumed text |  |
+| 118 | 62 | unconsumed text |  |
 | 42 | 25 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 16 | 14 | expected 'unless defending player controls' |  |
@@ -229,6 +229,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, if this card is exiled with a scream counter on it, remove a scream counter from it. If there are no more scream counters on it, put it into your graveyard and each player returns all creature cards from their graveyard to the battlefield.`
 - **Allay**
   - `Destroy target enchantment.`
+- **Alley Grifters**
+  - `Whenever this creature becomes blocked, defending player discards a card.`
 - **Alms**
   - `{1}, Exile the top card of your graveyard: Prevent the next 1 damage that would be dealt to target creature this turn.`
 - **Alpine Houndmaster**
@@ -906,6 +908,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your end step, create a 0/1 black Thrull creature token.`
   - `At the beginning of your upkeep, sacrifice this enchantment unless you pay {B}{B}.`
   - `At the beginning of your end step, create a 0/1 black Thrull creature token.`
+- **Briar Patch**
+  - `Whenever a creature attacks you, it gets -1/-0 until end of turn.`
 - **Briar Shield**
   - `Sacrifice this Aura: Enchanted creature gets +3/+3 until end of turn.`
 - **Brilliant Halo**
@@ -1483,6 +1487,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Corrupt deals damage to any target equal to the number of Swamps you control. You gain life equal to the damage dealt this way.`
 - **Corrupt Official**
   - `{2}{B}: Regenerate this creature.`
+  - `Whenever this creature becomes blocked, defending player discards a card at random.`
 - **Corrupting Licid**
   - `{B}, {T}: This creature loses this ability and becomes an Aura enchantment with enchant creature. Attach it to target creature. You may pay {B} to end this effect.`
 - **Cosmic Horror**
@@ -2325,6 +2330,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Exile target enchantment.`
 - **Erhnam Djinn**
   - `At the beginning of your upkeep, target non-Wall creature an opponent controls gains forestwalk until your next upkeep. (It can't be blocked as long as defending player controls a Forest.)`
+- **Erithizon**
+  - `Whenever this creature attacks, put a +1/+1 counter on target creature of defending player's choice.`
 - **Erosion**
   - `At the beginning of the upkeep of enchanted land's controller, destroy that land unless that player pays {1} or 1 life.`
   - `At the beginning of the upkeep of enchanted land's controller, destroy that land unless that player pays {1} or 1 life.`
@@ -5542,6 +5549,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Polymorph**
   - `Destroy target creature. It can't be regenerated. Its controller reveals cards from the top of their library until they reveal a creature card. The player puts that card onto the battlefield, then shuffles all other cards revealed this way into their library.`
   - `Destroy target creature. It can't be regenerated. Its controller reveals cards from the top of their library until they reveal a creature card. The player puts that card onto the battlefield, then shuffles all other cards revealed this way into their library.`
+- **Port Inspector**
+  - `Whenever this creature becomes blocked, you may look at defending player's hand.`
 - **Portcullis**
   - `Whenever a creature enters, if there are two or more other creatures on the battlefield, exile that creature. Return that card to the battlefield under its owner's control when this artifact leaves the battlefield.`
 - **Portcullis Vine**
@@ -5742,6 +5751,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Pyrotechnics deals 4 damage divided as you choose among any number of targets.`
   - `Pyrotechnics deals 4 damage divided as you choose among any number of targets.`
   - `Pyrotechnics deals 4 damage divided as you choose among any number of targets.`
+- **Quagmire Lamprey**
+  - `Whenever this creature becomes blocked by a creature, put a -1/-1 counter on that creature.`
 - **Quarum Trench Gnomes**
   - `{T}: If target Plains is tapped for mana, it produces colorless mana instead of white mana. (This effect lasts indefinitely.)`
 - **Quash**
@@ -6113,6 +6124,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Righteous Aura**
   - `{W}, Pay 2 life: The next time a source of your choice would deal damage to you this turn, prevent that damage.`
   - `{W}, Pay 2 life: The next time a source of your choice would deal damage to you this turn, prevent that damage.`
+- **Righteous Indignation**
+  - `Whenever a creature blocks a black or red creature, the blocking creature gets +1/+1 until end of turn.`
 - **Righteous War**
   - `White creatures you control have protection from black.`
   - `Black creatures you control have protection from white.`
@@ -6164,6 +6177,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{U}: This creature gains mountainwalk until end of turn. (It can't be blocked as long as defending player controls a Mountain.)`
 - **Roaming Ghostlight**
   - `When this creature enters, return up to one target non-Spirit creature to its owner's hand.`
+- **Robber Fly**
+  - `Whenever this creature becomes blocked, defending player discards all the cards in their hand, then draws that many cards.`
 - **Roc Hatchling**
   - `At the beginning of your upkeep, remove a shell counter from this creature.`
   - `As long as this creature has no shell counters on it, it gets +3/+2 and has flying.`
@@ -6787,6 +6802,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Draw three cards, then discard a card.`
 - **Sigil of Sleep**
   - `Whenever enchanted creature deals damage to a player, return target creature that player controls to its owner's hand.`
+- **Silent Assassin**
+  - `{3}{B}: Destroy target blocking creature at end of combat.`
 - **Silent Attendant**
   - `{T}: You gain 1 life.`
 - **Silent Dart**
@@ -7907,6 +7924,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Switch target creature's power and toughness until end of turn.`
 - **Transmute Artifact**
   - `Sacrifice an artifact. If you do, search your library for an artifact card. If that card's mana value is less than or equal to the sacrificed artifact's mana value, put it onto the battlefield. If it's greater, you may pay {X}, where X is the difference. If you do, put it onto the battlefield. If you don't, put it into its owner's graveyard. Then shuffle.`
+- **Trap Runner**
+  - `{T}: Target unblocked attacking creature becomes blocked. Activate only during combat after blockers are declared. (This ability works on creatures that can't be blocked.)`
 - **Treachery**
   - `When this Aura enters, untap up to five lands.`
 - **Treasure Hunter**
