@@ -19,15 +19,17 @@ that module's docstring states — **which shield records what, and for how long
 shield nor a duration.
 
 **A floor rather than a family**, for ``_blankets``' reason: ``prevention``
-reads it — from three places in ``_lower_prevent_damage``, all of them in front
-of the branch that owns the clause — and it reads nothing back.
+reads it — from three places in ``_lower_prevent_damage`` and nowhere else —
+and it reads nothing back.
 
-The three readers are deliberately *in front of* the branches, and that is the
-whole safety argument for the module. Every shield branch in ``prevention`` was
+Two of the three are read at the **top** of that function, ahead of every
+branch, and that is deliberate rather than incidental. Each shield branch was
 written before any rider existed and reads none of them, so a rider printed on a
 Circle, a blanket or a halving shield would arm without it and the card would
 report supported with a printed sentence doing nothing. Refusing centrally is
-what makes "dropped rider" impossible rather than merely unlikely.
+what makes "dropped rider" impossible rather than merely unlikely. The third,
+``_lower_team_shield``, is a branch of its own: what its rider does is what
+picks the interceptor, so there is no shield to refuse it *on*.
 """
 
 from ...oracle_types import OracleInstruction
