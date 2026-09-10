@@ -1245,6 +1245,56 @@ the trigger, the entry's work is still undone, and the amended condition did its
 job: under the *old* wording this would have read as due for the second set
 running and been read as a live work item for the second time.
 
+**Drained at 6ED's wave 1 — and it had been drained for two days before that,
+by the set that raised it.** All four parts, plus the fifth the entry did not
+name, landed in commit `233b35bf` ("EXO 143/143: a cast can announce CR 609.7a's
+chosen source") on 2026-09-07, at EXO's own Phase 3. `casting.cast_from_hand` /
+`_cast_onto_stack` take the three `chosen_source_*` parameters,
+`web/action_helpers._queue_spell_from_request` forwards them,
+`app.js`'s `startCastChosenSourceStage` runs after both a target walk and a
+roles walk, `redirect_chosen_source_damage_between_targets_until_eot` exists
+with its categories and spec rows, and `legality._attach_chosen_source_targets`
+fills `source_targets` on the cast path. Kor Chant compiles supported;
+`lowering/redirection.py` has no by-name refusal left to remove.
+
+**Two Phase-6 re-checks read the entry's trigger condition and never re-probed
+the code, and both reported the work still undone.** USG's re-check counted the
+set's eight printings of the phrase and correctly found all eight were activated
+abilities; ULG's counted Martyr's Cause and found the same. Both conclusions
+about *the set* were right. Neither asked whether the **entry** was still true,
+and the honest reading is that amending a trigger condition is not a substitute
+for opening the file the entry names: a decline ages in the direction of
+becoming free, and this one had already gone free. **A re-check owes one probe
+of the code, not just one probe of the set.**
+
+**What the re-checks could not have known is now measured, in the app.** The
+entry's own proof card is Honorable Passage, whose walk is `kind: "any"`; the
+shape nobody had ever driven is Kor Chant's **roles** walk followed by the
+source stage, which the EXO commit built and verified only by reading `app.js`
+as text. Driven end to end in the running app at 6ED's wave 1: the two role
+clicks, then the source stage, then
+
+    Kor Chant: damage Mons's Goblin Raiders would deal to Grizzly Bears this
+    turn is dealt to Hill Giant instead
+    ...
+    1 damage to Grizzly Bears is dealt to Hill Giant instead (Kor Chant)
+
+with Hill Giant's own 2 combat damage to the same creature staying put, which is
+what says the record answers to the chosen source and not to every source.
+
+**What is left is one kind wider than the two cards.** `requires_source` rides
+on top of whatever target description the card prints
+(`targeting._off_target_chosen_source_redirect_spec` returns
+`{**described, "requires_source": True}`), so the next card printing the phrase
+picks its own walk — and only `resolvePendingCastTarget` and `confirmRoleTargets`
+reach the stage. A `divided`, `several`, `stack` or `player` description would
+route to a walk with none, and fail exactly as this entry's original defect did:
+the cast completes, the record arms, and it answers to every source.
+`tests/ui/test_cast_target_kinds.py::test_every_cast_that_asks_for_a_source_ends_in_a_walk_that_offers_one`
+sweeps the pool for that and fails naming the card, so the class is fail-closed
+rather than waiting for a fifth set to notice. Backwards-validated against
+`233b35bf^`, where it names Honorable Passage.
+
 **Added at EXO's Phase 5: a client-only envelope has no guard, and one had
 been wrong for four sets.** `GameActionRequest.seat` is required of every
 action and `sendAction` does not supply it, so all 125 call sites in
