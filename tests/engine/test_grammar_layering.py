@@ -822,7 +822,26 @@ LOWER_LAYERS = [
 # dispatcher alone and `_accept_spell_type_union` from `_parse_cast_permission`
 # alone, and neither calls anything left behind. Both moved byte-identically,
 # so no compiled program moves.
-EFFECT_FAMILIES = ["damage", "characteristics", "base_pt", "types", "board", "cards", "exile", "stack", "combat", "game", "mana", "library", "search", "reveal", "control_changes", "prevention", "damage_instances", "redirection", "damage_locks", "counters", "tapping", "attachments", "tokens", "returns", "text_changes", "destruction", "zones", "hand", "permissions", "requirements"]
+# `production_changes` split off `effects/mana.py` at Urza's Destiny's Phase 0,
+# when that module sat **twelve** lines under the size guard with a parallel
+# wave about to land productions in it — the same pre-split `damage_instances`
+# and `prevented_riders` were taken at Exodus' Phase 0, and for the same stated
+# reason. The seam is the one `effects/mana.py`'s own first sentence had already
+# drawn and named: "Mana: producing it, **and changing what a permanent
+# produces**". It is the CR's line as well — CR 605's mana ability resolves into
+# a pool *now*, where CR 611.2's continuous effect changes what a land will make
+# *later* and adds nothing itself — and it is the one `control_changes` and
+# `text_changes` draw beside it. The call graph was already two components with
+# zero edges between them: `_parse_produced_mana_word` and its word table are
+# read by the three moved productions alone, and `references.parse_target_spec`
+# by no production left behind. There is no import between the two modules in
+# either direction, and the block moved byte-identically, so no compiled program
+# moves. Parse-only, like `search`, `reveal`, `text_changes` and `damage_locks`:
+# all three sentences lower within fifty lines of each other in
+# `lowering/mana.py`, because a swap lowers to one instruction however many ways
+# its sentence spells the tapper. A near-empty `lowering/production_changes.py`
+# would buy back the symmetry and cost the thing symmetry is for.
+EFFECT_FAMILIES = ["damage", "characteristics", "base_pt", "types", "board", "cards", "exile", "stack", "combat", "game", "mana", "production_changes", "library", "search", "reveal", "control_changes", "prevention", "damage_instances", "redirection", "damage_locks", "counters", "tapping", "attachments", "tokens", "returns", "text_changes", "destruction", "zones", "hand", "permissions", "requirements"]
 # `redirection` arrived on the parse side at Visions' first wave, a set after
 # the lowering side split it off `lowering/damage.py` — the mirror re-forming
 # rather than a new vocabulary, which is what this file asks a split to do.
@@ -1020,6 +1039,13 @@ LOWERING_FAMILIES = [
         # anything, and a near-empty `lowering/damage_instances.py` would buy
         # back the symmetry and cost the thing symmetry is for.
         "damage_instances",
+        # `production_changes` is `damage_instances`' reason one family over:
+        # all three of its productions lower in `lowering/mana.py`, within fifty
+        # lines of each other and of the pip clauses, because a produced-mana
+        # swap lowers to one instruction however many ways its sentence spells
+        # the tapper. The guard that made it a parse family fired on the
+        # *productions*; `lowering/mana.py` is 750 lines and crossed nothing.
+        "production_changes",
     )
 # `base_pt` was appended here when it was a lowering family with no parse twin.
 # Tempest's first wave gave it one — `effects/characteristics.py` crossed the
@@ -1334,6 +1360,14 @@ AST_FAMILIES = [
         # every other one. The guard that made this a parse family fired on the
         # *productions*; the node inventory never crossed anything.
         "damage_locks",
+        # `production_changes` is `damage_locks`' reason one family over: all
+        # three of its sentences build the one node `ProducesManaInstead`, which
+        # is a fact about **mana** and sits in `ast/mana.py` beside `AddMana`
+        # and `AddManaForTappedLand` because that is what it is. The guard that
+        # made this a parse family fired on the productions; `ast/mana.py` is
+        # 362 lines and crossed nothing, and splitting the node out to match
+        # would put it in one family with both of its readers in another.
+        "production_changes",
         # `reveal` is `library`'s and `search`'s reason a third time, in the
         # same package: `RevealTop`, `RevealTopToHandOrBottom`,
         # `RevealTopOpponentChooses`, `RevealUntil` and the rest sit perfectly

@@ -1,15 +1,11 @@
-"""Mana: producing it, and changing what a permanent produces.
+"""Mana: producing it.
 
 Split out of `effects/cards.py`, and named for the family `lowering/mana.py`
-already carried. Three productions, and the axis between them is *whose* mana
-and *when*:
+already carried. The axis between the productions is *whose* mana and *when*:
 
     _parse_add_mana             "Add {G}" — the ability's own controller, now
     _parse_player_adds_mana     "…that player adds …" — a referent the enclosing
                                 trigger binds
-    _parse_produces_instead     "If target Plains is tapped for mana, it
-                                produces … instead of …" — nothing now, and a
-                                different symbol every time afterwards
     _parse_activates_each_lands_mana_ability
                                 "<player> activates a mana ability of each land
                                 they control" — somebody else's lands, into
@@ -19,6 +15,13 @@ and *when*:
 
 `_parse_mana_multiplier` is shared between the first two and lives here for
 that reason; nothing outside this family reads it.
+
+**Changing what a permanent produces** left for
+`effects/production_changes.py` at Urza's Destiny's Phase 0, along the seam the
+first line of this docstring used to name in the same breath as producing. Its
+three sentences add no mana at all — they record a standing swap (CR 611.2) a
+mana ability reads back later — where every production below counts pips,
+multipliers and amounts. That module carries the reason the line is there.
 """
 
 
@@ -28,7 +31,7 @@ from ..errors import GrammarError
 from ..lexer import (MANA, render)
 from ..nouns import parse_object_filter
 from ..records import accept_counters_removed_for_cost
-from ..references import parse_player_ref, parse_target_spec
+from ..references import parse_player_ref
 from ..stream import TokenStream
 
 
@@ -640,247 +643,6 @@ def _parse_player_adds_mana(
     return ast.AddManaForTappedLand(
         recipient, of_type_produced=amount, additional=additional,
         optional=optional,
-    )
-
-
-# The colour words a "produces X instead of Y" clause may name, mapped to the
-# symbol produced. "Colorless" is here rather than beside the five colours in
-# `oracle_types` because {C} is not a colour (CR 105.1) — it is the *absence*
-# of one, and only a clause about produced mana treats the two as alternatives
-# in the same slot.
-_PRODUCED_MANA_WORDS = {
-    "white": "W",
-    "blue": "U",
-    "black": "B",
-    "red": "R",
-    "green": "G",
-    "colorless": "C",
-}
-
-
-def _parse_produced_mana_word(stream: TokenStream) -> str | None:
-    """``<colour|colorless> mana`` — the symbol named, or None."""
-    mark = stream.mark()
-    word = stream.peek_word()
-    symbol = _PRODUCED_MANA_WORDS.get(word or "")
-    if symbol is None:
-        return None
-    stream.advance()
-    if not stream.accept_word("mana"):
-        stream.reset(mark)
-        return None
-    return symbol
-
-
-def _parse_produces_instead(stream: TokenStream) -> "ast.ProducesManaInstead | None":
-    """``If <object> is tapped for mana, it produces <X> mana instead of <Y> mana.``
-
-    Quarum Trench Gnomes. Refuses without consuming, because "if" opens every
-    intervening-if and every conditional sentence in the pool and this is one
-    printed shape among them.
-
-    Both symbols are read, in both slots. A production that consumed "instead
-    of white mana" without recording the colour would read a card that swapped
-    a land's *green* mana as though it swapped its white — and, worse, would
-    fire on a land that never made white at all.
-    """
-    mark = stream.mark()
-    if not stream.accept_word("if"):
-        return None
-    try:
-        target = parse_target_spec(stream)
-    except GrammarError:
-        stream.reset(mark)
-        return None
-    if target is None or not stream.accept_phrase("is", "tapped", "for", "mana"):
-        stream.reset(mark)
-        return None
-    if not stream.accept_punct(","):
-        stream.reset(mark)
-        return None
-    # "**it** produces" — the same object the condition named. Read rather than
-    # skipped: a different subject here would be a different card.
-    if not stream.accept_phrase("it", "produces"):
-        stream.reset(mark)
-        return None
-    produced = _parse_produced_mana_word(stream)
-    if produced is None or not stream.accept_phrase("instead", "of"):
-        stream.reset(mark)
-        return None
-    replaced = _parse_produced_mana_word(stream)
-    if replaced is None:
-        stream.reset(mark)
-        return None
-    return ast.ProducesManaInstead(target, replaced=replaced, produced=produced)
-
-
-def _accept_swapped_land_back_reference(
-    stream: TokenStream, subject: "ast.TargetSpec"
-) -> bool:
-    """``it`` / ``that Mountain`` — the land the clause's condition just named.
-
-    Read rather than skipped: a different subject here would be a different
-    card, and the noun in the long spelling has to be the one the condition
-    described. Chaos Moon prints "if a player taps **a Mountain** for mana,
-    **that Mountain** produces …" and a reader that took any noun would accept
-    a sentence swapping the mana of something the clause never mentioned.
-    """
-    if stream.accept_word("it"):
-        return True
-    mark = stream.mark()
-    if not stream.accept_word("that"):
-        return False
-    noun = stream.peek_word()
-    if noun is None:
-        stream.reset(mark)
-        return False
-    subtypes = subject.filter.subtypes
-    # "that land" answers a clause that named no land type; "that Mountain"
-    # answers one that named exactly that type. Anything else is a noun the
-    # condition did not describe.
-    if noun == "land" and not subtypes:
-        stream.advance()
-        return True
-    if noun in subtypes:
-        stream.advance()
-        return True
-    stream.reset(mark)
-    return False
-
-
-def _parse_tapper_produces_instead(
-    stream: TokenStream,
-) -> "ast.ProducesManaInstead | None":
-    """``If you tap <objects> for mana, it produces {X} instead of any other
-    type.`` (Deep Water.) ``If a player taps <objects> for mana, that <noun>
-    produces <colour> mana instead of any other type.`` (Chaos Moon.) Both with
-    "Until end of turn," in front of them — the leading duration the statement
-    layer distributes.
-
-    The same CR 611.2 / CR 305.7 swap :func:`_parse_produces_instead` reads, in
-    the active voice and about a *class* of lands rather than one named object.
-    Read as its own production rather than as a branch of that one because the
-    two sentences share no word after "if": one names the land and puts it in
-    the subject slot, the other names the tapper and puts the land in the
-    object slot.
-
-    **The tapper is the whole difference between the two spellings here**, and
-    it is read rather than inferred. "You" arms the swap on the ability's own
-    controller; "a player" arms it on every seat, because the sentence names
-    none. Inferring that from the noun phrase's "you control" instead would tie
-    two independent printed words together, and each of them can appear without
-    the other.
-
-    Refuses without consuming, for :func:`_parse_produces_instead`'s reason:
-    "if" opens every conditional in the pool.
-
-    Both ends are read. "instead of any other **type**" is not a colour — it is
-    everything the land would have produced — and a production that stopped at
-    "instead of" would compile Deep Water onto a swap of one unnamed symbol.
-    """
-    mark = stream.mark()
-    if stream.accept_phrase("if", "you", "tap"):
-        each_player = False
-    elif stream.accept_phrase("if", "a", "player", "taps"):
-        each_player = True
-    else:
-        return None
-    try:
-        subject = parse_target_spec(stream)
-    except GrammarError:
-        stream.reset(mark)
-        return None
-    if subject is None or not stream.accept_phrase("for", "mana"):
-        stream.reset(mark)
-        return None
-    if not stream.accept_punct(","):
-        stream.reset(mark)
-        return None
-    if not _accept_swapped_land_back_reference(stream, subject):
-        stream.reset(mark)
-        return None
-    if not stream.accept_word("produces"):
-        stream.reset(mark)
-        return None
-    # Two printed spellings of one symbol, because the pool prints both: the
-    # symbol itself ({U}, Deep Water) and the colour written out ("colorless
-    # mana", Chaos Moon). The word form is read first and non-consuming, so a
-    # line printing neither still falls out on the mana check below.
-    produced = _parse_produced_mana_word(stream)
-    if produced is None:
-        token = stream.peek()
-        produced = (
-            token.text.strip("{}") if token is not None and token.kind == MANA else ""
-        )
-        # One coloured symbol, spelled as the card prints it. A hybrid, a
-        # phyrexian or a generic pip is a symbol the record has no way to
-        # produce, and admitting one would arm a swap onto a symbol no mana pool
-        # has.
-        if len(produced) != 1 or not produced.isalpha():
-            stream.reset(mark)
-            return None
-        stream.advance()
-    if not stream.accept_phrase("instead", "of", "any", "other", "type"):
-        stream.reset(mark)
-        return None
-    return ast.ProducesManaInstead(
-        subject,
-        replaced=ast.ANY_OTHER_TYPE,
-        produced=produced,
-        by_controller=True,
-        each_player=each_player,
-    )
-
-
-def _parse_tapped_lands_produce_chosen(
-    stream: TokenStream,
-) -> "ast.ProducesManaInstead | None":
-    """``<lands> tapped for mana produce mana of the chosen color instead of
-    any other color.`` (Hall of Gemstone, behind its leading "Until end of
-    turn,".)
-
-    The **passive** voice of the swap the two productions above read, and its
-    own production for their own reason: the three sentences share no word
-    after their first, because each puts a different thing in the subject slot.
-    Here it is the lands themselves, and nobody is named as the tapper at all —
-    which is what makes the swap cover every seat.
-
-    The colour is not printed. It is the one an earlier sentence of the same
-    ability had a player choose, so the node carries the *reference* and the
-    handler reads the record — the same channel "add one mana of the chosen
-    color" already travels.
-
-    Refuses without consuming, like both productions above it: a noun phrase in
-    the subject slot is what every ordinary sentence in the pool opens with.
-    """
-    mark = stream.mark()
-    try:
-        subject = parse_target_spec(stream)
-    except GrammarError:
-        stream.reset(mark)
-        return None
-    if subject is None:
-        stream.reset(mark)
-        return None
-    if not stream.accept_phrase("tapped", "for", "mana"):
-        stream.reset(mark)
-        return None
-    if not stream.accept_phrase("produce", "mana", "of", "the", "chosen", "color"):
-        stream.reset(mark)
-        return None
-    # "instead of any other **color**" where the active-voice spellings print
-    # "type". Both ends are read for that production's reason: a reader that
-    # stopped at "instead of" would compile a swap of one unnamed symbol.
-    if not stream.accept_phrase("instead", "of", "any", "other", "color"):
-        stream.reset(mark)
-        return None
-    return ast.ProducesManaInstead(
-        subject,
-        replaced=ast.ANY_OTHER_TYPE,
-        produced="",
-        from_chosen_color=True,
-        by_controller=True,
-        each_player=True,
     )
 
 

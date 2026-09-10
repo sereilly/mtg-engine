@@ -14,7 +14,8 @@ precisely so this stays true. Independence is the point: it is what makes
     returns          an object put back into a zone it came from
     tapping          tapping, and not untapping
     cards            drawing, discarding, milling, searching, revealing
-    mana             producing it, and changing what a permanent produces
+    mana             producing it
+    production_changes  a standing swap of what a land makes when tapped
     stack            countering, choosing modes, and declining a cost
     combat           can't-attack / can't-be-blocked restrictions
     game             tokens, winning, extra turns, enchant
@@ -130,10 +131,12 @@ from .mana import (
     _parse_activates_each_lands_mana_ability,
     _parse_loses_unspent_mana,
     _parse_player_adds_mana,
+    _parse_spend_mana_as_though,
+)
+from .production_changes import (
     _parse_produces_instead,
     _parse_tapped_lands_produce_chosen,
     _parse_tapper_produces_instead,
-    _parse_spend_mana_as_though,
 )
 from .exile import (
     _parse_exile_bound_card,
