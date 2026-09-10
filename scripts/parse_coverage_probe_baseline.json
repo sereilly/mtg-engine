@@ -1316,14 +1316,6 @@
   ]
  },
  {
-  "card": "Junk Diver",
-  "clause": "return another target artifact card from your graveyard to your hand",
-  "ignored": [
-   "another",
-   "target"
-  ]
- },
- {
   "card": "Kaervek's Hex",
   "clause": "kaervek's hex deals 1 damage to each nonblack creature and an additional 1 damage to each green creature",
   "ignored": [

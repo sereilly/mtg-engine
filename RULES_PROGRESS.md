@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**411 / 617 tracked rules covered (66%)** — 2468 tests, 0 unannotated.
+**411 / 617 tracked rules covered (66%)** — 2473 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -202,7 +202,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 109. Objects
 
 - [x] **109.1** An object is an ability on the stack, a card, a copy of a card, a token, a spell, a permanent, or... *(1 tests)*
-- [x] **109.2** If a spell or ability uses a description of an object that includes a card type or subtype, but d... *(1 tests)*
+- [x] **109.2** If a spell or ability uses a description of an object that includes a card type or subtype, but d... *(4 tests, subrules a)*
 - [ ] **109.3** An object’s characteristics are name, mana cost, color, color indicator, card type, subtype, supe...
 - [x] **109.4** Only objects on the stack or on the battlefield have a controller. Objects that are neither on th... *(3 tests, subrules b)*
 - [x] **109.5** The words “you” and “your” on an object refer to the object’s controller, its would-be controller... *(25 tests)*
@@ -246,7 +246,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **113.4** Some activated abilities and some triggered abilities are mana abilities. Mana abilities follow s...
 - [ ] **113.5** Some activated abilities are loyalty abilities. Loyalty abilities follow special rules: A player ...
 - [x] **113.6** Abilities of an instant or sorcery spell usually function only while that object is on the stack.... *(16 tests, subrules bgjkm)*
-- [x] **113.7** The source of an ability is the object that generated it. The source of an activated ability on t... *(4 tests, subrules a)*
+- [x] **113.7** The source of an ability is the object that generated it. The source of an activated ability on t... *(8 tests, subrules a)*
 - [ ] **113.8** The controller of an activated ability on the stack is the player who activated it. The controlle...
 - [ ] **113.9** Activated and triggered abilities on the stack aren’t spells, and therefore can’t be countered by...
 - [ ] **113.10** Effects can add or remove abilities of objects. An effect that adds an ability will state that th...
@@ -265,7 +265,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **115.1** Some spells and abilities require their controller to choose one or more targets for them. The ta... *(27 tests, subrules abcd)*
 - [x] **115.2** Only permanents are legal targets for spells and abilities, unless a spell or ability (a) specifi... *(3 tests)*
-- [x] **115.3** The same target can’t be chosen multiple times for any one instance of the word “target” on a spe... *(10 tests)*
+- [x] **115.3** The same target can’t be chosen multiple times for any one instance of the word “target” on a spe... *(11 tests)*
 - [x] **115.4** Some spells and abilities that refer to damage require “any target,” “another target,” “two targe... *(6 tests)*
 - [ ] **115.5** A spell or ability on the stack is an illegal target for itself.
 - [x] **115.6** A spell or ability that requires targets may allow zero targets to be chosen. Such a spell or abi... *(4 tests)*
@@ -666,7 +666,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(249 tests, subrules abcdefghi)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(250 tests, subrules abcdefghi)*
 - [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(26 tests, subrules a)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [x] **601.5** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*
@@ -685,7 +685,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **603.1** Triggered abilities have a trigger condition and an effect. They are written as “[When/Whenever/A... *(3 tests, subrules b)*
 - [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(29 tests, subrules bd)*
-- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(57 tests, subrules bcd)*
+- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(58 tests, subrules bcd)*
 - [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(16 tests)*
 - [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(10 tests)*
 - [x] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit... *(3 tests, subrules c)*

@@ -10,7 +10,7 @@ unclaimed text. Do not edit by hand.
 - Fully claimed: **3713**
 - With acknowledged simplifications: **2**
 - With UNCLAIMED text (must fix or acknowledge): **0**
-- With deletion-probe findings (ignored words): **428**
+- With deletion-probe findings (ignored words): **426**
 
 ## Acknowledged simplifications
 
@@ -215,7 +215,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Jokulhaups | `destroy all artifacts, creatures, and lands. they can't be regenerated` | all |
 | Jolt | `you may tap or untap target artifact, creature, or land` | or |
 | Joven's Ferrets | `tap all creatures that blocked this creature this turn. they don't unt` | all creature controller's |
-| Junk Diver | `return another target artifact card from your graveyard to your hand` | another target |
 | Kaervek's Hex | `kaervek's hex deals 1 damage to each nonblack creature and an addition` | each each |
 | Karmic Guide | `if this permanent came under your control since the beginning of your ` | permanent |
 | Keeper of the Dead | `choose target opponent who has at least two fewer creature cards in th` | cards |
@@ -224,7 +223,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Kjeldoran Frostbeast | `destroy all creatures blocking or blocked by this creature` | all creature |
 | Kjeldoran Home Guard | `if this creature attacked or blocked this combat, put a -0/-1 counter ` | creature |
 | Knight of Valor | `each creature without flanking blocking this creature gets -1/-1 until` | each |
-| Kor Chant | `all damage that would be dealt this turn to target creature you contro` | target another |
+| Kor Chant | `all damage that would be dealt this turn to target creature you contro` | target |
 | Labyrinth Minotaur | `that creature doesn't untap during its controller's next untap step` | controller's |
 | Land's Edge | `if the discarded card was a land card, this enchantment deals 2 damage` | card, |
 | Lead Golem | `it doesn't untap during its controller's next untap step` | controller's |
@@ -386,7 +385,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Suleiman's Legacy | `destroy all djinns and efreets. they can't be regenerated` | all |
 | Sunder | `return all lands to their owners' hands` | all |
 | Sworn Defender | `this creature's power becomes the toughness of target creature blockin` | being creature |
-| Sylvan Hierophant | `exile it, then return another target creature card from your graveyard` | another target |
 | Sylvan Library | `you may draw two additional cards. if you do, choose two cards in your` | additional |
 | Symbiosis | `two target creatures each get +2/+2 until end of turn` | each |
 | Taniwha | `all lands you control phase out` | all |
