@@ -89,6 +89,38 @@ def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
         else (req.permanent_index if req.permanent_index is not None else req.target_permanent_index)
     )
     target = req.target_seat if req.target_seat is not None else _default_target(card_name, seat)
+    # A roles announcement whose slots are not all permanents (Donate's "target
+    # player gains control of target permanent you control"). One entry per
+    # role, in role order, translated **here** into the two channels a cast
+    # already has: the id list, positional in the same order with ``None`` where
+    # the slot is not a permanent, and the seat, which is where a stack item has
+    # carried "the player this spell targets" since the first spell to name one.
+    #
+    # Translated at the boundary rather than forwarded, for the reason the mode
+    # choices above are: the wire's shape exists to keep "which slot is this?"
+    # answerable, and the engine's exists to be read back at resolution. A
+    # third parameter on ``queue_from_hand`` would be a second spelling of an
+    # announcement it already takes.
+    role_ids = None
+    if req.target_role_refs:
+        role_ids = []
+        for ref in req.target_role_refs:
+            if ref.seat is not None:
+                target = ref.seat
+                role_ids.append(None)
+                continue
+            if ref.graveyard_seat is not None:
+                # No **spell** in the pool names a slot in a graveyard — the one
+                # ability that does is activated, and its path stamps the pile
+                # itself (``_role_announcement_stamps``). Refused loudly rather
+                # than translated to a hole in the id list, which the
+                # announcement gate would decline as "no valid target" and
+                # leave a client author reading the wrong sentence.
+                raise HTTPException(
+                    status_code=400,
+                    detail="a cast cannot name a graveyard slot for a role",
+                )
+            role_ids.append(ref.permanent_id)
     # Cross-seat divided targets (Fireball): (seat, index|None) pairs; an index
     # of None is that player's face.
     # A three-tuple only where a share was announced (CR 601.2d): the two-tuple
@@ -117,7 +149,9 @@ def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
         # index on the first slot's board. Rookie Mistake has been half-castable
         # in the browser since round 65 for exactly this reason; the engine and
         # the activation path (below) had it right the whole time.
-        target_permanent_ids=req.target_permanent_ids,
+        target_permanent_ids=(
+            role_ids if role_ids is not None else req.target_permanent_ids
+        ),
         x_value=x_value,
         new_color=req.mana_color,
         target_stack_index=engine_stack_index,

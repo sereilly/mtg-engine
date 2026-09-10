@@ -1969,15 +1969,31 @@ def _choose_role_targets(
         options = options[0].get("next") or []
     if not picks:
         return ()
+    # A **player** role's answer is the seat itself (Donate's "target player"),
+    # and it fills no slot in the positional id list — the seat travels on the
+    # field every cast already carries, which is what the resolution reads back.
+    # Held as ``None`` in both lists rather than dropped, because those lists
+    # are positional in role order and a short one shifts every slot after it.
     ids = [
-        game.permanent_id_of(game.permanent_at(pick["seat"], pick["index"]))
+        None if pick.get("kind") == "player"
+        else game.permanent_id_of(game.permanent_at(pick["seat"], pick["index"]))
         for pick in picks
     ]
-    if not all(isinstance(value, int) for value in ids):
+    if not all(value is None or isinstance(value, int) for value in ids):
         return ()
-    # The seat is still sent, because every cast carries one; the *ids* are what
-    # address the two boards a roles spell may span (CR 400.7).
-    return picks[0]["seat"], [pick["index"] for pick in picks], ids
+    seats = [pick["seat"] for pick in picks if pick.get("kind") == "player"]
+    if len(seats) > 1:
+        # Two player roles would be one seat sent twice, which the resolution
+        # refuses on the other side of the same fact. Skipped rather than cast.
+        return ()
+    # The seat is still sent for every other roles spell too, because every cast
+    # carries one; the *ids* are what address the two boards a roles spell may
+    # span (CR 400.7).
+    seat = seats[0] if seats else picks[0]["seat"]
+    indices = [
+        None if pick.get("kind") == "player" else pick["index"] for pick in picks
+    ]
+    return seat, indices, ids
 
 
 def _choose_several_targets(

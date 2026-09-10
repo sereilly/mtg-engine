@@ -304,6 +304,13 @@ def _lower_another_seat_gains_control(
     that is exercised by a sentence no card in the pool prints. And the seat
     must be one the resolution can name.
     """
+    # "**Target player** gains control of **target permanent you control**."
+    # (Donate.) The subject is chosen rather than being the source, and the
+    # seat is chosen too — two targets of *different kinds* in one announcement
+    # (CR 601.2c), which is the ordered-roles shape Fumarole prints one noun
+    # over with a player in slot 0.
+    if _is_target(subject) and node.gained_by.kind == "target_player":
+        return (_lower_seat_gains_target_permanent(node, subject),)
     if not _is_source(subject):
         raise LoweringError(
             "only a permanent handing itself over is implemented", node=node
@@ -390,6 +397,58 @@ def _lower_another_seat_gains_control(
         )
     return (
         OracleInstruction("give_control_of_source_to_player", "", {"who": who}),
+    )
+
+
+def _lower_seat_gains_target_permanent(
+    node: ast.GainControl, subject: ast.TargetSpec,
+) -> OracleInstruction:
+    """"Target player gains control of target permanent you control." (Donate.)
+
+    Ordered **roles**, in the order the sentence prints them: the seat is slot 0
+    and the permanent slot 1. Built here rather than through
+    ``describe_independent_target_roles`` because that helper names each role by
+    the printed noun it reads off a filter, and a player has no filter to read
+    one off.
+
+    Untimed, like every branch of the caller (CR 611.2a): nothing states a
+    duration, so no contribution is swept back and the payload carries no
+    lifetime to forget.
+
+    The narrowing is checked against the matcher rather than trusted. A role is
+    enumerated by ``subject_matches`` and re-checked by it at CR 608.2b, so a
+    key it cannot test would be a printed restriction the picker offers past
+    and the resolution ignores — the silent widening this file's neighbours
+    refuse in the same direction.
+    """
+    if node.duration != "indefinite" or node.tap_when_lost or node.offered:
+        raise LoweringError(
+            "a permanent handed to a chosen seat changes controllers untimed",
+            node=node,
+        )
+    described = _filter_payload(subject.filter)
+    untestable = untestable_filter_keys(described)
+    if untestable:
+        raise LoweringError(
+            "a target role narrowed by "
+            f"{sorted(untestable)} is one the matcher cannot test", node=node,
+        )
+    return OracleInstruction(
+        "give_control_of_target_to_player", "",
+        {
+            "targets": {
+                "kind": "roles",
+                "roles": [
+                    {"role": "player", "kind": "player"},
+                    {
+                        "role": "permanent",
+                        "kind": "object",
+                        "count": 1,
+                        "filter": described,
+                    },
+                ],
+            },
+        },
     )
 
 

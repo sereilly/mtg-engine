@@ -297,6 +297,13 @@ class TargetRoleRef(BaseModel):
     # safe to hold (CR 601.2c, and see engine/game_types.GraveyardTarget).
     graveyard_seat: int | None = Field(default=None, ge=0)
     graveyard_index: int | None = Field(default=None, ge=0)
+    # …or the chosen **player**, for a role whose object is a seat rather than
+    # an object in any zone: "**Target player** gains control of target
+    # permanent you control" (Donate). A third alternative here rather than a
+    # nullable ``target_permanent_ids`` entry, for the reason the graveyard
+    # address is one: a hole in a positional id list cannot say whether the
+    # slot is a player or a permanent that has left.
+    seat: int | None = Field(default=None, ge=0)
 
 
 class SearchPickRef(BaseModel):

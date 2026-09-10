@@ -481,3 +481,151 @@ def test_rofellos_gift_returns_nothing_from_an_empty_graveyard(
     assert result.supported, game.log[-3:]
     assert [c.name for c in alice.hand] == ["Giant Growth", "Llanowar Elves"]
     assert [c.name for c in alice.graveyard] == ["Grizzly Bears", "Rofellos's Gift"]
+
+
+# --- W2G1: a player as a target role ---
+import pytest
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+from engine.targeting import derive_cast_spec
+from tests.helpers import resolve_stack
+
+
+def _w2g1_donate_board(set_pool, catalog_by_name, *, mine=("Grizzly Bears",),
+                       theirs=(), seats=2):
+    """Seat 0 holding Donate with *mine* out; the other seats hold *theirs*.
+
+    Cards other than Donate come from the whole-manifest catalog, because a
+    vanilla creature to give away is furniture rather than a fact about Urza's
+    Destiny — and this set prints none simple enough to keep the assertions
+    about the control change.
+    """
+    pool = set_pool("UDS")
+    players = [
+        PlayerState(
+            name="P0", life=20, hand=[pool["Donate"]],
+            battlefield=[Permanent(card=catalog_by_name[name]) for name in mine],
+        )
+    ]
+    for index in range(1, seats):
+        players.append(PlayerState(
+            name=f"P{index}", life=20,
+            battlefield=[Permanent(card=catalog_by_name[name]) for name in theirs],
+        ))
+    game = Game(players=players)
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game._sync_control()
+    return pool, game
+
+
+def test_w2g1_donate_compiles_to_a_roles_announcement_with_a_seat(set_pool):
+    """"Target player gains control of target permanent you control."
+
+    The line parsed all along; what refused was the lowering, whose only
+    hand-over branch wanted the ability's own source ("only a permanent handing
+    itself over is implemented"). The shape it needed already existed one noun
+    over — Fumarole's ordered roles — with a **player** in slot 0, in the order
+    the sentence prints them.
+    """
+    donate = set_pool("UDS")["Donate"]
+    program = compile_card_oracle(donate)
+
+    assert program.supported
+    (instruction,) = [i for i in program.instructions if i.kind != "spell_pattern"]
+    assert instruction.kind == "give_control_of_target_to_player"
+    roles = instruction.payload["targets"]["roles"]
+    assert [role["role"] for role in roles] == ["player", "permanent"]
+    assert roles[0]["kind"] == "player"
+    # The printed "you control" is carried, not dropped: the picker narrows the
+    # second slot with it and the resolution re-checks it.
+    assert roles[1]["filter"] == {"controller": "you"}
+    assert derive_cast_spec(donate, program)["roles"][1]["own_only"] is True
+
+
+def test_w2g1_donate_hands_the_permanent_to_the_named_seat(set_pool, catalog_by_name):
+    """The effect: one CR 613 layer-2 contribution, so the permanent is
+    projected onto the named seat's battlefield and off the caster's."""
+    _pool, game = _w2g1_donate_board(set_pool, catalog_by_name)
+    (bears,) = game.players[0].battlefield
+
+    result = game.cast_from_hand(
+        0, "Donate", target_player_index=1,
+        target_permanent_ids=[None, game.permanent_id_of(bears)],
+    )
+    resolve_stack(game)
+
+    assert result.supported, game.log[-3:]
+    assert game.controller_index_of(bears) == 1
+    assert [p.card.name for p in game.players[1].battlefield] == ["Grizzly Bears"]
+
+
+def test_w2g1_donating_to_your_own_seat_changes_nothing(set_pool, catalog_by_name):
+    """"Target **player**", not "target opponent": the caster is a legal answer
+    to slot 0 and the picker offers them.
+
+    Naming yourself is a legal announcement that moves nothing — a contribution
+    handing a permanent to the seat that already controls it would take a fresh
+    timestamp and change no answer, so the resolution says so instead.
+    """
+    _pool, game = _w2g1_donate_board(set_pool, catalog_by_name)
+    (bears,) = game.players[0].battlefield
+
+    result = game.cast_from_hand(
+        0, "Donate", target_player_index=0,
+        target_permanent_ids=[None, game.permanent_id_of(bears)],
+    )
+    resolve_stack(game)
+
+    assert result.supported, game.log[-3:]
+    assert game.controller_index_of(bears) == 0
+    assert any("already controls" in line for line in game.log)
+
+
+def test_w2g1_an_opponents_permanent_is_not_a_legal_second_role(
+    set_pool, catalog_by_name
+):
+    """CR 601.2c: the announcement must be one the picker would have offered.
+    "…target permanent **you control**" is checked before any mana is spent, so
+    naming the opponent's creature refuses the cast rather than resolving into
+    a handler that finds the wrong permanent."""
+    _pool, game = _w2g1_donate_board(
+        set_pool, catalog_by_name, theirs=("Hill Giant",),
+    )
+    (theirs,) = game.players[1].battlefield
+
+    result = game.cast_from_hand(
+        0, "Donate", target_player_index=1,
+        target_permanent_ids=[None, game.permanent_id_of(theirs)],
+    )
+
+    assert not result.supported
+    assert not game.stack
+    assert game.controller_index_of(theirs) == 1
+
+
+def test_w2g1_a_permanent_that_left_makes_the_spell_do_nothing(
+    set_pool, catalog_by_name
+):
+    """CR 608.2b, asked of the whole announcement at resolution: the gift is
+    still on the stack when its subject leaves the battlefield, so nobody gains
+    control of anything and the seat that was named keeps its own board."""
+    _pool, game = _w2g1_donate_board(set_pool, catalog_by_name)
+    (bears,) = game.players[0].battlefield
+
+    # Queued rather than cast: ``cast_from_hand`` resolves in the same call, so
+    # the battlefield could never move underneath the spell — which is the whole
+    # of what this test is about.
+    result = game.queue_from_hand(
+        0, "Donate", target_player_index=1,
+        target_permanent_ids=[None, game.permanent_id_of(bears)],
+    )
+    assert result.supported, game.log[-3:]
+    game.remove_from_battlefield(bears)
+    resolve_stack(game)
+
+    assert game.players[1].battlefield == []
+    assert any("no longer legal" in line for line in game.log)
+# --- end W2G1 ---

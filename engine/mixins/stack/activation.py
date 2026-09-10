@@ -2654,9 +2654,15 @@ class AbilityActivationMixin:
         # into.
         graveyard_stamps = None
         if target_role_refs:
-            target_permanent_ids, target_permanent_index, graveyard_stamps = (
-                self._role_announcement_stamps(target_role_refs)
-            )
+            (
+                target_permanent_ids, target_permanent_index, graveyard_stamps,
+                role_seat,
+            ) = self._role_announcement_stamps(target_role_refs)
+            # A player slot's answer is the seat, and it goes on the one field
+            # that already means it — never beside it, which would leave the
+            # resolution two answers to the same question.
+            if role_seat is not None:
+                target_idx = role_seat
         self._stack_push(
             # CR 602.2b: an activated ability's targets were chosen when it
             # was activated, so it does not choose again here.
@@ -3073,7 +3079,7 @@ class AbilityActivationMixin:
         return SimulationResult(card.name, True, ability.effect_kind, "queued")
 
     def _role_announcement_stamps(self, target_role_refs):
-        """One mixed-zone roles announcement as ``(ids, indices, stamps)``.
+        """One mixed-zone roles announcement as ``(ids, indices, stamps, seat)``.
 
         Three lists, all positional in role order, because that is what a
         ``StackItem`` already carries: an id per battlefield slot
@@ -3086,10 +3092,20 @@ class AbilityActivationMixin:
         The index is derived from the id rather than sent, for the reason ids
         exist: the activator chose a permanent, and where it sits is a fact
         about the board at this moment.
+
+        A **player** slot answers with none of the three and with the scalar
+        beside them instead: a stack item has carried the one player an
+        announcement names under ``target_player_index`` since the first
+        announcement to name one, and the resolution reads it back as
+        ``context.target``. Returned as a fourth value rather than squeezed into
+        a list, because it is not positional — an announcement with two player
+        roles would read one seat twice, which ``resolve_role_player`` refuses
+        on the other side of the same fact.
         """
         ids: list = []
         indices: list = []
         stamps: list = []
+        seat: int | None = None
         for ref in target_role_refs:
             ref = ref if isinstance(ref, dict) else {}
             permanent_id = ref.get("permanent_id")
@@ -3101,13 +3117,20 @@ class AbilityActivationMixin:
                 )
                 stamps.append(None)
                 continue
+            named_seat = ref.get("seat")
+            if isinstance(named_seat, int):
+                seat = named_seat
+                ids.append(None)
+                indices.append(None)
+                stamps.append(None)
+                continue
             index = ref.get("graveyard_index")
             ids.append(None)
             indices.append(index if isinstance(index, int) else None)
             stamps.append(
                 self.graveyard_target_at(ref.get("graveyard_seat"), index)
             )
-        return ids, indices, stamps
+        return ids, indices, stamps, seat
 
     def activate_from_graveyard(
         self,
