@@ -27,6 +27,7 @@ from ._common import (
 )
 from ._events import (
     _DAMAGED_PLAYER_EVENTS,
+    _DEFENDING_PLAYER_EVENTS,
     _EVENT_SUBJECT_PLAYERS,
     EVENT_SUBJECT_PLAYER,
     _back_reference_payload,
@@ -376,6 +377,29 @@ def _lower_draw(
         # for a trigger that chose nothing is whatever the resolution held: this
         # card would have drawn its own controller the cards.
         payload["drawer_seat_record"] = EVENT_SUBJECT_PLAYER
+    elif node.player.kind == "that_player" and event in _DAMAGED_PLAYER_EVENTS:
+        # "Whenever this creature deals damage to a player, **that player**
+        # discards all the cards in their hand, then draws that many cards."
+        # (Shocker.) The **other** record the same two words name — a damage
+        # event freezes the damaged player under ``defending_player_index``,
+        # and the branch above is keyed on the seat-subject one. Shocker had
+        # neither: the discard carried ``who: "damaged_player"`` and the draw
+        # beside it carried nothing at all, so the opponent emptied their hand
+        # and Shocker's own controller drew the cards.
+        payload["drawer_seat_record"] = "defending_player_index"
+    elif node.player.kind == "defending_player":
+        # "Whenever this creature becomes blocked, **defending player** discards
+        # all the cards in their hand, then draws that many cards." (Robber
+        # Fly.) CR 506.2's seat, stamped by the combat fire sites under the key
+        # every other reader of the phrase asks — and refused where no event
+        # froze one, because the fall-through below describes no target for this
+        # word and the draw would land on whatever seat the resolution held.
+        if event not in _DEFENDING_PLAYER_EVENTS:
+            raise LoweringError(
+                '"defending player" names a seat this event did not record',
+                node=node,
+            )
+        payload["drawer_seat_record"] = "trigger_defending_player_index"
     _describe_targets(payload, node.player)
     return (OracleInstruction(kind, "", payload),)
 

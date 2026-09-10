@@ -2255,6 +2255,17 @@ class DeclareBlockersStepMixin:
                 blockers_of.setdefault(attacker_idx, (attacker, []))[1].append(blocker)
         for attacker_idx, (attacker, blockers) in blockers_of.items():
             seat = self.active_player_index
+            # CR 506.2: the seat this attacker is attacking, frozen into the
+            # announcement (CR 603.10) under the key every other combat fire
+            # site already stamps. "Whenever this creature becomes blocked,
+            # **defending player** discards a card" (Alley Grifters) is the
+            # phrase that needs it, and the attacker can leave combat before the
+            # ability resolves — after which `defending_player_index_now` would
+            # answer for a combat this trigger was never part of, or for nobody
+            # at all. Read off `combat_attackers` rather than off the blocker's
+            # controller: CR 509.1a makes those the same seat in every legal
+            # declaration, and the map is the one that says which combat.
+            defending_index = self.combat_attackers.get(attacker_idx)
             # The attacker's own abilities, then the joined block-pair sentence
             # printed on something attached to it (Infinite Authority, whichever
             # side of the block its host is on). The mirror of the scan in
@@ -2341,6 +2352,10 @@ class DeclareBlockersStepMixin:
                             # death triggers freeze theirs.
                             trigger_context={
                                 "event_subject_controller": blocker_seat,
+                                # CR 506.2's seat, so a sentence after this
+                                # event may say "defending player" and name one
+                                # (`lowering/_events._DEFENDING_PLAYER_EVENTS`).
+                                "trigger_defending_player_index": defending_index,
                                 # The pair this firing is about, by stable id
                                 # and under the key the *blocks* half already
                                 # writes. `block_pair_permanents` prefers it to

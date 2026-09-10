@@ -99,6 +99,14 @@ _DEFENDING_PLAYER_EVENTS: frozenset[str] = frozenset({
     # that stamped it, and an event added here without the stamp is a phrase
     # naming nobody.
     "attacks_unblocked",
+    # "Whenever this creature becomes blocked, **defending player** discards a
+    # card." (Alley Grifters, Corrupt Official, Port Inspector, Robber Fly.)
+    # The declare-*blockers* fire site
+    # (`declare_blockers_step._fire_becomes_blocked_triggers`) stamps the same
+    # key off `combat_attackers`, which is what puts the kind in this set — the
+    # entry is the list of events that stamped it, never the list of events on
+    # which the phrase reads plausibly.
+    "creature_becomes_blocked",
 })
 
 #: Which *frozen seat* a printed player word names, per event that froze one:
@@ -722,6 +730,36 @@ _BLOCK_PAIR_EVENTS = frozenset({
 ROLE_NAMES_BLOCK_PARTNER: dict[str, frozenset[str]] = {
     "blocking": frozenset({"matching_creature_becomes_blocked"}),
     "attacking": frozenset({"matching_creature_blocks"}),
+}
+
+
+#: The other half of the table above: for each printed combat role, the events
+#: whose **own subject** plays it — the creature the firing is *about*, frozen
+#: by the fire site under ``event_subject_permanent_id``.
+#:
+#: The exact mirror of :data:`ROLE_NAMES_BLOCK_PARTNER`, and an event appears in
+#: at most one of the two per role, which is the invariant that makes a role word
+#: answerable at all: "the blocking creature" is the announcement's subject under
+#: a *blocks* event and its partner under a *becomes blocked* one, and a lowering
+#: that read the wrong table would pump, destroy or shrink the other half of the
+#: combat with nothing failing.
+#:
+#: The lowering-side half of ``rebinding._ROLE_EVENT_SUBJECTS``, which says the
+#: same thing for the *source-scoped* kinds and rewrites the role away at parse
+#: time. It cannot reach these: a board-wide condition's subject is a noun phrase
+#: describing a **set**, so there is nothing for the rewrite to bind the word to
+#: and the role survives into lowering — which is why the answer has to exist
+#: here as well as there.
+#:
+#: Both rows are a claim about a stamp. ``matching_creature_attacks`` is stamped
+#: by ``declare_attackers_step._fire_matching_creature_attacks_triggers`` and
+#: ``matching_creature_blocks`` by both of the declare-blockers announcements
+#: (``_fire_board_wide_block_triggers`` for CR 509.3d's narrowed reading and
+#: ``_announce_bare_board_wide_blocks`` for CR 509.3c's bare one); a row added
+#: without one is a role word naming nobody.
+ROLE_NAMES_EVENT_SUBJECT: dict[str, frozenset[str]] = {
+    "blocking": frozenset({"matching_creature_blocks"}),
+    "attacking": frozenset({"matching_creature_attacks"}),
 }
 
 

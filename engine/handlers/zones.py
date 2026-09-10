@@ -4341,6 +4341,20 @@ def look_at_target_hand(game: Game, instruction: OracleInstruction, context: Ora
     target = context.target
     viewer = context.caster
     card = context.card
+    # ``who: "defending_player"`` names CR 506.2's seat, frozen into the
+    # trigger's context by the combat fire site (Port Inspector) — nobody
+    # targeted it, so ``context.target`` for this trigger is whatever the
+    # resolution was already carrying, which on a becomes-blocked trigger is the
+    # *blocker*'s controller by coincidence and the viewer's own seat as soon as
+    # the coincidence stops holding. The same key the two discards beside this
+    # handler read for the same printed phrase.
+    if instruction.payload.get("who") == "defending_player":
+        seat = (context.trigger_context or {}).get("trigger_defending_player_index")
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            # The attacker can leave combat before this resolves, and a seat
+            # nobody recorded is not a hand to show.
+            return True, "resolved"
+        target = game.players[seat]
     # Record the reveal so the UI can show the viewer the actual cards in the
     # target player's hand (Glasses of Urza). The viewer is the ability's
     # controller; the target is the player whose hand is looked at.
@@ -5946,6 +5960,17 @@ def discard_hand(game: Game, instruction: OracleInstruction, context: OracleExec
         return True, "resolved"
     if instruction.payload.get("who") == "damaged_player":
         seat = (context.trigger_context or {}).get("defending_player_index")
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            game.log.append(f"{context.card.name}: no recorded player, no discard")
+            return True, "resolved"
+        caster = game.players[seat]
+    if instruction.payload.get("who") == "defending_player":
+        # CR 506.2's seat rather than the damaged one above: Robber Fly's
+        # trigger deals no damage at all, so the damage key is simply absent for
+        # it. The two words are two records and reading one for both would empty
+        # nobody's hand on every card of the second kind — the distinction
+        # ``player_gets_poison_counters`` already states for the same pair.
+        seat = (context.trigger_context or {}).get("trigger_defending_player_index")
         if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
             game.log.append(f"{context.card.name}: no recorded player, no discard")
             return True, "resolved"

@@ -554,6 +554,23 @@ def _lower_discard(node: ast.Discard, event: str | None = None) -> tuple[OracleI
             payload: dict[str, object] = {"who": "target"}
             _describe_targets(payload, node.player)
             return (OracleInstruction("discard_hand", "", payload),)
+        # "Whenever this creature becomes blocked, **defending player** discards
+        # all the cards in their hand, then draws that many cards." (Robber
+        # Fly.) CR 506.2's seat, frozen by the combat fire site — the same
+        # ``who`` channel the three branches above use, gated on an event that
+        # really stamped one, exactly as the counted discard one screen down
+        # gates the identical phrase.
+        if node.player.kind == "defending_player":
+            if event not in _DEFENDING_PLAYER_EVENTS:
+                raise LoweringError(
+                    '"defending player" names a seat this event did not record',
+                    node=node,
+                )
+            return (
+                OracleInstruction(
+                    "discard_hand", "", {"who": "defending_player"}
+                ),
+            )
         raise LoweringError(
             f"no whole-hand discard handler for {node.player.kind!r}", node=node
         )

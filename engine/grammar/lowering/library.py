@@ -333,7 +333,9 @@ def _lower_exile_graveyard(node: ast.ExileGraveyard) -> tuple[OracleInstruction,
     )
 
 
-def _lower_look_at_hand(node: ast.LookAtHand) -> tuple[OracleInstruction, ...]:
+def _lower_look_at_hand(
+    node: ast.LookAtHand, event: str | None = None,
+) -> tuple[OracleInstruction, ...]:
     """"Look at target player's hand." (Glasses of Urza.)
 
     ``look_at_target_hand`` reads one chosen player off the resolution context
@@ -350,7 +352,27 @@ def _lower_look_at_hand(node: ast.LookAtHand) -> tuple[OracleInstruction, ...]:
     lowering that accepted the word and lost the flag would offer the caster
     their own hand, which is the failure this refusal was written to prevent —
     so the fix is the flag reaching the picker, not the word reaching the kind.
+
+    **"Whenever this creature becomes blocked, you may look at defending
+    player's hand." (Port Inspector.)** CR 506.2's seat rather than a target, so
+    it carries no target description at all and no picker offers it — the
+    handler reads the seat the combat fire site froze into the trigger's context
+    (CR 603.10). Admitted only under an event that stamped one
+    (``_DEFENDING_PLAYER_EVENTS``): with nothing frozen the phrase names nobody,
+    and a look falling through to ``context.target`` would show the caster
+    whichever hand the resolution happened to be carrying — their own on a
+    trigger that chose no target.
     """
+    if node.player.kind == "defending_player":
+        if event not in _DEFENDING_PLAYER_EVENTS:
+            raise LoweringError(
+                '"defending player" names a seat this event did not record',
+                node=node,
+            )
+        payload: dict[str, object] = {"who": "defending_player"}
+        if node.random_card:
+            payload["random_card"] = True
+        return (OracleInstruction("look_at_target_hand", "", payload),)
     if node.player.kind not in ("target_player", "target_opponent"):
         raise LoweringError(
             f"no handler for looking at {node.player.kind!r}'s hand", node=node

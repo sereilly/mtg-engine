@@ -1084,6 +1084,35 @@ def add_counter_to_target(game: Game, instruction: OracleInstruction, context: O
             game.log.append(f"{card.name}: nothing was left to put a counter on")
         return True, "resolved"
 
+    if instruction.payload.get("on_block_pair"):
+        # "Whenever this creature becomes blocked by a creature, put a -1/-1
+        # counter on **that creature**." (Quagmire Lamprey.) The other half of
+        # the block the trigger froze — nothing was chosen (CR 601.2c announces
+        # targets when the ability goes on the stack, and on the *blocks* half
+        # the stack item's target is the blocking creature itself), so the
+        # object is read through the one function that knows how each of the two
+        # fire sites binds it. The named-counter handler beside this one reads
+        # the same key for the same printed pronoun.
+        from ._common import block_pair_permanents
+
+        wanted = instruction.payload.get("filter") or {}
+        creature = next(
+            (
+                perm for perm in block_pair_permanents(game, context)
+                if game.is_on_battlefield(perm)
+                and (not wanted or permanent_matches_filter(perm, wanted))
+            ),
+            None,
+        )
+        if creature is None:
+            game.log.append(f"{card.name}: the creature it names is gone")
+            return True, "resolved"
+        game.place_pt_counters(creature, kind, how_many)
+        game.log.append(
+            f"{creature.card.name} gets {how_many} {kind} counter(s) ({card.name})"
+        )
+        return True, "resolved"
+
     pair_member = instruction.payload.get("pair_member")
     if pair_member:
         bound = (context.trigger_context or {}).get(

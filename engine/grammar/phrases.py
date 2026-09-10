@@ -766,7 +766,7 @@ def _parse_opponents_choice(
     """"…of an opponent's choice" — the rider that hands the pick to the other
     seat, and the recipient with the rider lifted off it.
 
-    Two spellings reach here, and they are the same three words. The rider may
+    Two spellings reach here for each seat word the rider can name. The rider may
     still be sitting in the stream (nothing else claimed it), or the noun parser
     may already have consumed it as part of the noun phrase — which is what it
     does when the phrase continues, as "target creature of an opponent's choice
@@ -780,6 +780,15 @@ def _parse_opponents_choice(
     """
     if stream.accept_phrase("of", "an", "opponent", "'s", "choice"):
         return ast.PlayerRef("target_opponent"), recipient
+    # "…put a +1/+1 counter on target creature **of defending player's
+    # choice**." (Erithizon.) The same rider naming CR 506.2's seat instead of
+    # "an opponent": in a duel they are the same player and at three seats they
+    # are not — a combat has one defending player *per attacking creature*
+    # (CR 802), and "an opponent" would take the first live one. So it is a
+    # spelling of this rider rather than a synonym of the one above, and the
+    # seat it returns is the one only a trigger that froze a combat can answer.
+    if stream.accept_phrase("of", "defending", "player", "'s", "choice"):
+        return ast.PlayerRef("defending_player"), recipient
     filt = getattr(recipient, "filter", None)
     if filt is not None and getattr(filt, "chosen_by_opponent", False):
         return (
