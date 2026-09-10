@@ -1683,7 +1683,7 @@ def test_layers_only_import_downward(layers):
         # library shares with it the printed word "Search" and no vocabulary at
         # all.
         ("effects", ("_strips",), ()),
-        ("lowering", ("_common", "_filters", "_events", "_deaths", "_delays", "_amounts", "_counted_damage", "_counted_pumps", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_conjuncts", "_bound_returns", "_bound_exiles", "_described_returns", "_piles", "_counter_stores", "_plus_one_counters", "_blankets", "_prevented_riders", "_pump_categories", "_zone_categories", "_record_keys", "_record_conditions", "_cost_records", "_superlatives", "_recipients", "_collapses", "categories", "conditions"), ()),
+        ("lowering", ("_common", "_filters", "_events", "_frozen_seats", "_deaths", "_delays", "_amounts", "_counted_damage", "_counted_pumps", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_conjuncts", "_bound_returns", "_bound_exiles", "_described_returns", "_piles", "_counter_stores", "_plus_one_counters", "_blankets", "_prevented_riders", "_pump_categories", "_zone_categories", "_record_keys", "_record_conditions", "_cost_records", "_superlatives", "_recipients", "_collapses", "categories", "conditions"), ()),
         # `costs` is shared beside `_core` rather than a family: a cost is
         # charged on the way to the stack and never lowered, so it has no
         # `effects/` or `lowering/` twin to be a family of — and both
@@ -1937,6 +1937,14 @@ def test_every_grammar_module_is_placed_or_exempt():
 # `UNLAYERED` is — see the test below.
 FAMILY_SHARED = {
     "_common", "_core", "_events", "conditions", "categories", "statements",
+    # `lowering/_frozen_seats`, split out of `_events` at Mercadian Masques'
+    # second Phase 0 — the seat half of that module's three questions ("that
+    # player", "that much", "they"), taken out when `_events` reached 990 of the
+    # size guard as a *floor* every lowering family reads, so no single group
+    # would have crossed it alone and none could be briefed to expect the split.
+    # `_events` re-exports every name under the spelling it had, so this has one
+    # importer by construction — the `_recipients` shape below.
+    "_frozen_seats",
     # `effects/_strips`, split out of `effects/search.py` at Urza’s Destiny’s
     # wave 1 — the multi-zone strip by a recorded name (Lobotomy; Eradicate and
     # its four siblings). A single-importer floor, precedented by `_recipients`
