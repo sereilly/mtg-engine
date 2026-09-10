@@ -481,6 +481,35 @@ def conditional_static_holds(game, seat: int, source, condition: dict) -> bool:
             perm.has_type("planeswalker") and perm.has_type(subtype)
             for perm in game.controlled_by(seat)
         )
+    if kind == "all_share_a_color":
+        # "Nonartifact creatures get +2/+2 **as long as they all share a
+        # color**." (Common Cause.) CR 105.2 makes an object's colours a set, so
+        # "all share a color" is a non-empty **intersection** across the whole
+        # set — not "no two differ", which would be true of a board of one white
+        # and one blue creature.
+        #
+        # The set is the anthem's own filter, copied onto this payload by the
+        # lowering, and it is read through the layer-aware colour accessor
+        # (CR 613.1e): a creature Painter's Servant has made black shares black,
+        # and a colourless one shares nothing — which is what makes an artifact
+        # creature able to switch this off, and why the card says "nonartifact".
+        #
+        # An empty board is vacuously true and buffs nobody either way; saying
+        # so explicitly keeps the intersection loop from having to mean it.
+        from .subject_filters import subject_matches
+
+        described = condition.get("filter") or {}
+        shared: set[str] | None = None
+        for permanent in game.all_permanents():
+            if not subject_matches(
+                game, permanent, dict(described), observer=seat, source=source
+            ):
+                continue
+            colors = set(game._effective_colors(permanent))
+            shared = colors if shared is None else (shared & colors)
+            if not shared:
+                return False
+        return True
     if kind == "attached_matches":
         # "As long as enchanted land is a basic Mountain, …" (Goblin Caves,
         # Goblin Shrine.) The question is about the permanent the source is

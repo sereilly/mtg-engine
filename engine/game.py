@@ -433,8 +433,13 @@ class Game(
     # "…and players and permanents can't be the targets of spells or activated
     # abilities." (Peace Talks.) CR 115.1's choice denied outright for a stated
     # window, over *both* populations at once — which is why it is a list of
-    # windows rather than a shroud grant: shroud is a keyword on one object
-    # (CR 702.18) and a player cannot have one.
+    # windows rather than a shroud grant, and **not** because a player cannot
+    # have shroud — CR 702.18a says "This permanent **or player** can't be the
+    # target of spells or abilities", and Ivory Mask prints exactly that
+    # (`engine/player_statics.py`). The difference is the mechanism: this is a
+    # window a resolution opened and a cleanup counts down, where a granted
+    # keyword is a continuous ability derived from a permanent that is on the
+    # battlefield right now (CR 611.3) and ends with it.
     #
     # Each entry: {"source_name", "remaining_turns"}. Read by
     # `legality._enumerate_targets`, the one list both the target picker and

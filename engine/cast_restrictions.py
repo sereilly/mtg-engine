@@ -1047,6 +1047,121 @@ def chosen_name_ban(game: "Game", card) -> str | None:
     return None
 
 
+#: "Players can't cast spells with the same name as a nontoken permanent." /
+#: "Players can't play nonbasic lands with the same name as a nontoken
+#: permanent." (Cornered Market.)
+#:
+#: Null Chamber's ban one screen up, with the names read off the **board**
+#: instead of off the permanent: nothing was chosen, so what the sentence
+#: forbids changes every time a permanent enters or leaves. Its own row rather
+#: than a widening of that one, because the two differ in where the name set
+#: comes from — a chosen name is a record and this is a question about the
+#: table, and a reader that took either would have to be told which every time.
+#:
+#: **Two printed lines, and each is claimed on its own**, which is the opposite
+#: arrangement from Null Chamber's single sentence: there one line states both
+#: rules, and here the card spends a line on each. The alternation is what makes
+#: them one row — the noun after "can't" is the only word that differs — and
+#: which half a line stated is returned, because the halves forbid different
+#: sets: the land line exempts a **basic** land and the spell line has no such
+#: word.
+#:
+#: "Nontoken" is a real narrowing on the *permanent* side and CR 111.1's reason
+#: it is printed: a token copy of a creature would otherwise lock its own name
+#: out of every hand at the table.
+_SAME_NAME_AS_PERMANENT_BAN = re.compile(
+    r"^players can't (?P<half>cast spells|play nonbasic lands) with the same "
+    r"name as a nontoken permanent$"
+)
+
+#: The claim name the support gate and ``engine/grammar/registries.py`` use for
+#: the row above, its own for :data:`GLOBAL_PLAY_TIMING_CLAIM`'s reason.
+SAME_NAME_AS_PERMANENT_BAN_CLAIM = "same_name_as_permanent_ban"
+
+
+@lru_cache(maxsize=None)
+def same_name_as_permanent_ban_line(line: str) -> str | None:
+    """Which half of Cornered Market *line* states, or None.
+
+    ``"cast spells"`` or ``"play nonbasic lands"`` — the words themselves, so a
+    caller cannot invent a third value and the enforcement below reads the
+    printed distinction rather than a flag somebody has to keep in step.
+
+    One reader, two callers, exactly as :func:`global_cast_ban_line` has:
+    ``engine/grammar/registries.py`` asks it so the printed line is *claimed*,
+    and ``mixins/stack/casting.py`` asks it at CR 601.3 / CR 305.1 so the line
+    is *enforced*. A restriction claimed and not enforced is an enchantment that
+    reports supported and stops nothing.
+    """
+    match = _SAME_NAME_AS_PERMANENT_BAN.match(line.strip().lower().rstrip("."))
+    return match.group("half") if match is not None else None
+
+
+def same_name_as_permanent_ban(game: "Game", card) -> str | None:
+    """The name of a permanent whose ban stops *card* being played, or None.
+
+    Every battlefield and no seat comparison: the sentence names nobody, so it
+    binds everybody including the enchantment's own controller (CR 601.3a) —
+    which on this card is the whole design, since the names it locks out are
+    whatever anybody has already resolved.
+
+    **Which half applies is decided by the card, not by the caller.** A land is
+    never cast (CR 305.1 makes playing one a special action), so the spell line
+    cannot reach it and the land line cannot reach anything else; and the land
+    line exempts a basic land, which the spell line does not say and must not be
+    given. Read the other way round, a Forest would stop being playable the
+    moment anybody resolved one.
+
+    The comparison goes through ``search_filters.name_key`` on both sides, so a
+    printing with different punctuation is the same name — the comparison every
+    other name test in the engine makes. The permanent's **effective** name is
+    what counts (CR 707.2): a Clone that copied a Bear really is called Grizzly
+    Bears, and it is the name the card asks about.
+    """
+    from .search_filters import card_has_type, name_key
+
+    wanted = name_key(getattr(card, "name", "") or "")
+    if not wanted:
+        return None
+    is_land = card_has_type(card, "land")
+    if is_land and "basic" in (getattr(card, "type_line", "") or "").lower():
+        # The land half's own word. A basic land is exempt however many of it
+        # are on the table, which is what keeps this from ending the game.
+        return None
+    half = "play nonbasic lands" if is_land else "cast spells"
+    for _seat, permanent in game.permanents_with_controller():
+        if permanent.metadata.get("is_token"):
+            continue
+        for raw_line in (
+            permanent.effective_card.oracle_text or ""
+        ).splitlines():
+            if same_name_as_permanent_ban_line(raw_line) != half:
+                continue
+            # The banning permanent is not what has to share the name — any
+            # nontoken permanent on the table does, this one included.
+            if _a_nontoken_permanent_is_named(game, wanted):
+                return permanent.card.name
+    return None
+
+
+def _a_nontoken_permanent_is_named(game: "Game", wanted: str) -> bool:
+    """Whether any **nontoken** permanent on any battlefield answers to *wanted*.
+
+    Its own two lines because the ban above walks the board twice for two
+    different questions — which permanents impose the prohibition, and which
+    ones supply the names — and folding them into one loop is how a card would
+    come to forbid only its own name.
+    """
+    from .search_filters import name_key
+
+    for _seat, permanent in game.permanents_with_controller():
+        if permanent.metadata.get("is_token"):
+            continue
+        if name_key(permanent.effective_card.name) == wanted:
+            return True
+    return False
+
+
 #: "Players can cast spells and activate abilities only during their own
 #: turns." (City of Solitude.) The **timing** half of CR 601.3a and CR 602.5,
 #: read off the board rather than off the object being played: nothing about

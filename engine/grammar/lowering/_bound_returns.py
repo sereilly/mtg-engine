@@ -41,6 +41,7 @@ from ..errors import LoweringError
 from ...oracle_types import CHOSEN_TARGET_GRAVEYARD_SLOTS
 from ._deaths import BOUND_CARD_EVENTS
 from ._delays import _BOUND_OBJECT_DELAYED_EVENTS
+from ._events import _EVENT_SUBJECT_OBJECTS
 from ._described_returns import lower_described_return
 from ._events import CHOSEN_PERMANENT as _ATTACH_HOST_KEY
 from ._common import (
@@ -173,6 +174,66 @@ def lower_untargeted_return(
                 {"tapped": True} if node.entering_tapped else {},
             ),
         )
+    # "Whenever a creature becomes the target of a spell or ability, **return
+    # that creature to its owner's hand**." (Cowardice.)
+    #
+    # The bound object as a **permanent** rather than as a card, which is the
+    # whole difference from the branch below it: that one names a card in a
+    # graveyard and this one a permanent still on a battlefield, so the two do
+    # different things with what they find and the branch below refuses this
+    # shape outright (`is_card` is False on a printed permanent noun).
+    # ``return_tapped_land_to_hand`` is its nearest relative and stayed its own
+    # kind for the same reason, one event narrower.
+    #
+    # Gated on the *event* recording an object, which is this module's standing
+    # rule: under a condition whose fire site freezes nothing, "that creature"
+    # names a permanent nobody wrote down, and the handler would find nothing
+    # while the card reported supported.
+    #
+    # The noun re-states the trigger's own subject (CR 109.5's "that"), so it is
+    # not a further narrowing to honour — but any field beyond the restatement
+    # is, and one dropped here is a bounce wider than the card prints.
+    if (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "that"
+        and not subject.filter.is_card
+        and not _returns_its_own_source(node, subject)
+        and not _is_attached_host_pronoun(subject)
+        and node.from_zone is None
+        and node.to.name == "hand"
+        # Gated **in the guard** and not by a refusal inside it, which is the
+        # shape the delayed bound-object branch below already has and the reason
+        # it has it: "return that creature to its owner's hand **at end of
+        # combat**" (Wall of Tears) is the same words under a delayed event, and
+        # a refusal here would claim that sentence and take a shipped card down
+        # rather than letting it reach the branch written for it.
+        and event in _EVENT_SUBJECT_OBJECTS
+    ):
+        if node.to.owner is None or node.to.owner.kind != "owner":
+            raise LoweringError(
+                "the bound-permanent bounce reaches its owner's hand alone",
+                node=node,
+            )
+        unread = [
+            name for name in (
+                "entering_tapped", "exile_on_leave", "also_stack",
+                "attached_to", "actor", "repetitions", "under_control_of",
+            )
+            if getattr(node, name, None)
+        ]
+        if unread:
+            raise LoweringError(
+                "the bound-permanent bounce honours no further rider", node=node
+            )
+        leftovers = _restrictions_beyond(
+            subject.filter, frozenset({"zone", "card_types"})
+        )
+        if leftovers:
+            raise LoweringError(
+                f"no bound-permanent bounce honours {sorted(leftovers)}",
+                node=node,
+            )
+        return (OracleInstruction("bounce_event_subject", "", {}),)
     # "Return **that card** to its owner's hand." (Puppet Master.) The bound
     # object: the card of the creature whose death fired the trigger, which by
     # resolution is in a graveyard. Nothing is chosen and nothing is targeted —

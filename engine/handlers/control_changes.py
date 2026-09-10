@@ -396,6 +396,22 @@ def give_control_of_source_to_player(game: Game, instruction: OracleInstruction,
             game.log.append(f"{context.card.name}: nothing was destroyed to name a seat")
             return True, "resolved"
         recipient = game.players[seat]
+    elif who == "event_subject_controller":
+        # "Whenever a source deals damage to this creature, **that source's
+        # controller** gains control of this creature." (Crag Saurian.) The
+        # controller of the object the firing event was about — for a damage
+        # event, whatever dealt the damage (CR 109.5), which the damage seam
+        # derives once and freezes into the trigger's context. A board read
+        # cannot answer it: the source may be a spell, which has no controller
+        # at all, and by resolution it has left the stack (CR 603.10).
+        #
+        # Nobody recorded hands the creature to nobody, for the branch below's
+        # reason: the sentence has just named a seat that is not the caster.
+        seat = (context.trigger_context or {}).get("event_subject_controller")
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            game.log.append(f"{context.card.name}: no seat was recorded")
+            return True, "resolved"
+        recipient = game.players[seat]
     elif who == "event_subject_player":
         # "At the beginning of **each player's** upkeep, that player may pay
         # … **they** gain control of this creature." (Emberwilde Djinn.)

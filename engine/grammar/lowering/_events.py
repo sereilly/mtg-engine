@@ -294,6 +294,44 @@ _EVENT_SUBJECT_OBJECTS: frozenset[str] = frozenset({
     # A bare "becomes blocked" has several blockers and one attacker, so the
     # attacker is exactly the referent a bare firing can answer for.
     "matching_creature_becomes_blocked",
+    # "Whenever a creature becomes the target of a spell or ability, **return
+    # that creature** to its owner's hand." (Cowardice.) CR 603.2's event, whose
+    # one announcement seam (`mixins/helpers._announce_targeting`) freezes the
+    # targeted permanent's id — the object the words name, and the only one this
+    # event has: the ability's source is a third party watching the whole board.
+    #
+    # Safe for the three narrower scopes of the same kind as well: under
+    # "**this** creature becomes the target" the frozen id is the source's own,
+    # which is what "that creature" would mean there too.
+    "self_becomes_target",
+})
+
+
+#: Trigger events whose fire site stamps the object the event was about onto the
+#: **stack item** (``target_permanent_id``), so an effect may say "that <noun>"
+#: or "the other <noun>" and mean it — and the ordinary targeted handler
+#: resolves it with no picker, because the choice was never offered
+#: (CR 603.3d).
+#:
+#: Here rather than in one family, because two now ask it: ``destruction``
+#: (Hooded Blightfang's "destroy that planeswalker", Vampiric Feast's "the
+#: other creature") and ``control_changes`` (Charisma's "gain control of the
+#: other creature"). A family may not import a sibling, so a leaf two of them
+#: read sits on this floor — and one fact spelled in two families is how the
+#: two come to disagree about which events really freeze an object.
+#:
+#: Distinct from :data:`_EVENT_SUBJECT_OBJECTS` one screen up, and the pair is
+#: the two ends of one damage event: that one names the **damager**
+#: (``event_subject_permanent_id`` in the trigger's context) and this one the
+#: object that was **damaged**. Reading one for the other on a creature that
+#: traded blows acts on the wrong permanent, with nothing to see.
+_EVENT_STAMPED_TARGET_OBJECTS: frozenset[str] = frozenset({
+    # Hooded Blightfang: "… deals damage to a planeswalker, destroy **that**
+    # planeswalker". The damaged object is what `damage_events._announce`
+    # stamps onto the stack item. A damage event whose recipient was a player
+    # stamps nothing, and the effect then resolves nothing rather than finding
+    # a permanent by index.
+    "damage_dealt",
 })
 
 

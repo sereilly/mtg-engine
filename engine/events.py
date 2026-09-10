@@ -604,6 +604,29 @@ def _cast_colors(game: Game, card, caster: int | None) -> tuple[str, ...]:
     return card_colors(game, card, caster)
 
 
+def _cast_colour_union_admits(printed: str | None, colors) -> bool:
+    """Whether *colors* answers a printed colour **union** ("green or white").
+
+    CR 105.2b: an object with more than one colour is each of those colours, so
+    a listed colour anywhere in the spell's set admits it. Its own two lines
+    because three rows now carry the key — Quirion Dryad's "that's white, blue,
+    black, or red" and the two board-wide cast kinds — and three copies of the
+    split is how the single-colour narrowing above came to be read in one
+    dispatcher and dropped in the others.
+
+    An empty or unreadable list admits everything: a narrowing nothing could
+    parse must not silently stop the trigger the card prints.
+    """
+    if not printed:
+        return True
+    wanted = {
+        _COLOR_SYMBOLS[word]
+        for word in str(printed).replace(",", " ").split()
+        if word in _COLOR_SYMBOLS
+    }
+    return not wanted or bool(wanted & set(colors))
+
+
 def _cast_narrowing_admits(
     game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, card,
     caster: int | None = None,
@@ -637,6 +660,17 @@ def _cast_narrowing_admits(
     colour_word = trig.condition.payload.get("color_word")
     if colour_word and _COLOR_SYMBOLS.get(colour_word) not in _cast_colors(
         game, card, caster
+    ):
+        return False
+    # "…casts a **green or white** spell" (Putrefaction, Snake Pit). The same
+    # narrowing over a set: CR 105.2b makes a multicoloured object *each* of its
+    # colours, so any listed colour answers. One key rather than a second
+    # condition kind, and read here rather than only in `_controller_cast_filter`
+    # — a union tested for "you cast" alone is a union the two board-wide cast
+    # kinds silently ignore, which is the widening the single-colour row above
+    # already had to be told about once.
+    if not _cast_colour_union_admits(
+        trig.condition.payload.get("cast_colors"), _cast_colors(game, card, caster)
     ):
         return False
     cast_types = trig.condition.payload.get("cast_types")
@@ -728,15 +762,11 @@ def _controller_cast_filter(
     # colour list arrives as condition payload, the raw captured phrase; the
     # trigger fires only when the cast spell shares at least one listed
     # colour (CR 105.2b — a multicoloured object *is* each of its colours).
-    cast_colors = trig.condition.payload.get("cast_colors")
-    if cast_colors:
-        wanted = {
-            _COLOR_SYMBOLS[word]
-            for word in cast_colors.replace(",", " ").split()
-            if word in _COLOR_SYMBOLS
-        }
-        if wanted and not (wanted & set(_cast_colors(game, card, caster_index))):
-            return False
+    if not _cast_colour_union_admits(
+        trig.condition.payload.get("cast_colors"),
+        _cast_colors(game, card, caster_index),
+    ):
+        return False
     # "…a noncreature spell" (Spellgorger Weird): the type word from the
     # trigger's own text, tested against the cast card's type line — "non"
     # negates, so a noncreature trigger stays silent for a creature spell.
@@ -930,9 +960,32 @@ def _self_becomes_target_filter(
                 return False
         elif subject is None or not game.controls(observer, subject):
             return False
+    elif trig.condition.payload.get("targeted_filter") is not None:
+        # "Whenever **a creature** becomes the target of a spell or ability"
+        # (Cowardice). The **fourth dispatch scope**: an observer watching a
+        # described set on every battlefield rather than itself, its host or its
+        # own side — so the test is the printed noun phrase asked of the
+        # targeted object, through the one matcher every other printed phrase in
+        # this engine goes through.
+        #
+        # The observer's seat is the source's (CR 109.5), which is what a
+        # relative key like "you control" would be read against. A targeted
+        # *player* announces this event with no subject at all, and a phrase
+        # about an object cannot be answered for a seat — so no subject is no
+        # match, never a free pass.
+        from .subject_filters import subject_matches
+
+        if event.subject is None:
+            return False
+        observer = game.players.index(_controller_of(game, permanent))
+        if not subject_matches(
+            game, event.subject, dict(trig.condition.payload["targeted_filter"]),
+            observer=observer, source=permanent,
+        ):
+            return False
     elif event.subject is not permanent:
         # The **self** scope, and the last branch rather than the first because
-        # the two above are the narrowed readings: "this creature" means the
+        # the three above are the narrowed readings: "this creature" means the
         # very permanent whose ability this is, by identity, because a
         # look-alike on the same battlefield is a different permanent and would
         # otherwise draw its controller two cards.
@@ -1197,6 +1250,14 @@ def _damage_dealt_filter(
         # derives the seat for both.
         if event.payload.get("damager_seat") != observer:
             return False
+    elif payload.get("damager_any"):
+        # "Whenever **a source** deals damage to this creature" (Crag Saurian).
+        # No narrowing on the damager at all: CR 109.5's "source" is a spell, an
+        # ability or a permanent, and the card watches every one of them. The
+        # *recipient* half below is what keeps this from firing on the whole
+        # board — which is why this branch is a marker the table produces rather
+        # than the absence of one, and why the `else` beneath still refuses.
+        pass
     elif "damager_filter" in payload:
         # A noun phrase describes *permanents*, and a damage source need not be
         # one: for a spell it is the printed card (CR 109.5), which has no
@@ -1234,6 +1295,18 @@ def _damage_dealt_filter(
 
     recipient = event.payload.get("recipient")
     seat = event.payload.get("defending_player_index")
+    if payload.get("damaged_self"):
+        # "Whenever a source deals damage **to this creature**" (Crag Saurian).
+        # The recipient is the very permanent whose ability this is, by
+        # identity — a look-alike on the same battlefield is a different
+        # permanent (CR 400.7), and this card hands *itself* over, so matching
+        # by value would give away the wrong Saurian.
+        #
+        # Asked before every other recipient reading and returning outright,
+        # because none of them can express it: a marker is not a filter, and
+        # falling through to "no narrowing printed" would fire this on every
+        # point of damage in the game.
+        return recipient is permanent
     # "…deals damage to **you or a white creature you control**" (Mangara's
     # Equity). A recipient the sentence describes two ways: one seat word and
     # one noun phrase. Whichever the event's recipient *is* decides which half

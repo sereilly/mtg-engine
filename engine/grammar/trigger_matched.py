@@ -47,6 +47,8 @@ from .trigger_casts import _parse_cast_event
 from .trigger_damage import _parse_damage_dealt_event
 from .trigger_phrases import accept_event_phrase
 from .trigger_tables import (
+    _BECOMES_TARGET_CONTROLLERS,
+    _BECOMES_TARGET_OBJECTS,
     _WHENEVER_EVENTS,
     _BARE_BOARD_WIDE_BLOCK_EVENTS,
     _BOARD_WIDE_BLOCK_EVENTS,
@@ -220,6 +222,52 @@ def _parse_quantified_tap_event(stream: TokenStream) -> ast.TriggerEvent | None:
     return None
 
 
+
+
+def _accept_subject_becomes_target(
+    stream: TokenStream, word: str
+) -> ast.TriggerEvent | None:
+    """"Whenever **a creature** becomes the target of a spell or ability."
+    (Cowardice.)
+
+    CR 603.2's event watched over a *described set* rather than over the
+    ability's own source, the permanent it is attached to, or its controller's
+    side of the board — the three scopes ``trigger_tables``' generated phrase
+    table already carries. Those are fixed-word subjects; this one is a noun
+    phrase, so it is a production and not a fourth axis.
+
+    Read **after** that table, which is the whole of what keeps the three
+    narrower scopes intact: "this creature", "enchanted creature" and "you or a
+    permanent you control" are all claimed there first, and the article test
+    below refuses any of them that reached here anyway.
+
+    The two axes after the noun are the table's own, reused rather than
+    respelled — a card printing this subject about "an Aura spell" or "a spell
+    an opponent controls" is read for free, and the narrowing itself rides
+    ``engine/oracle.py``'s condition payload the way every trigger clause does.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("a", "an"):
+        stream.reset(mark)
+        return None
+    try:
+        subject = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if subject is None or not stream.accept_phrase("becomes", "the", "target", "of"):
+        stream.reset(mark)
+        return None
+    for obj in _BECOMES_TARGET_OBJECTS:
+        if not stream.accept_phrase(*obj):
+            continue
+        for controller in _BECOMES_TARGET_CONTROLLERS:
+            if controller and not stream.accept_phrase(*controller):
+                continue
+            return ast.TriggerEvent("self_becomes_target", word, subject=subject)
+        break
+    stream.reset(mark)
+    return None
 
 
 def _parse_matched_event(
@@ -433,6 +481,14 @@ def _parse_matched_event(
     anywhere = _accept_card_put_into_graveyard_from_anywhere(stream)
     if anywhere is not None:
         return anywhere
+    # "Whenever **a creature** becomes the target of a spell or ability"
+    # (Cowardice). Subject-led, so it sits after the phrase table for that
+    # table's stated reason — the three fixed-word scopes are claimed there —
+    # and before the subject-led death below, which would otherwise read the
+    # noun and then refuse the whole line for want of "is put into".
+    becomes_target = _accept_subject_becomes_target(stream, word)
+    if becomes_target is not None:
+        return becomes_target
     grave_mark = stream.mark()
     # "Whenever **a spell or ability an opponent controls causes** a land to be
     # put into your graveyard from the battlefield" (Sacred Ground). The same
@@ -493,6 +549,16 @@ def _parse_matched_event(
         )
         or stream.accept_phrase(
             "is", "put", "into", "an", "opponent", "'s", "graveyard",
+            "from", "the", "battlefield"
+        )
+        # "…is put into **a player's** graveyard from the battlefield"
+        # (Liability). Not a fourth narrowing: CR 404.1 sends a permanent to
+        # its owner's graveyard and "a player's" names whichever that is, so
+        # this is the unnarrowed "a graveyard" spelling with the owner said out
+        # loud. Listed because the words must be consumed — a spelling this
+        # production cannot read refuses the line and takes the effect with it.
+        or stream.accept_phrase(
+            "is", "put", "into", "a", "player", "'s", "graveyard",
             "from", "the", "battlefield"
         )
         # CR 700.4: "dies" **means** "is put into a graveyard from the

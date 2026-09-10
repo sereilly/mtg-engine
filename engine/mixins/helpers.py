@@ -2839,6 +2839,14 @@ class GameHelpersMixin:
             emit(
                 self, "self_becomes_target",
                 subject=targeted,
+                # The targeted permanent by **id**, under the key every
+                # object-subject event freezes its object under — "return
+                # **that creature** to its owner's hand" (Cowardice) is a
+                # third-party observer that has no other way to name it, and by
+                # resolution an index is not an identity (CR 400.7 / 603.10).
+                # Stamped for every scope of this condition, because "that
+                # creature" means the targeted one under all of them.
+                event_subject_permanent_id=targeted.permanent_id,
                 source_seat=item.caster_index,
                 targeted_by="an ability" if item.is_ability else "a spell",
                 # "…the target of **an Aura spell**" (Fugitive Druid). Which

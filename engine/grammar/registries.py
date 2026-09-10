@@ -38,6 +38,8 @@ from ..cast_restrictions import (CAST_RESTRICTIONS, COMBAT_PLAY_BAN_CLAIM,
                                  cast_opponent_cast_line,
                                  cast_own_cast_line,
                                  chosen_name_ban_line,
+                                 SAME_NAME_AS_PERMANENT_BAN_CLAIM,
+                                 same_name_as_permanent_ban_line,
                                  MOST_PERMANENTS_PLAY_BAN_CLAIM,
                                  most_permanents_play_ban_line,
                                  OWN_CAST_BAN_CLAIM,
@@ -183,6 +185,15 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # enforces it, so the claim cannot outlive the ban.
     if chosen_name_ban_line(normalized):
         return "cast_restrictions"
+
+    # engine/cast_restrictions.py — the same name-keyed rule with the names read
+    # off the **board** instead of chosen: "Players can't cast spells with the
+    # same name as a nontoken permanent." / "Players can't play nonbasic lands
+    # with the same name as a nontoken permanent." (Cornered Market.) Two
+    # printed lines, one reader, claimed through the reader that enforces both
+    # — so a card cannot be admitted on one line while the other goes unread.
+    if same_name_as_permanent_ban_line(normalized) is not None:
+        return SAME_NAME_AS_PERMANENT_BAN_CLAIM
 
     # engine/cast_restrictions.py — the same rule over a seat the *board* names
     # rather than the sentence: "A player who controls more permanents than

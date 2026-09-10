@@ -515,6 +515,13 @@ def _lower_condition(
         # The counter word is payload the whole way down, so a card printing a
         # differently-named counter needs nothing here.
         return {"kind": "source_exiled_with_counter", "counter": condition.counter}
+    if isinstance(condition, ast.SubjectsShareAColor):
+        # "…as long as **they all share a color**" (Common Cause). No subject
+        # travels with the clause: "they" is the set the anthem already
+        # describes, and `statics._lower_static_ability` writes that filter onto
+        # this payload — one reading of one noun phrase, so the condition and
+        # the buff cannot come to disagree about which creatures they are about.
+        return {"kind": "all_share_a_color"}
     if isinstance(condition, ast.SourceCounterCount):
         return {
             "kind": "source_counter_count",

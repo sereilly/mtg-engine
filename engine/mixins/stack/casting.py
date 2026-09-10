@@ -32,6 +32,7 @@ from ...auras import controller_cast_ban
 # one import shadowing the other, silently, with the surviving reader answering
 # the wrong question for both cards.
 from ...cast_restrictions import (check_cast_timing, chosen_name_ban,
+                                  same_name_as_permanent_ban,
                                   most_permanents_cast_ban,
                                   combat_play_ban,
                                   global_play_timing,
@@ -1143,6 +1144,23 @@ class SpellCastingMixin:
         naming_permanent = chosen_name_ban(self, card)
         if naming_permanent is not None:
             details = f"can't play {card.name}: {naming_permanent}"
+            self.log.append(details)
+            return SimulationResult(card.name, False, classification.effect_kind, details)
+
+        # "Players can't cast spells with the same name as a nontoken
+        # permanent." / "…can't play nonbasic lands with the same name…"
+        # (Cornered Market.) The row above with the names read off the board
+        # rather than chosen as the permanent entered, so what it forbids
+        # changes with every resolution — which is why it is asked here, at the
+        # announcement, and not recorded anywhere.
+        #
+        # Beside the chosen-name ban rather than folded into it, for the reason
+        # the three type-keyed bans above are three: what differs is where the
+        # name set comes from, and one reader told which every time is a reader
+        # that will eventually be told wrong.
+        matching_permanent = same_name_as_permanent_ban(self, card)
+        if matching_permanent is not None:
+            details = f"can't play {card.name}: {matching_permanent}"
             self.log.append(details)
             return SimulationResult(card.name, False, classification.effect_kind, details)
 

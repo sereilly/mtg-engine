@@ -850,6 +850,10 @@ TRIGGERED_LABELS: dict[str, str] = {
     "add_counter_to_target": "triggered_counter",
     "add_mana_from_text": "triggered_mana",
     "bounce_target_creature": "triggered_bounce",
+    # "…return that creature to its owner's hand" (Cowardice) — the same
+    # reported effect as the targeted bounce beside it; what differs is where
+    # the object came from, which is not what a label is about.
+    "bounce_event_subject": "triggered_bounce",
     "buff_creatures_global": "triggered_pump",
     "copy_triggering_spell": "triggered_copy",
     "create_token": "triggered_token",

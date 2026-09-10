@@ -72,6 +72,7 @@ from engine.cast_restrictions import (CAST_RESTRICTIONS,  # noqa: E402
                                       cast_opponent_cast_line,
                                       cast_own_cast_line,
                                       chosen_name_ban_line,
+                                      same_name_as_permanent_ban_line,
                                       global_cast_ban_line,
                                       global_play_timing_line)
 from engine.cast_restrictions import (most_permanents_play_ban_sentence,  # noqa: E402
@@ -395,6 +396,14 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # cannot outlive the ban.
     ("cast_restrictions.py (chosen-name ban)",
      lambda s: chosen_name_ban_line(s)),
+    # The same name-keyed rule with the names read off the **board** instead of
+    # chosen — "Players can't cast spells with the same name as a nontoken
+    # permanent." / "…can't play nonbasic lands with the same name…" (Cornered
+    # Market). Its own channel beside the row above for that row's reason, and
+    # a *separate* claim per printed line, because the card spends a line on
+    # each half and each is enforced on its own.
+    ("cast_restrictions.py (same-name-as-permanent ban)",
+     lambda s: same_name_as_permanent_ban_line(s) is not None),
     # "A player who controls more permanents than each other player can't play
     # lands or cast artifact, creature, or enchantment spells." (Damping
     # Engine.) CR 601.3a over a seat the board names rather than the sentence,

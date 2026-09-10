@@ -1264,7 +1264,33 @@ LOWERING_FAMILIES = [
      # moment the family had a second member: `_lower_repeat_process` had been
      # a section of one there, with its parse half in `parser.py` and no mirror
      # at all.
-     "repeats"]
+     "repeats",
+     # `exchanges` split off `lowering/control_changes.py` at Mercadian
+     # Masques' wave 1, on the seam that module's own **first line** had been
+     # naming since it existed: "CR 613 layer 2, and CR 701.12's exchange" —
+     # two subjects in a title. Layer 2 is the half that grows (every steal,
+     # duration and link lands in `_lower_gain_control`) and CR 701.12's three
+     # lowerings had been stable since Exodus, so the stable half left.
+     #
+     # The seam had to be *read against what pointed at it*, and two things
+     # did. `control_changes`' own second paragraph said the parse half was in
+     # `effects/board.py`, which had been untrue for three sets — it is
+     # `effects/control_changes.py`, split off in its own round — and that
+     # paragraph is corrected rather than carried. And the file's tail comment
+     # argued the opposite conclusion outright ("an exchange of control is a
+     # control change made atomic, which is this module's subject"), which is
+     # right about the *subject* and is what a family is, not what a file is:
+     # `ownership` made exactly this move one rule over, leaving `zones` while
+     # still answering "where does this card end up".
+     #
+     # What every function here has and none left behind does is CR 701.12a's
+     # **atomicity**: each describes both sides in one payload and refuses a
+     # sentence whose halves it cannot carry together. A one-sided hand-over
+     # has nothing to be atomic about.
+     #
+     # Lowering-only, like `zones`, `library`, `mana` and `redirection`: the
+     # parse half is 329 lines and crossed nothing.
+     "exchanges"]
 # `delayed` is the lowering-only family Visions' second wave split off
 # `lowering/stack.py`, when the counter's "unless its controller pays {1} **and
 # 1 life**" (Mundungu) took that module past the guard below. The line is the

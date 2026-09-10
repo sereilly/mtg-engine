@@ -342,8 +342,16 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     "attached_creature_leaves_battlefield":
         "when enchanted creature leaves the battlefield, its controller "
         "sacrifices a creature of their choice.",
-    "discarded_by_opponent_effect":
+    # Both printed words, because the condition has two dispatch scopes and one
+    # per table: Psychic Purge's "when …discard **this card**" is the discarded
+    # card's own ability watching from the hand (CR 113.6), and Spiritual
+    # Focus' "whenever …discard **a card**" is a permanent on the battlefield
+    # watching its controller's discards. A single "when" example left the
+    # whenever row unexercised.
+    "discarded_by_opponent_effect": (
         "when a spell or ability an opponent controls causes you to discard this card",
+        "whenever a spell or ability an opponent controls causes you to discard a card",
+    ),
     "no_islands": "when you control no islands",
     "no_permanents_anywhere": "when there are no lands on the battlefield",
     "self_cast": "when you cast this spell",

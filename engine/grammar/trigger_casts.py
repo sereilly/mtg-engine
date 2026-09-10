@@ -82,6 +82,44 @@ def _accept_unshared_colour(stream: TokenStream) -> ast.ObjectFilter | None:
     return None
 
 
+def _accept_colour_union(stream: TokenStream) -> tuple[str, ...]:
+    """The colour word or printed union at the cursor, or ``()``.
+
+    "…casts a **blue** spell" (Leshrac's Sigil) and "…casts a **green or
+    white** spell" (Putrefaction) are one narrowing over a set of colours
+    (CR 105.2b), so one reader answers both rather than the union getting a
+    branch that duplicates the single word's. Nothing is consumed when the
+    cursor is not on a colour.
+
+    The separators are the ones the pool prints — "or", and the comma list
+    Quirion Dryad's clause reads one screen down — so a card naming three
+    colours needs no words of its own here.
+    """
+    mark = stream.mark()
+    colours: list[str] = []
+    while True:
+        word = stream.peek_word()
+        if word not in COLOR_WORDS:
+            break
+        stream.advance()
+        colours.append(COLOR_WORDS[word])
+        joint = stream.mark()
+        if stream.accept_punct(","):
+            stream.accept_word("or")
+            continue
+        if stream.accept_word("or"):
+            # A trailing "or" with no colour behind it is not this clause:
+            # rewind to the last colour so the caller sees a clean union and
+            # the word is left for whatever production reads it.
+            if stream.peek_word() in COLOR_WORDS:
+                continue
+            stream.reset(joint)
+        break
+    if not colours:
+        stream.reset(mark)
+    return tuple(colours)
+
+
 def _parse_cast_event(
     stream: TokenStream, trigger_word: str
 ) -> "ast.TriggerEvent | None":
@@ -109,14 +147,12 @@ def _parse_cast_event(
     ):
         mark = stream.mark()
         if stream.accept_phrase(*opener):
-            colour = stream.peek_word()
-            if colour in COLOR_WORDS:
-                stream.advance()
-                if stream.accept_word("spell"):
-                    return ast.TriggerEvent(
-                        scope, trigger_word,
-                        subject=ast.ObjectFilter(colors=(COLOR_WORDS[colour],)),
-                    )
+            colours = _accept_colour_union(stream)
+            if colours and stream.accept_word("spell"):
+                return ast.TriggerEvent(
+                    scope, trigger_word,
+                    subject=ast.ObjectFilter(colors=colours),
+                )
         stream.reset(mark)
     # "…casts an **artifact** spell" (Urza's Chalice, Citanul Druid). The
     # type narrowing beside the colour one above, and for the same reason:

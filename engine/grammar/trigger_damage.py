@@ -83,6 +83,15 @@ def _parse_damage_dealt_event(
         # is a source too, and no ObjectFilter can name one. The narrowing rides
         # the controller field, which is what the dispatcher reads.
         subject = ast.ObjectFilter(controller="you")
+    elif stream.accept_phrase("a", "source"):
+        # "Whenever **a source** deals damage to this creature" (Crag Saurian).
+        # The unnarrowed damager, and an empty filter is exactly that — CR
+        # 109.5's word covers a spell and an ability as well as a permanent, so
+        # there is nothing here for a noun phrase to describe. Below "a source
+        # you control", which is a strict prefix of nothing and would be claimed
+        # by this branch if it came first, and above the noun parser, which
+        # refuses the bare word and would take the line down with it.
+        subject = ast.ObjectFilter()
     else:
         subject = parse_subject_filter_at(stream)
         if subject is None:
@@ -104,6 +113,30 @@ def _parse_damage_dealt_event(
         stream.reset(mark)
         return None
     if stream.accept_word("to"):
+        # "…deals damage **to this creature**" (Crag Saurian). The ability's own
+        # source as the *recipient*, read the same way the damager branch at the
+        # top of this production reads it: the fixed-word table below names
+        # players and planeswalkers, and the noun parser after it refuses "this"
+        # outright — so without this branch the words strand the line.
+        #
+        # Consumed and not carried, exactly as Justice's "or spell" is:
+        # `engine/oracle.py`'s table marks the self-reference and
+        # `events._damage_dealt_filter` tests it by identity, which is not
+        # something an `ObjectFilter` narrowing could say.
+        self_recipient = stream.mark()
+        if stream.at_kind(SELF) or stream.at_word("this"):
+            stream.advance()
+            if not stream.at_kind(SELF):
+                if stream.accept_word(*_DAMAGER_NOUNS):
+                    return ast.TriggerEvent(
+                        "damage_dealt", word, subject=subject,
+                        narrowings=narrowings,
+                    )
+            else:
+                return ast.TriggerEvent(
+                    "damage_dealt", word, subject=subject, narrowings=narrowings,
+                )
+            stream.reset(self_recipient)
         for phrase, _recipient in _DAMAGE_RECIPIENTS:
             if stream.accept_phrase(*phrase):
                 break

@@ -211,6 +211,14 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # are comparisons against something outside the permanent. Tested below and
     # refused by the pure matcher.
     "cast_by_you_this_turn",
+    # "Creatures **played by your opponents** enter tapped." (Uphill Battle.)
+    # The key above with the seat turned around and no turn window, off the same
+    # CR 701.5a stamp — and its own key rather than a value on ``controller``,
+    # because "played" and "control" name different sets: a creature an opponent
+    # reanimated is theirs and was never played, and folding the two would make
+    # this static tap it. Tested below and refused by the pure matcher, for the
+    # seat half's reason.
+    "played_by",
     # "target **attacking** creature" (Disharmony's untap). CR 508.1a makes
     # attacking a state of the permanent itself, so it is answerable from the
     # object alone — ``Permanent.attacking`` is stamped at declaration and
@@ -392,6 +400,11 @@ OBJECT_ONLY_FILTER_KEYS = TESTABLE_SUBJECT_FILTER_KEYS - {
     # the set; admitting it would let a sweep with no observer take every
     # creature, the caster's and the opponents' alike.
     "cast_by_you_this_turn",
+    # Out for the key above's reason exactly: "played by your opponents" is a
+    # seat comparison, and a caller with no observer has nobody to be an
+    # opponent *of* — which would take every played creature rather than the
+    # opponents'.
+    "played_by",
     # Out for ``exclude_self``'s reason: the bound is a characteristic of the
     # ability's *source*, and a caller with none would compare against nothing.
     "characteristic_vs_source",
@@ -1030,6 +1043,36 @@ def subject_matches(
         if observer is None or not isinstance(stamp, dict):
             return False
         if stamp.get("seat") != observer or stamp.get("turn") != game.turn:
+            return False
+    # "Creatures **played by your opponents**" (Uphill Battle). The same stamp,
+    # read for a *different* seat and with no turn window: CR's glossary makes
+    # "play" mean "cast that card as a spell", so the question is who cast the
+    # spell this permanent resolved from — a fact settled when it entered and
+    # never rewritten, which is why nothing here compares turns.
+    #
+    # **No stamp is no match**, which is the whole content of the key: a token,
+    # a reanimated creature and one an effect put onto the battlefield were all
+    # not played, and a fallback to "whoever controls it" would be the
+    # controller reading this key exists to not be.
+    played_by = described.get("played_by")
+    if played_by:
+        from .enter_effects import CAST_THIS_TURN_STAMP
+
+        stamp = obj.metadata.get(CAST_THIS_TURN_STAMP)
+        if observer is None or not isinstance(stamp, dict):
+            return False
+        seat = stamp.get("seat")
+        if not isinstance(seat, int):
+            return False
+        if played_by == "opponent":
+            if seat == observer:
+                return False
+        elif played_by == "you":
+            if seat != observer:
+                return False
+        else:
+            # A seat word nothing here answers. Refusing is the direction that
+            # cannot widen the set, which is this file's standing rule.
             return False
     # Keywords are asked of layer 6, so a creature *granted* defender answers a
     # defender-narrowed filter exactly as a printed one does.

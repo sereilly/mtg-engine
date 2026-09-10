@@ -271,8 +271,16 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      r"whenever (?P<dying_subject>an? [^,]+) is put into "
      r"(?P<dying_graveyard_owner>your|an opponent's) "
      r"graveyard from the battlefield"),
+    # "…is put into **a player's** graveyard from the battlefield" (Liability).
+    # The unnarrowed reading with the owner said out loud: CR 404.1 already
+    # sends a permanent to its owner's pile, so "a player's" narrows nothing
+    # that "a graveyard" did not already admit. One row with the bare spelling
+    # rather than a fourth `dying_graveyard_owner` value, because a value the
+    # dispatcher would have to read as "no restriction" is a restriction
+    # waiting to be tested by accident.
     ("permanent_dies",
-     r"whenever (?P<dying_subject>an? [^,]+) is put into a graveyard from the battlefield"),
+     r"whenever (?P<dying_subject>an? [^,]+) is put into (?:a|a player's) "
+     r"graveyard from the battlefield"),
     # "Whenever **another card** is put into **a** graveyard **from anywhere**."
     # (Planar Void.) Not a death and not the row above it: the object is a
     # *card*, the source zone is unnamed, and the pile is anybody's — so nothing
@@ -316,6 +324,25 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # pool printed, which is a kind named after one of its own narrowings.
     ("discards_card",
      r"whenever (?:you discard|(?P<discarder>an opponent) discards) a card"),
+    # "Whenever a spell or ability an opponent controls causes you to discard
+    # **a card**, you gain 2 life and you may draw a card." (Spiritual Focus.)
+    # The **second dispatch scope** for the condition the "when" table carries
+    # for Psychic Purge: that one is the discarded card's own ability,
+    # functioning from the hand (CR 113.6), and this is a permanent on the
+    # battlefield watching its controller's discards. One kind, told apart by
+    # the marker, which is this table's standing rule — the event is the same
+    # discard and the same seam announces it
+    # (`mixins/effects._announce_discard_triggers`).
+    #
+    # **Not** the row above, whose narrowing is only *who discarded*: this one
+    # additionally asks what **caused** it (CR 109.5, read off `resolving_seats`
+    # the way the damage seam derives its source seat), and a discard the player
+    # made themselves — a cost, a cleanup — must not fire it. Above that row
+    # because neither is the other's prefix and the pairing is what the reader
+    # needs to see.
+    ("discarded_by_opponent_effect",
+     r"whenever a spell or ability an opponent controls causes you to "
+     r"discard (?P<discarded_any_card>a card)"),
     ("creature_dies",               r"whenever a creature dies"),
     # "Whenever equipped creature dies" (Malefic Scythe) / "When enchanted
     # creature dies" (Creature Bond). One kind for both words: an Equipment and
@@ -374,6 +401,14 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      r"(?P<damager_self>this (?:creature|artifact|enchantment|land|aura|permanent))"
      r"|(?P<damager_attached>enchanted (?:creature|artifact|enchantment|land|permanent))"
      r"|a source (?P<damager_controller>you) control"
+     # "Whenever **a source** deals damage to this creature" (Crag Saurian).
+     # The damager narrowed by nothing at all — CR 109.5's word covers a spell,
+     # an ability and a permanent alike, and no `ObjectFilter` can name the
+     # first two. So it is a **marker** group rather than a subject one: read
+     # through the noun parser, "a source" would become a filter, and a filter
+     # is a description of permanents that would silently exclude every spell
+     # the card watches. Above `damager_subject`, whose `[^,]+?` would claim it.
+     r"|(?P<damager_any>a source)"
      # "…a red creature **or spell** deals damage" (Justice). One object, two
      # nouns: English prints the adjective once and distributes it, so the
      # subject group takes "a red creature" and the marker records that the
@@ -402,7 +437,15 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      # and then fail the comma bound, taking the whole condition down with it.
      # That is exactly what it did — Mangara's Equity's third sentence compiled
      # to nothing at all.
-     r"(?P<damage_recipient>a player or planeswalker|a player"
+     # "…deals damage **to this creature**" (Crag Saurian). The ability's own
+     # source on the *recipient* side, which is the one thing no branch below
+     # can say: every one of them names a player, a planeswalker or a noun
+     # phrase with an article, and "this creature" is a self-reference. A
+     # **marker** rather than a `_subject` group for the damager's reason one
+     # screen up — the noun parser refuses the words, and a filter is not what
+     # "this" means anyway: it is an identity, tested as one in `events.py`.
+     r"(?P<damaged_self>this (?:creature|artifact|enchantment|land|aura|permanent))"
+     r"|(?P<damage_recipient>a player or planeswalker|a player"
      # "…to **defending player**" (Electryte). CR 506.2's seat, printed with no
      # article — the one recipient word naming a relation to the *combat*
      # rather than to the ability's controller. Beside the others here because
@@ -877,6 +920,26 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      r"control becomes the target of (?P<targeted_by>a spell or ability"
      r"|an aura spell|a spell|an ability)"
      r"(?: (?P<targeting_controller>an opponent controls|you control))?"),
+    # "Whenever **a creature** becomes the target of a spell or ability, return
+    # that creature to its owner's hand." (Cowardice.)
+    #
+    # The **fourth dispatch scope**, and the widest: the observer is neither the
+    # targeted object, nor attached to it, nor its controller — Cowardice
+    # watches every creature on every battlefield. So the subject is a printed
+    # *noun phrase* delimited as a `_subject` group, exactly as the death rows
+    # above delimit theirs, and `events._self_becomes_target_filter` asks
+    # `subject_matches` with it.
+    #
+    # **Last** of the four, and the position is a guard rather than
+    # documentation: `an? [^,]+?` would claim "an opponent controls" out of the
+    # narrowed spellings above and read the rest as a noun phrase, so a row
+    # placed first would take the three narrower scopes' lines and answer them
+    # through a filter instead of through the identity test each of them needs.
+    ("self_becomes_target",
+     r"whenever (?P<targeted_subject>an? [^,]+?) becomes "
+     r"the target of (?P<targeted_by>a spell or ability|an aura spell|a spell"
+     r"|an ability)"
+     r"(?: (?P<targeting_controller>an opponent controls|you control))?"),
     # "Whenever this creature becomes untapped" (Ghostly Pilferer). CR 701.26b's
     # event, announced by the one untap seam — which is why the seam had to
     # exist first: eleven places set the flag, and a trigger wired into one of
@@ -1056,6 +1119,16 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # A colour-narrowed cast trigger (the Rod/Cup/Sphere cycle). The colour is
     # captured into the condition payload so one dispatcher covers every card
     # written this way; must precede the unnarrowed form below.
+    # "Whenever a player casts a **green or white** spell" (Putrefaction). The
+    # same narrowing over a *union* of colours (CR 105.2b: an object is each of
+    # its colours, so any listed one answers), carried in the `cast_colors` key
+    # Quirion Dryad's row below already uses rather than a second spelling of
+    # the question — `events._cast_narrowing_admits` reads both. Before the
+    # single-colour row, which is its strict prefix: matched there, "green"
+    # would be read and "or white spell" left unconsumed.
+    ("spell_cast",
+     r"whenever a player casts a (?P<cast_colors>(?:white|blue|black|red|green)"
+     r"(?:,? (?:or )?(?:white|blue|black|red|green))+) spell"),
     ("spell_cast",                  r"whenever a player casts a (?P<color_word>white|blue|black|red|green) spell"),
     # The same narrowing on the spell's *type* rather than its colour (Urza's
     # Chalice). Written with the group name `you_cast_spell`'s rows already use,
@@ -1110,6 +1183,13 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # player-scoped row above uses — one narrowing read by one helper
     # (`events._cast_narrowing_admits`), not a second spelling of the question.
     # Before the bare row, which is its strict prefix.
+    # "Whenever an opponent casts a **blue or black** spell" (Snake Pit). The
+    # colour *union* on the opponent-scoped kind, in the `cast_colors` key its
+    # player-scoped twin above uses — one narrowing, one reader. Before the
+    # single-colour row, whose pattern is its strict prefix.
+    ("opponent_casts_spell",
+     r"whenever an opponent casts a (?P<cast_colors>(?:white|blue|black|red|green)"
+     r"(?:,? (?:or )?(?:white|blue|black|red|green))+) spell"),
     ("opponent_casts_spell",
      r"whenever an opponent casts a (?P<color_word>white|blue|black|red|green) spell"),
     # "…a spell **that targets you or a creature you control**"
@@ -6393,8 +6473,10 @@ def _derived_static_claims(
     from .cast_restrictions import (COMBAT_PLAY_BAN_CLAIM,
                                     OWN_CAST_BAN_CLAIM,
                                     GLOBAL_PLAY_TIMING_CLAIM,
+                                    SAME_NAME_AS_PERMANENT_BAN_CLAIM,
                                     combat_play_ban_line,
                                     own_cast_ban_line,
+                                    same_name_as_permanent_ban_line,
                                     global_play_timing_line)
 
     if any(
@@ -6412,6 +6494,16 @@ def _derived_static_claims(
         for line in (oracle_text or "").splitlines()
     ):
         claims.append(COMBAT_PLAY_BAN_CLAIM)
+    # "Players can't cast spells with the same name as a nontoken permanent." /
+    # "Players can't play nonbasic lands with the same name as a nontoken
+    # permanent." (Cornered Market.) The same shape again: both lines are read
+    # off the board at the announcement, so neither produces an instruction, and
+    # the enchantment's whole text is the pair.
+    if any(
+        same_name_as_permanent_ban_line(line) is not None
+        for line in (oracle_text or "").splitlines()
+    ):
+        claims.append(SAME_NAME_AS_PERMANENT_BAN_CLAIM)
     # "Any player may cast creature spells with mana value 3 or less without
     # paying their mana costs and as though they had flash." (Aluren.) Three
     # permissions, all three read off the board at the cast — and the

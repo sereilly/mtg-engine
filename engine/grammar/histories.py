@@ -120,6 +120,21 @@ def accept_history_relation(stream: TokenStream, d) -> bool:
     if stream.accept_phrase("you", "cast", "this", "turn"):
         d.cast_by_you_this_turn = True
         return True
+    # "Creatures **played by your opponents** enter tapped." (Uphill Battle.)
+    # The record above with the seat turned around and the window dropped —
+    # and the word is "played", not "control": CR's glossary entry for Play
+    # makes it "cast that card as a spell", so a creature an opponent
+    # *reanimated* was never played and this static does not tap it. Reading
+    # the phrase as a controller clause would be a static that binds a
+    # strictly larger set than the card prints, which is exactly the shape
+    # every enter-tapped comment in this engine warns about.
+    #
+    # No "this turn" half, deliberately: the phrase names how the permanent
+    # arrived, and the stamp is written at that arrival and never rewritten —
+    # a creature an opponent cast three turns ago is still one they played.
+    if stream.accept_phrase("played", "by", "your", "opponents"):
+        d.played_by = "opponent"
+        return True
     # "destroy all Plains **that weren't chosen this way by any player**"
     # (Raiding Party). A narrowing of the noun phrase rather than an
     # exception clause on the verb, for the reason Season of the Witch's

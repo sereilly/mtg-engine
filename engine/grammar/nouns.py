@@ -764,6 +764,50 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
     if not d.saw_head and not allow_bare:
         raise stream.error("expected an object noun")
 
+    # "**White creatures and blue creatures** can't block." (Magistrate's Veto.)
+    # The colour union with the head noun printed twice — one set, spelled the
+    # long way. "White or blue creatures" is the short spelling and the
+    # adjective loop above has read it since Abomination; this is the same
+    # narrowing, and reading it as two noun phrases would leave "and blue
+    # creatures" unconsumed and refuse the line.
+    #
+    # Read **before** the postmodifiers, which is what makes "white creatures
+    # and blue creatures **you control**" apply the seat to the whole union
+    # rather than to its second half alone — the printed reading.
+    #
+    # Gated hard, because "and" between two noun phrases usually joins two
+    # different sets and folding those would name a set neither half prints:
+    # the first half must already have named a colour and exactly one card
+    # type with no subtype, and the second must be colour words and the **same
+    # plural head noun** and nothing else. "Destroy all creatures and all
+    # lands" fails on the article, "…and blue enchantments" on the head noun,
+    # and "…creatures you control and blue creatures" on the postmodifier that
+    # has not been read yet.
+    if d.card_types and not d.subtypes and d.colors:
+        union = stream.mark()
+        if stream.accept_word("and"):
+            more: list[str] = []
+            while stream.peek_word() in COLOR_WORDS:
+                more.append(COLOR_WORDS[str(stream.peek_word())])
+                stream.advance()
+                if stream.at_word("or") and stream.peek_word(1) in COLOR_WORDS:
+                    stream.advance()
+                    continue
+                break
+            tail = stream.peek_word()
+            if (
+                more
+                and tail is not None
+                and tail != _singular(tail)
+                and _singular(tail) == d.card_types[-1]
+            ):
+                stream.advance()
+                for colour in more:
+                    if colour not in d.colors:
+                        d.colors.append(colour)
+            else:
+                stream.reset(union)
+
     _parse_postmodifiers(stream, d, parse_object_filter)
 
 
