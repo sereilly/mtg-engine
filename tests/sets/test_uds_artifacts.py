@@ -24,3 +24,68 @@ Cards come from `set_pool("UDS")` / `set_cards("UDS")` — never a new
 never a bare `while game.stack:` loop — that spins forever once a seat is owed
 a prompt.
 """
+
+
+# --- W1G2: name-matched search, graveyards and libraries ---
+import pytest
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+from engine.targeting import derive_activation_spec
+from tests.helpers import resolve_stack
+
+
+@pytest.fixture
+def _g2a_lea(set_pool):
+    """One Alpha card by name, to fill a graveyard with something that is not
+    an Urza's Destiny card."""
+    return lambda name: set_pool("LEA")[name]
+
+
+def test_thran_foundry_shuffles_a_named_players_whole_graveyard_back(set_pool, _g2a_lea):
+    """"{1}, {T}, Exile this artifact: Target player shuffles their graveyard
+    into their library."
+
+    Feldon's Cane's whole-zone move with a *subject* printed in front of it,
+    which is the only thing this card adds — so the assertion is that every card
+    moved and that the seat it moved for is the one the ability named.
+    """
+    foundry = Permanent(card=set_pool("UDS")["Thran Foundry"])
+    game = Game(players=[
+        PlayerState(
+            name="G2a-A", battlefield=[foundry, Permanent(card=_g2a_lea("Mountain"))],
+            graveyard=[_g2a_lea("Black Lotus")],
+        ),
+        PlayerState(
+            name="G2a-B",
+            graveyard=[_g2a_lea("Healing Salve"), _g2a_lea("Lightning Bolt")],
+            library=[_g2a_lea("Island")],
+        ),
+    ])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    result = game.activate_permanent_ability(0, "Thran Foundry", target_player_index=1)
+    assert result.supported, result
+    resolve_stack(game)
+    assert game.players[1].graveyard == []
+    assert sorted(c.name for c in game.players[1].library) == [
+        "Healing Salve", "Island", "Lightning Bolt",
+    ]
+    # The activator's own graveyard is not the one the ability named.
+    assert [c.name for c in game.players[0].graveyard] == ["Black Lotus"]
+    # "Exile this artifact" is a cost (CR 601.2h), so it is gone either way.
+    assert [c.name for c in game.players[0].exile] == ["Thran Foundry"]
+
+
+def test_thran_foundry_raises_a_player_picker(set_pool):
+    """The other half of a printed "target player": the ability has to *ask*.
+
+    A supported card whose activation derives no spec is one the browser
+    activates with nobody named — the Roots class, one path over.
+    """
+    program = compile_card_oracle(set_pool("UDS")["Thran Foundry"])
+    assert program.supported
+    assert len(program.activated_abilities) == 1
+    spec = derive_activation_spec(program.activated_abilities[0])
+    assert spec is not None and spec.get("kind") == "player", spec

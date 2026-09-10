@@ -15,13 +15,20 @@ productions behind it (the other player's library, the untap rider, the counted
 two-destination form) are called from here and nowhere else. Nothing left in
 ``library`` calls anything here, and nothing here calls anything there.
 
+The multi-zone strip that used to sit at the bottom of this file left at
+Urza's Destiny's wave 1, into ``_strips`` — a floor this module imports rather
+than a family beside it, since nothing else asks. Its own docstring records the
+seam; the short version is that "search a player's graveyard, hand, and library
+for all cards with the same name as that spell and exile them" is not a library
+search, and shared not one word of vocabulary with what stayed.
+
 **Asymmetric, and the mirror image of the asymmetry this package usually
-records.** The lowering side has no ``search`` family: ``lowering/library.py``
-holds the search lowering beside the look-at lowering and is nowhere near the
-cap, because a tutor lowers to one ``search_library`` instruction however
-elaborately its sentence is printed. The words are where the work is. A
-near-empty ``lowering/search.py`` would buy back the symmetry and cost the
-thing symmetry is for.
+records** — or it was. The sentence that stood here said the lowering side has
+no ``search`` family, because a tutor lowers to one ``search_library``
+instruction however elaborately its sentence is printed and the words are where
+the work is. ``lowering/search.py`` has existed for several sets; the mirror
+re-formed on its own, which is what the naming rule is for, and the paragraph
+went on describing a repo that had moved. Read a recorded seam as a lead.
 """
 
 
@@ -34,6 +41,7 @@ from ..nouns import parse_object_filter
 from ..references import parse_player_ref, parse_target_spec
 from ..stream import TokenStream
 from ..phrases import _accept_number, _parse_zone
+from ._strips import _accept_strip_cards_with_chosen_name
 
 
 
@@ -902,71 +910,3 @@ def _accept_search_reveal_opponent_chooses(
         fate=_PICKED_SEARCH_FATES[fate],
         other_fate=_REST_SEARCH_FATES[rest],
     )
-
-
-#: The zones a strip-by-name may open, in the order CR 400.1 lists them and the
-#: cards print them. A closed list because each is a pile the handler actually
-#: walks — a word outside it refuses the line rather than lowering onto a zone
-#: nothing reaches.
-_STRIPPED_ZONES: tuple[str, ...] = ("graveyard", "hand", "library")
-
-
-def _accept_strip_cards_with_chosen_name(
-    stream: TokenStream, player: "ast.PlayerRef",
-) -> "ast.StripCardsWithChosenName | None":
-    """``graveyard, hand, and library for all cards with the same name as the
-    chosen card and exile them. Then that player shuffles.`` at the cursor, with
-    ``Search <player>'s`` already read — or None with the cursor where it was.
-    (Lobotomy.)
-
-    Both sentences, for :class:`ast.StripCardsWithChosenName`' reason: CR 701.24
-    ends a library search with the shuffle, and the seat it names is the one
-    this search opened.
-
-    Two or more zones are required. One zone is the ordinary counted search
-    above, whose whole tail this production has none of, and admitting a single
-    zone here would take those cards away from it.
-
-    "the same name as **the chosen card**" is read as the printed words rather
-    than as a filter: the name is not on this card at all — an earlier step of
-    the same spell recorded it — and a filter would have to describe a literal
-    the sentence never states. The lowering demands that step.
-    """
-    mark = stream.mark()
-    zones: list[str] = []
-    while True:
-        word = stream.peek_word()
-        if word not in _STRIPPED_ZONES:
-            break
-        stream.advance()
-        zones.append(word)
-        if stream.accept_punct(","):
-            stream.accept_word("and")
-            continue
-        if stream.accept_word("and"):
-            continue
-        break
-    if len(zones) < 2:
-        stream.reset(mark)
-        return None
-    if not stream.accept_phrase(
-        "for", "all", "cards", "with", "the", "same", "name", "as", "the",
-        "chosen", "card", "and", "exile", "them",
-    ):
-        stream.reset(mark)
-        return None
-    if not stream.accept_punct("."):
-        stream.reset(mark)
-        return None
-    stream.accept_word("then")
-    shuffler = parse_player_ref(stream)
-    if shuffler is None or shuffler.kind != "that_player":
-        # "Then **that player** shuffles" names the seat this search opened. A
-        # sentence naming anybody else would shuffle a library nothing looked
-        # through, which is a different card.
-        stream.reset(mark)
-        return None
-    if not stream.accept_word("shuffles"):
-        stream.reset(mark)
-        return None
-    return ast.StripCardsWithChosenName(player, tuple(zones))

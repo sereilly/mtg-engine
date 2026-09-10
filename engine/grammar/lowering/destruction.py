@@ -27,7 +27,7 @@ from ._common import (
     _restrictions_beyond, is_mana_value_x, SEVERAL_DESTROY_NARROWINGS,
     split_creature_type_choice, testable_filter_payload
 )
-from ._events import (ATTACHED_PERMANENT_CONTROLLER, _EVENT_SUBJECT_OBJECTS, _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER, ROLE_NAMES_BLOCK_PARTNER, names_attached_permanent, CHOSEN_PERMANENT)
+from ._events import (ATTACHED_PERMANENT_CONTROLLER, LAST_TARGET_NAME, _EVENT_SUBJECT_OBJECTS, _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER, ROLE_NAMES_BLOCK_PARTNER, names_attached_permanent, CHOSEN_PERMANENT)
 from ._delays import (_DELAYED_AGENT_EVENTS, _BOUND_OBJECT_DELAYED_EVENTS)
 from ._superlatives import superlative_pick
 
@@ -277,6 +277,42 @@ def _lower_destroy(
         # generic paths below would leave the sweep with no narrowing at all and
         # destroy every permanent on the battlefield.
         if filt.name_from_event:
+            # "Destroy target land **and all other lands with the same name as
+            # that land**." (Wake of Destruction.) The same printed phrase with
+            # a different antecedent, and the difference is not in the words: no
+            # event fired here at all — "that land" is the *target the sentence
+            # in front of this conjunct chose*, which the destroy step records
+            # one line before it takes the permanent off the battlefield.
+            #
+            # Asked before the trigger gate rather than after it, because the
+            # record is the *closer* binder: a sweep written under a trigger
+            # whose event names an object and preceded by a destroy in the same
+            # sentence means the one it just destroyed. Same precedence
+            # `lowering/life.py` gives the loop marker over the bare record, one
+            # family over.
+            if LAST_TARGET_NAME in produced:
+                recorded = _filter_payload(
+                    filt, carried_separately=frozenset({"name_from_event"}),
+                )
+                # "all **other** lands" — other than the land this sentence
+                # already destroyed, which by the time the sweep runs is a card
+                # in a graveyard and on nobody's battlefield. Popped rather than
+                # dropped, for the trigger branch's reason: the noun parser
+                # wrote it as `exclude_self`, where "self" is the *ability's
+                # source*, and a sorcery has none — left on the payload it would
+                # be a narrowing the sweep silently ignores.
+                recorded.pop("exclude_self", None)
+                recorded.pop("name_from_event", None)
+                if untestable_filter_keys(recorded):
+                    raise LoweringError(
+                        "no sweep handler for this narrowing", node=node
+                    )
+                recorded["name_from_record"] = LAST_TARGET_NAME
+                if node.no_regen:
+                    recorded["bypass_regeneration"] = True
+                return (
+                    OracleInstruction("destroy_all_matching", "", recorded),
+                )
             if event not in _EVENT_SUBJECT_OBJECTS:
                 raise LoweringError(
                     "\"that name\" is the name of the object this "

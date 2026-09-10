@@ -32,6 +32,7 @@ from ..oracle_types import (DISCARDED_BY_SEAT, DREW_BY_SEAT, DREW_COUNT,
                             EXILED_BY_SEAT,
                             MILLED_THIS_WAY,
                            LAST_TARGET_CONTROLLER,
+                            LAST_TARGET_NAME,
                             REVEALED_HAND_CARDS,
                             EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS,
                             HAND_CARDS_TO_LIBRARY, MILLED_THIS_WAY,
@@ -2785,6 +2786,15 @@ def strip_cards_with_chosen_name(game: Game, instruction: OracleInstruction, con
     same name as the chosen card and exile them. Then that player shuffles."
     (Lobotomy.)
 
+    …and "Exile target nonblack creature. Search **its controller's** graveyard,
+    hand, and library for all cards with the same name as **that creature** and
+    exile them. Then that player shuffles." (Eradicate, Scour, Splinter, Sowing
+    Salt; Quash prints it behind a counter.) One handler because it is one
+    effect: three zones walked in the printed order, every copy of one name
+    exiled, and the library shuffled at the end. What differs is only where the
+    name and the seat are read from, which the lowering settles into two payload
+    keys — see the branch below.
+
     The **decomposed** half of Necromentia's paragraph. That card fuses the
     naming, the strip and a token clause into one handler because its last
     sentence counts a pile only that handler holds; this one has nothing behind
@@ -2802,11 +2812,35 @@ def strip_cards_with_chosen_name(game: Game, instruction: OracleInstruction, con
     (CR 701.24): a graveyard is an open zone and a hand is its owner's, and
     randomising either would be a move the sentence does not describe.
     """
-    target = context.target
-    if target is None or target not in game.players:
-        game.log.append(f"{context.card.name}: no player to search")
-        return True, "resolved"
-    named = str(context.results.get("chosen_card_name") or "").strip()
+    # Which two records this sentence reads, or neither. Lobotomy names the
+    # seat it searched outright and reads the name out of ``chosen_card_name``;
+    # Eradicate and its four siblings name *both* off the step in front of them
+    # — "its controller's" zones, "that creature's" name — and the lowering
+    # says which pair, because only it knows what an exile, a destroy or a
+    # counter leaves behind.
+    name_record = instruction.payload.get("name_record")
+    seat_record = instruction.payload.get("seat_record")
+    if name_record is not None:
+        seat = context.results.get(seat_record)
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            # The step in front chose nothing — its target had left (CR 608.2b)
+            # — so there is no object for "its controller" or "that creature" to
+            # name and nothing to search. Not a search that finds everything:
+            # an unrecorded seat would otherwise fall through to the resolving
+            # spell's own target, which for these five is the permanent or the
+            # spell rather than a player.
+            game.log.append(
+                f"{context.card.name}: nothing was chosen, so no zones are searched"
+            )
+            return True, "resolved"
+        target = game.players[seat]
+        named = str(context.results.get(name_record) or "").strip()
+    else:
+        target = context.target
+        if target is None or target not in game.players:
+            game.log.append(f"{context.card.name}: no player to search")
+            return True, "resolved"
+        named = str(context.results.get("chosen_card_name") or "").strip()
     zones = tuple(instruction.payload.get("zones") or ())
     if not named:
         # The pick chose nothing (an empty hand, or a hand of nothing but basic
@@ -3409,6 +3443,13 @@ def exile_target_permanent(game: Game, instruction: OracleInstruction, context: 
     # at length why declaring it here would un-refuse a near-miss that reads
     # the wrong seat.
     context.results["its_toughness"] = max(0, int(perm.effective_toughness))
+    # "…all cards with the same name as **that creature**" (Eradicate, Scour,
+    # Splinter, Sowing Salt). The name, frozen one line before the removal for
+    # the toughness's reason above: the search runs after this step and by then
+    # the permanent is a card in exile, which CR 400.7 makes a new object no
+    # board read can find. Through ``effective_card`` (CR 707.2) so a Clone of
+    # Grizzly Bears strips Grizzly Bears rather than the copy's printed face.
+    context.results[LAST_TARGET_NAME] = perm.effective_card.name
     game.remove_from_battlefield(perm)
     if owner_index is None:
         owner_index = controller_index if controller_index is not None else 0

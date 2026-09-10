@@ -1233,6 +1233,25 @@ LAST_TARGET_CONTROLLER = "last_target_controller"
 #: to disagree about which object the sentence was about.
 LAST_TARGET_OWNER = "last_target_owner"
 
+#: The **name** of that same object, frozen at the same moment and for the same
+#: reason the two seats above it are. "Exile target nonblack creature. Search
+#: its controller's graveyard, hand, and library for all cards with the same
+#: name as **that creature** and exile them." (Eradicate, and Scour, Splinter
+#: and Sowing Salt over the other three card types.) By the time the search
+#: runs, that creature is a card in exile — CR 400.7 makes it a new object and
+#: CR 613.1 leaves it no computed characteristics at all — so the name the
+#: sentence compares against exists nowhere but here.
+#:
+#: The **effective** name (CR 707.2): a Clone copying Grizzly Bears is a
+#: creature named Grizzly Bears, and a search launched off its printed face
+#: would strip a card nobody named.
+#:
+#: Its own key beside the two seats rather than a field on either, because a
+#: sentence reads one or the other: Afterlife names the seat and never the
+#: name, and these five name the name and reach the seat through the
+#: controller key already beside it.
+LAST_TARGET_NAME = "last_target_name"
+
 #: The ``deal_damage`` recipient meaning "the controller of the last <noun
 #: phrase> that dealt damage to you this turn" (Suffocation). A seat nobody
 #: chose and no event froze: it is read at resolution out of
@@ -1260,6 +1279,24 @@ LAST_DAMAGER_CONTROLLER = "last_damager_controller"
 #: the ``zones`` handler reads it and ``grammar/lowering/_records._PRODUCES``
 #: declares it, so the three sit at opposite ends of the pipeline.
 COUNTERED_SPELL_CONTROLLER = "countered_spell_controller_seat"
+
+#: The countered spell's **name**, the stack-side twin of ``LAST_TARGET_NAME``
+#: above. "Counter target instant or sorcery spell. Search its controller's
+#: graveyard, hand, and library for all cards with the same name as **that
+#: spell** and exile them." (Quash.)
+#:
+#: A separate key from the permanent one rather than a second writer of it, for
+#: ``COUNTERED_SPELL_CONTROLLER``'s own reason one line up: a spell on the stack
+#: is not a permanent, the two are written by handlers in different modules, and
+#: a lowering that could not tell them apart would admit "that spell" behind a
+#: destroy and "that creature" behind a counterspell.
+#:
+#: Written when the counter step **chooses** its spell rather than when it
+#: succeeds. CR 608.2's "as much as possible": a spell that can't be countered
+#: (CR 701.6a has nothing to do to it) still leaves Quash a name to search for,
+#: and a record written only on success would silently drop the whole second
+#: sentence.
+COUNTERED_SPELL_NAME = "countered_spell_name"
 
 
 #: The permanent "counter target activated ability" records: the source the

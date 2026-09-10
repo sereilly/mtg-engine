@@ -377,6 +377,13 @@ class StripCardsWithChosenName:
     holds a literal, and a literal is exactly what a card that names nothing
     cannot supply.
 
+    "The chosen card" is one spelling of that record and not the only one.
+    Eradicate, Scour, Splinter, Sowing Salt and Quash print the same three
+    zones behind "…with the same name as **that creature**" — the object the
+    sentence in front of this one exiled or countered — and ``name_of`` below
+    is which. The class keeps its name because what it describes has not
+    changed: a strip by a name this card never states.
+
     Both sentences, because CR 701.24 ends a library search with the shuffle
     and the shuffle names the same seat this one opened — split off, the second
     is a statement no production implements and the whole line refuses.
@@ -394,6 +401,21 @@ class StripCardsWithChosenName:
     #: Which zones, in the printed order. Data, not part of the kind — a card
     #: printing two of the three is the same effect over a smaller reach.
     zones: tuple[str, ...]
+    #: Which recorded object the name is compared against, as the printed noun:
+    #: ``"creature"`` for Eradicate, ``"spell"`` for Quash, and None for
+    #: Lobotomy's "the same name as **the chosen card**".
+    #:
+    #: Data rather than a second node, because every reading is the same effect
+    #: over the same three zones and the difference is *which earlier step of
+    #: this same resolution wrote the name down*. That is a question about the
+    #: sentence in front of this one, which is exactly what the lowering's
+    #: ``produced`` set answers and what a parse-side node could not.
+    #:
+    #: Carried as the printed word rather than as the record's own name for the
+    #: reason ``zones`` is data: the parse side does not know what an exile or a
+    #: counter leaves behind, and a node that named a scratchpad key would be
+    #: the grammar reaching across the pipeline for it.
+    name_of: str | None = None
 
 
 @dataclass(frozen=True)
