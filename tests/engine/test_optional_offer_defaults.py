@@ -526,6 +526,15 @@ def test_every_offer_with_a_rider_names_a_reviewed_action_kind(catalog):
         # `tests/sets/test_usg_enchantments.py` is where that is a game.
         "exile_chosen_card_from_hand",
         "put_chosen_card_from_hand_onto_battlefield",
+        # Academy Rector and Gamekeeper (UDS): "When this creature dies, **you
+        # may exile it**. If you do, <search / reanimate>." Reviewed and
+        # deliberately **not** a self-payment: the exile is of a card already in
+        # the graveyard, which is where it was going anyway, and what it buys is
+        # strictly larger — so a seat nobody asked should take it, which is what
+        # `offered_action_is_a_payment` answering False makes it do. Declining is
+        # safe in the other direction too: `on_accept` is `action + then`, so the
+        # rider cannot fire behind a refused offer. Both halves checked, not one.
+        "exile_self",
         # Answered by `_action_is_takeable`, so the offer is withdrawn.
         "ante_top_card", "choose_permanent", "choose_permanents",
         "discard_controller_cards", "discard_target_cards",

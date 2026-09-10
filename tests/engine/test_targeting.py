@@ -509,6 +509,17 @@ def test_the_agreement_ratchet_still_examines_the_card_that_broke_it(supported_c
     It is examined here because the walk runs over ``program.instructions``,
     which carries a permanent's ability instructions too. Both offer either
     graveyard, which is what their payloads say.
+
+    **Iridescent Drake is the fifth, and a third new shape**: the first to print
+    the phrase on a *triggered* ability, and the first whose card type is an
+    Aura (`graveyard_subtypes: ['aura']`, `attach_to: 'source'`). Its
+    `any_graveyard` is True like the other four, so the inventory's actual claim
+    — the payload offers either graveyard — holds. What does **not** hold for it
+    is that anybody asks: `targeting.py` and `legality.py` deliberately decline a
+    triggered ability's targets, so with two legal Auras in two graveyards the
+    seat does not choose between them and `reanimate_creature`'s fallback search
+    picks. That is pre-existing for every triggered reanimation in the pool and
+    belongs to that round rather than behind this card.
     """
     widened = {
         card.name for card in supported_cards
@@ -517,6 +528,7 @@ def test_the_agreement_ratchet_still_examines_the_card_that_broke_it(supported_c
 
     assert widened == {
         "Hymn of Rebirth", "Necromancy", "Reanimate", "Coffin Queen",
+        "Iridescent Drake",
     }
 
 

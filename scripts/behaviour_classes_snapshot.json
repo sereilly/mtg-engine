@@ -76,6 +76,7 @@
     "Phantom Monster",
     "Roc of Kher Ridges",
     "Scryb Sprites",
+    "Tormented Angel",
     "Willow Faerie",
     "Wind Drake"
   ],
@@ -87,8 +88,10 @@
     "Hazerider Drake",
     "Melesse Spirit",
     "Sea Sprite",
+    "Voice of Duty",
     "Voice of Grace",
     "Voice of Law",
+    "Voice of Reason",
     "Weatherseed Faeries",
     "Windreaper Falcon"
   ],
@@ -114,6 +117,15 @@
     "Youthful Knight"
   ],
   [
+    "Argothian Swine",
+    "Crash of Rhinos",
+    "Goliath Beetle",
+    "Iron Tusk Elephant",
+    "Moorish Cavalry",
+    "War Mammoth",
+    "Wild Elephant"
+  ],
+  [
     "Benalish Hero",
     "Benalish Infantry",
     "Icatian Phalanx",
@@ -132,12 +144,12 @@
     "Wall of Wood"
   ],
   [
-    "Argothian Swine",
-    "Crash of Rhinos",
-    "Iron Tusk Elephant",
-    "Moorish Cavalry",
-    "War Mammoth",
-    "Wild Elephant"
+    "Clergy en-Vec",
+    "Femeref Healer",
+    "Master Healer",
+    "Orim, Samite Healer",
+    "Samite Healer",
+    "Sanctum Custodian"
   ],
   [
     "Death Speakers",
@@ -198,6 +210,13 @@
     "White Ward"
   ],
   [
+    "Burn Bright",
+    "Scare Tactics",
+    "Shield Wall",
+    "Solidarity",
+    "Warrior's Honor"
+  ],
+  [
     "Circle of Protection: Black",
     "Circle of Protection: Blue",
     "Circle of Protection: Green",
@@ -205,18 +224,18 @@
     "Circle of Protection: White"
   ],
   [
-    "Clergy en-Vec",
-    "Femeref Healer",
-    "Orim, Samite Healer",
-    "Samite Healer",
-    "Sanctum Custodian"
-  ],
-  [
     "Crystal Rod",
     "Iron Star",
     "Ivory Cup",
     "Throne of Bone",
     "Wooden Sphere"
+  ],
+  [
+    "Drowned",
+    "Phyrexian Monitor",
+    "Restless Dead",
+    "Unworthy Dead",
+    "Walking Dead"
   ],
   [
     "Dwarven Song",
@@ -260,10 +279,10 @@
     "Disciple of Law"
   ],
   [
-    "Burn Bright",
-    "Scare Tactics",
-    "Shield Wall",
-    "Warrior's Honor"
+    "Canopy Spider",
+    "Giant Mantis",
+    "Giant Spider",
+    "Plated Spider"
   ],
   [
     "Colossal Dreadmaw",
@@ -272,16 +291,16 @@
     "Yavimaya Wurm"
   ],
   [
+    "Craven Giant",
+    "Goblin Raider",
+    "Hulking Cyclops",
+    "Hulking Ogre"
+  ],
+  [
     "Deathlace",
     "Lifelace",
     "Purelace",
     "Thoughtlace"
-  ],
-  [
-    "Drowned",
-    "Restless Dead",
-    "Unworthy Dead",
-    "Walking Dead"
   ],
   [
     "Ekundu Griffin",
@@ -314,6 +333,11 @@
     "Phyrexian Walker"
   ],
   [
+    "Army of Allah",
+    "Morale",
+    "Trumpet Blast"
+  ],
+  [
     "Bog Imp",
     "Mahamoti Djinn",
     "Storm Crow"
@@ -322,11 +346,6 @@
     "Breezekeeper",
     "Teferi's Drake",
     "Tolarian Drake"
-  ],
-  [
-    "Canopy Spider",
-    "Giant Mantis",
-    "Giant Spider"
   ],
   [
     "Canyon Wildcat",
@@ -349,11 +368,6 @@
     "Cloud Spirit"
   ],
   [
-    "Craven Giant",
-    "Goblin Raider",
-    "Hulking Cyclops"
-  ],
-  [
     "D'Avenant Archer",
     "Elite Archers",
     "Heavy Ballista"
@@ -367,6 +381,11 @@
     "Dauthi Marauder",
     "Soltari Foot Soldier",
     "Thalakos Sentry"
+  ],
+  [
+    "Deadly Insect",
+    "Elvish Lookout",
+    "Pincher Beetles"
   ],
   [
     "Fyndhorn Elves",
@@ -418,8 +437,16 @@
     "Righteousness"
   ],
   [
+    "Ambush Party",
+    "Goblin Berserker"
+  ],
+  [
     "Anaba Bodyguard",
     "Tundra Wolves"
+  ],
+  [
+    "Angelic Page",
+    "Serra Advocate"
   ],
   [
     "Ardent Militia",
@@ -432,10 +459,6 @@
   [
     "Armor of Faith",
     "Holy Armor"
-  ],
-  [
-    "Army of Allah",
-    "Morale"
   ],
   [
     "Bad Moon",
@@ -454,6 +477,10 @@
     "White Knight"
   ],
   [
+    "Blizzard Elemental",
+    "Vigilant Drake"
+  ],
+  [
     "Blue Elemental Blast",
     "Red Elemental Blast"
   ],
@@ -464,6 +491,10 @@
   [
     "Cancel",
     "Counterspell"
+  ],
+  [
+    "Capashen Templar",
+    "Honor Guard"
   ],
   [
     "Carapace",
@@ -494,10 +525,6 @@
     "Sea Serpent"
   ],
   [
-    "Deadly Insect",
-    "Pincher Beetles"
-  ],
-  [
     "Defender of Chaos",
     "Defender of Law"
   ],
@@ -520,6 +547,10 @@
   [
     "Elven Cache",
     "Regrowth"
+  ],
+  [
+    "Elvish Bard",
+    "Taunting Elf"
   ],
   [
     "Elvish Berserker",
@@ -590,6 +621,10 @@
     "Pyroblast"
   ],
   [
+    "Immolation",
+    "Twisted Experiment"
+  ],
+  [
     "Island",
     "Snow-Covered Island"
   ],
@@ -638,6 +673,10 @@
     "Nature's Revolt"
   ],
   [
+    "Lone Wolf",
+    "Thorn Elemental"
+  ],
+  [
     "Mana Leech",
     "Mole Worms"
   ],
@@ -652,6 +691,10 @@
   [
     "Mesa Pegasus",
     "Teremko Griffin"
+  ],
+  [
+    "Metathran Soldier",
+    "Phantom Warrior"
   ],
   [
     "Mountain",
@@ -710,6 +753,10 @@
     "Rootwalla"
   ],
   [
+    "Razortooth Rats",
+    "Squirming Mass"
+  ],
+  [
     "Resurrection",
     "Rise Again"
   ],
@@ -744,6 +791,10 @@
   [
     "Staunch Defenders",
     "Venerable Monk"
+  ],
+  [
+    "Talruum Minotaur",
+    "Wild Colos"
   ],
   [
     "Torment",

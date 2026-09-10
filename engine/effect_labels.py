@@ -715,6 +715,17 @@ TRIGGERED_LABELS: dict[str, str] = {
     # label is what the ability does.
     "discard_x_target_cards": "triggered_discard",
     "gain_control_until_eot": "triggered_control",
+    # --- Urza's Destiny, at its promotion ---------------------------------
+    # Aura Thief's death trigger. `triggered_control` beside
+    # `gain_control_until_eot` above and matching `gain_control_of_target`'s
+    # `activated_steal` family on the other side: the label is what the
+    # ability does, and taking every enchantment on the battlefield is the
+    # same thing as taking one, done to more of them.
+    "gain_control_of_all_matching": "triggered_control",
+    # Telepathic Spies' entry trigger, the same kind Orcish Spy activates —
+    # so it takes `activated_look`'s family with the prefix its side of the
+    # table uses, rather than a bucket of its own.
+    "look_at_target_hand": "triggered_look",
     # --- Urza's Saga ------------------------------------------------------
     # Wild Dogs' and Ghazban Ogre's "at the beginning of your upkeep, ... the
     # player with the most life gains control of this creature". The kind
@@ -1139,6 +1150,17 @@ TRIGGERED_LABELS_BY_CONDITION: dict[tuple[str, str], str] = {
     ("combat_your_turn", "may"): "triggered_combat",
     ("damage_dealt", "may"): "triggered_combat",
     ("dies", "may"): "triggered_death",
+    # --- Urza's Destiny, at its promotion ---------------------------------
+    # Three more optional triggers whose wrapper says nothing about what it
+    # offers, so the condition names the moment — the rule this table has
+    # followed since M21's seventeen above. Compost's is a card reaching an
+    # opponent's graveyard, Sanctimony's a land tapped for mana, and Pattern
+    # of Rebirth's the death of the creature it enchants; Pattern of Rebirth
+    # is shipped and reached this table for the first time here, which is the
+    # promotion gate doing its job rather than the card changing.
+    ("card_put_into_graveyard", "may"): "triggered_death",
+    ("land_tapped_for_mana", "may"): "triggered_mana",
+    ("attached_creature_dies", "may"): "triggered_death",
     ("enters_battlefield", "may"): "triggered_etb",
     ("draws_card", "may"): "triggered_draw",
     ("end_step", "may"): "triggered_end_step",

@@ -37,6 +37,7 @@ from engine.auras import aura_continuous_claim
 from engine.card_loader import load_catalog
 from engine.cast_restrictions import cast_timing_claims_line
 from engine.characteristic_defining import dynamic_pt_for
+from engine.combat_permissions import block_permission_claims_line
 from engine.combat_restrictions import combat_restriction_for
 from engine.land_play_allowance import land_play_line
 from engine.lord_buffs import lord_buff_for
@@ -156,6 +157,20 @@ def _derived(normalized: str) -> bool:
         # for any line nothing reads. Twenty-four shipped instants print the
         # same clause and were never asked here before, which is why widening a
         # gate is the moment to re-read the guards keyed on the old answer.
+        # A printed **block permission** — "this creature can block an
+        # additional creature each combat" (Two-Headed Giant of Foriys), "…can
+        # block any number of creatures" (Wall of Glare). One table read twice,
+        # by `_max_blocks_for` for the ceiling and by the support gate for the
+        # claim, so the two cannot disagree about which spellings exist.
+        #
+        # This arm was missing for as long as the table was: Wall of Glare
+        # arrived at Urza's Destiny with a working ceiling of 1,000,000 and
+        # this guard called the line unbacked, because the guard keeps its own
+        # list of which tables exist. That is the failure mode SET_PLAYBOOK
+        # calls the most expensive kind — a guard that re-spells the thing it
+        # checks reports a disagreement it invented — and the answer is to ask
+        # the table's own claim function rather than to add a spelling here.
+        or block_permission_claims_line(normalized)
         or cast_timing_claims_line(normalized)
         # An **attached** permanent's continuous effect — "Enchanted creature
         # has flying", "…gets +2/+2", "…can't attack or block". The fifteenth

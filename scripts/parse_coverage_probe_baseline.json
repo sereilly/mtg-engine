@@ -170,6 +170,13 @@
   ]
  },
  {
+  "card": "Aura Thief",
+  "clause": "you gain control of all enchantments",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Avalanche Riders",
   "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {3}{r}",
   "ignored": [
@@ -722,6 +729,13 @@
   ]
  },
  {
+  "card": "Extruder",
+  "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {4}",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
   "card": "Eye of Singularity",
   "clause": "destroy all other permanents with that name. they can't be regenerated",
   "ignored": [
@@ -740,6 +754,13 @@
   "clause": "other faerie creatures you control get +1/+0 until end of turn",
   "ignored": [
    "creatures"
+  ]
+ },
+ {
+  "card": "False Prophet",
+  "clause": "exile all creatures",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -762,6 +783,13 @@
   "ignored": [
    "all",
    "each"
+  ]
+ },
+ {
+  "card": "Festering Wound",
+  "clause": "this aura deals x damage to that player, where x is the number of infection counters on this aura",
+  "ignored": [
+   "aura"
   ]
  },
  {
@@ -833,6 +861,13 @@
   "clause": "target player shuffles up to three target cards from their graveyard into their library",
   "ignored": [
    "target"
+  ]
+ },
+ {
+  "card": "Gamekeeper",
+  "clause": "you may exile it. if you do, reveal cards from the top of your library until you reveal a creature card. put that card onto the battlefield and put all other cards revealed this way into your graveyard",
+  "ignored": [
+   "put"
   ]
  },
  {
@@ -908,6 +943,13 @@
  {
   "card": "Goblin Lackey",
   "clause": "you may put a goblin permanent card from your hand onto the battlefield",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Goblin Marshal",
+  "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {4}{r}{r}",
   "ignored": [
    "permanent"
   ]
@@ -1118,6 +1160,13 @@
   ]
  },
  {
+  "card": "Hunting Moa",
+  "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {2}{g}",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
   "card": "Hush",
   "clause": "destroy all enchantments",
   "ignored": [
@@ -1181,6 +1230,13 @@
   ]
  },
  {
+  "card": "Incendiary",
+  "clause": "this aura deals x damage to any target, where x is the number of fuse counters on this aura",
+  "ignored": [
+   "aura"
+  ]
+ },
+ {
   "card": "Infernal Harvest",
   "clause": "infernal harvest deals x damage divided as you choose among any number of target creatures",
   "ignored": [
@@ -1206,6 +1262,13 @@
   "clause": "untap all creatures",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Iridescent Drake",
+  "clause": "put target aura card from a graveyard onto the battlefield under your control attached to this creature",
+  "ignored": [
+   "creature"
   ]
  },
  {
@@ -1253,6 +1316,14 @@
   ]
  },
  {
+  "card": "Junk Diver",
+  "clause": "return another target artifact card from your graveyard to your hand",
+  "ignored": [
+   "another",
+   "target"
+  ]
+ },
+ {
   "card": "Kaervek's Hex",
   "clause": "kaervek's hex deals 1 damage to each nonblack creature and an additional 1 damage to each green creature",
   "ignored": [
@@ -1272,6 +1343,20 @@
   "clause": "choose target opponent who has at least two fewer creature cards in their graveyard than you do as you activate this ability. destroy target nonblack creature that player controls",
   "ignored": [
    "cards"
+  ]
+ },
+ {
+  "card": "Keldon Champion",
+  "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {2}{r}{r}",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Keldon Vandals",
+  "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {2}{r}",
+  "ignored": [
+   "permanent"
   ]
  },
  {
@@ -1398,6 +1483,13 @@
   ]
  },
  {
+  "card": "Lurking Jackals",
+  "clause": "if this permanent is an enchantment, it becomes a 3/2 jackal creature",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
   "card": "Lurking Skirge",
   "clause": "if this permanent is an enchantment, it becomes a 3/2 phyrexian imp creature with flying",
   "ignored": [
@@ -1407,6 +1499,13 @@
  {
   "card": "Magnetic Web",
   "clause": "all creatures with magnet counters on them block that creature this turn if able",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Magnify",
+  "clause": "all creatures get +1/+1 until end of turn",
   "ignored": [
    "all"
   ]
@@ -1563,6 +1662,13 @@
   ]
  },
  {
+  "card": "Multani's Decree",
+  "clause": "destroy all enchantments. you gain 2 life for each enchantment destroyed this way",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Nature's Chosen",
   "clause": "untap target artifact, creature, or land",
   "ignored": [
@@ -1706,6 +1812,13 @@
   ]
  },
  {
+  "card": "Opposition",
+  "clause": "tap target artifact, creature, or land",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
   "card": "Orc General",
   "clause": "other orc creatures get +1/+1 until end of turn",
   "ignored": [
@@ -1776,6 +1889,13 @@
   ]
  },
  {
+  "card": "Plague Dogs",
+  "clause": "all creatures get -1/-1 until end of turn",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Planar Birth",
   "clause": "return all basic land cards from all graveyards to the battlefield tapped under their owners' control",
   "ignored": [
@@ -1797,8 +1917,23 @@
   ]
  },
  {
+  "card": "Powder Keg",
+  "clause": "destroy each artifact and creature with mana value equal to the number of fuse counters on this artifact",
+  "ignored": [
+   "each",
+   "artifact"
+  ]
+ },
+ {
   "card": "Power Leak",
   "clause": "that player may pay any amount of mana. this aura deals 2 damage to that player. prevent x of that damage, where x is the amount of mana that player paid this way",
+  "ignored": [
+   "aura"
+  ]
+ },
+ {
+  "card": "Private Research",
+  "clause": "draw a card for each page counter on this aura",
   "ignored": [
    "aura"
   ]
@@ -1846,6 +1981,13 @@
   ]
  },
  {
+  "card": "Rapid Decay",
+  "clause": "exile up to three target cards from a single graveyard",
+  "ignored": [
+   "target"
+  ]
+ },
+ {
   "card": "Rats of Rath",
   "clause": "destroy target artifact, creature, or land you control",
   "ignored": [
@@ -1857,6 +1999,13 @@
   "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {2}{u}",
   "ignored": [
    "permanent"
+  ]
+ },
+ {
+  "card": "Rayne, Academy Chancellor",
+  "clause": "you may draw a card. you may draw an additional card if rayne is enchanted",
+  "ignored": [
+   "additional"
   ]
  },
  {
@@ -1920,6 +2069,13 @@
   "clause": "each other attacking creature gets +1/+0 until end of turn",
   "ignored": [
    "each"
+  ]
+ },
+ {
+  "card": "Replenish",
+  "clause": "return all enchantment cards from your graveyard to the battlefield",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -2772,6 +2928,14 @@
   "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {1}{r}{r}",
   "ignored": [
    "permanent"
+  ]
+ },
+ {
+  "card": "Wake of Destruction",
+  "clause": "destroy target land and all other lands with the same name as that land",
+  "ignored": [
+   "all",
+   "other"
   ]
  },
  {
