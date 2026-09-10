@@ -19,7 +19,9 @@ leave the player choosing from their entire library while the card still
 reported supported.
 """
 
-from ...oracle_types import OracleInstruction
+from ...oracle_types import (COUNTERED_SPELL_CONTROLLER, COUNTERED_SPELL_NAME,
+                             LAST_TARGET_CONTROLLER, LAST_TARGET_NAME,
+                             OracleInstruction)
 from ...search_filters import SEARCH_COMPARISONS, SEARCH_RESTRICTIONS
 from ._deaths import BOUND_CARD_EVENTS
 from .. import ast
@@ -556,7 +558,35 @@ def _lower_search_reveal_opponent_chooses(
 #: absent: no card asks its own controller to lose every copy of a card they
 #: just chose, and a seat this cannot name is a search of the wrong library —
 #: strictly a different card, and silently so.
-_STRIP_PLAYERS = frozenset({"target_player", "target_opponent", "that_player"})
+_STRIP_PLAYERS = frozenset({
+    "target_player", "target_opponent", "that_player",
+    # "Search **its controller's** graveyard, hand, and library …" (Eradicate,
+    # Scour, Splinter, Sowing Salt, Quash.) The possessive names the object the
+    # sentence in front of this one chose, so the seat is not on the payload at
+    # all — it comes off the same record pair the name does, below. Admitted
+    # here rather than beside them because this set is about which *printed*
+    # references have a reading, and this one does.
+    "controller",
+})
+
+#: What "…with the same name as that **<noun>**" reads, as
+#: ``printed noun -> (name record, seat record)``.
+#:
+#: Two rows because two kinds of object can be behind the sentence and they are
+#: recorded by handlers in different modules: an exile or a destroy writes down
+#: the permanent it chose, and a counter writes down the spell it chose. A spell
+#: on the stack is not a permanent (CR 111.1), which is the same reason
+#: ``oracle_types`` keeps the two seat keys apart, and one shared row would let
+#: "that creature" behind a counterspell take the stack reading.
+#:
+#: The seat travels with the name rather than being looked up separately,
+#: because the two answer one question — whose zones hold the copies of the
+#: object this spell just dealt with — and a pair that could come apart would
+#: let a strip open the right library and search it for nothing.
+_STRIP_NAME_RECORDS: dict[str, tuple[str, str]] = {
+    "spell": (COUNTERED_SPELL_NAME, COUNTERED_SPELL_CONTROLLER),
+    "*": (LAST_TARGET_NAME, LAST_TARGET_CONTROLLER),
+}
 
 
 def _lower_strip_cards_with_chosen_name(
@@ -587,12 +617,53 @@ def _lower_strip_cards_with_chosen_name(
         raise LoweringError(
             f"no flow strips {node.player.kind!r}'s zones", node=node
         )
+    payload: dict[str, object] = {"zones": list(node.zones)}
+    if node.name_of is not None:
+        # "…with the same name as **that creature**" (Eradicate, and its four
+        # siblings). The same gate as Lobotomy's below and the same reason for
+        # it — the name is a record an earlier step wrote — asked of the pair
+        # the printed noun names. Both keys are required: a step that recorded
+        # only one of them is a strip that opens a library and searches it for
+        # nothing, which is the silent half-effect this whole function refuses.
+        name_record, seat_record = _STRIP_NAME_RECORDS.get(
+            node.name_of, _STRIP_NAME_RECORDS["*"]
+        )
+        if name_record not in produced or seat_record not in produced:
+            raise LoweringError(
+                f'"that {node.name_of}" names an object no step of this spell '
+                "recorded",
+                node=node,
+            )
+        payload["name_record"] = name_record
+        payload["seat_record"] = seat_record
+        if node.player.kind != "controller":
+            # "**Its** controller" is the possessive that reads a record. A
+            # sentence naming a seat outright ("that player's graveyard") after
+            # a step that chose an *object* is naming somebody the record does
+            # not answer for, and taking the record anyway would open a library
+            # the card never pointed at.
+            raise LoweringError(
+                "a strip by a recorded name opens that object's controller's "
+                f"zones, not {node.player.kind!r}'s",
+                node=node,
+            )
+        return (
+            OracleInstruction("strip_cards_with_chosen_name", "", payload),
+        )
+    if node.player.kind == "controller":
+        # The other direction of the pair above: "its controller" with nothing
+        # for "its" to point at. Lobotomy's reading names the seat it searched
+        # outright, so this possessive belongs to the recorded-name branch and
+        # to nothing else.
+        raise LoweringError(
+            '"its controller" names an object this sentence never mentions',
+            node=node,
+        )
     if "chosen_card_name" not in produced:
         raise LoweringError(
             "\"the chosen card\" names a card no step of this spell chose",
             node=node,
         )
-    payload: dict[str, object] = {"zones": list(node.zones)}
     if node.player.kind != "that_player":
         _describe_targets(payload, node.player)
     return (

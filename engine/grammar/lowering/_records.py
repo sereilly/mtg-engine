@@ -32,7 +32,8 @@ from ...oracle_types import (CHOSEN_CREATURE_TYPE_THIS_WAY,
                              REVEALED_HAND_CARDS,
                              SEARCHED_PERMANENTS,
                              COUNTERED_ABILITY_SOURCE,
-                             COUNTERED_SPELL_CONTROLLER, DISCARDED_BY_SEAT,
+                             COUNTERED_SPELL_CONTROLLER,
+                             COUNTERED_SPELL_NAME, DISCARDED_BY_SEAT,
                              MANA_PAID_BY_SEAT,
                              DREW_BY_SEAT,
                              EXILED_BY_SEAT,
@@ -48,7 +49,8 @@ from ...oracle_types import (CHOSEN_CREATURE_TYPE_THIS_WAY,
 from ._events import (ATTACHED_PERMANENT_CONTROLLER,
                       EXILED_SPELL_CONTROLLER,
                       EXILED_SPELL_RECORD,
-                      LAST_TARGET_CONTROLLER, LAST_TARGET_OWNER,
+                      LAST_TARGET_CONTROLLER, LAST_TARGET_NAME,
+                      LAST_TARGET_OWNER,
                       EXILED_THIS_WAY,
                       _EVENT_SUBJECT_POWER_RECORD,
                       _EVENT_SUBJECT_TOUGHNESS_RECORD)
@@ -163,6 +165,12 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # would test, and it has been the primary since Mana Drain.
     "counter_top_stack_spell": (
         "countered_spell_mana_value", COUNTERED_SPELL_CONTROLLER,
+        # "…all cards with the same name as **that spell**" (Quash). The third
+        # question the sentence behind a counter can ask about the object that
+        # is no longer there: what it was called. Declared beside the seat
+        # because the strip reads both — the name says what to look for and the
+        # seat says whose zones to look in.
+        COUNTERED_SPELL_NAME,
     ),
     # "Counter target activated ability from an artifact, creature, enchantment,
     # or land. **That permanent's** activated abilities can't be activated this
@@ -380,6 +388,13 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # refuse for want of a producer, which is the loud failure.
     "exile_target_permanent": (
         LAST_TARGET_CONTROLLER, _EVENT_SUBJECT_TOUGHNESS_RECORD,
+        # "…all cards with the same name as **that creature**" (Eradicate;
+        # Scour, Splinter and Sowing Salt over the other three card types).
+        # Safe to declare where the *power* above is not: nothing else in the
+        # grammar reads a name record, so this un-refuses no near-miss — it
+        # buys exactly the one sentence that names it, and any other reader
+        # would have to be written to ask for it.
+        LAST_TARGET_NAME,
     ),
     # "Create Stangg Twin, a … token. Exile **that token** when …" (Stangg).
     # The token maker records which permanent it made, which is the only place
@@ -761,6 +776,10 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
         "its_mana_value", "destroyed_target", "destroyed_this_way",
         _EVENT_SUBJECT_POWER_RECORD, _EVENT_SUBJECT_TOUGHNESS_RECORD,
         LAST_TARGET_CONTROLLER,
+        # …and what it was called (Wake of Destruction), for the reason the
+        # exile beside it declares the same key: the sweep in the second half
+        # of that sentence compares against a permanent this step destroys.
+        LAST_TARGET_NAME,
         # …and the victim's **owner** (Path of Peace). Its own key beside the
         # controller because CR 108.3 and CR 109.5 answer differently for every
         # stolen permanent, and the destroy step writes both at the same moment.

@@ -608,6 +608,18 @@ def _lower_exile(
         }
         if filt.card_types:
             pile["card_type"] = filt.card_types[0]
+        else:
+            # "Exile up to three target **cards** from a single graveyard."
+            # (Ebony Charm's third mode, Rapid Decay.) The unnarrowed phrase,
+            # said out loud: ``graveyard_card_matches`` reads an absent
+            # ``card_type`` as *creature* — the reanimation Auras' default,
+            # since their enchant clause carries no type of its own — so a
+            # payload that simply left the key off narrowed a sentence that
+            # narrows nothing. Ebony Charm has shipped that way: its third mode
+            # offered only creature cards, and against a graveyard of lands and
+            # spells reported "no graveyard holds a card it can exile" and
+            # exiled nothing at all.
+            pile["any_card"] = True
         return (OracleInstruction("exile_cards_from_graveyard", "", pile),)
     # "…**with two delay counters on it**." (Ertai's Meddling.) CR 121.1's
     # counters put on the card as it arrives in exile, which only ``exile_self``

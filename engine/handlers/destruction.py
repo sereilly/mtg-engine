@@ -7,6 +7,7 @@ from ..dexterity import flip_lands_on
 from ..static_bonuses import singular_land_type
 from ..models import Permanent, PlayerState
 from ..oracle_types import (ATTACHED_PERMANENT_CONTROLLER, LAST_TARGET_CONTROLLER,
+                            LAST_TARGET_NAME,
                             LAST_TARGET_OWNER,
                             OracleInstruction, PER_OBJECT_SEAT_RECORDS)
 from ..resumption import run_resumable
@@ -210,6 +211,11 @@ def destroy_all_matching(game: Game, instruction: OracleInstruction, context: Or
             # (Eye of Singularity), both resolved below against the firing
             # event's context — which `subject_matches` never sees.
             "name_from_event", "other_than_event_subject",
+            # …and the same comparison against a name this *resolution* wrote
+            # down (Wake of Destruction), for the reason its two neighbours are
+            # lifted out: `subject_matches` is handed a permanent, a seat and a
+            # source, and never the scratchpad.
+            "name_from_record",
             # "…**of the creature type of your choice**" (Extinction). A word an
             # earlier step of this same resolution wrote, resolved just below
             # into the ordinary ``subtype_filter`` every matcher already reads.
@@ -321,6 +327,29 @@ def destroy_all_matching(game: Game, instruction: OracleInstruction, context: Or
     # less, it is one that takes the board.
     event_name: str | None = None
     event_subject_id: int | None = None
+    # "Destroy target land **and all other lands with the same name as that
+    # land**." (Wake of Destruction.) The same comparison against a name this
+    # resolution wrote down rather than one a firing event froze: the step in
+    # front of this one destroyed the land and recorded what it was called, one
+    # line before it left the battlefield (CR 608.2h).
+    #
+    # A branch beside the trigger reading rather than a second reader of it: the
+    # two names live in different places — one in the trigger's frozen context,
+    # one in the resolution's scratchpad — and a handler that guessed between
+    # them would sweep the board whenever it guessed wrong.
+    name_record = instruction.payload.get("name_from_record")
+    if name_record is not None:
+        event_name = str(context.results.get(name_record) or "").strip() or None
+        if event_name is None:
+            # The destroy in front chose nothing (its target had left,
+            # CR 608.2b), so there is no name for the sweep to compare against
+            # and nothing it may take. Ending here for the trigger branch's
+            # reason: a dropped narrowing on a sweep destroys every land on the
+            # table.
+            game.log.append(
+                f"{context.card.name}: nothing was destroyed, so no name to match"
+            )
+            return True, "resolved"
     if instruction.payload.get("name_from_event"):
         tctx = context.trigger_context or {}
         event_name = tctx.get("event_subject_name")
@@ -814,6 +843,13 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
         owner_seat = game.owner_index_of(victim)
         if owner_seat is not None:
             context.results[LAST_TARGET_OWNER] = owner_seat
+        # "Destroy target land **and all other lands with the same name as that
+        # land**." (Wake of Destruction.) The sweep behind this step compares
+        # against a permanent this step is about to destroy, so the name is
+        # frozen here beside the two seats and for their reason — CR 608.2h,
+        # last-known information. ``effective_card`` for CR 707.2: a Clone of a
+        # land is a land with that land's name and goes with the rest of them.
+        context.results[LAST_TARGET_NAME] = victim.effective_card.name
         if seat is not None:
             context.results[LAST_TARGET_CONTROLLER] = seat
             # The same seat under the per-object key, so a sentence counting

@@ -10,7 +10,8 @@ from ..exiled_records import (EXILE_RECORD_KEY, EXILED_SPELL_CONTROLLER_KEY,
                               record_in_context)
 from ..game_types import StackItem
 from ..mana_payment import mana_cost_label, total_pips
-from ..oracle_types import COUNTERED_ABILITY_SOURCE, COUNTERED_SPELL_CONTROLLER
+from ..oracle_types import (COUNTERED_ABILITY_SOURCE, COUNTERED_SPELL_CONTROLLER,
+                            COUNTERED_SPELL_NAME)
 from ._common import _card_matches_filter, resolve_amount
 from .registry import effect_handler
 
@@ -543,6 +544,22 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
                 )
                 return True, "resolved"
         target = chosen if (chosen is not None and chosen in game.stack) else game.stack[-1]
+        # What this step **chose**, recorded the moment it is known and not
+        # where the counter succeeds. CR 608.2 does as much of the effect as it
+        # can: "Counter target instant or sorcery spell. Search its controller's
+        # graveyard, hand, and library for all cards with the same name as
+        # **that spell** and exile them" (Quash) searches whether or not the
+        # spell could be countered, and so does Arcane Denial's "**its
+        # controller** may draw up to two cards" — an uncounterable spell, a
+        # colour the payload declines, or a controller who pays the "unless"
+        # cost all leave the sentence behind this one with the same object to
+        # talk about.
+        #
+        # Both keys together, because they describe one object: a seat written
+        # without the name would let Quash open the right library and search for
+        # nothing, which is the half-effect that reports resolved.
+        context.results[COUNTERED_SPELL_NAME] = target.card.name
+        context.results[COUNTERED_SPELL_CONTROLLER] = target.caster_index
         # "This spell can't be countered." (Scragnoth.) CR 113.6g: the ability
         # functions while the object is on the stack, so it is asked here — at
         # CR 608.2, the one moment the spell exists to be asked — and **before**
@@ -809,11 +826,12 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
         context.results["countered_spell_mana_value"] = stack_object_mana_value(countered)
         # "**Its controller** may draw up to two cards at the beginning of the
         # next turn's upkeep." (Arcane Denial.) The other thing about the
-        # countered spell that only the counter can write down, and for the
-        # mana value's reason one line up: CR 108.4 gives a card in a graveyard
-        # no controller, and by the time the delayed ability fires — a turn
-        # later, on a different player's upkeep — the stack item is long gone.
-        context.results[COUNTERED_SPELL_CONTROLLER] = countered.caster_index
+        # countered spell that only the counter can write down — CR 108.4 gives
+        # a card in a graveyard no controller, and by the time the delayed
+        # ability fires, a turn later on a different player's upkeep, the stack
+        # item is long gone. Written **above**, where the spell is chosen, for
+        # the reason recorded there: the sentence behind the counter runs
+        # whether or not the counter itself did anything.
         destination = instruction.payload.get("countered_destination")
         # "**If an artifact or creature spell** is countered this way…"
         # (Desertion.) CR 614.1's replacement is conditional on the countered

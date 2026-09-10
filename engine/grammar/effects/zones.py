@@ -169,7 +169,7 @@ def _parse_shuffle_graveyard_into_library(stream: TokenStream) -> ast.Statement 
     # same word in another inflection, and two productions racing for it would
     # make which reading a card gets depend on their order. Tried first because
     # it is the only branch that opens on a player reference.
-    chosen = _accept_player_shuffles_chosen_cards(stream)
+    chosen = _accept_player_shuffles(stream)
     if chosen is not None:
         return chosen
     # "your graveyard" is a possessive, not a player reference — `parse_player_ref`
@@ -246,12 +246,12 @@ def _parse_shuffle_graveyard_into_library(stream: TokenStream) -> ast.Statement 
     return ast.ShuffleGraveyardIntoLibrary(ast.PlayerRef("you"))
 
 
-def _accept_player_shuffles_chosen_cards(
+def _accept_player_shuffles(
     stream: TokenStream,
 ) -> "ast.ShuffleGraveyardIntoLibrary | None":
-    """``<player> shuffles up to <N> target cards from their graveyard into
-    their library`` at the cursor, or None with the cursor where it was.
-    (Gaea's Blessing.)
+    """``<player> shuffles <their graveyard | up to <N> target cards from their
+    graveyard> into their library`` at the cursor, or None with the cursor where
+    it was. (Thran Foundry; Gaea's Blessing.)
 
     Barishi's ``cards`` filter one step further: there the moving subset is
     *described* and nobody chooses, here it is **targeted** and the controller
@@ -273,6 +273,19 @@ def _accept_player_shuffles_chosen_cards(
     if player is None or not stream.accept_word("shuffles"):
         stream.reset(mark)
         return None
+    # "Target player shuffles **their graveyard** into their library." (Thran
+    # Foundry.) Feldon's Cane's whole-zone move with its subject printed in
+    # front of it, which is the same relationship Gaea's Blessing below has to
+    # Barishi — so it is a branch here rather than a production of its own, and
+    # tried first because "their graveyard" and "up to" are different words in
+    # the same slot. Both possessives are read for the reason every other
+    # reading in this file reads its own: a card pairing one player's graveyard
+    # with another's library is a different card, and consuming the words unread
+    # would compile it onto this one.
+    if stream.accept_phrase(
+        "their", "graveyard", "into", "their", "library",
+    ):
+        return ast.ShuffleGraveyardIntoLibrary(player)
     if not stream.accept_phrase("up", "to"):
         stream.reset(mark)
         return None

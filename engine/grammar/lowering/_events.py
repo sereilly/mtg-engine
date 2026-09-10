@@ -34,7 +34,8 @@ from ...exiled_records import (EXILE_RECORD_KEY,
                                EXILED_SPELL_CONTROLLER_KEY)
 
 from ...oracle_types import (ATTACHED_PERMANENT_CONTROLLER,  # noqa: F401
-                             LAST_TARGET_CONTROLLER, LAST_TARGET_OWNER,
+                             LAST_TARGET_CONTROLLER, LAST_TARGET_NAME,
+                             LAST_TARGET_OWNER,
                              EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS)
 from .. import ast
 from ..errors import LoweringError
