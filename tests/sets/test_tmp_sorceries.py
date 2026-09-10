@@ -888,7 +888,9 @@ def _w3g4_extinction_game(set_pool, mine, theirs, interactive=()):
 def _w3g4_cast_extinction(game):
     result = game.cast_from_hand(0, "Extinction")
     assert result.supported, result.details
-    resolve_stack(game)
+    # No drain: `cast_from_hand` resolves the spell, and an interactive seat's
+    # type choice holds it on the stack (CR 608.2). `resolve_stack` answers what
+    # blocks the stack, so it would name the type for the seat under test.
     return result
 
 

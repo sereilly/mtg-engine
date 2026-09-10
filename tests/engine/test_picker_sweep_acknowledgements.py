@@ -39,7 +39,7 @@ from engine.oracle import compile_card_oracle
 from engine.targeting import derive_activation_spec
 
 from .test_activation_targeting import _UNANNOUNCEABLE_TARGETS, _abilities
-from .test_targeting import _NO_PICKER
+from .test_targeting import _NO_PICKER, acknowledgeable_cards
 
 _REPO = Path(__file__).resolve().parents[2]
 
@@ -88,15 +88,20 @@ def test_the_scripts_activation_acknowledgements_are_the_reviewed_ones():
     )
 
 
-def test_the_unannounceable_acknowledgements_are_not_stale(supported_cards):
+def test_the_unannounceable_acknowledgements_are_not_stale():
     """The direction the activation list was never checked in.
 
     An ability that starts deriving a spec has been fixed, and the entry
     excusing it is then a standing free pass for whatever the next parser
     change does to that card — the same reasoning
     ``test_the_no_picker_acknowledgements_are_not_stale`` gives one file over.
+
+    Over both manifest roles, for that guard's reason too: the sweep this list
+    answers is run over a **measured** set, so a decline made there must be
+    recordable there. The shipped-pool gate is
+    ``test_the_shipped_pool_sweeps_clean`` below.
     """
-    by_name = {card.name: card for card in supported_cards}
+    by_name = {card.name: card for card in acknowledgeable_cards()}
 
     for (name, index), reason in sorted(_UNANNOUNCEABLE_TARGETS.items()):
         card = by_name.get(name)

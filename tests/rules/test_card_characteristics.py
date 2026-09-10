@@ -185,6 +185,11 @@ def _invoke_prejudice_board(catalog_by_name, guard: str | None):
         p1.battlefield.append(Permanent(card=catalog_by_name[guard]))
     p2.hand = [catalog_by_name["Grizzly Bears"]]
     game.cast_from_hand(1, "Grizzly Bears")
+    # Invoke Prejudice's trigger asks the caster for {X}{X} and holds its own
+    # object on the stack until that is answered (CR 608.2). Seat 1 is the seat
+    # the engine plays, so the drain here is the answer it would take anywhere
+    # else — the web layer's ``_auto_resolve_ai_pending``, in a test's clothes.
+    game.auto_resolve_pending_choices()
     game._settle()
     return game, p1, p2, [perm.card.name for perm in p2.battlefield] == ["Grizzly Bears"]
 
@@ -235,6 +240,7 @@ def test_sharing_a_color_is_asked_of_the_computed_color(catalog_by_name):
 
     p2.hand = [catalog_by_name["Grizzly Bears"]]
     game.cast_from_hand(1, "Grizzly Bears")
+    game.auto_resolve_pending_choices()  # the payment Invoke Prejudice offers
     game._settle()
 
     assert [card.name for card in p2.graveyard] == ["Grizzly Bears"]

@@ -39,6 +39,36 @@ def supported_cards():
     return [c for c in load_catalog() if compile_card_oracle(c).supported]
 
 
+def acknowledgeable_cards():
+    """The pool a **reviewed decline** may name — both manifest roles.
+
+    Every ratchet in this file reads ``load_catalog()``, the shipped seam, and
+    is right to: each is a claim about what ships. The staleness guards below
+    are not claims about what ships — they ask whether an acknowledgement still
+    describes a real card — and reading the shipped pool there made the one
+    moment a decline is *made* the one moment it cannot be *recorded*.
+
+    ``scripts/picker_sweep.py --set <CODE>`` runs over a **measured** set: that
+    is what Phase 3 uses it for. So the sweep names a card the reviewed list
+    beside it could not, and the entry had to wait for the promotion — a set
+    later, with nothing to remind anybody, while the script went on reporting a
+    finding that had already been declined. Carrion Beetles is what that looks
+    like after a whole set's lifetime (see
+    ``tests/engine/test_picker_sweep_acknowledgements.py``).
+
+    Reading a card file is not shipping it (CLAUDE.md, "the manifest has two
+    roles"), and nothing here makes a support claim: the gate over the shipped
+    pool is ``test_the_shipped_pool_sweeps_clean``, which is untouched.
+    """
+    from engine.card_loader import load_cards, manifest_set_paths
+
+    return [
+        card
+        for card in load_cards(manifest_set_paths(include_measured=True))
+        if compile_card_oracle(card).supported
+    ]
+
+
 def test_reconstruction_picks_an_artifact_card_out_of_a_graveyard(supported_cards):
     """The bug the full-spec differential found.
 
@@ -179,6 +209,19 @@ _NO_PICKER = {
     # "You own target card in the ante." Nothing enumerates the ante zone, so
     # the handler exchanges the card it finds there rather than one chosen.
     "Darkpact": "the ante zone has no picker",
+    # "Exile up to three target cards from a single graveyard." The **cast**
+    # face of ``exile_cards_from_graveyard``, whose activation face is the
+    # reviewed decline in ``_UNANNOUNCEABLE_TARGETS`` (Carrion Beetles) — one
+    # deviation, three cards. No picker in this engine names several cards in
+    # one pile at CR 601.2c, so the chooser names them as the spell resolves
+    # (``graveyard_pile_choice`` then ``graveyard_exile_pick``): the card is
+    # castable and playable, and what it does not do is *announce*. Closing the
+    # deviation is a class-wide round — a spec for the kind, an "all slots from
+    # one pile" announcement constraint (``legality``'s ``same_controller`` is
+    # permanents-only), a handler that consumes announced slots, and the AI's
+    # side of naming graveyard slots — and it moves Ebony Charm's second mode
+    # and Carrion Beetles with it.
+    "Rapid Decay": "a graveyard target is chosen at resolution, not announced",
 }
 
 
@@ -236,10 +279,14 @@ def test_every_card_that_targets_as_it_is_cast_derives_its_own_prompt(supported_
     assert gaps == [], f"these cards target but derive no prompt: {gaps}"
 
 
-def test_the_no_picker_acknowledgements_are_not_stale(supported_cards):
+def test_the_no_picker_acknowledgements_are_not_stale():
     """An acknowledgement that stops matching a real card is how the next card
-    inheriting that name gets a free pass nobody re-checked."""
-    by_name = {c.name: c for c in supported_cards}
+    inheriting that name gets a free pass nobody re-checked.
+
+    Over ``acknowledgeable_cards()`` — both manifest roles — because a decline
+    is made while the set is still ``measured``; see that function.
+    """
+    by_name = {c.name: c for c in acknowledgeable_cards()}
 
     for name in _NO_PICKER:
         card = by_name.get(name)

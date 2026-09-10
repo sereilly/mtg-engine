@@ -361,7 +361,9 @@ def test_encroach_offers_only_nonbasic_lands_from_the_revealed_hand(set_pool):
     game.interactive_seats = {0}
     game.start_turn(0)
     assert game.cast_from_hand(0, "Encroach", target_player_index=1).supported
-    resolve_stack(game)
+    # No drain: the resolution is held on the stack while this seat owes its
+    # answer (CR 608.2), and `resolve_stack` answers what blocks the stack —
+    # it would take the default out from under the confirm below.
 
     choice = game.pending_choices[0]
     offered = {victim_hand[index].name for index in choice.data["legal_indices"]}

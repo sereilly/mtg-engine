@@ -583,7 +583,10 @@ def test_w1g3_dracoplasm_is_the_total_of_what_was_given_up(set_pool, cards):
     game.enforce_mana_costs = False
     game.interactive_seats = {0}
     game.cast_from_hand(0, "Dracoplasm")
-    resolve_stack(game)
+    # No drain: the resolution is held on the stack while a seat owes its
+    # answer (CR 608.2). `resolve_stack` answers what blocks the stack, and a
+    # bare `while game.stack` loop spins on it — both would take the decision
+    # this test makes itself.
     assert game.resolve_pending_choice("sacrifice", 0, indices=[0, 1])
     game._recompute_continuous_effects()
     dracoplasm = seats[0].battlefield[-1]

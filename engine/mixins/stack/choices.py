@@ -3174,6 +3174,15 @@ class PendingChoicesMixin:
             # seat that paid nothing, because a seat the map never mentions
             # would read as whatever the last answer was.
             results.setdefault(MANA_PAID_BY_SEAT, {})[seat] = value
+        # Off the queue, which every sibling resolver here does and this one did
+        # not. ``auto_resolve_pending_choices`` drops a defaulted choice itself,
+        # so a headless or AI seat hid it; a *confirmed* one stayed queued with
+        # ``_answered`` on it, and ``waiting_prompt`` reads the queue — so after
+        # Liege of the Hollows died and both seats had paid, the game went on
+        # reporting a decision nobody owed, refusing every action by the seat
+        # that had already answered. CR 117.3b: play resumes when the decision is
+        # made, and it was.
+        self.discard_pending_choice(choice)
         return True
 
     def _default_pay_any_amount(self, choice: PendingChoice) -> bool:

@@ -828,14 +828,68 @@ class StackResolutionMixin:
         re-checking SBAs between each resolution (CR 704.3 + 603.3). Triggers that
         fire during an SBA check are enqueued (never resolved) there, so this loop
         is what actually drains them in the headless/AI path. Terminates when the
-        stack is empty and SBAs report no further change."""
+        stack is empty and SBAs report no further change.
+
+        **Whether a resolution may stop to ask is derived, not assumed.** This
+        loop is reached from the two "do the whole thing now" entry points
+        (``cast_from_hand``, ``activate_permanent_ability``), and it resolved
+        with ``pause_for_choices`` left False whoever was playing — so a prompt
+        armed part-way through a resolution was queued against an *empty
+        stack*: nothing recorded the object (``_stack_item`` is stamped from
+        ``resolving_stack_item``, which only the pausing path sets), so the
+        object never came back, ``_release_stack_item`` never ran, and CR 704.3's
+        sweep and CR 117.3b's priority hand-off were applied to a resolution
+        that had not finished. Measured over the shipped pool: of the 296
+        prompt-armings a resolution makes on this path, **267 across 255 cards**
+        had nothing holding them. The other 29 structurally cannot have one — a
+        mana ability uses no stack (CR 605.3a), a mode chosen at announcement
+        records ``_trigger_item`` instead, and a land play puts no object on the
+        stack at all — and those same 29, and only those, are what the priority
+        path leaves unheld. That is what named this loop as the seam.
+
+        The condition is ``bool(self.interactive_seats)`` — the same derivation
+        ``_resolve_priority_window`` already makes, and for the same reason: with
+        nobody to stop for, headless and AI play queue the same prompts and drain
+        them deterministically afterwards, so a seeded run resolves exactly as it
+        did.
+
+        **What it does not do is answer anything.** A prompt owed by a seat the
+        engine plays still holds the object here, exactly as it does on the
+        priority path, and the caller drains it — ``_auto_resolve_ai_pending``
+        in the web layer, ``auto_resolve_pending_choices`` in a test. Draining
+        inside this loop was tried and is a *different* change: it takes the
+        AI's answer before the caller can see what was asked, which is what
+        forty tests read the queue for.
+
+        Power Sink's payment is where that shows on a shipped card. It used to
+        be answered from inside ``resolve_top_of_stack`` on the ``not
+        pause_for_choices`` branch, so ``cast_from_hand`` finished it; now it is
+        queued like every other prompt, held with its object, and answered by
+        whoever drains. Invoke Prejudice ("counter that spell unless that player
+        pays {X}{X}") is the card that reaches it in an ordinary duel.
+        """
+        # CR 608.2 / CR 117.3b, only where there is somebody to wait for.
+        pause_for_choices = bool(self.interactive_seats)
         iterations = 0
         while True:
             self.check_state_based_actions()
             if not self.stack:
                 break
-            if not self.resolve_top_of_stack():
+            if not self.resolve_top_of_stack(pause_for_choices=pause_for_choices):
                 # Top item is paused on a pending choice (Word of Command).
+                break
+            # A resolution that stopped to ask holds its object on the stack
+            # (CR 608.2). Break *here* rather than letting the loop come round:
+            # the next iteration's SBA check would run mid-resolution, which is
+            # a sweep at a moment CR 704.3 does not name. The caller resumes
+            # when the last of the object's prompts is answered — the answer
+            # path releases it (`_release_stack_item`).
+            if (
+                pause_for_choices
+                and self.stack
+                and self.stack[-1].resolution_held
+                and self.stack_item_is_waiting(self.stack[-1])
+            ):
                 break
             iterations += 1
             if iterations > self.MAX_SETTLE_ITERS:
