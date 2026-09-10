@@ -525,80 +525,26 @@ class DeclareBlockersStepMixin:
             if able:
                 return False, f"{blocker.card.name} blocks each combat if able"
 
-        # "No more than two creatures can block each combat." (Caverns of
-        # Despair.) The blocking twin of the attack cap, and a restriction on
-        # the declaration as a whole (CR 509.1b) rather than on any one pairing,
-        # so it is checked here rather than in `_can_block_attacker`. Counted
-        # across **every** defender's declaration: the sentence says "each
-        # combat", and one seat's blockers do not stop being blockers because
-        # another seat declares next. A Camouflage resolution is exempt for the
-        # reason menace and Lure are — the piles were matched at random, so
-        # there is no declaration to declare illegal.
-        if not _camouflage_resolution:
-            block_cap = participation_cap(self.all_permanents(), "block")
-            if block_cap is not None:
-                already = sum(
-                    len(other)
-                    for seat, other in self.combat_blockers.items()
-                    if seat != controller_index
-                )
-                if already + len(assignments) > block_cap:
-                    return False, (
-                        f"no more than {block_cap} creature(s) can block each combat"
-                    )
-
-        # "…can't block **unless at least two other creatures block**." (Orcish
-        # Conscripts.) The floor to the cap above, and counted the same way and
-        # for the same reason: CR 509.1b asks its restrictions of the whole
-        # declaration, and a creature blocking under another defender's
-        # declaration does not stop being a blocker because this seat declares
-        # next. Camouflage is exempt beside the cap, for that block's reason —
+        # CR 509.1b's restrictions on the **declaration as a whole** — the
+        # block cap (Caverns of Despair), the company floor (Orcish Conscripts,
+        # Mogg Flunkies) and the greater-power comparison (Okk). All three used
+        # to be written out here and **nowhere else**, which is precisely what
+        # W2G4 had already fixed on the attack side: the AI's chooser could not
+        # ask them, so it proposed a set the declaration refused *whole* and the
+        # defender blocked with nobody. They live in
+        # :meth:`block_declaration_refusal` now, which is what both this gate
+        # and `ai_policy._legal_block_declaration` read.
+        #
+        # A Camouflage resolution is exempt for the reason menace and Lure are —
         # the piles were matched at random, so there is no declaration to
-        # declare illegal.
+        # declare illegal — and the exemption stays at the *call*, beside the
+        # other four, rather than inside a predicate the AI also asks.
         if not _camouflage_resolution:
-            blocking_total = len(assignments) + sum(
-                len(other)
-                for seat, other in self.combat_blockers.items()
-                if seat != controller_index
+            set_refusal = self.block_declaration_refusal(
+                [resolved_blockers[idx] for idx in assignments]
             )
-            for blocker_idx in assignments:
-                blocker = resolved_blockers[blocker_idx]
-                needed = declaration_company_required(blocker, "block")
-                if needed is not None and blocking_total - 1 < needed:
-                    return False, (
-                        f"{blocker.card.name} needs at least {needed} other "
-                        "blocking creature(s)"
-                    )
-            # "…unless a creature with **greater power** also blocks." (Okk.)
-            # The comparison twin of the count above, and the same CR 509.1b
-            # declaration-wide question — so the same place, and the same
-            # exemption for a Camouflage resolution.
-            #
-            # Only *this seat's* declaration is compared, which is the one
-            # difference from the count above it: that one totals every
-            # defender's blockers because "at least two other creatures block"
-            # says nothing about whose, and this one has to hold two
-            # `Permanent` objects side by side to compare their power. A
-            # blocker declared under another defender's earlier declaration is
-            # not in `resolved_blockers` at all, so widening the scan would
-            # mean re-resolving a second seat's indices against a second
-            # board — a round of its own, and not one Okk needs: CR 509.1a
-            # gives every blocker one attacking creature to block, and this
-            # engine's combats have one defending player.
-            for blocker_idx in assignments:
-                blocker = resolved_blockers[blocker_idx]
-                if not declaration_greater_power_required(blocker, "block"):
-                    continue
-                if not any(
-                    resolved_blockers[other] is not blocker
-                    and resolved_blockers[other].effective_power
-                    > blocker.effective_power
-                    for other in assignments
-                ):
-                    return False, (
-                        f"{blocker.card.name} needs a blocking creature with "
-                        "greater power beside it"
-                    )
+            if set_refusal is not None:
+                return False, set_refusal[1]
 
         # CR 509.1d-f: the total cost to block, locked in and paid before the
         # chosen creatures become blockers. Last of the legality checks and
@@ -663,6 +609,103 @@ class DeclareBlockersStepMixin:
         if self.combat_blockers_locked:
             self.start_priority_window(self.active_player_index)
         return True, "declared blockers"
+
+    def block_declaration_refusal(
+        self,
+        declared_blockers: list[Permanent],
+    ) -> "tuple[Permanent, str] | None":
+        """Which declared blocker's restriction this **set** disobeys, and why.
+
+        CR 509.1b asks its restrictions of the declaration as a whole — "if any
+        restrictions are being disobeyed, the declaration of blockers is
+        illegal" — so none of these can live in ``_can_block_attacker``, a
+        per-pair predicate with no way to say "and no more of you" (Caverns of
+        Despair), "and at least two more of you" (Orcish Conscripts, and Mogg
+        Flunkies' printed "can't block alone") or "and one of you bigger than
+        me" (Okk).
+
+        **Public, and returning the offending permanent, because the AI asks it
+        too.** This is the blocking twin of
+        :meth:`attack_declaration_refusal`, and it is written from the same
+        defect: until this existed the three checks were inline in
+        ``declare_blockers`` and nowhere else, so ``choose_combat_blockers``
+        pruned against nothing. It proposed an over-cap map, the declaration
+        refused it *whole*, ``ai_combat.declare_ai_blockers`` fell through to
+        ``{}`` and ``web/game_flow`` to a safety valve that wipes every seat's
+        blocks — the defender blocked with nobody, this combat and every later
+        one, with no rule broken, nothing spent and nothing logged. The
+        permanent is what lets the AI drop the creature this names instead.
+
+        **One defending player's declaration, and only theirs (CR 802.4b).**
+        These three checks used to add every *other* seat's ``combat_blockers``
+        to their totals, on the reading that "each combat" spans the whole
+        combat and a creature blocking under an earlier declaration does not
+        stop being a blocker. CR 802.4b says the opposite in as many words:
+        "When determining whether a defending player's blocks are legal, ignore
+        any creatures attacking other players and **any blocking creatures
+        controlled by other players**." So under a Caverns of Despair each
+        defender may block with two, and the engine was refusing the second
+        defender's legal declaration outright — a restriction firing more often
+        than the rules allow, which is the same silent wrongness as one firing
+        less often, pointed the other way. It is also why this takes a list and
+        not a seat: once the other seats' blockers are ignored there is nothing
+        left for a seat index to select.
+
+        Asked of the collected ``Permanent`` objects rather than of indices: an
+        index is unstable, and both callers have the permanents already.
+
+        The Camouflage exemption is the **caller's**, not this predicate's: the
+        piles were matched at random (CR 509.1a is replaced wholesale), so
+        there is no declaration to declare illegal, and the declaration gate
+        already skips this beside the four requirement checks it skips for the
+        same reason.
+        """
+        # The board-wide cap first, for the reason the attack side takes it
+        # first: it is the widest restriction here — it does not care who is
+        # blocking or what they block — so it is the cheapest true answer, and
+        # naming any other offender under it would be arbitrary in a different
+        # way. The **last** blocker in the list is named, which makes the order
+        # the caller hands them over in the caller's policy:
+        # ``_legal_block_declaration`` sorts its worst block last, so a cap
+        # drops that one.
+        #
+        # The permanents scanned are the whole board (``all_permanents``), not
+        # one seat's: CR 802.4b scopes which *blockers* are counted, not where
+        # the permanent printing the cap is allowed to sit.
+        cap = participation_cap(self.all_permanents(), "block")
+        if cap is not None and len(declared_blockers) > cap:
+            return declared_blockers[-1], (
+                f"no more than {cap} creature(s) can block each combat"
+            )
+        for blocker in declared_blockers:
+            needed = declaration_company_required(blocker, "block")
+            if needed is not None and len(declared_blockers) - 1 < needed:
+                return blocker, (
+                    f"{blocker.card.name} needs at least {needed} other "
+                    "blocking creature(s)"
+                )
+        # "…unless a creature with **greater power** also blocks." (Okk.) The
+        # comparison twin of the count above, and the same CR 509.1b
+        # declaration-wide question.
+        #
+        # Power is read live off both creatures rather than off their printed
+        # numbers: CR 613 computes it, so a pumped Okk needs a bigger companion
+        # than one that has not been. ``is`` rather than an index comparison,
+        # because the rule is about the *other* blockers and two 3/3s are not
+        # one another.
+        for blocker in declared_blockers:
+            if not declaration_greater_power_required(blocker, "block"):
+                continue
+            if not any(
+                other is not blocker
+                and other.effective_power > blocker.effective_power
+                for other in declared_blockers
+            ):
+                return blocker, (
+                    f"{blocker.card.name} needs a blocking creature with "
+                    "greater power beside it"
+                )
+        return None
 
     def is_camouflage_active(self) -> bool:
         """True when Camouflage was cast this turn, so the defender's blocks come

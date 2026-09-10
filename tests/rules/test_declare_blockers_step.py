@@ -972,3 +972,167 @@ def test_509_1h_removal_alone_leaves_the_attacker_blocked():
 
     assert attacker.blocked is False
 # --- end W4G2 ---
+
+
+# --- W1G1: the block-declaration predicate (CR 509.1b, CR 802.4b) ---
+#
+# `Game.block_declaration_refusal` is the blocking twin of
+# `attack_declaration_refusal`, hoisted out of `declare_blockers` so the AI's
+# chooser can ask the same question the gate asks. Before it existed the three
+# declaration-wide restrictions lived inline in the gate and nowhere else, so
+# `ai_policy.choose_combat_blockers` pruned against nothing: it proposed a map
+# the engine refused *whole*, and the defender blocked with nobody — this
+# combat and every later one, with nothing spent, no rule broken and nothing
+# logged. `tests/ai/test_ai_declaration_legality.py` holds the AI half; these
+# hold the rule.
+
+from engine.card_loader import load_cards as _w1g1_load_cards  # noqa: E402
+from engine.card_loader import manifest_set_paths as _w1g1_set_paths  # noqa: E402
+
+
+def _w1g1_pool() -> dict[str, CardDefinition]:
+    """Every card in both manifest roles, by name. The four cards printing a
+    declaration-wide block restriction are spread over LEG, ICE, STH and USG."""
+    seen: dict[str, CardDefinition] = {}
+    for path in _w1g1_set_paths(include_measured=True):
+        for card in _w1g1_load_cards(path):
+            seen.setdefault(card.name, card)
+    return seen
+
+
+def _w1g1_board(restriction_card: CardDefinition, blockers: int, attackers: int = 1):
+    """*attackers* 3/3s into *blockers* 2/2s, with *restriction_card* on the
+    defending side."""
+    attacking = [
+        Permanent(card=_mk_creature(f"W1G1-A{i}", 3, 3)) for i in range(attackers)
+    ]
+    board = [Permanent(card=_mk_creature(f"W1G1-B{i}", 2, 2)) for i in range(blockers)]
+    board.append(Permanent(card=restriction_card))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=attacking),
+        PlayerState(name="P2", battlefield=board),
+    ])
+    _to_declare_blockers(game, list(range(attackers)))
+    return game
+
+
+@pytest.mark.cr("509.1b")
+def test_509_1b_the_predicate_names_the_blocker_a_cap_stops():
+    """A cap is disobeyed by the *set*, so no member of it is the illegal one —
+    the predicate names the **last** blocker it was handed, which is what makes
+    "which one do I give up?" the caller's policy rather than the engine's."""
+    game = _w1g1_board(_w1g1_pool()["Caverns of Despair"], blockers=3)
+    declared = list(game.players[1].battlefield[:3])
+
+    refusal = game.block_declaration_refusal(declared)
+
+    assert refusal is not None
+    offender, why = refusal
+    assert offender is declared[-1]
+    assert "no more than 2 creature(s) can block each combat" == why
+    assert game.block_declaration_refusal(declared[:2]) is None
+
+
+@pytest.mark.cr("509.1b")
+def test_509_1b_the_predicate_names_the_blocker_owing_company():
+    """"This creature can't block unless at least two other creatures block."
+    (Orcish Conscripts.) A floor rather than a ceiling, and the offender is not
+    arbitrary here: it is the creature printing the clause."""
+    pool = _w1g1_pool()
+    game = _w1g1_board(_mk_creature("W1G1 Filler", 1, 1), blockers=1)
+    conscripts = Permanent(card=pool["Orcish Conscripts"])
+    game.players[1].battlefield.append(conscripts)
+    other = game.players[1].battlefield[0]
+
+    refusal = game.block_declaration_refusal([other, conscripts])
+
+    assert refusal is not None
+    assert refusal[0] is conscripts
+    assert "needs at least 2 other blocking creature(s)" in refusal[1]
+
+
+@pytest.mark.cr("509.1b")
+def test_509_1b_mogg_flunkies_is_the_same_restriction_with_the_number_printed_as_a_word():
+    """"This creature can't attack or block alone." CR 506.5's word is a count,
+    so the printed sentence lowers to the company floor above with N=1 — one
+    enforcement site, not two, and one predicate reading both."""
+    pool = _w1g1_pool()
+    game = _w1g1_board(_mk_creature("W1G1 Filler", 1, 1), blockers=1)
+    flunkies = Permanent(card=pool["Mogg Flunkies"])
+    game.players[1].battlefield.append(flunkies)
+    other = game.players[1].battlefield[0]
+
+    assert game.block_declaration_refusal([flunkies])[0] is flunkies
+    assert game.block_declaration_refusal([other, flunkies]) is None
+
+
+@pytest.mark.cr("509.1b", "613.1g")
+def test_509_1b_okks_companion_is_compared_on_computed_power():
+    """"This creature can't block unless a creature with greater power also
+    blocks." (Okk.) A comparison rather than a count, and both sides are read
+    live: CR 613 computes power, so a pumped Okk needs a bigger companion than
+    an unpumped one."""
+    pool = _w1g1_pool()
+    game = _w1g1_board(_mk_creature("W1G1 Filler", 1, 1), blockers=1)
+    okk = Permanent(card=pool["Okk"])
+    game.players[1].battlefield.append(okk)
+    smaller = game.players[1].battlefield[0]
+    bigger = Permanent(card=_mk_creature("W1G1 Bigger", 9, 9))
+    game.players[1].battlefield.append(bigger)
+
+    assert game.block_declaration_refusal([smaller, okk])[0] is okk
+    assert game.block_declaration_refusal([bigger, okk]) is None
+
+
+@pytest.mark.cr("802.4b", "509.1b")
+def test_802_4b_another_defenders_blockers_are_ignored_by_this_ones_cap():
+    """"When determining whether a defending player's blocks are legal, ignore
+    any creatures attacking other players and any blocking creatures controlled
+    by other players."
+
+    The three restrictions above used to total **every** defender's blockers,
+    on the reading that "each combat" spans the whole combat. CR 802.4b says
+    the opposite in as many words, and the cost of the old reading was a legal
+    declaration refused outright: under one Caverns of Despair the first
+    defender blocked with two and the second was told the cap was full.
+    """
+    pool = _w1g1_pool()
+    seats = [PlayerState(name="P1"), PlayerState(name="P2"), PlayerState(name="P3")]
+    for i in range(2):
+        seats[0].battlefield.append(Permanent(card=_mk_creature(f"W1G1-A{i}", 2, 2)))
+    for seat in seats[1:]:
+        for i in range(2):
+            seat.battlefield.append(Permanent(card=_mk_creature(f"{seat.name}-B{i}", 2, 2)))
+    seats[1].battlefield.append(Permanent(card=pool["Caverns of Despair"]))
+    game = Game(players=seats)
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    # Caverns caps attacks at two as well, so exactly two — one at each seat.
+    ok, why = game.declare_attackers(0, [0, 1], attacker_targets={0: 1, 1: 2})
+    assert ok, why
+    game.advance_combat_phase()
+    assert game.current_step == "declare_blockers"
+
+    ok, why = game.declare_blockers(1, {0: 0, 1: 0}, acting_index=1)
+    assert ok, why
+    ok, why = game.declare_blockers(2, {0: 1}, acting_index=2)
+    assert ok, why
+
+
+@pytest.mark.cr("509.1b")
+def test_509_1b_the_gate_still_refuses_what_the_predicate_names():
+    """The hoist moved the checks; it did not soften them. The declaration is
+    still refused whole (CR 509.1b), with the same printed reason."""
+    game = _w1g1_board(_w1g1_pool()["Caverns of Despair"], blockers=3)
+
+    ok, why = game.declare_blockers(1, {0: 0, 1: 0, 2: 0}, acting_index=1)
+    assert not ok
+    assert "no more than 2 creature(s) can block each combat" == why
+
+    ok, why = game.declare_blockers(1, {0: 0, 1: 0}, acting_index=1)
+    assert ok, why
+
+
+# --- end W1G1 ---

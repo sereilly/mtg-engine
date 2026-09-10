@@ -911,6 +911,96 @@ def choose_attackers(game: Game, attacking_player_index: int) -> list[int]:
     return sorted(chosen)
 
 
+def _legal_block_declaration(
+    game: Game,
+    defending_player_index: int,
+    chosen: dict[int, int | list[int]],
+) -> dict[int, int | list[int]]:
+    """*chosen*, pruned until the **declaration** itself is legal (CR 509.1b).
+
+    :func:`_legal_declaration` one step of combat over, and written from the
+    identical defect. ``_can_block_attacker`` is a per-pair predicate, and a
+    restriction can be about the set: "no more than two creatures can block each
+    combat" (Caverns of Despair), "can't block unless at least two other
+    creatures block" (Orcish Conscripts, and Mogg Flunkies' "can't block
+    alone"), "can't block unless a creature with greater power also blocks"
+    (Okk). Proposing a map that disobeys one is not a partial failure —
+    ``declare_blockers`` refuses the **whole** declaration, so the defender
+    blocked with nobody, this combat and every later one, in silence.
+
+    The rule is asked of the engine rather than re-read here, for the attack
+    side's reason exactly: a second copy in the AI would drift from the one the
+    declaration enforces, and the direction it drifts is a seat that stops
+    blocking for reasons the rules do not give. The engine names the offending
+    permanent, which is what makes this a prune rather than a search — each pass
+    drops exactly one blocker, so it terminates.
+
+    A **map**, not a list, which is the one structural difference from the
+    attack side: dropping the offender means dropping a key, and the attackers
+    it was assigned go with it. Everything else about that blocker's assignment
+    is left alone, because a partial block is a different declaration, not a
+    smaller one.
+
+    Only this seat's own map is pruned, and only against itself: CR 802.4b
+    judges each defending player's blocks with every other player's blockers
+    ignored, so a second defender declaring first cannot make this one's map
+    illegal.
+
+    Which blocker the engine names for a **cap** is this function's business,
+    the way it is `_legal_declaration`'s: a cap is disobeyed by the set rather
+    than by any member of it, so the engine names the *last* one it was handed.
+    The list therefore goes over worst-block-last — scored by the same
+    `_score_block_pair` that chose the blocks — which is what makes this a cap
+    the AI blocks *under* rather than one it blocks *through*.
+    """
+    attacker_player = game.players[game.active_player_index]
+    ordered: list[tuple[int, Permanent, float]] = []
+    for blocker_idx, assigned in chosen.items():
+        blocker = game.permanent_at(defending_player_index, blocker_idx)
+        if blocker is None:
+            continue
+        attacker_indices = assigned if isinstance(assigned, list) else [assigned]
+        attacker = next(
+            (
+                perm
+                for perm in (
+                    game.permanent_at(attacker_player, idx)
+                    for idx in attacker_indices
+                )
+                if perm is not None
+            ),
+            None,
+        )
+        # The value of *the block*, not of the blocker: a cap forces the seat to
+        # give one up, and the one to give up is the least useful block rather
+        # than the smallest creature. With no attacker resolvable there is no
+        # pair to score, so the creature's own value stands in.
+        score = (
+            _score_block_pair(blocker, attacker)
+            if attacker is not None
+            else _permanent_value(blocker)
+        )
+        ordered.append((blocker_idx, blocker, score))
+    ordered.sort(key=lambda entry: -entry[2])
+
+    while ordered:
+        refusal = game.block_declaration_refusal(
+            [perm for _idx, perm, _score in ordered]
+        )
+        if refusal is None:
+            break
+        offender, _reason = refusal
+        ordered = [
+            entry for entry in ordered if entry[1] is not offender
+        ]
+    kept = {blocker_idx for blocker_idx, _perm, _score in ordered}
+    return {
+        blocker_idx: assigned
+        for blocker_idx, assigned in chosen.items()
+        if blocker_idx in kept
+    }
+
+
 def choose_combat_blockers(
     game: Game,
     defending_player_index: int,
@@ -1157,7 +1247,11 @@ def choose_combat_blockers(
             assignments[blocker_idx] = attacker_idx
             break
 
-    return assignments
+    # CR 509.1b's restrictions on the declaration as a whole, last — the mirror
+    # of `_legal_declaration` at the tail of `choose_attackers`, and last for
+    # its reason: every requirement above may still *add* a blocker, and a set
+    # that was under the cap before one was added is not under it after.
+    return _legal_block_declaration(game, defending_player_index, assignments)
 
 
 def choose_combat_instant_cast_action(game: Game, player_index: int) -> CastAction | None:
