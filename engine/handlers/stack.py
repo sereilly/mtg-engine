@@ -11,7 +11,7 @@ from ..exiled_records import (EXILE_RECORD_KEY, EXILED_SPELL_CONTROLLER_KEY,
 from ..game_types import StackItem
 from ..mana_payment import mana_cost_label, total_pips
 from ..oracle_types import COUNTERED_ABILITY_SOURCE, COUNTERED_SPELL_CONTROLLER
-from ._common import _card_matches_filter, resolve_amount
+from ._common import _card_matches_filter, count_from_payload, resolve_amount
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -771,7 +771,7 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
             # Seer that showed nothing does.
             per_recorded = instruction.payload.get("unless_pays_per_recorded")
             if per_recorded is not None:
-                cost *= max(0, int(context.results.get(str(per_recorded), 0) or 0))
+                cost *= count_from_payload(game, context, per_recorded)
             # "…and 1 life" (Mundungu). The life half of one offer, sent on
             # the same prompt: what the payer decides is whether to pay the
             # whole price, so a second prompt would be a second decision and a

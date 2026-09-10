@@ -22,6 +22,7 @@ from ._common import (
 )
 from ._events import (_DEFENDING_PLAYER_EVENTS, _EVENT_SUBJECT_PLAYERS,
                       _RECORDED_PERMANENTS)
+from ._amounts import recorded_count_spec
 from ._cost_records import SACRIFICED_FOR_COST, UNTAPPED_FOR_COST
 
 #: Which cost payment each printed back-reference names, and how to say so when
@@ -261,17 +262,19 @@ def _lower_add_mana(
             # ``per_each`` spec the board count below writes. One evaluator for
             # both, which is what stops "for each" meaning two arithmetics.
             #
-            # Refused without a producer, like every back-reference in this
-            # grammar: with no reveal in front of it the words name nothing and
-            # the spec would answer 0 — a Metalworker that reports supported and
-            # adds no mana at all.
-            if node.per_each_recorded not in produced:
+            # Through ``recorded_count_spec``, the one reader that turns a
+            # recorded quantity into a count spec — so the producer gate every
+            # back-reference in this grammar carries is asked once rather than
+            # re-written here. With no reveal in front of it the words name
+            # nothing and the spec would answer 0, which is a Metalworker that
+            # reports supported and adds no mana at all.
+            spec = recorded_count_spec(node.per_each_recorded, produced, node)
+            if spec is None:
                 raise LoweringError(
-                    f"back-reference to {node.per_each_recorded!r} with no "
-                    "producer in this effect",
+                    "a mana multiplier per recorded unit names its producer",
                     node=node,
                 )
-            payload["per_each"] = {"back_reference": node.per_each_recorded}
+            payload["per_each"] = spec
         if node.per_each is not None:
             # The count is taken at resolution through the one evaluator every
             # computed amount shares, so "creature with power 4 or greater you

@@ -112,10 +112,13 @@ class AddMana:
     #: there is nothing on a board to scan, and read as one the clause would
     #: count every card in the hand rather than the ones the seat revealed.
     #:
-    #: Carried resolved (the key) rather than as the printed words, exactly as
-    #: :class:`ast.ThatMuch` carries its own, so the lowering needs no second
-    #: copy of ``records._THIS_WAY_COUNTS``.
-    per_each_recorded: str | None = None
+    #: Carried as the :class:`ThatMuch` ``records._parse_for_each_this_way``
+    #: mints rather than as the bare key it holds, so the lowering spends it
+    #: through ``lowering/_amounts.recorded_count_spec`` — the one reader that
+    #: turns a recorded quantity into a count spec and demands its producer.
+    #: A string here would have been the same fact spelled twice, with the
+    #: producer gate written out a second time beside it.
+    per_each_recorded: "Amount | None" = None
     #: "Add one mana of any color **that a land an opponent controls could
     #: produce**." (Fellwar Stone.) Which board decides the colours available -
     #: ``"opponent_lands"`` today, and a value rather than a flag because the

@@ -116,7 +116,7 @@ def _parse_removed_counter_multiplier(stream: TokenStream) -> str | None:
     return None
 
 
-def _parse_recorded_multiplier(stream: TokenStream) -> str | None:
+def _parse_recorded_multiplier(stream: TokenStream) -> "ast.Amount | None":
     """``for each <noun> <participle> this way`` after a mana clause
     (Metalworker), as the record's key.
 
@@ -129,15 +129,11 @@ def _parse_recorded_multiplier(stream: TokenStream) -> str | None:
     The phrase is ``records._parse_for_each_this_way``'s — the same reader the
     life gain, the counter placement and the repeated return already spend this
     clause with — so a record added for one of them is a record every family
-    can read. What stays here is the unwrapping to a bare key, which is this
-    family's payload shape.
+    can read. The node travels whole rather than unwrapped to its key: the
+    lowering hands it to ``recorded_count_spec``, which is where a recorded
+    quantity becomes a count spec and where its producer is demanded.
     """
-    mark = stream.mark()
-    counted = _parse_for_each_this_way(stream)
-    if counted is not None and counted.source is not None and not counted.bonus:
-        return counted.source
-    stream.reset(mark)
-    return None
+    return _parse_for_each_this_way(stream)
 
 
 def _parse_combination_symbols(stream: TokenStream) -> tuple[str, ...]:

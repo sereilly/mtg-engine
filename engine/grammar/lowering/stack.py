@@ -17,6 +17,7 @@ from ...oracle_types import OracleInstruction
 from ...subject_filters import CARD_ONLY_FILTER_KEYS
 from .. import ast
 from ..errors import LoweringError
+from ._amounts import recorded_count_spec
 from .conditions import _lower_condition
 from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS, _restrictions_beyond, is_mana_value_x,
@@ -528,14 +529,17 @@ def _lower_counter_spell(
             # CR 608.2 takes the count then and the reveal in front of this
             # sentence has not happened when the line is lowered.
             #
-            # Refused without a producer, like every back-reference in this
-            # grammar: with no reveal the record reads 0, the offer becomes {0},
-            # every board covers it and the counter never counters — a card
-            # that reports supported and does nothing.
-            if node.unless_pays_per_recorded not in produced:
+            # Through ``recorded_count_spec``, the one reader that turns a
+            # recorded quantity into a count spec: the counter flow then asks
+            # ``count_from_payload`` for the number, which is the same
+            # evaluator the life gain and the mana addition spend this record
+            # on. Refused without a producer, like every back-reference in this
+            # grammar — with no reveal the record reads 0, the offer becomes
+            # {0}, every board covers it and the counter never counters.
+            spec = recorded_count_spec(node.unless_pays_per_recorded, produced, node)
+            if spec is None:
                 raise LoweringError(
-                    f"back-reference to {node.unless_pays_per_recorded!r} with "
-                    "no producer in this effect",
+                    "a counter price per recorded unit names its producer",
                     node=node,
                 )
             if "unless_pays_amount" not in payload:
@@ -547,7 +551,7 @@ def _lower_counter_spell(
                     "only a printed generic cost is paid per recorded unit",
                     node=node,
                 )
-            payload["unless_pays_per_recorded"] = node.unless_pays_per_recorded
+            payload["unless_pays_per_recorded"] = spec
     if node.unpaid_penalty is not None:
         if node.unless_pays is None:
             raise LoweringError("a decline penalty with no cost to decline", node=node)

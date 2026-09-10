@@ -203,12 +203,6 @@ def _parse_counter(stream: TokenStream) -> ast.Statement:
         # reason the alternatives are read after it — the three clauses are
         # about different things and the card prints this one against the cost.
         per_recorded = _parse_for_each_this_way(stream)
-        if per_recorded is not None and (
-            per_recorded.source is None or per_recorded.bonus
-        ):
-            raise stream.error(
-                "a counter cost per recorded unit names its producer"
-            )
         # "…pays {4} **instead**" (Lofty Denial). The word is the whole
         # difference between a second counter and a replacement amount for the
         # first, so it is what sets the flag. Refused on the chosen form:
@@ -223,9 +217,7 @@ def _parse_counter(stream: TokenStream) -> ast.Statement:
         return ast.CounterSpell(
             subject, unless_pays=payment,
             unless_pays_life=payment_life,
-            unless_pays_per_recorded=(
-                per_recorded.source if per_recorded is not None else None
-            ),
+            unless_pays_per_recorded=per_recorded,
             # "…pays {B} **or {3}**" (Thrull Wizard). Read here rather than
             # before "instead" above because the two clauses are about
             # different things: "instead" replaces an amount an earlier
