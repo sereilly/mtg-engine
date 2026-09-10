@@ -189,10 +189,12 @@ PRINTED_READ_EXEMPTIONS: dict[str, str] = {
     # sweeps that used to be covered by this entry read the effective card now.
     "mixins/game_ending.py": "Aura/Equipment/Saga/Role shapes",
     "mixins/helpers.py": "the Aura shape, plus a stack item's card colours",
-    # An object on the stack is not a permanent and has no layers applied to it
-    # here; its colour comes from the card (and a Lace's recolour, which
-    # `_stack_item_colors` folds in).
-    "mixins/stack/casting.py": "a spell on the stack, matched by its card",
+    # `mixins/stack/casting.py` used to be exempt here, on the reason "an object
+    # on the stack is not a permanent and has no layers applied to it". The
+    # first half is true and the second was the mistake this list is meant to
+    # catch: CR 613.1 applies the layers to an *object*. Its one read — the
+    # spell "counter target <colour> spell" falls back to — goes through
+    # `object_colors` now, so the entry is gone rather than reworded.
 }
 
 
@@ -208,6 +210,79 @@ def test_printed_type_and_colour_reads_stay_where_they_belong():
         "permanent.has_type / permanent.effective_colors, or add the file to "
         "PRINTED_READ_EXEMPTIONS with the reason it really means the card:\n"
         + "\n".join(f"  {f}:{n}: {t}" for f, n, t in offenders)
+    )
+
+
+# ---------------------------------------------------------------------------
+# The printed colour of an object that is *not* a permanent
+# ---------------------------------------------------------------------------
+#
+# The guard above deliberately skips a **bare** ``card.colors``: "a local named
+# ``card`` already *is* a CardDefinition, so reading its printed line is the
+# only thing it could mean." That is still true of a type line and it stopped
+# being true of a colour the day Celestial Dawn was ingested — "the same is
+# true for spells you control and nonland cards you own that aren't on the
+# battlefield" is a CR 613 layer-5 effect over objects with no permanent to
+# ask, so a card in a hand, a graveyard or on the stack has an effective colour
+# and ``engine/object_colors.py`` is where it is answered.
+#
+# The 6ED round found thirteen of these and left five. Every one it fixed was a
+# rule reading a characteristic the board had already changed, in silence: a
+# Gloom charged nothing for a Dark Ritual the Dawn had made white, a White
+# Knight refused to be targeted by a Terror that was no longer black, and
+# "whenever a player casts a white spell" never fired.
+#
+# Same shape as the list above and the same rule: it may only shrink. A new
+# entry is either a caller that genuinely has no game and no seat — which gets
+# the printed answer, the safe direction — or a read that should have gone
+# through ``object_colors``.
+
+# Both spellings, unlike the guard above: ``perm.card.colors`` and a bare
+# ``card.colors`` are the same wrong answer here, so the possessive half
+# overlaps that list on purpose and is the stricter of the two.
+_PRINTED_COLOR_READS = re.compile(r"\b\w*card\.colors\b")
+
+# file -> why the printed colours are the right question there.
+PRINTED_COLOR_EXEMPTIONS: dict[str, str] = {
+    # The layer system's own input, both of them: layer 5 is seeded from the
+    # printed colours and layer 1 copies them as a copiable value (CR 707.2a).
+    "layer_bridge.py": "the layer-5 seed",
+    "copies.py": "the copiable values a copy starts from",
+    # A weight over a card with no board in hand. AI tuning, not a rule.
+    "ai_valuation.py": "a valuation predicate with no game to ask",
+    # Known gaps, both named in the 6ED w1g3 report rather than left silent:
+    # `graveyard_card_matches` has nineteen call sites and takes neither a game
+    # nor the pile's owner, and `_exile_search_matches` is a staticmethod. Both
+    # want the seat threaded to them, which is its own round.
+    "handlers/_common.py": "graveyard_card_matches takes no game or owner yet",
+    "mixins/stack/choices.py": "_exile_search_matches is a staticmethod",
+}
+
+
+def test_printed_colour_reads_of_a_non_permanent_stay_where_they_belong():
+    """"What colour is this card?" is CR 613.1e's question wherever the card
+    is, and ``object_colors`` is the one place it is answered."""
+    offenders = [
+        hit for hit in _hits(_PRINTED_COLOR_READS, skip=set())
+        if hit[0].replace("\\", "/") not in PRINTED_COLOR_EXEMPTIONS
+    ]
+    assert not offenders, (
+        "printed card.colors read outside the exempt list — ask "
+        "engine.object_colors.object_colors / card_colors with the object's "
+        "seat, or add the file to PRINTED_COLOR_EXEMPTIONS with the reason it "
+        "really means the printed mana cost:\n"
+        + "\n".join(f"  {f}:{n}: {t}" for f, n, t in offenders)
+    )
+
+
+def test_no_printed_colour_exemption_has_gone_stale():
+    """The list may only shrink: an exemption for a file with no such read left
+    is how the next one gets in free."""
+    live = {hit[0].replace("\\", "/") for hit in _hits(_PRINTED_COLOR_READS, skip=set())}
+    stale = sorted(set(PRINTED_COLOR_EXEMPTIONS) - live)
+    assert not stale, (
+        f"exemptions with no printed colour read left: {stale} — drop them "
+        "from PRINTED_COLOR_EXEMPTIONS"
     )
 
 

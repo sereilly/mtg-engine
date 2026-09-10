@@ -569,7 +569,7 @@ def shields_damage(perm, *, dealt_to: bool, combat: bool) -> bool:
 # mutates, and only the second is reachable from an ``apply``.
 
 
-def _source_matches(game, shield: Shield, source) -> bool:
+def _source_matches(game, shield: Shield, source, seat: int | None = None) -> bool:
     """Whether *shield* answers damage from *source*.
 
     Two independent narrowings, both rechecked at damage time rather than
@@ -582,7 +582,7 @@ def _source_matches(game, shield: Shield, source) -> bool:
         if game._match_chosen_damage_source([shield.source], source) is None:
             return False
     if shield.colors and not set(shield.colors) & set(
-        damage_source_colors(game, source)
+        damage_source_colors(game, source, seat=seat)
     ):
         return False
     if shield.source_type is not None and not source_has_type(
@@ -750,7 +750,9 @@ def _live(game, event: dict, kind: str, *, chosen: bool | None = None):
             continue
         if chosen is not None and (shield.source is not None) != chosen:
             continue
-        if not _source_matches(game, shield, event.get("source")):
+        if not _source_matches(
+            game, shield, event.get("source"), event.get("source_seat")
+        ):
             continue
         if shield.targets_recipient and not _object_targets_recipient(game, recipient):
             # Checked here rather than in `_source_matches`, and the difference
@@ -981,7 +983,10 @@ def _applies_protection(game, event: dict) -> bool:
         return seat is not None and protected_from(game, seat, source)
     if not hasattr(recipient, "metadata"):
         return False
-    return game._is_protected_from(recipient, source, as_damage_source=True)
+    return game._is_protected_from(
+        recipient, source, as_damage_source=True,
+        seat=event.get("source_seat"),
+    )
 
 
 @prevention_effect(PROTECTION, applies=_applies_protection)
@@ -1187,7 +1192,9 @@ def _gain_life_if_rider_colour(
     if not shield.rider_colors:
         game._gain_life(holder, prevented, source_name=shield.source_name)
         return
-    if set(shield.rider_colors) & set(damage_source_colors(game, event.get("source"))):
+    if set(shield.rider_colors) & set(
+        damage_source_colors(game, event.get("source"), seat=event.get("source_seat"))
+    ):
         game._gain_life(holder, prevented, source_name=shield.source_name)
 
 
@@ -1247,7 +1254,9 @@ def _damage_the_source_controller(
         return
     if shield.rider_colors and not (
         set(shield.rider_colors)
-        & set(damage_source_colors(game, event.get("source")))
+        & set(damage_source_colors(
+            game, event.get("source"), seat=event.get("source_seat")
+        ))
     ):
         return
     seat = event.get("source_seat")
@@ -1629,7 +1638,9 @@ def _resolved_chosen_color(wanted: dict, holder) -> dict | None:
     return resolved
 
 
-def _source_shield_matches(game, source, recipient, wanted: dict) -> bool:
+def _source_shield_matches(
+    game, source, recipient, wanted: dict, seat: int | None = None
+) -> bool:
     """Whether *source* is in the class *wanted* names.
 
     Every key is checked, never a subset: a shield whose phrase this file
@@ -1650,7 +1661,7 @@ def _source_shield_matches(game, source, recipient, wanted: dict) -> bool:
         if not hasattr(source, "metadata") or not auras_attached_to(source):
             return False
     color = wanted.get("color")
-    if color and color not in damage_source_colors(game, source):
+    if color and color not in damage_source_colors(game, source, seat=seat):
         # CR 615.9 rechecks the recorded property when the damage would be
         # dealt, so a source that has changed colour since the Aura entered is
         # tested by what it is now.
@@ -1837,7 +1848,10 @@ def _applies_source_type_blanket(game, event: dict) -> bool:
         # that ignored the word would stop a Wall's ping as well, which is a
         # strictly larger effect than the card prints.
         return False
-    return _source_shield_matches(game, event.get("source"), event["recipient"], wanted)
+    return _source_shield_matches(
+        game, event.get("source"), event["recipient"], wanted,
+        event.get("source_seat"),
+    )
 
 
 def _source_class_label(wanted: dict) -> str:

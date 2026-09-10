@@ -71,7 +71,7 @@ def colorless_source_line(line: str) -> frozenset[str] | None:
     return frozenset(_COLOR_WORD_TO_SYMBOL[word] for word in words)
 
 
-def source_colors(source) -> tuple[str, ...]:
+def source_colors(source, *, game=None, seat: int | None = None) -> tuple[str, ...]:
     """The colours a damage source *is*, before any damage-source rewrite.
 
     A permanent answers through the CR 613 layer system, which is what makes a
@@ -81,8 +81,13 @@ def source_colors(source) -> tuple[str, ...]:
     **until end of turn**" spells wrote a second channel the shields never saw
     and a Circle of Protection: Red let the reddened creature through.
 
-    A spell has no permanent and no layers: its source is the card as printed
-    (CR 109.5), so the printed colours are the whole answer.
+    A spell has no permanent — and this used to say that therefore "the printed
+    colours are the whole answer", which was the same mistake one zone over.
+    CR 613.1 applies the layers to an **object**, and Celestial Dawn's second
+    sentence is a layer-5 effect whose scope is a seat's spells and cards. So a
+    spell answers through ``object_colors`` with the seat that controls it
+    (CR 109.5); a caller with no *game* or no seat gets the printed colours,
+    which is the answer it had before.
     """
     if source is None:
         return ()
@@ -90,7 +95,11 @@ def source_colors(source) -> tuple[str, ...]:
     if effective is not None:
         return tuple(sorted(effective))
     card = getattr(source, "card", source)
-    return tuple(getattr(card, "colors", ()) or ())
+    if game is None:
+        return tuple(getattr(card, "colors", ()) or ())
+    from .object_colors import card_colors
+
+    return card_colors(game, card, seat)
 
 
 @lru_cache(maxsize=None)
@@ -124,7 +133,7 @@ def colorless_source_colors(game) -> frozenset[str]:
     return frozenset(colours)
 
 
-def damage_source_colors(game, source) -> tuple[str, ...]:
+def damage_source_colors(game, source, *, seat: int | None = None) -> tuple[str, ...]:
     """The colours *source* has **as a source of damage** (CR 609.7b).
 
     The one answer every damage-colour question asks. A source none of the
@@ -132,8 +141,14 @@ def damage_source_colors(game, source) -> tuple[str, ...]:
     colorless *entirely* — "black and/or red permanents … are **colorless**
     sources", not "lose black and red", so a black-green source that deals
     damage is colorless and a shield answering to green no longer answers to it.
+
+    *seat* is whose the source is, for the spell half — every damage event
+    already carries it as ``source_seat`` (``damage_events.damage_source_seat``,
+    derived once per event), so the callers pass that rather than deriving a
+    second answer. Omitting it keeps the printed reading, which is what a
+    caller holding no event has.
     """
-    colours = source_colors(source)
+    colours = source_colors(source, game=game, seat=seat)
     if not colours:
         return colours
     rewritten = colorless_source_colors(game)

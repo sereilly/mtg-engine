@@ -1863,7 +1863,19 @@ class SpellCastingMixin:
                 color_filter: str | None = None
                 if color_match:
                     color_filter = _COLOR_WORD_TO_SYMBOL.get(color_match.group(1))
-                matching = [it for it in self.stack if not color_filter or color_filter in it.card.colors]
+                # The spell's colours through ``object_colors``, so a stack
+                # object Celestial Dawn has made white is what "counter target
+                # white spell" finds — the same reading `_shares_a_color`
+                # twenty lines up already makes for the other half of CR 105.
+                from ...object_colors import object_colors
+
+                matching = [
+                    it for it in self.stack
+                    if not color_filter
+                    or color_filter in object_colors(
+                        self, it.card, getattr(it, "caster_index", None)
+                    )
+                ]
                 if matching:
                     target_stack_item_val = matching[-1]
             spell_item = StackItem(
