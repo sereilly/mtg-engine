@@ -28,6 +28,7 @@ from fastapi.testclient import TestClient
 from engine import load_cards
 from engine.card_loader import manifest_set_path
 from engine.models import CardDefinition, Permanent
+from tests.helpers import app_js_function_body
 from web.app import app, store
 
 client = TestClient(app)
@@ -171,27 +172,10 @@ def test_the_cast_picker_offers_a_source_list_for_every_spell_that_asks():
 
 
 
-def _js_function_body(name: str) -> str:
-    """The source of one top-level ``function name(...) { ... }`` in app.js.
-
-    Read as text for the reason ``tests/ui/test_cast_target_kinds.py`` gives:
-    ``app.js`` is DOM-coupled and bare ``node`` cannot load it, and the thing
-    being checked is which cascade calls what — which is the real answer rather
-    than a paraphrase of it. The closing brace is the first one in column 0,
-    which is how every top-level function in that file ends.
-    """
-    from pathlib import Path
-    import re
-
-    source = (
-        Path(__file__).resolve().parents[2] / "web" / "static" / "app.js"
-    ).read_text(encoding="utf-8")
-    match = re.search(
-        r"^function " + re.escape(name) + r"\([^)]*\)\s*\{\n(.*?)^\}$",
-        source, re.S | re.M,
-    )
-    assert match is not None, f"{name} is gone or was renamed"
-    return match.group(1)
+#: Reading one walk's body out of ``app.js`` is asked by two modules now —
+#: this one, and ``tests/ui/test_cast_target_kinds.py``, which sweeps the pool
+#: for the *kinds* that reach these walks — so it lives in ``tests/helpers``.
+_js_function_body = app_js_function_body
 
 
 def test_both_cast_target_walks_reach_the_chosen_source_stage():

@@ -28,6 +28,7 @@ from engine.card_loader import load_cards, manifest_set_paths
 from engine.legality import targeting_instruction
 from engine.oracle import compile_card_oracle
 from engine.targeting import derive_cast_spec
+from tests.helpers import app_js_function_body
 from web.serialization import _mode_target_kind
 
 APP_JS = (Path(__file__).resolve().parents[2] / "web" / "static" / "app.js").read_text(
@@ -256,3 +257,107 @@ def test_the_prompt_requires_the_printed_number():
     assert "function severalTargetsAreExact(" in APP_JS
     assert "exact_targets" in APP_JS
     assert "severalExact && severalChosen < pendingCastTarget.maxTargets" in APP_JS
+
+
+# ---------------------------------------------------------------------------
+# A cast that asks for CR 615.8's chosen source as well as its targets
+# ---------------------------------------------------------------------------
+#
+# "A source of your choice" is not a target (CR 615.8, CR 609.7a), so a spell
+# that names one *and* a target announces two things down two channels: the
+# targets through the walk below, and the source through `source_seat` /
+# `source_permanent_index` / `source_stack_index`. The second is collected by
+# `startCastChosenSourceStage`, which the walk runs after its own last click.
+#
+# The stage sat inside `if (pending.castAction === "activate")` for four sets,
+# so every *cast* fell straight past it and armed a sourceless record — the
+# whole of SET_PLAYBOOK.md's "a cast cannot announce CR 615.8's chosen source".
+# That is fixed for the two walks the pool's two cards take, and the guard next
+# door pins both by name. What has no guard is the **kind**: `requires_source`
+# rides on top of whatever target description the card prints
+# (`targeting._off_target_chosen_source_redirect_spec` returns
+# `{**described, "requires_source": True}`), so the next card to print the
+# phrase decides its own walk. A "divided", "several", "stack" or "player"
+# description would route to a walk with no stage, and the failure is the
+# original one exactly: the cast completes, the record arms, and it answers to
+# every source instead of the one the player never got to choose.
+
+
+#: The ``app.js`` function that *sends* a cast body, per target kind — the last
+#: thing that runs after the walk's final click, and therefore the only place
+#: the source stage can be reached from.
+#:
+#: A kind absent from this map is the assertion, not an omission: a cast spec
+#: reporting `requires_source` on a kind nobody has wired is a card whose source
+#: is silently dropped, so it fails here naming the card rather than shipping.
+_WALK_THAT_SENDS_A_CAST = {
+    "any": "resolvePendingCastTarget",
+    "artifact": "resolvePendingCastTarget",
+    "creature": "resolvePendingCastTarget",
+    "graveyard_creature": "resolvePendingCastTarget",
+    "land": "resolvePendingCastTarget",
+    "permanent": "resolvePendingCastTarget",
+    "roles": "confirmRoleTargets",
+}
+
+
+def _casts_that_ask_for_a_source() -> dict[str, str]:
+    """``{card name: target kind}`` for every supported card in the pool whose
+    **cast** spec asks the player to choose a damage source."""
+    found = {}
+    for name, card in _POOL.items():
+        program = compile_card_oracle(card)
+        if not program.supported:
+            continue
+        spec = derive_cast_spec(card, program)
+        if spec and spec.get("requires_source"):
+            found[name] = spec["kind"]
+    return found
+
+
+def test_every_cast_that_asks_for_a_source_ends_in_a_walk_that_offers_one():
+    """The whole pool against the walks, rather than the two cards against the
+    two walks the guard next door names.
+
+    Read the failure message as "wire the stage into that walk", never as "add a
+    row here": a row is the claim that the walk already calls
+    ``startCastChosenSourceStage``, and the loop below checks that claim for
+    every kind the pool actually uses. A row for a kind no card reaches yet is
+    unchecked by construction — it becomes an assertion the day a card lands on
+    it, which is the point at which being wrong about it would cost something.
+    """
+    asking = _casts_that_ask_for_a_source()
+    assert asking, (
+        "no cast in the pool asks for a chosen source — the check below would "
+        "pass over nothing"
+    )
+
+    unwired = sorted(
+        f"{name} (kind {kind!r})"
+        for name, kind in asking.items()
+        if kind not in _WALK_THAT_SENDS_A_CAST
+    )
+    assert not unwired, (
+        "a cast spec carries requires_source on a target kind whose walk nobody "
+        "has wired to startCastChosenSourceStage, so the source is dropped and "
+        "the record answers to every source: " + "; ".join(unwired)
+    )
+
+    for kind in sorted(set(asking.values())):
+        walk = _WALK_THAT_SENDS_A_CAST[kind]
+        assert "startCastChosenSourceStage(" in app_js_function_body(walk), (
+            f"{walk} sends a {kind!r} cast without running the chosen-source "
+            f"stage, so {sorted(n for n, k in asking.items() if k == kind)} "
+            "arms a record answering to any source"
+        )
+
+
+def test_the_pool_still_exercises_both_walks():
+    """Both halves populated, because one card on one walk would let the loop
+    above pass while the other walk had lost its stage.
+
+    Named by *kind* rather than by card: a set that reprints Honorable Passage
+    under a new name still has an "any" cast asking for a source, and that is
+    what the assertion is about.
+    """
+    assert set(_casts_that_ask_for_a_source().values()) >= {"any", "roles"}

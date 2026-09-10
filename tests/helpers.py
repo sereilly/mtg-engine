@@ -204,3 +204,31 @@ def _resolve_top_stack(session_id: str, first_pass_seat: int):
     second = _pass_priority(session_id, 1 - first_pass_seat)
     assert second.status_code == 200
     return second
+
+
+def app_js_function_body(name: str) -> str:
+    """The source of one top-level ``function name(...) { ... }`` in app.js.
+
+    Read as text for the reason ``tests/ui/test_cast_target_kinds.py`` gives:
+    ``app.js`` is DOM-coupled and bare ``node`` cannot load it, and the thing
+    being checked is which cascade calls what — which is the real answer rather
+    than a paraphrase of it. The closing brace is the first one in column 0,
+    which is how every top-level function in that file ends.
+
+    Here rather than in one of the two ``tests/ui`` modules that ask it, because
+    both do: the chosen-source regression reads the two walks that send a cast,
+    and the target-kind sweep reads the same walks to ask whether every kind
+    that requests a source reaches the stage that collects one. A second copy is
+    how the two would come to disagree about what "the body of a walk" means.
+    """
+    import re
+
+    source = (
+        Path(__file__).resolve().parents[1] / "web" / "static" / "app.js"
+    ).read_text(encoding="utf-8")
+    match = re.search(
+        r"^function " + re.escape(name) + r"\([^)]*\)\s*\{\n(.*?)^\}$",
+        source, re.S | re.M,
+    )
+    assert match is not None, f"{name} is gone or was renamed"
+    return match.group(1)
