@@ -1765,6 +1765,15 @@ def _card_type_choice(ctx: PromptContext, choices: list) -> dict:
         "card_name": data.get("card_name", ""),
         "options": [str(option) for option in (data.get("options") or ())],
         "default_card_type": data.get("default_card_type"),
+        # What naming a type *does*, when the arming site can say it for every
+        # card that reaches it. The kind stopped being one card's the moment a
+        # second thing armed it: Storage Matrix asks the same question during
+        # the untap step and spends the answer quite differently, so the client
+        # cannot carry one sentence for all of them. Absent from
+        # ``choose_card_type``'s two arming branches, which serve Teferi's Realm
+        # and Turnabout from one place and would have to name a card to tell
+        # them apart — those fall back to the client's generic wording.
+        "detail": data.get("detail"),
     }
 
 

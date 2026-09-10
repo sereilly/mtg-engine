@@ -22,10 +22,12 @@ from ..control import LINKED_CONTROL_CONDITIONS
 from ..named_counters import counters_on
 from ..turn_state import record_turn_start_states
 from ..turn_state import attacked_during_seats_last_turn
+from ..handlers._common import CHOSEN_CARD_TYPE, chosen_card_type_filter
 from ..untap_restrictions import (
     LIMITED_SCOPES,
     SELF_DOESNT_UNTAP_PHRASE,
     SELF_MAY_KEEP_TAPPED_PHRASE,
+    TYPE_CHOICE_SCOPE,
     permanent_in_limited_scope,
     self_untap_attacked_last_turn,
     self_untap_counter_condition,
@@ -156,6 +158,46 @@ def _self_untap_blocked(game, permanent, seat: int) -> bool:
     return blocked
 
 
+#: Which untap step a source last asked its type choice for, as ``(turn,
+#: seat)``, recorded on the source permanent.
+#:
+#: The answer itself goes in ``CHOSEN_CARD_TYPE`` — the record every other
+#: "of the chosen type" reader already asks — but that key alone cannot say
+#: *when* it was chosen, and this choice is re-made every untap step by whoever
+#: is untapping. Without the stamp the arming would either re-ask (overwriting a
+#: human's answer with the default the moment the step resumed) or never re-ask
+#: (freezing turn one's answer into the rest of the game).
+UNTAP_TYPE_CHOICE_STAMP = "untap_type_choice_stamp"
+
+
+def _most_untappable_type(game, seat: int, options) -> str:
+    """The option that would untap the most of *seat*'s tapped permanents.
+
+    A real answer rather than the first item, which is what a chooser facing
+    this every untap step would actually name. Ties go to the printed order, so
+    the default is deterministic and a seed still reproduces a run — and an
+    empty board takes the first option, because every count is zero and the
+    sentence still demands a word.
+
+    Counted through the filter the prompt offers and the step then spends
+    (idiom 9), so the number the default is picked on is the number the step
+    will really untap.
+    """
+    best, best_count = str(options[0]), -1
+    for option in options:
+        described = chosen_card_type_filter(option)
+        if described is None:
+            continue
+        count = sum(
+            1
+            for perm in game.controlled_by(seat)
+            if perm.tapped and subject_matches(game, perm, described, observer=seat)
+        )
+        if count > best_count:
+            best, best_count = str(option), count
+    return best
+
+
 class UntapStepMixin:
     def _untap_constraints(self) -> dict[str, object]:
         """Aggregate every active untap restriction on any battlefield into
@@ -183,6 +225,13 @@ class UntapStepMixin:
         # matcher, which refuses every permanent — a restriction that quietly
         # blocks nothing.
         blocked: list[tuple[dict, int | None, object]] = []
+        # "…each player chooses artifact, creature, or land during their untap
+        # step. That player can untap only permanents of the chosen type this
+        # step." (Storage Matrix.) The third family, as ``(source, options)``.
+        # The *answer* is not here: it is recorded on the source permanent and
+        # re-made every untap step, so what this aggregate can say is only which
+        # sources are asking and what each offers.
+        type_choices: list[tuple[object, tuple[str, ...]]] = []
         for perm in self.all_permanents():
             # effective_card, so a CR 613 layer-3 text change (Sleight of Mind
             # rewriting the colour word) is applied before the restriction is
@@ -201,6 +250,9 @@ class UntapStepMixin:
                         limits.get(restriction.scope, restriction.limit),
                         restriction.limit,
                     )
+            elif restriction.scope == TYPE_CHOICE_SCOPE:
+                if restriction.chosen_type_options:
+                    type_choices.append((perm, restriction.chosen_type_options))
             elif restriction.blocked is not None:
                 blocked.append(
                     (restriction.blocked, self.controller_index_of(perm), perm)
@@ -209,13 +261,110 @@ class UntapStepMixin:
             "skip_all_source": skip_all_source,
             "limits": limits,
             "blocked": blocked,
+            "type_choices": type_choices,
         }
+
+    # -- The type the untapping player names (CR 502.3) ---------------------
+
+    def arm_untap_type_choices(self, player_index: int) -> bool:
+        """Ask *player_index* for each type choice their untap step owes.
+
+        CR 502.3 makes untapping a turn-based action, and this is a decision
+        *inside* it: the active player names a type before determining which
+        permanents untap, so the answer has to exist before the step does
+        anything. Returns whether an interactive seat now owes one — the web
+        layer stops the beginning phase on a True and picks it up when the
+        answer arrives (``web/turn_steps.py``).
+
+        Three things make this safe to call from either end. The **default is
+        stamped first**, so a headless or AI seat is never blocked and the step
+        always has a word to spend — ``card_type_choice``'s own arrangement, and
+        for its reason. The **stamp** makes it idempotent for one step, so
+        ``resolve_untap_step`` may call it again on the way through without
+        overwriting a human's answer. And a source that is *tapped* asks
+        nothing, because Storage Matrix's whole sentence is "as long as this
+        artifact is untapped" — a turn where it is tapped owes no choice at all.
+
+        This is the first prompt in the engine armed by a **turn-based action**
+        rather than by a resolution, and the registry carries it unchanged:
+        ``arm_pending_choice`` stamps ``_stack_item`` only while something is
+        resolving, so this one holds priority and holds no stack object — the
+        shape ``land_type_choice`` already documents for a prompt armed by a
+        permanent that is already on the battlefield.
+        """
+        asked = False
+        for source, options in self._untap_constraints()["type_choices"]:
+            stamp = (self.turn, player_index)
+            if source.metadata.get(UNTAP_TYPE_CHOICE_STAMP) == stamp:
+                continue
+            default = _most_untappable_type(self, player_index, options)
+            source.metadata[CHOSEN_CARD_TYPE] = default
+            source.metadata[UNTAP_TYPE_CHOICE_STAMP] = stamp
+            choice = self.arm_pending_choice(
+                "card_type_choice", player_index,
+                card_name=source.card.name, permanent=source,
+                options=list(options), default_card_type=default,
+                # What the answer does, for the prompt. Not a card's sentence
+                # but the *family's*, so any card printing this pair gets it —
+                # which is what lets it travel from a text-keyed table at all.
+                detail="you can untap only permanents of the chosen type this step.",
+                # Which prompt this is, for the untap step's *other* channel —
+                # see `get_untap_land_selection_options`. Private, so it never
+                # reaches a client.
+                _untap_step=True,
+            )
+            self.log.append(
+                f"{source.card.name}: {self.players[player_index].name} chooses a type "
+                f"({', '.join(options)})"
+            )
+            asked = asked or choice is not None
+        return asked
+
+    def untap_type_choice_owed(self, player_index: int) -> bool:
+        """Whether *player_index* still owes their untap step's type choice."""
+        return any(
+            choice.kind == "card_type_choice"
+            and choice.player_index == player_index
+            and choice.data.get("_untap_step")
+            for choice in self.pending_choices
+        )
+
+    def _chosen_untap_type_filters(self, constraints: dict) -> list[dict]:
+        """The filter payload each live type choice has been answered with.
+
+        A source with **no** recorded answer contributes nothing, and that
+        direction is the opposite of the block family's on purpose: this
+        sentence says a player can untap *only* permanents of the chosen type,
+        so a dropped narrowing untaps the whole board where a dropped block
+        would untap nothing. Neither is reachable while
+        :meth:`arm_untap_type_choices` stamps a default before it asks; the
+        fall-through is stated rather than left to whichever way the payload
+        happened to fail.
+        """
+        filters: list[dict] = []
+        for source, _options in constraints["type_choices"]:
+            word = source.metadata.get(CHOSEN_CARD_TYPE)
+            described = chosen_card_type_filter(word) if word else None
+            if described is not None:
+                filters.append(described)
+        return filters
 
     def get_untap_land_selection_options(self, player_index: int) -> dict[str, object] | None:
         """Untap-step selection constraints the controller must resolve: Winter Orb
         limits untapping to one *land*, Smoke to one *creature*. Returns combined
         candidate battlefield indices and the total number that may be untapped
         among the constrained types, or None if nothing is constrained."""
+        # Nothing to offer while the type choice is still owed: under Storage
+        # Matrix *and* Winter Orb, which permanents are even eligible depends on
+        # the word that has not been said yet, so the count prompt is computed
+        # after it. Here rather than in the web layer because the same answer is
+        # read by the action gate, the state payload and the deferral — and a
+        # gate that said "select untap lands before other actions" while the
+        # seat owed a type choice would refuse the only action that could
+        # answer it.
+        if self.untap_type_choice_owed(player_index):
+            return None
+
         player = self.players[player_index]
         constraints = self._untap_constraints()
 
@@ -301,6 +450,14 @@ class UntapStepMixin:
         self._set_phase_and_step(phase, step)
         self._on_step_or_phase_begin(phase, step)
         player = self.players[player_index]
+        # CR 502.3's "the active player determines which permanents they control
+        # will untap" — where a card makes that determination a *named type*,
+        # the naming happens here, before anything is untapped. Idempotent for
+        # one step, so the web layer's own call (which is what lets a human be
+        # asked at all) is not undone by this one; for every other caller this
+        # is where the default is stamped, which is why a headless run and the
+        # AI simulator need no untap-step code of their own.
+        self.arm_untap_type_choices(player_index)
         constraints = self._untap_constraints()
         # CR 702.26a's phasing event: before the active player untaps anything,
         # this player's phased-in permanents *with phasing* phase out and their
@@ -339,6 +496,7 @@ class UntapStepMixin:
 
         limits: dict[str, int] = dict(constraints["limits"])
         blocked = list(constraints["blocked"])
+        chosen_types = self._chosen_untap_type_filters(constraints)
 
         # The controller chooses which of the constrained permanents to untap
         # (CR 502 with a "can't untap more than N" restriction): Winter Orb
@@ -482,6 +640,22 @@ class UntapStepMixin:
                     self, permanent, described, observer=seat, source=source
                 )
                 for described, seat, source in blocked
+            ):
+                continue
+
+            # "That player can untap only permanents of the chosen type this
+            # step." (Storage Matrix.) The inverse of the block above — a
+            # permanent that does **not** answer to the named type stays tapped
+            # — and every live source narrows independently, so two Matrices
+            # answered differently leave the intersection, which is what "only"
+            # says twice. No ``source``: the word has already been resolved into
+            # an ordinary type filter by `_chosen_untap_type_filters`, so this
+            # is the same pure question the block family asks.
+            if any(
+                not subject_matches(
+                    self, permanent, described, observer=player_index
+                )
+                for described in chosen_types
             ):
                 continue
 

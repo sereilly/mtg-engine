@@ -139,6 +139,7 @@ from engine.land_play_allowance import land_play_line  # noqa: E402
 from engine.untap_restrictions import (  # noqa: E402
     self_untap_line,
     untap_restriction_for,
+    untap_type_choice_sentence,
 )
 from engine.draw_reveals import reveals_first_draw_line  # noqa: E402
 from engine.hand_size import hand_size_line  # noqa: E402
@@ -475,6 +476,17 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # `mixins/game_ending.py` enforces with.
     ("lethal_damage.py", single_source_lethal_line),
     ("untap_restrictions.py", lambda s: untap_restriction_for(s) is not None),
+    # "As long as this artifact is untapped, each player chooses artifact,
+    # creature, or land during their untap step. **That player can untap only
+    # permanents of the chosen type this step.**" (Storage Matrix.)
+    #
+    # **Both sentences, one channel.** The row above reads the *line*, which is
+    # where the support gate and the grammar ask; this census splits a line into
+    # sentences, and neither half of this pair is a restriction on its own — the
+    # first delimits the options and the second says what naming one does. So
+    # both are claimed by the reader that carries the pair out, rather than by
+    # inventing a second rule for the half that has no separate implementation.
+    ("untap_restrictions.py (untap type choice)", untap_type_choice_sentence),
     # The per-source untap lines — "this artifact doesn't untap during your
     # untap step" and "you may choose not to untap this artifact …" — which the
     # untap step reads off the permanent rather than compiling.
