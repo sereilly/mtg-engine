@@ -41,7 +41,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 6ED | 335 | 404 | 95.5% | 95.5% | 65.8% | 243 |
 | UDS | 143 | 204 | 91.7% | 91.2% | 65.7% | 121 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| MMQ *(measured)* | 335 | 465 | 80.6% | 74.2% | 51.2% | 215 |
+| MMQ *(measured)* | 335 | 465 | 82.4% | 76.8% | 53.8% | 227 |
 | **All (shipped)** | **5829** | **8560** | **90.6%** | **90.0%** | **60.7%** | **4401** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -54,9 +54,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 478 | 217 | expected a subject |  |
+| 474 | 213 | expected a subject |  |
 | 144 | 74 | unrecognized effect verb |  |
-| 119 | 63 | unconsumed text |  |
+| 115 | 59 | unconsumed text |  |
 | 42 | 25 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 16 | 14 | expected 'unless defending player controls' |  |
@@ -1175,6 +1175,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature attacks, it gets +0/+3 until end of turn.`
 - **Chariot of the Sun**
   - `{2}, {T}: Until end of turn, target creature you control gains flying and has base toughness 1.`
+- **Charmed Griffin**
+  - `When this creature enters, each other player may put an artifact or enchantment card onto the battlefield from their hand.`
 - **Child of Gaea**
   - `At the beginning of your upkeep, sacrifice this creature unless you pay {G}{G}.`
   - `{1}{G}: Regenerate this creature.`
@@ -2305,6 +2307,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Search your library for an artifact or enchantment card, reveal it, then shuffle and put that card on top.`
 - **Enraging Licid**
   - `{R}, {T}: This creature loses this ability and becomes an Aura enchantment with enchant creature. Attach it to target creature. You may pay {R} to end this effect.`
+- **Enslaved Horror**
+  - `When this creature enters, each other player may return a creature card from their graveyard to the battlefield.`
 - **Enslaved Scout**
   - `{2}: This creature gains mountainwalk until end of turn. (It can't be blocked as long as defending player controls a Mountain.)`
 - **Entropic Specter**
@@ -2395,6 +2399,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Destroy all creatures of the creature type of your choice.`
 - **Extortion**
   - `Look at target player's hand and choose up to two cards from it. That player discards those cards.`
+- **Extravagant Spirit**
+  - `At the beginning of your upkeep, sacrifice this creature unless you pay {1} for each card in your hand.`
 - **Extruder**
   - `Sacrifice an artifact: Put a +1/+1 counter on target creature.`
 - **Eye of Ramos**
@@ -2763,6 +2769,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Fortitude**
   - `Sacrifice a Forest: Regenerate enchanted creature.`
   - `When this Aura is put into a graveyard from the battlefield, return it to its owner's hand.`
+- **Foster**
+  - `Whenever a creature you control dies, you may pay {1}. If you do, reveal cards from the top of your library until you reveal a creature card. Put that card into your hand and the rest into your graveyard.`
 - **Foul Familiar**
   - `{B}, Pay 1 life: Return this creature to its owner's hand.`
 - **Foul Imp**
@@ -2884,6 +2892,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Draw a card.`
 - **Gamble**
   - `Search your library for a card, put that card into your hand, discard a card at random, then shuffle.`
+- **Game Preserve**
+  - `At the beginning of your upkeep, each player reveals the top card of their library. If all cards revealed this way are creature cards, put those cards onto the battlefield under their owners' control.`
 - **Game of Chaos**
   - `Flip a coin. If you win the flip, you gain 1 life and target opponent loses 1 life, and you decide whether to flip again. If you lose the flip, you lose 1 life and that opponent gains 1 life, and that player decides whether to flip again. Double the life stakes with each flip.`
   - `Flip a coin. If you win the flip, you gain 1 life and target opponent loses 1 life, and you decide whether to flip again. If you lose the flip, you lose 1 life and that opponent gains 1 life, and that player decides whether to flip again. Double the life stakes with each flip.`
@@ -3738,6 +3748,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{0}: Untap enchanted creature. Activate only during your turn and only once each turn.`
   - `{0}: Untap enchanted creature. Activate only during your turn and only once each turn.`
   - `{0}: Untap enchanted creature. Activate only during your turn and only once each turn.`
+- **Insubordination**
+  - `At the beginning of the end step of enchanted creature's controller, this Aura deals 2 damage to that player unless that creature attacked this turn.`
 - **Interdict**
   - `Counter target activated ability from an artifact, creature, enchantment, or land. That permanent's activated abilities can't be activated this turn. (Mana abilities can't be targeted.)`
   - `Draw a card.`
@@ -4259,6 +4271,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Untap target land.`
   - `{T}: Untap target land.`
   - `{T}: Untap target land.`
+- **Ley Line**
+  - `At the beginning of each player's upkeep, that player may put a +1/+1 counter on target creature of their choice.`
 - **Library Larcenist**
   - `Whenever this creature attacks, draw a card.`
 - **Library of Alexandria**
@@ -4656,6 +4670,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}, {T}, Discard a card: Regenerate target creature.`
 - **Meditate**
   - `Draw four cards. You skip your next turn.`
+- **Megatherium**
+  - `When this creature enters, sacrifice it unless you pay {1} for each card in your hand.`
 - **Megrim**
   - `Whenever an opponent discards a card, this enchantment deals 2 damage to that player.`
 - **Melee**
@@ -4673,6 +4689,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Counter target spell. If that spell is countered this way, put it on top of its owner's library instead of into that player's graveyard.`
 - **Mental Discipline**
   - `{1}{U}, Discard a card: Draw a card.`
+- **Mercadian Atlas**
+  - `At the beginning of your end step, if you didn't play a land this turn, you may draw a card.`
 - **Mercadian Bazaar**
   - `{T}: Put a storage counter on this land.`
   - `{T}, Remove any number of storage counters from this land: Add {R} for each storage counter removed this way.`
@@ -5034,6 +5052,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Needle Storm deals 4 damage to each creature with flying.`
 - **Nekrataal**
   - `When this creature enters, destroy target nonartifact, nonblack creature. That creature can't be regenerated.`
+- **Nether Spirit**
+  - `At the beginning of your upkeep, if this card is the only creature card in your graveyard, you may return this card to the battlefield.`
 - **Nether Void**
   - `Whenever a player casts a spell, counter it unless that player pays {3}.`
 - **Nettletooth Djinn**
@@ -8012,6 +8032,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}{W}: Target nonattacking, nonblocking creature gets +0/+2 until end of turn.`
 - **Unmask**
   - `Target player reveals their hand. You choose a nonland card from it. That player discards that card.`
+- **Unnatural Hunger**
+  - `At the beginning of the upkeep of enchanted creature's controller, this Aura deals damage equal to that creature's power to that player unless they sacrifice another creature of their choice.`
 - **Unnerve**
   - `Each opponent discards two cards.`
 - **Unseen Walker**
@@ -8621,6 +8643,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{B}{B}: This creature gains swampwalk until end of turn and deals 2 damage to you. (It can't be blocked as long as defending player controls a Swamp.)`
 - **Worn Powerstone**
   - `{T}: Add {C}{C}.`
+- **Worry Beads**
+  - `At the beginning of each player's upkeep, that player mills a card.`
 - **Worthy Cause**
   - `You gain life equal to the sacrificed creature's toughness.`
 - **Wrath of God**

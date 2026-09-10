@@ -38,6 +38,8 @@ from .records import (AdditionalCostWasPaid, AttackedOrBlockedThisCombat,
                       DamagedBySourceDiedThisTurn, DealtDamageThisTurn,
                       SeatCastSpellThisTurn,
                       SeatCastSpellThisTurn,
+                      SeatPlayedLandThisTurn,
+                      AllRevealedTopCardsAre,
     SeatWasDealtDamageThisTurn,
                       DestroyedTargetWas, DestroyedThisWay, DiedThisTurn,
                       DiedThisWay, DiscardedCardWas, DiscardedThisWay,
@@ -539,6 +541,32 @@ class SelfInGraveyardWithCardsAbove:
     directly: bool = False
 
 
+@dataclass(frozen=True)
+class SelfIsOnlyCardOfTypeInGraveyard:
+    """"if **this card is the only creature card in your graveyard**"
+    (Nether Spirit).
+
+    :class:`SelfInGraveyardWithCardsAbove`'s sibling, and it says both of that
+    node's two things:
+
+    * **Where the ability functions** — CR 113.6b. The effect behind it prints
+      no source zone ("you may return this card to the battlefield"), so this
+      clause is the only place the card names a graveyard at all, and the
+      lowering exposes the same derived ``functions_from`` key.
+    * **What else is in the pile.** Not a position this time (CR 404.3's order
+      says nothing here) but a *census*: exactly one card of the printed type is
+      in that graveyard and it is this one. A count alone would be a different
+      question — a graveyard holding two copies of this same card has one of
+      them "the only creature card" by no reading — so the identity is part of
+      the test rather than assumed from the count.
+
+    ``card_type`` is the printed noun, so a card printing "the only land card in
+    your graveyard" is data rather than a second production.
+    """
+
+    card_type: str
+
+
 #: Every node a condition clause can be. **Complete**, and held so by
 #: ``tests/engine/test_grammar_layering.py``: it was a hand-maintained list that
 #: had drifted twelve entries behind the modules it names, which is the shape
@@ -565,6 +593,7 @@ Condition = Union[
     RawCondition,
     SameNamedObject,
     SelfInGraveyardWithCardsAbove,
+    SelfIsOnlyCardOfTypeInGraveyard,
     AttachedCounterCount,
     SourceCounterCount,
     SourceExiled,
@@ -586,6 +615,8 @@ Condition = Union[
     DamagedBySourceDiedThisTurn,
     DealtDamageThisTurn,
     SeatCastSpellThisTurn,
+    SeatPlayedLandThisTurn,
+    AllRevealedTopCardsAre,
     SeatWasDealtDamageThisTurn,
     DestroyedTargetWas,
     DestroyedThisWay,

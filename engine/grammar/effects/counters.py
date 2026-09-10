@@ -27,7 +27,7 @@ from ..stream import TokenStream
 from ..vocabulary import CARD_TYPES, COLOR_WORDS
 from ..nouns import parse_object_filter
 from ..phrases import (_expect_counter_kind, _parse_for_each,
-                       accept_graveyard_position,
+                       accept_graveyard_position, accept_zone_possessive,
                        is_pt_counter, parse_pair_ordinal_subject,
                        _parse_that_object)
 
@@ -220,6 +220,13 @@ def _parse_put_counter(stream: TokenStream) -> ast.Statement:
             # "under your control" was not, so one sentence cannot claim both.
             owners = not under and bool(
                 stream.accept_phrase("under", "its", "owner", "'s", "control")
+                # "…under **their owners'** control." (Game Preserve.) The
+                # plural of the same clause, for a sentence putting several
+                # cards onto several battlefields at once. One token, not
+                # three: the lexer splits a singular "'s" off its noun and
+                # leaves a plural's bare apostrophe attached (the same reading
+                # ``zones.accept_zone_scope`` records for "all players'").
+                or stream.accept_phrase("under", "their", "owners'", "control")
             )
             # "…onto the battlefield **attached to this creature**." (Academy
             # Researchers.) CR 303.4f attaches the Aura as it enters, so the
@@ -249,6 +256,39 @@ def _parse_put_counter(stream: TokenStream) -> ast.Statement:
                     attached = True
                 else:
                     stream.reset(host)
+            # "…put an artifact or enchantment card onto the battlefield
+            # **from their hand**." (Charmed Griffin.) The source zone printed
+            # *after* the destination instead of inside the noun phrase — the
+            # same sentence Flash prints the other way round ("put a creature
+            # card **from your hand** onto the battlefield"), which the noun
+            # parser's own postmodifier already reads. One word order was a
+            # production and the other was unconsumed text.
+            #
+            # Folded back onto the noun phrase rather than carried as a field
+            # on this node, so the two orders produce the **same** AST and every
+            # lowering, gate and coverage instrument downstream sees one
+            # sentence. Only when the noun phrase named no zone of its own: a
+            # phrase saying both would be two answers to "where does it come
+            # from", and the second one would quietly win.
+            trailing = stream.mark()
+            if (
+                isinstance(moved, ast.TargetSpec)
+                and moved.filter.zone == "battlefield"
+                and stream.accept_word("from")
+            ):
+                whose = accept_zone_possessive(stream)
+                noun = stream.peek_word()
+                if whose is not None and noun in ("hand", "graveyard", "library"):
+                    stream.advance()
+                    moved = dataclasses.replace(
+                        moved,
+                        filter=dataclasses.replace(
+                            moved.filter, zone=noun, zone_owner=whose,
+                            is_card=True,
+                        ),
+                    )
+                else:
+                    stream.reset(trailing)
             return ast.PutOntoBattlefield(
                 moved, under_your_control=under, under_owners_control=owners,
                 attached_to_source=attached,

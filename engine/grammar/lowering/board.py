@@ -37,7 +37,7 @@ from ._sacrifices import _forced_sacrifice_filter
 from ._common import (_describe_targets, _filter_payload,
                       _is_enchanted, _is_source, _is_target,
                       player_deed_payload)
-from ._events import (CHOSEN_PLAYER, LOOP_BOUND_OBJECT, OTHER_CHOSEN_PERMANENT, _EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER, names_attached_permanent, CHOSEN_PERMANENT, _RECORDED_PERMANENTS, _back_reference_payload)
+from ._events import (ATTACHED_SUBJECT_EVENTS, CHOSEN_PLAYER, LOOP_BOUND_OBJECT, OTHER_CHOSEN_PERMANENT, _EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER, names_attached_permanent, CHOSEN_PERMANENT, _RECORDED_PERMANENTS, _back_reference_payload)
 from ._delays import (_BOUND_OBJECT_DELAYED_EVENTS)
 
 
@@ -452,7 +452,28 @@ def _lower_sacrifice(
             # that only ever passed one.
             payload["count"] = node.subject.count
         if node.subject.filter.other_than_source:
-            payload["exclude_self"] = True
+            # "…unless they sacrifice **another** creature of their choice."
+            # (Unnatural Hunger.) Under a trigger printed about the attached
+            # permanent (:data:`ATTACHED_SUBJECT_EVENTS`) the antecedent of
+            # "another" is that permanent, not the ability's source — an Aura
+            # is not a creature, so ``exclude_self`` on a creature filter rules
+            # out nothing at all and the enchanted creature is offered as its
+            # own way out. Silent, and strictly in the card's favour.
+            #
+            # It rides the **same** ``exclude`` channel ``exclude_self`` does
+            # rather than a filter key, because that channel is the one already
+            # threaded end to end: the takeability gate, the inline resolution
+            # and the queued prompt all compare it by identity, where a filter
+            # key would need ``subject_matches`` to be handed the ability's
+            # source and the sacrifice readers do not pass one. Which permanent
+            # to leave out is the only thing that differs.
+            #
+            # Pool-wide this reaches exactly one card, measured at the round
+            # rather than assumed.
+            payload[
+                "exclude_attached_host" if event in ATTACHED_SUBJECT_EVENTS
+                else "exclude_self"
+            ] = True
         if node.player.kind == "that_player":
             # "At the beginning of each player's upkeep, **that player**
             # sacrifices a land of their choice." (Mana Vortex.) The seat the

@@ -516,6 +516,20 @@ def _characteristic_of_object(
         if cast_card is None:
             return 0
         return max(0, int(getattr(cast_card, "cmc", 0) or 0) + offset)
+    if spec.get("object") == "attached":
+        # "…deals damage equal to **that creature's power**…" (Unnatural
+        # Hunger). The permanent the ability's source is attached to, through
+        # the one reader that already answers "what is this Aura on" including
+        # the last-known-information case (CR 603.10) — the Aura may have gone
+        # to a graveyard between the trigger and its resolution.
+        host = attached_host(game, context.source_permanent)
+        if host is None:
+            return 0
+        if name == "power":
+            return max(0, int(host.effective_power) + offset)
+        if name == "toughness":
+            return max(0, int(host.effective_toughness) + offset)
+        return max(0, int(getattr(host.card, "cmc", 0) or 0) + offset)
     # "…where X is the power of **that blocked creature**" (Glyph of Delusion).
     # A sentence naming two targets of different kinds cannot be asked for "the
     # target": the clause said which, the lowering matched the printed words to
@@ -1060,6 +1074,19 @@ def _card_matches_filter(card, filt: dict, *, game=None, owner=None) -> bool:
     """
     types, subtypes = printed_shape(card)
     wanted = filt.get("type_filter")
+    if wanted == "artifact_or_enchantment":
+        # "an **artifact or enchantment** card" (Charmed Griffin). The one
+        # ``type_filter`` value that is not a printed type: the permanent
+        # matcher has special-cased it since it was introduced and this reader
+        # never did, so the same two printed words matched every permanent on a
+        # battlefield and **no card in any zone**. A filter key one matcher
+        # honours and the other silently drops is the asymmetric-gate class,
+        # and it fails in the quiet direction — the effect reports "nothing
+        # qualifies" over a hand that is full of qualifying cards.
+        #
+        # Rewritten into the union spelling below rather than answered here, so
+        # the exclusions and the rest of the filter still run.
+        wanted = ("artifact", "enchantment")
     wanted_types = tuple(wanted) if isinstance(wanted, (list, tuple)) else ((wanted,) if wanted else ())
     if wanted_types and not any(t in types for t in wanted_types):
         return False

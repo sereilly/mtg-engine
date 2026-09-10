@@ -256,6 +256,72 @@ def lower_described_return(
                 _graveyard_to_hand_payload(subject.filter),
             ),
         )
+    # "…may return **a creature card** from their graveyard **to the
+    # battlefield**." (Enslaved Horror.) The chosen-but-not-targeted graveyard
+    # pick two branches up with the other destination — CR 115.1 again: the card
+    # is in the chooser's own graveyard, so there is nothing for targeting to
+    # protect and the picker the targeted spelling uses is the same picker.
+    #
+    # It lowers to the open-zone pick Reincarnation already reaches rather than
+    # a kind of its own: ``search_library`` over ``zones=("graveyard",)`` with
+    # ``destination="battlefield"`` *is* this effect, and the seat comes from
+    # whoever answers the prompt — which under "each other player may …" is the
+    # offered seat, because ``control_flow._offer_to_seat`` rebinds the caster
+    # for every actor in ``_EACH_ACTORS``.
+    #
+    # Held to one printed card type and no other narrowing, exactly as the
+    # Reincarnation branch below is: the pick's own predicate reads a type, and
+    # an adjective admitted here would be a return wider than the sentence.
+    if (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "a"
+        and subject.count == 1
+        and not subject.targeted
+        and subject.filter.is_card
+        and subject.filter.zone == "graveyard"
+        and subject.filter.zone_owner is not None
+        # Two spellings of one pile. "Your graveyard" is `you`; "**their**
+        # graveyard" under "each other player may …" arrives as `owner`, which
+        # names the same zone — CR 404.2 puts every card in its owner's
+        # graveyard, so for a card already there the two words are one seat.
+        # (They are not one *node* today: "each player … their graveyard" reads
+        # `you` and "each **other** player … their graveyard" reads `owner`,
+        # which is a fork in the possessive reader rather than a difference the
+        # cards print.)
+        and subject.filter.zone_owner.kind in ("you", "owner")
+        and node.to.name == "battlefield"
+        and node.to.owner is None
+        and node.under_control_of is None
+        and (
+            node.from_zone is None
+            or (
+                node.from_zone.name == "graveyard"
+                and node.from_zone.owner is not None
+                and node.from_zone.owner.kind == subject.filter.zone_owner.kind
+            )
+        )
+    ):
+        if (
+            node.entering_tapped
+            or node.repetitions
+            or node.also_stack
+            or node.gaining_abilities
+            or node.attached_to
+            or _reads_no_return_restriction(subject.filter)
+        ):
+            raise LoweringError("no return handler honours this restriction", node=node)
+        if len(subject.filter.card_types) != 1:
+            raise LoweringError("the graveyard pick reads one card type", node=node)
+        return (
+            OracleInstruction(
+                "search_library", "",
+                {
+                    "zones": ("graveyard",),
+                    "card_type": subject.filter.card_types[0],
+                    "destination": "battlefield",
+                },
+            ),
+        )
     # "Return a creature card from **its owner's** graveyard to the battlefield
     # **under the control of that creature's owner**." (Reincarnation.)
     #

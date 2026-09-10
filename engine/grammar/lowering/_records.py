@@ -33,6 +33,7 @@ from ...oracle_types import (CHOSEN_COLOR_THIS_WAY,
                              MILLED_THIS_WAY,
                              REVEALED_HAND_CARDS,
                              REVEALED_THIS_WAY,
+                             REVEALED_TOP_CARDS_BY_SEAT,
                              SEARCHED_PERMANENTS,
                              COUNTERED_ABILITY_SOURCE,
                              COUNTERED_SPELL_CONTROLLER,
@@ -845,6 +846,14 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
 #: already writes.
 _PRODUCES_FOR_PAYLOAD: dict[str, tuple[str, object, str]] = {
     "search_library": ("destination", "exile", "exiled_cards"),
+    # "**Each player** reveals the top card of their library." (Game Preserve.)
+    # A row here rather than in ``_PRODUCES`` because it is not true of every
+    # step of the kind: "reveal the top card of your library" opens one library
+    # and records one card under ``revealed_card``, and declaring the per-seat
+    # map flat would admit a one-library reveal followed by "put **those
+    # cards** onto the battlefield under their owners' control" — a sentence
+    # that would compile clean and put nothing.
+    "reveal_top_of_library": ("whose", "each_player", REVEALED_TOP_CARDS_BY_SEAT),
     # "**Choose a source you control** and flip a coin." (Desperate Gambit.) The
     # same instruction Enchantment Alteration's host pick uses, sending its
     # answer somewhere else — and where it sends it is exactly what the

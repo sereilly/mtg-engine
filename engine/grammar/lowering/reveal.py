@@ -283,6 +283,18 @@ def _lower_put_revealed_card_onto_battlefield(
     """
     if "revealed_card" not in produced:
         return ()
+    # "…put **those cards** onto the battlefield under their owners' control."
+    # (Game Preserve.) The plural back-reference, which is a different record —
+    # one card per seat rather than the single ``revealed_card`` this branch
+    # reads — and so a different handler. Declined rather than refused, so the
+    # battlefield lowering keeps its reading: a per-player reveal writes *both*
+    # records, and without this the singular reading claimed the plural
+    # sentence and failed it on the owner clause.
+    if (
+        isinstance(node.target, ast.TargetSpec)
+        and node.target.quantifier == "those"
+    ):
+        return ()
     if node.under_owners_control or node.gains or node.sacrifice_when_control_lost:
         raise LoweringError(
             "the revealed card enters under its owner's control with no rider",

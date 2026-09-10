@@ -50,6 +50,10 @@ to be `categories` reaching up into a family for its rows.
 ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     "bin_revealed_card": "zones",
     "put_revealed_card_onto_battlefield": "zones",
+    # "…put **those cards** onto the battlefield under their owners' control."
+    # (Game Preserve.) The plural of the row above — one card per seat, each
+    # going back to the library it came off — and a zone move for its reason.
+    "put_revealed_top_cards_onto_battlefield": "zones",
     "reveal_top_opponent_chooses": "zones",
     # Wood Sage's sorted reveal, beside the pick above: what it touches is a
     # library and two zones the pile is split between.

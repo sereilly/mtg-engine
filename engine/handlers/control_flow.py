@@ -30,7 +30,7 @@ from ..exiled_records import is_live, record_in_context, source_object
 from ..named_counters import counters_on
 from ..oracle_types import (CHOSEN_CARD_TYPE_THIS_WAY, CHOSEN_COLOR_THIS_WAY,
                             CHOSEN_NUMBER_THIS_WAY, MANA_PAID_BY_SEAT,
-                            REVEALED_HAND_CARDS,
+                            REVEALED_HAND_CARDS, REVEALED_TOP_CARDS_BY_SEAT,
                             MILLED_THIS_WAY,
                             PER_OBJECT_SEAT_RECORDS,
                             OracleInstruction)
@@ -299,6 +299,35 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         return bool(
             positions_satisfying(context.caster.graveyard, context.card, payload)
         )
+
+    if kind == "self_only_card_of_type_in_graveyard":
+        # "…if **this card is the only creature card in your graveyard**"
+        # (Nether Spirit). CR 603.4's re-check, asked of the pile as it stands
+        # now — the ability fired at the start of the upkeep and anything may
+        # have reached the graveyard since.
+        #
+        # **The identity is half the test.** A count of one is a different
+        # question: a graveyard holding one creature card that is some *other*
+        # creature satisfies "exactly one" and satisfies nothing this card says.
+        # Two copies of one card are the same immutable object, so the
+        # comparison is `is` against every entry rather than a name match — and
+        # a graveyard holding two of them has two creature cards in it and
+        # answers False, which is what the card says.
+        #
+        # "Your" graveyard is the ability's controller's, and CR 108.4a makes
+        # that the owner for a card nobody controls — the seat the graveyard
+        # scan enqueued the trigger under, so ``context.caster`` is already
+        # right.
+        from ..graveyard_order import is_printed_type
+
+        if context.caster is None or context.card is None:
+            return False
+        wanted = str(payload.get("card_type", "creature"))
+        matching = [
+            held for held in context.caster.graveyard
+            if is_printed_type(held, wanted)
+        ]
+        return len(matching) == 1 and matching[0] is context.card
 
     if kind == "destroyed_target_was":
         # "Destroy target land. **If that land was a snow land**, …" (Icequake,
@@ -1321,6 +1350,65 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         )
         return (not cast) if payload.get("negated") else cast
 
+    if kind == "all_revealed_top_cards_are":
+        # "…**if all cards revealed this way are creature cards**…" (Game
+        # Preserve.) The per-seat map the reveal in front of this wrote
+        # (CR 608.2h), never a re-read of the libraries: CR 701.20a moved
+        # nothing, so a second look would find the same cards only until
+        # something else touched a deck — and would say nothing about which of
+        # them this sentence is about.
+        #
+        # **An empty record is False**, which is ``all_of``'s rule above and
+        # its reason: a universal over nothing is vacuously true, and answering
+        # true here would run the effect behind it over an empty set. It is
+        # also the honest reading of the card — with every library empty
+        # nothing was revealed, so there is nothing to put onto the
+        # battlefield.
+        from ..graveyard_order import is_printed_type
+
+        revealed = context.results.get(REVEALED_TOP_CARDS_BY_SEAT) or {}
+        wanted = str(payload.get("card_type", "creature"))
+        return bool(revealed) and all(
+            is_printed_type(card, wanted) for card in revealed.values()
+        )
+
+    if kind == "seat_played_land_this_turn":
+        # "At the beginning of your end step, **if you didn't play a land this
+        # turn**, you may draw a card." (Mercadian Atlas.) CR 603.4's
+        # intervening-if, read off the per-seat per-turn tally the land-play
+        # path writes (``Game.lands_played_this_turn``, bumped in
+        # ``mixins/stack/resolution.py`` and cleared by ``turn_management``) —
+        # never off the board, because by the end step a land played this turn
+        # is an ordinary permanent and says nothing about how it got there.
+        #
+        # Whose tally is payload, exactly as the cast record above: "you" is the
+        # ability's controller (CR 109.5, ``context.caster`` for a triggered
+        # ability as much as for a spell) and "that player" the seat the firing
+        # event named. A seat the words name and nothing recorded answers False
+        # rather than guessing, which is that clause's rule and its reason.
+        who = payload.get("who")
+        if who == "that_player":
+            seat = (context.trigger_context or {}).get("event_subject_player")
+            if not isinstance(seat, int):
+                return False
+        elif who == "an_opponent":
+            if context.caster not in game.players:
+                return False
+            seats = list(game.opponents_of(game.players.index(context.caster)))
+            played = any(
+                int(game.lands_played_this_turn.get(other, 0) or 0) > 0
+                for other in seats
+            )
+            return (not played) if payload.get("negated") else played
+        else:
+            if context.caster not in game.players:
+                return False
+            seat = game.players.index(context.caster)
+        if not (0 <= seat < len(game.players)):
+            return False
+        played = int(game.lands_played_this_turn.get(seat, 0) or 0) > 0
+        return (not played) if payload.get("negated") else played
+
     if kind == "seat_dealt_damage_this_turn":
         # "…unless **one of their opponents was dealt damage this turn**"
         # (Antagonism). The turn's damage ledger, never a read of a life total:
@@ -1889,6 +1977,16 @@ def _action_is_takeable(
 
     if instruction.kind == "sacrifice_matching_permanent":
         exclude = source if instruction.payload.get("exclude_self") else None
+        if instruction.payload.get("exclude_attached_host"):
+            # "…unless they sacrifice **another** creature of their choice."
+            # (Unnatural Hunger.) The permanent "another" is measured against
+            # is the Aura's host, not the Aura — and this gate has to leave out
+            # exactly what the charge will, or the offer is made for a price
+            # the handler then refuses to take: accepted, nothing sacrificed,
+            # and the printed penalty skipped.
+            from ._common import attached_host
+
+            exclude = attached_host(game, source)
         # The printed count, not merely "at least one": "unless you sacrifice
         # **two** Swamps" (Mold Demon) is an offer a player with one Swamp
         # cannot take, and accepting it would run the cost half-paid and skip
@@ -2635,6 +2733,24 @@ def _offer_to_seat(
     # Devotee) is a dict, not the number 2, because a payment that counted to a
     # number could only ever collect generic mana.
     cost = _resolved_cost(instruction.payload.get("cost"), context, game)
+    # "…unless you pay {1} **for each card in your hand**." (Extravagant
+    # Spirit, Megatherium.) The printed price times a count taken **now**
+    # (CR 608.2), through the one evaluator every computed amount in this
+    # engine goes through — so "for each card in your hand" means here what it
+    # means in a damage amount or a draw.
+    #
+    # A count of zero is a cost of nothing, and that is the rule rather than an
+    # edge case: an empty hand makes the toll {0}, which its payer can always
+    # cover, so the creature stays. The dict is emptied rather than left with
+    # zero-valued pips, because ``_player_can_pay_optional`` and the prompt both
+    # read "no cost" off emptiness.
+    per_each = instruction.payload.get("cost_per")
+    if per_each is not None and cost:
+        from ._common import count_from_payload
+
+        times = max(0, count_from_payload(game, context, dict(per_each)))
+        cost = {symbol: amount * times for symbol, amount in cost.items()}
+        cost = {symbol: amount for symbol, amount in cost.items() if amount}
     on_accept = _steps(instruction, "action") + _steps(instruction, "then")
     on_decline = _steps(instruction, "otherwise")
     # CR 603.12: a *separate* ability the payment creates, so it is carried

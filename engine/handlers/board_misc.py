@@ -2599,6 +2599,20 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
     """
     caster_index = game.players.index(context.caster)
     exclude = context.source_permanent if instruction.payload.get("exclude_self") else None
+    if instruction.payload.get("exclude_attached_host"):
+        # "…unless they sacrifice **another** creature of their choice."
+        # (Unnatural Hunger.) On an Aura's own trigger the antecedent of
+        # "another" is the *enchanted* permanent, not the ability's source: an
+        # Aura is not a creature, so excluding it rules out nothing and the
+        # enchanted creature is offered as its own way out of the damage.
+        #
+        # The same ``exclude`` channel the source spelling above uses, so the
+        # takeability gate, the inline resolution and the queued prompt all get
+        # it for free — and through ``attached_host``, which answers the
+        # last-known-information case (CR 603.10) the Aura may already be in.
+        from ._common import attached_host
+
+        exclude = attached_host(game, context.source_permanent)
     who = instruction.payload.get("who")
     if who is None:
         payers = [caster_index]

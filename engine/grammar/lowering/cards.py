@@ -428,10 +428,24 @@ def _lower_mill(
         # the resolution was already carrying: this phrase reads a seat the
         # fire site froze or it refuses, which is the contract `_events.py`
         # states and the one the damage family's own fall-through breaks.
+        #
+        # Two records, because two different fire sites freeze two different
+        # seats under two different keys. A damage event freezes the seat the
+        # damage went to (`defending_player_index`); a step whose *subject is a
+        # player* — "at the beginning of each player's upkeep, **that player**
+        # mills a card" (Worry Beads) — freezes whose step it is
+        # (`EVENT_SUBJECT_PLAYER`). The draw one family up has read both since
+        # Malignant Growth and its comment already claimed this function did
+        # too; it did not, and the words are the same words. A card printing
+        # them under a seat-freezing step reported "no handler" and the set's
+        # own artifact was unsupported for a record that was already stamped.
+        if event in _EVENT_SUBJECT_PLAYERS:
+            payload["recipient"] = EVENT_SUBJECT_PLAYER
+            return (OracleInstruction("mill_target_player", "", payload),)
         if event not in _DAMAGED_PLAYER_EVENTS:
             raise LoweringError(
                 '"that player" mills only under a trigger whose event froze a '
-                "damaged player",
+                "damaged player or the seat whose step it is",
                 node=node,
             )
         payload["recipient"] = "damaged_player"

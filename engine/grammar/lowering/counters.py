@@ -841,4 +841,4 @@ def _lower_put_counter(
     # drew for itself with the gate at the top of that run. Handed down
     # rather than returned to the caller, so the printed-specificity order
     # stays one list in one place and this function keeps one exit.
-    return lower_plus_one_placement(node, produced)
+    return lower_plus_one_placement(node, produced, trigger_event=trigger_event)

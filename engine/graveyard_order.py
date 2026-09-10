@@ -36,7 +36,7 @@ from typing import Any
 from .layer_bridge import printed_shape
 
 
-def _is_type(card: Any, wanted: str) -> bool:
+def is_printed_type(card: Any, wanted: str) -> bool:
     """Whether *card* is printed with the *wanted* card type.
 
     Through ``printed_shape`` rather than ``primary_type``: CR 205.2a gives a
@@ -69,8 +69,8 @@ def satisfies_above(graveyard: list, index: int, spec: dict) -> bool:
     wanted_type = str(spec.get("card_type", "creature"))
     above = cards_above(graveyard, index)
     if spec.get("directly"):
-        return bool(above) and _is_type(above[0], wanted_type)
-    count = sum(1 for card in above if _is_type(card, wanted_type))
+        return bool(above) and is_printed_type(above[0], wanted_type)
+    count = sum(1 for card in above if is_printed_type(card, wanted_type))
     wanted = int(spec.get("count", 1))
     return count >= wanted if spec.get("op") == "ge" else count == wanted
 

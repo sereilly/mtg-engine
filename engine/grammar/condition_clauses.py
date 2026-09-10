@@ -30,7 +30,8 @@ from .vocabulary import CARD_TYPES, COLOR_WORDS, NUMBER_WORDS
 from .lexer import PT
 from .readers import accept_source_reference
 from .seat_records import (_accept_seat_cast_record,
-                           _accept_seat_damage_record)
+                           _accept_seat_damage_record,
+                           _accept_seat_land_record)
 
 
 def _parse_self_in_graveyard_above(
@@ -77,6 +78,35 @@ def _parse_self_in_graveyard_above(
     return ast.SelfInGraveyardWithCardsAbove(
         card_type=card_type, count=count, at_least=at_least, directly=directly,
     )
+
+
+def _parse_self_only_of_type_in_graveyard(
+    stream: TokenStream,
+) -> "ast.SelfIsOnlyCardOfTypeInGraveyard | None":
+    """``this card is the only <type> card in your graveyard``, or None without
+    consuming.
+
+    The clause above's sibling (Nether Spirit against Nether Shadow), and the
+    same two claims in one node: CR 113.6b's statement of where the ability
+    functions, and a census of the pile. Non-consuming on refusal for that
+    clause's reason — "this card is" opens both, and a branch that ate the
+    pronoun would take the whole line's refusal site with it.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("this", "card", "is", "the", "only"):
+        stream.reset(mark)
+        return None
+    card_type = stream.peek_word()
+    if card_type not in CARD_TYPES:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    if not stream.accept_phrase("card", "in", "your", "graveyard"):
+        # The type is read and the zone is not: another sentence about the same
+        # card, left whole for the branch that can read it.
+        stream.reset(mark)
+        return None
+    return ast.SelfIsOnlyCardOfTypeInGraveyard(card_type=card_type)
 
 
 def _parse_blockers_of_bound_creature(
@@ -242,6 +272,13 @@ def _accept_record_condition(stream: TokenStream) -> "ast.Condition | None":
     seat_cast = _accept_seat_cast_record(stream)
     if seat_cast is not None:
         return seat_cast
+    # "…**if you didn't play a land this turn**" (Mercadian Atlas). The cast
+    # record's twin one special action over (CR 305.1), probed beside it and
+    # after it: both open on the same seat words, and this one is settled by the
+    # verb that follows. Neither consumes on refusal.
+    seat_land = _accept_seat_land_record(stream)
+    if seat_land is not None:
+        return seat_land
     # "if this permanent **came under your control since the beginning of your
     # last upkeep**" — CR 702.30a, the whole of what echo adds to a sentence
     # this grammar already read (``engine/echo.py`` rewrites the keyword line

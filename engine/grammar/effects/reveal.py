@@ -445,6 +445,20 @@ def _accept_reveal_until_rest(
     # Avenging Druid's repeated verb. Read before the pile so the two elided
     # spellings below are one branch.
     stream.accept_word("put")
+    # "…and **the rest** into your graveyard." (Foster.) A fourth printed
+    # spelling of the same pile — what the run turned over before it stopped —
+    # and read here beside the other three for this function's stated reason:
+    # every word in front of it is identical, and a production differing only
+    # in a tail would be one sentence written four times.
+    rest_mark = stream.mark()
+    if stream.accept_phrase("the", "rest"):
+        if stream.accept_word("into"):
+            stream.accept_word(possessive)
+            rest_zone = stream.peek_word()
+            if rest_zone in _REVEAL_UNTIL_REST:
+                stream.advance()
+                return _REVEAL_UNTIL_REST[rest_zone]
+        stream.reset(rest_mark)
     if stream.accept_phrase("all", "other", "cards", "revealed", "this", "way"):
         if not stream.accept_word("into"):
             stream.reset(mark)

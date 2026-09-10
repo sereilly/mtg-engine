@@ -30,6 +30,7 @@ from __future__ import annotations
 from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
+from ._amounts import count_spec
 from ._collapses import (_each_player_optional_discard,
                          _each_player_optional_draw,
                          _each_player_optional_pay_mana,
@@ -543,6 +544,14 @@ def _lower_may(
         # a {B} had nothing to collect it with. `engine/mana_payment.py` is what
         # made the refusal unnecessary.
         payload["cost"] = _may_cost_payload(node)
+        if node.cost_per_each is not None:
+            # "…unless you pay {1} **for each card in your hand**." The count
+            # rides the payload as an ordinary count spec — the same
+            # ``count_spec`` shape every computed amount in this engine travels
+            # on — and ``handlers/control_flow._offer_to_seat`` multiplies the
+            # printed cost by it at resolution, which is when CR 608.2 says the
+            # number is taken.
+            payload["cost_per"] = count_spec(node.cost_per_each, node)
     if node.cost_alternatives:
         # "…unless they pay {B} **or {3}**" (Lim-Dûl's Hex). CR 118.8's second
         # way to cover the *same* offer, so it rides the one prompt rather than

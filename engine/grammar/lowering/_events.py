@@ -429,6 +429,15 @@ _EVENT_SUBJECT_PLAYERS: frozenset[str] = frozenset({
     # enqueues the trigger — after checking, through
     # `upkeep_trigger_seat_matches`, that it is the host's controller's.
     "upkeep_enchanted_controller",
+    # The same clause naming the **end step** instead — "At the beginning of the
+    # end step of enchanted creature's controller, this Aura deals 2 damage to
+    # **that player**" (Insubordination). A separate condition kind because the
+    # two are dispatched by different steps (CR 502 and CR 513), and a separate
+    # row here for the same reason the kinds are separate: membership is a claim
+    # about the *fire site*, and `phases/end_step.py`'s scan is the one that
+    # stamps this seat — after checking, through `end_step_trigger_seat_matches`,
+    # that it is the host's controller's.
+    "end_step_enchanted_controller",
     # "At the beginning of the chosen player's upkeep, this enchantment deals
     # 1 damage to **that player**" (Takklemaggot's granted line). The same
     # loop and the same stamp, gated the same way: the seat is whichever
@@ -607,6 +616,28 @@ def _back_reference_payload(
         key = _EVENT_QUANTITIES.get(event or "")
         if key is not None:
             return {"amount_from_trigger": key}
+        # "…this Aura deals damage equal to **that creature's power** to that
+        # player…" (Unnatural Hunger.) Under a trigger printed about the
+        # attached permanent (:data:`ATTACHED_SUBJECT_EVENTS`) the words name
+        # that permanent — and it is *on the battlefield* when the ability
+        # resolves, so the number is a live read rather than something a fire
+        # site had to freeze. CR 613 makes power computed, so a creature pumped
+        # between the trigger and its resolution deals the number it has then,
+        # which is what CR 608.2 asks for.
+        #
+        # It travels the ordinary ``x_from_count`` channel every computed amount
+        # in this engine travels rather than a channel of its own, so
+        # ``_execute_oracle_instruction`` resolves it once and every effect
+        # family that already reads an X gets this for free.
+        if event in ATTACHED_SUBJECT_EVENTS:
+            return {
+                "amount": "x",
+                "x_from_count": {
+                    "object_characteristic": {
+                        "characteristic": "power", "object": "attached",
+                    },
+                },
+            }
         # "Destroy target nonartifact attacking creature. … Its power is equal
         # to **that creature's power**." (Broken Visage.) With no trigger at all
         # there is no event for the words to be about, and the creature the
