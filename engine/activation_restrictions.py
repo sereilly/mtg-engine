@@ -173,27 +173,19 @@ def _controlled_board_phrase(phrase: str) -> "tuple[dict, bool] | None":
     -- "two or more", "three" -- is a threshold this does not read, and it
     refuses rather than answering as presence, because a threshold silently read
     as "at least one" is a restriction lifted on a board the card does not name.
-    """
-    from .grammar.errors import GrammarError
-    from .grammar.lexer import tokenize
-    from .grammar.nouns import parse_object_filter
-    from .grammar.stream import TokenStream
-    from .subject_filters import untestable_filter_keys
 
-    article, _, rest = phrase.strip().partition(" ")
-    if article not in ("a", "an", "no") or not rest:
-        return None
-    stream = TokenStream(tokenize(rest).tokens)
-    try:
-        described = parse_object_filter(stream)
-    except GrammarError:
-        return None
-    if not stream.exhausted:
-        return None
-    payload = described.to_payload()
-    if not payload or untestable_filter_keys(payload):
-        return None
-    return payload, article != "no"
+    All of which is ``subject_filters.quantified_board_phrase``, which this now
+    calls rather than spells out: CR 118.9's conditional alternative cost ("If
+    you control a Plains, you may tap an untapped creature you control rather
+    than pay this spell's mana cost") asks these same two questions of these
+    same words, and the copy it would otherwise have made is the one that
+    drifts. The name stays here because the *clause* is this table's -- what
+    moved is the reading of its noun phrase, next to the matcher that answers
+    it.
+    """
+    from .subject_filters import quantified_board_phrase
+
+    return quantified_board_phrase(phrase)
 
 
 def _readable_controlled_board(match: "re.Match[str]") -> bool:

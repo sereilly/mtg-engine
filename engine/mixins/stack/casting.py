@@ -21,7 +21,8 @@ import re
 from .._constants import _MANA_SYMBOLS as _POOL_SYMBOLS
 from ...cast_permissions import consume as consume_permission, permission_for
 from ...auras import aura_enchant_clause
-from ...alternative_costs import AlternativeCost, alternative_costs
+from ...alternative_costs import (AlternativeCost, alternative_costs,
+                                  board_noun)
 from ...cast_costs import (AdditionalCost, OptionalManaCost, additional_costs,
                            buyback_cost)
 from ...auras import controller_cast_ban
@@ -2019,6 +2020,13 @@ class SpellCastingMixin:
         "sacrifice_all": "sacrifice_all_filter",
         "return": "return_filter",
         "exile": "exile_filter",
+        # CR 118.9's alternative cost prints a *tap* where no additional cost in
+        # this pool does ("you may tap an untapped creature you control rather
+        # than pay this spell's mana cost", Orim's Cure). The verb differs and
+        # the question does not: which permanents on the payer's own
+        # battlefield the printed noun phrase names. ``untapped_only`` rides on
+        # the payload, so the scan below needs no branch for it.
+        "tap": "tap_filter",
     }
 
     def _additional_cost_candidates(
@@ -2345,7 +2353,7 @@ class SpellCastingMixin:
         one file over: a permanent whose text an effect has changed grants what
         it currently says.
         """
-        from ...alternative_costs import granted_alternative_cost
+        from ...alternative_costs import condition_holds, granted_alternative_cost
 
         found = list(alternative_costs(card))
         for _seat, permanent in self.permanents_with_controller():
@@ -2354,7 +2362,23 @@ class SpellCastingMixin:
             )
             if granted is not None:
                 found.append(granted)
-        return tuple(found)
+        # "**If you control a Swamp**, you may pay 4 life rather than pay this
+        # spell's mana cost." (Snuff Out, and seven more in Mercadian Masques.)
+        # CR 601.2b announces the intention to pay an alternative cost, and a
+        # cost whose printed condition does not hold is not one this caster may
+        # announce — so it is filtered *here*, in the one reader, rather than
+        # refused later as unpayable. The two are different answers: unpayable
+        # is a price the caster cannot meet, and this is an offer that does not
+        # exist, which is what the picker must not show and the AI must not
+        # take.
+        #
+        # Asked of the board every time rather than resolved once at compile:
+        # the condition is a live question (CR 601.2b checks it as the spell is
+        # cast), and a Legate that was free last turn is not free now.
+        return tuple(
+            cost for cost in found
+            if condition_holds(self, caster_index, cost.condition)
+        )
 
     def _shares_a_color(self, one, other, seat: int) -> bool:
         """Whether two cards *seat* owns share a colour (CR 105.2, CR 202.2).
@@ -2599,6 +2623,71 @@ class SpellCastingMixin:
                     f"{card.name} can't be cast: {shortfall} to sacrifice for "
                     f"its alternative cost (CR 601.2h)"
                 )
+        # "You may **return two Islands you control to their owner's hand**
+        # rather than pay this spell's mana cost." (Gush, Thwart, Tidal Bore.)
+        # The *count* is what makes this unpayable, exactly as it is for the
+        # sacrifice above: one Island is no more a payment of a two-Island cost
+        # than none (CR 118.3 — a cost may be paid only in full), and a gate
+        # that asked only whether one existed would admit the announcement and
+        # then charge one, which for an alternative cost is a spell cast for
+        # nothing because the mana payment has already been skipped.
+        if cost.return_filter is not None:
+            available = self._additional_cost_candidates(
+                caster_index, cost, giving_up="return"
+            )
+            wanted = max(1, cost.return_count)
+            if len(available) < wanted:
+                # ``board_noun``, not ``filter_head_noun``: every noun phrase
+                # this cost prints is a land *subtype* ("two Islands"), and the
+                # head noun answers "permanent" for all of them — so five
+                # different refusals would read identically and none would name
+                # the price. The gate is unaffected either way; what changes is
+                # whether the player is told what they are short of.
+                noun = board_noun(cost.return_filter)
+                shortfall = f"no {noun}" if wanted == 1 else f"not enough {noun}s"
+                return (
+                    f"{card.name} can't be cast: {shortfall} to return for its "
+                    f"alternative cost (CR 601.2h)"
+                )
+        # "You may **tap an untapped creature you control** rather than pay this
+        # spell's mana cost." (Orim's Cure, Ramosian Rally.) The same count
+        # question one verb over, through the same candidate scan — which is
+        # what keeps the gate and the payment counting one list. "Untapped" is
+        # in the payload, so a board of tapped creatures is a shortfall here
+        # rather than a payment that taps nothing.
+        if cost.tap_count:
+            available = self._additional_cost_candidates(
+                caster_index, cost, giving_up="tap"
+            )
+            if len(available) < cost.tap_count:
+                noun = board_noun(cost.tap_filter or {})
+                shortfall = (
+                    f"no untapped {noun}" if cost.tap_count == 1
+                    else f"not enough untapped {noun}s"
+                )
+                return (
+                    f"{card.name} can't be cast: {shortfall} to tap for its "
+                    f"alternative cost (CR 601.2h)"
+                )
+        # "…you may **have an opponent gain 3 life** rather than pay this
+        # spell's mana cost." (Invigorate.) CR 119.7's last sentence, in as many
+        # words: "a cost that involves having that player gain life can't be
+        # paid". Without this the gate would admit the announcement, the
+        # payment's ``_gain_life`` would log the prohibition and change nothing,
+        # and the spell would be cast for **nothing** — the mana payment having
+        # already been skipped, which is the exact failure this whole gate
+        # exists to prevent.
+        #
+        # Asked of *every* opponent rather than the first, because CR 601.2b
+        # lets the caster choose which one gains and the payment picks the same
+        # way: one banned seat is not an unpayable cost while another can pay.
+        if cost.opponent_gains_life and self._life_gain_cost_payer(
+            caster_index
+        ) is None:
+            return (
+                f"{card.name} can't be cast: no opponent may gain life, so its "
+                f"alternative cost cannot be paid (CR 119.7)"
+            )
         # "You may **exile the top three black cards of your graveyard** rather
         # than pay this spell's mana cost." (Spinning Darkness.) The *count*
         # again, and the scan with it: CR 118.3 lets a cost be paid only in
@@ -2622,6 +2711,32 @@ class SpellCastingMixin:
                     f"(CR 601.2h)"
                 )
         return None
+
+    def _life_gain_cost_payer(self, caster_index: int) -> "int | None":
+        """The seat an "have an opponent gain N life" cost will hand its life to.
+
+        One reader for the CR 601.2h gate and the payment, the arrangement every
+        other cost on this path makes and for its reason: a gate that counted a
+        different set from the one the payment picks from would admit a cast the
+        payment cannot collect — and here "cannot collect" means the spell is
+        cast for nothing.
+
+        A seat that cannot gain life is skipped rather than refused (CR 119.7),
+        because CR 601.2b lets the caster choose *which* opponent gains: one
+        Forsaken Wastes does not make Invigorate uncastable while a second
+        opponent is at the table. None when no opponent can take it at all,
+        which is the gate's refusal.
+        """
+        from ...life_prohibitions import life_gain_banned
+
+        return next(
+            (
+                seat for seat in range(len(self.players))
+                if seat != caster_index and not self.players[seat].lost
+                and not life_gain_banned(self, self.players[seat])
+            ),
+            None,
+        )
 
     def _pay_alternative_cost(
         self,
@@ -2671,6 +2786,80 @@ class SpellCastingMixin:
                     self.log.append(
                         f"{caster.name} sacrificed {name} to cast {card.name}"
                     )
+        if cost.return_filter is not None:
+            # "…return **two Islands you control** to their owner's hand."
+            # (Gush.) Re-enumerated per permanent, never sliced off one list:
+            # each return takes a permanent off the battlefield, and a list
+            # held across that holds an object the board no longer has — the
+            # same loop the identically printed additional cost runs, through
+            # the same ``return_permanent_to_owners_hand`` every bounce effect
+            # uses, so CR 903.9b and the leaves-the-battlefield replacements
+            # see a cost payment exactly as they see a spell's bounce.
+            from ...handlers._common import return_permanent_to_owners_hand
+
+            for _ in range(max(1, cost.return_count)):
+                candidates = self._additional_cost_candidates(
+                    caster_index, cost, giving_up="return"
+                )
+                if not candidates:
+                    break  # gated above; a board that changed since is a no-op
+                giving = self.default_sacrifice_pick(candidates)
+                name = giving.card.name
+                return_permanent_to_owners_hand(self, giving, caster)
+                self.log.append(
+                    f"{caster.name} returned {name} to hand to cast {card.name}"
+                )
+        if cost.tap_count:
+            # "…**tap an untapped creature you control**…" (Orim's Cure.)
+            # Through ``Game.tap_permanent``, never a metadata poke: tapping is
+            # an event other permanents watch, and a cost payment is not
+            # exempt (CR 701.26a is the action; CR 118.11 is why paying a
+            # cost is still an ordinary one). Re-enumerated per permanent
+            # for the return's
+            # reason above — each tap takes its permanent out of the candidate
+            # list, since ``untapped_only`` rides on the filter.
+            for _ in range(cost.tap_count):
+                candidates = self._additional_cost_candidates(
+                    caster_index, cost, giving_up="tap"
+                )
+                if not candidates:
+                    break  # gated above; a board that changed since is a no-op
+                tapping = self.default_sacrifice_pick(candidates)
+                self.become_tapped(tapping)
+                self.log.append(
+                    f"{caster.name} tapped {tapping.card.name} to cast "
+                    f"{card.name}"
+                )
+        if cost.reveal_hand:
+            # "…**reveal your hand**…" (Land Grant.) The payment moves nothing;
+            # what it costs is the information. Through ``record_reveal`` --
+            # the one feed the web layer reads, the same seam the ``reveal_hand``
+            # *effect* uses -- rather than a log line alone: a reveal the client
+            # cannot show is a reveal the player has to take on trust, and here
+            # it is the entire price of the spell.
+            #
+            # The spell is already off the hand (CR 601.2a) when this runs, so
+            # what is shown is the hand the card asks about: Land Grant's own
+            # condition is "no land cards in hand", and revealing the card that
+            # is on the stack would be showing a hand the player no longer has.
+            names = [held.name for held in caster.hand]
+            self.record_reveal(caster_index, names)
+            self.log.append(
+                f"{caster.name} revealed their hand to cast {card.name}: "
+                + (", ".join(names) or "(empty)")
+            )
+        if cost.opponent_gains_life:
+            # "…**have an opponent gain 3 life**…" (Invigorate.) The gain lands
+            # on somebody else, so it goes through ``Game._gain_life`` like
+            # every other life gain — CR 614's ``life_gain`` replacements are
+            # armed on the *gaining* seat, CR 119.7's prohibition is asked
+            # there, and a cost payment is not exempt from either (CR 118.11).
+            # That seam announces the gain itself, so nothing is logged here.
+            opponent = self._life_gain_cost_payer(caster_index)
+            if opponent is not None:
+                self._gain_life(
+                    self.players[opponent], cost.opponent_gains_life, card.name
+                )
         if cost.exile_graveyard_position is not None:
             from ...graveyard_order import positions_named
 
