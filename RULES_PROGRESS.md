@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**411 / 617 tracked rules covered (66%)** — 2424 tests, 0 unannotated.
+**411 / 617 tracked rules covered (66%)** — 2430 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -205,7 +205,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **109.2** If a spell or ability uses a description of an object that includes a card type or subtype, but d... *(1 tests)*
 - [ ] **109.3** An object’s characteristics are name, mana cost, color, color indicator, card type, subtype, supe...
 - [x] **109.4** Only objects on the stack or on the battlefield have a controller. Objects that are neither on th... *(3 tests, subrules b)*
-- [x] **109.5** The words “you” and “your” on an object refer to the object’s controller, its would-be controller... *(24 tests)*
+- [x] **109.5** The words “you” and “your” on an object refer to the object’s controller, its would-be controller... *(25 tests)*
 
 ### 110. Permanents
 
@@ -263,7 +263,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 115. Targets
 
-- [x] **115.1** Some spells and abilities require their controller to choose one or more targets for them. The ta... *(25 tests, subrules abcd)*
+- [x] **115.1** Some spells and abilities require their controller to choose one or more targets for them. The ta... *(26 tests, subrules abcd)*
 - [x] **115.2** Only permanents are legal targets for spells and abilities, unless a spell or ability (a) specifi... *(3 tests)*
 - [x] **115.3** The same target can’t be chosen multiple times for any one instance of the word “target” on a spe... *(9 tests)*
 - [x] **115.4** Some spells and abilities that refer to damage require “any target,” “another target,” “two targe... *(6 tests)*
@@ -683,16 +683,16 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 603. Handling Triggered Abilities
 
-- [x] **603.1** Triggered abilities have a trigger condition and an effect. They are written as “[When/Whenever/A... *(2 tests, subrules b)*
-- [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(27 tests, subrules bd)*
-- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(56 tests, subrules bcd)*
-- [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(15 tests)*
-- [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(9 tests)*
+- [x] **603.1** Triggered abilities have a trigger condition and an effect. They are written as “[When/Whenever/A... *(3 tests, subrules b)*
+- [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(29 tests, subrules bd)*
+- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(57 tests, subrules bcd)*
+- [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(16 tests)*
+- [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(10 tests)*
 - [x] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit... *(3 tests, subrules c)*
 - [x] **603.7** An effect may create a delayed triggered ability that can do something at a later time. A delayed... *(36 tests, subrules bcde)*
 - [x] **603.8** Some triggered abilities trigger when a game state (such as a player controlling no permanents of... *(8 tests)*
 - [ ] **603.9** Some triggered abilities trigger specifically when a player loses the game. These abilities trigg...
-- [x] **603.10** Normally, objects that exist immediately after an event are checked to see if the event matched a... *(10 tests, subrules a)*
+- [x] **603.10** Normally, objects that exist immediately after an event are checked to see if the event matched a... *(11 tests, subrules a)*
 - [x] **603.11** Some objects have a static ability that’s linked to one or more triggered abilities. (See rule 60... *(1 tests)*
 - [x] **603.12** A resolving spell or ability may allow or instruct a player to take an action and create a trigge... *(2 tests)*
 
@@ -863,7 +863,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **701.18** Play *(6 tests, subrules ab)*
 - [x] **701.19** Regenerate *(29 tests, subrules abc)*
 - [x] **701.20** Reveal *(2 tests, subrules a)*
-- [x] **701.21** Sacrifice *(13 tests, subrules a)*
+- [x] **701.21** Sacrifice *(14 tests, subrules a)*
 - [x] **701.22** Scry *(8 tests, subrules ab)*
 - [x] **701.23** Search *(4 tests, subrules ad)*
 - [x] **701.24** Shuffle *(2 tests, subrules a)*

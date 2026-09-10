@@ -40,7 +40,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ULG | 143 | 227 | 84.1% | 84.1% | 59.5% | 121 |
 | 6ED | 335 | 404 | 95.5% | 95.5% | 65.8% | 243 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| UDS *(measured)* | 143 | 204 | 79.4% | 77.0% | 52.5% | 94 |
+| UDS *(measured)* | 143 | 204 | 83.3% | 80.9% | 56.4% | 102 |
 | **All (shipped)** | **5686** | **8356** | **90.6%** | **89.9%** | **60.6%** | **4280** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -53,13 +53,13 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 455 | 194 | expected a subject |  |
+| 449 | 188 | expected a subject |  |
 | 128 | 66 | unrecognized effect verb |  |
-| 94 | 45 | unconsumed text |  |
+| 93 | 44 | unconsumed text |  |
 | 41 | 25 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 16 | 14 | expected 'unless defending player controls' |  |
-| 13 | 8 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
+| 14 | 9 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
 | 12 | 3 | expected what this creature can't block, or a duration |  |
 | 12 | 12 | expected 'the' |  |
 | 7 | 1 | no lowering for RawEffect |  |
@@ -1321,6 +1321,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}{W}: Prevent the next 1 damage that would be dealt to any target this turn.`
 - **Commander Greven il-Vec**
   - `When Commander Greven il-Vec enters, sacrifice a creature.`
+- **Compost**
+  - `Whenever a black card is put into an opponent's graveyard from anywhere, you may draw a card.`
 - **Conch Horn**
   - `{1}, {T}, Sacrifice this artifact: Draw two cards, then put a card from your hand on top of your library.`
 - **Conclave Mentor**
@@ -2909,6 +2911,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature deals damage to a player, you may put a Goblin permanent card from your hand onto the battlefield.`
 - **Goblin Lyre**
   - `Sacrifice this artifact: Flip a coin. If you win the flip, this artifact deals damage to target opponent or planeswalker equal to the number of creatures you control. If you lose the flip, this artifact deals damage to you equal to the number of creatures that opponent or that planeswalker's controller controls.`
+- **Goblin Marshal**
+  - `When this creature enters or dies, create two 1/1 red Goblin creature tokens.`
 - **Goblin Masons**
   - `When this creature dies, destroy target Wall.`
 - **Goblin Matron**
@@ -3337,6 +3341,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, sacrifice this creature unless you pay {G}{G}.`
 - **Hunter's Edge**
   - `Put a +1/+1 counter on target creature you control. Then that creature deals damage equal to its power to target creature you don't control.`
+- **Hunting Moa**
+  - `When this creature enters or dies, put a +1/+1 counter on target creature.`
 - **Hurloon Shaman**
   - `When this creature dies, each player sacrifices a land of their choice.`
 - **Hurr Jackal**
@@ -3452,6 +3458,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this enchantment leaves the battlefield, you lose 20 life.`
 - **Imaginary Pet**
   - `At the beginning of your upkeep, if you have a card in hand, return this creature to its owner's hand.`
+- **Impatience**
+  - `At the beginning of each player's end step, if that player didn't cast a spell this turn, this enchantment deals 2 damage to that player.`
 - **Impending Disaster**
   - `At the beginning of your upkeep, if there are seven or more lands on the battlefield, sacrifice this enchantment and destroy all lands.`
 - **Implements of Sacrifice**
@@ -5159,6 +5167,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{4}, {T}: Target opponent chooses one of the top two cards of your graveyard. Exile that card and put the other one into your hand.`
 - **Phyrexian Monitor**
   - `{B}: Regenerate this creature.`
+- **Phyrexian Negator**
+  - `Whenever this creature is dealt damage, sacrifice that many permanents.`
 - **Phyrexian Plaguelord**
   - `{T}, Sacrifice this creature: Target creature gets -4/-4 until end of turn.`
   - `Sacrifice a creature: Target creature gets -1/-1 until end of turn.`
@@ -5565,6 +5575,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Ray of Erasure**
   - `Target player mills a card.`
   - `Draw a card at the beginning of the next turn's upkeep.`
+- **Rayne, Academy Chancellor**
+  - `Whenever you or a permanent you control becomes the target of a spell or ability an opponent controls, you may draw a card. You may draw an additional card if Rayne is enchanted.`
 - **Raze**
   - `Destroy target land.`
 - **Razor Pendulum**
@@ -5990,6 +6002,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Prevent the next 1 damage that would be dealt to any target this turn.`
   - `{T}: Prevent the next 1 damage that would be dealt to any target this turn.`
   - `{T}: Prevent the next 1 damage that would be dealt to any target this turn.`
+- **Sanctimony**
+  - `Whenever an opponent taps a Mountain for mana, you may gain 1 life.`
 - **Sanctum Custodian**
   - `{T}: Prevent the next 2 damage that would be dealt to any target this turn.`
 - **Sanctum Guardian**
@@ -7047,6 +7061,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this creature enters, you may search your library and/or graveyard for a card named Teferi, Timeless Voyager, reveal it, and put it into your hand. If you search your library this way, shuffle.`
 - **Telekinesis**
   - `Tap target creature. Prevent all combat damage that would be dealt by that creature this turn. It doesn't untap during its controller's next two untap steps.`
+- **Telepathic Spies**
+  - `When this creature enters, look at target opponent's hand.`
 - **Teleport**
   - `Target creature can't be blocked this turn.`
 - **Telethopter**
