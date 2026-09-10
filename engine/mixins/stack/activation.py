@@ -732,6 +732,40 @@ class AbilityActivationMixin:
             if stable is not None:
                 target_permanent_ids = [stable.permanent_id]
 
+        # …and the *seat* of that same announcement, settled at the same moment
+        # and for the same reason. ``target_idx`` above answers a different
+        # question — "which battlefield does a bare index count into" — which
+        # has to have an answer even when nothing named one.
+        # ``StackItem.target_player_index`` is read as "which seat is this
+        # object pointed at", and ``handlers/_common.pick_target_permanent``
+        # scopes an announced id to exactly that player. So where the activator
+        # named ids and no seat, this function's working default stood in front
+        # of a choice somebody had made, and every id on the activator's own
+        # battlefield was thrown away behind it.
+        #
+        # **Here rather than at the push below**, which is the obvious place and
+        # the wrong one for the reason the id stamping above is here: CR 601.2c
+        # chooses the target and CR 601.2h then pays the cost, and this
+        # ability's cost may *eat the permanent that was named*. Goblin
+        # Bombardment sacrifices a creature and Skull Catapult sacrifices the
+        # one it is aimed at — by the time the item is built there is no live
+        # permanent for the ids to name, so the seat could not be recovered and
+        # the default came back. Settled before the costs, the announcement
+        # survives the cost that destroys it, and CR 608.2b then fizzles the
+        # ability at resolution, which is the rule's own answer rather than a
+        # resolution against the wrong board.
+        #
+        # Asked of the seam rather than derived inline: ``_stamp_stack_targets``
+        # settles the same question for every item built elsewhere (the cast
+        # path, ``activate_from_graveyard``, a fire site), and two spellings of
+        # "which seat did the ids name" is how the two ends of one announcement
+        # come apart in the first place.
+        announced_target_idx = target_idx
+        if target_player_index is None:
+            from_ids = self.announced_target_seat(target_permanent_ids)
+            if from_ids is not None:
+                announced_target_idx = from_ids
+
         # An explicitly chosen spell on the stack (e.g. Deathgrip: "{B}{B}: Counter
         # target green spell"). target_stack_index indexes self.stack (bottom-first).
         target_stack_item = None
@@ -2658,11 +2692,27 @@ class AbilityActivationMixin:
                 target_permanent_ids, target_permanent_index, graveyard_stamps,
                 role_seat,
             ) = self._role_announcement_stamps(target_role_refs)
-            # A player slot's answer is the seat, and it goes on the one field
-            # that already means it — never beside it, which would leave the
-            # resolution two answers to the same question.
+            # A roles announcement's ids are settled *here* (the cost above may
+            # have moved the graveyard slot the second role counts into), so its
+            # seat is settled here too — the one case where CR 601.2c's identity
+            # genuinely is not known before the cost is paid, and so the one case
+            # that has to re-ask.
+            #
+            # Two announcements can answer "which seat", and they are asked in
+            # the order of how directly the player said it. A **player role** is
+            # the seat, named outright, and it goes on the one field that already
+            # means it rather than beside it — a second arity there would leave
+            # the resolution two answers to one question. Only where no role
+            # named a seat does the seat come back off the ids, which is the
+            # fallback every other item-building site uses through the same
+            # seam. Two groups of one wave wrote these two arms independently
+            # and neither is the other's special case.
             if role_seat is not None:
-                target_idx = role_seat
+                announced_target_idx = role_seat
+            elif target_player_index is None:
+                from_ids = self.announced_target_seat(target_permanent_ids)
+                if from_ids is not None:
+                    announced_target_idx = from_ids
         self._stack_push(
             # CR 602.2b: an activated ability's targets were chosen when it
             # was activated, so it does not choose again here.
@@ -2670,7 +2720,7 @@ class AbilityActivationMixin:
             item=StackItem(
                 card=permanent.card,
                 caster_index=controller_index,
-                target_player_index=target_idx,
+                target_player_index=announced_target_idx,
                 target_permanent_index=target_permanent_index,
                 target_permanent_id=target_permanent_ids,
                 target_graveyard_card=graveyard_stamps,
