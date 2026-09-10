@@ -61,6 +61,36 @@ from .upkeep_effects import (UPKEEP_EFFECTS, UpkeepContext, UpkeepEffectsMixin,
 #: anything about it was interactive. Erosion and Curse Artifact are the
 #: ordinary shape: an offer with a penalty, which the grammar reads as a `may`
 #: and the generic pending-choice queue already runs.
+#: What separates a printed name from the ordinal that says *which* same-named
+#: subject a prompt is about. A character no card name contains, so
+#: ``"Nether Shadow#1"`` can never collide with a card called that.
+SUBJECT_ORDINAL_SEPARATOR = "#"
+
+
+def subject_prompt_key(card_name: str, ordinal: int) -> str:
+    """The address of the *ordinal*-th subject printed *card_name*.
+
+    The graveyard's and the obligation list's answer to ``permanent_id``, and
+    it has to be a different answer for the same reason
+    :class:`engine.game_types.GraveyardTarget` does: ``load_cards`` dedupes by
+    ``oracle_id``, so two Nether Shadows in one graveyard are literally one
+    ``CardDefinition`` object and neither an id nor ``is`` can tell them apart.
+    What can is *order* — and ``ordinal`` here is exactly
+    ``GraveyardTarget.ordinal``, which copy of the card counting from the
+    bottom of the pile, read off the one function that computes it
+    (``Game.graveyard_target_at``). A Nafs Asp obligation is the same shape one
+    list over: its records are equal dicts, so which one a prompt is about is
+    its position among that player's obligations from that source.
+
+    A **string** rather than the pair, because this key is a dict key in
+    ``session.upkeep_resolved_choices`` and that dict is serialized to the
+    client — JSON has no tuple keys. The separator is the whole of the
+    encoding, spelled once here and mirrored by ``upkeepPromptKey`` in
+    ``web/static/app.js``.
+    """
+    return f"{card_name}{SUBJECT_ORDINAL_SEPARATOR}{ordinal}"
+
+
 def upkeep_prompt_key(entry: dict):
     """The key *entry*'s answer belongs under in the map handed to
     :meth:`UpkeepStepMixin.resolve_upkeep`.
@@ -69,8 +99,15 @@ def upkeep_prompt_key(entry: dict):
     every one of them but two: Nether Shadow's return offer is about a card in
     a **graveyard** and Nafs Asp's is about an obligation *record* whose source
     may have left, and neither has a permanent id to be addressed by. Those two
-    keep the printed name, and are named in ``ROADMAP.md`` as the remainder of
-    this class.
+    carry a ``subject_ordinal`` instead and are filed under
+    :func:`subject_prompt_key` — which is what makes two eligible Nether
+    Shadows two offers, where a bare name made them one and a single "yes"
+    returned both.
+
+    The bare name survives as the third form, for an entry carrying neither
+    address: it names a *card*, so it answers every subject of that name at
+    once. On a board with one copy that is exact, which is why it stayed
+    correct for as long as it did.
 
     One function, read by the arming side (``web/turn_steps.py``) and by the
     answering side (``web/action_turn.py``), so what a prompt is filed under and
@@ -78,7 +115,37 @@ def upkeep_prompt_key(entry: dict):
     file just came out of, one level up.
     """
     permanent_id = entry.get("permanent_id")
-    return entry["card_name"] if permanent_id is None else permanent_id
+    if permanent_id is not None:
+        return permanent_id
+    ordinal = entry.get("subject_ordinal")
+    if ordinal is None:
+        return entry["card_name"]
+    return subject_prompt_key(entry["card_name"], ordinal)
+
+
+def upkeep_subject_answer(answers: dict | None, card_name: str, ordinal: int):
+    """The seat's answer for the *ordinal*-th subject printed *card_name*, or
+    None if they were not asked about it.
+
+    The read half of :func:`subject_prompt_key`, and the twin of
+    ``upkeep_effects.upkeep_answer`` one zone over. The bare name is consulted
+    **after** the exact address and never before it: the specific answer wins
+    over the blanket one, the same precedence
+    :meth:`UpkeepStepMixin._upkeep_answers_by_permanent` gives an explicit id
+    over a name. The fallback is what keeps every headless caller and every
+    test in this repo working — ``{"Nether Shadow": True}`` still means "every
+    one of them", which on a graveyard holding one copy is exact.
+
+    Returns the raw value rather than a bool so a caller can tell "not asked"
+    from "answered no": those two take different defaults, and collapsing them
+    is how a prompt nobody was shown ends up counting as a refusal.
+    """
+    if not answers:
+        return None
+    exact = answers.get(subject_prompt_key(card_name, ordinal))
+    if exact is not None:
+        return exact
+    return answers.get(card_name)
 
 
 def _reason_card(reason: str):
@@ -403,8 +470,10 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         to remove.
 
         Unmatched string keys are **kept**, not dropped: the two prompts whose
-        subject is not a permanent (see :func:`upkeep_prompt_key`) are still
-        answered by name, and their readers look them up in this same map.
+        subject is not a permanent (see :func:`upkeep_prompt_key`) are keyed by
+        :func:`subject_prompt_key`, which is a string this loop can match no
+        permanent to, and their readers look them up in this same map through
+        :func:`upkeep_subject_answer`.
         """
         if not answers:
             return answers
@@ -604,10 +673,11 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         self.mire_cleanup_obligations = surviving
 
     def _graveyard_return_candidates(self, player_index: int) -> list:
-        """``(graveyard index, card)`` for each card whose "return during your
-        upkeep" condition is currently met for ``player_index`` (Nether Shadow
-        with enough creature cards above it). Shared by the prompt query and the
-        upkeep resolver so both agree on which cards are eligible.
+        """``(graveyard index, ordinal, card)`` for each card whose "return
+        during your upkeep" condition is currently met for ``player_index``
+        (Nether Shadow with enough creature cards above it). Shared by the
+        prompt query and the upkeep resolver so both agree on which cards are
+        eligible **and on how to name one of them**.
 
         **The index is part of the answer, not scaffolding.** A graveyard holds
         ``CardDefinition`` objects and ``load_cards`` dedupes by ``oracle_id``, so
@@ -619,6 +689,14 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         cards went in and four came out. That is the look-alike bug class
         ``tests/engine/test_control_reads.py`` bans on the battlefield, and it is
         worse here, because on the battlefield the copies are distinct objects.
+
+        The **ordinal** beside it is the other half of that fact, and it is the
+        half the *player* needed: an index is a slot and renumbers, so it cannot
+        be handed out and taken back, but ``GraveyardTarget.ordinal`` — which
+        copy of this card, counting from the bottom — survives everything except
+        another copy of the same card leaving the same pile. It is read off
+        ``Game.graveyard_target_at`` rather than recounted here, so the prompt's
+        address and a target's are one derivation.
         """
         owner = self.players[player_index]
         candidates = []
@@ -637,7 +715,8 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                 if above.primary_type == "creature"
             )
             if creatures_above >= int(instr.payload.get("min_creatures_above", 3)):
-                candidates.append((grave_index, card))
+                target = self.graveyard_target_at(player_index, grave_index)
+                candidates.append((grave_index, target.ordinal, card))
         return candidates
 
     def get_optional_upkeep_triggers(self, player_index: int) -> list[dict]:
@@ -650,20 +729,19 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         goes under — see :func:`upkeep_prompt_key`.
         """
         triggers: list[dict] = []
-        # **The graveyard half only.** Its subject is a card in a graveyard,
-        # which has no ``permanent_id`` to be addressed by, so it is still
-        # keyed — and so still deduped — by printed name: two eligible Nether
-        # Shadows share one offer and one answer returns both. That is the
-        # remainder of this file's own defect and is named in ``ROADMAP.md``;
-        # the battlefield half below no longer has it.
-        seen: set[str] = set()
-        for _grave_index, card in self._graveyard_return_candidates(player_index):
-            if card.name in seen:
-                continue
-            seen.add(card.name)
+        # **The graveyard half.** Its subject is a card in a graveyard, which
+        # has no ``permanent_id`` to be addressed by — so it carries the other
+        # address, ``subject_ordinal`` (see :func:`subject_prompt_key`). It used
+        # to be deduped by printed name, which made two eligible Nether Shadows
+        # one offer whose single "yes" returned **both**: a creature created out
+        # of nothing, in the player's favour, silently. CR 603.3d makes them two
+        # abilities and CR 603.3 puts each on the stack on its own, so they are
+        # two offers and each is answerable alone.
+        for _grave_index, ordinal, card in self._graveyard_return_candidates(player_index):
             triggers.append({
                 "card_name": card.name,
                 "permanent_id": None,
+                "subject_ordinal": ordinal,
                 "kind": "upkeep_return_self_from_graveyard",
                 "prompt": f"Return {card.name} to the battlefield from your graveyard?",
             })
@@ -1320,16 +1398,23 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         # is None (AI turns, scripted/test runs) the beneficial default is taken;
         # when provided, the card returns only on an explicit yes.
         owner = self.players[player_index]
+        # One answer per eligible copy, addressed by its ordinal: with two
+        # Nether Shadows deep enough to return, "yes" to the first and "no" to
+        # the second returns exactly one. ``optional_choices is None`` is still
+        # the headless/AI signal for "nobody was asked", which takes the
+        # beneficial default; a map that was given but says nothing about this
+        # copy is a decline, exactly as it was.
         accepted_returns = [
             (grave_index, card)
-            for grave_index, card in self._graveyard_return_candidates(player_index)
-            if optional_choices is None or optional_choices.get(card.name, False)
+            for grave_index, ordinal, card in self._graveyard_return_candidates(player_index)
+            if optional_choices is None
+            or bool(upkeep_subject_answer(optional_choices, card.name, ordinal))
         ]
         # Remove highest index first, so popping one does not renumber the slots
         # of the ones still to come — the same ordering rule the several-card
         # graveyard return follows. Removing by identity instead would take every
         # copy of the card (see `_graveyard_return_candidates`).
-        for grave_index, _card in sorted(accepted_returns, reverse=True):
+        for grave_index, _card in sorted(accepted_returns, key=lambda pair: pair[0], reverse=True):
             if 0 <= grave_index < len(owner.graveyard):
                 owner.graveyard.pop(grave_index)
         # Then onto the battlefield in printed graveyard order, so the log reads

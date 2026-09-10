@@ -500,7 +500,11 @@ def test_nether_shadow_upkeep_prompts_human_then_accepts(all_cards):
 
     resp = client.post(
         f"/api/sessions/{sid}/action",
-        json={"seat": 0, "action": "resolve_optional_trigger", "card_name": "Nether Shadow", "accept": True},
+        json={
+            "seat": 0, "action": "resolve_optional_trigger",
+            "card_name": "Nether Shadow", "prompt_subject_ordinal": 0,
+            "accept": True,
+        },
     )
     assert resp.status_code == 200
     p0 = session.game.players[0]
@@ -518,7 +522,11 @@ def test_nether_shadow_upkeep_prompt_declined(all_cards):
 
     resp = client.post(
         f"/api/sessions/{sid}/action",
-        json={"seat": 0, "action": "resolve_optional_trigger", "card_name": "Nether Shadow", "accept": False},
+        json={
+            "seat": 0, "action": "resolve_optional_trigger",
+            "card_name": "Nether Shadow", "prompt_subject_ordinal": 0,
+            "accept": False,
+        },
     )
     assert resp.status_code == 200
     p0 = session.game.players[0]

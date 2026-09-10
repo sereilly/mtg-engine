@@ -1405,18 +1405,54 @@ free — and should add the block-side twin of `refused_attacks` while they are 
 it, because `declare_ai_blockers` currently falls back silently in exactly the
 way the attack side did before it was counted.
 
-**Added at ULG's W2G5, declined there: two prompts whose subject has no
-`permanent_id`.** The upkeep prompt is now addressed by permanent, which fixed
-112 shipped cards — but the Nether Shadow graveyard-return prompt's subject is a
-**card in a graveyard** and the Nafs Asp draw-step obligation's is an
-**obligation record** whose source may have left the battlefield. Two eligible
-Nether Shadows still share one prompt and one answer returns both. Keying either
-needs an address for a non-permanent, which is the same question W2G1 answered
-for *targets* (`TargetRoleRef` carries a `permanent_id` **or** a graveyard
-`(seat, index)`) — so the shape exists now and the two prompts are its second
-customer. Also left: `trigger_targets` values are still `(seat, battlefield
-index)`, a smaller instance of the same class, far less dangerous because the
-index is resolved and re-validated inside the same call.
+**Added at ULG's W2G5, drained at 6ED's W1G5: two prompts whose subject has no
+`permanent_id`.** Both are addressed now. Nether Shadow's graveyard return and a
+Nafs Asp obligation carry a `subject_ordinal` and are filed under
+`upkeep_step.subject_prompt_key`; `prompt_subject_ordinal` is its wire half,
+required of a prompt that has one exactly as `prompt_permanent_id` is. Two
+eligible Nether Shadows are two offers, and declining the first while accepting
+the second returns exactly one — driven in the app, not only headless.
+
+Three things the entry got wrong, worth keeping because each is a shape a brief
+takes:
+
+* **It named the wrong machinery.** "The fix is registry-shaped —
+  `engine/pending_choices.py`, the `ChoiceSpec` table, the renderers in
+  `web/prompts.py`" is true of every prompt in the engine *except* these. The
+  upkeep protocol is the one channel that does not run through
+  `pending_choices` (`tests/ui/test_upkeep_prompt_wire.py` says so in a
+  comment), and none of those three files was touched. `ChoiceSpec.
+  holds_priority` is likewise not what makes this prompt wait —
+  `_upkeep_decisions_pending` and `web/actions.py`'s gate are.
+* **It named the wrong shape to reuse.** `TargetRoleRef`'s graveyard half is
+  `(seat, index)`, and an index is a slot: it renumbers, and the obligation list
+  has no graveyard to index at all. What both subjects share is the thing
+  `TargetRoleRef` *resolves into* — `GraveyardTarget.ordinal`, which copy of
+  this card, computed by the one function that computes it,
+  `Game.graveyard_target_at`.
+* **Its residual was right for a reason it did not give.** `trigger_targets`
+  values are still `(seat, battlefield index)`, and re-measuring says leave them
+  there. The window looked open — `web/actions.py` lets `tap` and `activate`
+  through while an upkeep decision is owed — but an activation during that
+  window only puts an ability on the *stack*; nothing resolves and the
+  battlefield cannot renumber before `resolve_upkeep` reads the index (measured:
+  two Erhnam Djinns, a Prodigal Sorcerer pinging the 1/1 between the two
+  answers, both Djinns still hit the creatures they named). The stack-bound
+  reader is safe for a *different* reason than "same call": the index it hands
+  to `_enqueue_triggered_ability` is stamped into an id by
+  `_stamp_stack_targets` at the push, which is the boundary that function exists
+  to guard.
+
+  **The residual, recorded because "unreachable today" is this repo's own
+  warning phrase.** `_resolve_upkeep_trigger_target` falls back to
+  `candidates[0]` on a stale index *silently* — replacing a player's choice with
+  the engine's, in the direction of doing something rather than nothing. It is
+  unreachable only because nothing resolves inside the upkeep-decision window,
+  which is a fact about today's gate rather than about the reader. The day
+  anything does resolve there it is live. Cost to close, measured rather than
+  estimated: three engine readers, one web writer, an `id` on `valid_targets`,
+  `session_store`'s annotation, and six test call sites passing `(seat, index)`
+  tuples.
 
 ## Phase 0 — Pre-flight
 

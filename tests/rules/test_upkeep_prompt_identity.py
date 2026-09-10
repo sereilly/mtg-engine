@@ -259,3 +259,148 @@ def test_two_afiya_groves_move_a_counter_onto_two_different_creatures(set_pool):
 
     assert counters_on(bears, "+1/+1") == 1
     assert counters_on(giant, "+1/+1") == 1
+
+
+# ---------------------------------------------------------------------------
+# The two prompts whose subject is not a permanent at all
+# ---------------------------------------------------------------------------
+#
+# The remainder of the class above, and the harder half: a permanent had an id
+# waiting to be used, while a card in a graveyard and an obligation record have
+# nothing to be addressed by. Both are named the way
+# ``engine.game_types.GraveyardTarget`` names a graveyard card — by *which* of
+# the same-named ones, counting from the first — because in both zones the
+# objects are indistinguishable by identity. ``load_cards`` dedupes by
+# ``oracle_id``, so two Nether Shadows in one graveyard are literally one
+# ``CardDefinition``; two Nafs Asp obligations are equal dicts.
+
+@pytest.mark.cr("603.3", "603.3d", "603.5")
+def test_two_eligible_nether_shadows_are_two_offers(set_pool):
+    """Return one Nether Shadow and leave the other in the graveyard.
+
+    CR 603.5: an optional trigger goes on the stack whatever its controller
+    intends, and the choice is made as *that ability* resolves — so two
+    eligible Nether Shadows are two "you may"s. They shared one prompt, and a
+    single "yes" put **both** onto the battlefield: a creature created out of
+    nothing, in the player's favour, and silent because the log's two lines
+    read exactly like two abilities correctly resolving.
+
+    Bottom-to-top the pile is Shadow, Shadow, Bears, Bears, Bears: the bottom
+    Shadow has four creature cards above it and the one on top of it has
+    three, which is the threshold, so both are eligible at once.
+    """
+    lea = set_pool("LEA")
+    shadow, bears = lea["Nether Shadow"], lea["Grizzly Bears"]
+    owner = PlayerState(name="P1", graveyard=[shadow, shadow, bears, bears, bears])
+    game = _upkeep_game(owner, PlayerState(name="P2"))
+
+    prompts = game.get_optional_upkeep_triggers(0)
+    assert [p["card_name"] for p in prompts] == ["Nether Shadow", "Nether Shadow"]
+    # Two offers that can be told apart. Neither carries a permanent id — the
+    # subject is a card in a graveyard — so the ordinal is the whole address.
+    assert [p["permanent_id"] for p in prompts] == [None, None]
+    assert [p["subject_ordinal"] for p in prompts] == [0, 1]
+
+    game.resolve_upkeep(0, optional_choices={
+        "Nether Shadow#0": True,
+        "Nether Shadow#1": False,
+    })
+
+    # The pair is the assertion: one came back and one stayed put. Answering
+    # by name returned both, and answering "no" by name returned neither.
+    assert [p.card.name for p in owner.battlefield] == ["Nether Shadow"]
+    assert [c.name for c in owner.graveyard] == [
+        "Nether Shadow", "Grizzly Bears", "Grizzly Bears", "Grizzly Bears"
+    ]
+    assert sum(
+        "returned Nether Shadow to the battlefield" in line for line in game.log
+    ) == 1
+
+
+@pytest.mark.cr("603.5")
+def test_a_card_name_answer_still_speaks_for_every_graveyard_copy(set_pool):
+    """The legacy shorthand one zone over, stated rather than left as folklore.
+
+    ``resolve_upkeep`` still accepts a printed name for a graveyard subject,
+    because every headless caller and every scripted duel uses one and on a
+    pile holding a single copy it is exact. What it means is "every copy of
+    this card", and the exact address wins over it when both are given —
+    the same precedence ``_upkeep_answers_by_permanent`` gives an id over a
+    name on the battlefield.
+    """
+    lea = set_pool("LEA")
+    shadow, bears = lea["Nether Shadow"], lea["Grizzly Bears"]
+    owner = PlayerState(name="P1", graveyard=[shadow, shadow, bears, bears, bears])
+    game = _upkeep_game(owner, PlayerState(name="P2"))
+
+    game.resolve_upkeep(0, optional_choices={"Nether Shadow": True})
+
+    assert [p.card.name for p in owner.battlefield] == ["Nether Shadow", "Nether Shadow"]
+
+    # And the specific answer overrides the blanket one.
+    second = PlayerState(name="P3", graveyard=[shadow, shadow, bears, bears, bears])
+    other = _upkeep_game(second, PlayerState(name="P4"))
+    other.resolve_upkeep(0, optional_choices={
+        "Nether Shadow": True, "Nether Shadow#1": False,
+    })
+    assert [p.card.name for p in second.battlefield] == ["Nether Shadow"]
+
+
+@pytest.mark.cr("603.5", "603.7")
+def test_two_nafs_asp_obligations_are_two_payments(set_pool):
+    """Pay one "unless you pay {1}" and take the life loss from the other.
+
+    CR 603.7's delayed ability, whose CR 603.5 "unless" is dealt with as it
+    resolves — once per obligation. The two records are equal dicts, so the
+    prompt used to dedupe them by their source's name and apply the one answer
+    to both: a seat quoted ``{1}`` was charged ``{2}``, and a seat that
+    declined once lost 2 life. Which is the same defect
+    ``get_upkeep_pay_triggers`` names one file over — a player charged a price
+    they were not quoted.
+    """
+    arn = set_pool("ARN")
+    assert "Nafs Asp" in arn  # the printed source, so the record is not invented
+    victim = PlayerState(name="P1")
+    victim.mana_pool = {"R": 5}
+    game = _upkeep_game(victim, PlayerState(name="P2"))
+    game.turn = 3
+    game.pending_draw_step_life_loss = [
+        {"player_index": 0, "amount": 1, "cost": 1, "source_name": "Nafs Asp"},
+        {"player_index": 0, "amount": 1, "cost": 1, "source_name": "Nafs Asp"},
+    ]
+
+    prompts = game.get_draw_step_life_loss_choices(0)
+    assert [p["card_name"] for p in prompts] == ["Nafs Asp", "Nafs Asp"]
+    assert [p["subject_ordinal"] for p in prompts] == [0, 1]
+
+    game.resolve_draw_step(0, pay_life_loss={"Nafs Asp#0": True, "Nafs Asp#1": False})
+
+    assert victim.life == 19
+    assert sum("paid {1} to avoid losing life" in line for line in game.log) == 1
+    assert sum("lost 1 life (Nafs Asp)" in line for line in game.log) == 1
+    # Both records are spent either way — a decision made is a decision gone.
+    assert game.pending_draw_step_life_loss == []
+
+
+@pytest.mark.cr("603.7")
+def test_an_obligation_against_another_seat_is_left_alone(set_pool):
+    """Only the drawing player's obligations resolve, and the ordinal is
+    counted per seat — otherwise an opponent's Nafs Asp record would shift
+    which of yours a "pay" answer bought."""
+    victim = PlayerState(name="P1")
+    victim.mana_pool = {"R": 5}
+    game = _upkeep_game(victim, PlayerState(name="P2"))
+    game.turn = 3
+    game.pending_draw_step_life_loss = [
+        {"player_index": 1, "amount": 1, "cost": 1, "source_name": "Nafs Asp"},
+        {"player_index": 0, "amount": 1, "cost": 1, "source_name": "Nafs Asp"},
+    ]
+
+    assert [p["subject_ordinal"] for p in game.get_draw_step_life_loss_choices(0)] == [0]
+
+    game.resolve_draw_step(0, pay_life_loss={"Nafs Asp#0": False})
+
+    assert victim.life == 19
+    assert game.pending_draw_step_life_loss == [
+        {"player_index": 1, "amount": 1, "cost": 1, "source_name": "Nafs Asp"}
+    ]

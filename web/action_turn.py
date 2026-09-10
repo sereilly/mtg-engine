@@ -36,18 +36,21 @@ def _answered_upkeep_prompt(pending: list[dict], req) -> tuple:
     """The pending upkeep prompt *req* is answering, and the key to file it
     under — or an HTTP error naming which half of the address was wrong.
 
-    **The permanent id is required whenever the prompt has one.** A card name
-    alone cannot say which of two Breeding Pits is being paid for, and a
-    request that sends only the name would silently answer whichever prompt
-    matched first — the defect this whole seam was rebuilt to remove, arriving
-    back through the wire. So a prompt carrying ``permanent_id`` is answerable
-    only by ``prompt_permanent_id``; the two that carry none (Nether Shadow's
-    graveyard return, a Nafs Asp obligation) are answered by ``card_name`` as
-    they always were.
+    **An address is required whenever the prompt has one.** A card name alone
+    cannot say which of two Breeding Pits is being paid for, and a request that
+    sends only the name would silently answer whichever prompt matched first —
+    the defect this whole seam was rebuilt to remove, arriving back through the
+    wire. So a prompt carrying ``permanent_id`` is answerable only by
+    ``prompt_permanent_id``, and a prompt whose subject is not a permanent —
+    Nether Shadow's graveyard return, a Nafs Asp obligation — only by
+    ``prompt_subject_ordinal``, which says *which* of the same-named subjects
+    it is. Both narrow to one pending entry; the bare name is left as the
+    answer for a prompt carrying neither, where it can only mean the one.
 
-    An id that names no *pending* prompt is a 400 rather than a fall-through:
-    the client wrote this against the board it last polled, and if that
-    permanent has gone the name beside it now points at a different decision.
+    An address that names no *pending* prompt is a 400 rather than a
+    fall-through: the client wrote this against the board it last polled, and
+    if that permanent has gone the name beside it now points at a different
+    decision.
     """
     if req.prompt_permanent_id is not None:
         match = next(
@@ -62,6 +65,21 @@ def _answered_upkeep_prompt(pending: list[dict], req) -> tuple:
         return match, upkeep_prompt_key(match)
     if not req.card_name:
         raise HTTPException(status_code=400, detail="card_name is required")
+    if req.prompt_subject_ordinal is not None:
+        match = next(
+            (
+                c for c in pending
+                if c["card_name"] == req.card_name
+                and c.get("subject_ordinal") == req.prompt_subject_ordinal
+            ),
+            None,
+        )
+        if match is None:
+            raise HTTPException(
+                status_code=400,
+                detail="that subject is not awaiting an upkeep decision",
+            )
+        return match, upkeep_prompt_key(match)
     match = next(
         (c for c in pending if c["card_name"] == req.card_name), None
     )
@@ -73,6 +91,11 @@ def _answered_upkeep_prompt(pending: list[dict], req) -> tuple:
         raise HTTPException(
             status_code=400,
             detail="prompt_permanent_id is required to answer this decision",
+        )
+    if match.get("subject_ordinal") is not None:
+        raise HTTPException(
+            status_code=400,
+            detail="prompt_subject_ordinal is required to answer this decision",
         )
     return match, upkeep_prompt_key(match)
 

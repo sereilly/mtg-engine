@@ -280,13 +280,19 @@ class TestNafsAsp:
         assert info is not None
         choice = next(c for c in info["pending"] if c["card_name"] == "Nafs Asp")
         assert choice["kind"] == "draw_step_life_loss_unless_pay"
-        assert info["can_pay"]["Nafs Asp"] is True
+        # Filed under the obligation's own address, not under the source's
+        # printed name: two Nafs Asps arm two obligations and each is priced
+        # and answered on its own (tests/ui/test_upkeep_prompt_wire.py).
+        assert info["can_pay"]["Nafs Asp#0"] is True
 
     def test_paying_avoids_the_life_loss(self):
         sid, session, game, p0 = _nafs_session(with_land=True)
         resp = client.post(
             f"/api/sessions/{sid}/action",
-            json={"seat": 0, "action": "pay_upkeep", "card_name": "Nafs Asp"},
+            json={
+                "seat": 0, "action": "pay_upkeep", "card_name": "Nafs Asp",
+                "prompt_subject_ordinal": 0,
+            },
         )
         assert resp.status_code == 200, resp.text
         assert p0.life == 20
@@ -297,7 +303,10 @@ class TestNafsAsp:
         sid, session, game, p0 = _nafs_session(with_land=True)
         resp = client.post(
             f"/api/sessions/{sid}/action",
-            json={"seat": 0, "action": "sacrifice_upkeep", "card_name": "Nafs Asp"},
+            json={
+                "seat": 0, "action": "sacrifice_upkeep", "card_name": "Nafs Asp",
+                "prompt_subject_ordinal": 0,
+            },
         )
         assert resp.status_code == 200, resp.text
         assert p0.life == 19
@@ -308,14 +317,20 @@ class TestNafsAsp:
     def test_a_player_who_cannot_pay_is_shown_as_unable(self):
         sid, session, game, p0 = _nafs_session(with_land=False)
         info = client.get(f"/api/sessions/{sid}/state", params={"seat": 0}).json()["upkeep_pay"]
-        assert info["can_pay"]["Nafs Asp"] is False
+        assert info["can_pay"]["Nafs Asp#0"] is False
 
     def test_the_answer_does_not_leak_into_the_next_turn(self):
         sid, session, game, p0 = _nafs_session(with_land=True)
-        client.post(
+        answered = client.post(
             f"/api/sessions/{sid}/action",
-            json={"seat": 0, "action": "pay_upkeep", "card_name": "Nafs Asp"},
+            json={
+                "seat": 0, "action": "pay_upkeep", "card_name": "Nafs Asp",
+                "prompt_subject_ordinal": 0,
+            },
         )
+        # Asserted, so the emptiness below is a cleared answer rather than a
+        # request the server refused on the way in.
+        assert answered.status_code == 200, answered.text
         assert session.draw_step_life_loss_choices == {}
 
     def test_headless_play_still_auto_pays(self, arn_by_name):

@@ -368,6 +368,17 @@ class GameActionRequest(BaseModel):
     # rather than a 404 here. Required whenever the prompt carries one — a
     # card name cannot say which of two Breeding Pits is being paid for.
     prompt_permanent_id: int | None = Field(default=None, ge=1)
+    # The same address for the two upkeep prompts whose subject is **not** a
+    # permanent and so has no id to be named by: Nether Shadow's return offer
+    # (a card in a graveyard) and a Nafs Asp obligation (a record). Which of
+    # the several same-named subjects this action answers, counting from the
+    # first — ``subject_ordinal`` as the prompt serialized it, and
+    # ``engine/phases/upkeep_step.subject_prompt_key`` is what both sides file
+    # it under. Required whenever the prompt carries one, for
+    # ``prompt_permanent_id``'s reason: a card name alone cannot say which of
+    # two eligible Nether Shadows is being returned, and answering by name
+    # returned both.
+    prompt_subject_ordinal: int | None = Field(default=None, ge=0)
     target_permanent_id: int | None = Field(default=None, ge=1)
     target_permanent_ids: list[int] | None = Field(default=None)
     # One entry per **role** of a several-role announcement, in role order, for
