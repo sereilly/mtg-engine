@@ -716,10 +716,17 @@ def _has_printed_type(card, wanted: str) -> bool:
 
 
 def _subject_matches(
-    colour: str | None, card_types: tuple[str, ...], card
+    colour: str | None, card_types: tuple[str, ...], card, colors
 ) -> bool:
-    """Whether *card* is one of the objects a single printed noun phrase names."""
-    if colour and colour not in (card.colors or ()):
+    """Whether *card* is one of the objects a single printed noun phrase names.
+
+    *colors* is the taxed object's **effective** colours, worked out once by the
+    caller — see :func:`taxed_object_colors`. Passed in rather than read off
+    ``card.colors`` here, because the printed field answers a narrower question
+    than "**white** spells cost {3} more" asks: CR 601.2f is about the spell,
+    and a spell's colour is a layer-5 characteristic like any other.
+    """
+    if colour and colour not in colors:
         return False
     if card_types and not any(
         _has_printed_type(card, wanted) for wanted in card_types
@@ -728,7 +735,28 @@ def _subject_matches(
     return True
 
 
-def _matches(modifier: CostModifier, card) -> bool:
+def taxed_object_colors(game, obj, seat: int | None) -> tuple[str, ...]:
+    """The colours the taxed object has *now* (CR 105, CR 613.1e).
+
+    Every loop below asks this once and hands the answer to :func:`_matches`,
+    which is the difference between a tax on a colour and a tax on a printed
+    mana cost. Both kinds of object reach here — a card being cast or cycled
+    from a hand, and a permanent whose activated ability is being taxed — and
+    ``object_colors`` is the one reader that answers for either.
+
+    *seat* is the object's own seat and not the taxing permanent's: CR 601.2f
+    charges the player casting the spell, and Celestial Dawn's second sentence
+    recolours "spells **you** control and nonland cards **you own**", so a
+    Gloom on one battlefield taxes a Dark Ritual only when the Dawn is on the
+    caster's. A caller with no seat gets the printed answer, which is what every
+    caller here did before this function existed.
+    """
+    from .object_colors import object_colors
+
+    return object_colors(game, obj, seat)
+
+
+def _matches(modifier: CostModifier, card, colors) -> bool:
     """Whether *card* is taxed by *modifier*.
 
     The keyword narrows every subject -- it is printed after the list, so it is
@@ -742,7 +770,7 @@ def _matches(modifier: CostModifier, card) -> bool:
     }:
         return False
     return any(
-        _subject_matches(colour, card_types, card)
+        _subject_matches(colour, card_types, card, colors)
         for colour, card_types in (
             (modifier.colour, modifier.card_types),
             *modifier.alternative_subjects,
@@ -800,7 +828,7 @@ def _names_a_permanent(modifier: CostModifier) -> bool:
 def _tax(
     game, card, applies_to: str, *, wanted: str,
     controller_index: int | None = None, targeted=(), ability=None,
-    on_battlefield: bool = True,
+    on_battlefield: bool = True, subject=None,
 ) -> tuple[int, list[str]]:
     """The total *wanted* ("more" or "less") change to *card*'s cost from every
     permanent on any battlefield, and those permanents' names for the log.
@@ -812,7 +840,7 @@ def _tax(
     total, names, _floor = _tax_floored(
         game, card, applies_to, wanted=wanted,
         controller_index=controller_index, targeted=targeted, ability=ability,
-        on_battlefield=on_battlefield,
+        on_battlefield=on_battlefield, subject=subject,
     )
     return total, names
 
@@ -849,7 +877,7 @@ def _ability_subject_holds(modifier: CostModifier, card, ability) -> bool:
 def _tax_floored(
     game, card, applies_to: str, *, wanted: str,
     controller_index: int | None = None, targeted=(), ability=None,
-    on_battlefield: bool = True,
+    on_battlefield: bool = True, subject=None,
 ) -> tuple[int, list[str], int]:
     """:func:`_tax` plus the highest floor any contributing modifier names.
 
@@ -858,7 +886,17 @@ def _tax_floored(
     reduction charged under somebody else's floor. The floor is the **maximum**
     for ``auras.attached_ability_cost_reduction``'s reason: two reductions must
     not cancel each other's protection against a free ability.
+
+    *subject* is the **object** being taxed, where that is not the card itself:
+    an activation tax is charged to a permanent, whose colour is a layer-5
+    reading and not the printed field on ``effective_card`` (CR 613.1e -- layers
+    1 and 3 are folded into that card, layer 5 is not, because a permanent's
+    colour lives on the permanent). ``None`` means the object *is* the card,
+    which is a spell being cast and every other caller.
     """
+    colors = taxed_object_colors(
+        game, card if subject is None else subject, controller_index
+    )
     total = 0
     floor = 0
     names: list[str] = []
@@ -895,7 +933,9 @@ def _tax_floored(
             # and a Gloom taxed a white enchantment nobody had cast.
             if not on_battlefield and _names_a_permanent(modifier):
                 continue
-            if modifier.applies_to != applies_to or not _matches(modifier, card):
+            if modifier.applies_to != applies_to or not _matches(
+                modifier, card, colors
+            ):
                 continue
             # "**Cycling** abilities you activate…" (Fluctuator) narrows by
             # which ability is being activated rather than by what its source
@@ -954,12 +994,13 @@ def _stack_tax(
     """
     from .stack_statics import stack_static_cost_sources
 
+    colors = taxed_object_colors(game, card, caster_index)
     total = 0
     names: list[str] = []
     for item, modifiers in stack_static_cost_sources(getattr(game, "stack", ())):
         seat = getattr(item, "caster_index", None)
         for modifier in modifiers:
-            if not _matches(modifier, card):
+            if not _matches(modifier, card, colors):
                 continue
             if modifier.controller == "you" and seat != caster_index:
                 continue
@@ -1024,13 +1065,16 @@ def spell_symbol_tax(
     "**you** cast" charges only its own controller's spells and an opponent's
     black spell is untaxed.
     """
+    colors = taxed_object_colors(game, card, caster_index)
     total: dict[str, int] = {}
     names: list[str] = []
     for seat, permanent in game.permanents_with_controller():
         for modifier in cost_modifiers_for(permanent.effective_card.oracle_text):
             if not modifier.symbols or modifier.reduces:
                 continue
-            if modifier.applies_to != "cast" or not _matches(modifier, card):
+            if modifier.applies_to != "cast" or not _matches(
+                modifier, card, colors
+            ):
                 continue
             if modifier.controller == "you" and seat != caster_index:
                 continue
@@ -1181,6 +1225,12 @@ def modified_ability_source_card(source):
     modify — and `getattr(source, "effective_card")` on a `CardDefinition`
     raises, which is how the two ability-cost readers below came to be callable
     only from the battlefield.
+
+    Its **colour** does not come from here, and that is the point of the
+    ``subject`` argument the two readers pass alongside this: ``effective_card``
+    folds in layers 1 and 3 and stops, so a permanent Celestial Dawn has made
+    white still reads its printed colours off this card. The object itself is
+    what layer 5 was applied to.
     """
     return getattr(source, "effective_card", source)
 
@@ -1205,7 +1255,7 @@ def ability_cost_tax(
     return _tax(
         game, modified_ability_source_card(source), "activate", wanted="more",
         controller_index=controller_index, ability=ability,
-        on_battlefield=on_battlefield,
+        on_battlefield=on_battlefield, subject=source,
     )
 
 
@@ -1227,7 +1277,7 @@ def ability_cost_reduction(
     return _tax_floored(
         game, modified_ability_source_card(source), "activate", wanted="less",
         controller_index=controller_index, ability=ability,
-        on_battlefield=on_battlefield,
+        on_battlefield=on_battlefield, subject=source,
     )
 
 

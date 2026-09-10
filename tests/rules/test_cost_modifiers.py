@@ -274,7 +274,10 @@ def test_601_2f_several_subjects_are_still_one_cost_increase():
     assert sum(m.amount for m in modifiers) == 2
     from engine.cost_modifiers import _matches
 
-    assert _matches(modifiers[0], _Card())
+    # The colours are handed in rather than read off the card: they are the
+    # object's *effective* colours (CR 613.1e), which for a card with no board
+    # behind it is the printed pair.
+    assert _matches(modifiers[0], _Card(), ("G", "W"))
 
 
 @pytest.mark.cr("601.2f")

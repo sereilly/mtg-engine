@@ -2855,7 +2855,7 @@ class PermanentStateMixin:
 
     def _card_has_quality(
         self, card: CardDefinition, quality: tuple[str, str], *,
-        as_damage_source: bool = False,
+        as_damage_source: bool = False, seat: int | None = None,
     ) -> bool:
         """The same question of a *card* — a spell on the stack, which has no
         permanent to ask the layers about.
@@ -2866,22 +2866,41 @@ class PermanentStateMixin:
         into a colorless source exactly as it rewrites a red creature. Reading
         ``card.colors`` for a damage question would have left protection from
         red stopping a Lightning Bolt the board had made colorless.
+
+        *seat* is **whose** spell or card this is, and it is what makes the
+        colour half of CR 702.16a a live reading rather than a printed one.
+        "No permanent to ask the layers about" is true and does not mean the
+        layers say nothing: CR 613.1 applies layer 5 to an *object*, and
+        Celestial Dawn's second sentence puts every spell its controller
+        controls in scope. Without the seat a Terror the Dawn had made white
+        was still a black spell here, and a White Knight went on reporting it
+        an illegal target. A caller that cannot say gets the printed answer,
+        which is what every caller gave before the argument existed.
         """
         kind, value = quality
         if kind == "color":
             if as_damage_source:
                 from ..damage_source_colors import damage_source_colors
 
-                return value in damage_source_colors(self, card)
-            return value in card.colors
+                return value in damage_source_colors(self, card, seat=seat)
+            from ..object_colors import card_colors
+
+            return value in card_colors(self, card, seat)
         if kind == "multicolored":
-            return len(set(card.colors)) >= 2
+            # Not rewritten by a damage-source static, mirroring
+            # :meth:`_permanent_has_quality` exactly -- see the reason written
+            # out there. It *is* read through the layers, because that is a
+            # different question and the one this method was getting wrong.
+            from ..object_colors import card_colors
+
+            return len(set(card_colors(self, card, seat))) >= 2
         if kind in ("card_type", "subtype"):
             return value in (card.type_line or "").lower().split()
         return False
 
     def _source_has_quality(
         self, source, quality: tuple[str, str], *, as_damage_source: bool = False,
+        seat: int | None = None,
     ) -> bool:
         """Whether a damage source of **either** shape has *quality*.
 
@@ -2907,12 +2926,16 @@ class PermanentStateMixin:
         card = getattr(source, "card", source)
         if not hasattr(card, "colors"):
             return False
+        # *seat* only ever reaches the card half: a permanent's layers already
+        # know whose it is, so passing it there would be a second opinion.
         return self._card_has_quality(
-            card, quality, as_damage_source=as_damage_source
+            card, quality, as_damage_source=as_damage_source,
+            seat=seat if seat is not None else getattr(source, "caster_index", None),
         )
 
     def _is_protected_from(
         self, victim: Permanent, source, *, as_damage_source: bool = False,
+        seat: int | None = None,
     ) -> bool:
         """True if *victim* has protection from a quality *source* has
         (CR 702.16e/f).
@@ -2928,10 +2951,16 @@ class PermanentStateMixin:
         a spell's printed card — because the damage half is now asked of every
         damage event rather than only of the four combat sites, and those were
         the only callers that could guarantee a permanent.
+
+        *seat* is that source's controller, and only the card half reads it —
+        see :meth:`_card_has_quality`. The damage callers have it already:
+        ``damage_events`` derives ``source_seat`` once per event for exactly
+        this class of question, so the caller passes it rather than deriving a
+        second answer here.
         """
         return any(
             self._source_has_quality(
-                source, quality, as_damage_source=as_damage_source
+                source, quality, as_damage_source=as_damage_source, seat=seat,
             )
             for quality in self._protection_qualities(victim)
         )
@@ -3022,7 +3051,9 @@ class PermanentStateMixin:
             # creature back to the line — so it takes the game and scans, which
             # `printed_about` structurally cannot do.
             if any(
-                spell_is_in_class(source_card, spell_class)
+                spell_is_in_class(
+                    source_card, spell_class, game=self, seat=caster_index,
+                )
                 for spell_class in (
                     spell_target_immunity_classes(target)
                     | board_target_immunity_classes(self, target)
@@ -3095,7 +3126,7 @@ class PermanentStateMixin:
         ):
             return False
         if source_card is not None and any(
-            self._card_has_quality(source_card, quality)
+            self._card_has_quality(source_card, quality, seat=caster_index)
             for quality in qualities
         ):
             return False
@@ -3103,7 +3134,13 @@ class PermanentStateMixin:
             if self._has_keyword(target, "hexproof"):
                 return False
             if source_card is not None:
-                source_colors = set(source_card.colors)
+                # The same layer-5 reading the protection block above makes,
+                # and for the same reason: "hexproof from black" asks what
+                # colour the spell **is** (CR 702.11d), which is not the field
+                # printed on the card.
+                from ..object_colors import card_colors
+
+                source_colors = set(card_colors(self, source_card, caster_index))
                 for word, symbol in _COLOR_WORD_TO_SYMBOL.items():
                     if symbol in source_colors and self._has_keyword(
                         target, f"hexproof from {word}"

@@ -653,13 +653,21 @@ def cannot_be_enchanted(permanent, *, by_aura=None) -> bool:
     )
 
 
-def spell_is_in_class(card, spell_class: str) -> bool:
+def spell_is_in_class(
+    card, spell_class: str, *, game=None, seat: int | None = None
+) -> bool:
     """Whether a spell being cast belongs to *spell_class*.
 
     :data:`ANY_SPELL` is every spell; anything else is a subtype, asked through
     the reader every other subtype question uses — a card has every subtype its
     line prints, and picking one off a list is how an "Enchantment — Aura" stops
     being an Aura.
+
+    *game* and *seat* are for the colour classes alone, and they are what makes
+    "what it is now" mean the same thing here as it does on the battlefield: a
+    spell's colour is a layer-5 characteristic of an object (CR 613.1), so a
+    caller that can say whose spell it is gets the board's answer and one that
+    cannot gets the printed one.
     """
     if spell_class == ANY_SPELL:
         return True
@@ -670,7 +678,9 @@ def spell_is_in_class(card, spell_class: str) -> bool:
         # what it was printed as.
         from .damage_source_colors import source_colors
 
-        return spell_class[len(COLOR_CLASS_PREFIX):] in source_colors(card)
+        return spell_class[len(COLOR_CLASS_PREFIX):] in source_colors(
+            card, game=game, seat=seat
+        )
     from .search_filters import card_has_type
 
     return card_has_type(card, spell_class)

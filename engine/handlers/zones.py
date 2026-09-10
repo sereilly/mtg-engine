@@ -6885,6 +6885,8 @@ def grant_cast_permission(game: Game, instruction: OracleInstruction, context: O
         # the caster's own graveyard; the chosen index is honoured when it
         # names a legal card, else the first legal card stands in, the same
         # fallback every other stale-choice path takes.
+        from ..object_colors import object_colors
+
         card_types = tuple(payload.get("card_types") or ())
         colors = tuple(payload.get("colors") or ())
 
@@ -6897,7 +6899,9 @@ def grant_cast_permission(game: Game, instruction: OracleInstruction, context: O
                 card_has_type(card, name) for name in card_types
             ):
                 return False
-            if colors and not any(color in card.colors for color in colors):
+            if colors and not any(
+                color in object_colors(game, card, caster) for color in colors
+            ):
                 return False
             return True
 

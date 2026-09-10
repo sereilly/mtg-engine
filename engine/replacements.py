@@ -925,7 +925,10 @@ def _spell_damage_delta(game, payload: dict) -> int:
             if read is None:
                 continue
             source_class, points = read
-            if not _source_answers_class(game, payload.get("source"), source_class):
+            if not _source_answers_class(
+                game, payload.get("source"), source_class,
+                payload.get("source_seat"),
+            ):
                 continue
             total += points
     return total
@@ -977,7 +980,9 @@ def _match_group(pattern, line: str, group: str) -> str | None:
     return match.group(group) if match is not None else None
 
 
-def _source_answers_class(game, source, source_class: str) -> bool:
+def _source_answers_class(
+    game, source, source_class: str, seat: int | None = None
+) -> bool:
     """Whether *source* is in the class a redirect or a delta names.
 
     A leading **colour word** is peeled off first and tested through
@@ -996,7 +1001,7 @@ def _source_answers_class(game, source, source_class: str) -> bool:
 
     word, _, rest = source_class.partition(" ")
     if rest and word in COLOR_WORDS:
-        if COLOR_WORDS[word] not in damage_source_colors(game, source):
+        if COLOR_WORDS[word] not in damage_source_colors(game, source, seat=seat):
             return False
         source_class = rest
     if source_class == "unblocked creatures":
@@ -1071,7 +1076,10 @@ def _protecting_bodyguard(game, payload: dict):
             source_class = redirect_to_self_source_class(line)
             if source_class is None:
                 continue
-            if _source_answers_class(game, payload.get("source"), source_class):
+            if _source_answers_class(
+                game, payload.get("source"), source_class,
+                payload.get("source_seat"),
+            ):
                 return permanent
     return None
 

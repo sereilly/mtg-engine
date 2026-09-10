@@ -1,4 +1,4 @@
-"""What colour a card is when it is **not** on the battlefield.
+"""What colour an object is (CR 105) — a card in a zone, a spell, a permanent.
 
 CR 105 asks the question of every object, and CR 613.1e answers it for a
 permanent through the layer system. A card in a hand, a graveyard, a library or
@@ -12,8 +12,16 @@ question: with the Dawn out, the Swamp-turned-Plains in play is white *and* so
 is the Dark Ritual still in hand, which is what lets it be cast at all under the
 Dawn's own spending restriction.
 
-**One reader, three callers**, which is the whole point of the module. The
-colour of a card outside the battlefield used to be read in three places that
+**One reader**, which is the whole point of the module -- and since the ULG
+round it answers for a permanent too (:func:`object_colors`), by handing that
+half to the layer system. Not because a permanent needed a second reader, but
+because half this module's callers hold "a spell **or** a permanent" and cannot
+say which: a cost tax reads a card being cast and a permanent whose ability is
+being activated, and protection reads a spell's colour and a creature's. A
+caller that has to branch on the kind of object is a caller that can forget one
+of the two, which is how every site below came to read the printed field.
+
+The colour of a card outside the battlefield used to be read in three places that
 could not agree — ``handlers/_common._card_matches_filter`` (a filter payload),
 ``search_filters.card_colors`` (a library search) and ``_stack_item_colors`` (a
 spell) — and each read the printed field. Two of those took neither a game nor
@@ -119,4 +127,34 @@ def card_colors(game=None, card=None, seat=None) -> tuple[str, ...]:
     return override if override is not None else printed
 
 
-__all__ = ["card_colors", "color_override_for_seat"]
+def object_colors(game, obj, seat=None) -> tuple[str, ...]:
+    """The effective colours of **any** object (CR 105 over CR 109.1).
+
+    CR 613.1 is about an *object*, not a permanent: "the values of an object's
+    characteristics are determined by starting with the actual object … then
+    all applicable continuous effects are applied", and layer 5 is one of them.
+    A permanent's answer comes out of the layer system; every other object's
+    comes out of :func:`card_colors` above. Two derivations because the two
+    kinds of object genuinely have nothing in common -- one reads a per-object
+    layer stack, the other scans a seat's board -- but **one place they are
+    asked**, which is what a caller holding "a spell or a permanent" needs.
+
+    Dispatched on ``effective_colors``, which is what a ``Permanent`` has and a
+    ``CardDefinition`` does not, for ``_source_has_quality``'s reason exactly: a
+    token, an animated land and a copy are all permanents by that question and
+    the import stays out. Empty is a real answer on both sides (CR 105.2c), so
+    the dispatch is ``is not None`` and never truthiness.
+
+    *seat* is ignored for a permanent, which is right rather than lax: the
+    layers already know whose it is, and a caller holding a board object should
+    not have to say.
+    """
+    if obj is None:
+        return ()
+    effective = getattr(obj, "effective_colors", None)
+    if effective is not None:
+        return tuple(sorted(effective))
+    return card_colors(game, getattr(obj, "card", obj), seat)
+
+
+__all__ = ["card_colors", "color_override_for_seat", "object_colors"]

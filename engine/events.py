@@ -552,11 +552,27 @@ def _spell_cast_filter(
     # dispatcher reading a narrowing nothing produced, which is round 1's
     # shape with the halves swapped: harmless while dead, and a second
     # opinion about what "an artifact spell" means the moment it was not.
-    return _cast_narrowing_admits(game, permanent, trig, card)
+    return _cast_narrowing_admits(
+        game, permanent, trig, card, event.payload.get("caster_index")
+    )
+
+
+def _cast_colors(game: Game, card, caster: int | None) -> tuple[str, ...]:
+    """The colours the cast spell has (CR 105 through CR 613.1e).
+
+    Its own two lines because three narrowings ask it — the singular colour
+    word, Quirion Dryad's colour list and Invoke Prejudice's "doesn't share a
+    color" — and three copies of ``card.colors`` is how all three came to be
+    blind to Celestial Dawn at once.
+    """
+    from .object_colors import card_colors
+
+    return card_colors(game, card, caster)
 
 
 def _cast_narrowing_admits(
-    game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, card
+    game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, card,
+    caster: int | None = None,
 ) -> bool:
     """Whether *card* answers this cast trigger's printed narrowing.
 
@@ -564,6 +580,11 @@ def _cast_narrowing_admits(
     **instant or sorcery** spell" counts instants and sorceries and nothing
     else — so the narrowing is asked once here and reused, rather than the
     counting loop growing its own copy of the type tests below.
+
+    *caster* is who cast it (CR 109.5), for the colour narrowings alone: a
+    spell's colour is a layer-5 characteristic of an object (CR 613.1), so
+    "casts a **blue** spell" asks what the spell is now and not what its mana
+    cost was printed as. A caller with no seat gets the printed reading.
 
     *game* and *permanent* are here for the one narrowing that is not about the
     cast card alone: "…that doesn't share a color with a creature you control"
@@ -580,7 +601,9 @@ def _cast_narrowing_admits(
     # is a colour the opponent-scoped spelling silently ignores — Freyalise's
     # Charm and Leshrac's Sigil would have fired on an opponent's every spell.
     colour_word = trig.condition.payload.get("color_word")
-    if colour_word and _COLOR_SYMBOLS.get(colour_word) not in (card.colors or ()):
+    if colour_word and _COLOR_SYMBOLS.get(colour_word) not in _cast_colors(
+        game, card, caster
+    ):
         return False
     cast_types = trig.condition.payload.get("cast_types")
     if cast_types and not any(word in type_line for word in cast_types.split(" or ")):
@@ -613,7 +636,7 @@ def _cast_narrowing_admits(
         from .subject_filters import subject_matches
 
         observer = game.players.index(_controller_of(game, permanent))
-        cast_colors = set(card.colors or ())
+        cast_colors = set(_cast_colors(game, card, caster))
         for candidate in game.all_permanents():
             if not subject_matches(
                 game, candidate, dict(unshared), observer=observer,
@@ -678,7 +701,7 @@ def _controller_cast_filter(
             for word in cast_colors.replace(",", " ").split()
             if word in _COLOR_SYMBOLS
         }
-        if wanted and not (wanted & set(card.colors)):
+        if wanted and not (wanted & set(_cast_colors(game, card, caster_index))):
             return False
     # "…a noncreature spell" (Spellgorger Weird): the type word from the
     # trigger's own text, tested against the cast card's type line — "non"
@@ -715,7 +738,7 @@ def _controller_cast_filter(
         caster = game.players[caster_index]
         matching = [
             spell for spell in caster.spells_cast_this_turn
-            if _cast_narrowing_admits(game, permanent, trig, spell)
+            if _cast_narrowing_admits(game, permanent, trig, spell, caster_index)
         ]
         if len(matching) != 1 or matching[0] is not card:
             return False
@@ -765,7 +788,7 @@ def _opponent_cast_filter(
         caster = game.players[caster_index]
         matching = [
             spell for spell in caster.spells_cast_this_turn
-            if _cast_narrowing_admits(game, permanent, trig, spell)
+            if _cast_narrowing_admits(game, permanent, trig, spell, caster_index)
         ]
         if len(matching) <= exempt:
             return False
@@ -791,7 +814,7 @@ def _opponent_cast_filter(
                 return False
     # "…casts an **artifact** spell" (Citanul Druid), asked of the same helper
     # the other two cast kinds use.
-    return _cast_narrowing_admits(game, permanent, trig, card)
+    return _cast_narrowing_admits(game, permanent, trig, card, caster_index)
 
 
 # The controller clause of a "whenever a <filter> becomes tapped" condition, as
