@@ -41,7 +41,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 6ED | 335 | 404 | 95.5% | 95.5% | 65.8% | 243 |
 | UDS | 143 | 204 | 91.7% | 91.2% | 65.7% | 121 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| MMQ *(measured)* | 335 | 465 | 83.0% | 80.4% | 56.6% | 239 |
+| MMQ *(measured)* | 335 | 465 | 85.2% | 83.0% | 58.7% | 249 |
 | **All (shipped)** | **5829** | **8560** | **90.6%** | **90.0%** | **60.7%** | **4401** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -54,9 +54,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 472 | 211 | expected a subject |  |
-| 144 | 74 | unrecognized effect verb |  |
-| 114 | 58 | unconsumed text |  |
+| 464 | 203 | expected a subject |  |
+| 143 | 73 | unrecognized effect verb |  |
+| 113 | 57 | unconsumed text |  |
 | 42 | 25 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 16 | 14 | expected 'unless defending player controls' |  |
@@ -1179,6 +1179,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature attacks, it gets +0/+3 until end of turn.`
 - **Chariot of the Sun**
   - `{2}, {T}: Until end of turn, target creature you control gains flying and has base toughness 1.`
+- **Charisma**
+  - `Whenever enchanted creature deals damage to a creature, gain control of the other creature for as long as this Aura remains on the battlefield.`
 - **Charm Peddler**
   - `{W}, {T}, Discard a card: The next time a source of your choice would deal damage to target creature this turn, prevent that damage.`
 - **Charmed Griffin**
@@ -1410,6 +1412,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}{W}: Prevent the next 1 damage that would be dealt to any target this turn.`
 - **Commander Greven il-Vec**
   - `When Commander Greven il-Vec enters, sacrifice a creature.`
+- **Common Cause**
+  - `Nonartifact creatures get +2/+2 as long as they all share a color.`
 - **Compost**
   - `Whenever a black card is put into an opponent's graveyard from anywhere, you may draw a card.`
 - **Conch Horn**
@@ -1508,6 +1512,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Counter target spell.`
 - **Covetous Dragon**
   - `When you control no artifacts, sacrifice this creature.`
+- **Cowardice**
+  - `Whenever a creature becomes the target of a spell or ability, return that creature to its owner's hand. (It won't be affected by the spell or ability.)`
+- **Crag Saurian**
+  - `Whenever a source deals damage to this creature, that source's controller gains control of this creature.`
 - **Crash**
   - `Destroy target artifact.`
 - **Crash Through**
@@ -3838,6 +3846,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Ivory Guardians**
   - `Creatures named Ivory Guardians get +1/+1 as long as an opponent controls a nontoken red permanent.`
   - `Creatures named Ivory Guardians get +1/+1 as long as an opponent controls a nontoken red permanent.`
+- **Ivory Mask**
+  - `You have shroud. (You can't be the target of spells or abilities.)`
 - **Ivy Seer**
   - `{2}{G}, {T}: Reveal any number of green cards in your hand. Target creature gets +X/+X until end of turn, where X is the number of cards revealed this way.`
 - **Jabari's Banner**
@@ -4286,6 +4296,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Untap target land.`
 - **Ley Line**
   - `At the beginning of each player's upkeep, that player may put a +1/+1 counter on target creature of their choice.`
+- **Liability**
+  - `Whenever a nontoken permanent is put into a player's graveyard from the battlefield, that player loses 1 life.`
 - **Library Larcenist**
   - `Whenever this creature attacks, draw a card.`
 - **Library of Alexandria**
@@ -5742,6 +5754,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this creature enters, each opponent creates a 1/1 red Pirate creature token with "This token can't block" and "Creatures you control attack each combat if able."`
 - **Pursuit of Knowledge**
   - `Remove three study counters from this enchantment, Sacrifice this enchantment: Draw seven cards.`
+- **Putrefaction**
+  - `Whenever a player casts a green or white spell, that player discards a card.`
 - **Pygmy Hippo**
   - `Whenever this creature attacks and isn't blocked, you may have defending player activate a mana ability of each land they control and lose all unspent mana. If you do, this creature assigns no combat damage this turn and at the beginning of your next main phase this turn, you add an amount of {C} equal to the amount of mana that player lost this way.`
 - **Pygmy Pyrosaur**
@@ -6953,6 +6967,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Snake Basket**
   - `{X}, Sacrifice this artifact: Create X 1/1 green Snake creature tokens. Activate only as a sorcery.`
   - `{X}, Sacrifice this artifact: Create X 1/1 green Snake creature tokens. Activate only as a sorcery.`
+- **Snake Pit**
+  - `Whenever an opponent casts a blue or black spell, you may create a 1/1 green Snake creature token.`
 - **Snap**
   - `Return target creature to its owner's hand. Untap up to two lands.`
 - **Snarespinner**
@@ -7185,6 +7201,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{0}: The next 1 damage that would be dealt to this creature this turn is dealt to target creature you control instead.`
 - **Spirit of Malevolence**
   - `When this creature dies, each opponent loses 1 life and you gain 1 life.`
+- **Spiritual Focus**
+  - `Whenever a spell or ability an opponent controls causes you to discard a card, you gain 2 life and you may draw a card.`
 - **Spiritual Sanctuary**
   - `At the beginning of each player's upkeep, if that player controls a Plains, they gain 1 life.`
 - **Spitting Drake**
@@ -8098,6 +8116,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Draw a card at the beginning of the next turn's upkeep.`
   - `Target creature gains flying until end of turn.`
   - `Draw a card at the beginning of the next turn's upkeep.`
+- **Uphill Battle**
+  - `Creatures played by your opponents enter tapped.`
 - **Urborg**
   - `{T}: Add {B}.`
   - `{T}: Target creature loses first strike or swampwalk until end of turn.`
