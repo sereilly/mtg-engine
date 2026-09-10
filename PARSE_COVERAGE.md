@@ -12,6 +12,47 @@ unclaimed text. Do not edit by hand.
 - With UNCLAIMED text (must fix or acknowledge): **0**
 - With deletion-probe findings (ignored words): **426**
 
+## Measured sets — reported, not gated
+
+Cards in a `measured` set (see `cards/manifest.json`) that the
+compiler calls **supported** while carrying a printed line nothing
+implements. They are the debt behind that set's progress number, and
+`--hollow-lines` sees only the ones that produced an *ability part* —
+a line yielding nothing at all leaves that probe nothing to find.
+
+Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
+`HOOK_RELIANCE.md`'s ceilings exclude the same sets: a ratchet over a
+set nobody has implemented fires on its composition rather than on
+anything anyone did, and every ingest would arrive red.
+
+**13 unclaimed sentence(s) across 12 supported card(s).**
+
+- **Barbed Wire**
+  - `{2}: prevent the next 1 damage that would be dealt by this artifact this turn`
+- **Conspiracy**
+  - `creatures you control are the chosen type`
+  - `the same is true for creature spells you control and creature cards you own that aren't on the battlefield`
+- **Invigorate**
+  - `if you control a forest, rather than pay this spell's mana cost, you may have an opponent gain 3 life`
+- **Jeweled Torque**
+  - `whenever a player casts a spell of the chosen color, you may pay {2}. if you do, you gain 2 life`
+- **Kyren Toy**
+  - `{t}, remove x charge counters from this artifact: add an amount of {c} equal to x plus one`
+- **Land Grant**
+  - `if you have no land cards in hand, you may reveal your hand rather than pay this spell's mana cost`
+- **Mercadian Lift**
+  - `{t}, remove x winch counters from this artifact: you may put a creature card with mana value x from your hand onto the battlefield`
+- **Orim's Cure**
+  - `if you control a plains, you may tap an untapped creature you control rather than pay this spell's mana cost`
+- **Ramosian Rally**
+  - `if you control a plains, you may tap an untapped creature you control rather than pay this spell's mana cost`
+- **Rouse**
+  - `if you control a swamp, you may pay 2 life rather than pay this spell's mana cost`
+- **Snuff Out**
+  - `if you control a swamp, you may pay 4 life rather than pay this spell's mana cost`
+- **Soothsaying**
+  - `{x}: look at the top x cards of your library, then put them back in any order`
+
 ## Acknowledged simplifications
 
 | Card | Sentence | Why it is acceptable |

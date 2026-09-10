@@ -229,6 +229,23 @@ def _parse_counter_removal_cost(stream: TokenStream) -> ast.RemoveCounterCost:
     counter = _expect_counter_kind(stream, " to remove").text
     stream.expect_word("counter", "counters")
     stream.expect_word("from")
+    # "Remove **X** winch counters from this artifact" (Mercadian Lift). Three
+    # count shapes reach a charger -- a printed number, "any number of" and
+    # "all" -- and every other one is charged as ``a``, which is this
+    # production's own invariant broken from the inside: the grammar admits the
+    # ability, the payment path removes one counter or none, and the effect
+    # behind it reads an X nobody announced. An announced X is a real cost shape
+    # (CR 601.2b) and it wants the announcement channel, the payability check
+    # against what the permanent holds, and a client that offers the box -- none
+    # of which exist for a cost whose ``{X}`` is a printed word rather than a
+    # mana symbol. Until they do, refusing is the honest answer: the card
+    # reports unsupported naming this clause instead of being activated for
+    # free, for ever.
+    if not isinstance(count, (ast.Fixed, ast.AnyNumber, ast.AllOf)):
+        raise stream.error(
+            "a counter-removal cost is charged as a printed number, "
+            '"any number of" or "all"'
+        )
     if accept_source_reference(stream):
         return ast.RemoveCounterCost(counter, count)
     marked = stream.mark()
