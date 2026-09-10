@@ -233,7 +233,13 @@ to use it, and commit instead), and a **shared scratch directory collides**
 — give each group a private subdirectory or they overwrite each other's probes.
 
 **Write each decline as a list of parts, and the next wave finishes them for
-free.** This is the highest-leverage instruction in the whole process. Ice Age
+free.** This is the highest-leverage instruction in the whole process. Expect
+the *parts* to be wrong and take them anyway: UDS's three wave-2 cards each
+arrived with a list of four to nine named pieces, and in every case roughly half
+were already built — a resolver where the list said an enumeration, two words
+where it said a subsystem, an existing prompt kind where it said a new one. A
+list that is half wrong still routes the round to the right file and is
+answerable in an afternoon; "too complex" is answerable by nobody. Ice Age
 declined ten cards across three waves, every one with its missing pieces
 enumerated individually rather than as "too complex" — and other groups then
 built those pieces as a side effect of unrelated work. Chaos Moon's parity
@@ -1611,6 +1617,75 @@ reach** the fix even when the engine is right, because `prompts` sits below
 `serialize_card` at all. The missing piece is a second injected callable taking
 a permanent — one line at each of three sites once it exists.
 
+**Added at UDS's wave 2, declined with its parts named: a spell's targets live
+in one description, a *sequence's* live in several, and the roles walk only
+reads the first.** Donate's two slots (a player and a permanent) are one
+`targets` description on one instruction, which is what W2G1 taught
+`role_object_at` and the walk to resolve. **Shower of Sparks** (USG) and
+**Superior Numbers** (MIR) are not that shape: the first is a `sequence` of two
+independent `deal_damage` steps each with its own description, so both points
+land on the creature and the player takes none; the second's opponent is a bare
+`owner: "target_opponent"` inside an `x_from_count` payload and is not a
+`targets` description at all — measured, the engine substitutes the target's
+controller when that is an opponent and the first opponent otherwise, so at
+three seats the caster cannot say whose creatures are counted.
+
+Five parts: `_from_instructions` builds roles **across** a sequence's steps
+instead of returning the first step's spec; each targeting step carries its own
+`role` name in the shared description; `deal_damage` and every other per-step
+handler resolves through `resolve_role_permanent` / `resolve_role_player`
+instead of `resolve_target_permanent`; a count payload's `owner:
+"target_opponent"` becomes an announced role (Superior Numbers alone,
+independent of the rest); and the AI's chosen seat for a player role, which is a
+valuation rather than a policy weight. The pool census for the class is **seven
+shipped cards** — Drafna's Restoration, Gaea's Blessing, Phelddagrif, Reap,
+Shower of Sparks, Soldevi Heretic, Superior Numbers. No regression tests were
+written for them, deliberately: a test asserting the current wrong behaviour is
+worse than none.
+
+**Added at UDS's wave 2: nineteen choice kinds whose resolver never takes its
+own choice off the queue.** `_resolve_pay_any_amount` was one and is fixed —
+after Liege of the Hollows died and both seats paid, the game reported a
+decision nobody owed and refused every further action by the seat that had
+already answered. It was hidden because `auto_resolve_pending_choices` discards
+for AI and headless seats, so only a *confirmed* answer wedges. The other
+nineteen are `body_choice`, `cast_choice`, `choose_cards_in_hand`,
+`entry_exile`, `graveyard_exile_pick`, `opponent_damage`, `permanent_choice`,
+`player_choice`, `retarget_choice`, plus ten that delegate to
+`resolve_replacement_choice` and use the other queue (probably fine). Each needs
+a per-kind probe to say whether it actually wedges. The general fix is one of
+two one-line changes with a whole-pool blast radius — teach `ChoiceSpec.open_for`
+that an `_answered` choice is closed (Word of Command is `suspends=False`, so
+untouched), or discard in `resolve_pending_choice` — which is why it is an entry
+rather than a round's tail.
+
+**Added at UDS's Phase 4: a triggered ability with a graveyard target announces
+nothing.** `graveyard_creature` is deliberately outside
+`_CHOOSABLE_TRIGGER_TARGET_KINDS`, so Junk Diver's "return **another** target
+artifact card from your graveyard to your hand" resolves doing nothing when no
+legal card exists, rather than being removed from the stack by CR 603.3c — and
+with two legal artifact cards a human never picks which comes back. The
+observable outcome is now right (the source excludes itself); the announcement
+is not. The same gap covers every graveyard-targeting trigger in the pool,
+including Iridescent Drake, whose target is chosen by `reanimate_creature`'s
+fallback search rather than by its controller. Widening that set is the round.
+
+**Added at UDS's Phase 4: `costs.py` is now the third reader of the printed word
+"another", and its recorded reason for being separate is stale.** The comment at
+`engine/grammar/costs.py:59-63` says teaching the noun parser an "another"
+quantifier "would change every targeted line in the pool"; `parse_target_spec`
+has had **two** `another` branches for sets, recording `distinct_from_prior`.
+The decision itself must stand as-is — `costs.py` consumes the word before
+`parse_target_spec` sees it, and if it stopped, the spec would come back
+quantifier `"a"` with `distinct_from_prior=True` and `_parse_cost_object`'s
+`replace(spec.filter, …)` would **silently drop it**, which is this round's own
+bug class. Unifying the three readers moves every cost payload in the pool.
+Its CR citation is also wrong: 602.5c is about a restriction on an ability
+acquired from another object. **CR 113.7** is the rule that makes "another" mean
+the source (113.7a for last-known information); several comments in
+`engine/subject_filters.py` and around it miscite **CR 109.5**, which is about
+"you"/"your", and `test_cr_citation_subjects.py` polices only the 701 block.
+
 ## Phase 0 — Pre-flight
 
 **Entry:** a set has been chosen. **Exit:** clean tree, every gate green,
@@ -2334,6 +2409,16 @@ reported a disagreement it had invented about a card whose subject is
 enchantments. **Run the card.** Neither could be told from the other by reading,
 and driving each took a minute.
 
+**And the rule cuts the other way, which UDS is the instance of.** Thran Golem
+— "As long as this creature is enchanted, it gets +2/+2 and has flying, first
+strike, and trample" — read 4/5 with no keywords off **both** the engine and the
+wire, which looks exactly like the set's headline mechanic being dropped on the
+client. It was the probe: nothing in it had run a state-based-action check, and
+`check_state_based_actions` is what recomputes a conditional static. A real game
+runs one constantly. **A card that looks broken from outside a game is not a
+finding until it is driven inside one**, and the cost of skipping that is a
+retrospective naming a defect that never existed.
+
 **And expect that to stop being true once the guards are fixed.** Weatherlight's
 rehearsal turned seven guards red and **every one was a real finding** — the
 first promotion in this project where none of them was the guard.
@@ -2360,6 +2445,21 @@ reported unenforceable. **When a pool-wide census disagrees with a card, run the
 card first** — the enforcement path and the census must be handed the same
 arguments, and a census that takes fewer of them is reading a different
 sentence.
+
+**Urza's Destiny paid that twice in one set, once at the gate and once inside a
+round, so the rule is now: a census gets the same probe a refusal site does.**
+A promotion-gate finding sized a dropped rider at "40 supported cards, none
+carrying the exclusion" — from a probe that walked `ObjectFilter` and never
+looked at the neighbouring `TargetSpec`, where the word had been recorded for
+sets, and from grepping the compiled payload for the **AST field name** rather
+than the payload key that is actually written. The real number was three. A
+wave-2 census had the same shape one level worse: it called
+`activate_permanent_ability`, which settles the stack itself, so it examined
+**zero** announcements and **passed on the broken engine**. Both were caught by
+re-deriving rather than by reading. Two habits follow — spell the key you grep
+for out of the code that reads it, never out of the AST; and make a sweep assert
+a floor on how much it measured, because a sweep that measured nothing looks
+exactly like a sweep that found nothing.
 
 **A guard that checks a proxy needs the proxy's availability asserted too**, and
 a reprint set is what collects on that. Two fired at 4ED. One proved
@@ -3418,3 +3518,64 @@ count; `web/serialization.py` still prices Gloom by hand, which this wave turned
 into a live divergence; Balance and Kudzu count by printed type in five engine
 sites plus a client that cannot reach the fix). Zero hooks added, zero caps
 crossed, and the CI baseline Phase 0 owed was refreshed 571s → 677s.
+
+### UDS — 2026-09-10
+
+*The two rounds with no cards in them found more broken shipped cards than the
+set had cards, and both numbers were measured rather than estimated.* Wave 2
+gave two of five groups the pile wave 1 had enumerated. One found that
+`_activate_onto_stack` settled "which seat is this pointed at" **before** the
+StackItem existed, so an announcement with no seat reached the stack as "the
+opponent" and every id on the activator's own battlefield was thrown away behind
+it: **382 shipped cards in the class, 209 demonstrably misresolving** — 163
+acting on a permanent nobody chose while logging success — plus **151 of 275**
+targeting instants and sorceries on the cast path, which wave 1 never mentioned.
+The other found `Game._settle` running resolutions with `pause_for_choices`
+False whoever was playing, so **267 prompt-armings across 255 shipped cards**
+were queued with nothing holding them and CR 704.3's sweep ran on a resolution
+that had not finished. Both reported `oracle_diff` 0 of 3,715, correctly.
+
+*Both groups' censuses were wrong before they were right, in the same shape, and
+so was the integrator's.* One sweep called `activate_permanent_ability`, which
+settles the stack itself — so it examined **zero** announcements and **passed on
+the broken engine**; it now asserts a floor on how much it measured. And the
+promotion gate's own "another" brief claimed the parser drops the word, from a
+probe that walked `ObjectFilter` and never looked at `TargetSpec`, where
+`parse_target_spec` had recorded it for sets; its "40 cards" came from grepping
+the payload for `other_than_source`, the **AST field name**, when the payload
+key is `exclude_self`. Phase 4's text now says a census gets the same probe a
+refusal site does.
+
+*The real finding under that wrong brief is the one to keep.* The graveyard
+family **has** a gate for narrowings it cannot honour — `_reads_no_return_
+restriction`, which explicitly refuses `other_than_source`. It reads the
+ObjectFilter; the word was on the neighbouring TargetSpec. Junk Diver returned
+itself from an empty graveyard, supported the whole way through. **A rider on
+the dataclass beside the one a gate reads is invisible to it.**
+
+*The rehearsal split eight red guards three ways and only running the card told
+them apart.* Three ratchets, four review items, one real finding. One review
+item was the guard: `test_static_line_support` keeps its own list of which
+derivation tables exist and had never been told about `combat_permissions`, so
+Wall of Glare's working ceiling of 1,000,000 read as an unbacked line. And the
+discipline cut the other way too — Thran Golem read 4/5 with no keywords on both
+the engine *and* the wire until the probe ran a state-based-action check, which
+a real game does constantly. **A card that looks broken from outside a game is
+not evidence until it is driven inside one.**
+
+*Zero hooks added across 143 cards, the ninth consecutive set*, and reliance
+fell to **1.4%**. Ten group briefs said a name-keyed hook was the last resort.
+
+*Two waves, ten groups, three cap crossings and one merge hazard that mattered.*
+`lowering/zones.py` crossed at integration on nobody's branch — two groups'
+additions summing — and the shuffles left under their own name.
+`_chosen_graveyard_cards` did **not** stay behind, measured rather than assumed:
+both halves call it, so it went to `_piles`. Two branches wrote
+`_STATE_TESTS["enchanted"]` independently and agreed on the reading; the merge
+kept one helper and routed the other's filter key through it.
+
+*One mechanical hazard worth the line it costs.* The per-set block
+reconstruction reads the merge base with `git show` — and doing that in **text**
+mode decodes UTF-8 as cp1252 on Windows and silently mangles every em dash in
+both branches' blocks. Read bytes. The per-line survival sweep caught it because
+the mangled lines stopped matching, which is the sweep earning its place.
