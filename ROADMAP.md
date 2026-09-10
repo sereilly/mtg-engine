@@ -51,11 +51,19 @@ Anything that weakens these is a regression regardless of what it enables:
 
 1. **No silent wrongness.** A card may fail loudly as unsupported with a
    reason; it may never resolve as something other than what it says.
-2. **The suite stays fast.** **17,804 tests**, CI budget **940s**, CI-measured
-   baseline **571s** (`ci.yml`), read from run 34081047302: `suite wall time:
-   571s`, **60% of budget**, creep warning not firing. The test count is
-   Exodus's Phase 6 reading (2026-09-07); the baseline predates the set, and
-   the next Phase 0 owes CI a fresh one.
+2. **The suite stays fast.** **19,533 tests**, CI budget **940s**, CI-measured
+   baseline **677s** (`ci.yml`), read from run 34296564407: `suite wall time:
+   677s`, **72% of budget**. The test count is 6ED's Phase 6 reading
+   (2026-09-09); the baseline is the freshest runner number and predates the
+   set, so the next Phase 0 owes CI another.
+
+   **The creep warning no longer fires first**, and that is the live cost of the
+   refresh rather than a thing to fix by raising the budget. At BASELINE 677 the
+   1.5x warning is 1,016s, above the 940s gate — so until the next raise the
+   percentage line is the only creep signal. It is also the one this project has
+   always said matters. BUDGET stays at 940 because 72% is not pressing against
+   it; the next raise takes it to ~1,140, owed on the earlier of a ~750s reading
+   or the ordering staying inverted for another set.
 
    The rules that number lives by, each learned at a cost:
 
@@ -77,7 +85,12 @@ Anything that weakens these is a regression regardless of what it enables:
      Today BUDGET is 1.65x BASELINE rather than the ~2x this gate wants, so the
      creep warning sits 9% below the gate instead of ~22% — it still fires
      first.
-   * Growth is real and mild: +14.4% tests took +21.5% runner wall time, the
+   * **One reading is not the suite's cost.** Three adjacent main runs measured
+     540s, 625s and 677s — a 25% spread across days, mostly runner weather.
+     That is the argument for keeping headroom, and against reading any single
+     number as the truth; BASELINE takes the latest per the method note, which
+     is the conservative direction for a gate and the wrong one for a warning.
+   * Growth is real and mild: +16.4% tests took +18.6% runner wall time, the
      same super-linearity ICE measured. `--durations` shows no single culprit
      (a 27s parse-coverage setup, one 17s AI simulation, then a long tail of
      pool-wide guards at 2–6s each); the sweeps that walk every card scale
