@@ -51,7 +51,7 @@ Anything that weakens these is a regression regardless of what it enables:
 
 1. **No silent wrongness.** A card may fail loudly as unsupported with a
    reason; it may never resolve as something other than what it says.
-2. **The suite stays fast.** **19,533 tests**, CI budget **940s**, CI-measured
+2. **The suite stays fast.** **19,582 tests**, CI budget **940s**, CI-measured
    baseline **677s** (`ci.yml`), read from run 34296564407: `suite wall time:
    677s`, **72% of budget**. The test count is 6ED's Phase 6 reading
    (2026-09-09); the baseline is the freshest runner number and predates the
@@ -986,6 +986,18 @@ coverage: 3,570 of 3,572 supported cards fully claimed, 2 acknowledged, **0
 unclaimed** (`PARSE_COVERAGE.md`). `RULES_PROGRESS.md` is the CR coverage
 tracker. `CARD_VERIFICATION.md` is a log, not a target: 602 passed (403
 in-game, 199 auto), 47 equivalent, 0 failed, 2,923 untested.
+
+**A whole wave can fix a hundred cards and move no compiled program**, and 6ED's
+is the run to cite. Five groups, five Known-gaps entries, zero cards implemented,
+and `oracle_diff` reported **0 of 3,572 on all five merges** — correctly, because
+none of the defects were in compilation. They were in dispatch (a block cap
+enforced against the wrong set of creatures, CR 802.4b), on the wire (nine
+printed-card reads in `web/`, and a castable highlight pricing Gloom by name),
+in a prompt's address (two Nether Shadows sharing one answer), and in an
+accessor's scope (nine off-battlefield colour reads that could not see a colour
+static). **That is where the pool's remaining defects live now**, and it is the
+argument for the wire-level and census-level instruments over the compiled map,
+which is blind to all of it by construction.
 
 **A hook count is only as honest as what claims a hooked card's other lines.**
 `parse_coverage` blanket-claimed *every* sentence of any card carrying *any*

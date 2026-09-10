@@ -496,6 +496,15 @@ A channel whose arity is settled and whose element type is not fails exactly the
 way the arity did: silently, on one card, in the direction of doing nothing.
 Whoever settles the next shared channel owes both questions in the same round.
 
+**A re-check owes one probe of the *code*, not just one probe of the set.** 6ED's
+W1G4 found its entire brief had been drained two days earlier by the set that
+raised it, after two consecutive Phase 6 re-checks had each counted their set's
+printings of the phrase, correctly concluded the set did not meet the trigger,
+and never opened the file the entry names. Amending a trigger condition is not a
+substitute for opening the implementation. A decline ages in the direction of
+becoming free, so the question a carried entry needs answered is "is this still
+undone?", which only the code can answer.
+
 **This entry outlived its own drain by two sets, which is the process finding
 worth keeping.** It was drained at VIS wave 1 and went on being carried as open
 through the VIS, WTH and TMP retrospectives, each of which re-read it and left it
@@ -1358,6 +1367,43 @@ So the round this entry has been asking for is **two questions, not one**: which
 question**. The second cannot be grepped and has to be read — every place `web/`
 calls an engine accessor, against what the caller actually needs to know.
 
+**Taken at 6ED's W1G2, and the round found the entry had been read backwards.**
+Four instalments made it look like a list of sites being closed one at a time,
+so the brief said "some are already fixed; establish which are live". **All nine
+greppable reads were live**, including the three ULG's wave 1 had just added;
+only the non-greppable one had ever been closed. An entry that accretes
+instalments reads as progress even when nothing has been fixed.
+
+`tests/ui/test_layer_reads_in_web.py` is the scan, ratcheted **per module**
+rather than exempted per file, so `web/serialization.py` — where three of the
+sites lived — stays at zero instead of getting a blanket. Eight fixes, each
+proven from the payload: the untap picker filtered on `("land", "creature")`
+where the engine has four `LIMITED_SCOPES` and wrote the pruned list back onto
+the session, so Damping Field and Static Orb offered nothing *and* refused the
+click; a Clone of a Bears reported its printed `{3}{U}` and a base `0/0`, which
+paints the P/T green; an animated land was dropped from a band's blocker
+assignments and drawn as "Basic Land — Swamp"; Dingus Egg fired twice.
+
+**And the biggest one is the entry's second question with a card name in it.**
+The castable highlight priced a spell as `3 if a permanent is named "Gloom" and
+the card is white` — one name, one hardcoded amount, one colour — where
+`engine/cost_modifiers.py` is a text-keyed table knowing **28 shipped cards** and
+covering reductions too. Chill, Derelor and Irini Sengir had never appeared in
+the UI's cost at all. The highlight now calls the same four functions the cast
+path and `ai_policy._cost_for` call, so all three price a spell identically by
+construction.
+
+**Two things the round found that the *engine's* own guard cannot see**, both now
+Known gaps of their own below: its pattern is `\.card\.(type_line|colors)`, which
+omits `primary_type` — the field every one of the seven `web/` sites used, and
+**70** reads in `engine/` — and `mixins/helpers.py` is exempted *by file*, which
+hides two Licid-class `"Aura" in permanent.card.type_line` reads in the engine's
+own graveyard path.
+
+**A guard whose exemptions are per-file cannot ratchet**, which is the general
+form: `test_layer_reads.py` exempts files and `test_control_reads.py` ratchets
+counts, and only the second makes a new offence in an old file fail.
+
 **Added at ULG's Phase 6: an off-battlefield colour read ignores a
 colour-defining static.** `engine/object_colors.py`'s own docstring names the
 class ("has not been taught the seat"), and W2G2 measured two live instances
@@ -1380,6 +1426,37 @@ its own differential rather than a rider. **It is the same shape as the `web/`
 entry above — an accessor that answers a narrower question than its caller
 needs — and whoever takes either should look at both.**
 
+**Drained at 6ED's W1G3 — and "the battlefield side is clean" was the wrong
+half of the entry to trust.** That sentence was inferred from `subject_filters`
+and the lord buffs, which are clean. The **tax** family is not: `ability_cost_tax`
+taxes a *permanent* and read its printed colours off `effective_card`, which
+folds layers 1 and 3 and stops, because layer 5 lives on the object. So Gloom's
+second line was blind to all three colour statics in the pool. **An entry that
+bounds itself with a reassurance owes that reassurance a probe, not just its
+claim** — the claim reproduced exactly and the bound was wrong.
+
+`object_colors(game, obj, seat)` is the seam, dispatching on `effective_colors`
+the way `_source_has_quality` already dispatched. Nine reads in five families —
+the taxes, protection and hexproof-from-a-colour, damage-source colours, the
+colour narrowings on cast triggers, and the graveyard/stack pickers. The damage
+half cost one keyword argument per site because `damage_events` already derives
+`source_seat` per event, which is that seam paying for itself a third time.
+
+**The differential is the model for a text-keyed change.** `cost_modifiers` never
+reaches a compiled program, so `oracle_diff` is structurally blind and reported
+0 of 3,572 — correctly and uselessly. The census beside it is four boards x the
+whole pool, and **the containment is the finding**: a bare board moves 0 rows in
+all three censuses, Celestial Dawn moves 4,444 spell-tax rows, 516
+activation-tax rows and 11,966 targeting rows, and on the parent all four boards
+were byte-identical because the engine could not see a colour static at all.
+Every moved row is accounted for by name.
+
+Left, as one round with its parts named: `graveyard_card_matches`' colour branch
+(19 call sites, no game and no owner in scope), `_exile_search_matches` (a
+`@staticmethod`, so the fix is making it an instance method), and
+`_card_matches_filter`'s `game=`/`owner=` passed by only 15 of ~35 sites.
+Celestial Dawn reaches a graveyard too, so they belong together.
+
 **Added at ULG's W2G4, declined there with its parts named: the *blocking* side
 of the declaration-legality gap.** The attack side was fixed (both caps moved
 behind `attack_declaration_refusal`, so the AI no longer proposes an over-cap set
@@ -1400,10 +1477,39 @@ Conscripts, Okk.
 when the entry was written.** It said "note that it cannot be validated by the
 AI simulator, which has no combat phase"; the simulator drives combat as of the
 round that drained the entry above, so a block declaration refused for the whole
-seat is now observable there. Whoever takes this gets the end-to-end check for
-free — and should add the block-side twin of `refused_attacks` while they are in
-it, because `declare_ai_blockers` currently falls back silently in exactly the
-way the attack side did before it was counted.
+seat is now observable there.
+
+**Drained at 6ED's W1G1 — and part (1), the only part the entry stated as a
+rule, was itself the bug.** `block_declaration_refusal` is the predicate,
+`refused_blocks` the census, and `web/game_flow.py` lost its second copy of the
+fallback chain (whose safety valve wiped *every* seat's blocks). Parts (2) and
+(3) were both already free: `resolved_blockers` is `defender.battlefield[idx]`
+and never needed hoisting, and `ignore_substitution=` had existed since Melee.
+
+The part worth carrying is part (1). It said the cap "totals **every**
+defender's blockers (CR 509.1b)", which is what the code did — and **CR 802.4b
+says the opposite in as many words**: "When determining whether a defending
+player's blocks are legal, ignore any creatures attacking other players and any
+blocking creatures controlled by other players." So Caverns of Despair had been
+refusing *legal* blocks in multiplayer for the life of the engine, on top of the
+AI defect the entry was about. A restriction firing more often than the card
+allows is the same silent wrongness as one firing less often, pointed the other
+way — and this list's own instruction ("check the CR, do not rule from memory")
+is what found it, applied to the brief rather than to a card.
+
+**What is left is CR 509.1c's maximisation**, declined at 6ED with four parts
+named *after* the naive fix was built and backed out — which is the right way to
+decline. The five requirement checks in `declare_blockers` consult menace only,
+so the three declaration-wide restrictions are invisible to them: **three
+Watchdogs under a Caverns of Despair has no legal block declaration at all**,
+and combat deadlocks for a human seat as thoroughly as for an AI one. The parts:
+(1) "is this creature compelled?" as one predicate over all six channels that
+currently each read their own; (2) a *substitution* test rather than an addition
+test, so "the cap is full of creatures that also owe requirements" is
+distinguishable from "the cap is full of creatures that don't"; (3) the count
+itself — obeyed vs maximum obeyable — which is the only shape that expresses "2
+of these 3 Watchdogs"; (4) the AI prune preferring to keep compelled blockers.
+It is a simulator issue now rather than a silent hang.
 
 **Added at ULG's W2G5, drained at 6ED's W1G5: two prompts whose subject has no
 `permanent_id`.** Both are addressed now. Nether Shadow's graveyard return and a
@@ -1453,6 +1559,57 @@ takes:
   estimated: three engine readers, one web writer, an `id` on `valid_targets`,
   `session_store`'s annotation, and six test call sites passing `(seat, index)`
   tuples.
+
+**Added at 6ED's W1G2: the engine's own layer-read guard has two holes, and the
+`web/` twin built this wave has neither.** Its pattern is
+`\.card\.(type_line|colors)`, which omits **`primary_type`** — the field every
+one of the seven historical `web/` sites used, and **70** reads in `engine/`.
+And its exemptions are **per file**, so `mixins/helpers.py` ("the Aura shape,
+plus a stack item's card colours") hides two live Licid-class reads:
+`"Aura" in permanent.card.type_line` at `:1066` and `:2084`, in the engine's own
+graveyard path. A Licid is a creature that *becomes* an Aura by a layer-4 type
+change, so the printed line is the wrong question and `effective_card` is also
+the wrong fix — only `has_type` answers.
+
+Two parts, and the second is the one that keeps it fixed: widen the pattern to
+`primary_type` and triage the 70; and convert the file exemptions to **per-module
+counts** the way `test_control_reads.py` and this wave's `web/` guard do, so a
+*new* offence in an already-exempt file fails. A guard that exempts a file
+cannot ratchet, which is why this one went four sets without moving.
+
+**Added at 6ED's W1G3, and it is a divergence the same wave created:** the
+engine now prices a spell through `cost_modifiers` and `web/serialization.py`
+still prices Gloom by hand. W1G2 replaced the *castable highlight*'s copy —
+which decides whether a card is offered — and declined the *displayed cost
+string*, `_gloom_white_tax` at `web/serialization.py:576`: `any(perm.card.name ==
+"Gloom" ...)` returning a hardcoded `3`. So a Dark Ritual under Gloom +
+Celestial Dawn is charged `{3}` by the engine and displayed as `{B}`, and the
+client will not auto-tap for it.
+
+It is the last card-name dispatch left in `web/` and the guard that would catch
+it (`test_card_name_reads.py`) scans `engine/` only — the same file-scope hole
+as the entry above. Three parts: call the same four cost functions; a cost-dict
+to `{…}` renderer, which `mana_payment.mana_cost_label` nearly is except that it
+renders from the normalized dict and **loses `{X}`**, so it would change every X
+spell's displayed cost; and `tests/ui/test_batch9_ui_api.py` pins the current
+string shape.
+
+**Added at 6ED's W1G2, declined with its parts named: Balance and Kudzu count by
+printed type, and the `web/` half cannot be fixed alone.** `web/prompts.py`'s
+filter is a *faithful mirror* of five engine sites (`board_misc.balance_resources`
+counts by `primary_type`; `_resolve_balance` and `_default_balance` validate by
+it), so fixing the client would offer a permanent the resolver then refuses —
+strictly worse than the bug. Six parts, five in `engine/` and one that follows
+for free; the design piece is part five, **a permanent that is both a land and a
+creature**, because Balance's printed text is two separate steps and under
+Living Lands or Kormus Bell the two chosen sets overlap. Payers: Living Lands,
+Kormus Bell, an animated Mishra's Factory.
+
+There is a second reason it is worth taking whole: `web/prompts.py` **cannot
+reach** the fix even when the engine is right, because `prompts` sits below
+`serialization` in `web/__init__.LAYERS`, which is why `PromptContext` injects
+`serialize_card` at all. The missing piece is a second injected callable taking
+a permanent — one line at each of three sites once it exists.
 
 ## Phase 0 — Pre-flight
 
@@ -1723,8 +1880,17 @@ is green, the trackers carry its row, and the census is in hand.
    file's `oracle_id`s against the shipped pool — one comparison, and it decides
    whether this is a set you implement or a set you promote. Do not read a
    100%-supported census as an anticlimax and skip the rest: the ingest still
-   pays, and where it pays is Phase 4. Nine such sets are still ahead (ROADMAP's
+   pays, and where it pays is Phase 4. Eight such sets are still ahead (ROADMAP's
    header names them), so this is a shape, not a curiosity.
+
+   **Diff against *this pool*, never against the release line's own column.**
+   `set_progress.json` records 6ED with **0** new cards and it brought **two** —
+   Blaze and Regal Unicorn, whose earlier printing was Portal, a set the manifest
+   does not carry. That column counts against all of Magic; a reprint set
+   reprints from the manifest, and the difference is however many of its sources
+   are still unshipped. Two cards is small enough to look like nothing and large
+   enough that "no per-card tests, this is a pure reprint" would have been false
+   in the set's own test file.
 
 ## Phase 2 — Machinery census (the big rocks)
 
@@ -1832,6 +1998,28 @@ not its slot" is the same rule with an index instead of a name.
 The scheduling rule that follows: **the count of no-card groups is set by the
 size of the enumerated pile, not by how many cards are left.** Six cards did not
 need five groups; the pile did.
+
+**6ED took that rule to its limit: a wave of five groups and *no* cards at
+all.** The set arrived 335/335 supported with every instrument at zero, so
+Phases 2 and 3 had no card work in them, and all five briefs were Known-gaps
+entries. It worked — the wave fixed defects on **well over a hundred shipped
+cards** — and the two things it proved are worth stating.
+
+First, **an entry with individually named parts is a brief and an entry without
+them is not**. Every one of the five had its parts enumerated by the group that
+declined it, and that is what made a cold start possible; the entries that sat
+in this list as prose would not have supported one.
+
+Second, and this is the number to remember: **`oracle_diff` reported 0 of 3,572
+on all five merges.** A whole wave, over a hundred mis-playing cards, and the
+compiled-program differential — the instrument this playbook calls the cheapest
+in the repo and the one that answers "what else did this touch?" — moved
+nothing, correctly. Because none of these defects were in compilation. They were
+in dispatch, on the wire, in a prompt's address and in the AI's declaration, and
+**that is where the pool's remaining defects now live.** Keep running it (it is
+what proves a change was local), and do not read its zero as a finding: a
+text-keyed or wire-level round owes a census of its own, which is what W1G3's
+four-boards-by-whole-pool comparison and W1G2's 28-card cost census are.
 
 **A new census or instrument must be validated *backwards* before anyone trusts
 it.** Run it against a commit where the defects it is meant to find are still
@@ -2148,7 +2336,16 @@ and driving each took a minute.
 
 **And expect that to stop being true once the guards are fixed.** Weatherlight's
 rehearsal turned seven guards red and **every one was a real finding** — the
-first promotion in this project where none of them was the guard. Ten effect
+first promotion in this project where none of them was the guard.
+
+**6ED is the other end of that: three guards red and every one a ratchet.** No
+real finding at all, on a set with two new cards — and the two proxy guards that
+fired at 4ED and at Ice Age, for a reprint set and for an emptied `measured`
+role, both stayed green because each had been rewritten to assert its invariant
+rather than a symptom. That is the accumulated fixes working, and it is the
+reason to keep ingesting a reprint-shaped set through the full phase rather than
+short-cutting it: the rehearsal is cheap precisely when it finds nothing, and
+the two occasions it found something were both occasions nobody expected. Ten effect
 labels falling through to the grammar-family default, two divided cards wanting
 review into the AI's inventory, and a deletion probe whose five non-new findings
 each turned out to be a word the payload provably carried. That is what the
@@ -3163,3 +3360,61 @@ claim, and the simulator's missing main phase — whose re-baseline, unlike its
 can now be a role, which is three of the multi-slot entry's four named pieces
 built, and CR 615.8's chosen source was re-checked against its own amended
 condition and correctly did not fire.
+
+### 6ED — 2026-09-09
+
+*The set with no cards in it, and the wave that proves what the Known-gaps list
+is for.* Classic Sixth Edition arrived **335/335 supported** with zero hollow
+lines, zero unclaimed sentences and zero picker findings, so Phases 2 and 3 had
+no card work at all and all five wave briefs were Known-gaps entries. It worked:
+the wave fixed defects on **well over a hundred shipped cards** while
+implementing none. The condition that made a cold start possible was that every
+one of the five entries had its parts *individually enumerated* by the group
+that declined it — the entries in this list written as prose would not have
+supported a brief, and that is the argument for the decline convention restated
+from the consuming end.
+
+*`oracle_diff` reported 0 of 3,572 on all five merges, and that is the finding
+rather than the absence of one.* Over a hundred mis-playing cards and the
+compiled-program differential moved nothing, correctly, because none of these
+defects were in compilation — they were in dispatch, on the wire, in a prompt's
+address and in the AI's declaration. **That is where the pool's remaining
+defects now live.** Phase 3's text now says to keep running it and never to read
+its zero as a finding: a text-keyed or wire-level round owes a census of its
+own, and W1G3's four-boards-by-whole-pool comparison is the model.
+
+*Three of five briefs were wrong in the same place — the sentence that bounded
+the problem.* W1G1's said the block cap totals every defender's blockers "because
+CR 509.1b"; **CR 802.4b says the opposite in as many words**, so Caverns of
+Despair had been refusing *legal* blocks in multiplayer for the life of the
+engine. W1G3's said "the battlefield side is clean"; the tax family was not, and
+Gloom's second line was blind to all three colour statics in the pool. W1G2's
+said "some of the seven sites are already fixed"; all nine live reads were live,
+because an entry that accretes instalments reads as progress even when nothing
+has been closed. **A brief's reassurance needs a probe exactly as much as its
+claim does**, and it is the half nobody probes.
+
+*W1G4's entire brief had been drained two days earlier by the set that raised
+it.* Two consecutive Phase 6 re-checks had each counted their set's printings of
+"a source of your choice", correctly concluded the set did not meet the trigger,
+and never opened the file the entry names. **A re-check owes one probe of the
+code, not just one probe of the set** — now in Known gaps' preamble. What landed
+instead is a fail-closed guard on the *class*, since only two of six cast walks
+reach the chosen-source stage.
+
+*The set is the third reprint-shaped one and the first where that is only almost
+true.* `set_progress.json` records 6ED with 0 new cards; it brought two, because
+that column counts against the release line and this manifest is a subset of it.
+Phase 1 now says to diff against the pool, never against that column. The
+promotion rehearsal turned three guards red and **all three were ratchets** — no
+real finding, on a set where 4ED's and Ice Age's proxy guards would once have
+fired, because both had since been rewritten to assert their invariants.
+
+*Three items drained* (CR 615.8's chosen source on a cast, the two prompts whose
+subject is not a permanent, the off-battlefield colour read), *one taken and
+left open with its remainder named* (`web/`'s layer reads), *three added* (the
+engine's own layer guard omits `primary_type` and exempts by file rather than by
+count; `web/serialization.py` still prices Gloom by hand, which this wave turned
+into a live divergence; Balance and Kudzu count by printed type in five engine
+sites plus a client that cannot reach the fix). Zero hooks added, zero caps
+crossed, and the CI baseline Phase 0 owed was refreshed 571s → 677s.
