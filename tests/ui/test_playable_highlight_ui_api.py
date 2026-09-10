@@ -172,3 +172,104 @@ def test_an_aura_is_not_highlighted_with_nothing_to_enchant():
     _aura_board(session_id, with_creature=False)
 
     assert _state(session_id)["players"][0]["playable_hand_indices"] == []
+
+
+# ---------------------------------------------------------------------------
+# CR 601.2f: the highlight prices the spell the way the cast path will
+# ---------------------------------------------------------------------------
+#
+# The affordability half asked ``3 if a permanent is named "Gloom" and the card
+# is white`` — one card name, one hardcoded amount, one colour. The engine owns
+# this in ``engine/cost_modifiers.py``, a *text-keyed* table covering increases
+# and reductions in both directions, and the shipped pool prints **28** cards
+# that table knows and the highlight did not: twelve more increases, ten
+# reductions and five self-reductions. So the glow said "castable" over a board
+# that would refuse the click, and "not castable" over one that would take it.
+#
+# The same three functions the cast path (``mixins/stack/casting``) and the AI's
+# affordability read (``ai_policy._cost_for``) call, so all three price a spell
+# identically by construction.
+
+from engine.card_loader import load_catalog as _load_catalog
+
+
+def _board_session(board: list[str], hand: list[str]) -> str:
+    """Seat 0 on priority in its own main phase, with *board* and *hand*."""
+    from web.runtime import CARD_BY_NAME
+
+    response = client.post("/api/sessions", json={
+        "mode": "human_vs_ai", "host_name": "Host", "host_colors": 2,
+        "guest_colors": 2, "seed": 4242,
+        "host_deck_cards": [{"name": "Plains", "count": 40}],
+        "guest_deck_cards": [{"name": "Forest", "count": 40}],
+    })
+    assert response.status_code == 200, response.text
+    session_id = response.json()["session_id"]
+    session = store.get(session_id)
+    game = session.game
+    session.current_turn = 0
+    game.active_player_index = 0
+    game.current_phase = "main"
+    game.current_step = "precombat_main"
+    game.players[0].battlefield = [
+        Permanent(card=CARD_BY_NAME[name.casefold()]) for name in board
+    ]
+    for permanent in game.players[0].battlefield:
+        permanent.metadata["summoning_sick"] = False
+    game.players[0].hand = [CARD_BY_NAME[name.casefold()] for name in hand]
+    game.players[1].battlefield = []
+    game._recompute_continuous_effects()
+    game.start_priority_window(0)
+    return session_id
+
+
+def _playable(session_id: str) -> list[int]:
+    return _state(session_id)["players"][0]["playable_hand_indices"]
+
+
+def test_a_taxed_spell_is_not_highlighted_as_castable():
+    """Sphere of Resistance: "Spells cost {1} more to cast."
+
+    Healing Salve costs {W} and one Plains cannot pay {1}{W}. The tax reader
+    knew one card name, and it was not this one, so the whole hand glowed over
+    a board that refuses every click.
+    """
+    assert _playable(_board_session(["Plains"], ["Healing Salve"])) == [0]
+    taxed = _board_session(["Plains", "Sphere of Resistance"], ["Healing Salve"])
+    assert _playable(taxed) == []
+
+
+def test_a_reduced_spell_is_highlighted_as_castable():
+    """The other direction, which no amount of "increases only" covers.
+
+    Pearl Medallion: "White spells you cast cost {1} less to cast." Mesa Pegasus
+    is {1}{W} and one Plains pays it — and the highlight said no, so the card
+    the player could cast was greyed out.
+    """
+    assert _playable(_board_session(["Plains"], ["Mesa Pegasus"])) == []
+    reduced = _board_session(["Plains", "Pearl Medallion"], ["Mesa Pegasus"])
+    assert _playable(reduced) == [0]
+
+
+def test_the_highlight_prices_every_cast_modifier_the_engine_knows():
+    """The census behind the two cards above.
+
+    Not an assertion about a number — the pool grows — but about the *reader*:
+    the highlight must go through ``engine/cost_modifiers.py``, so a card
+    printed with one of its templates needs no edit here. A hardcoded name
+    covers exactly one of these.
+    """
+    from engine.cost_modifiers import cost_modifiers_for, self_cost_reduction
+
+    modifiers = {
+        card.name
+        for card in _load_catalog()
+        for modifier in cost_modifiers_for(card.oracle_text or "")
+        if modifier.applies_to == "cast"
+    }
+    modifiers |= {
+        card.name for card in _load_catalog()
+        if self_cost_reduction(card.oracle_text or "")
+    }
+    assert "Gloom" in modifiers
+    assert len(modifiers) > 20, sorted(modifiers)

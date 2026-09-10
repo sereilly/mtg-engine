@@ -69,8 +69,14 @@ def _debug_move_permanent_off_battlefield(game, controller_seat: int, index: int
     owner_index = game.owner_index_of(permanent)
     owner = game.players[owner_index] if owner_index is not None else controller
 
+    # Whether it is an Aura is asked *before* the move and through
+    # ``has_type`` (CR 613 layer 4). A **Licid** becomes an Aura enchantment
+    # without a word of its card moving, so the printed type line that stood
+    # here answered "no" and left a Licid's grants on the creature it had been
+    # attached to after the Licid itself had been bounced.
+    is_aura = permanent.has_type("aura")
     game.remove_from_battlefield(permanent)
-    if "Aura" in permanent.card.type_line:
+    if is_aura:
         game._remove_aura_effects(permanent)
     # An Aura's death trigger used to be announced here as well. It was wrong
     # twice over: this move is a bounce or an exile, and CR 700.4 makes "dies"
