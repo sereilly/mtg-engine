@@ -410,6 +410,40 @@ a re-baseline that will certainly move every seeded run. **Phase 0 of the next
 set is where to decide whether to take it**, and the honest reading is that the
 loop is a *casting* simulator with a main phase, not a game.
 
+**Drained 2026-09-09, as its own round.** `engine/ai_combat.py` drives the
+phase, and it is a loop over the engine's own `advance_combat_phase` rather than
+a second step walker: that method returns *without moving* at exactly the three
+points where a player owes a turn-based action, so "advance, and if nothing
+moved, supply what it is waiting for" needs no list of wait states to go stale.
+All 23 shipped sets now attack, block and deal combat damage — 57–196
+declarations each, up to 261 attackers, 96 blockers, and 37 multi-blocked or
+banding splits on Mirage, which is a path no simulated game had ever reached.
+
+**The re-baseline moved every seeded run, and the honest summary is that the
+runs got shorter.** Interaction counts fall across the board (LEA 398 → 332)
+because games now *end* — creatures kill people, where before every game ran to
+the turn cap with both seats near 20 life. That is the change being real rather
+than a regression, and it is the second consecutive re-baseline in this function
+that was not a no-op.
+
+**Two lessons worth keeping.** The counter W2G4 declined to add was right to be
+declined and is now right to exist: `refused_attacks` could only ever have read
+zero before a simulated seat could declare an attack, and a census that reports
+zero and means nothing is exactly what that group refused to build. And **the
+declaration, not the walking, is what had to be shared** with `web/` — a refused
+declaration is silent, and that silence is what hid both attack caps, so a
+second copy of the fallback chain would have been a second place for it to hide.
+
+**And the round found a shipped crash before it found anything about combat.**
+`simulate_ai_games.py --set TMP` did not fail an assertion, it died with a
+traceback: `event_durations.holds_window` asked `REMOVED_ABILITY_LINES` for a
+`duration` key on a channel that is bare strings by construction, where it meant
+`REMOVED_ABILITY_KEYWORDS` — two constants one word apart. It needs a Licid *and*
+a creature spell, so both halves worked alone and Tempest had no simulation
+coverage at all. **A set whose run dies is invisible to every number the script
+prints**, which is an argument for reading the exit code of each set's run rather
+than the summary of the one you happened to name.
+
 **Added at FEM's Phase 6: `permanents_from` carries two arities and only one
 reader knows.** That payload key names a scratchpad record, and its producers
 disagree about shape — a reanimation writes a *list* of permanent ids, a
@@ -1310,8 +1344,16 @@ exemption; (2) hoisting `resolved_blockers` out of `declare_blockers`; (3) an AI
 prune over a **map** (blocker → attacker), so "drop the offender" means removing
 a key and `choose_combat_blockers` needs a substitution mode; (4) a census twin
 over the block kinds. Population: Caverns of Despair, Mogg Flunkies, Orcish
-Conscripts, Okk. **Note that it cannot be validated by the AI simulator**, which
-has no combat phase — see the entry above.
+Conscripts, Okk.
+
+**Amended 2026-09-09: the AI simulator can now validate this, which it could not
+when the entry was written.** It said "note that it cannot be validated by the
+AI simulator, which has no combat phase"; the simulator drives combat as of the
+round that drained the entry above, so a block declaration refused for the whole
+seat is now observable there. Whoever takes this gets the end-to-end check for
+free — and should add the block-side twin of `refused_attacks` while they are in
+it, because `declare_ai_blockers` currently falls back silently in exactly the
+way the attack side did before it was counted.
 
 **Added at ULG's W2G5, declined there: two prompts whose subject has no
 `permanent_id`.** The upkeep prompt is now addressed by permanent, which fixed

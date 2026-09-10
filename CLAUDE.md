@@ -293,11 +293,29 @@ manifest when it does not, which is what makes Antiquities, Legends and The
 Dark playable at all — their own lands cannot cast their own spells.
 `required=` pins a card into every deck, for a regression test whose subject
 has to be in play; without it such a test passes on any seed that dealt none.
-Two numbers in the report are the honesty checks: `interaction_count` (a run
-that cast nothing proves nothing, and the script now exits 1) and
-`refused_casts` (casts the engine declined — no rule broken and nothing spent,
-but the AI re-proposes the same card every turn, so a non-zero count is a seat
-doing nothing all game).
+**It plays a whole turn, and that took three goes to be true.** The loop
+open-coded the turn structure and left pieces out, each time invisibly: the
+untap/upkeep/draw steps (which froze every per-seat-turn record), then the
+precombat main phase (so no `main_phase_*` trigger had ever fired), then combat
+— no simulated game had declared an attacker, a block or a damage step in this
+project's history. All three failed the same way, which is worth knowing before
+adding a fourth: the run completes, the interaction count is non-zero and the
+issue list is empty, so nothing is wrong and half a turn is missing. Combat is
+driven by `engine/ai_combat.py` as a loop over the engine's own
+`advance_combat_phase`, which returns without moving at exactly the points where
+a player owes a turn-based action — so the driver supplies declarations rather
+than re-walking the steps.
+
+The honesty checks in the report exist because "no illegal interactions" over a
+game where nothing happened is a true statement about nothing.
+`interaction_count` (a run that cast nothing proves nothing, and the script
+exits 1); `refused_casts` (casts the engine declined — no rule broken and
+nothing spent, but the AI re-proposes the same card every turn, so a non-zero
+count is a seat doing nothing all game); `refused_attacks`, its attack-side twin
+for a declaration refused the same way; and the combat counts, which are what
+stop a future regression to no-combat from reading green. A seat whose *fallback*
+declaration is also refused attacks with nobody for the rest of the game and is
+reported as an issue rather than a count.
 
 **Naming a set:** every script that runs over a set takes `--set <CODE>` /
 `--all` / `--cards <path>`, resolved through `cards/manifest.json` by
