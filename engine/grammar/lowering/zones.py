@@ -21,7 +21,7 @@ one table and one row per kind and no reader's address changed.
 
 from __future__ import annotations
 
-from ...oracle_types import OracleInstruction
+from ...oracle_types import OracleInstruction, REVEALED_TOP_CARDS_BY_SEAT
 from ...subject_filters import card_only_filter
 from .. import ast
 from ..errors import LoweringError
@@ -315,7 +315,8 @@ def _lower_graveyard_cards_on_library_top(
 
 
 def _lower_put_onto_battlefield(
-    node: ast.PutOntoBattlefield, event: str | None = None
+    node: ast.PutOntoBattlefield, event: str | None = None,
+    produced: frozenset[str] = frozenset(),
 ) -> tuple[OracleInstruction, ...]:
     """The three "put … onto the battlefield" shapes the pool prints:
 
@@ -584,6 +585,36 @@ def _lower_put_onto_battlefield(
             # leaves the choice to the player; both of these name one.)
             payload["attach_to"] = "source"
         return (OracleInstruction("reanimate_creature", "", payload),)
+    # "…put **those cards** onto the battlefield **under their owners'
+    # control**." (Game Preserve.) The cards an earlier step of this same
+    # resolution revealed off the top of every library, each going back to the
+    # seat whose library it came off — CR 110.2a's "unless the effect states
+    # otherwise", and this sentence is that statement.
+    #
+    # Gated on that step having run: "those cards" names nothing on its own, and
+    # ``produced`` is what proves the reveal is in front of it — the same
+    # producer discipline every other back-reference in this package follows.
+    # Without it a card printing the sentence alone would compile clean and put
+    # nothing, which is the shape ``--hollow-lines`` exists to find.
+    if (
+        isinstance(node.target, ast.TargetSpec)
+        and node.target.quantifier == "those"
+        and node.under_owners_control
+        and not node.under_your_control
+    ):
+        if REVEALED_TOP_CARDS_BY_SEAT not in produced:
+            raise LoweringError(
+                "\"those cards\" needs an earlier step of this effect that "
+                "revealed one per player",
+                node=node,
+            )
+        if node.gains or node.attached_to_source or node.sacrifice_when_control_lost:
+            raise LoweringError(
+                "the per-owner battlefield entry reads no rider", node=node
+            )
+        return (
+            OracleInstruction("put_revealed_top_cards_onto_battlefield", "", {}),
+        )
     raise LoweringError("no handler for this battlefield entry", node=node)
 
 
@@ -598,7 +629,13 @@ def _lower_put_onto_battlefield(
 #: and a reference the handler cannot resolve is a card revealed off the wrong
 #: deck and recorded under a name every sentence behind it then reads.
 _REVEAL_TOP_PLAYERS = frozenset(
-    {"you", "that_player", "target_player", "target_opponent"}
+    {"you", "that_player", "target_player", "target_opponent",
+     # "**Each player** reveals the top card of their library." (Game
+     # Preserve.) One library per seat rather than one library, which is why
+     # the handler records ``{seat: card}`` for it: the sentence behind it
+     # names every card at once and puts each under a different player's
+     # control.
+     "each_player"},
 )
 
 
@@ -625,6 +662,12 @@ def _lower_reveal_top_of_library(
         )
     if node.player.kind == "you":
         return (OracleInstruction("reveal_top_of_library", "", {}),)
+    if node.player.kind == "each_player":
+        # No target is described: "each player" names every seat rather than
+        # choosing one (CR 115.1), so there is nothing for a picker to offer.
+        return (
+            OracleInstruction("reveal_top_of_library", "", {"whose": "each_player"}),
+        )
     payload: dict[str, object] = {"whose": node.player.kind}
     if node.player.kind != "that_player":
         _describe_targets(payload, node.player)

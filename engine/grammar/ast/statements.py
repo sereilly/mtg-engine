@@ -480,6 +480,15 @@ class May:
     #: characteristic of the object the sentence already named and only the
     #: resolution knows it (CR 613 makes toughness computed).
     life_cost: "Amount | None" = None
+    #: "…unless you pay {1} **for each card in your hand**." (Extravagant
+    #: Spirit, Megatherium.) The set whose size multiplies the printed cost.
+    #:
+    #: A multiplier rather than a number, for ``DestroyUnlessPay.per_counter``'s
+    #: reason one node over: the count is taken when the ability *resolves*
+    #: (CR 608.2), and a hand that changed between the trigger and its
+    #: resolution is the hand this charges against. None is a flat cost, which
+    #: is every other offer in the pool.
+    cost_per_each: "ObjectFilter | None" = None
     #: "**Starting with you**, each player may …" (Eureka). Which seat is asked
     #: first. CR 101.4 already orders a multi-seat offer from the active player,
     #: and for a sorcery those are the same seat — but they are not the same

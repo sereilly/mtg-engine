@@ -486,6 +486,45 @@ class SeatCastSpellThisTurn:
 
 
 @dataclass(frozen=True)
+class AllRevealedTopCardsAre:
+    """"**If all cards revealed this way are creature cards**, put those cards
+    onto the battlefield under their owners' control." (Game Preserve.)
+
+    A record like every other node in this module: CR 701.20a moves nothing, so
+    the cards are still on top of the libraries they came from and no board read
+    can say which of them this sentence is about — only the per-seat map the
+    reveal in front of it wrote (``oracle_types.REVEALED_TOP_CARDS_BY_SEAT``).
+
+    ``card_type`` is the printed noun, so "all cards revealed this way are land
+    cards" needs no second production.
+    """
+
+    card_type: str
+
+
+@dataclass(frozen=True)
+class SeatPlayedLandThisTurn:
+    """"At the beginning of your end step, **if you didn't play a land this
+    turn**, you may draw a card." (Mercadian Atlas.)
+
+    :class:`SeatCastSpellThisTurn` one special action over (CR 305.1), and a
+    record for its reason: nothing on the board answers it. A land played this
+    turn is an ordinary permanent by the end step, indistinguishable from one
+    put onto the battlefield by a spell or one that has been there since turn
+    three — so the only thing that can say is the per-seat, per-turn tally the
+    land-play path already keeps (``Game.lands_played_this_turn``), which
+    ``mixins/turn_management`` clears at the turn boundary.
+
+    ``who`` and ``negated`` are payload for that node's stated reason: "you
+    didn't play a land" and "that player played a land" are one question with
+    two referents and two signs.
+    """
+
+    who: str
+    negated: bool = False
+
+
+@dataclass(frozen=True)
 class InABlockSinceLastUpkeep:
     """"if **it has blocked or been blocked since your last upkeep**" (Wiitigo).
 

@@ -442,6 +442,56 @@ def lower_untargeted_return(
         return (
             OracleInstruction("return_self_from_graveyard", "", {"to": "hand"}),
         )
+    # "…you may return **this card to the battlefield**." (Nether Spirit.) The
+    # clause above with the other destination, and it is the same reading in
+    # every respect that matters: the ability's own source, no printed source
+    # zone, and an intervening-if in front of it ("if this card is the only
+    # creature card in your graveyard") that is CR 113.6b's statement of where
+    # the ability functions — which ``lower.py`` stamps onto whatever this
+    # lowers to.
+    #
+    # ``functions_from`` is deliberately **not** stamped here either, for the
+    # hand branch's stated reason: this sentence names no zone, and inventing
+    # one would let a card printing it with no graveyard condition be scanned
+    # for in a zone it never mentioned. With no such condition the instruction
+    # is simply never enqueued from a graveyard and the handler finds nothing —
+    # which is the honest outcome for a sentence nobody has printed that way.
+    #
+    # **Every unread rider refuses, and one of them is load-bearing.** "Return
+    # **it** to the battlefield **under its owner's control**" (Ivory Gargoyle,
+    # Homing Gargoyle) is a different reading with its own handler further down,
+    # told apart by exactly that phrase — see :func:`_returns_its_own_source`,
+    # whose second clause demands it. A branch here that ignored the field
+    # claimed those cards first and returned them under the wrong seat.
+    if (
+        _is_source(subject)
+        and node.from_zone is None
+        and node.to.name == "battlefield"
+        and node.to.owner is None
+        and node.under_control_of is None
+        and not [
+            name for name in (
+                "exile_on_leave", "repetitions", "actor", "attached_to",
+                "losing_subtypes", "losing_abilities", "gaining_abilities",
+                "also_stack", "bound_card_from",
+            )
+            if getattr(node, name, None)
+        ]
+    ):
+        assert isinstance(subject, ast.TargetSpec)
+        leftovers = _restrictions_beyond(
+            subject.filter, frozenset({"is_source", "card_types"})
+        )
+        if leftovers:
+            raise LoweringError(
+                f"the self-return does not honour {leftovers[0]!r}", node=node
+            )
+        payload: dict[str, object] = {"tapped": node.entering_tapped}
+        if node.entering_counters:
+            payload["counters"] = {
+                kind: count for kind, count in node.entering_counters
+            }
+        return (OracleInstruction("return_self_from_graveyard", "", payload),)
     # "Return **this card** to its owner's hand." (Puppet Master's rider.) The
     # ability's own source, and by the time this resolves the Aura is in its
     # owner's graveyard — CR 704.5m put it there the moment the creature it

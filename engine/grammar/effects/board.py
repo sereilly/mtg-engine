@@ -178,7 +178,30 @@ def _parse_sacrifice(stream: TokenStream, player: ast.PlayerRef) -> ast.Statemen
                     cost_from="its_mana_cost",
                 )
             stream.reset(mark_derived)
-            return ast.SacrificeUnlessPay(subject, _parse_mana_payment(stream))
+            cost = _parse_mana_payment(stream)
+            # "…unless you pay {1} **for each card in your hand**."
+            # (Extravagant Spirit, Megatherium.) A multiplied price, and the
+            # one shape this branch may not keep fused: the fused kinds are
+            # dispatched by the upkeep registry and by nothing else, so the
+            # *same sentence* on an enters-the-battlefield trigger
+            # (Megatherium) would compile clean and never run. Decomposed it is
+            # the ordinary offer this file's own comments prefer everywhere the
+            # price is not plain mana — an "unless" is an offer with a penalty,
+            # which is what `May` already says — and it reaches an
+            # EFFECT_HANDLERS entry under any trigger at all.
+            #
+            # The flat spelling stays fused, so every payload written before
+            # this is byte-identical and the two upkeep handlers keep the cards
+            # they already had.
+            per_each, beyond_first = _parse_per_each_objects(stream)
+            if per_each is not None and not beyond_first:
+                return ast.May(
+                    actor=player,
+                    cost=cost,
+                    cost_per_each=per_each,
+                    otherwise=ast.Sacrifice(player, subject),
+                )
+            return ast.SacrificeUnlessPay(subject, cost)
     stream.reset(mark)
     # "… unless you **sacrifice two Swamps**" (Mold Demon) — the same
     # alternative with a cost mana cannot express. Not a second fused node: an

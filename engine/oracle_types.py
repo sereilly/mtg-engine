@@ -181,6 +181,19 @@ REVEALED_HAND_CARDS = "revealed_hand_cards"
 # amount reads an empty record.
 REVEALED_THIS_WAY = "revealed_this_way"
 
+# "**Each player reveals the top card of their library.** If all cards revealed
+# this way are creature cards, put those cards onto the battlefield under their
+# owners' control." (Game Preserve.) One card per seat, kept as ``{seat: card}``
+# rather than as a flat list — which is the whole of what the second sentence
+# needs and nothing else can supply: the cards are still on top of their own
+# libraries (CR 701.20a moves nothing), and "under **their owners'** control"
+# names a different battlefield for each of them.
+#
+# A third record beside the two above for their stated reason: ``REVEALED_THIS_
+# WAY`` is a count and ``REVEALED_HAND_CARDS`` a flat set out of one hand, and a
+# reader handed either would lose which seat each card belongs to.
+REVEALED_TOP_CARDS_BY_SEAT = "revealed_top_cards_by_seat"
+
 # The payload key an effect carries when the object it acts on was **bound by
 # the firing trigger** rather than chosen as a target — "…that creature becomes
 # green" under a block trigger (Aisling Leprechaun). Here for the same reason as

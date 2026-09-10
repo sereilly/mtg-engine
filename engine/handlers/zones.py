@@ -36,6 +36,7 @@ from ..oracle_types import (DISCARDED_BY_SEAT, DREW_BY_SEAT, DREW_COUNT,
                             LAST_TARGET_NAME,
                             REVEALED_HAND_CARDS,
                             REVEALED_THIS_WAY,
+                            REVEALED_TOP_CARDS_BY_SEAT,
                             EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS,
                             HAND_CARDS_TO_LIBRARY, MILLED_THIS_WAY,
                             PER_OBJECT_SEAT_RECORDS,
@@ -4438,6 +4439,25 @@ def mill_target_player(game: Game, instruction: OracleInstruction, context: Orac
             game.log.append(f"{context.card.name}: no recorded player, no mill")
             return True, "resolved"
         victims = [game.players[seat]]
+    elif recipient == "event_subject_player":
+        # "At the beginning of each player's upkeep, **that player** mills a
+        # card." (Worry Beads.) The seat whose step this firing is, frozen by
+        # the upkeep announcement (CR 603.10) under the key every other reader
+        # of those two words takes — the damage recipient beside it, the draw's
+        # `drawer_seat_record`, `subject_filters`' "that player". A different
+        # record from ``damaged_player`` above and deliberately a separate
+        # branch: that one is the seat a damage event hit, and on a step
+        # trigger nothing has hit anybody.
+        #
+        # No record mills nobody, never the ability's controller — the same
+        # rule the damaged branch above follows, and for its reason: the
+        # controller is the seat this must not hit on every upkeep but their
+        # own.
+        seat = (context.trigger_context or {}).get("event_subject_player")
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            game.log.append(f"{context.card.name}: no recorded player, no mill")
+            return True, "resolved"
+        victims = [game.players[seat]]
     else:
         victims = [context.target]
     # "…**If a card with the chosen name was milled this way**, you draw a
@@ -5834,6 +5854,39 @@ def reveal_top_of_library(game: Game, instruction: OracleInstruction, context: O
     # Absent for every reveal printed about "your library", so those keep
     # reaching ``context.caster`` and their payload byte-identical.
     whose = str(instruction.payload.get("whose", "you"))
+    if whose == "each_player":
+        # "**Each player** reveals the top card of their library." (Game
+        # Preserve.) One library per seat, in CR 101.4's order — the active
+        # player first — so a seeded AI run reproduces exactly. A seat that has
+        # left the game reveals nothing (CR 800.4a) and an empty library
+        # contributes no card, which is what makes the sentence behind this one
+        # False rather than vacuously true.
+        #
+        # Recorded as ``{seat: card}`` rather than a flat list because "put
+        # those cards onto the battlefield **under their owners' control**"
+        # needs a different battlefield per card, and nothing else can say
+        # which: CR 701.20a leaves every card on top of its own library, so by
+        # the time the next sentence runs there is no move to read the seat off.
+        by_seat: dict[int, object] = {}
+        total = len(game.players)
+        active = game.active_player_index or 0
+        order = sorted(
+            (i for i, p in enumerate(game.players) if not p.lost),
+            key=lambda i: ((i - active) % total, i),
+        )
+        for seat in order:
+            player = game.players[seat]
+            if not player.library:
+                game.log.append(f"{player.name} has no library to reveal from")
+                continue
+            top = player.library[0]
+            by_seat[seat] = top
+            game.log.append(
+                f"{player.name} revealed {top.name} from the top of their library"
+            )
+            game.record_reveal(seat, [top.name])
+        context.results[REVEALED_TOP_CARDS_BY_SEAT] = by_seat
+        return True, "resolved"
     revealer = context.caster if whose == "you" else context.target
     if revealer is None:
         game.log.append(f"{context.card.name}: no player to reveal from")
@@ -5847,6 +5900,48 @@ def reveal_top_of_library(game: Game, instruction: OracleInstruction, context: O
         f"{revealer.name} revealed {top.name} from the top of their library"
     )
     game.record_reveal(game.players.index(revealer), [top.name])
+    return True, "resolved"
+
+
+@effect_handler("put_revealed_top_cards_onto_battlefield")
+def put_revealed_top_cards_onto_battlefield(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"…put **those cards** onto the battlefield **under their owners'
+    control**." (Game Preserve.)
+
+    The cards an earlier step of this same resolution revealed off the top of
+    every library, each going to the seat whose library it came off — which is
+    what "their owners'" says and why the record is keyed by seat. CR 400.3: a
+    card put onto the battlefield by an effect that names an owner enters under
+    that player's control, not the ability controller's.
+
+    Nothing recorded is nothing to put: the reveal in front of this is the only
+    producer, and the intervening condition already refuses an empty one.
+    Each card is removed from its own library **by identity** at the position it
+    still occupies, because two copies of a card are the same immutable object
+    and a value comparison would take the wrong one.
+    """
+    by_seat = context.results.get(REVEALED_TOP_CARDS_BY_SEAT) or {}
+    if not by_seat:
+        game.log.append(f"{context.card.name}: no revealed card to put onto the battlefield")
+        return True, "resolved"
+    for seat, card in sorted(by_seat.items()):
+        if not (0 <= seat < len(game.players)):
+            continue
+        owner = game.players[seat]
+        for index, held in enumerate(owner.library):
+            if held is card:
+                owner.library.pop(index)
+                break
+        else:
+            # It left the library between the reveal and this step. CR 400.7
+            # makes whatever is on top now a different object, so nothing is
+            # put rather than the wrong card.
+            game.log.append(f"{card.name} was no longer on top of {owner.name}'s library")
+            continue
+        game._put_permanent_onto_battlefield(seat, Permanent(card=card), None)
+        game.log.append(
+            f"{owner.name} put {card.name} onto the battlefield ({context.card.name})"
+        )
     return True, "resolved"
 
 

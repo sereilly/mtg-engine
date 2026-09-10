@@ -32,7 +32,8 @@ from .phrases import _parse_duration, _parse_keywords
 from .condition_clauses import (accept_mana_added_with_this_ability,
                                 _accept_counter_condition,
                                 _accept_record_condition,
-                                _parse_self_in_graveyard_above)
+                                _parse_self_in_graveyard_above,
+                                _parse_self_only_of_type_in_graveyard)
 # The counted half, which reads `condition_clauses` itself: the filter parser,
 # the seat references, the life totals and the colour table all left with it.
 from .condition_counts import accept_counted_condition
@@ -195,6 +196,29 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
     grave = _parse_self_in_graveyard_above(stream)
     if grave is not None:
         return grave
+    stream.reset(mark)
+
+    # "**all cards revealed this way are creature cards**" (Game Preserve).
+    # Read here, near the top, because it opens on five fixed words no other
+    # condition in this file begins with, and it consumes nothing when they are
+    # not all there.
+    revealed_mark = stream.mark()
+    if stream.accept_phrase("all", "cards", "revealed", "this", "way", "are"):
+        card_type = stream.peek_word()
+        if card_type in CARD_TYPES and stream.peek_word(1) == "cards":
+            stream.advance()
+            stream.advance()
+            return ast.AllRevealedTopCardsAre(card_type=card_type)
+    stream.reset(revealed_mark)
+
+    # "**this card is the only creature card in your graveyard**" (Nether
+    # Spirit). The clause above's sibling — same opener, same CR 113.6b claim,
+    # a census of the pile instead of a position in it — read beside it and
+    # after it, because the first is settled by the four words "in your
+    # graveyard" landing immediately after "is" and this one by their not.
+    only_of_type = _parse_self_only_of_type_in_graveyard(stream)
+    if only_of_type is not None:
+        return only_of_type
     stream.reset(mark)
 
     # "**this spell's additional cost was paid**" (Undergrowth) — CR 601.2b's
@@ -489,6 +513,29 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
     # source. `rebinding` tells them apart by the quantifier, so the word has to
     # survive this far.
     subject = accept_source_reference_spec(stream)
+    if subject is None:
+        # "…unless **that creature** attacked this turn." (Insubordination.)
+        # The repeated noun instead of the pronoun — idiom 20's other spelling,
+        # and the same referent: under a trigger whose own condition named a
+        # permanent ("the end step of enchanted creature's controller") the
+        # words name that permanent. Which one it is stays the *lowering's*
+        # question, through ``_events.names_attached_permanent``, exactly as it
+        # is for the pronoun; this reader only says the phrase was printed.
+        #
+        # Read after the pronoun and gated on a state phrase following it: the
+        # block below returns only when one of its fixed clauses matches and
+        # resets otherwise, so "that creature" opening any other sentence is
+        # handed back whole.
+        that_mark = stream.mark()
+        if stream.accept_word("that"):
+            noun = stream.peek_word()
+            if noun is not None and noun in CARD_TYPES:
+                stream.advance()
+                subject = ast.TargetSpec(
+                    "that", ast.ObjectFilter(card_types=(noun,))
+                )
+            else:
+                stream.reset(that_mark)
     if subject is not None:
         if stream.accept_word("is") or stream.accept_word("'s"):
             for word, state, negated in _PRESENT_STATES:

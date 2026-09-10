@@ -91,6 +91,13 @@ def _arm(game: Game, seat: int, card, gate: dict) -> None:
     if kind == "life_gained_this_turn":
         player.life_gained_this_turn = int(gate.get("amount", 1))
         return
+    if kind == "self_only_card_of_type_in_graveyard":
+        # Nothing to arm: the card is the *only* thing in this graveyard, which
+        # is exactly what the clause asks (Nether Spirit). Named rather than
+        # left to the fall-through below, because "this guard cannot arm it yet"
+        # and "it is already true" are different answers and only one of them is
+        # a pass.
+        return
     if kind == "self_in_graveyard_with_cards_above":
         filler = _pool()[_FILLER[str(gate.get("card_type", "creature"))]]
         for _ in range(int(gate.get("count", 1))):

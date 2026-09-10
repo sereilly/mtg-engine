@@ -487,7 +487,7 @@ def lower_statement(
         # "that card" names is a fact about the whole printed line, and the
         # parser is what reads one (``rebinding.bind_recorded_card``).
         return _lower_put_onto_battlefield(
-            statement, statement.bound_card_from or event
+            statement, statement.bound_card_from or event, produced,
         )
 
     if isinstance(statement, ast.Sacrifice):

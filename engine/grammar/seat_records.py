@@ -131,3 +131,42 @@ def _accept_seat_cast_record(stream: TokenStream) -> "ast.Condition | None":
         stream.reset(mark)
         return None
     return ast.SeatCastSpellThisTurn(referent, negated)
+
+
+def _accept_seat_land_record(stream: TokenStream) -> "ast.Condition | None":
+    """``<seat> [didn't] play a land this turn`` — the node, or None.
+
+    "At the beginning of your end step, **if you didn't play a land this
+    turn**, you may draw a card." (Mercadian Atlas.)
+
+    The cast clause above one special action over (CR 305.1). It is a record for
+    that clause's reason: by the end step a land played this turn is an ordinary
+    permanent, indistinguishable from one put onto the battlefield by a spell or
+    one that has been there since turn three, so ``Game.lands_played_this_turn``
+    is the only thing that can answer.
+
+    The seat table is shared with the cast clause deliberately — the two are one
+    vocabulary, and a second copy is how the two spellings come to disagree
+    about which words name a seat. Both signs are read for its reason too.
+
+    Non-consuming on refusal, so the dispatcher's next branch keeps its say.
+    """
+    mark = stream.mark()
+    referent = None
+    for words, name in _CAST_RECORD_SEATS.items():
+        if stream.accept_phrase(*words):
+            referent = name
+            break
+    if referent is None:
+        return None
+    negated = bool(stream.accept_word("didn't"))
+    if not stream.accept_word("play"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("a", "land", "this", "turn"):
+        # The seat and the verb are read and the record is not — "you play a
+        # land" opens several sentences this must leave whole rather than
+        # consume half of.
+        stream.reset(mark)
+        return None
+    return ast.SeatPlayedLandThisTurn(referent, negated)

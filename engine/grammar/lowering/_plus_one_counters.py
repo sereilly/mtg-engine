@@ -22,12 +22,15 @@ reader), which is the footing ``_bound_returns`` and ``_sweeps`` sit on.
 from __future__ import annotations
 
 from ...oracle_types import OracleInstruction
+from ...subject_filters import untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
 from ..phrases import PAIR_ORDINALS
 from ._amounts import recorded_count_spec
-from ._common import (_describe_several_targets, _describe_targets, _is_source,
-                      _is_target, _names_several_targets)
+from ._common import (_describe_several_targets, _describe_targets,
+                      _filter_payload, _is_source, _is_target,
+                      _names_several_targets)
+from ._events import CHOSEN_PERMANENT, EVENT_SUBJECT_PLAYER, _EVENT_SUBJECT_PLAYERS
 
 
 def _lower_recorded_count_placement(
@@ -80,7 +83,8 @@ def _lower_recorded_count_placement(
 
 
 def lower_plus_one_placement(
-    node: ast.PutCounter, produced: frozenset[str]
+    node: ast.PutCounter, produced: frozenset[str],
+    trigger_event: str | None = None,
 ) -> tuple[OracleInstruction, ...]:
     """The placements left once the counter is known to be a +1/+1 pair.
 
@@ -200,6 +204,72 @@ def lower_plus_one_placement(
         several: dict[str, object] = {"power": 1, "toughness": 1}
         _describe_several_targets(several, node.subject)
         return (OracleInstruction("add_counter_to_target", "", several),)
+    if (
+        _is_target(node.subject)
+        and getattr(node.subject.filter, "their_choice", False)
+    ):
+        # "At the beginning of each player's upkeep, that player may put a
+        # +1/+1 counter on target creature **of their choice**." (Ley Line.)
+        #
+        # ``lowering/destruction._lower_destroy_of_their_choice`` word for word,
+        # one verb over: the pick belongs to a seat that is not the ability's
+        # controller, so the ordinary ``choose_permanent`` prompt is armed on
+        # *that* seat and the placement behind it reads the recorded id through
+        # ``permanents_from`` rather than a target. Both halves already exist;
+        # what is new is only the pairing.
+        #
+        # The deviation from CR 603.3d is the one The Abyss's branch records:
+        # the printed word is "target" and a triggered ability's targets are
+        # chosen as it goes on the stack, but this engine announces an upkeep
+        # trigger's targets from one seat — so the affected player's pick is
+        # made at resolution instead. What that costs is the CR 608.2b re-check
+        # and shroud on the picked creature.
+        #
+        # Refused under an event that froze no seat: with nobody named there is
+        # nobody to ask, and a prompt armed on nobody is an effect that silently
+        # does not happen. Where The Abyss also demands "that player controls",
+        # this sentence narrows the candidates not at all — any creature on the
+        # table is one — so the controller key is simply absent rather than
+        # checked.
+        #
+        # The **unfiltered** trigger event, for the reason
+        # ``statement_dispatch`` gives one clause up when it hands this family
+        # two of them: "of their choice" under a trigger whose subject is a
+        # player is a fact about the *trigger*, true of every clause beneath it,
+        # and this clause is nested inside the sentence's own "that player
+        # may …" — so the ``whole_effect``-filtered event is None here and a
+        # gate on it would refuse the only card that prints the phrase.
+        if trigger_event not in _EVENT_SUBJECT_PLAYERS:
+            raise LoweringError(
+                "'of their choice' names no player this placement can ask",
+                node=node,
+            )
+        described = _filter_payload(
+            node.subject.filter, carried_separately=frozenset({"their_choice"})
+        )
+        # Lifted rather than carried, for the destroy's reason: no candidate can
+        # be asked whether it is "of their choice", so left in the payload it
+        # would be a key the candidate rule cannot test.
+        described.pop("their_choice", None)
+        if untestable_filter_keys(described):
+            raise LoweringError(
+                "the counter prompt cannot test this restriction", node=node
+            )
+        return (
+            OracleInstruction(
+                "choose_permanent", "",
+                {
+                    "result_key": CHOSEN_PERMANENT,
+                    "chooser": EVENT_SUBJECT_PLAYER,
+                    "filter": described,
+                    "prompt": "Choose a creature to put a +1/+1 counter on.",
+                },
+            ),
+            OracleInstruction(
+                "add_counter_to_target", "",
+                {"power": 1, "toughness": 1, "permanents_from": CHOSEN_PERMANENT},
+            ),
+        )
     if _is_target(node.subject):
         # "Put a +1/+1 counter on target creature [you control]." The kind
         # predates this lowering: Dwarven Weaponsmith's hook has always emitted

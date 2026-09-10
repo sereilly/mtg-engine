@@ -619,6 +619,24 @@ def lower_record_condition(
             "who": condition.who,
             "negated": bool(condition.negated),
         }
+    if isinstance(condition, ast.SeatPlayedLandThisTurn):
+        # The cast record's twin one special action over, and the same two
+        # payload keys for the same reason: one question, two referents, two
+        # signs, and a kind per combination is four kinds for one tally.
+        return {
+            "kind": "seat_played_land_this_turn",
+            "who": condition.who,
+            "negated": bool(condition.negated),
+        }
+    if isinstance(condition, ast.AllRevealedTopCardsAre):
+        # The printed noun rides the payload, exactly as the two clauses above
+        # carry their seat and their sign: "all cards revealed this way are
+        # land cards" is the same question about a different type, and a kind
+        # per type is one kind per printed noun.
+        return {
+            "kind": "all_revealed_top_cards_are",
+            "card_type": condition.card_type,
+        }
     if isinstance(condition, ast.LifeGainedThisTurn):
         # The seat rides the payload rather than being baked into the kind, so
         # "if an opponent gained…" is the same condition with a different `who`

@@ -30,7 +30,8 @@ from .. import ast
 from ..errors import LoweringError
 from ._common import _is_enchanted
 from ._events import (ATTACHED_PERMANENT_CONTROLLER, _EVENT_SUBJECT_OBJECTS,
-                      _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER)
+                      _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER,
+                      names_attached_permanent)
 from ._record_conditions import lower_record_condition
 
 #: What ``targets.kind`` on a guarded effect says the pronoun "it" names, and
@@ -167,6 +168,17 @@ def _lower_condition(
             "count": condition.count,
             "op": "ge" if condition.at_least else "eq",
             "directly": condition.directly,
+            "functions_from": "graveyard",
+        }
+    if isinstance(condition, ast.SelfIsOnlyCardOfTypeInGraveyard):
+        # The clause above's sibling, and ``functions_from`` is here for its
+        # reason exactly: "you may return this card to the battlefield" prints
+        # no source zone, so this condition is the only place Nether Spirit says
+        # a graveyard is where the ability works at all — and an ability nothing
+        # scans for is one that compiles clean and never fires.
+        return {
+            "kind": "self_only_card_of_type_in_graveyard",
+            "card_type": condition.card_type,
             "functions_from": "graveyard",
         }
     if isinstance(condition, ast.AttackersAimedAtYou):
@@ -399,8 +411,33 @@ def _lower_condition(
         # pronoun was rebound to the permanent the source is attached to, and
         # the evaluator has to ask that permanent rather than the Aura. Which
         # object, as payload — the question and the reading are identical.
-        if _is_enchanted(condition.subject):
+        #
+        # "…unless **that creature** attacked this turn" (Insubordination) is
+        # the same referent with the noun repeated instead of the pronoun, and
+        # it goes through the one reader that answers both
+        # (:func:`names_attached_permanent`) rather than a second test — the two
+        # spellings are one question, and a "that" resolved against the wrong
+        # object does not fail, it asks about a different permanent.
+        #
+        # **The unbound spelling refuses**, and that is the whole reason this is
+        # not a bare `quantifier == "that"` check: with nothing to bind it the
+        # payload would carry no subject at all and the evaluator would ask the
+        # *Aura* whether it attacked — always false, so the damage would land
+        # every end step whatever the creature did. Silent, and in the card's
+        # favour.
+        if _is_enchanted(condition.subject) or names_attached_permanent(
+            condition.subject, event, event_subject
+        ):
             payload["subject"] = "attached"
+        elif (
+            isinstance(condition.subject, ast.TargetSpec)
+            and condition.subject.quantifier == "that"
+        ):
+            raise LoweringError(
+                "\"that <noun>\" names the firing event's object, and this "
+                "event records none",
+                node=condition,
+            )
         return payload
     if isinstance(condition, ast.SourceOnBattlefield):
         # "if this enchantment is on the battlefield" (Tombstone Stairwell).
