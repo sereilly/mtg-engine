@@ -314,6 +314,21 @@ def _lower_another_seat_gains_control(
         )
     assert node.gained_by is not None
     who = node.gained_by.kind
+    # "Choose one of your opponents. **That player** gains control of this
+    # enchantment." (Goblin Festival.) The pronoun points back at a pick an
+    # earlier step of this same resolution made, which is the reading the two
+    # branches below give it for a *destroy* and for a trigger's frozen seat —
+    # this is the third producer, and it is the one the sentence names most
+    # directly, so it is asked first. Under ``_CHOSEN_GAINERS``' own two-step
+    # lowering the second instruction is byte-identical to this one, which is
+    # the point: Rainbow Vale's one-sentence spelling and this two-sentence one
+    # are one pick, not two.
+    if who in _EVENT_GAINERS and CHOSEN_PLAYER in produced:
+        return (
+            OracleInstruction(
+                "give_control_of_source_to_player", "", {"who": "chosen"}
+            ),
+        )
     if who in _EVENT_GAINERS:
         # "Destroy target artifact or creature. **That permanent's controller**
         # gains control of this creature." (Starke of Rath.) No trigger fired

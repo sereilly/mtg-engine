@@ -165,6 +165,19 @@ class CostModifier:
     #: Read the other way round, a Defense Grid would tax its own player's
     #: spells on everybody's turn and nobody else's.
     off_controllers_turn: bool = False
+    #: "Creature spells **of the chosen type** cost {2} less to cast."
+    #: (Urza's Incubator.) The subject is narrowed by a word this permanent's
+    #: *controller* chose as it entered (CR 614.1c, CR 205.3m), so no reading of
+    #: the sentence can answer it — only a reader holding the taxing permanent
+    #: can, which is why this is a flag here and the word is looked up in
+    #: :func:`_tax_floored` beside the two seat comparisons.
+    #:
+    #: The same shape ``subject_filters``' ``chosen_creature_type`` key has one
+    #: layer over, and it fails the same way round: a permanent with no word
+    #: recorded discounts nothing. A dropped narrowing would make every creature
+    #: spell in the game cost {2} less, which is the direction a cost must never
+    #: drift in.
+    chosen_creature_type: bool = False
 
 
 @dataclass(frozen=True)
@@ -215,10 +228,17 @@ class CostReduction:
 # first" (Fireball's surcharge, charged in ``mixins/stack/``) now *matches* this
 # pattern part-way through, and only the agreement check keeps it from being
 # read as a tax on every spell in the game.
-_SPELL_SUBJECT_TEXT = rf"(?:(?:{_COLOURS}) )?(?:(?:{_TYPE_LIST}) )?spells?"
+# "…spells **of the chosen type**" (Urza's Incubator). A narrowing printed
+# *after* the noun rather than before it, which is why it is a tail on the
+# subject and not another slot beside the colour and the type list: the word it
+# names is not in the sentence at all, it is on the permanent (CR 614.1c).
+_CHOSEN_TYPE_TAIL = r"(?: of the chosen type)"
+_SPELL_SUBJECT_TEXT = (
+    rf"(?:(?:{_COLOURS}) )?(?:(?:{_TYPE_LIST}) )?spells?{_CHOSEN_TYPE_TAIL}?"
+)
 _SPELL_SUBJECT = re.compile(
     rf"^(?:(?P<colour>{_COLOURS}) )?(?:(?P<type>{_TYPE_LIST}) )?"
-    r"spell(?P<plural>s)?$"
+    rf"spell(?P<plural>s)?(?P<chosen>{_CHOSEN_TYPE_TAIL})?$"
 )
 # Split only where the "and" separates two *whole* subjects. `_TYPE_LIST`
 # spells its own alternation with the same word -- "Instant and enchantment
@@ -560,11 +580,13 @@ def _spell_tax_modifier(match: "re.Match[str]") -> CostModifier | None:
         return None
     subjects: list[tuple[str | None, tuple[str, ...]]] = []
     singular = False
+    chosen_type = False
     for printed in _SUBJECT_SPLIT.split(match.group("subjects")):
         read = _SPELL_SUBJECT.match(printed.strip())
         if read is None:
             return None
         singular = singular or not read.group("plural")
+        chosen_type = chosen_type or bool(read.group("chosen"))
         subjects.append(
             (
                 _COLOR_WORD_TO_SYMBOL.get(read.group("colour") or ""),
@@ -588,6 +610,18 @@ def _spell_tax_modifier(match: "re.Match[str]") -> CostModifier | None:
     elif singular or singular_verb:
         return None
     colour, card_types = subjects[0]
+    # "of the chosen type" names a catalog through the **head noun** it hangs
+    # off, the same way ``_CHOSEN_SUBTYPE_KEYS`` reads it one layer over: a
+    # creature spell's chosen type is CR 205.3m's, and a subject naming any
+    # other noun would be a land type or a card type and land in a different
+    # record. Nothing prints one, so the reading refuses rather than guesses --
+    # and refusing takes the whole line with it, which is loud.
+    #
+    # One subject only, for the reason ``quantified`` admits one: the narrowing
+    # is printed once, and a list would leave it ambiguous which conjunct it
+    # narrows.
+    if chosen_type and (card_types != ("creature",) or len(subjects) > 1):
+        return None
     return CostModifier(
         amount=generic,
         applies_to="cast",
@@ -599,6 +633,7 @@ def _spell_tax_modifier(match: "re.Match[str]") -> CostModifier | None:
         symbols=pips,
         alternative_subjects=tuple(subjects[1:]),
         off_controllers_turn=bool(match.group("off_turn")),
+        chosen_creature_type=chosen_type,
     )
 
 
@@ -778,6 +813,24 @@ def _matches(modifier: CostModifier, card, colors) -> bool:
     )
 
 
+def _chosen_type_holds(permanent, card) -> bool:
+    """Whether *card* has the creature type *permanent* chose as it entered.
+
+    The one narrowing in this file that is answered off the **taxing**
+    permanent rather than off the taxed object, because that is where CR 614.1c
+    records the answer — ``engine/mixins/permanent_state.py`` stamps it under
+    the same key ``subject_filters`` reads for "creatures of the chosen type",
+    so one recorded word answers both questions.
+
+    False when nothing is recorded: a permanent whose choice has not been made
+    narrows to nothing rather than to everything.
+    """
+    word = getattr(permanent, "metadata", {}).get("chosen_creature_type")
+    if not word:
+        return False
+    return str(word).lower() in (getattr(card, "type_line", "") or "").lower()
+
+
 def _timing_holds(game, modifier: CostModifier, caster_index: int | None) -> bool:
     """Whether *modifier*'s printed timing clause lets it charge right now.
 
@@ -937,6 +990,20 @@ def _tax_floored(
                 modifier, card, colors
             ):
                 continue
+            # "…**of the chosen type**" (Urza's Incubator). The word was chosen
+            # as this permanent entered (CR 614.1c) and recorded on it, so it is
+            # asked here rather than in ``_matches``: that function answers
+            # about the taxed card alone and has no permanent to read.
+            #
+            # Containment in the printed type line for ``_has_printed_type``'s
+            # reason — a card being cast is not a permanent, so CR 613.1 leaves
+            # the line as the whole of what there is to ask. No word recorded
+            # yet discounts nothing, which is the safe direction: a dropped
+            # narrowing would take {2} off every creature spell in the game.
+            if modifier.chosen_creature_type and not _chosen_type_holds(
+                permanent, card
+            ):
+                continue
             # "**Cycling** abilities you activate…" (Fluctuator) narrows by
             # which ability is being activated rather than by what its source
             # is, so it is asked here beside `_matches` rather than inside it:
@@ -1000,6 +1067,14 @@ def _stack_tax(
     for item, modifiers in stack_static_cost_sources(getattr(game, "stack", ())):
         seat = getattr(item, "caster_index", None)
         for modifier in modifiers:
+            # "…of the chosen type": the word is recorded on a *permanent* as it
+            # enters (CR 614.1c), and a stack object never entered anything. No
+            # card in the pool prints both clauses on one line; refused rather
+            # than ignored, because ignoring would widen the subject to every
+            # creature spell — the direction ``_chosen_type_holds`` refuses in
+            # one loop over.
+            if modifier.chosen_creature_type:
+                continue
             if not _matches(modifier, card, colors):
                 continue
             if modifier.controller == "you" and seat != caster_index:

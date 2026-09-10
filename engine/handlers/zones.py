@@ -3685,6 +3685,12 @@ def reveal_hand_and_choose(game: Game, instruction: OracleInstruction, context: 
     }
     if card_types:
         narrowing["card_type"] = tuple(card_types)
+    # "a **nonbasic** land card" (Encroach). The third narrowing, carried for
+    # the two above it's reason: an exclusion only this handler knew about is a
+    # client offering the whole hand.
+    excluded_supertypes = list(instruction.payload.get("exclude_supertypes") or ())
+    if excluded_supertypes:
+        narrowing["exclude_supertypes"] = excluded_supertypes
     legal = [
         index
         for index, held in enumerate(victim.hand)
@@ -3733,6 +3739,7 @@ def reveal_hand_and_choose(game: Game, instruction: OracleInstruction, context: 
         exclude_types=exclude_types,
         exclude_basic_lands=narrowing["exclude_basic_lands"],
         card_types=card_types,
+        exclude_supertypes=excluded_supertypes,
         fate=str(instruction.payload.get("fate", "discard")),
         # The resolution's own scratchpad. Every pick writes the chosen card's
         # name into it — the pick *is* a chosen card, whatever becomes of it —
@@ -5289,6 +5296,46 @@ def put_target_on_library_top(game: Game, instruction: OracleInstruction, contex
 
     described = (instruction.payload.get("targets") or {}).get("filter") or {}
     observer = game.players.index(context.caster)
+    targets_desc = instruction.payload.get("targets") or {}
+    if isinstance(targets_desc, dict) and targets_desc.get("count") not in (None, 1):
+        # "Put **two target lands** on top of their owners' libraries." (Plow
+        # Under.) A chosen list, resolved strictly per slot the way
+        # ``destroy_target_permanent``'s list branch resolves one: a slot whose
+        # permanent has left is dropped (CR 608.2b) rather than slid onto
+        # another, and the filter is re-asked because a land that stopped being
+        # one is no longer what the caster chose.
+        #
+        # ``bottom_instead_colors`` is not read here and cannot arrive: the
+        # lowering refuses the rider on this shape, because "if **that**
+        # creature is red" asks a colour of one object and this branch holds
+        # several.
+        chosen = resolve_target_permanents(
+            game, context,
+            predicate=lambda perm: subject_matches(
+                game, perm, described, observer=observer,
+                source=context.source_permanent,
+            ),
+        )
+        moved: list[str] = []
+        for perm in chosen:
+            if not game.is_on_battlefield(perm):
+                continue
+            owner_idx = game.owner_index_of(perm)
+            owner = (
+                game.players[owner_idx] if owner_idx is not None else context.caster
+            )
+            game.remove_from_battlefield(perm)
+            game._remove_aura_effects(perm)
+            game.put_card_into_library(
+                owner, perm.card, "top", from_battlefield=perm
+            )
+            moved.append(perm.card.name)
+        game.log.append(
+            f"{context.card.name} put {', '.join(moved)} on top of their "
+            "owners' libraries"
+            if moved else f"{context.card.name}: no valid target"
+        )
+        return True, "resolved"
     target_perm = resolve_target_permanent(
         game, context,
         predicate=lambda perm: subject_matches(

@@ -352,6 +352,21 @@ _THIS_WAY_COUNTS: dict[tuple[str, str], str] = {
     # the key names the shield and the lowering that reads it is the one that
     # knows to ask it for its total.
     ("damage", "prevented"): "prevention_shield",
+    # "Destroy all enchantments. You gain 2 life **for each enchantment
+    # destroyed this way**." (Multani's Decree.) The same record the destroy
+    # sweeps already write and the loop spelling above already reads — "for each
+    # creature that **died** this way" names it too, because CR 700.4 reserves
+    # "dies" for a creature and every other permanent is "destroyed". One
+    # record, two printed verbs, and the noun is what says which.
+    #
+    # The key is the literal rather than an ``oracle_types`` constant, which is
+    # the opposite of what ``("card", "exiled")`` above does and is deliberate:
+    # ``"destroyed_this_way"`` is spelled literally at twenty-three sites across
+    # ``engine/`` — every destroy handler that writes it and every lowering that
+    # gates on it — so minting a constant for this one row would be a
+    # twenty-fourth spelling of the idea rather than a consolidation of the
+    # other twenty-three. That consolidation is its own change.
+    ("enchantment", "destroyed"): "destroyed_this_way",
 }
 
 

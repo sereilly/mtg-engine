@@ -1136,6 +1136,27 @@ LOWERING_FAMILIES = [
      # carried on the parse side since Alpha's ante cards, so the mirror
      # re-forms rather than forking.
      "ownership",
+     # `shuffles` split off `lowering/zones.py` at Urza's Destiny's wave-1
+     # integration, when two groups' additions summed fourteen lines past the
+     # guard with neither at fault — `ownership`'s shape one set over, and the
+     # seam is the same sentence read the same way. `zones`' docstring says
+     # everything there answers "which zone does this object end up in"; a
+     # shuffle answers "what order is this library in now", which is a
+     # different question about a zone nothing moved into.
+     #
+     # `_chosen_graveyard_cards` did **not** stay behind, and that was measured
+     # rather than assumed: `zones`' "put a graveyard's chosen cards on top of
+     # a library" and `shuffles`' "shuffle a graveyard into a library" both
+     # call it, so it went to `_piles`, the floor that exists for a leaf two
+     # families read. `_REVEAL_TOP_PLAYERS` is the mirror check and came out
+     # the other way — it is byte-identical to `_SHUFFLE_LIBRARY_PLAYERS` and
+     # stayed, because two facts that happen to hold the same four seats are
+     # still two facts.
+     #
+     # Lowering-only, for `zones`' own reason: the shuffle productions are
+     # spread across `effects/library.py`, `effects/zones.py` and
+     # `effects/search.py` and none of those is near its guard.
+     "shuffles",
      # `tolls` split off `lowering/board.py` at Urza's Saga's second wave, when
      # that module sat eight lines under the guard with a 72-card tail still to
      # come. The seam was not found at the cap: `board.py`'s own docstring had

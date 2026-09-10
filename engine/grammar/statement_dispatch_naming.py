@@ -267,6 +267,28 @@ def lower_naming_statement(
             ),
         )
 
+    if isinstance(statement, ast.ChooseOpponent):
+        # "Choose one of your opponents." (Goblin Festival.) The bare-sentence
+        # spelling of the noun phrase ``lowering/control_changes._CHOSEN_GAINERS``
+        # already reads inside its own sentence ("An opponent gains control of
+        # this land", Rainbow Vale) — the *same* instruction, so the two printed
+        # word orders cannot come to mean two different picks.
+        #
+        # Its own step rather than a word the sentence after it resolves, for
+        # ``choose_opponent``'s stated reason: a pick with one answer at two
+        # seats is a prompt at four, and a handler that has to stop and ask
+        # cannot also finish the sentence. Recorded under the key every "that
+        # player" reads, so the sentence behind it is already wired.
+        return (
+            OracleInstruction(
+                "choose_opponent", "",
+                {
+                    "result_key": CHOSEN_PLAYER,
+                    "prompt": "Choose an opponent.",
+                },
+            ),
+        )
+
     if isinstance(statement, ast.ChoosePlayerWhoCast):
         # "Choose a player who cast one or more sorcery spells this turn."
         # (Backdraft.) The choice and nothing else: what the chosen player is

@@ -84,3 +84,78 @@ CANT_BLOCK_ATTACKERS_UNTIL_EOT = "cant_block_attackers_until_eot"
 #: one-turn twin of Watchdog's printed static, read at the same place in the
 #: declare-blockers step so the two cannot come to mean different things.
 MUST_BLOCK_UNTIL_EOT = "must_block_until_eot"
+
+
+#: The printed static permissions that lift CR 509.1a's default of **one**
+#: attacker per blocker, and how many extra attackers each one grants.
+#:
+#: A table beside the marks above rather than a substring scan inside the
+#: declare-blockers step, for this module's stated reason: the sentence is read
+#: twice — once by ``_max_blocks_for`` to raise the ceiling and once by the
+#: support gate in ``engine/oracle.py`` to claim the line — and two readings of
+#: one printed sentence is how a card comes to be admitted with its only ability
+#: dropped. Two-Headed Giant of Foriys was already in that state in the small
+#: way (a substring count here, a prefix string there); Wall of Glare is the
+#: card that would have made it the large way, because "any number" is not a
+#: count and a scan for the other spelling answers zero.
+#:
+#: Whole printed lines rather than prefixes, which is the anchoring
+#: ``combat_restriction_for`` already has and the reason ``oracle.py``'s own
+#: comment gives for preferring a table: a prefix claim admits any sentence
+#: beginning with the words and drops whatever follows.
+#:
+#: "…**this turn**" is deliberately absent. That spelling is a one-shot grant
+#: (Yare, Mounted Archers, Blaze of Glory) written onto the permanent as
+#: ``ADDITIONAL_BLOCKS_UNTIL_EOT`` / ``CAN_BLOCK_ANY_NUMBER_UNTIL_EOT`` by the
+#: handler that resolves it and swept with the turn; read here it would be a
+#: permanent grant every combat, for free and whether or not anybody activated
+#: anything.
+_PRINTED_BLOCK_PERMISSIONS: dict[str, int] = {
+    # Two-Headed Giant of Foriys, Foriysian Brigade.
+    "this creature can block an additional creature each combat": 1,
+    # "This creature can block any number of creatures." (Wall of Glare.) No
+    # ceiling at all, spelled as a number the additive arithmetic in
+    # ``_max_blocks_for`` can carry — a sentinel keeps the sum one expression,
+    # where an "unlimited" flag would fork every caller that adds to it.
+    "this creature can block any number of creatures": 1_000_000,
+}
+
+
+def printed_block_ceiling(static_lines) -> int:
+    """How many attackers **beyond the printed one** *static_lines* allow.
+
+    0 for a creature printing none, which is every creature. Summed rather than
+    maximised, because CR 509.1b's permissions are cumulative the way the
+    granted ceilings beside them are: a creature printing the sentence twice
+    blocks two extra.
+
+    Read off the compiled program's **static** lines and not the whole oracle
+    text, which is the distinction ``_max_blocks_for`` has always drawn and the
+    one that matters: the same sentence is printed as an *activated* ability
+    ("{W}: This creature can block an additional creature this turn.", Mounted
+    Archers), and a text scan cannot tell the two apart.
+    """
+    return sum(
+        _PRINTED_BLOCK_PERMISSIONS.get(_normalized_permission(line), 0)
+        for line in static_lines or ()
+    )
+
+
+def block_permission_claims_line(line: str) -> bool:
+    """Whether *line* is, in full, one of the block permissions above.
+
+    The support gate's half of :func:`printed_block_ceiling`, so what raises the
+    ceiling and what admits the card are the same table. A creature whose only
+    line is one of these is supported by this and by nothing else.
+    """
+    return _normalized_permission(line) in _PRINTED_BLOCK_PERMISSIONS
+
+
+def _normalized_permission(line: str) -> str:
+    """*line* as the table spells it — lowercased, with the full stop off.
+
+    One normalizer for both readers, because the gate is handed a line the
+    compiler already normalized and the ceiling is handed a compiled static
+    line, and the two differ by exactly a trailing period.
+    """
+    return str(line or "").strip().lower().rstrip(".")

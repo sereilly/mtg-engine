@@ -263,6 +263,32 @@ def _parse_choose_color(stream: TokenStream) -> ast.Statement | None:
     return None
 
 
+def _parse_choose_opponent(stream: TokenStream) -> "ast.ChooseOpponent | None":
+    """``Choose one of your opponents.`` (Goblin Festival.)
+
+    Beside :func:`_parse_choose_color` and refusing the same way: None with the
+    cursor untouched, so every other "choose" sentence keeps the reading it
+    owns.
+
+    The whole phrase and nothing after it, for that production's reason exactly:
+    "choose an opponent **and a color**" is a sentence this has not read, and a
+    reader that stopped at "opponents" would leave the rest to be dropped.
+
+    "**One of your** opponents" rather than a bare "an opponent": the latter is
+    a noun phrase the control-gift lowering already reads *inside* its own
+    sentence (Rainbow Vale's "An opponent gains control of this land"), and one
+    production reading both positions would make the two spellings compete for
+    the same tokens.
+    """
+    mark = stream.mark()
+    if stream.accept_phrase("choose", "one", "of", "your", "opponents") and (
+        stream.exhausted or stream.at_punct(".", ",")
+    ):
+        return ast.ChooseOpponent()
+    stream.reset(mark)
+    return None
+
+
 def parse_choose_card_type(
     stream: TokenStream, chooser: "ast.PlayerRef | None" = None
 ) -> "ast.ChooseCardType | None":

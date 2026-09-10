@@ -5307,6 +5307,19 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
 
     if _one_sentence(line) and aura_continuous_claim(normalized) is not None:
         return True
+    # "This creature can block an additional creature each combat."
+    # (Two-Headed Giant of Foriys) / "…can block any number of creatures."
+    # (Wall of Glare.) CR 509.1a's one-attacker default lifted by a printed
+    # static, derived by the table ``_max_blocks_for`` raises the ceiling from —
+    # so what is claimed and what is enforced are one reading. The first of the
+    # two was a prefix row in the tuple below until Wall of Glare arrived and
+    # showed what a second spelling of the same sentence costs: a scan for
+    # "additional" answers zero for "any number", and the card would have been
+    # admitted blocking exactly one attacker.
+    from .combat_permissions import block_permission_claims_line
+
+    if block_permission_claims_line(normalized):
+        return True
     static_patterns = (
         "this creature enters with seven +1/+0 counters on it",
         "this creature enters with x +1/+1 counters on it",
@@ -5322,7 +5335,6 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
         # lord line — a prefix admitting any sentence that began with the word —
         # and it is now `lord_buff_for` above, which claims the sentence end to
         # end or not at all.
-        "this creature can block an additional creature each combat",
         "as long as this creature is untapped, all damage that would be dealt to you by unblocked creatures is dealt to this creature instead",
         "remove a corpse counter from this creature: regenerate this creature",
         "you may have this creature enter as a copy of any creature on the battlefield",

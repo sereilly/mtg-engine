@@ -15,6 +15,7 @@ from .. import ast
 from ..amounts import accept_counters_on_source, accept_fraction_head, accept_rounding, expect_pt, parse_amount, parse_equal_to
 from ..bounds import accept_life_gain_cap
 from ..records import (_parse_for_each_this_way, accept_counters_removed_for_cost,
+                       scaled_by_recorded_count,
                       accept_plus_per_cost_paid,
                       parse_for_each_milled_this_way)
 
@@ -253,19 +254,27 @@ def _parse_gains(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
                 # counter placement one family over treats the same clause.
                 #
                 # Read after the history clause above, which declines without
-                # consuming, and only over a printed 1: "gain 2 life for each"
-                # is a multiplication `ThatMuch` cannot carry, and reading the
-                # clause while dropping the printed count would gain one life
-                # where the card says two.
+                # consuming. The printed number is a **rate**: "gain 1 life for
+                # each card exiled this way" (Rysorian Badger) is the record
+                # itself and "**gain 2 life** for each enchantment destroyed
+                # this way" (Multani's Decree) is twice it. Both go through
+                # ``records.scaled_by_recorded_count``, the reader the counter
+                # family one file over already uses for the same clause — so the
+                # two effects cannot come to read one printed sentence as two
+                # numbers, and a printed 1 still folds away to the bare record
+                # rather than to ``Times(1, …)``.
+                #
+                # This refused a printed 2 outright until Multani's Decree, on
+                # the reading that ``ThatMuch`` cannot carry a multiplication.
+                # True of that node and beside the point: ``ast.Times`` is the
+                # node for one and the shared reader had been minting it for the
+                # counter spelling of this very clause since Mind Maggots.
                 if per_each is None:
                     counted = _parse_for_each_this_way(stream)
                     if counted is not None:
-                        if not (isinstance(amount, ast.Fixed) and amount.value == 1):
-                            raise stream.error(
-                                "life gained per recorded unit is gained one "
-                                "at a time"
-                            )
-                        return ast.GainLife(player, counted)
+                        return ast.GainLife(
+                            player, scaled_by_recorded_count(amount, counted, stream)
+                        )
                 if per_each is None:
                     for_each_mark = stream.mark()
                     if stream.accept_phrase("for", "each"):

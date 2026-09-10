@@ -99,6 +99,25 @@ def _records_produced(
         for branch in branches:
             for nested in instruction.payload.get(branch) or ():
                 keys |= _records_produced(nested, branches)
+    if instruction.kind == "if_then":
+        # "Flip a coin. **If you lose the flip, choose one of your opponents.**
+        # That player gains control of this enchantment." (Goblin Festival.)
+        # A branch records the seat and the sentence after the branch reads it,
+        # which is the offer's shape above with the condition printed instead of
+        # offered — so it threads the same way and for the same reason: what is
+        # visible afterwards is the *possibility* that the record exists.
+        #
+        # A branch that did not run writes nothing, and the reader behind it
+        # answers an absent record the way every reader in this engine does —
+        # ``give_control_of_source_to_player`` hands the permanent to nobody,
+        # which is what the card says happens when the flip is won.
+        #
+        # Both branches, unlike the offer's split above: an ``if_then``'s
+        # ``else`` is the same sentence's other half rather than a decline, and
+        # a step after the whole conditional cannot know which half ran.
+        for branch in ("then", "else"):
+            for nested in instruction.payload.get(branch) or ():
+                keys |= _records_produced(nested, branches)
     if instruction.kind == "choose_one":
         # "**Destroy all green creatures or all white creatures.** They can't
         # be regenerated. You lose 2 life for each creature that died this

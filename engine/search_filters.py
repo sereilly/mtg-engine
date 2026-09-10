@@ -144,6 +144,29 @@ def search_matches(card, data: dict, *, game=None, owner=None) -> bool:
         "basic" in type_line.split("\u2014")[0]
     ):
         return False
+    # "You choose a **nonbasic land** card from it." (Encroach.) A printed
+    # *supertype* exclusion, beside the type exclusion above rather than under
+    # ``restrictions`` because it is the same kind of key those two are: a
+    # narrowing the revealed-hand picker carries flat, spelled the way
+    # ``handlers/_common.permanent_matches_filter`` already spells the identical
+    # phrase for a permanent.
+    #
+    # Distinct from ``exclude_basic_lands`` directly above, which is CR 205.4a's
+    # supertype **paired with** the land card type — Lobotomy's "other than a
+    # basic land card" excludes a basic land and admits a nonbasic one, and this
+    # excludes anything carrying the word wherever the noun phrase's own type
+    # narrowing has already said what kind of card is wanted. Two printed
+    # phrases, two keys, and reading either as the other admits a card the
+    # sentence excluded.
+    #
+    # Off the printed type line's supertype half, for the reason the required
+    # supertypes below are read that way: a card in a hand, a library or a
+    # graveyard has no computed characteristics at all (CR 613.1).
+    excluded_supertypes = data.get("exclude_supertypes") or ()
+    if excluded_supertypes:
+        printed_supertypes = type_line.split("—")[0]
+        if any(word in printed_supertypes for word in excluded_supertypes):
+            return False
     restrictions = data.get("restrictions") or {}
     # "a **blue** instant card" (Merchant Scroll). A search may test a colour at
     # all for the reason it may test the type line: a card's colour is its mana

@@ -22,7 +22,7 @@ import dataclasses
 
 from .. import ast
 from ..errors import LoweringError
-from ._common import chargeable_card_filter
+from ._common import _restrictions_beyond, chargeable_card_filter
 
 
 # Restrictions the exile-search picker tests (engine/search_filters.py's
@@ -53,3 +53,65 @@ def _linked_exile_filter(filt: ast.ObjectFilter) -> dict:
             node=filt,
         )
     return described
+
+
+#: Added at Urza's Destiny's wave-1 integration, when the shuffles left
+#: `zones`: this leaf is read by `zones`' "put a graveyard's chosen cards on
+#: top of a library" and by `shuffles`' "shuffle a graveyard into a library",
+#: which are now two families. A leaf two families read cannot live in either
+#: without one importing the other, which is what this floor is for.
+def _chosen_graveyard_cards(
+    filt: ast.ObjectFilter, subject: ast.TargetSpec, node
+) -> dict[str, object]:
+    """The payload half naming **which cards in a graveyard were chosen** — the
+    narrowing and the target description, in the key names
+    ``graveyard_card_matches`` reads and ``_graveyard_to_library_spec`` derives
+    a picker from. One definition, because two sentences name the same set and
+    differ only in what then happens to it: "put ... on top of their library in
+    any order" (Drafna's Restoration) and "shuffles ... into their library"
+    (Gaea's Blessing). A second copy would be a second answer to which cards the
+    line may name, and the picker, the cast-time re-check and the handler all
+    read it. A head noun with no card type (Misinformation's bare "cards") is
+    not the absence of a narrowing but a narrowing saying "any card"; a
+    supertype (Lodestone Bauble's "basic land cards") is read off the printed
+    type line, which for a card in a graveyard is the whole of what there is
+    (CR 613.1). Dropping either is a strictly better card than the one printed.
+    """
+    if len(filt.card_types) > 1:
+        raise LoweringError(
+            "the graveyard-to-library handler narrows by one card type", node=node
+        )
+    leftover = _restrictions_beyond(
+        filt,
+        frozenset({"card_types", "is_card", "zone", "zone_owner", "supertypes"}),
+    )
+    if leftover:
+        raise LoweringError(
+            f"the graveyard-to-library handler does not honour {leftover[0]!r}",
+            node=node,
+        )
+    return {
+        **(
+            {"card_type": filt.card_types[0]} if filt.card_types
+            else {"any_card": True}
+        ),
+        **({"supertypes": list(filt.supertypes)} if filt.supertypes else {}),
+        # "Any number" prints no ceiling, so the only cap is how many legal
+        # targets there are — a number the picker knows and this lowering does
+        # not. "Up to three" (Reinforcements) prints one, and it rides the same
+        # description every counted target list uses.
+        # The **printed** quantifier, not "up_to" for everything counted: a
+        # bare "target creature card" (Volrath's Stronghold) is a target the
+        # announcement must fill and "up to one" is one it may decline, and
+        # CR 602.2b refuses the activation of the first with nothing paid. The
+        # count is the same number either way, so every card written before
+        # "target" was admitted here sends a byte-identical payload.
+        "targets": (
+            {"quantifier": "any_number", "kind": "card", "unbounded": True}
+            if subject.quantifier == "any_number"
+            else {
+                "quantifier": subject.quantifier, "kind": "card",
+                "count": int(subject.count or 1),
+            }
+        ),
+    }

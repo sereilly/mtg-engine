@@ -856,12 +856,26 @@ def skip_next_step(game: Game, instruction: OracleInstruction, context: OracleEx
     without that the record is spent by whichever player's draw step comes round
     first, and on the opponent's turn that is the wrong player.
 
-    The seat is the ability's controller, which is what "you" means (CR 109.5).
+    "you" is the ability's controller (CR 109.5). "**Target player**" (Fatigue)
+    is a seat chosen as the spell was cast (CR 115.1), which only the resolution
+    knows — so the pronoun rides the payload and is read back here, the same
+    reading ``board_misc``'s forced-sacrifice branch gives the identical word.
+
+    A pronoun with nobody chosen answers False rather than falling back to the
+    caster: skipping your own draw step where the card names an opponent's is a
+    strictly different card.
     """
     step = str(instruction.payload.get("step") or "")
     if not step:
         return False, "no step named"
-    seat = game.seat_index(context.caster)
+    who = str(instruction.payload.get("seat") or "you")
+    if who == "you":
+        seat = game.seat_index(context.caster)
+    else:
+        chosen = context.target
+        if chosen not in game.players:
+            return False, f"no player was chosen for {who!r}"
+        seat = game.players.index(chosen)
     game.skip_next_step(step, int(instruction.payload.get("count", 1) or 1), seat=seat)
     game.log.append(
         f"{game.players[seat].name} will skip their next {step} step"

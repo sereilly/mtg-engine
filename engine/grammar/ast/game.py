@@ -367,6 +367,28 @@ class ChooseColor:
 
 
 @dataclass(frozen=True)
+class ChooseOpponent:
+    """``Choose one of your opponents.`` (Goblin Festival.)
+
+    Beside :class:`ChooseColor` and :class:`ChooseCardType` and for their
+    reason: the sentence produces a *value* and no effect of its own, and what
+    reads it is the next sentence on the card ("**That player** gains control of
+    this enchantment").
+
+    A **resolution** choice (CR 608.2c/608.2d), not a target: the words "target"
+    and "up to" are absent, nothing is announced as the ability is activated,
+    and the pick is only made if the coin flip in front of it is lost. That is
+    what separates it from :class:`stack.ChooseTarget`'s player form, which is
+    announced at CR 602.2b and can be countered by removing the seat.
+
+    Carries no fields. Who picks is CR 609.5's controller of the ability, and
+    which opponents are legal is every seat that is not them — neither is
+    printed, and a card that named a narrower set would be a sentence this
+    production has not read.
+    """
+
+
+@dataclass(frozen=True)
 class ChooseCardType:
     """``That player chooses artifact, creature, land, or non-Aura
     enchantment.`` (Teferi's Realm.)
