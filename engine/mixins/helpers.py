@@ -2703,6 +2703,26 @@ class GameHelpersMixin:
             # second slot resolved to whatever sat at that index on the wrong
             # board. Garruk, Savage Herald's -2 names one creature you control
             # and then anyone's, so it is the shape that needed this.
+            #
+            # **The seat is settled here too, and it is the same announcement.**
+            # An id says which battlefield it is on and a seat does not, so an
+            # announcement carrying ids and no seat is complete — but every
+            # reader downstream defaults the missing seat to the *opponent*
+            # (`_ability_execution_context`, `_resolve_card`), and
+            # `handlers/_common.pick_target_permanent` scopes the id lookup to
+            # that player on purpose. So an id naming a permanent the activator
+            # controls was rejected by the very resolver that was handed it,
+            # and the fallback scan below it picked whichever permanent it met
+            # first: War Barge, aimed by id at its controller's own creature,
+            # gave islandwalk to an opposing one and logged success.
+            #
+            # This is the graveyard fix in ``_run_stack_item_resolution`` one
+            # zone over (that one writes ``item.target_player_index =
+            # first.seat`` off a stamped graveyard card, for the same reason),
+            # and it is the web layer's own ``if len(seats) == 1`` rule read
+            # back into the engine — which is why no game ever showed this and
+            # every headless caller did.
+            self._settle_announced_target_seat(item)
             return
         seat = item.target_player_index
         if seat is None:
@@ -2710,6 +2730,73 @@ class GameHelpersMixin:
             seat = 1 - item.caster_index if len(self.players) == 2 else item.caster_index
         if 0 <= seat < len(self.players):
             item.target_permanent_id = self.permanent_ids_at(seat, item.target_permanent_index)
+
+    def announced_target_seat(self, permanent_ids) -> int | None:
+        """The seat an announcement made by ``permanent_id`` already names, or
+        None where the ids do not settle one (CR 601.2c, CR 400.7).
+
+        An announcement made by id is complete: CR 400.7 makes the id one
+        object for one stay on the battlefield, and that object knows whose
+        battlefield it is on. A seat is not part of the choice, so a caller
+        naming ids has nothing to add, and every headless caller — a test, the
+        AI, ``scripts/run_duel.py`` — leaves it out.
+
+        Downstream, though, "no seat named" is not "no seat". Every reader of
+        ``StackItem.target_player_index`` supplies the *opposing* seat as its
+        default (:meth:`_ability_execution_context`, ``_resolve_card``), and
+        ``handlers/_common.pick_target_permanent`` scopes its id lookup to
+        exactly that player — on purpose, so that widening a target's
+        battlefield is never something a resolver does by itself. Each half is
+        defensible; together they discard the announcement. Every activated
+        ability aimed by id at a permanent its own activator controls resolved
+        against the wrong battlefield: the id was rejected by the resolver it
+        was handed to, and the scan beneath it took whichever permanent it met
+        first. War Barge gave islandwalk to an opposing creature and logged
+        success, and 209 shipped cards did the same shape of thing.
+
+        So the seat is *derived from the choice* rather than defaulted around
+        it. One query, asked wherever an announcement's seat is being settled —
+        :meth:`_stamp_stack_targets` for an item built with ids, and
+        ``_activate_onto_stack`` where the default is applied before the item
+        exists.
+
+        None unless every live named permanent agrees, for the reason
+        ``web/actions.py`` writes ``target_seat`` back only for a single-seat
+        list: a pair of targets on two battlefields (Garruk, Savage Herald's
+        -2) has no one seat to be on, and those resolutions read the ids
+        anyway. Naming either seat would invent a fact about the other slot.
+        """
+        if permanent_ids is None:
+            return None
+        listed = (
+            permanent_ids
+            if isinstance(permanent_ids, (list, tuple))
+            else [permanent_ids]
+        )
+        seats = {
+            self.controller_index_of(permanent)
+            for permanent in (
+                self.permanent_by_id(permanent_id)
+                for permanent_id in listed
+                if isinstance(permanent_id, int)
+            )
+            if permanent is not None
+        }
+        return seats.pop() if len(seats) == 1 else None
+
+    def _settle_announced_target_seat(self, item) -> None:
+        """Write :meth:`announced_target_seat`'s answer onto *item*.
+
+        Only where the item names no seat of its own: a caller that supplied
+        one made a choice — a targeted **player** rides this same field, and so
+        does the battlefield a bare index counts into — and overwriting it
+        would be this method causing the class it exists to close.
+        """
+        if item.target_player_index is not None:
+            return
+        seat = self.announced_target_seat(item.target_permanent_id)
+        if seat is not None:
+            item.target_player_index = seat
 
     def _announce_targeting(self, item) -> None:
         """"…becomes the target of a spell or ability" (CR 603.2, Warden of the

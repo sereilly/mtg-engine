@@ -715,7 +715,28 @@ adding entries, not editing dispatch**:
   are **banned outright** by that guard; positional subscripting is ratcheted
   per module. The wire carries `id` alongside `index` and resolves it once at
   the top of `web/actions.py`, where a stale id is a 404, never a fall back to
-  the index. **Combat is still index-keyed, but its maps follow their creatures**:
+  the index.
+  **An id names a battlefield as well as an object, and the engine had to be
+  told.** That sentence is about the wire and was true of it — `web/actions.py`
+  writes `target_seat` back off the id — and the *engine's* own announcement
+  API held the opposite. `activate_permanent_ability(..., target_permanent_ids
+  =[id])` defaulted the unsaid seat to the opponent's before the object reached
+  the stack, and `handlers/_common.pick_target_permanent` scopes an announced id
+  to exactly that seat, so an id on the activator's own battlefield was
+  discarded by the resolver it was handed to and the scan beneath it took
+  whichever permanent it met first. **209 shipped cards** did that (163 acting
+  on the wrong permanent, 47 doing nothing) and 151 more on the cast side; no
+  compiled program moved, so `oracle_diff` and every coverage instrument were
+  blind to all of it and only running a card could see it.
+  `Game.announced_target_seat` is the seam — the seat the ids already name, asked
+  where an announcement's seat is settled, which for an activation is **before
+  the cost is paid** (CR 601.2c precedes CR 601.2h, and Skull Catapult
+  sacrifices the creature it is aimed at). Held pool-wide by
+  `tests/regressions/test_announced_target_seat.py`, whose sweep carries a floor
+  on how many announcements it examined — asked of `activate_permanent_ability`,
+  which settles the stack itself, it reached zero of them and passed on the
+  broken engine.
+  **Combat is still index-keyed, but its maps follow their creatures**:
   `_renumber_combat_after_removal` runs from the removal transition below and
   drops an entry whose creature left, shifting the rest. Adding a combat map
   means adding it there — every index has a resolvable seat (an attacker's is
