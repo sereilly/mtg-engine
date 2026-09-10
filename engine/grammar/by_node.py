@@ -246,7 +246,6 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.ExileCostSacrifices: _lower_exile_cost_sacrifices,
     ast.ExileGraveyard: _lower_exile_graveyard,
     ast.ExileGraveyardArrivalsThisTurn: _lower_exile_graveyard_arrivals_this_turn,
-    ast.LookAtHand: _lower_look_at_hand,
     ast.GraveyardTopToLibrary: _lower_graveyard_top_to_library,
     ast.LookAtLibraryTop: _lower_look_at_library_top,
     ast.LookTopCycleForLife: _lower_look_top_cycle_for_life,
@@ -353,6 +352,12 @@ _BY_NODE_TYPE_WITH_EVENT: dict[type, object] = {
     # across by the round that next touched the dispatcher — which is what that
     # note asks for.
     ast.UntapChosenByPaying: _lower_untap_chosen_by_paying,
+    # "…you may look at **defending player's** hand" (Port Inspector).
+    # CR 506.2's seat is one a *combat* event froze, so the same words on a
+    # line with no such event in front of them name nobody — which the
+    # lowering can only decide once it knows which event fired. It left the
+    # name-only table above the moment it started deciding that.
+    ast.LookAtHand: _lower_look_at_hand,
     ast.RevealHandAndChoose: _lower_reveal_hand_and_choose,
     ast.PlayerGetsCounters: _lower_player_gets_counters,
     ast.LookTopPickToHand: _lower_look_top_pick,

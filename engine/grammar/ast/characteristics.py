@@ -241,6 +241,14 @@ class PutCounter:
     # ``divided_targets`` list on the stack item. ``subject`` is then the noun
     # the shares are divided *among* rather than one permanent.
     distributed: bool = False
+    # "…put a +1/+1 counter on target creature **of defending player's
+    # choice**." (Erithizon.) Who *picks* the permanent, which is not a property
+    # of any candidate and is not the ability's controller — so it is lifted off
+    # the noun phrase and carried here, exactly as ``ChoosePermanent.chooser``
+    # carries it for the sentence that says "<player> chooses" outright. None on
+    # every card that prints no rider, which is the reading CR 601.2c gives:
+    # the announcing player chooses.
+    chooser: "PlayerRef | None" = None
 
 
 @dataclass(frozen=True)

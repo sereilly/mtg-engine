@@ -1657,7 +1657,7 @@ def test_layers_only_import_downward(layers):
         # library shares with it the printed word "Search" and no vocabulary at
         # all.
         ("effects", ("_strips",), ()),
-        ("lowering", ("_common", "_filters", "_events", "_deaths", "_delays", "_amounts", "_counted_damage", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_conjuncts", "_bound_returns", "_bound_exiles", "_described_returns", "_piles", "_counter_stores", "_plus_one_counters", "_blankets", "_pump_categories", "_zone_categories", "_record_keys", "_record_conditions", "_cost_records", "_superlatives", "_recipients", "_collapses", "categories", "conditions"), ()),
+        ("lowering", ("_common", "_filters", "_events", "_deaths", "_delays", "_amounts", "_counted_damage", "_counted_pumps", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_conjuncts", "_bound_returns", "_bound_exiles", "_described_returns", "_piles", "_counter_stores", "_plus_one_counters", "_blankets", "_pump_categories", "_zone_categories", "_record_keys", "_record_conditions", "_cost_records", "_superlatives", "_recipients", "_collapses", "categories", "conditions"), ()),
         # `costs` is shared beside `_core` rather than a family: a cost is
         # charged on the way to the stack and never lowered, so it has no
         # `effects/` or `lowering/` twin to be a family of — and both
@@ -2014,6 +2014,21 @@ FAMILY_SHARED = {
     # `_amounts` for `count_spec`, which is a floor reading a floor, the
     # arrangement `_amounts` already has with `_common`.
     "_counted_damage",
+    # `_counted_pumps` split out of `lowering/characteristics.py` at Mercadian
+    # Masques' first wave, on `_counted_damage`'s line one CR layer over: a
+    # printed quantity that is **counted**, against the sentence that spends it
+    # — here a CR 613 layer-7c modification rather than a damage event. Every
+    # reading of `_lower_pump` whose *size* was a count went with it (the
+    # milled-this-way record, the team buff, the bound target, the event's own
+    # subject, the source's continuous bonus), and that is the half that grows:
+    # a set prints a new shape of counted pump far oftener than it teaches
+    # `count_spec` a new zone. `_TARGET_PUMP_DURATIONS` went too, because it
+    # has a reader on each side of the cut and a table left behind would have
+    # made a floor import the family that reads it. A floor for `_amounts`'
+    # reason exactly — `characteristics` reads it and it reads nothing back —
+    # and it reads `_amounts`, `_common` and `_events`, which is a floor
+    # reading floors.
+    "_counted_pumps",
     # `_bites` split out of `lowering/damage.py` at Mirage's third wave, the
     # next time that module reached the guard below. The line is the one the
     # branches had already drawn: everything left in `damage` computes a

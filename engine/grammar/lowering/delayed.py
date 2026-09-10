@@ -788,6 +788,47 @@ def _lower_activated_delayed_destroy(
                 "binds_target": True,
             }),
         )
+    # "{3}{B}: **Destroy target blocking creature** at end of combat."
+    # (Silent Assassin.) The fourth subject this shape names, and the only one
+    # the *announcement* chose: CR 602.2b picks the target when the ability goes
+    # on the stack, so by the time the delayed ability fires there is nothing
+    # left to pick from — the creature may have stopped blocking, or the combat
+    # may be a different one. ``binds_target`` is exactly that reading, and it
+    # is the same key the loop-bound branch above uses because it is the same
+    # question: which permanent is this entry *about*.
+    #
+    # No trigger is involved, so none of the block-pair readings below can
+    # apply; and the branch has to sit here rather than there because
+    # ``binds_block_pair`` would refuse an activated ability outright and the
+    # refusal would name a trigger the card does not print.
+    #
+    # The printed noun phrase rides ``targets`` on the **outer** instruction —
+    # the wrapper is what the picker reads at activation — while the inner
+    # destroy takes no description at all: by the time it runs the choice is
+    # made and the entry holds the id.
+    if spec.quantifier == "target" and spec.targeted:
+        if _restrictions_beyond(
+            spec.filter, frozenset({"card_types", "blocked", "blocking", "attacking"})
+        ):
+            raise LoweringError(
+                "the end-of-combat destroy carries no narrowing beyond a "
+                "combat role",
+                node=node,
+            )
+        if node.no_regen:
+            raise LoweringError(
+                "the end-of-combat destroy handler does not bypass regeneration",
+                node=node,
+            )
+        payload: dict[str, object] = {
+            "event": "next_end_of_combat",
+            "instruction": OracleInstruction("destroy_bound_permanent", "", {}),
+            "once": True,
+            "duration": "end_of_turn",
+            "binds_target": True,
+        }
+        _describe_targets(payload, spec)
+        return (OracleInstruction("create_delayed_trigger", "", payload),)
     # The pronoun is read **before** the self-reference, and the order is the
     # card: `parse_recipient` gives a bare "it" the same `is_source` filter a
     # card naming itself gets, and tells them apart by the quantifier alone. Put

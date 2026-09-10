@@ -36,6 +36,7 @@ from ._plus_one_counters import lower_plus_one_placement
 from ._counter_stores import lower_loyalty_counters
 from ._events import (CHOSEN_PERMANENT, OTHER_CHOSEN_PERMANENT, EVENT_SUBJECT_CONTROLLER, _EVENT_SUBJECT_OBJECTS, binds_block_pair, _REANIMATED_PERMANENTS, _RECORDED_PERMANENTS)
 from ._delays import (_BOUND_OBJECT_DELAYED_EVENTS)
+from ._seats import _CHOOSER_SEATS
 
 
 #: Whose creature an *unchosen* counter placement lands on, and the word the
@@ -78,6 +79,83 @@ _ATTACHED_COUNTER_TRIGGERS: frozenset[str] = frozenset({
     "upkeep_enchanted_controller",
     "creature_dealt_damage_by_attached_dies",
 })
+
+
+
+def _lower_chosen_counter_placement(
+    node: ast.PutCounter,
+) -> tuple[OracleInstruction, ...]:
+    """"Put a +1/+1 counter on target creature **of defending player's
+    choice**." (Erithizon.)
+
+    A placement whose object somebody *other than the ability's controller*
+    picks. CR 602.3 is the rule that has room for it — an ability may say one of
+    its controller's opponents does something the controller would normally do,
+    and choosing the target is exactly that — so the sentence is two steps
+    rather than one: the prompt that asks the named seat, and the placement that
+    reads what it answered.
+
+    The **same two steps** Crashing Boars, The Abyss, Preacher and Nova Pentacle
+    already lower to, through the same ``choose_permanent`` kind, the same
+    ``_CHOOSER_SEATS`` row and the same ``attach_host`` record. That is why the
+    seat table moved down to ``_seats``: this is the second family to need it,
+    and a second copy of it would answer differently the first time a row was
+    added to one of them.
+
+    Nothing is gated on the *event* here, deliberately, because the handler is
+    where the seat is resolved and it already refuses to fall back: a chooser no
+    firing named answers None and the prompt is reported as a choice nobody
+    could make, never handed to the ability's controller — the one seat the card
+    has just said must not choose. Gating here as well would be a second answer
+    to one question.
+
+    A **P/T pair only**: the recorded-permanent branch of
+    ``add_counter_to_target`` writes through ``Game.place_pt_counters``, which
+    derives the power and toughness from the counter's own name (CR 122.1a) and
+    has nowhere to put a counter that has none.
+    """
+    seat = _CHOOSER_SEATS.get(node.chooser.kind)
+    if seat is None:
+        raise LoweringError(
+            f"no prompt asks {node.chooser.kind!r} to choose a permanent",
+            node=node,
+        )
+    if not is_pt_counter(node.counter):
+        raise LoweringError(
+            f"no chosen placement puts a {node.counter} counter on a permanent",
+            node=node,
+        )
+    if node.up_to or node.then_double or node.cap is not None or node.distributed:
+        raise LoweringError("a chosen placement carries no rider", node=node)
+    if not isinstance(node.count, ast.Fixed) or node.count.value < 1:
+        raise LoweringError("a chosen placement counts a fixed number", node=node)
+    if not isinstance(node.subject, ast.TargetSpec):
+        raise LoweringError("a chosen placement names a permanent", node=node)
+    described = _filter_payload(node.subject.filter)
+    if object_only_filter(described) is None:
+        # The prompt enumerates candidates with no observer and no source, so a
+        # narrowing it cannot test would be dropped — an offer of every creature
+        # on the table where the card printed a restriction.
+        raise LoweringError(
+            "the choice carries a restriction the prompt cannot test", node=node
+        )
+    chosen: dict[str, object] = {
+        "filter": described,
+        "result_key": CHOSEN_PERMANENT,
+        "prompt": f"Choose a creature to put a {node.counter} counter on.",
+        "chooser": seat,
+        "optional": False,
+    }
+    return (
+        OracleInstruction("sequence", "", {"steps": (
+            OracleInstruction("choose_permanent", "", chosen),
+            OracleInstruction("add_counter_to_target", "", {
+                "counter": node.counter,
+                "count": node.count.value,
+                "permanents_from": CHOSEN_PERMANENT,
+            }),
+        )}),
+    )
 
 
 def _lower_put_counter(
@@ -127,6 +205,8 @@ def _lower_put_counter(
                 ),
             }),
         )
+    if node.chooser is not None:
+        return _lower_chosen_counter_placement(node)
     # "Put a loyalty counter on Garruk." (Garruk, Unleashed's −2.)
     # CR 306.5c: loyalty is a *store* — a planeswalker's life total and the
     # price of its abilities — so the whole placement is decided by the
@@ -810,6 +890,40 @@ def _lower_put_counter(
                 "cannot test", node=node,
             )
         return (OracleInstruction("add_named_counter_to_target", "", {
+            "counter": node.counter, "count": node.count.value,
+            "on_block_pair": True, **({"filter": described} if described else {}),
+        }),)
+    # The same referent with a **P/T pair** on it: "Whenever this creature
+    # becomes blocked by a creature, put a -1/-1 counter on **that creature**."
+    # (Quagmire Lamprey.) Its own branch rather than a widened gate above,
+    # because CR 122.1a makes the two placements two different writes —
+    # `Game.place_pt_counters` derives the power and toughness from the
+    # counter's own name and `add_counters` cannot, which is exactly what that
+    # branch's ``is_pt_counter`` refusal says. So the pair goes to the handler
+    # that owns the P/T channel (`engine/pt.py`, through `add_counter_to_target`)
+    # and reads its object through the one function that knows how each fire
+    # site binds it.
+    if (
+        isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier == "that"
+        and not node.up_to
+        and not node.then_double
+        and is_pt_counter(node.counter)
+        and binds_block_pair(trigger_event, event_subject)
+    ):
+        if not isinstance(node.count, ast.Fixed) or node.count.value < 1:
+            raise LoweringError("a bound placement counts a fixed number", node=node)
+        described = _filter_payload(node.subject.filter)
+        if object_only_filter(described) is None:
+            # The rebound filter re-states the event's own narrowing, so it is
+            # carried and re-checked rather than dropped — the reason the named
+            # placement above gives, and the reason a restriction the resolution
+            # cannot test refuses rather than being ignored.
+            raise LoweringError(
+                "the counter's subject carries a restriction the resolution "
+                "cannot test", node=node,
+            )
+        return (OracleInstruction("add_counter_to_target", "", {
             "counter": node.counter, "count": node.count.value,
             "on_block_pair": True, **({"filter": described} if described else {}),
         }),)

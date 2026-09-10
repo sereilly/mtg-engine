@@ -645,6 +645,36 @@ def _before_blockers_are_declared(game: "Game", controller_index: int, source) -
     )
 
 
+def _after_blockers_are_declared(game: "Game", controller_index: int, source) -> bool:
+    """"Activate only during combat after blockers are declared." (Trap Runner.)
+
+    The mirror of :func:`_before_blockers_are_declared`, and its own predicate
+    for that one's stated reason: two spellings of "has the declaration
+    happened" would be two answers, and the one updated later would decide which
+    card could be activated. It reads the **same lock**, one step over — CR 509.1
+    makes the declaration a turn-based action of the declare-blockers step, so
+    the window opens the moment blockers are locked in rather than when the next
+    step arrives, which is the priority window of CR 509.2 that Trap Runner is
+    printed to be used in.
+
+    Closed at the end of combat, because the clause says "during combat"
+    (CR 506.1 names the five steps): the ability makes an attacking creature
+    blocked, and outside a combat there is no attacker for it to name.
+
+    A *skipped* declare-blockers step (CR 506.1: skipped when nobody attacked)
+    never locks, so the window never opens on a turn with no combat in it —
+    which is the honest answer rather than a special case.
+    """
+    if game.current_turn_phase != "combat":
+        return False
+    if game.current_step in ("combat_damage", "end_of_combat"):
+        return True
+    return (
+        game.current_step == "declare_blockers"
+        and game.combat_blockers_locked
+    )
+
+
 def _opponents_turn_before_attackers(game: "Game", controller_index: int, source) -> bool:
     """Nettling Imp -- the same window `cast_restrictions.py` reads for the same
     printed phrase, narrowed to an opponent's turn."""
@@ -1669,6 +1699,17 @@ ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
         re.compile(r"^activate only before blockers are declared$"),
         _before_blockers_are_declared,
         "only before blockers are declared",
+    ),
+    # "Activate only during combat after blockers are declared." (Trap Runner.)
+    # The complement of the row above, and beside it rather than folded into
+    # the bare "only during combat" one: that window is the whole phase, and
+    # this ability may not be used before the blocks are in — an unenforced
+    # timing clause is an ability that works more often than the card allows,
+    # which is silent and in the player's favour.
+    ActivationRestriction(
+        re.compile(r"^activate only during combat after blockers are declared$"),
+        _after_blockers_are_declared,
+        "only during combat after blockers are declared",
     ),
     # "Activate only if you have **no** cards in hand" (Fool's Tome) and
     # "…**exactly seven** cards in hand" (Library of Alexandria). One row: the

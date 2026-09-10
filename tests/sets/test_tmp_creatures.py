@@ -2272,3 +2272,66 @@ def test_a_removed_ability_line_does_not_crash_the_spell_cast_window(set_pool):
     game.players[1].hand.append(pool["Mogg Fanatic"])
     result = game.cast_from_hand(1, "Mogg Fanatic")
     assert result.supported, result.details
+
+
+# --- MMQ W1G2: the seat a "that player … then draws that many" names ---
+
+from engine import Game as _MmqG2Game, PlayerState as _MmqG2Player
+from engine.models import Permanent as _MmqG2Permanent
+from tests.helpers import _mk_creature_card as _mmq_g2_creature
+from tests.helpers import resolve_stack as _mmq_g2_resolve
+
+
+def _mmq_g2_shocker_table(set_pool, seats):
+    """Shocker plus *seats* - 1 opponents, each holding a different hand size.
+
+    The hands differ so the assertion can name **which** player drew: at two
+    seats the damaged player and "the opponent a targetless resolution falls
+    back to" are the same seat by coincidence, and the defect this pins is
+    invisible until a third seat separates them.
+    """
+    shocker = _MmqG2Permanent(card=set_pool("TMP")["Shocker"])
+    table = [
+        _MmqG2Player(
+            name="P1", battlefield=[shocker], life=20,
+            library=[_mmq_g2_creature(f"L1_{i}", 1, 1) for i in range(6)],
+        )
+    ]
+    for seat in range(1, seats):
+        table.append(_MmqG2Player(
+            name=f"P{seat + 1}", life=20,
+            hand=[_mmq_g2_creature(f"H{seat}_{i}", 1, 1) for i in range(seat + 1)],
+            library=[_mmq_g2_creature(f"L{seat}_{i}", 1, 1) for i in range(6)],
+        ))
+    game = _MmqG2Game(players=table)
+    game._settle()
+    shocker.metadata["summoning_sickness_turn"] = -99
+    game.active_player_index = 0
+    return game, shocker
+
+
+def test_shocker_refills_the_hand_it_emptied(set_pool):
+    """"Whenever this creature deals damage to a player, that player discards
+    all the cards in their hand, then draws that many cards."
+
+    One sentence, one seat. The discard named the damaged player outright and
+    the draw beside it named nobody, so it fell through to whatever seat the
+    resolution was carrying — the *first* opponent. At two seats that is the
+    damaged player by coincidence; at three it is not, and the card emptied one
+    player's hand and handed the cards to another.
+
+    Driven through the damage seam rather than by pushing a stack item, because
+    which key the fire site stamps is half of what is under test.
+    """
+    from tests.helpers import _damage_dealt as _mmq_g2_damage
+
+    game, shocker = _mmq_g2_shocker_table(set_pool, seats=3)
+    _mmq_g2_damage(game, game.players[2], 2, source=shocker)
+    _mmq_g2_resolve(game)
+    game.auto_resolve_pending_choices()
+    _mmq_g2_resolve(game)
+
+    assert len(game.players[2].hand) == 3, "the damaged seat discarded and redrew"
+    assert all(c.name.startswith("L2_") for c in game.players[2].hand)
+    assert len(game.players[1].hand) == 2, "the bystander's hand is untouched"
+    assert len(game.players[0].hand) == 0, "and Shocker's controller drew nothing"

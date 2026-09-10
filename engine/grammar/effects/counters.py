@@ -27,7 +27,7 @@ from ..stream import TokenStream
 from ..vocabulary import CARD_TYPES, COLOR_WORDS
 from ..nouns import parse_object_filter
 from ..phrases import (_expect_counter_kind, _parse_for_each,
-                       accept_graveyard_position,
+                       _parse_opponents_choice, accept_graveyard_position,
                        is_pt_counter, parse_pair_ordinal_subject,
                        _parse_that_object)
 
@@ -335,7 +335,17 @@ def _parse_put_counter(stream: TokenStream) -> ast.Statement:
             then_double = True
     if not then_double:
         stream.reset(double_mark)
-    placement = ast.PutCounter(subject, counter, count, up_to, then_double=then_double)
+    # "…on target creature **of defending player's choice**." (Erithizon.) The
+    # rider that says somebody other than the ability's controller picks, read
+    # through the one function every family reads it through — two productions
+    # racing on one phrase is how Nova Pentacle's chooser came to be dropped.
+    # Lifted off the noun phrase rather than left on it, because it is not a
+    # property of any candidate: a lowering with no prompt behind it refuses the
+    # rider instead of quietly letting the wrong seat choose.
+    chooser, subject = _parse_opponents_choice(stream, subject)
+    placement = ast.PutCounter(
+        subject, counter, count, up_to, then_double=then_double, chooser=chooser,
+    )
     if len(alternatives) > 1:
         # A choice between kinds is the modal handler's question, so it lowers
         # onto `ast.OneOf` — the same node "sacrifice a creature **or** discard
