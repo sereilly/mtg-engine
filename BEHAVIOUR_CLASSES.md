@@ -4,14 +4,14 @@ Cards the engine resolves through the same code paths, differing only in values 
 
 A card whose class contains a **verified** card needs no separate manual pass: it exercises no engine path that card didn't. This is weaker than checking the card — it inherits its peer's correctness, and cannot catch a card whose data breaks a generic path.
 
-- Cards in the catalog: **3570**
-- Distinct behaviours: **3236**
-- Cards sharing a behaviour with another: **475** in **141** classes
-- Unverified cards covered by a verified peer: **150**
+- Cards in the catalog: **3572**
+- Distinct behaviours: **3237**
+- Cards sharing a behaviour with another: **476** in **141** classes
+- Unverified cards covered by a verified peer: **151**
 
 | Size | Cards |
 | --- | --- |
-| 62 | Balduvian Barbarians, Balduvian Bears, Barbary Apes, Barktooth Warbeard, Blanchwood Treefolk, Coral Merfolk, **Craw Wurm**, Crimson Kobolds, Crookshank Kobolds, Durkwood Boars, Dwarven Trader, **Earth Elemental**, Elvish Ranger, Femeref Scouts, **Fire Elemental**, Garruk's Gorehorn, Giant Cockroach, Goblin Hero, Gorilla Warrior, **Gray Ogre**, **Grizzly Bears**, Headless Horseman, **Hill Giant**, Horned Turtle, **Hurloon Minotaur**, **Ironroot Treefolk**, Jasmine Boreal, Jedit Ojanen, Jerrard of the Closed Fist, Kasimir the Lone Wolf, Keepers of the Faith, Kobolds of Kher Keep, Lady Orca, Lowland Giant, **Merfolk of the Pearl Trident**, **Mons's Goblin Raiders**, Moss Monster, Onakke Ogre, Panther Warriors, **Pearled Unicorn**, Python, Raging Bull, Redwood Treefolk, **Savannah Lions**, Scaled Wurm, Scarwood Goblins, **Scathe Zombies**, Sir Shandlar of Eberyn, Sivitri Scarzam, Spined Wurm, Squire, Staunch Shieldmate, The Lady of the Mountain, Tobias Andrion, Tor Giant, Torsten Von Ursus, Trained Armodon, Viashino Warrior, Vodalian Soldiers, Walking Corpse, **Water Elemental**, Wishcoin Crab |
+| 63 | Balduvian Barbarians, Balduvian Bears, Barbary Apes, Barktooth Warbeard, Blanchwood Treefolk, Coral Merfolk, **Craw Wurm**, Crimson Kobolds, Crookshank Kobolds, Durkwood Boars, Dwarven Trader, **Earth Elemental**, Elvish Ranger, Femeref Scouts, **Fire Elemental**, Garruk's Gorehorn, Giant Cockroach, Goblin Hero, Gorilla Warrior, **Gray Ogre**, **Grizzly Bears**, Headless Horseman, **Hill Giant**, Horned Turtle, **Hurloon Minotaur**, **Ironroot Treefolk**, Jasmine Boreal, Jedit Ojanen, Jerrard of the Closed Fist, Kasimir the Lone Wolf, Keepers of the Faith, Kobolds of Kher Keep, Lady Orca, Lowland Giant, **Merfolk of the Pearl Trident**, **Mons's Goblin Raiders**, Moss Monster, Onakke Ogre, Panther Warriors, **Pearled Unicorn**, Python, Raging Bull, Redwood Treefolk, Regal Unicorn, **Savannah Lions**, Scaled Wurm, Scarwood Goblins, **Scathe Zombies**, Sir Shandlar of Eberyn, Sivitri Scarzam, Spined Wurm, Squire, Staunch Shieldmate, The Lady of the Mountain, Tobias Andrion, Tor Giant, Torsten Von Ursus, Trained Armodon, Viashino Warrior, Vodalian Soldiers, Walking Corpse, **Water Elemental**, Wishcoin Crab |
 | 13 | **Air Elemental**, Armored Pegasus, Azure Drake, **Bird Maiden**, Concordia Pegasus, Feral Shadow, Fighting Drake, **Flying Men**, **Phantom Monster**, **Roc of Kher Ridges**, **Scryb Sprites**, Willow Faerie, Wind Drake |
 | 11 | Abbey Gargoyles, Cerulean Wyvern, Duskrider Falcon, Freewind Falcon, Hazerider Drake, Melesse Spirit, Sea Sprite, Voice of Grace, Voice of Law, Weatherseed Faeries, Windreaper Falcon |
 | 9 | Anaconda, Bog Raiders, **Bog Wraith**, Lost Soul, Marsh Goblins, Moor Fiend, Plague Beetle, Pygmy Allosaurus, Warthog |

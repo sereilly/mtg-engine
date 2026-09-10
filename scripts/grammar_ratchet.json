@@ -20,10 +20,15 @@
       "lowered_pct": 94.0,
       "parsed_pct": 94.6
     },
+    "6ED": {
+      "executed_pct": 65.8,
+      "lowered_pct": 95.5,
+      "parsed_pct": 95.5
+    },
     "<pool>": {
-      "executed_pct": 60.3,
-      "lowered_pct": 89.7,
-      "parsed_pct": 90.4
+      "executed_pct": 60.6,
+      "lowered_pct": 89.9,
+      "parsed_pct": 90.6
     },
     "ALL": {
       "executed_pct": 70.5,

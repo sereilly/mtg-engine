@@ -13,11 +13,15 @@ Antiquities (85), Revised Edition (296), Legends (310), The Dark (119),
 Fallen Empires (102), Fourth Edition (368), Ice Age (373), Homelands (115),
 Alliances (144), Mirage (335), Visions (167), Fifth Edition (434),
 Weatherlight (167), Tempest (335), Stronghold (143), Exodus (143),
-Urza's Saga (335), Urza's Legacy (143) and Core Set 2021 (285), 3,570 unique
-cards, all classified as supported.
-**Twenty-three sets, and their sizes are the whole spread**: 4ED and 5ED are pure
+Urza's Saga (335), Urza's Legacy (143), Classic Sixth Edition (335) and
+Core Set 2021 (285), 3,572 unique cards, all classified as supported.
+**Twenty-four sets, and their sizes are the whole spread**: 4ED and 5ED are pure
 reprint sets, every one of their cards already in the pool, so they are the two
-sets that ship without implementing a card; Ice Age is the largest ever ingested and brought
+sets that ship without implementing a card, and **6ED is the third of that shape
+and the first where it is only *almost* true** — 333 of its 335 were already
+here and **two were not**, Blaze and Regal Unicorn, whose earlier printings were
+in Portal, a set this manifest does not carry. A reprint set is a set that
+reprints from *this pool*, not from Magic, and the difference is two cards; Ice Age is the largest ever ingested and brought
 **346 new cards**, more than any set since Alpha; and Fallen Empires is the
 smallest work set yet, 102 cards of which every single one was new. Homelands
 is the second set after FEM to bring nothing but new cards — 115 of 115, with
@@ -64,7 +68,7 @@ Rehearsed at the wrong end before the real promotion, the prefix guard passed
 and `test_the_shipped_sets_are_in_printing_order` failed at index 20 — which is
 exactly the division of labour those two guards are documented to have, observed
 rather than assumed. Which is why
-the per-set totals sum to far more than 3,570 — they are printings (5,747 of
+the per-set totals sum to far more than 3,572 — they are printings (6,098 of
 them). Alliances was the
 first set to reach 100% with **zero name-keyed hooks**, across all 144, Visions
 is the second across all 167, **Weatherlight is the third** across all 167
@@ -80,7 +84,7 @@ the first to move the count downward on purpose**: 335 cards across fifteen
 parallel groups in three waves, adding no hook and **retiring five** — and
 **Urza's Legacy is the eighth**, 143 of 143 across ten parallel groups in two
 waves, adding none.
-Reliance is **1.5% of supported cards**, 53 of 3,570, down from 53 of 3,427.
+Reliance is **1.5% of supported cards**, 53 of 3,572, down from 53 of 3,427.
 
 USG's five are worth naming because four of them were hooks that were *wrong*,
 and wrong in one way: **a hook writes the end state directly, so it is a place a
@@ -108,8 +112,8 @@ went in under it at 58% supported, Antiquities at 56.5%, Legends at 32.9%, The
 Dark at 47.9%, Fourth Edition at 100%, Ice Age at 49.3%, Fallen Empires at
 67.6%, Homelands at 66.1%, Fifth Edition at 100%, Alliances at 43.1%, Mirage
 at 54.9%, Visions at 59.3%, Weatherlight at 59.9%, Tempest at 67.8%,
-Stronghold at 67.8% again and Exodus at 63.6%, and all sixteen were promoted
-to `sets` once every card was, which is the role working as designed rather than a role nobody uses. 4ED is the degenerate case that shows what the role is
+Stronghold at 67.8% again, Exodus at 63.6% and Classic Sixth Edition at 100%,
+and all seventeen were promoted to `sets` once every card was, which is the role working as designed rather than a role nobody uses. 4ED is the degenerate case that shows what the role is
 *for* rather than an exception to it: it entered `measured` fully supported and
 left the same day, and the ingest still paid — a guard proved itself unable to
 tell the roles apart for an all-reprint set, which is a finding only the
@@ -126,8 +130,12 @@ by a *single whitelist word*. Every one of those cards read 335/335 supported
 with zero hollow lines, because a card is supported when **any** of its lines
 is. `parse_coverage.py` is the only instrument that can see it and it gates on
 the shipped half alone — so the debt was invisible until the entry moved, which
-is precisely what the rehearsal is for. It took a fourth wave to clear. The next
-ingested set goes there first.
+is precisely what the rehearsal is for. It took a fourth wave to clear.
+**6ED's ingest is the one that paid nothing, and that is a result rather than a
+miss**: its rehearsal turned three guards red and all three were ratchets, where
+accepting is the review — which is what four sets of guard fixes look like from
+the far side, and is why the reprint-shaped ingest keeps happening rather than
+being skipped. The next ingested set goes there first.
 
 **The manifest is printing-ordered, and the order is load-bearing.** Antiquities
 went in at index 4, Legends at index 6, The Dark at index 7, Fallen Empires at
@@ -988,8 +996,8 @@ The board UI is **canvas-rendered** (`web/static/battlefield-canvas.js`).
 ## Card verification tracker
 
 `CARD_VERIFICATION.md` / `card_verification.json` track which cards have been
-manually validated in-game (590 of the 3,570 catalog cards passing — 398
-checked in-game and 192 auto-passed — with 45 more reported `equivalent`; the
+manually validated in-game (601 of the 3,572 catalog cards passing — 402
+checked in-game and 199 auto-passed — with 47 more reported `equivalent`; the
 rest — almost all of M21, Antiquities, Legends, The Dark, Ice Age, Fallen
 Empires, Homelands, Alliances, Mirage, Visions, Weatherlight, Tempest,
 Stronghold, Exodus and Urza's Saga, all promoted before their in-game pass —
@@ -1005,7 +1013,10 @@ card you have just watched work is a result worth recording. Fourth and Fifth
 Edition are the two promotions that did not add to that backlog, because they
 added no card to
 verify — the tracker is keyed to the deduped catalog, so a reprint set inherits
-every result its cards already have. **Ice Age is the opposite pole**: 346 new
+every result its cards already have. **Classic Sixth Edition added exactly
+one**, Blaze, because Regal Unicorn is a vanilla creature and auto-passes: the
+smallest non-zero Phase 5 in the project, and the number that says what "almost
+a reprint set" costs. **Ice Age is the opposite pole**: 346 new
 cards, the largest single addition to the untested count since the tracker
 existed, which took it from 708 to 1,020; Fallen Empires added 99 more of its
 102 (two auto-pass and one is `equivalent`), to 1,119; Alliances added 144 new
