@@ -841,7 +841,25 @@ LOWER_LAYERS = [
 # `lowering/mana.py`, because a swap lowers to one instruction however many ways
 # its sentence spells the tapper. A near-empty `lowering/production_changes.py`
 # would buy back the symmetry and cost the thing symmetry is for.
-EFFECT_FAMILIES = ["damage", "characteristics", "base_pt", "types", "board", "cards", "exile", "stack", "combat", "game", "mana", "production_changes", "library", "search", "reveal", "control_changes", "prevention", "damage_instances", "redirection", "damage_locks", "counters", "tapping", "attachments", "tokens", "returns", "text_changes", "destruction", "zones", "hand", "permissions", "requirements"]
+# `retargeting` split off `effects/stack.py` in the same Phase 0 and on the same
+# arithmetic — 986 lines, fourteen under the guard, with a wave about to land.
+# The seam is the one that module had recorded by **omission**: its docstring
+# enumerates its subjects — countering, the two copy templates, the modal head,
+# the closed list of unpaid-cost penalties, the activation restrictions — and
+# has never named a retarget among them. The line under the omission is the
+# CR's: everything left in `stack` acts on a stack object as a *whole*, where
+# CR 115.7's re-aim leaves the object where it is, resolving exactly as printed,
+# and changes one of the choices made when it was announced (CR 601.2c). The
+# call graph was already two components, with the one edge *inside* the moved
+# half (`_parse_change_target` reads `_accept_targets_only`) and none across:
+# `readers.accept_source_reference_spec` travelled with them because nothing
+# left behind reads it, and `parse_target_spec` / `parse_player_ref` are one
+# layer down rather than siblings, so both modules keep them. There is no import
+# between the two in either direction, and the block moved byte-identically, so
+# no compiled program moves. Parse-only for `damage_locks`' reason: all three
+# arrangements build one `ast.ChangeTarget` — which is what makes them three
+# arrangements rather than three effects.
+EFFECT_FAMILIES = ["damage", "characteristics", "base_pt", "types", "board", "cards", "exile", "stack", "retargeting", "combat", "game", "mana", "production_changes", "library", "search", "reveal", "control_changes", "prevention", "damage_instances", "redirection", "damage_locks", "counters", "tapping", "attachments", "tokens", "returns", "text_changes", "destruction", "zones", "hand", "permissions", "requirements"]
 # `redirection` arrived on the parse side at Visions' first wave, a set after
 # the lowering side split it off `lowering/damage.py` — the mirror re-forming
 # rather than a new vocabulary, which is what this file asks a split to do.
@@ -1046,6 +1064,12 @@ LOWERING_FAMILIES = [
         # the tapper. The guard that made it a parse family fired on the
         # *productions*; `lowering/mana.py` is 750 lines and crossed nothing.
         "production_changes",
+        # `retargeting` is that reason a third time in the same Phase 0:
+        # `_lower_change_target` is one function in `lowering/stack.py` (752
+        # lines), because all three printed arrangements build one
+        # `ast.ChangeTarget` and there is nothing for a second lowering to do.
+        # The guard fired on the productions; the lowering crossed nothing.
+        "retargeting",
     )
 # `base_pt` was appended here when it was a lowering family with no parse twin.
 # Tempest's first wave gave it one — `effects/characteristics.py` crossed the
@@ -1368,6 +1392,13 @@ AST_FAMILIES = [
         # 362 lines and crossed nothing, and splitting the node out to match
         # would put it in one family with both of its readers in another.
         "production_changes",
+        # `retargeting` is that reason one family over: all three arrangements
+        # build the one node `ChangeTarget`, which is a fact about an object on
+        # the **stack** and sits in `ast/stack.py` beside `CounterSpell`,
+        # `CopySpell` and `ModalNode`. The guard that made this a parse family
+        # fired on the productions; `ast/stack.py` is 382 lines and crossed
+        # nothing.
+        "retargeting",
         # `reveal` is `library`'s and `search`'s reason a third time, in the
         # same package: `RevealTop`, `RevealTopToHandOrBottom`,
         # `RevealTopOpponentChooses`, `RevealUntil` and the rest sit perfectly

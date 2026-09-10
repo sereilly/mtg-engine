@@ -17,6 +17,7 @@ precisely so this stays true. Independence is the point: it is what makes
     mana             producing it
     production_changes  a standing swap of what a land makes when tapped
     stack            countering, choosing modes, and declining a cost
+    retargeting      re-aiming what a stack object already chose (CR 115.7)
     combat           can't-attack / can't-be-blocked restrictions
     game             tokens, winning, extra turns, enchant
 
@@ -207,10 +208,10 @@ from .zones import (
     parse_put_library_top_into_hand,
 )
 from .search import _parse_search_library
+from .retargeting import _parse_change_target
 from .stack import (
     _parse_put_exiled_card_on_stack_as_copy,
     _parse_can_be_targeted_as_though,
-    _parse_change_target,
     _parse_copy_that_spell,
     _parse_copy_this_spell,
     _parse_counter,

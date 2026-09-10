@@ -53,7 +53,7 @@ from .effects import (_parse_bound_targeting_prevention,
                       parse_graveyard_top_to_library)
 from .effects.exile import (_parse_bin_unplayed_exiled_card,
                             parse_exile_graveyard_arrivals_this_turn)
-from .effects.stack import _parse_conditional_retarget
+from .effects.retargeting import _parse_conditional_retarget
 from .errors import GrammarError
 from .rebinding import (rebind_player_pronoun_to_condition_target,
                         rebind_pronoun_to_condition_target)
