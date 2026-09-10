@@ -364,6 +364,14 @@ PARSE_LAYERS = [
     # stream against them. Below `triggers`, and it imports nothing from the
     # reading side, which is what makes it a layer rather than a second half.
     "trigger_tables",
+    # ``accept_event_phrase`` alone: matching a table's word run against a line,
+    # reading a pre-Sixth-Edition card's self-naming spelling as the modern
+    # "this <noun>". A **floor**, not a family — `trigger_matched` walks the
+    # `whenever` tables and `triggers` walks the `when` ones, and both owe that
+    # substitution the same reading, so it sits under both rather than in
+    # either. Above `trigger_tables`, whose nouns it consumes and which is pure
+    # data by its own docstring; below both callers, because neither owns it.
+    "trigger_phrases",
     "trigger_subjects",
     # CR 603.8's state triggers — a condition that is simply *true* rather than
     # something that happens. The third split off `triggers` and the third along
@@ -391,6 +399,16 @@ PARSE_LAYERS = [
     # condition that fires one — the split `trigger_casts` already made against
     # `lowering/cards.py`.
     "trigger_damage",
+    # The condition clause after `whenever` — every event that word can open.
+    # The sixth split off `triggers` and the first that cuts the module rather
+    # than lifting a family out of it: `_parse_matched_event` and the three
+    # helpers only it calls are the half that **grows with the pool**, and
+    # `triggers` keeps the dispatch over the three printed trigger words, which
+    # has been stable for sets. `by_node.py`'s rule from Fallen Empires ("the
+    # table is a registry either way, and `lower.py` is dispatch") one package
+    # over. Above every trigger floor it reads and below `triggers`, which asks
+    # it and is never imported back.
+    "trigger_matched",
     # The trigger tables and the productions that read them. Split out of
     # `phrases` when Antiquities' trigger work pushed that module past the
     # thousand-line guard below — above `phrases`, whose shared fragments it
@@ -490,6 +508,14 @@ PARSE_LAYERS = [
     # boundary that module's own docstring drew: it reads a sentence's opening,
     # and an opening is one of two shapes. Below `subject_verb`, which asks it
     # first and is never imported back.
+    # The verb-led half of `imperatives`: a flat dispatch on a sentence's first
+    # word. Split out at Mercadian Masques' Phase 0 along the line
+    # `imperatives`' own docstring already drew — "an opening is one of two
+    # shapes" — with the paragraph openers staying above and the half that
+    # **grows with the pool** moving down, since a new printed verb is a new row
+    # and a new whole-paragraph shape is rare. Below `imperatives`, which calls
+    # it at its tail and is never imported back, and above everything it reads.
+    "imperative_verbs",
     "imperatives",
     # The verbs whose subject is a *seat* — "target player draws a card", "each
     # player sacrifices a creature", "that player may pay {R}{R}". Split out of
