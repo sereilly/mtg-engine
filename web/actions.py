@@ -293,7 +293,9 @@ def _action_tap(session, req, seat_type):
         raise HTTPException(status_code=400, detail="permanent not found")
     permanent_index, permanent = resolved
 
-    if permanent.card.primary_type == "land":
+    # ``has_type`` (CR 613 layer 4), not the printed line: which tap this is
+    # depends on what the permanent is now.
+    if permanent.has_type("land"):
         tapped = session.game.tap_land_for_mana(
             req.seat,
             permanent.card.name,
@@ -344,7 +346,7 @@ def _action_activate(session, req, seat_type):
     # previously every land activation fell into tap_land_for_mana, which
     # invented a green mana for mana-less lands and made Library's draw
     # unreachable.
-    land_as_mana_tap = permanent.card.primary_type == "land"
+    land_as_mana_tap = permanent.has_type("land")
     if land_as_mana_tap:
         usable = usable_activated_abilities(compile_card_oracle(permanent.effective_card))
         mana_kinds = {"add_mana_from_text", "sacrifice_self_for_mana", "sacrifice_creature_for_mana"}

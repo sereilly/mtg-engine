@@ -20,9 +20,11 @@ than through a guard:
   Aura, and no engine instrument could see it.
 
 This file is the wire-side answer: a driven game, the real serializer, and the
-fields a player actually reads. It is not the widened scan — that is a round of
-its own, recorded in SET_PLAYBOOK.md's Known gaps — but it pins the two sites
-that have already cost something.
+fields a player actually reads. The widened scan finally exists beside it —
+``tests/ui/test_layer_reads_in_web.py`` reads every ``web/`` module's source and
+ratchets what is left — and the two are the two halves this class needs: the
+scan says where the question is asked of the wrong object, and this file says
+what a player is shown when it is.
 """
 
 import pytest
@@ -166,3 +168,262 @@ def test_protection_from_a_card_type_reaches_the_wire(pool):
 
     # And the colour half still spells out the way it always did.
     assert "Protection from black" in _serialize_permanent(knight, game)["keywords"]
+
+
+# ---------------------------------------------------------------------------
+# Sixth Edition's wave: the round the Known-gaps entry had been asking for
+# ---------------------------------------------------------------------------
+#
+# Two questions, not one. The greppable half — which ``web/`` reads ask the
+# printed card — is scanned by ``test_layer_reads_in_web.py``; every site it
+# found that a shipped card pays for is pinned below. The half that cannot be
+# grepped is an accessor answering a **narrower** question than its caller
+# needs, which is what ``_protection_colors`` was above, and
+# ``_NONCREATURE_KEYWORDS`` is its second instance: a one-entry list standing in
+# for "the keywords CR defines over a permanent".
+
+from fastapi.testclient import TestClient
+
+from engine.untap_restrictions import permanent_in_limited_scope
+from web.app import app, store
+from web.combat_prompts import _band_blocker_assignments
+from web.debug_actions import _debug_move_permanent_off_battlefield
+from web.runtime import CARD_BY_NAME
+from web.serialization import _serialize_permanent_summary
+
+
+def _perm(pool, name):
+    """A permanent that has been around since the beginning of the turn."""
+    permanent = Permanent(card=pool[name])
+    permanent.metadata["summoning_sick"] = False
+    return permanent
+
+
+def _two_seat_game(*battlefield):
+    game = Game(
+        players=[PlayerState(name="A", battlefield=list(battlefield)),
+                 PlayerState(name="B")],
+        enforce_mana_costs=False,
+    )
+    game._recompute_continuous_effects()
+    return game
+
+
+def test_a_noncreature_permanents_own_keyword_reaches_the_client(pool):
+    """Nine Lives is Yavimaya Scion one card type over.
+
+    Its entire protective text is "Hexproof" and it is an enchantment, so the
+    badge row asked ``_NONCREATURE_KEYWORDS`` — which was the single entry
+    ``("Phasing",)``, written when Teferi's Isle was the card that had asked.
+    The engine held the shield at every seam it owns and the client was told
+    nothing at all.
+    """
+    nine = _perm(pool, "Nine Lives")
+    game = _two_seat_game(nine)
+
+    assert not nine.is_creature
+    assert game._has_keyword(nine, "Hexproof")
+    assert _serialize_permanent(nine, game)["keywords"] == ["Hexproof"]
+
+
+def test_a_shroud_granted_to_an_artifact_reaches_the_client(pool):
+    """Hanna's Custody: "All artifacts have shroud."
+
+    The grant is real, the Mox cannot be targeted, and the player looking at
+    the board could not see why. CR 702.18a is about a *permanent*, which is
+    the whole of this fix: the badge list a noncreature permanent is checked
+    against is now derived from what each keyword is about, rather than from
+    which card last complained.
+    """
+    mox = _perm(pool, "Mox Emerald")
+    custody = _perm(pool, "Hanna's Custody")
+    game = _two_seat_game(mox, custody)
+
+    assert game._has_keyword(mox, "Shroud")
+    assert _serialize_permanent(mox, game)["keywords"] == ["Shroud"]
+
+
+def test_a_creatures_badges_are_unchanged(pool):
+    """The direction this must not move: folding the two branches into one list
+    must not drop a combat keyword or reorder the row."""
+    knight = _perm(pool, "White Knight")
+    game = _two_seat_game(knight)
+
+    badges = _serialize_permanent(knight, game)["keywords"]
+    assert badges == ["First Strike", "Protection from black"], badges
+
+
+def test_a_clone_reports_the_copied_cards_mana_cost_and_base_pt(pool):
+    """CR 707.2: mana cost and printed P/T are *copiable values*.
+
+    ``oracle_text`` on this payload already came off ``effective_card``; the
+    two fields above it did not, so a Clone-as-Grizzly-Bears reached the client
+    with a ``{3}{U}`` cost and a base P/T of 0/0 against a current 2/2 — which
+    the canvas paints **green**, the colour it uses for "something pumped
+    this".
+    """
+    bears = _perm(pool, "Grizzly Bears")
+    clone = _perm(pool, "Clone")
+    game = _two_seat_game(bears, clone)
+    game._apply_copy(clone, bears)
+    game._recompute_continuous_effects()
+
+    wire = _serialize_permanent(clone, game)
+    assert wire["mana_cost"] == "{1}{G}"
+    assert (wire["base_power"], wire["base_toughness"]) == (2, 2)
+    assert (wire["power"], wire["toughness"]) == (2, 2)
+    # The physical card is still a Clone: the name is what the action API
+    # addresses it by, and the art is deliberately its own.
+    assert wire["name"] == "Clone"
+
+
+def test_an_animated_land_blocking_a_band_is_offered_the_702_22k_assignment(pool):
+    """CR 702.22k: the ACTIVE player chooses which band member each blocker
+    damages. The blocker check read the printed type line, so a Kormus Bell'd
+    Swamp blocking a band produced no assignment at all — and its sibling
+    ``_multiblock_blocker_splits``, three dozen lines below, had been asking
+    ``is_creature`` the whole time.
+    """
+    master, bears = _perm(pool, "Master of the Hunt"), _perm(pool, "Grizzly Bears")
+    swamp, bell = _perm(pool, "Swamp"), _perm(pool, "Kormus Bell")
+    game = Game(
+        players=[PlayerState(name="A", battlefield=[master, bears]),
+                 PlayerState(name="B", battlefield=[swamp, bell])],
+        enforce_mana_costs=False,
+    )
+    game.active_player_index = 0
+    game.combat_defending_player_index = 1
+    game._recompute_continuous_effects()
+
+    assert swamp.card.primary_type == "land"   # the card has not moved
+    assert swamp.is_creature                   # Kormus Bell has
+
+    master.attacking = bears.attacking = True
+    game.combat_attackers = {0: 1, 1: 1}
+    game.combat_bands = [[0, 1]]
+    game.combat_blockers = {1: {0: [0]}}
+    game._apply_band_block_propagation()
+
+    assert _band_blocker_assignments(game) == [
+        {"blocker_idx": 0, "member_indices": [0, 1]}
+    ]
+
+
+def test_a_pile_list_describes_the_permanent_not_the_card(pool):
+    """The same class one call deep.
+
+    Raging River's division and Camouflage's piles both *select* through
+    ``game._is_creature`` — correctly — and then described each entry with
+    ``_serialize_card_summary(p.card)``, so the player dividing their creatures
+    into two piles saw one of them drawn as "Basic Land — Swamp" with the
+    Bell's animation nowhere in sight.
+    """
+    swamp, bell = _perm(pool, "Swamp"), _perm(pool, "Kormus Bell")
+    game = _two_seat_game(swamp, bell)
+
+    summary = _serialize_permanent_summary(swamp, game)
+    assert "Creature" in summary["type"], summary["type"]
+    assert summary["name"] == "Swamp"
+
+
+def test_bouncing_an_attached_licid_ends_its_grant(pool):
+    """The Debug Menu's bounce asked ``"Aura" in permanent.card.type_line``.
+
+    A Licid becomes an Aura enchantment without a word of its card moving
+    (CR 613 layer 4), so the check answered "no", ``_remove_aura_effects`` was
+    skipped, and the creature it had been attached to kept flying after the
+    Licid was in its owner's hand.
+    """
+    game, licid, host = _attached_licid(pool)
+    assert licid.has_type("aura") and "Aura" not in licid.card.type_line
+    assert game._has_keyword(host, "Flying")
+
+    _debug_move_permanent_off_battlefield(game, 0, 0, "hand")
+    game._recompute_continuous_effects()
+
+    assert not game._has_keyword(host, "Flying")
+
+
+# --- The untap selection, which needs a session ----------------------------
+
+_client = TestClient(app)
+
+
+def _untap_session(constraint: str, tapped: list[str]):
+    """A seat in its untap step, under *constraint*, with *tapped* on board."""
+    response = _client.post("/api/sessions", json={
+        "mode": "human_vs_ai", "host_name": "H", "host_colors": 2,
+        "guest_colors": 2, "seed": 6006,
+        "host_deck_cards": [{"name": "Forest", "count": 40}],
+        "guest_deck_cards": [{"name": "Forest", "count": 40}],
+    })
+    assert response.status_code == 200, response.text
+    session_id = response.json()["session_id"]
+    session = store.get(session_id)
+    game = session.game
+    session.current_turn = 0
+    game.active_player_index = 0
+    game.current_phase = "beginning"
+    game.current_step = "untap"
+
+    board = [Permanent(card=CARD_BY_NAME[constraint.casefold()])]
+    for name in tapped:
+        permanent = Permanent(card=CARD_BY_NAME[name.casefold()])
+        permanent.tapped = True
+        board.append(permanent)
+    game.players[0].battlefield = board
+    game.players[1].battlefield = []
+    game._recompute_continuous_effects()
+
+    options = game.get_untap_land_selection_options(0)
+    assert options, "the constraint did not bind"
+    session.untap_candidate_indices = [int(i) for i in options["candidate_indices"]]
+    return session_id, options
+
+
+@pytest.mark.parametrize(
+    "constraint,tapped,scope",
+    [
+        ("Damping Field", ["Mox Emerald", "Mox Ruby", "Icy Manipulator"], "artifact"),
+        ("Static Orb", ["Grizzly Bears", "Forest", "Mox Emerald"], "permanent"),
+    ],
+)
+def test_every_constrained_untap_scope_reaches_the_client(constraint, tapped, scope):
+    """The re-validation between the engine's candidate list and the board.
+
+    It read ``card.primary_type in ("land", "creature")`` — the printed line
+    *and* only two of the four scopes a limit may name. Under **Damping Field**
+    the engine offered three tapped artifacts and the wire carried an empty
+    candidate list beside ``max_count: 1``: the player was told to untap one
+    artifact and given nothing to click. Worse, the pruned list was written
+    back onto the session, so ``untap_select`` then refused the click too.
+    **Static Orb**'s "permanent" is not a card type at all.
+    """
+    session_id, options = _untap_session(constraint, tapped)
+    assert set(options["limits"]) == {scope}
+
+    state = _client.get(f"/api/sessions/{session_id}/state", params={"seat": 0}).json()
+    selection = state["untap_land_selection"]
+    assert selection["candidate_indices"] == list(options["candidate_indices"])
+    assert selection["limits"] == options["limits"]
+    assert selection["max_count"] == options["max_count"]
+
+    # …and the click the client can now make is one the action handler takes.
+    chosen = selection["candidate_indices"][0]
+    response = _client.post(
+        f"/api/sessions/{session_id}/action",
+        json={"action": "untap_select", "seat": 0, "permanent_index": chosen},
+    )
+    assert response.status_code == 200, response.text
+    assert store.get(session_id).untap_selected_indices == [chosen]
+
+
+def test_the_untap_candidate_filter_asks_the_engines_own_predicate():
+    """The narrowing, named. Two spellings of "is this permanent in scope" is
+    how the board comes to offer what the resolver refuses — which is why
+    ``permanent_in_limited_scope`` exists at all."""
+    session_id, options = _untap_session("Damping Field", ["Mox Emerald", "Mox Ruby"])
+    battlefield = store.get(session_id).game.players[0].battlefield
+    for index in options["candidate_indices"]:
+        assert permanent_in_limited_scope(battlefield[index], "artifact")
+        assert battlefield[index].card.primary_type not in ("land", "creature")

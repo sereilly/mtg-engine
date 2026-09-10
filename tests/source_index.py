@@ -16,6 +16,8 @@ exemption tables and analyses all stay in their guard files.
 from __future__ import annotations
 
 import ast
+import io
+import tokenize
 from functools import lru_cache
 from pathlib import Path
 
@@ -44,3 +46,36 @@ def source_text(path: Path) -> str:
 def source_tree(path: Path) -> ast.Module:
     """The parsed module. Walk it, never mutate it — the tree is shared."""
     return ast.parse(source_text(path))
+
+
+@lru_cache(maxsize=None)
+def code_only_lines(path: Path) -> tuple[str, ...]:
+    """*path*'s lines with comments and string literals blanked out.
+
+    The regex guards are about what a module *does*, and this repo explains
+    itself in prose: a docstring naming ``permanent.card.oracle_text`` to say
+    why a node is not normalized is a description of the rule, not a breach of
+    it. Matching it would leave the only fix available being to stop writing
+    the sentence down. Line numbers are preserved so a real hit still points at
+    its line.
+
+    Shared because two guards ask it of two roots — ``tests/engine`` of
+    ``engine/`` and ``tests/ui`` of ``web/`` — and a second copy of a scanner
+    is a second answer to "is this line code?".
+    """
+    source = source_text(path)
+    lines = source.splitlines()
+    try:
+        tokens = list(tokenize.generate_tokens(io.StringIO(source).readline))
+    except (tokenize.TokenError, IndentationError, SyntaxError):
+        return tuple(lines)  # unparseable: report everything rather than nothing
+    for token in tokens:
+        if token.type not in (tokenize.COMMENT, tokenize.STRING):
+            continue
+        (start_row, start_col), (end_row, end_col) = token.start, token.end
+        for row in range(start_row, end_row + 1):
+            line = lines[row - 1]
+            head = line[:start_col] if row == start_row else ""
+            tail = line[end_col:] if row == end_row else ""
+            lines[row - 1] = head + " " * (len(line) - len(head) - len(tail)) + tail
+    return tuple(lines)

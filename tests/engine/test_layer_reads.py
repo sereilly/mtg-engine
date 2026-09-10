@@ -24,13 +24,11 @@ stamped value has to be un-stamped by whoever wrote it, and only ever
 with it.
 """
 
-import io
 import pathlib
 import re
-import tokenize
 
 import pytest
-from tests.source_index import source_text
+from tests.source_index import code_only_lines, source_text
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 ENGINE = ROOT / "engine"
@@ -66,41 +64,13 @@ def _engine_files() -> list[pathlib.Path]:
     return sorted(ENGINE.rglob("*.py"))
 
 
-def _code_only(source: str) -> list[str]:
-    """*source*'s lines with comments and string literals blanked out.
-
-    These guards are about what the engine *does*, and this repo explains
-    itself in prose: a docstring naming ``permanent.card.oracle_text`` to say
-    why a node is not normalized is a description of the rule, not a breach of
-    it. Matching it would leave the only fix available being to stop writing
-    the sentence down. Line numbers are preserved so a real hit still points at
-    its line.
-    """
-    lines = source.splitlines()
-    try:
-        tokens = list(tokenize.generate_tokens(io.StringIO(source).readline))
-    except (tokenize.TokenError, IndentationError, SyntaxError):
-        return lines  # unparseable: report everything rather than nothing
-    for token in tokens:
-        if token.type not in (tokenize.COMMENT, tokenize.STRING):
-            continue
-        (start_row, start_col), (end_row, end_col) = token.start, token.end
-        for row in range(start_row, end_row + 1):
-            line = lines[row - 1]
-            head = line[:start_col] if row == start_row else ""
-            tail = line[end_col:] if row == end_row else ""
-            lines[row - 1] = head + " " * (len(line) - len(head) - len(tail)) + tail
-    return lines
-
-
 def _hits(pattern: re.Pattern, skip: set[str]) -> list[tuple[str, int, str]]:
     found = []
     for path in _engine_files():
         if path.name in skip:
             continue
-        source = source_text(path)
-        raw = source.splitlines()
-        for number, line in enumerate(_code_only(source), 1):
+        raw = source_text(path).splitlines()
+        for number, line in enumerate(code_only_lines(path), 1):
             if pattern.search(line):
                 found.append((str(path.relative_to(ENGINE)), number, raw[number - 1].strip()))
     return found

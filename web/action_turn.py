@@ -183,7 +183,11 @@ def _action_untap_select(session, req, seat_type):
 
         def _ptype(idx: int) -> str:
             # The first constrained type this permanent answers to — which is
-            # the one whose cap the message should name.
+            # the one whose cap the message should name. "" when it answers to
+            # none, because then there is no cap to charge it against: the
+            # printed ``card.primary_type`` stood here as the fallback and
+            # could name a scope the permanent is **not** in, which is a Licid
+            # that became an Aura being charged against Smoke's creature cap.
             if not 0 <= idx < len(battlefield):
                 return ""
             permanent = battlefield[idx]
@@ -193,7 +197,7 @@ def _action_untap_select(session, req, seat_type):
                     t for t in sorted(limits)
                     if permanent_in_limited_scope(permanent, t)
                 ),
-                permanent.card.primary_type,
+                "",
             )
 
         new_type = _ptype(req.permanent_index)

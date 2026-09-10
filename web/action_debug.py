@@ -208,9 +208,13 @@ def _action_debug_destroy_permanent(session, req, seat_type):
     # always clear the board. It still routes through _permanent_to_graveyard,
     # so dies-triggers and Aura cleanup fire exactly as in a real destruction.
     session.game.remove_from_battlefield(permanent)
+    # ``_permanent_to_graveyard`` already fires the land-dies triggers, through
+    # ``has_type`` (CR 613 layer 4) rather than the printed line. A second call
+    # stood here, gated on ``card.primary_type``, and it was wrong in both
+    # directions at once: a debug-destroyed Plains dealt **Dingus Egg's damage
+    # twice**, and a permanent that is a land only through layer 4 got the
+    # printed-line answer for its second helping.
     session.game._permanent_to_graveyard(controller, permanent)
-    if permanent.card.primary_type == "land":
-        session.game._process_land_dies(controller_seat)
     session.game._recompute_continuous_effects()
     session.game.check_state_based_actions()
     session.game.log.append(f"[Debug] {name} destroyed.")

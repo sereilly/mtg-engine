@@ -68,10 +68,29 @@ _NOT_BADGED = {
     "bands with other",
 }
 
-#: The badges a **noncreature** permanent can carry. Indestructible is appended
-#: separately (it is derived from the layer, not read off the keyword); phasing
-#: is here because CR 702.26 is about a permanent of any type.
-_NONCREATURE_KEYWORDS = ("Phasing",)
+#: The badged keywords CR defines over a **permanent**, not over a creature.
+#: Phasing is CR 702.26, shroud CR 702.18a, hexproof CR 702.11a and protection
+#: CR 702.16a, and every one of those sentences says "permanent or player" or
+#: "permanent" — so an artifact, a land or an enchantment can carry them and a
+#: player looking at the card has to be told.
+#:
+#: This set is the answer to a question `_NONCREATURE_KEYWORDS` used to answer
+#: by being one hand-written entry long. It said "Phasing" because Teferi's Isle
+#: was the card that had asked, and the three beside it went unbadged: **Nine
+#: Lives**, whose entire protective text is "Hexproof", reached the client with
+#: no badge at all, and a Mox under **Hanna's Custody** ("All artifacts have
+#: shroud") reached it the same way — the engine holding both shields at every
+#: seam it owns. That is Yavimaya Scion's defect one card type over.
+_ANY_PERMANENT_KEYWORDS = frozenset({"Phasing", "Shroud", "Hexproof", "Protection"})
+
+#: The badges a **noncreature** permanent can carry, in the render order above.
+#: Derived rather than written out, so a keyword added to ``_DISPLAY_KEYWORDS``
+#: cannot be badged on creatures and silently missed everywhere else — which is
+#: how the single-entry version went stale. Indestructible is appended
+#: separately (it is derived from the layer, not read off the keyword) and
+#: Protection is spelled out with its qualities below, so it is filtered out of
+#: the plain list on both paths.
+_NONCREATURE_KEYWORDS = tuple(kw for kw in _DISPLAY_KEYWORDS if kw in _ANY_PERMANENT_KEYWORDS)
 
 # Color symbol → display word, for spelling out protection qualities on the card.
 _SYMBOL_TO_COLOR_WORD = {"W": "white", "U": "blue", "B": "black", "R": "red", "G": "green"}
@@ -89,7 +108,10 @@ def _effective_keywords(perm: Permanent, game: Game) -> list[str]:
     a player can't see that it applies unless the card says so. **Phasing is the
     second of those** (CR 702.26 is about a permanent, not a creature) — Teferi's
     Isle is a land and phases, and the badge said nothing about it from Mirage
-    until Tempest's promotion smoke test asked.
+    until Tempest's promotion smoke test asked. Shroud, hexproof and protection
+    are the rest of that family (:data:`_ANY_PERMANENT_KEYWORDS`), and they were
+    added by asking the CR what each keyword is *about* rather than by waiting
+    for the next card to be found unbadged.
 
     Whether the permanent *is* a creature is asked of the layers rather than of
     the printed type line: an animated land is a creature and its keywords are
@@ -103,12 +125,14 @@ def _effective_keywords(perm: Permanent, game: Game) -> list[str]:
     from white") so the player can see which color the permanent is protected
     against, not just that it has protection.
     """
-    if not game._is_creature(perm):
-        noncreature = [kw for kw in _NONCREATURE_KEYWORDS if game._has_keyword(perm, kw)]
-        if game._is_indestructible(perm):
-            noncreature.append("Indestructible")
-        return noncreature
-    keywords = [kw for kw in _DISPLAY_KEYWORDS if game._has_keyword(perm, kw)]
+    # One list and one set of appends for both shapes. It used to be two
+    # branches with an early return, and the early return is what hid the
+    # protection block below from every noncreature permanent.
+    candidates = _DISPLAY_KEYWORDS if game._is_creature(perm) else _NONCREATURE_KEYWORDS
+    keywords = [
+        kw for kw in candidates
+        if kw != "Protection" and game._has_keyword(perm, kw)
+    ]
     if game._is_indestructible(perm):
         keywords.append("Indestructible")
     # Protection is driven by the effective protected **qualities** (CR 702.16)
@@ -129,7 +153,11 @@ def _effective_keywords(perm: Permanent, game: Game) -> list[str]:
     # than what the engine computes. It is the fourth `web/` site of this class
     # after `serialization`'s type-line read (Tempest), `is_aura` (Stronghold)
     # and the blocker/Balance reads (Exodus).
-    keywords = [kw for kw in keywords if kw != "Protection"]
+    #
+    # Reached for **every** permanent, not only a creature: CR 702.16a is about
+    # a permanent, so a protection granted to an artifact or a land has to be
+    # spelled out too. It sat inside the creature branch until 6ED's wave, one
+    # early return away from the noncreature path.
     words = sorted(
         _protection_quality_word(kind, value)
         for kind, value in game._protection_qualities(perm)
@@ -291,9 +319,17 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         "is_creature": game._is_creature(perm),
         "power": perm.effective_power,
         "toughness": perm.effective_toughness,
-        "base_power": _printed_stat(perm.card, "power"),
-        "base_toughness": _printed_stat(perm.card, "toughness"),
-        "mana_cost": perm.card.mana_cost,
+        # CR 707.2: a copy's mana cost and its printed power/toughness are
+        # *copiable values*, so they come off the effective card the way the
+        # oracle text below already does. Reading ``perm.card`` here made a
+        # Clone-as-Grizzly-Bears report ``{3}{U}`` for its cost and a base P/T
+        # of 0/0 against a current 2/2 — so the canvas painted a vanilla Bear's
+        # P/T green, as though something had pumped it, and the preview showed
+        # the wrong cost. The art deliberately stays the Clone's (below); a
+        # characteristic does not.
+        "base_power": _printed_stat(perm.effective_card, "power"),
+        "base_toughness": _printed_stat(perm.effective_card, "toughness"),
+        "mana_cost": perm.effective_card.mana_cost,
         # A copy (Clone / Vesuvan Doppelganger) shows — and the UI activates —
         # the copied card's abilities, so its text is the effective text.
         "oracle_text": perm.effective_card.oracle_text,
@@ -601,6 +637,33 @@ def _serialize_card_summary(card) -> dict:
         "modes_at_least": compile_card_oracle(card).modes_at_least,
     })
     return serialized
+
+
+def _serialize_permanent_summary(perm: Permanent, game: Game) -> dict:
+    """A card summary for a permanent **on the battlefield**.
+
+    The same shape :func:`_serialize_card_summary` produces for a card in a hand
+    or a library, with the characteristics CR 613 can move answered by the
+    layers instead of by the printer. A list that *selects* through
+    ``game._is_creature`` and then *describes* through ``card.type_line`` is the
+    seven-site class this repo keeps finding, one call deep: the Raging River
+    division and the Camouflage piles both offer exactly the creatures the rules
+    say they should and then drew a Kormus Bell'd Swamp as "Basic Land —
+    Swamp".
+
+    Name and art stay the printed ones, for the reason
+    :func:`_serialize_permanent` keeps them: the physical card is a Clone, and
+    the name is what the action API addresses the permanent by.
+    """
+    summary = _serialize_card_summary(perm.card)
+    summary.update({
+        "type": displayed_type_line(perm),
+        "oracle_text": perm.effective_card.oracle_text,
+        "colors": sorted(game._effective_colors(perm)),
+        # CR 707.2: a copiable value (see ``_serialize_permanent``).
+        "mana_cost": perm.effective_card.mana_cost,
+    })
+    return summary
 
 
 def _serialize_mana_pool(player: PlayerState) -> dict:

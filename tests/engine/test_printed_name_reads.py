@@ -158,9 +158,15 @@ PRINTED_NAME_DISPATCH_BASELINE: dict[str, int] = {
     # Island Sanctuary (an enchantment nothing in the pool can copy/rename).
     "engine/phases/draw_step.py": 1,
     "web/turn_steps.py": 1,
-    # Gloom (the same, through the client-hint payloads).
+    # Gloom (the same, through the client-hint payloads). ``state_view``'s went
+    # at 6ED's wave: the castable highlight priced a spell with ``3 if a
+    # permanent is named "Gloom" and the card is white``, and now asks
+    # ``engine/cost_modifiers.py`` — the text-keyed table the cast path and the
+    # AI's affordability read both go through, which knows 28 shipped cards
+    # where the name knew one. ``serialization``'s is the same read for the
+    # *displayed* cost string and needs a cost-dict-to-symbols renderer that
+    # keeps ``{X}``, so it is still here.
     "web/serialization.py": 1,
-    "web/state_view.py": 1,
 }
 
 

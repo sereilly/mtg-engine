@@ -53,7 +53,10 @@ from engine.activation_zones import HAND
 from engine.cycling import expand_cycling_line
 from engine.mixins.stack.activation import hand_activation_cost
 from engine.oracle import compile_card_oracle
+from engine.cost_modifiers import (cost_reduction_for_cast, reduce_cost,
+                                   spell_cost_tax, spell_symbol_tax)
 from engine.targeting import usable_activated_abilities
+from engine.untap_restrictions import permanent_in_limited_scope
 
 from .prompts import PromptContext, render_prompts
 from .session_store import Session
@@ -198,7 +201,6 @@ class _CastingWindow:
     """
 
     potential_pool: dict[str, int]
-    has_gloom: bool
     may_play_land: bool
     current_turn: int
     is_main_phase: bool
@@ -238,14 +240,15 @@ def _casting_window(session: Session, player_index: int) -> _CastingWindow | Non
     # Potential mana = current pool + what each untapped land could produce
     potential_pool: dict[str, int] = dict(player.mana_pool)
     for perm in game.controlled_by(player_index):
-        if not perm.tapped and perm.card.primary_type == "land":
+        # ``has_type`` (CR 613 layer 4), not the printed line: what makes mana
+        # here is whatever is a land *now*.
+        if not perm.tapped and perm.has_type("land"):
             for color in perm.effective_produced_mana:
                 sym = color.upper()
                 potential_pool[sym] = potential_pool.get(sym, 0) + 1
 
     return _CastingWindow(
         potential_pool=potential_pool,
-        has_gloom=any(perm.card.name == "Gloom" for perm in game.all_permanents()),
         may_play_land=game._may_play_another_land(player_index),
         current_turn=session.current_turn,
         is_main_phase=game.current_phase == "main",
@@ -338,9 +341,29 @@ def _card_castable_now(
 
     # Mana affordability for non-land cards
     if card.primary_type != "land" and game.enforce_mana_costs:
-        extra_tax = extra_generic + (3 if (window.has_gloom and "W" in card.colors) else 0)
+        # CR 601.2f, through the three functions the cast path and the AI's own
+        # affordability read (``ai_policy._cost_for``) already call. What stood
+        # here was ``3 if a permanent is named "Gloom" and the card is white``:
+        # one card name, one hardcoded amount, one colour, and the printed
+        # colours at that. The pool prints **28** cards this misses — twelve
+        # more increases (Sphere of Resistance taxes every spell, so the whole
+        # hand glowed and every click was refused), ten reductions and five
+        # self-reductions (a Pearl Medallion out and the white spell that *is*
+        # castable stays greyed), plus Derelor's coloured pip, which no amount
+        # of generic arithmetic can see.
+        tax, _taxing = spell_cost_tax(game, player_index, card)
+        pips, _pip_taxing = spell_symbol_tax(game, player_index, card)
+        reduction, _reducing = cost_reduction_for_cast(game, player_index, card)
         # Use x_value=0 so X spells are shown as playable (castable at X=0)
-        cost = game._parse_mana_cost(card.mana_cost, x_value=0, extra_generic=extra_tax)
+        cost = reduce_cost(
+            game._parse_mana_cost(
+                card.mana_cost,
+                x_value=0,
+                extra_generic=extra_generic + tax,
+                extra_pips=pips,
+            ),
+            reduction,
+        )
         if not _can_afford_with_pool(window.potential_pool, cost, player):
             # CR 118.9: an alternative cost is paid *rather than* the mana cost,
             # so a seat with no mana at all can still cast Force of Will off a
@@ -610,12 +633,33 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
     untap_info = None
     untap_required = _untap_land_selection_requirement(session)
     if viewer_seat == session.current_turn and untap_required > 0:
+        # Which permanent types are constrained (Winter Orb → lands, Smoke →
+        # creatures, Damping Field → artifacts, Static Orb → every permanent).
+        # Read before the candidate list rather than after it, because it is
+        # what says whether a candidate belongs on that list at all.
+        untap_options = session.game.get_untap_land_selection_options(session.current_turn) or {}
+        untap_limits = untap_options.get("limits") or {}
+        battlefield = session.game.players[viewer_seat].battlefield
+        # ``permanent_in_limited_scope`` — the same predicate the untap step
+        # itself and ``web/action_turn.py`` ask, so the list the board offers
+        # and the list the engine accepts are one answer. This re-validation
+        # used to read ``card.primary_type in ("land", "creature")``, which is
+        # the printed line *and* only two of the four scopes a limit may name:
+        # under **Damping Field** the engine offered three tapped artifacts and
+        # the wire carried an empty candidate list beside ``max_count: 1``, so
+        # the player was told to untap one artifact and given nothing to click
+        # — and the pruned list was written straight back onto the session, so
+        # the action handler then refused the click too. **Static Orb**'s
+        # "permanent" scope is not a card type at all.
         valid_candidates = [
             idx
             for idx in sorted(set(session.untap_candidate_indices))
-            if 0 <= idx < len(session.game.players[viewer_seat].battlefield)
-            and session.game.players[viewer_seat].battlefield[idx].card.primary_type in ("land", "creature")
-            and session.game.players[viewer_seat].battlefield[idx].tapped
+            if 0 <= idx < len(battlefield)
+            and battlefield[idx].tapped
+            and any(
+                permanent_in_limited_scope(battlefield[idx], scope)
+                for scope in untap_limits
+            )
         ]
         session.untap_candidate_indices = valid_candidates
 
@@ -624,10 +668,6 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
             valid_selected = valid_selected[:untap_required]
         session.untap_selected_indices = valid_selected
         session.untap_required_lands = untap_required
-        # Which permanent types are constrained (Winter Orb → lands, Smoke →
-        # creatures) so the prompt can name the right type instead of always
-        # saying "lands".
-        untap_options = session.game.get_untap_land_selection_options(session.current_turn) or {}
         untap_info = {
             "max_count": untap_required,
             "candidate_indices": valid_candidates,

@@ -16,7 +16,7 @@ from engine.ai_policy import choose_attack_target, legal_attackers
 from .session_store import Session
 
 from .seats import _seat_type
-from .serialization import _serialize_card_summary
+from .serialization import _serialize_permanent_summary
 
 
 def _ai_declare_attackers(session: Session) -> None:
@@ -131,7 +131,15 @@ def _band_blocker_assignments(game) -> list[dict]:
             if b in seen or not (0 <= b < len(defender.battlefield)):
                 continue
             blocker = defender.battlefield[b]
-            if blocker.card.primary_type != "creature" or blocker.effective_power <= 0:
+            # ``is_creature`` (CR 613 layer 4), the same reading
+            # ``_multiblock_blocker_splits`` below already takes — an animated
+            # land blocking is a creature blocking. The printed line stood here
+            # and a Kormus Bell'd Swamp blocking a band produced no CR 702.22k
+            # assignment at all, so the active player was never asked which
+            # band member it damaged and combat damage auto-resolved past the
+            # decision. Two sibling functions, one right and one wrong, three
+            # dozen lines apart.
+            if not blocker.is_creature or blocker.effective_power <= 0:
                 continue
             seen.add(b)
             result.append({"blocker_idx": b, "member_indices": members})
@@ -248,7 +256,8 @@ def _build_raging_river_info(session: Session, viewer_seat: int | None) -> dict 
     if isinstance(defender_index, int) and 0 <= defender_index < len(game.players):
         defender = game.players[defender_index]
         divide = [
-            {"index": i, **_serialize_card_summary(p.card), "pile": game.combat_defender_piles.get(i)}
+            {"index": i, **_serialize_permanent_summary(p, game),
+             "pile": game.combat_defender_piles.get(i)}
             for i, p in enumerate(defender.battlefield)
             if game._is_creature(p) and not game._has_keyword(p, "flying")
         ]
@@ -262,7 +271,8 @@ def _build_raging_river_info(session: Session, viewer_seat: int | None) -> dict 
     if viewer_seat == attacker_index and defender_done and not game.combat_left_right_attacker_locked:
         attacker = game.players[attacker_index]
         label = [
-            {"index": i, **_serialize_card_summary(attacker.battlefield[i].card), "pile": game.combat_attacker_piles.get(i)}
+            {"index": i, **_serialize_permanent_summary(attacker.battlefield[i], game),
+             "pile": game.combat_attacker_piles.get(i)}
             for i in sorted(game.combat_attackers)
             if 0 <= i < len(attacker.battlefield)
         ]
@@ -293,7 +303,7 @@ def _build_camouflage_info(session: Session, viewer_seat: int | None) -> dict | 
         return None
     defender = game.players[defender_index]
     creatures = [
-        {"index": i, **_serialize_card_summary(p.card)}
+        {"index": i, **_serialize_permanent_summary(p, game)}
         for i, p in enumerate(defender.battlefield)
         if p.is_creature and not p.tapped
     ]
