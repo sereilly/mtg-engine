@@ -113,7 +113,22 @@ def _accept_land_tapped_for_mana_by_a_player(
     "whenever a player …" opener keeps its reading.
     """
     mark = stream.mark()
-    if not stream.accept_phrase("a", "player", "taps"):
+    # "Whenever **an opponent** taps a Mountain for mana" (Sanctimony). The same
+    # active voice with CR 109.5's seat named instead of "a player" — one more
+    # spelling of one event, not a second event, so it is a word this reader
+    # accepts rather than a kind of its own.
+    #
+    # **Which** seat is not decided here. This front end supplies the *effect*
+    # half of a triggered ability and `engine/oracle.py`'s pattern table
+    # supplies the condition; the seat rides there as an empty named group and
+    # is tested at the tap seam. A phrase only one front end reads is a card
+    # whose two halves watch different sets, which is the whole reason this
+    # reader exists — so the words are consumed here even though nothing here
+    # asks what they mean.
+    if not (
+        stream.accept_phrase("a", "player", "taps")
+        or stream.accept_phrase("an", "opponent", "taps")
+    ):
         stream.reset(mark)
         return None
     stream.accept_word("a", "an")
@@ -131,6 +146,59 @@ def _accept_land_tapped_for_mana_by_a_player(
         stream.reset(mark)
         return None
     return ast.TriggerEvent("land_tapped_for_mana", "whenever", subject=land)
+
+
+def _accept_card_put_into_graveyard_from_anywhere(
+    stream: TokenStream,
+) -> "ast.TriggerEvent | None":
+    """``a <card phrase> is put into an opponent's graveyard from anywhere`` —
+    the event, or None with the cursor untouched.
+
+    "Whenever a black card is put into an opponent's graveyard from anywhere,
+    you may draw a card." (Compost.) ``_WHENEVER_EVENTS`` carries the two
+    unnarrowed spellings of this condition as literal word tuples (Planar Void's
+    "another card", Energy Field's "your graveyard"); neither has a slot for a
+    noun phrase, and Compost prints one.
+
+    **The subject is not carried on the event.** This front end supplies the
+    *effect* half of a triggered ability and ``engine/oracle.py``'s pattern
+    table supplies the condition, and the filter this phrase describes is about
+    a card in a pile — a different testable set from anything a
+    :class:`ObjectFilter` on a battlefield subject would be matched against. So
+    the words are consumed here (a production takes every token of its line or
+    refuses it) and the narrowing rides the compiler's ``graveyard_card_filter``,
+    which the event filter in ``engine/events.py`` tests through the card
+    matcher.
+
+    Non-consuming on refusal, so the subject-led death production behind it
+    keeps its reading of every "from the battlefield" spelling.
+    """
+    mark = stream.mark()
+    stream.accept_word("a", "an")
+    try:
+        described = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if described is None:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase(
+        "is", "put", "into", "an", "opponent", "'s", "graveyard",
+        "from", "anywhere",
+    ):
+        stream.reset(mark)
+        return None
+    # The phrase rides the event as its subject, which is what
+    # `test_a_narrowed_trigger_reads_the_same_subject_on_both_sides` holds both
+    # front ends to: `engine/oracle.py`'s table delimits the same words and
+    # reads them into `graveyard_card_filter`, and a grammar that consumed them
+    # and recorded nothing would let the dispatcher test one set while the parse
+    # claimed another. Nothing lowers it — the narrowing is enforced from the
+    # condition's payload at the graveyard seam — but agreeing is the point.
+    return ast.TriggerEvent(
+        "card_put_into_graveyard", "whenever", subject=described
+    )
 
 
 def _parse_quantified_tap_event(stream: TokenStream) -> ast.TriggerEvent | None:
@@ -394,6 +462,15 @@ def _parse_matched_event(
     # The article is consumed here rather than by the noun parser, which
     # refuses "an" as an unknown adjective — the same split the condition
     # parser makes for "you control **a** Swamp".
+    # "Whenever **a black card is put into an opponent's graveyard from
+    # anywhere**" (Compost). Read before the subject-led death production
+    # below, which is its near-twin and whose every spelling ends "from the
+    # battlefield": that one is CR 700.4's death and this is the whole-zone
+    # move, and admitting a milled or discarded card as a *death* is a trigger
+    # firing on the wrong event while the card compiles supported.
+    anywhere = _accept_card_put_into_graveyard_from_anywhere(stream)
+    if anywhere is not None:
+        return anywhere
     grave_mark = stream.mark()
     # "Whenever **a spell or ability an opponent controls causes** a land to be
     # put into your graveyard from the battlefield" (Sacred Ground). The same
@@ -859,6 +936,23 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
                 stream.accept_word("creature", "artifact", "enchantment", "land", "aura")
             if stream.accept_word("enters"):
                 stream.accept_phrase("the", "battlefield")
+                # "When this creature **enters or dies**, …" (Goblin Marshal,
+                # Hunting Moa). CR 603.1's one ability with two trigger events,
+                # and the engine's standing answer to that shape is one
+                # condition kind read at both fire sites — the arrangement
+                # `creature_attacks_or_blocks` and
+                # `phases_out_or_leaves_battlefield` already have, and the
+                # reason this is not two abilities: an ability is one object,
+                # and splitting it would make a card that counts its own
+                # triggers count two.
+                #
+                # Read **after** the entry phrase rather than as a phrase of its
+                # own, because "enters" is its strict prefix: a table row for
+                # the joined event placed under the bare one would never be
+                # reached, and placed over it would have to re-spell every
+                # permanent noun the branch above consumes as a word.
+                if stream.accept_phrase("or", "dies"):
+                    return ast.TriggerEvent("enters_or_dies", "when")
                 return ast.TriggerEvent("enters_battlefield", "when")
             if stream.accept_word("leaves"):
                 stream.accept_phrase("the", "battlefield")

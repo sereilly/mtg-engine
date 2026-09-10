@@ -1239,6 +1239,50 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             return controller_seat in seats
         return any(seat != controller_seat for seat in seats)
 
+    if kind == "seat_cast_spell_this_turn":
+        # "At the beginning of each player's end step, **if that player didn't
+        # cast a spell this turn**, this enchantment deals 2 damage to that
+        # player." (Impatience.) CR 603.4's intervening-if, read off the
+        # per-seat per-turn record the casting path writes
+        # (`PlayerState.spells_cast_this_turn`) and the turn boundary clears —
+        # never off the board, because a resolved spell has left the stack and a
+        # permanent that entered from a cast is indistinguishable from one that
+        # was reanimated.
+        #
+        # Whose record is payload. "That player" is the seat the firing event
+        # named, frozen into the trigger's context by the end step (CR 603.10)
+        # under the same key the damage's own recipient reads — so the condition
+        # and the effect can never be about two different players, which on this
+        # card is the whole of what it does.
+        seats: list[int] = []
+        who = payload.get("who")
+        if who == "that_player":
+            frozen = (context.trigger_context or {}).get("event_subject_player")
+            if not isinstance(frozen, int):
+                # The words name a seat nothing recorded. Reported unmet rather
+                # than guessed, exactly as the ledger clause below does: the
+                # lowering is what keeps this clause off an event that freezes
+                # no seat, and answering either way here would make Impatience
+                # fire on every end step or on none.
+                return False
+            seats = [frozen]
+        elif who == "an_opponent":
+            if context.caster not in game.players:
+                return False
+            seats = list(game.opponents_of(game.players.index(context.caster)))
+        else:
+            if context.caster not in game.players:
+                return False
+            seats = [game.players.index(context.caster)]
+        if not seats:
+            return False
+        cast = any(
+            bool(game.players[seat].spells_cast_this_turn)
+            for seat in seats
+            if 0 <= seat < len(game.players)
+        )
+        return (not cast) if payload.get("negated") else cast
+
     if kind == "seat_dealt_damage_this_turn":
         # "…unless **one of their opponents was dealt damage this turn**"
         # (Antagonism). The turn's damage ledger, never a read of a life total:

@@ -71,12 +71,28 @@ _BECOMES_TARGET_CONTROLLERS: tuple[tuple[str, ...], ...] = (
     (),
 )
 
+#: The subjects the condition is printed about, longest first on this axis too.
+#:
+#: "**You or a permanent you control**" (Rayne, Academy Chancellor) is the one
+#: that is not a self-reference: it spans a *player* and a set of permanents at
+#: once, which is a third dispatch scope for this event rather than a third
+#: spelling of the first — `engine/events.py` is where the three are told apart,
+#: and `engine/oracle.py`'s marker group is what tells them.
+#:
+#: It joins the axes rather than getting a production of its own because that is
+#: what the axes are for: the card printing this subject about "a spell an
+#: opponent controls" is already read, and so is the one nobody has printed yet.
+_BECOMES_TARGET_SUBJECTS: tuple[tuple[str, ...], ...] = (
+    ("you", "or", "a", "permanent", "you", "control"),
+    *(("this", noun) for noun in _DAMAGER_NOUNS),
+)
+
 _BECOMES_TARGET_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = tuple(
     (
         "self_becomes_target",
-        ("this", noun, "becomes", "the", "target", "of") + obj + controller,
+        subject + ("becomes", "the", "target", "of") + obj + controller,
     )
-    for noun in _DAMAGER_NOUNS
+    for subject in _BECOMES_TARGET_SUBJECTS
     for obj in _BECOMES_TARGET_OBJECTS
     for controller in _BECOMES_TARGET_CONTROLLERS
 )

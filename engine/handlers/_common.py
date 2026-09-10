@@ -1440,7 +1440,8 @@ _STATE_TESTS = {
     "blocked": lambda perm: bool(perm.blocked),
     "unblocked": lambda perm: not perm.blocked,
     # "…as long as it's **enchanted**" (Fledgling Osprey, Metathran Elite,
-    # Thran Golem). CR 303.4: a permanent is enchanted while an *Aura* is
+    # Thran Golem) and "…**if Rayne is enchanted**" (Rayne, Academy
+    # Chancellor). CR 303.4: a permanent is enchanted while an *Aura* is
     # attached to it — so this is not "has anything attached". Equipment
     # attaches through the same record (``engine/equipment.py`` keeps
     # ``attached_auras`` as the one attachment list, and CR 301.5f gives the
@@ -1452,6 +1453,15 @@ _STATE_TESTS = {
     # subtype, and a Licid — an enchantment creature that becomes an Aura —
     # answers the question the layers give rather than the one it was printed
     # with.
+    #
+    # The ``enchanted_only`` filter key in ``permanent_matches_filter`` below
+    # is routed through this same test rather than spelled beside it: "destroy
+    # target **enchanted** creature" (Ramses Overdark), "as long as it's
+    # enchanted" and "if this creature is enchanted" are one question asked of
+    # one permanent, and two spellings of it is how a card ends up disagreeing
+    # with a sweep about what "enchanted" means. Two branches of one wave wrote
+    # this entry independently and agreed on the reading; the helper is the one
+    # copy.
     "enchanted": lambda perm: _is_enchanted(perm),
 }
 
@@ -1748,10 +1758,9 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     # something attached, because this engine shares the attachment record with
     # Equipment (CR 301.5f) and an equipped creature is not an enchanted one.
     if payload.get("enchanted_only"):
-        if not any(
-            attached.has_type("aura")
-            for attached in (perm.metadata.get("attached_auras") or [])
-        ):
+        # Through the state table above, so the filter key and the printed
+        # condition "if this creature is enchanted" cannot come apart.
+        if not _STATE_TESTS["enchanted"](perm):
             return False
 
     def _has_type(name: str) -> bool:

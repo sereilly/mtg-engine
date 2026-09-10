@@ -576,6 +576,16 @@ def lower_record_condition(
             "kind": "seat_dealt_damage_this_turn",
             "opponents_of": condition.who,
         }
+    if isinstance(condition, ast.SeatCastSpellThisTurn):
+        # The seat and the sign both ride the payload, for the reason the two
+        # conditions above do: "that player didn't cast a spell" and "you cast a
+        # spell" are one question with two referents and two signs, and a kind
+        # per combination is four kinds for one record.
+        return {
+            "kind": "seat_cast_spell_this_turn",
+            "who": condition.who,
+            "negated": bool(condition.negated),
+        }
     if isinstance(condition, ast.LifeGainedThisTurn):
         # The seat rides the payload rather than being baked into the kind, so
         # "if an opponent gained…" is the same condition with a different `who`

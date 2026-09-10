@@ -396,6 +396,34 @@ PARSE_LAYERS = [
     # thousand-line guard below — above `phrases`, whose shared fragments it
     # reads, and below everything that reads a whole line.
     "triggers",
+    # The conditions answered by a record kept about a **player** rather than
+    # about an object — "one of their opponents was dealt damage this turn"
+    # (Antagonism), "that player didn't cast a spell this turn" (Impatience).
+    # Split off `condition_clauses` at Urza's Destiny's wave 1, when the second
+    # of those clauses took that module past the guard below. The cut is that
+    # module's own taken one axis further: it holds every condition answered by
+    # a *record*, and every record it holds is about an **object** — a card that
+    # left a zone, a creature that died this way. These two are about a seat,
+    # and neither touches the noun-phrase vocabulary the rest of the module is
+    # built from.
+    #
+    # Both clauses moved rather than only the new one: a family with one member
+    # is a cut, and the point of the guard is to find a boundary that was
+    # already there. The name is the one this family already carries on the
+    # parse side, beside `seats`, `seat_comparisons` and `seat_relations` —
+    # the fourth thing a sentence can say about a player, after which seat it
+    # is, how it compares and what it owns: what it **did**.
+    #
+    # No mirror name to reuse, and the near miss is the reason to say so:
+    # `records` is already the parse-side mirror of `lowering/_records.py` and
+    # reads a *quantity*, and `histories` reads a record as a narrowing on a
+    # noun phrase. These return a whole `Condition`, lowered in
+    # `lowering/_record_conditions.py` beside every other condition's, which has
+    # never split — so taking either word would fork a name inside one package
+    # rather than re-form one across two.
+    #
+    # Below `condition_clauses`, which calls it and is never imported back.
+    "seat_records",
     # The printed clauses a condition is built from — one each, read to its
     # end. Split out of `conditions` at the guard below, along the boundary
     # that module already had in its own shape: `_parse_single_condition` is a

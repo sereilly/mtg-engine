@@ -298,6 +298,12 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     "phases_in": "whenever this creature phases in",
     # when
     "enters_battlefield": "when this creature enters the battlefield",
+    # W1G4 (UDS): CR 603.1b's one ability with two trigger conditions (Goblin
+    # Marshal, Hunting Moa). Its own kind rather than a spelling of either half,
+    # because the two halves are announced by two different fire sites and
+    # carried out by two different mechanisms — inline at entry, on the stack at
+    # death — so a compiler alias for either one would leave the other silent.
+    "enters_or_dies": "when this creature enters or dies",
     "leaves_battlefield": "when this creature leaves the battlefield",
     # Ertai's Familiar. CR 603.1's one ability with two trigger events, and the
     # example is a *shadowing* check as much as a coverage one: the generic

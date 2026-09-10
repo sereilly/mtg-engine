@@ -430,6 +430,30 @@ class SeatWasDealtDamageThisTurn:
     """
     who: str
 @dataclass(frozen=True)
+class SeatCastSpellThisTurn:
+    """"…**if that player didn't cast a spell this turn**, this enchantment
+    deals 2 damage to that player." (Impatience.)
+
+    A record, and a record for :class:`SeatWasDealtDamageThisTurn`'s reason one
+    node up: no read of the board answers it. A spell that resolved left the
+    stack, one that was countered left it too, and a permanent that entered from
+    a cast is indistinguishable on the battlefield from one that was reanimated
+    — so the only thing that can answer "did this seat cast anything this turn"
+    is the per-seat, per-turn record the casting path already writes
+    (``PlayerState.spells_cast_this_turn``), cleared by
+    ``mixins/turn_management`` at the turn boundary.
+
+    ``who`` is the printed seat and ``negated`` the printed "didn't", both
+    payload for this package's standing reason: "that player didn't cast a
+    spell" and "you cast a spell" are one question with two referents and two
+    signs, and a node that welded either in would make the other three cards
+    nobody can print.
+    """
+    who: str
+    negated: bool = False
+
+
+@dataclass(frozen=True)
 class InABlockSinceLastUpkeep:
     """"if **it has blocked or been blocked since your last upkeep**" (Wiitigo).
 

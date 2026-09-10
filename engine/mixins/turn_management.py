@@ -32,6 +32,24 @@ TAP_TRIGGER_KINDS = frozenset({
     "skip_next_untap",            # Winter's Night
     "deal_damage",                # Manabarbs
     "tap_lands_sharing_produced_mana",  # Mana Web
+    # "…**you may gain 1 life**." (Sanctimony.) An *optional* effect under this
+    # condition, which every kind above it is not — and the first one whose
+    # answer belongs to a player rather than to this site.
+    #
+    # It reaches the ordinary dispatcher rather than an arm of its own, and that
+    # is the point: `may` arms a prompt on the generic pending-choice queue,
+    # which is the machinery built for a decision owed part-way through
+    # something. What this site cannot give a trigger is a *priority window*;
+    # a queued question needs none, so the reason the docstring below gives for
+    # refusing control flow ("no priority window to run its branches") is a
+    # reason about `if_then`'s branches and not about an offer.
+    #
+    # Without it, Sanctimony parsed, lowered, was announced by this very loop
+    # and then gained nothing at all — the exact shape
+    # `tests/engine/test_trigger_dispatchers.py` cannot see, because the
+    # condition *is* dispatched and it is the effect that falls off the end.
+    "may",
+    "target_gains_life",
 })
 
 
@@ -693,6 +711,21 @@ class TurnManagementMixin:
             # never to whoever tapped the land. Dropped, the trigger would fire
             # on its own controller's lands too, which on Mana Web is a card
             # that taps out the player who cast it.
+            # "Whenever **an opponent** taps a Mountain for mana" (Sanctimony).
+            # CR 109.5's seat, asked of whoever tapped the land against the seat
+            # that controls the *watching permanent* — read through the control
+            # seam, so a Sanctimony somebody has taken control of watches
+            # **their** opponents from the moment they take it (CR 613 layer 2).
+            #
+            # This is the narrowing the two rows above are not: they describe
+            # the *land*, and this describes the player who tapped it. Dropped,
+            # the enchantment would gain its controller life for their own
+            # Mountains — a trigger firing on a strictly larger set, which reads
+            # to every census in this repo as an implemented card.
+            if trig.condition.payload.get("tapped_by_opponent") is not None:
+                watcher = self.controller_index_of(perm)
+                if watcher is None or player_index == watcher:
+                    continue
             described = trig.condition.payload.get("tapped_land_filter")
             if described:
                 from ..subject_filters import subject_matches
@@ -775,6 +808,37 @@ class TurnManagementMixin:
             self.log.append(
                 f"{perm.card.name}: nothing here resolves "
                 f"{kind!r} inside a cost payment"
+            )
+            return
+        # "Whenever an opponent taps a Mountain for mana, **you may gain 1
+        # life**." (Sanctimony.) Run through the engine's own dispatcher, with
+        # the ability's controller as the caster (CR 109.5) — never the seat
+        # that tapped the land, which on this card is the opponent whose
+        # Mountain it was.
+        #
+        # The tapping seat is frozen into the trigger's context under the key
+        # every "that player" reader already asks for, because this site is the
+        # fire site and holds it: an effect printed under this condition that
+        # names the event's player has one place to read it, and it is here.
+        if kind in ("may", "target_gains_life"):
+            watcher = self.controller_index_of(perm)
+            if watcher is None:
+                self.log.append(
+                    f"{perm.card.name}: its controller has left, so nothing is offered"
+                )
+                return
+            self._execute_oracle_instruction(
+                instruction,
+                OracleExecutionContext(
+                    caster=self.players[watcher],
+                    target=player,
+                    card=perm.card,
+                    source_permanent=perm,
+                    trigger_context={
+                        "event_subject_player": player_index,
+                        "event_subject_controller": player_index,
+                    },
+                ),
             )
             return
         if kind == "add_mana_for_tapped_land":

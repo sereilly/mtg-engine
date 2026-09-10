@@ -2714,6 +2714,25 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
         count = evaluate_count(
             game, context.caster, shared, source=context.source_permanent
         )
+    # "Whenever this creature is dealt damage, sacrifice **that many**
+    # permanents." (Phyrexian Negator.) The number the firing event carried,
+    # frozen into the trigger's context by the fire site — read here under the
+    # two keys the lowering chose between, which are the same two
+    # ``target_loses_life`` and ``look_at_target_library_top`` already read for
+    # the identical printed phrase. The trigger channel first, for that
+    # handler's reason: an event's number and a scratchpad's are different
+    # numbers, and a lowering emits exactly one of them.
+    #
+    # An absent record sacrifices **nothing** rather than falling back to the
+    # count of 1 the default above supplies — a Negator dealt no damage owes no
+    # permanents, and guessing one here would destroy a permanent on an event
+    # that never happened.
+    from_trigger = instruction.payload.get("amount_from_trigger")
+    from_results = instruction.payload.get("amount_from")
+    if from_trigger is not None:
+        count = max(0, int((context.trigger_context or {}).get(from_trigger, 0)))
+    elif from_results is not None:
+        count = max(0, int(context.results.get(from_results, 0)))
     # "Sacrifice two Swamps. **If you can't**, …" (Infernal Denizen.) Whether
     # the sacrifice could be performed at all, recorded here rather than after
     # the prompt: an interactive seat answers a queued choice long after this

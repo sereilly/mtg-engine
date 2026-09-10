@@ -56,6 +56,12 @@ _PRESENT_STATES: tuple[tuple[str, str, bool], ...] = (
     ("untapped", "tapped", True),
     ("attacking", "attacking", False),
     ("blocking", "blocking", False),
+    # "…**if Rayne is enchanted**" (Rayne, Academy Chancellor). CR 303.4a's
+    # state, read off the attachment record through the same test the
+    # ``enchanted_only`` filter key uses — one question about one permanent, one
+    # answer. A row here rather than a production for the reason this table has
+    # rows at all: it is "it is <word>" with a different field name.
+    ("enchanted", "enchanted", False),
 )
 
 #: The characteristics a "…'s <X> is N or greater" / "…has <X> N or greater"

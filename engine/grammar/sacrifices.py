@@ -77,11 +77,60 @@ def _parse_counted_sacrifice(
             ast.TargetSpec("any_number", described),
             total_at_least=total,
         )
+    # "…sacrifice **that many** permanents." (Phyrexian Negator.) How many is
+    # the number the *firing event* carried — the damage just dealt — so there
+    # is no printed number for `parse_counted_subject` to find and it refused
+    # the whole line. Read before it for that reason rather than after: "that"
+    # is not a count, and the counted reader has no branch that could grow one.
+    #
+    # The amount rides on ``TargetSpec.count_amount``, which is the field for
+    # exactly this ("how many, said by a clause in front of the noun phrase
+    # rather than by a printed number") and is documented as the **whole**
+    # count rather than a ceiling on one — which is what "that many" is. The
+    # noun phrase itself is read plural, as every counted position in this
+    # grammar is, so "permanents" resolves through the one noun parser.
+    #
+    # What the back-reference *means* is not decided here. This production only
+    # records that the count is one; ``lowering/board.py`` asks
+    # ``_back_reference_payload`` which channel carries it, and that refuses a
+    # trigger whose event freezes no quantity — so a card printing this phrase
+    # under an event with no number is reported unsupported rather than
+    # sacrificing nothing.
+    that_many = _accept_that_many_sacrifice(stream)
+    if that_many is not None:
+        return ast.Sacrifice(
+            player, ast.TargetSpec("a", that_many, count_amount=ast.ThatMuch(None))
+        )
     counted = parse_counted_subject(stream)
     if counted is None:
         raise stream.error("expected what to sacrifice")
     count, described = counted
     return ast.Sacrifice(player, ast.TargetSpec("a", described, count=count))
+
+
+def _accept_that_many_sacrifice(
+    stream: TokenStream,
+) -> "ast.ObjectFilter | None":
+    """``that many <plural noun>`` — the noun phrase, or None with the cursor
+    untouched.
+
+    Its own reader beside :func:`_accept_aggregate_sacrifice` and for that
+    reader's reason: it answers "how many" with something no number can express,
+    so it cannot be a branch of the counted reader that returns an ``int``.
+
+    Both words are required before anything is consumed, and the noun phrase
+    after them must parse — a half-consumed "that" would strand the rest of the
+    line on a production that then refused it, which is the one outcome worse
+    than refusing here.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("that", "many"):
+        return None
+    described = parse_subject_filter_at(stream, plural=True)
+    if described is None:
+        stream.reset(mark)
+        return None
+    return described
 
 
 #: The characteristics a printed aggregate threshold may total. Both are

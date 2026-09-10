@@ -326,8 +326,18 @@ def _lower_look_at_hand(node: ast.LookAtHand) -> tuple[OracleInstruction, ...]:
     and builds a single reveal from their hand. "Each opponent's hand" would
     need a loop it does not have and "your hand" is not an effect at all, so
     only the targeted form has a contract to lower onto.
+
+    **"Look at target opponent's hand." (Telepathic Spies.)** The same effect
+    with CR 115.4's seat narrowing, and it is admitted because the narrowing is
+    *carried* rather than dropped: ``_targets_only`` reads ``target_opponent``
+    into the same ``opponents_only`` flag ``discard_target_cards`` and
+    ``target_loses_life`` already emit, and ``targeting.py``'s player picker
+    turns that flag into the seat loop that refuses the caster's own face. A
+    lowering that accepted the word and lost the flag would offer the caster
+    their own hand, which is the failure this refusal was written to prevent —
+    so the fix is the flag reaching the picker, not the word reaching the kind.
     """
-    if node.player.kind != "target_player":
+    if node.player.kind not in ("target_player", "target_opponent"):
         raise LoweringError(
             f"no handler for looking at {node.player.kind!r}'s hand", node=node
         )
