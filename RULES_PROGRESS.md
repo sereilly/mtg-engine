@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**411 / 617 tracked rules covered (66%)** — 2452 tests, 0 unannotated.
+**411 / 617 tracked rules covered (66%)** — 2457 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -147,7 +147,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 105. Colors
 
-- [x] **105.1** There are five colors in the Magic game: white, blue, black, red, and green. *(4 tests)*
+- [x] **105.1** There are five colors in the Magic game: white, blue, black, red, and green. *(5 tests)*
 - [x] **105.2** An object can be one or more of the five colors, or it can be no color at all. An object is the c... *(8 tests, subrules abc)*
 - [x] **105.3** Effects may change an object’s color or give a color to a colorless object. If an effect gives an... *(3 tests)*
 - [ ] **105.4** If a player is asked to choose a color, they must choose one of the five colors. “Multicolored” i...
@@ -171,7 +171,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 107. Numbers and Symbols
 
-- [x] **107.1** The only numbers the Magic game uses are integers. *(1 tests, subrules a)*
+- [x] **107.1** The only numbers the Magic game uses are integers. *(2 tests, subrules ab)*
 - [x] **107.2** If anything needs to use a number that can’t be determined, either as a result or in a calculatio... *(1 tests)*
 - [x] **107.3** Many objects use the letter X as a placeholder for a number that needs to be determined. Some obj... *(16 tests, subrules ab)*
 - [x] **107.4** The mana symbols are {W}, {U}, {B}, {R}, {G}, and {C}; the numerical symbols {0}, {1}, {2}, {3}, ... *(4 tests)*
@@ -284,7 +284,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **117.1** Unless a spell or ability is instructing a player to take an action, which player can take action... *(3 tests, subrules a)*
 - [x] **117.2** Other kinds of abilities and actions are automatically generated or performed by the game rules, ... *(1 tests, subrules c)*
-- [x] **117.3** Which player has priority is determined by the following rules: *(19 tests, subrules abcd)*
+- [x] **117.3** Which player has priority is determined by the following rules: *(20 tests, subrules abcd)*
 - [x] **117.4** If all players pass in succession (that is, if all players pass without taking any actions in bet... *(3 tests)*
 - [x] **117.5** Each time a player would get priority, the game first performs all applicable state-based actions... *(1 tests)*
 - [x] **117.7** If a player with priority casts a spell or activates an activated ability while another spell or ... *(1 tests)*
@@ -676,7 +676,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 602. Activating Activated Abilities
 
 - [x] **602.1** Activated abilities have a cost and an effect. They are written as “[Cost]: [Effect.] [Activation... *(14 tests, subrules ab)*
-- [x] **602.2** To activate an ability is to put it onto the stack and pay its costs, so that it will eventually ... *(36 tests, subrules ab)*
+- [x] **602.2** To activate an ability is to put it onto the stack and pay its costs, so that it will eventually ... *(37 tests, subrules ab)*
 - [x] **602.3** Some abilities specify that one of their controller’s opponents does something the controller wou... *(3 tests)*
 - [ ] **602.4** Activating an ability that alters costs won’t affect spells and abilities that are already on the...
 - [x] **602.5** A player can’t begin to activate an ability that’s prohibited from being activated. *(39 tests, subrules ace)*
@@ -734,7 +734,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 608. Resolving Spells and Abilities
 
 - [x] **608.1** Each time all players pass in succession, the spell or ability on top of the stack resolves. (See... *(1 tests)*
-- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(78 tests, subrules bcdhn)*
+- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(84 tests, subrules bcdhn)*
 - [x] **608.3** If the object that’s resolving is a permanent spell, its resolution may involve several steps. Th... *(3 tests, subrules ab)*
 
 ### 609. Effects
@@ -862,7 +862,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **701.17** Mill *(6 tests, subrules a)*
 - [x] **701.18** Play *(6 tests, subrules ab)*
 - [x] **701.19** Regenerate *(29 tests, subrules abc)*
-- [x] **701.20** Reveal *(6 tests, subrules ab)*
+- [x] **701.20** Reveal *(7 tests, subrules ab)*
 - [x] **701.21** Sacrifice *(14 tests, subrules a)*
 - [x] **701.22** Scry *(8 tests, subrules ab)*
 - [x] **701.23** Search *(4 tests, subrules ad)*
