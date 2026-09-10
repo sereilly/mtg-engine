@@ -3346,6 +3346,7 @@ function getPromptBoardTargeting(state = currentState) {
           card_name: current.card_name,
           // Which trigger is being answered, as opposed to what it is aimed at.
           prompt_permanent_id: current.permanent_id ?? null,
+          prompt_subject_ordinal: current.subject_ordinal ?? null,
           accept: true,
           target_seat: targetSeat,
           target_permanent_index: idx,
@@ -4042,6 +4043,19 @@ function applyUntapPrompt(untapInfo) {
   customOkBtn.disabled = true;
 }
 
+// The address an upkeep prompt is filed under, mirroring the server's one
+// reader, `upkeep_prompt_key` in engine/phases/upkeep_step.py: a permanent id
+// when the subject is on the battlefield, "<card name>#<ordinal>" when it is a
+// card in a graveyard or an obligation record (Nether Shadow, Nafs Asp), and
+// the bare name only when the prompt carries neither — which then means every
+// subject of that name. Used to index the server-computed `can_pay` map, whose
+// keys JSON stringifies.
+function upkeepPromptKey(entry) {
+  if (entry?.permanent_id != null) return entry.permanent_id;
+  if (entry?.subject_ordinal != null) return `${entry.card_name}#${entry.subject_ordinal}`;
+  return entry?.card_name;
+}
+
 function applyUpkeepPayPrompt(upkeepInfo) {
   const panel = q("activationPanel");
   const title = q("promptTitle");
@@ -4098,16 +4112,17 @@ function applyUpkeepPayPrompt(upkeepInfo) {
 
   // Which permanent this prompt is about (CR 400.7's identity). Two copies of
   // one upkeep card produce two prompts with the same `card_name`, so the id is
-  // what the answer is filed under; the two prompts that have no permanent
-  // behind them (Nether Shadow in a graveyard, a Nafs Asp obligation) send
-  // `null` and are still answered by name.
+  // what the answer is filed under. A prompt with no permanent behind it (a
+  // Nafs Asp obligation) sends `null` here and its ordinal instead — two
+  // obligations from two Asps are two payments, and one answer used to buy
+  // both at one quoted price.
   const promptPermanentId = current?.permanent_id ?? null;
+  const promptSubjectOrdinal = current?.subject_ordinal ?? null;
   // Server-computed affordability (pool + untapped mana lands): a payment the
   // engine would reject is greyed out instead of offered. Keyed by the same
   // value the answer is — JSON turned the ids into strings and a numeric index
   // stringifies to match.
-  const canPayKey = promptPermanentId === null ? cardName : promptPermanentId;
-  const canPay = upkeepInfo.can_pay?.[canPayKey] !== false;
+  const canPay = upkeepInfo.can_pay?.[upkeepPromptKey(current)] !== false;
   // The imperative is the server's too: "Pay {U}" and "Sacrifice a land" are
   // the same cost, and only the cost knows which of its parts it has.
   const payLabel = current?.cost_pay_label || `Pay ${costLabel}`;
@@ -4134,6 +4149,7 @@ function applyUpkeepPayPrompt(upkeepInfo) {
         action: "pay_upkeep",
         card_name: cardName,
         prompt_permanent_id: promptPermanentId,
+        prompt_subject_ordinal: promptSubjectOrdinal,
       });
     });
   }
@@ -4144,6 +4160,7 @@ function applyUpkeepPayPrompt(upkeepInfo) {
         action: "sacrifice_upkeep",
         card_name: cardName,
         prompt_permanent_id: promptPermanentId,
+        prompt_subject_ordinal: promptSubjectOrdinal,
       });
     });
   }
@@ -4164,7 +4181,11 @@ function applyOptionalTriggerPrompt(info) {
   const cardName = current?.card_name || "Unknown";
   // See applyUpkeepPayPrompt: two Vesuvan Doppelgangers or two Erhnam Djinns
   // are two triggers with one card name, and the id is what tells them apart.
+  // Two eligible Nether Shadows are two triggers with one card name and *no*
+  // permanent, so the ordinal is what tells those apart — a single "yes" used
+  // to return both of them out of the graveyard.
   const promptPermanentId = current?.permanent_id ?? null;
+  const promptSubjectOrdinal = current?.subject_ordinal ?? null;
   const promptText = current?.prompt || `Resolve ${cardName}'s triggered ability?`;
 
   panel.classList.remove("hidden");
@@ -4210,6 +4231,7 @@ function applyOptionalTriggerPrompt(info) {
         action: "resolve_optional_trigger",
         card_name: cardName,
         prompt_permanent_id: promptPermanentId,
+        prompt_subject_ordinal: promptSubjectOrdinal,
         accept: true,
       });
     });
@@ -4221,6 +4243,7 @@ function applyOptionalTriggerPrompt(info) {
         action: "resolve_optional_trigger",
         card_name: cardName,
         prompt_permanent_id: promptPermanentId,
+        prompt_subject_ordinal: promptSubjectOrdinal,
         accept: false,
       });
     });

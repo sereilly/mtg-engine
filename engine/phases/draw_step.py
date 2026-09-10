@@ -27,6 +27,7 @@ from ..mana_payment import generic_cost
 from ..pt import BASE_PT_REVERT_KEY, clear_base_pt
 from ..upkeep_costs import UpkeepCost, cost_prompt_fields
 from ..trigger_utils import iter_triggered_abilities, make_trigger_event
+from .upkeep_step import upkeep_subject_answer
 
 #: The two draw-step conditions and the only difference between them, the same
 #: pair the upkeep and end steps carry: ``draw_step_self`` is "at the beginning
@@ -50,6 +51,33 @@ DRAW_STEP_INTERVENING_IF = "intervening_if"
 
 
 class DrawStepMixin:
+    def _draw_step_life_loss_obligations(self, player_index: int) -> list[tuple[int, dict]]:
+        """``(ordinal, obligation)`` for every draw-step obligation armed against
+        *player_index*, in the order they were armed.
+
+        The obligation list is the third zone this engine has had to name an
+        object in, after a battlefield and a graveyard, and it is the hardest of
+        the three: a record is ``{"player_index", "amount", "cost",
+        "source_name"}``, so two obligations from two Nafs Asps are *equal
+        dicts*. There is no id and nothing to stamp one on that survives the
+        record being rebuilt, so what names one is the same thing that names a
+        graveyard card — its position among the same-named ones
+        (:func:`engine.phases.upkeep_step.subject_prompt_key`).
+
+        One reader for the prompt side and the resolution side, so the ordinal a
+        seat is offered and the ordinal a seat is charged for cannot drift.
+        """
+        ordinals: dict[str, int] = {}
+        numbered: list[tuple[int, dict]] = []
+        for obligation in self.pending_draw_step_life_loss:
+            if obligation["player_index"] != player_index:
+                continue
+            name = obligation["source_name"]
+            ordinal = ordinals.get(name, 0)
+            ordinals[name] = ordinal + 1
+            numbered.append((ordinal, obligation))
+        return numbered
+
     def get_draw_step_life_loss_choices(self, player_index: int) -> list[dict]:
         """Nafs Asp obligations armed against *player_index*, as pay-or-consequence
         choices shaped like ``get_upkeep_pay_triggers`` entries.
@@ -57,20 +85,23 @@ class DrawStepMixin:
         The card says the payment happens "before that draw step", so these are
         offered during the player's upkeep alongside the other pay-or-else
         prompts; the answers come back to ``resolve_draw_step(pay_life_loss=...)``
-        keyed by source name. Obligations from several copies of the same source
-        collapse into one prompt (they share a name and a cost).
+        keyed by :func:`engine.phases.upkeep_step.upkeep_prompt_key`.
+
+        **One prompt per obligation.** Obligations from two copies of one source
+        used to collapse into a single prompt "because they share a name and a
+        cost" — and they do, but they do not share a *decision*: the one answer
+        was then applied to both, so a seat quoted ``{1}`` was charged ``{2}``,
+        or declined once and lost 2 life. A player quoted a price the engine
+        will not charge is the same defect as one charged a price they were not
+        quoted, which is the rule ``get_upkeep_pay_triggers`` states one file
+        over.
         """
         choices: list[dict] = []
-        seen: set[str] = set()
-        for obligation in self.pending_draw_step_life_loss:
-            if obligation["player_index"] != player_index:
-                continue
-            name = obligation["source_name"]
-            if name in seen:
-                continue
-            seen.add(name)
+        for ordinal, obligation in self._draw_step_life_loss_obligations(player_index):
             choices.append({
-                "card_name": name,
+                "card_name": obligation["source_name"],
+                "permanent_id": None,
+                "subject_ordinal": ordinal,
                 **cost_prompt_fields(UpkeepCost(mana=generic_cost(int(obligation["cost"])))),
                 "kind": "draw_step_life_loss_unless_pay",
                 "damage": 0,
@@ -174,19 +205,18 @@ class DrawStepMixin:
         # Nafs Asp: obligations armed against this player resolve now, before
         # the draw itself — "before that draw step" (a human is prompted via
         # pay_life_loss keyed by source name; AI/headless pays when able).
-        still_pending = []
-        for obligation in self.pending_draw_step_life_loss:
-            if obligation["player_index"] != player_index:
-                still_pending.append(obligation)
-                continue
+        for ordinal, obligation in self._draw_step_life_loss_obligations(player_index):
             source_name = obligation["source_name"]
             cost = obligation["cost"]
-            if pay_life_loss is not None and source_name in pay_life_loss:
-                paid = pay_life_loss[source_name] and self.can_pay_upkeep_mana(
-                    player, {"generic": cost}
-                )
-            else:
+            # Addressed by ordinal, so two Nafs Asp obligations are two
+            # decisions: pay one and take the life loss from the other. A bare
+            # ``{"Nafs Asp": True}`` still speaks for every one of them, which
+            # is what every headless caller means by it.
+            answer = upkeep_subject_answer(pay_life_loss, source_name, ordinal)
+            if answer is None:
                 paid = self.can_pay_upkeep_mana(player, {"generic": cost})
+            else:
+                paid = bool(answer) and self.can_pay_upkeep_mana(player, {"generic": cost})
             if paid:
                 self._spend_upkeep_mana(player, {"generic": cost})
                 self.log.append(f"{player.name} paid {{{cost}}} to avoid losing life ({source_name})")
@@ -194,7 +224,14 @@ class DrawStepMixin:
                 amount = obligation["amount"]
                 player.life -= amount
                 self.log.append(f"{player.name} lost {amount} life ({source_name})")
-        self.pending_draw_step_life_loss = still_pending
+        # Every obligation of this player's resolved above, so what survives is
+        # exactly the other seats' — read off the list after the loop rather
+        # than accumulated inside it, which is what lets an obligation armed
+        # *during* the loop against another seat survive.
+        self.pending_draw_step_life_loss = [
+            obligation for obligation in self.pending_draw_step_life_loss
+            if obligation["player_index"] != player_index
+        ]
 
         # 614.1b/614.10: skip step is a replacement effect
         if self._consume_step_skip(step, player_index):
