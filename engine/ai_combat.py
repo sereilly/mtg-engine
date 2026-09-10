@@ -17,6 +17,13 @@ both attack caps went unnoticed for the life of this engine, and a second copy
 of the fallback chain in the simulator would be a second place for it to hide.
 So the chain lives here once and both drivers call it.
 
+**Both chains, as of the round that drained the blocking half of the
+declaration-legality gap.** `web/game_flow` carried its own copy of the block
+fallback and its own `{}` rung, which is how CR 509.1b's declaration-wide
+restrictions stayed invisible to the AI's chooser for as long as the attack caps
+did: a refused block declaration is silent in exactly the same way, and the web
+copy's safety valve wipes *every* seat's blocks rather than one seat's.
+
 What is *not* shared is the surrounding turn structure. The web layer walks
 combat one client request at a time, pausing wherever a human has flagged a step
 on the phase rail; the simulator has no humans and walks the whole phase in one
@@ -63,6 +70,20 @@ class CombatOutcome:
     #: Declarations where even the fallback was refused, so the seat attacked
     #: with nobody. This is the one that means a restriction the AI cannot see.
     silent_attacks: list[tuple[str, str]] = field(default_factory=list)
+    #: The block-side twins, and they exist for the reason the attack pair does
+    #: rather than for symmetry: `declare_ai_blockers` fell back **in silence**
+    #: in exactly the way `declare_ai_attackers` did before W2G4 counted it, and
+    #: every one of CR 509.1b's declaration-wide restrictions was invisible to
+    #: the AI's chooser. A refused block costs nothing and breaks no rule, so it
+    #: fails no assertion — the defender simply blocks with nobody, and proposes
+    #: the same illegal map again next combat.
+    refused_blocks: list[tuple[str, str]] = field(default_factory=list)
+    #: Declarations where even the empty one was refused, so no legal block
+    #: existed for this seat to make. A requirement (Lure) compels a block the
+    #: restrictions forbid; the web layer's answer is a safety valve that wipes
+    #: **every** seat's blocks, so this is the one worth an issue rather than a
+    #: count.
+    silent_blocks: list[tuple[str, str]] = field(default_factory=list)
 
 
 def declare_ai_attackers(
@@ -121,7 +142,9 @@ def declare_ai_attackers(
     return game.declare_attackers(seat, [], defending_player_index=target)
 
 
-def declare_ai_blockers(game, defender_index: int) -> bool:
+def declare_ai_blockers(
+    game, defender_index: int, *, outcome: CombatOutcome | None = None
+) -> bool:
     """Declare *defender_index*'s blocks, with the same shape of fallback.
 
     CR 509.1a's chooser may be someone else ("You choose which creatures block
@@ -129,8 +152,17 @@ def declare_ai_blockers(game, defender_index: int) -> bool:
     defender's seat — so only who is asked changes. The engine is asked which
     seat that is rather than this deciding, because the two answers disagreeing
     is a block declared by a seat the rules did not ask.
+
+    **The fallbacks are counted, for the attack side's reason.** A refused
+    block is silent — nothing spent, no rule broken, and the defender simply
+    blocks with nobody, this combat and every later one, because the chooser
+    proposes the same map again. That silence is what hid every one of
+    CR 509.1b's declaration-wide restrictions from `choose_combat_blockers`,
+    which pruned against nothing at all until `block_declaration_refusal`
+    existed for it to ask.
     """
     chooser_index = game.block_chooser_index(defender_index)
+    name = game.players[defender_index].name
 
     if game.is_camouflage_active() and game.combat_attackers:
         # Camouflage replaces the declaration entirely: the defender divides
@@ -140,26 +172,41 @@ def declare_ai_blockers(game, defender_index: int) -> bool:
         return ok
 
     pairs = choose_combat_blockers(game, defender_index)
-    ok, _ = game.declare_blockers(defender_index, pairs, acting_index=chooser_index)
+    ok, why = game.declare_blockers(defender_index, pairs, acting_index=chooser_index)
     if ok:
         return True
+
+    if outcome is not None:
+        outcome.refused_blocks.append((name, why))
+    game.log.append(
+        f"AI block declaration refused ({why}); falling back"
+    )
 
     if pairs:
         # The chosen blocks were illegal; declaring none is legal unless a
         # requirement compels a block.
-        ok, _ = game.declare_blockers(defender_index, {}, acting_index=chooser_index)
+        ok, why = game.declare_blockers(defender_index, {}, acting_index=chooser_index)
         if ok:
             return True
 
     # Either the empty declaration is itself illegal (Lure compels a block), or
     # it was what we tried first because a substituted chooser preferred it. Ask
     # the defender's own scoring, ignoring the substitution.
-    ok, _ = game.declare_blockers(
+    ok, why = game.declare_blockers(
         defender_index,
         choose_combat_blockers(game, defender_index, ignore_substitution=True),
         acting_index=chooser_index,
     )
-    return ok
+    if ok:
+        return True
+
+    if outcome is not None:
+        outcome.silent_blocks.append((name, why))
+    game.log.append(
+        f"AI fallback block declaration also refused ({why}); "
+        "this seat blocks with nobody"
+    )
+    return False
 
 
 def run_ai_combat_phase(game, seat: int, *, outcome: CombatOutcome | None = None,
@@ -212,7 +259,7 @@ def run_ai_combat_phase(game, seat: int, *, outcome: CombatOutcome | None = None
                 game.combat_blockers_locked = True
                 game._prune_combat_state()
                 continue
-            declare_ai_blockers(game, pending)
+            declare_ai_blockers(game, pending, outcome=outcome)
             # `+=`, not `=`: this runs once per defending player per combat and
             # the outcome spans a whole phase, so assigning would report only
             # whichever defender declared last.

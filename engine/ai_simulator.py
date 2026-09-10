@@ -44,6 +44,15 @@ class SimulationReport:
     #: one (even the fallback refused) is an issue rather than a count, because
     #: that seat attacks with nobody for the rest of the game.
     refused_attacks: Counter[str] = field(default_factory=Counter)
+    #: The block-side twin, and the last of the three declarations this report
+    #: can be silent about. `declare_ai_blockers` fell back to `{}` exactly the
+    #: way the attack side did before that counter existed, and nothing above it
+    #: could tell "the defender chose not to block" from "the defender's whole
+    #: declaration was refused": both read as zero blockers. A non-zero count
+    #: means the AI is choosing block maps a CR 509.1b restriction forbids; a
+    #: *silent* one (even the empty declaration refused) is an issue rather than
+    #: a count, because that seat blocks with nobody for the rest of the game.
+    refused_blocks: Counter[str] = field(default_factory=Counter)
     #: How much combat actually happened. Reported for the reason
     #: `interaction_count` is: "no illegal interactions" over a run where nobody
     #: ever attacked is a true statement about nothing, and that was every run
@@ -738,6 +747,14 @@ def run_ai_simulation(
                             game_index, turn,
                             f"{seat_name} attacked with nobody: even the "
                             f"every-legal-attacker fallback was refused ({why})",
+                        ))
+                    for seat_name, why in combat.refused_blocks:
+                        report.refused_blocks[f"{seat_name}: {why}"] += 1
+                    for seat_name, why in combat.silent_blocks:
+                        report.issues.append(InteractionIssue(
+                            game_index, turn,
+                            f"{seat_name} blocked with nobody: even the empty "
+                            f"declaration was refused ({why})",
                         ))
                     _resolve_pending_choices(game)
 

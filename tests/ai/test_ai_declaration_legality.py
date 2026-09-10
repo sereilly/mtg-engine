@@ -216,3 +216,200 @@ def test_the_ai_can_declare_at_one_seat_of_three_under_a_per_defender_cap(set_po
 
     assert ok, f"proposed {proposed} at seat {target}: {why!r}"
     assert len(proposed) == 2, proposed
+
+
+# --- W1G1: the same census on the blocking side (CR 509.1b) ---
+#
+# The entry above was fixed at W2G4 and its blocking twin was declined there
+# with its parts named. This is that twin, and the failure was identical: the
+# three declaration-wide block restrictions lived inline in `declare_blockers`
+# and nowhere else, so `ai_policy.choose_combat_blockers` pruned against
+# nothing at all. It proposed a map the gate refused **whole**,
+# `ai_combat.declare_ai_blockers` fell through to `{}` and `web/game_flow` to a
+# safety valve that wipes *every* seat's blocks — so the defender blocked with
+# nobody, this combat and every later one, with nothing spent, no rule broken
+# and nothing logged.
+#
+# Unlike the attack side, this one **is** reproducible end to end now: the AI
+# simulator grew a combat phase, so a run pinned to one of these cards shows
+# the refusal in `SimulationReport.refused_blocks` and shows the blocker count
+# rise once the prune lands. The census still goes here, because a test is
+# where a declaration is guaranteed to happen.
+
+from engine.ai_policy import choose_combat_blockers  # noqa: E402
+
+#: The instruction kinds that refuse a *block declaration* rather than a pairing
+#: (CR 509.1b). Each is a restriction `_can_block_attacker` structurally cannot
+#: answer, because each is about who else was declared.
+_W1G1_BLOCK_DECLARATION_KINDS = (
+    "max_blockers_each_combat",                 # Caverns of Despair
+    "cant_block_unless_others_block",           # Orcish Conscripts, Mogg Flunkies
+    "cant_block_unless_greater_power_blocks",   # Okk
+)
+
+
+def _w1g1_restriction_cards():
+    """Every card in the pool — both manifest roles — printing one of those."""
+    seen: dict[str, object] = {}
+    for path in manifest_set_paths(include_measured=True):
+        for card in load_cards(path):
+            seen.setdefault(card.oracle_id or card.name, card)
+    found = []
+    for card in seen.values():
+        kinds = {
+            instruction.kind
+            for instruction in compile_card_oracle(card).instructions
+            if instruction.kind in _W1G1_BLOCK_DECLARATION_KINDS
+        }
+        for kind in sorted(kinds):
+            found.append((card.name, kind, card))
+    return sorted(found, key=lambda entry: (entry[1], entry[0]))
+
+
+_W1G1_CARDS = _w1g1_restriction_cards()
+
+
+#: Filler blockers, weakest first, so a cap has something to choose between and
+#: a wrong prune is visible in which creatures survive it. None of them outpowers
+#: Okk (4/4), which is what makes the comparison restriction bite.
+_W1G1_FILLERS = (("Runt", 1, 1), ("Middling", 2, 2), ("Fatty", 4, 4), ("Bulk", 3, 3))
+
+
+def _w1g1_shape(card, kind: str) -> tuple[int, int]:
+    """How many filler blockers and attackers make *kind* actually bite.
+
+    Derived from the printed payload rather than hardcoded, because the number
+    is data: Orcish Conscripts' floor is two and Mogg Flunkies' printed "alone"
+    is the same restriction with the number one, so a board that satisfies one
+    silently satisfies the other and the census reports a pass it never earned.
+    That is not hypothetical — the first draft of this census used one board for
+    every card, and both company cards passed against the **unpruned** chooser.
+    """
+    payloads = [
+        instruction.payload
+        for instruction in compile_card_oracle(card).instructions
+        if instruction.kind == kind
+    ]
+    if kind == "max_blockers_each_combat":
+        # One over the cap, and two attackers because Caverns of Despair caps
+        # attacks at the same number — the board has to be one its own other
+        # half admits.
+        cap = min(int(payload.get("count", 0)) for payload in payloads)
+        return cap + 1, 2
+    if kind == "cant_block_unless_others_block":
+        # One short of the floor, so the creature printing it is the offender.
+        needed = max(int(payload.get("count", 0)) for payload in payloads)
+        return max(needed - 1, 0), 1
+    # The comparison (Okk): one smaller creature beside it is enough.
+    return 1, 1
+
+
+def _w1g1_board(card, fillers: int, attackers: int):
+    """A board where the AI defender has *fillers* creatures to block with and
+    *card* is in play on its side.
+
+    The restriction's permanent always sits with the **defender**: every
+    sentence in this census is about blocking, and a creature carrying one is
+    itself a blocker.
+    """
+    attacker_seat = PlayerState(name="P1")
+    defender_seat = PlayerState(name="P2")
+    game = Game(players=[attacker_seat, defender_seat])
+    game.enforce_mana_costs = False
+    for index in range(attackers):
+        attacker_seat.battlefield.append(
+            Permanent(card=_mk_creature_card(f"W1G1-A{index}", 3, 3))
+        )
+    for index in range(fillers):
+        name, power, toughness = _W1G1_FILLERS[index % len(_W1G1_FILLERS)]
+        defender_seat.battlefield.append(
+            Permanent(card=_mk_creature_card(name, power, toughness))
+        )
+    defender_seat.battlefield.append(Permanent(card=card))
+    game.start_turn(0)
+    for permanent in attacker_seat.battlefield:
+        _nosick(permanent)
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # beginning_of_combat
+    game.advance_combat_phase()  # declare_attackers
+    assert game.current_step == "declare_attackers"
+    ok, why = game.declare_attackers(
+        0, list(range(attackers)), defending_player_index=1
+    )
+    assert ok, why
+    game.advance_combat_phase()  # declare_blockers
+    assert game.current_step == "declare_blockers"
+    return game
+
+
+@pytest.mark.parametrize(
+    "card_name,kind,card",
+    _W1G1_CARDS,
+    ids=[f"{name}-{kind}" for name, kind, _card in _W1G1_CARDS],
+)
+def test_the_ai_can_declare_a_legal_block_under_every_printed_restriction(
+    card_name, kind, card
+):
+    """The AI's proposal is accepted, whatever the restriction.
+
+    `declare_blockers` returning False here is the whole defect: the fallback
+    below it is the **empty** declaration, so a refusal is a defender that
+    blocks with nobody rather than one that blocks with fewer.
+    """
+    fillers, attackers = _w1g1_shape(card, kind)
+    game = _w1g1_board(card, fillers, attackers)
+    proposed = choose_combat_blockers(game, 1)
+    ok, why = game.declare_blockers(1, proposed, acting_index=1)
+    assert ok, f"{card_name} ({kind}): the AI proposed {proposed} and got {why!r}"
+
+
+def test_the_block_census_is_not_empty():
+    """A census that finds nothing reports zero and means nothing.
+
+    All three kinds are in the pool today — the cap since Legends, the company
+    floor since Ice Age (and again, spelled "alone", since Stronghold), the
+    comparison since Urza's Saga — so an empty parametrisation means the
+    derivation broke, not that the pool got simpler.
+    """
+    kinds = {kind for _name, kind, _card in _W1G1_CARDS}
+    assert kinds == set(_W1G1_BLOCK_DECLARATION_KINDS), sorted(kinds)
+
+
+def test_the_ai_keeps_its_best_blocks_under_a_cap(set_pool):
+    """A cap is disobeyed by the *set*, so the engine can only name an arbitrary
+    member — and it names the last one it was handed.
+
+    `_legal_block_declaration` therefore hands the list over worst-block-last,
+    scored by the same `_score_block_pair` that chose the blocks. Asserted
+    because it is a choice, not a consequence: the engine naming
+    `declared_blockers[-1]` would otherwise drop whichever creature happened to
+    be last in battlefield order.
+    """
+    game = _w1g1_board(set_pool("LEG")["Caverns of Despair"], 3, 2)
+    proposed = choose_combat_blockers(game, 1)
+    names = {game.players[1].battlefield[i].card.name for i in proposed}
+
+    assert len(proposed) == 2, "Caverns of Despair caps the declaration at two"
+    assert "Middling" not in names, names
+    assert game.declare_blockers(1, proposed, acting_index=1)[0]
+
+
+def test_a_blocker_that_cannot_be_legal_is_dropped_rather_than_grounding_the_rest(
+    set_pool,
+):
+    """Okk on a board with nothing bigger cannot block at all — and the prune
+    has to drop *it*, not give up on the declaration.
+
+    This is the shape that cost the whole seat: one creature the declaration
+    cannot legally contain used to refuse every other block beside it.
+    """
+    game = _w1g1_board(set_pool("USG")["Okk"], 3, 1)
+    proposed = choose_combat_blockers(game, 1)
+    blocked = {game.players[1].battlefield[i].card.name for i in proposed}
+
+    assert "Okk" not in blocked, blocked
+    assert blocked, "dropping Okk must not drop everybody"
+    assert game.declare_blockers(1, proposed, acting_index=1)[0]
+
+
+# --- end W1G1 ---

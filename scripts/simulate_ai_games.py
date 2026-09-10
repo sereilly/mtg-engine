@@ -66,6 +66,15 @@ def main() -> int:
         for reason, count in report.refused_attacks.most_common(5):
             print(f"  {count}x {reason}")
 
+    # The block-side twin, and it reads zero for two different reasons that no
+    # other number here tells apart: a defender that chose not to block, and a
+    # defender whose whole declaration was refused. This is the second.
+    if report.refused_blocks:
+        total = sum(report.refused_blocks.values())
+        print(f"Block declarations the engine declined: {total} (the AI proposed an illegal map)")
+        for reason, count in report.refused_blocks.most_common(5):
+            print(f"  {count}x {reason}")
+
     if report.refused_casts:
         total = sum(report.refused_casts.values())
         print(f"Casts the engine declined: {total} (the cast gate working, not a failure)")

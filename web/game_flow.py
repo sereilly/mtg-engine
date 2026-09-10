@@ -13,11 +13,12 @@ from __future__ import annotations
 
 from fastapi import HTTPException
 
+from engine.ai_combat import declare_ai_blockers
+
 from engine.ai_policy import (
     choose_activation_action,
     choose_hand_activation_action,
     choose_cast_action,
-    choose_combat_blockers,
     choose_combat_instant_cast_action,
 )
 
@@ -458,32 +459,19 @@ def _advance_phase(session: Session) -> None:
             )
             if isinstance(defender_index, int) and _seat_type(session, chooser_index) == "ai":
                 if not combat_state.get("blockers_locked", False):
-                    if game.is_camouflage_active() and combat_state.get("attackers"):
-                        # Camouflage: the AI defender divides its creatures into
-                        # random piles instead of declaring chosen blocks.
-                        ok, _ = game.resolve_camouflage_blocking(defender_index)
-                    else:
-                        blocker_pairs = choose_combat_blockers(game, defender_index)
-                        ok, _ = game.declare_blockers(
-                            defender_index, blocker_pairs, acting_index=chooser_index
-                        )
-                        if not ok and blocker_pairs:
-                            ok, _ = game.declare_blockers(
-                                defender_index, {}, acting_index=chooser_index
-                            )
-                        elif not ok:
-                            # The empty declaration a substituted chooser prefers
-                            # can itself be illegal (Lure). Fall back to the
-                            # defender's own scoring rather than to the safety
-                            # valve below, which wipes every seat's blocks.
-                            ok, _ = game.declare_blockers(
-                                defender_index,
-                                choose_combat_blockers(
-                                    game, defender_index,
-                                    ignore_substitution=True,
-                                ),
-                                acting_index=chooser_index,
-                            )
+                    # **The declaration and its fallback chain live in
+                    # `engine/ai_combat.py`**, the way the attack side's have
+                    # since W2G4 and for the same reason: the AI simulator makes
+                    # the same declaration, a refused one is silent — nothing
+                    # spent, no rule broken, the defender simply does not block
+                    # — and a second copy of the chain here would be a second
+                    # place for that silence to live. It was one, and what it
+                    # hid was every declaration-wide block restriction the
+                    # chooser could not see (Caverns of Despair, Orcish
+                    # Conscripts, Mogg Flunkies, Okk). Camouflage is routed
+                    # inside it, because the pile resolution is that same
+                    # declaration replaced (CR 509.1a).
+                    ok = declare_ai_blockers(game, defender_index)
                     if not ok:
                         # Safety valve: never let AI declaration failures deadlock combat progression.
                         game.combat_blockers = {}
