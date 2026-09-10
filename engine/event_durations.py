@@ -141,9 +141,26 @@ def holds_window(perm: "Permanent", duration: str) -> bool:
     nothing to do and then left an effect running.
     """
     from .keywords import (ABILITY_EFFECTS, ALL_ABILITIES_REMOVED,
-                           GRANTED_ABILITY_LINES, REMOVED_ABILITY_LINES)
+                           GRANTED_ABILITY_LINES, REMOVED_ABILITY_KEYWORDS)
 
-    for key in (ABILITY_EFFECTS, GRANTED_ABILITY_LINES, REMOVED_ABILITY_LINES,
+    # **`REMOVED_ABILITY_KEYWORDS`, not `REMOVED_ABILITY_LINES`** — two names one
+    # word apart, and this asked the wrong one. The *lines* channel is a list of
+    # bare normalized sentences with no duration at all (`remove_ability_line`
+    # says so in as many words: "nothing in this pool takes an ability away for a
+    # while, and a duration nothing sweeps would be a promise the engine does not
+    # keep"), so `entry.get` raised `AttributeError` on a `str` the first time a
+    # permanent that had lost a line met a spell-cast-ended window. **Leeching
+    # Licid crashed every Tempest AI simulation**, which is how it surfaced: the
+    # Licid's own ability removes its printed line, then any creature spell cast
+    # afterwards reached here.
+    #
+    # It is also wrong in the direction this function's docstring warns about,
+    # crash aside: the sweep below clears `REMOVED_ABILITY_KEYWORDS` through
+    # `clear_removed_ability_keywords`, and nothing anywhere ends a removed
+    # *line*. So the "is there anything to end?" half was asking about a channel
+    # the "end it" half does not touch — the exact disagreement the tuple exists
+    # to prevent, with the two halves naming different keys.
+    for key in (ABILITY_EFFECTS, GRANTED_ABILITY_LINES, REMOVED_ABILITY_KEYWORDS,
                 ALL_ABILITIES_REMOVED):
         for entry in perm.metadata.get(key) or ():
             if entry.get("duration") == duration:

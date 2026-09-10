@@ -2215,3 +2215,60 @@ def test_the_granted_sliver_ability_still_targets_a_player(set_pool):
 
     assert not game.players[1].hand
     assert not game.is_on_battlefield(other)
+
+
+# --- A Licid that has lost its line, and the next creature spell anybody casts ---
+import pytest as _licid_pytest
+
+from engine import Game as _LicidGame, PlayerState as _LicidPlayerState
+from engine.event_durations import holds_window as _licid_holds_window
+from engine.keywords import remove_ability_line as _licid_remove_ability_line
+from engine.models import Permanent as _LicidPermanent
+
+
+@_licid_pytest.mark.cr("613.1f", "701.3a")
+def test_a_removed_ability_line_does_not_crash_the_spell_cast_window(set_pool):
+    """`holds_window` asked `REMOVED_ABILITY_LINES` for a duration it never has.
+
+    Two constants one word apart. The **keywords** channel carries dicts with a
+    `duration`; the **lines** channel is a list of bare normalized sentences and
+    `remove_ability_line`'s docstring says why it has no duration at all —
+    "nothing in this pool takes an ability away for a while, and a duration
+    nothing sweeps would be a promise the engine does not keep". So
+    `entry.get("duration")` raised `AttributeError: 'str' object has no
+    attribute 'get'` the first time a permanent that had lost a line met a
+    spell-cast-ended window (Soul Sculptor's, the pool's only one).
+
+    **This crashed every Tempest AI simulation**, which is how it surfaced —
+    a Licid's own ability removes its printed line, and then any creature spell
+    cast by anybody reached the sweep. Nothing in the suite drove the pair,
+    because each half works alone.
+
+    It was also wrong in the direction the function's own docstring warns about,
+    crash aside: the sweep clears `REMOVED_ABILITY_KEYWORDS` and **nothing**
+    anywhere ends a removed *line*, so the "is there anything to end?" half was
+    asking about a channel the "end it" half does not touch.
+    """
+    pool = set_pool("TMP")
+    licid = _LicidPermanent(card=pool["Leeching Licid"])
+    game = _LicidGame(
+        players=[_LicidPlayerState(name="P1", battlefield=[licid]),
+                 _LicidPlayerState(name="P2")],
+        enforce_mana_costs=False,
+    )
+
+    # What the Licid's activation does to itself (CR 613.1f, layer 6).
+    _licid_remove_ability_line(licid, pool["Leeching Licid"].oracle_text.split("\n")[0])
+    assert licid.metadata["removed_ability_lines"], "the line channel should be armed"
+    assert all(isinstance(e, str) for e in licid.metadata["removed_ability_lines"]), (
+        "this channel is bare strings by construction — if that changes, the "
+        "reader above changes with it"
+    )
+
+    # The question the sweep asks of every permanent on every creature spell.
+    assert _licid_holds_window(licid, "until_a_player_casts_a_creature_spell") is False
+
+    # And end to end: casting a creature spell must not raise.
+    game.players[1].hand.append(pool["Mogg Fanatic"])
+    result = game.cast_from_hand(1, "Mogg Fanatic")
+    assert result.supported, result.details
