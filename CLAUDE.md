@@ -107,7 +107,7 @@ supported — the web app offers those cards to players, and two guards
 fail if one of them is unsupported. `measured` is a set ingested so its numbers
 can be read *before* the work of supporting it is done: the coverage instruments
 load it (`manifest_set_paths(include_measured=True)`), `load_catalog` does not,
-and no player can put one of its cards in a deck. **It is empty today** — M21
+and no player can put one of its cards in a deck. **It holds Urza's Destiny today**, ingested at 69.9% supported — M21
 went in under it at 58% supported, Antiquities at 56.5%, Legends at 32.9%, The
 Dark at 47.9%, Fourth Edition at 100%, Ice Age at 49.3%, Fallen Empires at
 67.6%, Homelands at 66.1%, Fifth Edition at 100%, Alliances at 43.1%, Mirage
