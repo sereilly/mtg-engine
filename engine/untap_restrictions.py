@@ -53,6 +53,17 @@ class UntapRestriction:
                   untap step. "Creatures with flying don't untap" matched none
                   of the three, so Energy Storm and Blizzard reported supported
                   with the line doing nothing at all.
+    chosen_type_options -- the printed list a **type choice** offers, with
+                  scope=:data:`TYPE_CHOICE_SCOPE`. The third family, and the
+                  only one whose set of untappable permanents is not known
+                  until a player answers: "each player chooses artifact,
+                  creature, or land during their untap step. That player can
+                  untap only permanents of the chosen type this step."
+                  (Storage Matrix.) The words are payload for this file's
+                  standing reason -- a card offering a different list is the
+                  same restriction -- and the answer itself is recorded on the
+                  source permanent, not here, because it is re-made every untap
+                  step.
     only_while_source_untapped -- the restriction is active only while the
                   source permanent itself is untapped (Winter Orb)
     """
@@ -60,6 +71,7 @@ class UntapRestriction:
     scope: str
     limit: int | None = None
     blocked: dict | None = None
+    chosen_type_options: tuple[str, ...] | None = None
     only_while_source_untapped: bool = False
 
 
@@ -97,6 +109,38 @@ def permanent_in_limited_scope(permanent, scope: str) -> bool:
     prompt comes to offer a permanent the resolver then refuses.
     """
     return scope == ANY_PERMANENT_SCOPE or permanent.has_type(scope)
+
+
+#: The scope word of the third family: not a count and not a block, but a type
+#: the untapping player **names** as the step begins, after which nothing else
+#: untaps. Its own scope rather than a flavour of ``blocked`` because the set it
+#: names is not readable off the card at all -- the sentence delimits the
+#: options and a player picks one, so the untap step has to ask before it can
+#: enforce anything.
+TYPE_CHOICE_SCOPE = "choice"
+
+
+def _printed_type_options(phrase: str) -> tuple[str, ...] | None:
+    """The card types a printed "artifact, creature, or land" list offers.
+
+    None when any item is not a card type this engine can turn into a filter --
+    which is the same question ``chosen_card_type_filter`` answers for the
+    *prompt* and for the sweep behind it, asked here so a third reader cannot
+    disagree with those two about what a player may name. A phrase with an
+    unreadable item leaves the line unclaimed and its card unsupported, rather
+    than admitting a sentence whose answer nothing could test.
+    """
+    from .handlers._common import chosen_card_type_filter
+
+    words: list[str] = []
+    for part in phrase.replace(" or ", ", ").split(","):
+        word = part.strip()
+        if not word:
+            continue
+        if chosen_card_type_filter(word) is None:
+            return None
+        words.append(word)
+    return tuple(words) or None
 
 
 def _skip_untap_step(match: re.Match) -> UntapRestriction:
@@ -152,6 +196,67 @@ def _subject_block(match: re.Match) -> "UntapRestriction | None":
     return None if blocked is None else UntapRestriction(scope="block", blocked=blocked)
 
 
+#: "…each player **chooses artifact, creature, or land** during their untap
+#: step." The half that delimits the options, kept as its own fragment because
+#: two readers need it at two granularities: the whole-line matcher below joins
+#: it to its partner (that is the restriction), and :func:`untap_type_choice_sentence`
+#: asks it alone (a census splits a printed line into sentences).
+_UNTAP_TYPE_CHOICE_ASK_BODY = (
+    r"each player chooses (?P<options>[a-z][a-z,\- ]*?) during their untap step"
+)
+
+#: "…**that player can untap only permanents of the chosen type this step**."
+#: The half that says what the answer *does*. It states no options of its own,
+#: so it is never a restriction on its own — only the pair is — which is why
+#: there is no row for it in the table below and only a sentence claim.
+_UNTAP_TYPE_CHOICE_LIMIT_BODY = (
+    r"that player can untap only permanents of the chosen type this step"
+)
+
+_UNTAP_TYPE_CHOICE_ASK = re.compile(rf"^{_UNTAP_TYPE_CHOICE_ASK_BODY}$")
+_UNTAP_TYPE_CHOICE_LIMIT = re.compile(rf"^{_UNTAP_TYPE_CHOICE_LIMIT_BODY}$")
+
+
+def _type_choice(match: re.Match) -> "UntapRestriction | None":
+    """"each player chooses <types> during their untap step. That player can
+    untap only permanents of the chosen type this step." (Storage Matrix.)
+
+    Both printed sentences, one restriction — the second says what the answer to
+    the first *means*, and neither half is a rule on its own. So the row matches
+    the pair and a list this engine cannot turn into a filter declines the match,
+    which leaves the card unsupported rather than admitting a prompt whose
+    answer the untap step could not spend. That refusal direction is the same one
+    :func:`_subject_block` takes, and here it matters more: an unreadable answer
+    under "can untap **only** permanents of the chosen type" would untap nothing
+    at all.
+    """
+    options = _printed_type_options(match.group("options"))
+    if options is None:
+        return None
+    return UntapRestriction(scope=TYPE_CHOICE_SCOPE, chosen_type_options=options)
+
+
+def untap_type_choice_sentence(sentence: str) -> bool:
+    """Whether *sentence* is one of the pair the row above matches as a whole.
+
+    **Both sentences, one channel** — ``scripts/parse_coverage.py`` splits a
+    printed line into sentences, where the support gate and the grammar ask the
+    *line* question through :func:`untap_restriction_for`. Neither half has a
+    separate implementation and inventing one for the second would be a second
+    reader of one printed rule, so both are claimed by the reader that carries
+    the pair out. The options half is claimed only when its list is readable,
+    which is the same condition the row itself declines on.
+    """
+    line = sentence.strip().lower().rstrip(".")
+    qualifier = _WHILE_UNTAPPED.match(line)
+    if qualifier is not None:
+        line = qualifier.group("rest")
+    ask = _UNTAP_TYPE_CHOICE_ASK.match(line)
+    if ask is not None:
+        return _printed_type_options(ask.group("options")) is not None
+    return _UNTAP_TYPE_CHOICE_LIMIT.match(line) is not None
+
+
 # Ordered: the first pattern whose regex matches the (qualifier-stripped) line
 # wins, so more specific wordings precede more general ones.
 UNTAP_RESTRICTION_PATTERNS: tuple[tuple[re.Pattern, Callable[[re.Match], UntapRestriction]], ...] = (
@@ -187,6 +292,19 @@ UNTAP_RESTRICTION_PATTERNS: tuple[tuple[re.Pattern, Callable[[re.Match], UntapRe
         ),
         _subject_block,
     ),
+    (
+        # "As long as this artifact is untapped, each player chooses artifact,
+        # creature, or land during their untap step. That player can untap only
+        # permanents of the chosen type this step." (Storage Matrix.) One row
+        # for two printed sentences, because they are one rule: the options and
+        # what naming one of them does. Last in the table because it is the
+        # longest and most specific wording, and because the block row above
+        # ends in a catch-all noun phrase that must get first refusal.
+        re.compile(
+            rf"^{_UNTAP_TYPE_CHOICE_ASK_BODY}\. {_UNTAP_TYPE_CHOICE_LIMIT_BODY}$"
+        ),
+        _type_choice,
+    ),
 )
 
 
@@ -211,6 +329,7 @@ def _restriction_from_line(line: str) -> UntapRestriction | None:
                 scope=restriction.scope,
                 limit=restriction.limit,
                 blocked=restriction.blocked,
+                chosen_type_options=restriction.chosen_type_options,
                 only_while_source_untapped=True,
             )
         return restriction

@@ -217,6 +217,12 @@ def _resume_paused_beginning_phase(session: Session) -> None:
     session.paused_beginning_phase = None
     if marker == "begin_turn":
         _finish_beginning_phase(session, player_index)
+    elif marker == "untap_type_choice":
+        # The untap step stopped *inside* CR 502.3's turn-based action, before
+        # it untapped anything, so the resume re-enters the step rather than the
+        # phase behind it — the type the seat just named is what the step is
+        # about to spend.
+        _finish_untap_step(session, player_index)
     elif marker == "main_phase":
         session.game.enter_next_turn_phase("beginning")
 
@@ -356,22 +362,49 @@ def _begin_turn(session: Session, player_index: int, defer_untap_selection: bool
     session.time_vault_pending = []
 
     if defer_untap_selection:
-        options = game.get_untap_land_selection_options(player_index)
-        if options:
+        # Storage Matrix: "each player chooses artifact, creature, or land
+        # during their untap step." A decision inside CR 502.3's turn-based
+        # action, and the *first* one in this file that is a registered pending
+        # choice rather than a session field — so it is asked through the
+        # registry and paused on through `_pause_beginning_phase`, which is
+        # already the generic "somebody owes something" stop. It comes before
+        # the two below because it decides what they can even offer.
+        if game.arm_untap_type_choices(player_index):
             game._set_phase_and_step("beginning", "untap")
-            session.untap_required_lands = int(options["max_count"])
-            session.untap_candidate_indices = [int(idx) for idx in options["candidate_indices"]]
-            session.untap_selected_indices = []
-            return False
+            if _pause_beginning_phase(session, "untap_type_choice", player_index):
+                return False
+        return _finish_untap_step(session, player_index)
 
-        # Old Man of the Sea: "You may choose not to untap this creature during
-        # your untap step." Pause for the human's keep-tapped choice; answered
-        # by the optional_untap_confirm action.
-        optional = game.get_optional_untap_permanents(player_index)
-        if optional:
-            game._set_phase_and_step("beginning", "untap")
-            session.optional_untap_pending = list(optional)
-            return False
+    _clear_untap_selection(session)
+    game.resolve_untap_step(player_index)
+
+    return _resolve_upkeep_step(session, player_index)
+
+
+def _finish_untap_step(session: Session, player_index: int) -> bool:
+    """The untap step's remaining decisions, and the step itself.
+
+    Split out of ``_begin_turn`` so a type choice can be resumed into without
+    re-running ``begin_turn_bookkeeping``: the resume enters *here*, at the
+    point the choice interrupted, rather than at the top of the turn.
+    """
+    game = session.game
+    options = game.get_untap_land_selection_options(player_index)
+    if options:
+        game._set_phase_and_step("beginning", "untap")
+        session.untap_required_lands = int(options["max_count"])
+        session.untap_candidate_indices = [int(idx) for idx in options["candidate_indices"]]
+        session.untap_selected_indices = []
+        return False
+
+    # Old Man of the Sea: "You may choose not to untap this creature during
+    # your untap step." Pause for the human's keep-tapped choice; answered
+    # by the optional_untap_confirm action.
+    optional = game.get_optional_untap_permanents(player_index)
+    if optional:
+        game._set_phase_and_step("beginning", "untap")
+        session.optional_untap_pending = list(optional)
+        return False
 
     _clear_untap_selection(session)
     game.resolve_untap_step(player_index)

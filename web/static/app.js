@@ -5712,7 +5712,22 @@ function applyCardTypeChoicePrompt(info) {
 
   const cardName = info.card_name || "an effect";
   title.textContent = "Choose a type";
-  body.textContent = `${cardName}: all nontoken permanents of the chosen type phase out.`;
+  // The effect sentence rides on the prompt when the arming site can supply one
+  // for every card that reaches it: Storage Matrix's is the untap-restriction
+  // family's own sentence, so any card printing that pair gets it.
+  //
+  // The fallback is deliberately generic. It used to be Teferi's Realm's
+  // sentence — "all nontoken permanents of the chosen type phase out" — printed
+  // over *every* card that arms this prompt, which meant Turnabout ("Tap all
+  // untapped permanents of the chosen type target player controls, or untap all
+  // tapped permanents of that type") described somebody else's card to its own
+  // caster. `choose_card_type`'s handler serves both from one branch and cannot
+  // tell them apart without keying on a name, so the honest text is the one
+  // true of all of them until the printed sentence is threaded down from the
+  // lowering.
+  body.textContent = info.detail
+    ? `${cardName}: ${info.detail}`
+    : `${cardName}: name one of the types the card offers.`;
   const buttons = info.options
     .map(
       (type) =>

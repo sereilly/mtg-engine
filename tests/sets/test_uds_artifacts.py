@@ -190,3 +190,165 @@ def test_a_chosen_type_reduction_with_no_word_recorded_discounts_nothing(set_poo
     )
     assert nothing.generic == 0, nothing
     assert names == [], names
+
+
+# --- W2G2: a type chosen during the untap step ---
+import pytest as _w2g2_pytest
+
+from engine import Game as _W2G2Game
+from engine import PlayerState as _W2G2PlayerState
+from engine.models import Permanent as _W2G2Permanent
+from engine.oracle import compile_card_oracle as _w2g2_compile
+from engine.phases.untap_step import UNTAP_TYPE_CHOICE_STAMP as _W2G2_STAMP
+
+
+def _w2g2_storage_board(set_pool, *, interactive=(), matrix_tapped=False):
+    """Storage Matrix plus one tapped land, creature and artifact per seat.
+
+    Both seats get the same three so a test can watch the *other* player's untap
+    step read the same source — "each player chooses … during their untap step"
+    is one card asking twice, not two records. Returns the game, the Matrix and
+    a name-keyed view of seat 0's three, ending in a dict so no other group's
+    helper tail matches this one.
+    """
+    uds = set_pool("UDS")
+    lea = set_pool("LEA")
+    matrix = _W2G2Permanent(card=uds["Storage Matrix"], tapped=matrix_tapped)
+
+    def _three():
+        return [
+            _W2G2Permanent(card=lea["Mountain"], tapped=True),
+            _W2G2Permanent(card=lea["Grizzly Bears"], tapped=True),
+            _W2G2Permanent(card=lea["Black Lotus"], tapped=True),
+        ]
+
+    mine = _three()
+    theirs = _three()
+    game = _W2G2Game(players=[
+        _W2G2PlayerState(name="W2G2-A", battlefield=[matrix, *mine], life=20),
+        _W2G2PlayerState(name="W2G2-B", battlefield=theirs, life=20),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    return game, matrix, {
+        "land": mine[0], "creature": mine[1], "artifact": mine[2],
+        "their_land": theirs[0], "their_creature": theirs[1],
+    }
+
+
+def test_storage_matrix_is_supported_as_a_derived_untap_restriction(set_pool):
+    """Both printed sentences are one CR 502 restriction, and it has no
+    instruction: the untap step reads the table, so the whole card's support
+    rests on `derived_static_rule`."""
+    program = _w2g2_compile(set_pool("UDS")["Storage Matrix"])
+
+    assert program.supported, program.reason
+    assert [i.kind for i in program.instructions] == ["derived_static_rule"]
+    assert program.instructions[0].value == "untap_restrictions"
+
+
+def test_storage_matrix_lets_only_the_named_type_untap(set_pool):
+    """"That player can untap only permanents of the chosen type this step."
+
+    The Mountain, the Bears and the Lotus are one each of the three printed
+    options, so naming one has to leave the other two tapped — and the Matrix
+    itself is an artifact, which is why it is left untapped here rather than
+    being part of the count.
+    """
+    game, matrix, board = _w2g2_storage_board(set_pool, interactive={0})
+    assert game.arm_untap_type_choices(0) is True
+    assert game.confirm_card_type_choice(0, "creature")
+
+    game.resolve_untap_step(0)
+
+    assert not board["creature"].tapped
+    assert board["land"].tapped, game.log
+    assert board["artifact"].tapped, game.log
+
+
+def test_storage_matrix_offers_exactly_the_three_printed_options(set_pool):
+    """The prompt is bounded by the card's sentence, not by a card-type catalog.
+
+    A seat that could answer "enchantment" would name a type Storage Matrix
+    never offered — and the untap step would then spend it as if it had.
+    """
+    game, matrix, _board = _w2g2_storage_board(set_pool, interactive={0})
+    game.arm_untap_type_choices(0)
+
+    owed = game.waiting_prompt(0)
+    assert owed is not None
+    assert owed.data["options"] == ["artifact", "creature", "land"]
+    assert owed.data["card_name"] == "Storage Matrix"
+    assert not game.confirm_card_type_choice(0, "enchantment")
+
+
+def test_storage_matrix_asks_nothing_on_a_turn_it_is_tapped(set_pool):
+    """"**As long as this artifact is untapped**, each player chooses…"
+
+    Tapping the Matrix is how a player buys one clean untap step, so a turn
+    where it is tapped owes no choice and restricts nothing.
+    """
+    game, matrix, board = _w2g2_storage_board(
+        set_pool, interactive={0}, matrix_tapped=True
+    )
+
+    assert game.arm_untap_type_choices(0) is False
+    game.resolve_untap_step(0)
+
+    assert not board["land"].tapped
+    assert not board["creature"].tapped
+    assert not board["artifact"].tapped
+    assert not matrix.tapped, "and the Matrix untaps like anything else"
+
+
+def test_storage_matrix_asks_each_player_on_their_own_untap_step(set_pool):
+    """One source, two seats, two answers — each spent on the step that made it.
+
+    The answer is recorded on the Matrix, so what keeps seat 0's word out of
+    seat 1's step is the `(turn, seat)` stamp that makes the step re-ask.
+    """
+    game, matrix, board = _w2g2_storage_board(set_pool, interactive={0, 1})
+    game.arm_untap_type_choices(0)
+    assert game.confirm_card_type_choice(0, "land")
+    game.resolve_untap_step(0)
+    assert not board["land"].tapped and board["creature"].tapped
+
+    game.turn += 1
+    assert game.arm_untap_type_choices(1) is True
+    assert matrix.metadata[_W2G2_STAMP] == (game.turn, 1)
+    assert game.confirm_card_type_choice(1, "creature")
+    game.resolve_untap_step(1)
+
+    assert not board["their_creature"].tapped
+    assert board["their_land"].tapped, "seat 1 named creature"
+
+
+def test_storage_matrix_default_never_blocks_a_headless_seat(set_pool):
+    """A seat nobody can ask still gets a real answer, taken inline.
+
+    `card_type_choice` is `default_at_arm`, so a non-interactive seat never
+    queues the prompt at all — which is what makes the AI simulator and every
+    headless test need no untap-step code of their own.
+    """
+    game, matrix, board = _w2g2_storage_board(set_pool)
+
+    assert game.arm_untap_type_choices(0) is False
+    assert game.pending_choices == []
+    assert matrix.metadata["chosen_card_type"] in {"artifact", "creature", "land"}
+
+    game.resolve_untap_step(0)
+    untapped = [name for name in ("land", "creature", "artifact") if not board[name].tapped]
+    assert len(untapped) == 1, (untapped, game.log)
+
+
+@_w2g2_pytest.mark.parametrize("named", ["artifact", "creature", "land"])
+def test_storage_matrix_spends_every_printed_option(set_pool, named):
+    """Each of the three words really is spendable, and each leaves the other
+    two down — the sweep a single worked example would not make."""
+    game, matrix, board = _w2g2_storage_board(set_pool, interactive={0})
+    game.arm_untap_type_choices(0)
+    assert game.confirm_card_type_choice(0, named)
+    game.resolve_untap_step(0)
+
+    assert not board[named].tapped
+    assert all(board[other].tapped for other in {"artifact", "creature", "land"} - {named})
