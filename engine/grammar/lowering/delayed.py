@@ -701,7 +701,7 @@ def _lower_delayed_destroy_of_damaged(
     are about a pair.
 
     The immediate spelling of the same sentence is already read one screen up
-    (``_EVENT_SUBJECT_DESTROY_EVENTS``): "that creature" under a damage trigger
+    (``_EVENT_STAMPED_TARGET_OBJECTS``): "that creature" under a damage trigger
     is the *damaged* permanent, whose id ``damage_events._announce`` stamps onto
     the stack item. The delay is CR 603.7 wrapped around that same object, so
     ``binds_target`` — the stack item's target, which is that id — binds exactly

@@ -696,6 +696,9 @@ _COVERED_ELSEWHERE = {
     # --- USG W1G5 ---
     "put_onto_battlefield_by_source":
         "test_usg_w1g5_put_onto_the_battlefield_with_names_one_reanimation",
+    # --- MMQ W1G5 ---
+    "played_by":
+        "test_mmq_w1g5_played_by_reads_the_cast_stamp_and_not_the_controller",
 }
 
 
@@ -2241,4 +2244,56 @@ def test_usg_w1g5_put_onto_the_battlefield_with_names_one_reanimation(pool):
     )
     assert not subject_matches(game, mine, described), (
         "with no source there is nothing the record is relative to"
+    )
+
+
+def test_mmq_w1g5_played_by_reads_the_cast_stamp_and_not_the_controller(pool):
+    """"Creatures **played by your opponents** enter tapped." (Uphill Battle.)
+
+    CR's glossary makes "play" mean "cast that card as a spell", so this is
+    ``cast_by_you_this_turn``'s stamp read for a *different* seat and with no
+    turn window — a creature an opponent cast three turns ago is still one they
+    played.
+
+    The two sets the key exists to tell apart are here twice over. A creature an
+    opponent **controls** but never played (a token, a reanimation, anything an
+    effect put onto the battlefield) carries no stamp and is out; and a creature
+    they played and then gave away keeps the stamp and stays in, which is what a
+    ``controller`` reading would get backwards in both directions.
+    """
+    from engine.enter_effects import CAST_THIS_TURN_STAMP
+
+    theirs = Permanent(
+        card=pool["Grizzly Bears"],
+        metadata={CAST_THIS_TURN_STAMP: {"seat": 1, "turn": 2}},
+    )
+    reanimated = Permanent(card=pool["Grizzly Bears"])
+    mine = Permanent(
+        card=pool["Grizzly Bears"],
+        metadata={CAST_THIS_TURN_STAMP: {"seat": 0, "turn": 3}},
+    )
+    # Played by the opponent, and now on the observer's own battlefield.
+    given_away = Permanent(
+        card=pool["Grizzly Bears"],
+        metadata={CAST_THIS_TURN_STAMP: {"seat": 1, "turn": 1}},
+    )
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[mine, given_away]),
+        PlayerState(name="P2", battlefield=[theirs, reanimated]),
+    ])
+    game.turn = 3
+    described = {"played_by": "opponent"}
+
+    assert subject_matches(game, theirs, described, observer=0)
+    assert subject_matches(game, given_away, described, observer=0), (
+        "who played it is not who controls it now (CR 400.3)"
+    )
+    assert not subject_matches(game, reanimated, described, observer=0), (
+        "an opponent's creature that was never played (CR 701.5a)"
+    )
+    assert not subject_matches(game, mine, described, observer=0), (
+        "the seat half"
+    )
+    assert not subject_matches(game, theirs, described), (
+        "with no observer there is nobody to be an opponent of"
     )

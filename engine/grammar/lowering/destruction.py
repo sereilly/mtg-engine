@@ -27,7 +27,7 @@ from ._common import (
     _restrictions_beyond, is_mana_value_x, SEVERAL_DESTROY_NARROWINGS,
     split_creature_type_choice, testable_filter_payload
 )
-from ._events import (ATTACHED_PERMANENT_CONTROLLER, LAST_TARGET_NAME, _EVENT_SUBJECT_OBJECTS, _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER, ROLE_NAMES_BLOCK_PARTNER, names_attached_permanent, CHOSEN_PERMANENT)
+from ._events import (ATTACHED_PERMANENT_CONTROLLER, LAST_TARGET_NAME, _EVENT_STAMPED_TARGET_OBJECTS, _EVENT_SUBJECT_OBJECTS, _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER, ROLE_NAMES_BLOCK_PARTNER, names_attached_permanent, CHOSEN_PERMANENT)
 from ._delays import (_DELAYED_AGENT_EVENTS, _BOUND_OBJECT_DELAYED_EVENTS)
 from ._superlatives import superlative_pick
 
@@ -55,19 +55,6 @@ _DESTROY_ALL_KINDS: dict[tuple[str, ...], str] = {
 
 _BASIC_LAND_TYPES = frozenset({"plains", "island", "swamp", "mountain", "forest"})
 
-
-# Trigger events whose fire site stamps the object the event was about onto the
-# stack item, so an effect may say "that <noun>" and mean it.
-
-
-_EVENT_SUBJECT_DESTROY_EVENTS: frozenset[str] = frozenset({
-    # Hooded Blightfang: "… deals damage to a planeswalker, destroy **that**
-    # planeswalker". The damaged object is what `damage_events._announce`
-    # stamps onto the stack item, so "that <noun>" under this event names it.
-    # A damage event whose recipient was a player stamps nothing, and the
-    # destroy then resolves nothing rather than finding a permanent by index.
-    "damage_dealt",
-})
 
 
 def _refuse_unfrozen_that_player(described: dict, event: str | None, node) -> None:
@@ -608,12 +595,12 @@ def _lower_destroy(
     # other" under a *delayed* ability is Infinite Authority's, and
     # ``lowering/delayed.py`` already reads it there.
     #
-    # Gated on ``_EVENT_SUBJECT_DESTROY_EVENTS`` exactly as that branch is, and
+    # Gated on ``_EVENT_STAMPED_TARGET_OBJECTS`` exactly as that branch is, and
     # for its reason: under any other event there is no second object for the
     # word to contrast with, and a destroy reading an unstamped id would resolve
     # nothing while the card reported supported.
     if spec.quantifier == "other":
-        if event not in _EVENT_SUBJECT_DESTROY_EVENTS:
+        if event not in _EVENT_STAMPED_TARGET_OBJECTS:
             raise LoweringError(
                 "\"the other creature\" names the second object of the firing "
                 "event, and this event announces only one",
@@ -695,7 +682,7 @@ def _lower_destroy(
             return (
                 OracleInstruction("destroy_bound_permanent", "", bound_payload),
             )
-        if event not in _EVENT_SUBJECT_DESTROY_EVENTS:
+        if event not in _EVENT_STAMPED_TARGET_OBJECTS:
             raise LoweringError(
                 "\"that\" names the firing event's object, and this event records none",
                 node=node,

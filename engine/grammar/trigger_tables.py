@@ -138,6 +138,15 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # discard seam, exactly as ``land_played``'s and ``draws_card``'s are.
     ("discards_card", ("you", "discard", "a", "card")),
     ("discards_card", ("an", "opponent", "discards", "a", "card")),
+    # "Whenever a spell or ability an opponent controls causes you to discard a
+    # card" (Spiritual Focus). Carried here as well as in `engine/oracle.py`'s
+    # table for this file's standing reason: a condition only one front end
+    # reads leaves the other refusing the effect behind it, and the engine
+    # dispatches on the compiler's. Its "when" printing (Psychic Purge) is read
+    # by `triggers.py`'s own passive block, which this word never reaches.
+    ("discarded_by_opponent_effect",
+     ("a", "spell", "or", "ability", "an", "opponent", "controls", "causes",
+      "you", "to", "discard", "a", "card")),
     # "Whenever **equipped** creature dies" (Malefic Scythe) / "When
     # **enchanted** creature dies" (Creature Bond). One condition for both
     # words: an Equipment and an Aura attach the same way here, and the trigger

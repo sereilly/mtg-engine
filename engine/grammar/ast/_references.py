@@ -346,6 +346,10 @@ class ObjectFilter:
     #: below it: the record is a seat and a turn number, so the pure matcher has
     #: nothing to compare either against and refuses.
     cast_by_you_this_turn: bool = False
+    #: "Creatures **played by your opponents**" (Uphill Battle) — CR's "play"
+    #: means "cast that card as a spell", so this is the cast stamp read for a
+    #: seat other than the observer's and with no turn window.
+    played_by: str | None = None
     # "…**except for creatures the player hasn't controlled continuously since
     # the beginning of the turn**" (Total War). CR 302.6's condition, printed as
     # an exception and therefore *narrowing to* the creatures that have been

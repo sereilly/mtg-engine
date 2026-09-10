@@ -1306,6 +1306,12 @@ class EffectsMixin:
         for trig in compile_card_oracle(card).triggered_abilities:
             if trig.condition.kind != "discarded_by_opponent_effect":
                 continue
+            if trig.condition.payload.get("discarded_any_card"):
+                # The board-scoped printing, handled by the scan below. The
+                # discarded card is not a permanent, so it can never be its own
+                # observer here — but a card that printed both sentences would
+                # otherwise be announced twice for one discard.
+                continue
             if not trig.supported or trig.instruction is None:
                 continue
             self._enqueue_triggered_ability(
@@ -1317,6 +1323,42 @@ class EffectsMixin:
                 target_player_index=causer,
                 trigger_context={"event_subject_player": causer},
             )
+        # "Whenever a spell or ability an opponent controls causes you to
+        # discard a card, you gain 2 life and you may draw a card."
+        # (Spiritual Focus.) The **second dispatch scope** for this condition:
+        # an observer on the battlefield rather than the card being discarded,
+        # so the loop above cannot reach it — the card in the hand is the only
+        # object that one has in view.
+        #
+        # "**You**" is the ability's own controller (CR 109.5), which is the
+        # seat doing the discarding, so the scan is that seat's battlefield.
+        # The causer test above already established that a spell or ability an
+        # *opponent* of that seat controls is what caused it, which is the whole
+        # of the condition's other half — asked once, here, rather than a second
+        # time per observer.
+        for observer in self.controlled_by(seat):
+            for trig in compile_card_oracle(
+                observer.effective_card
+            ).triggered_abilities:
+                if trig.condition.kind != "discarded_by_opponent_effect":
+                    continue
+                if not trig.condition.payload.get("discarded_any_card"):
+                    continue
+                if not trig.supported or trig.instruction is None:
+                    continue
+                self._enqueue_triggered_ability(
+                    controller_index=seat,
+                    card=observer.effective_card,
+                    instruction=trig.instruction,
+                    effect_kind=trig.effect_kind,
+                    ability_text=trig.source_line,
+                    source_permanent=observer,
+                    target_player_index=causer,
+                    trigger_context={
+                        "event_subject_player": causer,
+                        "discarded_name": getattr(card, "name", None),
+                    },
+                )
 
     def _gain_life(self, target: PlayerState, amount: int, source_name: str | None = None) -> None:
         """Apply a life gain, honoring 'If you would gain life, draw that many cards

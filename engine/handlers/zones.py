@@ -2751,6 +2751,43 @@ def bounce_target_creature(game: Game, instruction: OracleInstruction, context: 
     return True, "resolved"
 
 
+@effect_handler("bounce_event_subject")
+def bounce_event_subject(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Whenever a creature becomes the target of a spell or ability, **return
+    that creature to its owner's hand**." (Cowardice.)
+
+    The permanent the *trigger's own event* was about, carried by id in the
+    trigger's context — ``destroy_event_subject``'s twin one zone change over
+    (CR 400.1; a return to a hand is no keyword action at all), reading the same
+    frozen key for the same reason: nothing was chosen (CR 603.3d printed no
+    target), and by resolution an index is not an identity (CR 400.7 / 603.10).
+
+    Not routed through ``bounce_target_creature``: that one raises a picker for
+    a choice this card never offered and then returns whichever permanent the
+    resolution context happened to hold.
+
+    **No re-check of the printed noun**, for that handler's stated reason: the
+    event's filter already decided this permanent is what the trigger was
+    about, and asking again would let a creature that stopped being one between
+    the two escape a bounce the rules have already aimed at it.
+
+    A permanent already gone is returned by nothing, which is CR 608.2b doing
+    as much as it can. Cowardice's own reminder text says the spell that
+    triggered it still resolves and finds nothing there.
+    """
+    victim = game.permanent_by_id(
+        (context.trigger_context or {}).get("event_subject_permanent_id")
+    )
+    if victim is None or not game.is_on_battlefield(victim):
+        game.log.append(f"{context.card.name}: the permanent it named is gone")
+        return True, "resolved"
+    owner = return_permanent_to_owners_hand(game, victim, context.caster)
+    game.log.append(
+        f"{victim.card.name} returned to {owner.name}'s hand ({context.card.name})"
+    )
+    return True, "resolved"
+
+
 def _was_attached_to(perm, host_id: int) -> bool:
     """Whether *perm* is — or was, this resolution — attached to *host_id*.
 

@@ -24,8 +24,8 @@ from ..search_filters import SEARCH_COMPARISONS
 from ..subject_filters import OBJECT_ONLY_FILTER_KEYS
 from . import ast
 from .errors import LoweringError
-from .lowering import (_is_enchanted, _is_source, _lower_condition, _lower_pump,
-                       _signed)
+from .lowering import (_filter_payload, _is_enchanted, _is_source,
+                       _lower_condition, _lower_pump, _signed)
 
 
 def _lord_filter(filt: ast.ObjectFilter) -> LordBuffFilter:
@@ -263,6 +263,13 @@ def _lower_anthem_condition_payload(payload: dict, node: ast.StaticAbilityNode) 
     # here beside the two above rather than falling into the `controls` gates,
     # which would refuse it for parts the sentence does not have.
     if payload.get("kind") == "source_counter_count":
+        return payload
+    # "…as long as **they all share a color**" (Common Cause). Named here beside
+    # the three above rather than falling into the `controls` gates below, which
+    # would refuse it for parts the sentence does not have: it carries no seat
+    # word and no board noun phrase of its own — the set is the anthem's, copied
+    # on at the call site.
+    if payload.get("kind") == "all_share_a_color":
         return payload
     # "…as long as **it's blocking and you control a snow land**" (Snow Devil).
     # CR 613 puts no limit on how many clauses a static's criteria have, so each
@@ -631,6 +638,50 @@ def _lower_static_ability(node: ast.StaticAbilityNode) -> tuple[OracleInstructio
     """
     effect = node.effect
     effects = effect.effects if isinstance(effect, ast.Conjunction) else (effect,)
+    # "**You** have shroud." (Ivory Mask.) A keyword granted to a *seat* rather
+    # than to a set of permanents, which CR 702.18a says in as many words
+    # ("This permanent **or player** can't be the target of spells or
+    # abilities"). Read first, because every branch below asks the subject for
+    # a noun phrase and a `PlayerRef` has none — the anthem reader refuses it
+    # with "static abilities need the CR 613 layers engine", which named the
+    # wrong missing piece for as long as the card was unsupported.
+    #
+    # The word is gated on `player_statics.GRANTABLE_PLAYER_KEYWORDS` rather
+    # than on the permanent vocabulary: flying is implemented and a player
+    # cannot have it, so admitting a word because a *creature* can carry it
+    # would compile a static nothing reads.
+    if (
+        node.condition is None
+        and len(effects) == 1
+        and isinstance(effects[0], ast.GainKeyword)
+        and isinstance(getattr(effects[0], "subject", None), ast.PlayerRef)
+    ):
+        from ..player_statics import (GRANTABLE_PLAYER_KEYWORDS,
+                                      PLAYER_KEYWORD_STATIC_KIND)
+
+        grant = effects[0]
+        if grant.subject.kind != "you":
+            raise LoweringError(
+                "a player keyword static is read off its own controller's "
+                "seat, and no other seat word has a reader",
+                node=node,
+            )
+        if grant.duration.kind is not None or grant.choose_one or grant.chosen_ability:
+            raise LoweringError(
+                "a player keyword static carries no duration or choice", node=node
+            )
+        for keyword in grant.keywords:
+            if keyword not in GRANTABLE_PLAYER_KEYWORDS:
+                raise LoweringError(
+                    f"the engine answers no {keyword!r} about a player",
+                    node=node,
+                )
+        return (
+            OracleInstruction(
+                PLAYER_KEYWORD_STATIC_KIND, "",
+                {"keywords": list(grant.keywords)},
+            ),
+        )
     if node.condition is not None:
         # A condition on the *anthem* shape — "Creatures named Ivory Guardians
         # get +1/+1 as long as an opponent controls a nontoken red permanent"
@@ -667,6 +718,16 @@ def _lower_static_ability(node: ast.StaticAbilityNode) -> tuple[OracleInstructio
             )
         buff = _lower_lord_effects(node, effects)
         condition = _lower_anthem_condition(node.condition, node)
+        if condition.get("kind") == "all_share_a_color":
+            # "**They**" is the very set this anthem buffs, so the filter is
+            # copied from the buff rather than parsed a second time — and it is
+            # copied from `lord_buff_payload`'s own rendering, so the evaluator
+            # reads exactly the set `_lord_buff_matches` will buff. Written here
+            # because this is the one place that holds both halves.
+            condition = {
+                **condition,
+                "filter": _filter_payload(subject.filter),
+            }
         # "**Its** controller" needs one permanent to be the "it" of, and an
         # anthem describes a *set* — so the seat word the conditional-static
         # path above admits has no referent here. Refused rather than allowed

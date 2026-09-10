@@ -405,4 +405,8 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     # tapped for mana part-way through paying a cost, before the spell it pays
     # for is on the stack, so there is no stack to enqueue onto.
     "return_tapped_land_to_hand": "zones",
+    # "Whenever a creature becomes the target of a spell or ability, return
+    # that creature to its owner's hand." (Cowardice.) The bound-object bounce
+    # — the permanent the firing event froze, not one a player picks.
+    "bounce_event_subject": "zones",
 }

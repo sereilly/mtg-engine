@@ -187,6 +187,10 @@ class _FilterDraft:
     could_attack_this_turn: bool | None = None
     # "…**you cast this turn**" — see ``ast.ObjectFilter``.
     cast_by_you_this_turn: bool = False
+    #: "Creatures **played by your opponents**" (Uphill Battle). The seat word
+    #: printed with CR's "play", read off the same cast stamp as the field
+    #: above and with no turn window — see `histories.py`.
+    played_by: str | None = None
     # "…except for creatures the player hasn't controlled continuously since
     # the beginning of the turn" (Total War) — see ``ast.ObjectFilter``.
     controlled_since_turn_start: bool | None = None
@@ -323,6 +327,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         attacked_this_turn=d.attacked_this_turn,
         could_attack_this_turn=d.could_attack_this_turn,
         cast_by_you_this_turn=d.cast_by_you_this_turn,
+        played_by=d.played_by,
         controlled_since_turn_start=d.controlled_since_turn_start,
         token_only=d.token_only,
         their_choice=d.their_choice,

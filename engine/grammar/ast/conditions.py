@@ -430,6 +430,24 @@ class AttachedCounterCount:
 
 
 @dataclass(frozen=True)
+class SubjectsShareAColor:
+    """"Nonartifact creatures get +2/+2 **as long as they all share a color**."
+    (Common Cause.)
+
+    "They" is the set the sentence has just described, so this condition carries
+    no subject of its own — the lowering copies the anthem's own filter onto the
+    payload, which is what lets one evaluator answer it without a second reading
+    of the noun phrase.
+
+    CR 105.2: an object's colours are a set, so "all share a color" asks whether
+    the **intersection** across the whole set is non-empty. A colourless
+    creature shares a colour with nothing, which is what makes this a condition
+    an artifact creature could switch off — and is exactly why Common Cause says
+    "nonartifact".
+    """
+
+
+@dataclass(frozen=True)
 class SourceCounterCount:
     """"if **there are no more scream counters on it**" (All Hallow's Eve).
 
@@ -588,6 +606,7 @@ Condition = Union[
     OnBattlefield,
     SourceIsType,
     SourceOnBattlefield,
+    SubjectsShareAColor,
     LifeTotalDifference,
     PlayerLifeIs,
     RawCondition,

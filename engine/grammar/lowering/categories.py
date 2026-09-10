@@ -41,6 +41,7 @@ what a wrapper carries belongs beside what builds one.
 """
 
 from ...lord_buffs import (LORD_BUFF_KIND)
+from ...player_statics import PLAYER_KEYWORD_STATIC_KIND
 from ...enter_tapped_statics import ENTER_TAPPED_STATIC_KIND
 from ...land_animation import LAND_ANIMATION_KIND
 from ...zone_copies import ZONE_TOP_COPY_KIND
@@ -139,6 +140,12 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # readings of the same printed sentence answer to different rules
     # (CR 611.2c vs 611.3a). Sharing a switch would tie them together.
     LORD_BUFF_KIND: "static_buffs",
+    # "You have shroud." (Ivory Mask.) A continuous ability granting a keyword
+    # to a **seat** (CR 702.18a), which is the same layer-6-shaped question as
+    # the anthem beside it with a player where the noun phrase would be — so
+    # the same category, because a category names the migration family a kind
+    # belongs to and not the object it acts on.
+    PLAYER_KEYWORD_STATIC_KIND: "static_buffs",
     # The self-conditional twin of the anthem above ("This creature gets +1/+1
     # as long as an opponent controls a nontoken white permanent") — the same
     # layer-7c/layer-6 contribution with the source as its own subject.

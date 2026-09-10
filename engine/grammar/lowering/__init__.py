@@ -249,9 +249,11 @@ from .destruction import (
 )
 from .control_changes import (
     _lower_bid_life_for_control,
+    _lower_gain_control,
+)
+from .exchanges import (
     _lower_exchange_control,
     _lower_exchange_greatest_mana_value,
-    _lower_gain_control,
     _lower_mutual_control_of_sets,
 )
 from .tapping import (

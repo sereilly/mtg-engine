@@ -163,8 +163,17 @@ def granted_flash_timing(game: "Game", seat: int, card) -> bool:
 #: gate and the picker already share. A sentence naming any other quality
 #: refuses here rather than being admitted with the narrowing dropped, which
 #: would let a Shaman flash in an Aura that enchants a land.
+#:
+#: "**Any player** may cast **creature and enchantment** spells as though they
+#: had flash." (Vernal Equinox.) Two more axes, and both are payload for this
+#: table's standing reason. **Whose** spells: "you" is the permission's own
+#: controller (CR 109.5) and "any player" is every seat, which is a scope the
+#: reader answers rather than a second pattern. And **which** spells: a printed
+#: union of card types, where an object with either type answers it (CR 205.2b),
+#: read as a list so a card naming one class is the same row with one entry.
 _STATIC_FLASH_PERMISSION = re.compile(
-    r"^you may cast (?P<article>an? )?(?P<klass>[a-z]+) spells?"
+    r"^(?P<who>you|any player) may cast (?P<article>an? )?"
+    r"(?P<klass>[a-z]+(?: and [a-z]+)*) spells?"
     r"(?: with enchant (?P<enchant>[a-z]+))?"
     r" as though (?:it|they) had flash$"
 )
@@ -184,18 +193,23 @@ _FLASHABLE_CLASSES: frozenset[str] = frozenset(
 class StaticFlashPermission:
     """What one printed static timing permission covers.
 
-    ``card_class`` is the printed word before "spells"; ``enchant_noun`` is the
-    Aura clause it may narrow to, or None where the sentence named none.
+    ``card_classes`` are the printed words before "spells" — a **union**, since
+    "creature and enchantment spells" (Vernal Equinox) names every spell that is
+    either (CR 205.2b) and an object with both types answers it once.
+    ``enchant_noun`` is the Aura clause it may narrow to, or None where the
+    sentence named none. ``everyone`` is the printed seat word: False for "you"
+    (CR 109.5, the permission's own controller) and True for "any player".
     """
 
-    card_class: str
+    card_classes: tuple[str, ...]
     enchant_noun: str | None = None
+    everyone: bool = False
 
     def covers(self, card) -> bool:
         """Whether *card* is one of the spells this permission names."""
         from .search_filters import card_has_type
 
-        if not card_has_type(card, self.card_class):
+        if not any(card_has_type(card, klass) for klass in self.card_classes):
             return False
         if self.enchant_noun is None:
             return True
@@ -214,10 +228,18 @@ def static_flash_permission(line: str) -> StaticFlashPermission | None:
     match = _STATIC_FLASH_PERMISSION.match(_normalize(line).rstrip("."))
     if match is None:
         return None
-    klass = match.group("klass")
-    if klass not in _FLASHABLE_CLASSES:
+    classes = tuple(match.group("klass").split(" and "))
+    # **Every** word, not the first: a union with one unreadable half would
+    # otherwise grant flash to the half this engine can test and silently drop
+    # the other, which is a permission narrower than the card prints and
+    # invisible from outside a game.
+    if any(klass not in _FLASHABLE_CLASSES for klass in classes):
         return None
-    return StaticFlashPermission(card_class=klass, enchant_noun=match.group("enchant"))
+    return StaticFlashPermission(
+        card_classes=classes,
+        enchant_noun=match.group("enchant"),
+        everyone=match.group("who") == "any player",
+    )
 
 
 def static_flash_permissions_on(permanent) -> list[StaticFlashPermission]:
@@ -239,12 +261,20 @@ def board_flash_timing(game: "Game", seat: int, card) -> bool:
     """Whether a permanent *seat* controls lets them cast *card* at instant
     speed.
 
-    "**You** may cast …" is the permission's own controller (CR 109.5), so the
-    scan is over that seat's permanents rather than over the whole board — a
-    Shaman does not flash an opponent's Auras in.
+    "**You** may cast …" is the permission's own controller (CR 109.5), so such
+    a permission is read off that seat's own permanents — a Shaman does not
+    flash an opponent's Auras in.
+
+    "**Any player** may cast …" (Vernal Equinox) is the other scope and is why
+    the scan is over the whole board rather than over one battlefield: a
+    permission that reaches every seat cannot be found by looking only at the
+    asking seat's permanents, and the enchantment is a card whose whole point is
+    that it helps the table.
     """
-    for permanent in game.controlled_by(seat):
+    for controller_index, permanent in game.permanents_with_controller():
         for permission in static_flash_permissions_on(permanent):
+            if not permission.everyone and controller_index != seat:
+                continue
             if permission.covers(card):
                 return True
     return False

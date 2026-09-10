@@ -178,6 +178,18 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
     dropped intervening-ifs entirely, making conditional triggers always fire."""
     mark = stream.mark()
 
+    # "…get +2/+2 **as long as they all share a color**." (Common Cause.)
+    # Three fixed words after a pronoun, read first because "they" is a word no
+    # other condition here opens with and because the readers below would take
+    # "all" for a quantifier and then fail on the verb.
+    #
+    # "They" names the set the sentence has already described, so nothing is
+    # carried: `statics._lower_static_ability` copies the anthem's own filter
+    # onto the payload, which is what keeps the noun phrase read once.
+    if stream.accept_phrase("they", "all", "share", "a", "color"):
+        return ast.SubjectsShareAColor()
+    stream.reset(mark)
+
     # "**a card with the same name is in a graveyard**" / "**a nontoken
     # permanent with the same name is on the battlefield**" (Bazaar of
     # Wonders). Read first because both openers are noun phrases the general

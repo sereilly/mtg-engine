@@ -49,6 +49,7 @@ from .oracle import compile_card_oracle, expand_ability_lines
 from .mana_payment import (mana_cost_from_symbols, plan_payment, total_pips,
                           untapped_mana_lands)
 from .oracle_types import cost_target_count
+from .player_statics import seat_has_player_keyword
 from .resolution_overrides import resolves_with_illegal_targets
 from .static_bonuses import conditional_static_holds
 from .subject_filters import card_matches_any, subject_matches
@@ -2540,6 +2541,21 @@ class LegalityMixin:
                 # creature cards" *preferred* them, because a graveyard that has
                 # left the game is empty.
                 if self.players[seat].lost:
+                    continue
+                # "**You have shroud.**" (Ivory Mask.) CR 702.18a in as many
+                # words: "This permanent **or player** can't be the target of
+                # spells or abilities." Asked here, in the one list both the
+                # picker and the two announcement gates read, for the reason
+                # the targeting-ban check above this loop gives — a seat that
+                # cannot be chosen must be missing from the candidates rather
+                # than refused later by a second opinion.
+                #
+                # Unlike that ban, this reaches a **triggered** ability too: a
+                # trigger is not a spell, but CR 702.18a says "spells or
+                # abilities" and a triggered ability is one (CR 113.3c). So no
+                # `triggered` exemption — the difference is in the printed
+                # words, not in the mechanism.
+                if seat_has_player_keyword(self, seat, "shroud"):
                     continue
                 # "target opponent" (Word of Command) can't be the caster's own seat.
                 if spec.get("opponents_only") and seat == caster_index:
