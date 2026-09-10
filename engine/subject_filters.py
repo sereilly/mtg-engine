@@ -426,6 +426,54 @@ def untestable_filter_keys(
             unknown.add(key)
     return unknown
 
+
+def quantified_board_phrase(phrase: str) -> "tuple[dict, bool] | None":
+    """"a snow land" / "no land cards" as ``(filter payload, present)``, or None.
+
+    The one reader for the printed noun phrase that follows a board *condition*
+    — "as long as you control …", "Activate only if you control …", "Cast this
+    spell only if you control …", "If you control …, you may … rather than pay
+    this spell's mana cost". Every one of those clauses asks the same two
+    questions of the same words, and every one of them is answered by
+    :func:`subject_matches` — so the phrase is read **here**, beside the matcher
+    that will answer it, rather than by a regex in each table. A second reader
+    of "a snow land" would be free to disagree with this one about what a snow
+    land is, and the direction such a disagreement fails in is a condition that
+    holds on a board the card does not name.
+
+    The noun phrase itself goes through the grammar's own noun parser, and a
+    payload carrying a key :func:`subject_matches` cannot test is refused rather
+    than approximated: a key the matcher drops is a narrowing the condition
+    silently stops applying.
+
+    **The article is the quantifier and it is what the clause means**: "**a**
+    snow land" is a presence test and "**no** land cards" its negation, which is
+    the boolean returned. Anything else — "two or more", "three" — is a
+    threshold this does not read, and it refuses rather than answering as
+    presence, because a threshold read as "at least one" is a condition that
+    holds on strictly more boards than the card prints.
+    """
+    from .grammar.errors import GrammarError
+    from .grammar.lexer import tokenize
+    from .grammar.nouns import parse_object_filter
+    from .grammar.stream import TokenStream
+
+    article, _, rest = phrase.strip().partition(" ")
+    if article not in ("a", "an", "no") or not rest:
+        return None
+    stream = TokenStream(tokenize(rest).tokens)
+    try:
+        described = parse_object_filter(stream)
+    except GrammarError:
+        return None
+    if not stream.exhausted:
+        return None
+    payload = described.to_payload()
+    if not payload or untestable_filter_keys(payload):
+        return None
+    return payload, article != "no"
+
+
 def unimplemented_filter_keywords(payload: dict) -> set[str]:
     """The keyword *words* in *payload* this engine does not implement.
 
@@ -1206,6 +1254,7 @@ __all__ = [
     "card_only_filter",
     "filter_head_noun",
     "object_only_filter",
+    "quantified_board_phrase",
     "subject_matches",
     "unimplemented_filter_keywords",
 ]
