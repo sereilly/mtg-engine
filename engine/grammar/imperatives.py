@@ -66,6 +66,7 @@ from .effects import (
     _parse_change_text,
     _parse_choose_cards_in_hand,
     _parse_choose_color,
+    _parse_choose_opponent,
     parse_choose_card_name,
     parse_choose_card_type,
     _parse_choose_number,
@@ -756,6 +757,13 @@ def parse_imperative(
         chosen_type = parse_choose_card_type(stream)
         if chosen_type is not None:
             return chosen_type
+        # "Choose one of your opponents." (Goblin Festival.) A *seat* where the
+        # three above name a value, and beside them for their reason: the word
+        # opens several unrelated sentences and this declines without consuming,
+        # so every reader below keeps the one it owns.
+        chosen_opponent = _parse_choose_opponent(stream)
+        if chosen_opponent is not None:
+            return chosen_opponent
         # "Choose a player who cast one or more sorcery spells this turn."
         # (Backdraft.) Non-consuming on refusal for the reason every "choose"
         # production here is: the word opens several unrelated sentences, and a

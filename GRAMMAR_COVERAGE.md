@@ -40,7 +40,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ULG | 143 | 227 | 84.1% | 84.1% | 59.5% | 121 |
 | 6ED | 335 | 404 | 95.5% | 95.5% | 65.8% | 243 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| UDS *(measured)* | 143 | 204 | 75.0% | 72.1% | 48.0% | 85 |
+| UDS *(measured)* | 143 | 204 | 76.5% | 75.0% | 50.5% | 90 |
 | **All (shipped)** | **5686** | **8356** | **90.6%** | **89.9%** | **60.6%** | **4280** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -53,9 +53,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 456 | 195 | expected a subject |  |
-| 129 | 67 | unrecognized effect verb |  |
-| 96 | 47 | unconsumed text |  |
+| 455 | 194 | expected a subject |  |
+| 128 | 66 | unrecognized effect verb |  |
+| 95 | 46 | unconsumed text |  |
 | 41 | 25 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 16 | 14 | expected 'unless defending player controls' |  |
@@ -2143,6 +2143,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Enchantment Alteration**
   - `Attach target Aura attached to a creature or land to another permanent of that type.`
   - `Attach target Aura attached to a creature or land to another permanent of that type.`
+- **Encroach**
+  - `Target player reveals their hand. You choose a nonbasic land card from it. That player discards that card.`
 - **Endangered Armodon**
   - `When you control a creature with toughness 2 or less, sacrifice this creature.`
 - **Endless Wurm**
@@ -2319,6 +2321,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Destroy target creature that was dealt damage this turn. It can't be regenerated.`
 - **Fatal Lore**
   - `• You draw three cards.`
+- **Fatigue**
+  - `Target player skips their next draw step.`
 - **Fault Line**
   - `Fault Line deals X damage to each creature without flying and each player.`
 - **Favorable Destiny**
@@ -2885,6 +2889,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Goblin Elite Infantry**
   - `Whenever this creature blocks or becomes blocked, it gets -1/-1 until end of turn.`
   - `Whenever this creature blocks or becomes blocked, it gets -1/-1 until end of turn.`
+- **Goblin Festival**
+  - `{2}: This enchantment deals 1 damage to any target. Flip a coin. If you lose the flip, choose one of your opponents. That player gains control of this enchantment.`
 - **Goblin Flotilla**
   - `At the beginning of each combat, unless you pay {R}, whenever this creature blocks or becomes blocked by a creature this combat, that creature gains first strike until end of turn.`
 - **Goblin Gardener**
@@ -4675,6 +4681,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Reveal the top four cards of your library. Put all land cards revealed this way into your hand and the rest into your graveyard.`
 - **Multani's Acolyte**
   - `When this creature enters, draw a card.`
+- **Multani's Decree**
+  - `Destroy all enchantments. You gain 2 life for each enchantment destroyed this way.`
 - **Multani's Presence**
   - `Whenever a spell you've cast is countered, draw a card.`
 - **Mundungu**
@@ -5235,6 +5243,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever another card is put into a graveyard from anywhere, exile that card.`
 - **Plated Rootwalla**
   - `{2}{G}: This creature gets +3/+3 until end of turn. Activate only once each turn.`
+- **Plow Under**
+  - `Put two target lands on top of their owners' libraries.`
 - **Political Trickery**
   - `Exchange control of target land you control and target land an opponent controls. (This effect lasts indefinitely.)`
 - **Polluted Mire**

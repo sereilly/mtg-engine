@@ -3632,6 +3632,7 @@ def reveal_hand_and_choose(game: Game, instruction: OracleInstruction, context: 
         exclude_types=exclude_types,
         exclude_basic_lands=narrowing["exclude_basic_lands"],
         card_types=card_types,
+        exclude_supertypes=excluded_supertypes,
         fate=str(instruction.payload.get("fate", "discard")),
         # The resolution's own scratchpad. Every pick writes the chosen card's
         # name into it — the pick *is* a chosen card, whatever becomes of it —
