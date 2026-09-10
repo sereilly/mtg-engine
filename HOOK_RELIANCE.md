@@ -44,11 +44,7 @@ Held at this rate, supporting the 26,113-card release line would need about **43
 | ULG | 143 | 143 (100.0%) | 0 (0.0%) | 227 | 0 (0.0%) | 0 | 0.0 |
 | 6ED | 335 | 335 (100.0%) | 2 (0.6%) | 405 | 1 (0.2%) | 2 | 0.6 |
 | M21 | 285 | 285 (100.0%) | 0 (0.0%) | 503 | 0 (0.0%) | 0 | 0.0 |
-<<<<<<< HEAD
-| UDS *(measured)* | 143 | 128 (89.5%) | 0 (0.0%) | 189 | 0 (0.0%) | 0 | 0.0 |
-=======
-| UDS *(measured)* | 143 | 112 (78.3%) | 0 (0.0%) | 167 | 0 (0.0%) | 0 | 0.0 |
->>>>>>> uds/w1g1
+| UDS *(measured)* | 143 | 140 (97.9%) | 0 (0.0%) | 201 | 0 (0.0%) | 0 | 0.0 |
 | **Whole pool (shipped, deduped)** | **3572** | **3572 (100.0%)** | **53 (1.5%)** | **5550** | **49 (0.9%)** | **59** | **1.7** |
 
 *(measured)* — UDS are ingested for measurement and **not shipped**: `cards/manifest.json` lists them under `measured`, the engine's catalog does not load them, and no player can put one in a deck. They are reported here and excluded from the ALL row and from the ceilings, because a ratchet over a set nobody has implemented would fire on its composition rather than on anything anyone did. A measured set moves up to `sets` when it is fully supported.
