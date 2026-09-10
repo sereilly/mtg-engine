@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**411 / 617 tracked rules covered (66%)** — 2422 tests, 0 unannotated.
+**411 / 617 tracked rules covered (66%)** — 2424 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -194,7 +194,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [ ] **108.1** Use the Oracle card reference when determining a card’s wording. A card’s Oracle text can be foun...
 - [ ] **108.2** When a rule or text on a card refers to a “card,” it means only a Magic card or an object represe...
-- [x] **108.3** The owner of a card in the game is the player who started the game with it in their deck. If a ca... *(10 tests)*
+- [x] **108.3** The owner of a card in the game is the player who started the game with it in their deck. If a ca... *(11 tests)*
 - [x] **108.4** A card doesn’t have a controller unless that card represents a permanent or spell; in those cases... *(1 tests, subrules a)*
 - [ ] **108.5** Nontraditional Magic cards can’t start the game in any zone other than the command zone (see rule...
 - [ ] **108.6** For more information about cards, see section 2, “Parts of a Card.”
@@ -204,7 +204,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **109.1** An object is an ability on the stack, a card, a copy of a card, a token, a spell, a permanent, or... *(1 tests)*
 - [x] **109.2** If a spell or ability uses a description of an object that includes a card type or subtype, but d... *(1 tests)*
 - [ ] **109.3** An object’s characteristics are name, mana cost, color, color indicator, card type, subtype, supe...
-- [x] **109.4** Only objects on the stack or on the battlefield have a controller. Objects that are neither on th... *(2 tests, subrules b)*
+- [x] **109.4** Only objects on the stack or on the battlefield have a controller. Objects that are neither on th... *(3 tests, subrules b)*
 - [x] **109.5** The words “you” and “your” on an object refer to the object’s controller, its would-be controller... *(24 tests)*
 
 ### 110. Permanents
@@ -484,7 +484,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **400.1** A zone is a place where objects can be during a game. There are normally seven zones: library, ha... *(4 tests)*
 - [x] **400.2** Public zones are zones in which all players can see the cards’ faces, except for those cards that... *(5 tests)*
-- [x] **400.3** If an object would go to any library, graveyard, or hand other than its owner’s, it goes to its o... *(9 tests)*
+- [x] **400.3** If an object would go to any library, graveyard, or hand other than its owner’s, it goes to its o... *(10 tests)*
 - [ ] **400.4** Cards with certain card types can’t enter certain zones.
 - [x] **400.5** The order of objects in a library, in a graveyard, or on the stack can’t be changed except when e... *(2 tests)*
 - [ ] **400.6** If an object would move from one zone to another, determine what event is moving the object. If t...
@@ -734,7 +734,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 608. Resolving Spells and Abilities
 
 - [x] **608.1** Each time all players pass in succession, the spell or ability on top of the stack resolves. (See... *(1 tests)*
-- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(74 tests, subrules bcdhn)*
+- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(75 tests, subrules bcdhn)*
 - [x] **608.3** If the object that’s resolving is a permanent spell, its resolution may involve several steps. Th... *(3 tests, subrules ab)*
 
 ### 609. Effects
@@ -852,7 +852,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **701.2** Activate *(4 tests, subrules a)*
 - [x] **701.3** Attach *(13 tests, subrules abcd)*
 - [x] **701.5** Cast *(4 tests, subrules a)*
-- [x] **701.6** Counter *(7 tests, subrules ab)*
+- [x] **701.6** Counter *(8 tests, subrules ab)*
 - [x] **701.7** Create *(3 tests, subrules a)*
 - [x] **701.8** Destroy *(7 tests, subrules abc)*
 - [x] **701.9** Discard *(5 tests, subrules ac)*

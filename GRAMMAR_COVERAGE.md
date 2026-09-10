@@ -40,7 +40,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ULG | 143 | 227 | 84.1% | 84.1% | 59.5% | 121 |
 | 6ED | 335 | 404 | 95.5% | 95.5% | 65.8% | 243 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| UDS *(measured)* | 143 | 204 | 76.5% | 73.5% | 49.0% | 87 |
+| UDS *(measured)* | 143 | 204 | 79.4% | 77.0% | 52.5% | 94 |
 | **All (shipped)** | **5686** | **8356** | **90.6%** | **89.9%** | **60.6%** | **4280** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -54,7 +54,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
 | 455 | 194 | expected a subject |  |
-| 129 | 67 | unrecognized effect verb |  |
+| 128 | 66 | unrecognized effect verb |  |
 | 94 | 45 | unconsumed text |  |
 | 41 | 25 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
@@ -68,7 +68,6 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 6 | 1 | a counted redirect off the source moves the damage onto one chosen target |  |
 | 6 | 1 | unsupported life-loss target 'owner' |  |
 | 5 | 5 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
-| 5 | 5 | expected 'library' |  |
 | 4 | 1 | the sacrifice prompt cannot test this restriction |  |
 | 4 | 1 | expected 'that' |  |
 | 4 | 1 | attach needs one chosen permanent to attach to |  |
@@ -78,6 +77,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 1 | expected 'the number of' in a where-clause |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
+| 2 | 1 | expected 'top' |  |
 
 ## Cards executing through the grammar
 
@@ -2191,6 +2191,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever you cast a creature spell, you may pay {1}. If you do, return target creature to its owner's hand.`
 - **Equipoise**
   - `At the beginning of your upkeep, for each land target player controls in excess of the number you control, choose a land that player controls, then the chosen permanents phase out. Repeat this process for artifacts and creatures. (While they're phased out, they're treated as though they don't exist. They phase in before that player untaps during their next untap step.)`
+- **Eradicate**
+  - `Exile target nonblack creature. Search its controller's graveyard, hand, and library for all cards with the same name as that creature and exile them. Then that player shuffles.`
 - **Erase**
   - `Exile target enchantment.`
 - **Erhnam Djinn**
@@ -5436,6 +5438,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Pyrotechnics deals 4 damage divided as you choose among any number of targets.`
 - **Quarum Trench Gnomes**
   - `{T}: If target Plains is tapped for mana, it produces colorless mana instead of white mana. (This effect lasts indefinitely.)`
+- **Quash**
+  - `Counter target instant or sorcery spell. Search its controller's graveyard, hand, and library for all cards with the same name as that spell and exile them. Then that player shuffles.`
 - **Quickening Licid**
   - `{1}{W}, {T}: This creature loses this ability and becomes an Aura enchantment with enchant creature. Attach it to target creature. You may pay {W} to end this effect.`
 - **Quicksand**
@@ -6092,6 +6096,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Scorching Dragonfire deals 3 damage to target creature or planeswalker. If that creature or planeswalker would die this turn, exile it instead.`
 - **Scoria Wurm**
   - `At the beginning of your upkeep, flip a coin. If you lose the flip, return this creature to its owner's hand.`
+- **Scour**
+  - `Exile target enchantment. Search its controller's graveyard, hand, and library for all cards with the same name as that enchantment and exile them. Then that player shuffles.`
 - **Scoured Barrens**
   - `When this land enters, you gain 1 life.`
   - `{T}: Add {W} or {B}.`
@@ -6628,6 +6634,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Target creature you control gets +X/+0 until end of turn, where X is the number of creature cards in your graveyard. Sacrifice that creature at the beginning of the next end step.`
 - **Southern Paladin**
   - `{W}{W}, {T}: Destroy target red permanent.`
+- **Sowing Salt**
+  - `Exile target nonbasic land. Search its controller's graveyard, hand, and library for all cards with the same name as that land and exile them. Then that player shuffles.`
 - **Sparkhunter Masticore**
   - `{1}: This creature deals 1 damage to target planeswalker.`
   - `{3}: This creature gains indestructible until end of turn.`
@@ -6730,6 +6738,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}{R}, Remove a +1/+1 counter from this creature: It deals 1 damage to target creature.`
 - **Spitting Slug**
   - `Whenever this creature blocks or becomes blocked, you may pay {1}{G}. If you do, this creature gains first strike until end of turn. Otherwise, each creature blocking or blocked by this creature gains first strike until end of turn.`
+- **Splinter**
+  - `Exile target artifact. Search its controller's graveyard, hand, and library for all cards with the same name as that artifact and exile them. Then that player shuffles.`
 - **Splintering Wind**
   - `{2}{G}: This enchantment deals 1 damage to target creature. Create a 1/1 green Splinter creature token. It has flying and "Cumulative upkeep {G}." When it leaves the battlefield, it deals 1 damage to you and each creature you control. (At the beginning of its controller's upkeep, that player puts an age counter on it, then sacrifices it unless they pay its upkeep cost for each age counter on it.)`
 - **Spoils of Evil**
@@ -7203,6 +7213,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {C}{C}{C}.`
 - **Thran Forge**
   - `{2}: Until end of turn, target nonartifact creature gets +1/+0 and becomes an artifact in addition to its other types.`
+- **Thran Foundry**
+  - `{1}, {T}, Exile this artifact: Target player shuffles their graveyard into their library.`
 - **Thran Quarry**
   - `At the beginning of the end step, if you control no creatures, sacrifice this land.`
   - `{T}: Add one mana of any color.`
@@ -7803,6 +7815,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Waiting in the Weeds**
   - `Each player creates a 1/1 green Cat creature token for each untapped Forest they control.`
   - `Each player creates a 1/1 green Cat creature token for each untapped Forest they control.`
+- **Wake of Destruction**
+  - `Destroy target land and all other lands with the same name as that land.`
 - **Wake of Vultures**
   - `{1}{B}, Sacrifice a creature: Regenerate this creature.`
 - **Waker of Waves**
