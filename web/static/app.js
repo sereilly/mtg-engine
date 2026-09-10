@@ -10211,7 +10211,8 @@ function renderActivationPrompt() {
     } else if (pendingCastTarget.targetKind === "roles") {
       body.textContent =
         "This spell names several targets of different kinds. Click the glowing "
-        + "permanents one at a time — each choice narrows the next.";
+        + "targets one at a time — each choice narrows the next. A role may be a "
+        + "player, in which case the pill is what glows.";
       steps.innerHTML = [
         `<div>Card: ${escapeHtml(pendingCastTarget.cardName)}</div>`,
         `<div>${escapeHtml(roleTargetsHint())}</div>`,
@@ -12249,7 +12250,17 @@ function roleTargetNoun(role) {
   // caster would recognise, so the *printed noun* the lowering named the role
   // with is what is shown - "artifact card", for Goblin Welder's second slot.
   if (roleReadsAGraveyard(role)) return role.role || "card in a graveyard";
+  // A role whose object is a **seat** rather than an object in any zone
+  // ("Target player gains control of target permanent you control", Donate).
+  // The caster clicks a life pill for it, so the word has to be the one on the
+  // pill and not the spec kind.
+  if (roleChoosesAPlayer(role)) return "player";
   return role.kind || "permanent";
+}
+
+/** Whether this role is answered by clicking a player rather than a card. */
+function roleChoosesAPlayer(role) {
+  return !!role && role.kind === "player";
 }
 
 /** Whether this role's objects are chosen from a graveyard rather than a board. */
@@ -12324,6 +12335,43 @@ function revealRoleGraveyards() {
   if (sections.length) openZoneReveal(sections, { auto: true });
 }
 
+/** Answer the current role with a **player** (Donate's "target player").
+ *
+ * `chooseRoleTarget`'s sibling rather than a third branch inside it: that
+ * function is addressed by a seat *and a slot*, and a player has no slot —
+ * passing one would be an index into a list this choice never reads. What the
+ * two share is the tail, which is `advanceRoleWalk`.
+ */
+function chooseRolePlayer(targetSeat) {
+  const p = pendingCastTarget;
+  if (!p || p.targetKind !== "roles") return;
+  const option = (p.roleOptions || []).find(
+    (o) => o && o.kind === "player" && o.seat === targetSeat,
+  );
+  if (!option) {
+    updateActionHint("That isn't a legal choice for this target.", true);
+    return;
+  }
+  p.roleChosen.push({ seat: targetSeat, zone: "player" });
+  advanceRoleWalk(option);
+}
+
+/** The tail every answered role runs: finish, or step to the next role. */
+function advanceRoleWalk(option) {
+  const p = pendingCastTarget;
+  if (!p) return;
+  if (p.roleChosen.length >= p.roles.length) {
+    confirmRoleTargets();
+    return;
+  }
+  p.roleOptions = option.next || [];
+  Object.assign(p, indexValidTargets(p.roleOptions));
+  renderActivationPrompt();
+  renderBoard(currentState);
+  revealRoleGraveyards();
+  updateActionHint(roleTargetsHint());
+}
+
 function chooseRoleTarget(targetSeat, permanentIndex, zoneKind = "battlefield") {
   const p = pendingCastTarget;
   if (!p || p.targetKind !== "roles") return;
@@ -12342,16 +12390,7 @@ function chooseRoleTarget(targetSeat, permanentIndex, zoneKind = "battlefield") 
     // its slot, and the server stamps which copy as the ability goes on the
     // stack (CR 601.2c).
     p.roleChosen.push({ seat: targetSeat, idx: permanentIndex, zone: "graveyard" });
-    if (p.roleChosen.length >= p.roles.length) {
-      confirmRoleTargets();
-      return;
-    }
-    p.roleOptions = option.next || [];
-    Object.assign(p, indexValidTargets(p.roleOptions));
-    renderActivationPrompt();
-    renderBoard(currentState);
-    revealRoleGraveyards();
-    updateActionHint(roleTargetsHint());
+    advanceRoleWalk(option);
     return;
   }
   // Ids, for the reason every other picker sends them: a permanent that left
@@ -12365,16 +12404,7 @@ function chooseRoleTarget(targetSeat, permanentIndex, zoneKind = "battlefield") 
     return;
   }
   p.roleChosen.push({ seat: targetSeat, idx: permanentIndex, id: permanentId });
-  if (p.roleChosen.length >= p.roles.length) {
-    confirmRoleTargets();
-    return;
-  }
-  p.roleOptions = option.next || [];
-  Object.assign(p, indexValidTargets(p.roleOptions));
-  renderActivationPrompt();
-  renderBoard(currentState);
-  revealRoleGraveyards();
-  updateActionHint(roleTargetsHint());
+  advanceRoleWalk(option);
 }
 
 function confirmRoleTargets() {
@@ -12386,12 +12416,19 @@ function confirmRoleTargets() {
   // announcement travels in the wider shape instead - one entry per role,
   // still positional. Never mixed with the id list: "which list does slot 1
   // come from?" is a question the wire must not be asked.
-  const readsAZone = roleChosen.some((t) => t.zone === "graveyard");
-  const roleRefs = roleChosen.map((t) => (
-    t.zone === "graveyard"
-      ? { graveyard_seat: t.seat, graveyard_index: t.idx }
-      : { permanent_id: t.id }
-  ));
+  // …and a slot answered by a **player** cannot travel as one either: a hole in
+  // a positional id list cannot say whether the slot is a seat or a permanent
+  // that has left. Same shape, third alternative.
+  const needsRoleRefs = roleChosen.some(
+    (t) => t.zone === "graveyard" || t.zone === "player",
+  );
+  const roleRefs = roleChosen.map((t) => {
+    if (t.zone === "graveyard") {
+      return { graveyard_seat: t.seat, graveyard_index: t.idx };
+    }
+    if (t.zone === "player") return { seat: t.seat };
+    return { permanent_id: t.id };
+  });
   // In role order, which is the order the engine's own roles list is in — the
   // wire is positional and both ends read one list.
   const body = activating
@@ -12401,7 +12438,7 @@ function confirmRoleTargets() {
           action: "activate",
           permanent_name: cardName,
           permanent_index: p.sourcePermanentIndex,
-          ...(readsAZone
+          ...(needsRoleRefs
             ? { target_role_refs: roleRefs }
             : { target_permanent_ids: roleChosen.map((t) => t.id) }),
         },
@@ -12411,7 +12448,7 @@ function confirmRoleTargets() {
         seat,
         action: castAction || "cast",
         card_name: cardName,
-        ...(readsAZone
+        ...(needsRoleRefs
           ? { target_role_refs: roleRefs }
           : { target_permanent_ids: roleChosen.map((t) => t.id) }),
       };
@@ -13474,6 +13511,15 @@ function handlePlayerTargetClick(targetSeat) {
   }
   if (pendingCastTarget.targetKind === "divided") {
     setDividedFaceTarget(targetSeat);
+    return;
+  }
+  // A roles walk standing on a **player** role: the pill is the answer to this
+  // step of the announcement, not to the whole spell, so it goes to the walk
+  // rather than sending a cast. Guarded on the current role rather than on the
+  // walk alone — a click on a face while the walk wants a permanent is a
+  // mis-click, and answering it would fill the wrong slot.
+  if (pendingCastTarget.targetKind === "roles") {
+    if (roleChoosesAPlayer(currentRole(pendingCastTarget))) chooseRolePlayer(targetSeat);
     return;
   }
   if (pendingCastTarget.targetKind !== "player" && pendingCastTarget.targetKind !== "any") return;

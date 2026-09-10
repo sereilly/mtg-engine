@@ -3091,9 +3091,9 @@ class SpellCastingMixin:
         )
     def _named_role_targets(
         self, caster_index: int, target_player_index, target_permanent_index,
-        target_permanent_ids,
+        target_permanent_ids, roles=(),
     ) -> list:
-        """The permanents a roles announcement named, in role order.
+        """The objects a roles announcement named, in role order.
 
         Ids first, exactly as the CR 702.16b loop below reads them, and for the
         same reason: the roles of one spell may sit on **two** battlefields - a
@@ -3102,21 +3102,63 @@ class SpellCastingMixin:
         form is kept for a caller with one seat in hand (a test, the AI), and a
         slot that resolves to nothing stays None so the count check above sees a
         short announcement rather than a silently shifted one.
+
+        **A role whose object is a player is filled from
+        ``target_player_index``**, and that is a reuse rather than a special
+        case: a stack item has carried "the player this spell targets" under
+        that name since the first spell to name one, the resolution reads it
+        back as ``context.target``, and Donate's "**target player** gains
+        control of target permanent you control" means exactly that. Inventing
+        a per-slot seat list beside it would be a second arity on a channel this
+        repo has already recorded the cost of splitting
+        (``StackItem.target_permanent_id``, 119 reader sites).
+
+        Which slot is the player's comes from *roles*, never from the shape of
+        the announcement: an id list positional in role order carries ``None``
+        in that slot, and guessing "the None one is the player" would fill a
+        permanent slot whose permanent has left.
         """
+        player_slots = {
+            index for index, role in enumerate(roles)
+            if isinstance(role, dict) and role.get("kind") == "player"
+        }
+        seated = (
+            self.players[target_player_index]
+            if isinstance(target_player_index, int)
+            and 0 <= target_player_index < len(self.players)
+            else None
+        )
         if target_permanent_ids:
             return [
-                self.permanent_by_id(permanent_id) if permanent_id is not None else None
-                for permanent_id in target_permanent_ids
+                seated if index in player_slots
+                else (
+                    self.permanent_by_id(permanent_id)
+                    if permanent_id is not None else None
+                )
+                for index, permanent_id in enumerate(target_permanent_ids)
             ]
         slots = (
             target_permanent_index
             if isinstance(target_permanent_index, list)
             else [target_permanent_index]
         )
+        # …and where a player role has taken ``target_player_index`` for its own
+        # answer, that field no longer says which board the indices count into,
+        # so the caster's is the only board left to mean. Without this an
+        # announcement donating to seat 1 would look its own permanent up on
+        # seat 1's battlefield — the silent wrong-permanent read the id channel
+        # exists to abolish, arriving through the legacy one.
         seat = (
-            target_player_index if target_player_index is not None else caster_index
+            caster_index if player_slots
+            else (
+                target_player_index if target_player_index is not None
+                else caster_index
+            )
         )
-        return [self.permanent_at(seat, slot) for slot in slots]
+        return [
+            seated if index in player_slots else self.permanent_at(seat, slot)
+            for index, slot in enumerate(slots)
+        ]
 
     def _validate_cast_targets(
         self,
@@ -3287,7 +3329,7 @@ class SpellCastingMixin:
         if roles:
             chosen = self._named_role_targets(
                 caster_index, target_player_index, target_permanent_index,
-                target_permanent_ids,
+                target_permanent_ids, roles,
             )
             if len(chosen) != len(roles):
                 return False, f"{card.name} requires {len(roles)} targets"

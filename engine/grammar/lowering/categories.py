@@ -476,6 +476,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # family read from the other end — the permanent hands itself over rather
     # than taking something — so the same category.
     "give_control_of_source_to_player": "control",
+    # "Target player gains control of target permanent you control." (Donate.)
+    # The same hand-over with **both** ends chosen: the seat is a target and so
+    # is the permanent, which makes it an ordered-roles announcement and not a
+    # second effect family.
+    "give_control_of_target_to_player": "control",
     # The monitored linked durations (CR 611.2b): "for as long as you control
     # this creature and this creature remains tapped" (Willow Satyr, Rubinia
     # Soulsinger) and The Wretched's end-of-combat blocker steal. The

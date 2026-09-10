@@ -37,7 +37,7 @@ import re
 
 from .handlers._common import (evaluate_count, graveyard_card_matches,
                                permanent_matches_filter, state_holds)
-from .models import CardDefinition, Permanent
+from .models import CardDefinition, Permanent, PlayerState
 from .alternative_costs import alternative_costs
 from .cast_costs import buyback_cost, cast_announces_x, costs_charged_from
 from .cast_restrictions import timing_fixed_seat
@@ -555,6 +555,13 @@ def _role_object_key(obj) -> tuple:
     """
     if isinstance(obj, Permanent):
         return ("permanent", id(obj))
+    # A **player** role's object is a seat (Donate's "target player"). ``id``
+    # answers it for the battlefield arm's reason and not the graveyard arm's:
+    # a game holds exactly one live ``PlayerState`` per seat, so identity is
+    # what a seat *is*, where two graveyard copies of one card are one object
+    # and needed a key built by hand.
+    if isinstance(obj, PlayerState):
+        return ("player", id(obj))
     return ("graveyard", obj.seat, id(obj.card), obj.ordinal)
 
 
@@ -1178,6 +1185,18 @@ class LegalityMixin:
                 if isinstance(permanent_id, int):
                     named.append(self.permanent_by_id(permanent_id))
                     continue
+                # …or a **seat**, for a role whose object is a player (Donate).
+                # A third shape rather than a third list, for the reason the
+                # graveyard address is one entry here rather than a second
+                # positional list: which list a slot comes from is a question
+                # a wire must never be left to answer.
+                seat = ref.get("seat")
+                if isinstance(seat, int):
+                    named.append(
+                        self.players[seat]
+                        if 0 <= seat < len(self.players) else None
+                    )
+                    continue
                 named.append(
                     self.graveyard_target_at(
                         ref.get("graveyard_seat"), ref.get("graveyard_index")
@@ -1210,6 +1229,17 @@ class LegalityMixin:
             return self.graveyard_target_at(
                 candidate.get("seat"), candidate.get("index")
             )
+        # …and a role is not always an *object* at all. "**Target player** gains
+        # control of target permanent you control" (Donate) announces a seat in
+        # slot 0, which the seat loop in ``_enumerate_targets`` already emits as
+        # ``{"kind": "player", "seat": n}`` for every player-kind spec — so what
+        # the walk needs is not a new enumeration but a way to resolve the
+        # candidate that enumeration has been producing all along.
+        if candidate.get("kind") == "player":
+            seat = candidate.get("seat")
+            if not isinstance(seat, int) or not (0 <= seat < len(self.players)):
+                return None
+            return self.players[seat]
         return self.permanent_at(candidate.get("seat"), candidate.get("index"))
 
     def role_target_options(
@@ -2268,6 +2298,21 @@ class LegalityMixin:
             # caller passed a stray index still gets an id stamped, and
             # countering it would be inventing a target the card never printed
             # — or its target may be a player, above.
+            return None
+        if any(
+            role.get("kind") in _UNFIZZLABLE_TARGET_KINDS
+            for role in spec_roles(spec)
+        ):
+            # …and the same exclusion one shape up. "**Target player** gains
+            # control of target permanent you control" (Donate) prints the word
+            # twice and one instance names a seat, so CR 608.2b's all-or-nothing
+            # question has an answer this loop cannot reach: the permanent
+            # leaving makes *one* target illegal and the spell still resolves,
+            # doing nothing for the slot that is gone (608.2b's last sentence,
+            # which each handler already applies). Counted as illegal here it
+            # would counter a spell whose player target is perfectly legal —
+            # the wrong "yes" the table above is named for, arriving through a
+            # role instead of through a kind.
             return None
 
         legality: list[bool] = []

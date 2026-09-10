@@ -25,8 +25,9 @@ from ..oracle_types import CONTROL_EXCHANGED_PERMANENTS, LAST_TARGET_CONTROLLER
 from ._common import (recorded_permanent_ids, one_recorded_permanent_id, attached_host,
                       defending_player_seat, frozen_that_player_seat,
                       permanent_matches_filter,
+                      resolve_role_permanent, resolve_role_player,
                       resolve_target_permanent,
-                      resolve_target_slots)
+                      resolve_target_slots, roles_still_legal)
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -432,6 +433,66 @@ def give_control_of_source_to_player(game: Game, instruction: OracleInstruction,
         game.log.append(f"{context.card.name}: control can't change")
         return True, "resolved"
     game.log.append(f"{recipient.name} gains control of {context.card.name}")
+    return True, "resolved"
+
+
+@effect_handler("give_control_of_target_to_player")
+def give_control_of_target_to_player(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Target player gains control of target permanent you control." (Donate.)
+
+    ``give_control_of_source_to_player`` one target over: there the permanent
+    handed over is the ability's own source and only the seat is chosen, and
+    here **both** ends are announced (CR 601.2c). So it is an ordered-roles
+    resolution — the seat in slot 0, the permanent in slot 1 — read through the
+    same ``payload_role_slot`` every roles handler reads, never by counting
+    slots here.
+
+    CR 608.2b is asked once, of the whole announcement, through
+    ``roles_still_legal``: a seat that has left the game and a permanent that is
+    no longer a permanent the caster controls each make the spell do nothing
+    rather than do half of itself. Asked *before* anything moves, because the
+    two halves of this sentence are one effect.
+
+    The contribution belongs to the **spell** (CR 613 layer 2), so
+    ``change_control`` is reached directly with the card as its source — there
+    is no permanent for it to belong to — and no lifetime rides it: CR 611.2a
+    gives an effect with no stated duration no end at all, which is what makes
+    Donate a gift rather than a loan.
+    """
+    from ..control import change_control
+
+    payload = instruction.payload
+    observer = game.players.index(context.caster)
+    if not roles_still_legal(game, context, payload, observer=observer):
+        game.log.append(f"{context.card.name}: its targets are no longer legal")
+        return True, "resolved"
+    seat = resolve_role_player(game, context, payload, "player")
+    permanent = resolve_role_permanent(game, context, payload, "permanent")
+    if seat is None or permanent is None:
+        game.log.append(f"{context.card.name}: nothing was named for it")
+        return True, "resolved"
+    if seat == game.controller_index_of(permanent):
+        # The caster named their own seat. CR 613 would record a contribution
+        # with a fresh timestamp and change nothing; saying so is more useful,
+        # which is the reading the source-side hand-over one function up gives
+        # the same board.
+        game.log.append(
+            f"{game.players[seat].name} already controls {permanent.card.name}"
+        )
+        return True, "resolved"
+    if game.cant_gain_control(permanent, game.players[seat]):
+        # CR 614.17 (Guardian Beast), asked here because ``change_control`` is
+        # reached directly — there is no source permanent to inherit
+        # ``take_control``'s copy of this question from.
+        game.log.append(
+            f"{context.card.name}: {permanent.card.name} can't change controllers"
+        )
+        return True, "resolved"
+    change_control(permanent, seat, source=context.card, until_eot=False)
+    game._sync_control()
+    game.log.append(
+        f"{game.players[seat].name} gains control of {permanent.card.name}"
+    )
     return True, "resolved"
 
 

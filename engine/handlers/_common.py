@@ -2168,6 +2168,25 @@ def roles_still_legal(
                 return False
             resolved.append(stamp)
             continue
+        # **A role is not always an object either.** "Target player gains
+        # control of target permanent you control" (Donate) announces a *seat*
+        # in slot 0, and what CR 608.2b asks of a player is the whole of what
+        # can go wrong with one: they may have left the game (CR 800.4a), which
+        # takes them out of everybody's opponents and out of "target player".
+        # There is no noun phrase to re-read — the seat loop's own narrowings
+        # (``opponents_only`` and the rest) are properties of the announcement
+        # and are re-asked by ``roles_still_legal``'s caller through the same
+        # picker, exactly as a permanent role's filter is.
+        if role.get("kind") == "player":
+            seat = resolve_role_player(game, context, payload, role.get("role"))
+            if seat is None or game.players[seat].lost:
+                return False
+            if not _role_relation_still_holds(
+                game, role, roles, resolved, game.players[seat]
+            ):
+                return False
+            resolved.append(game.players[seat])
+            continue
         perm = resolve_role_permanent(game, context, payload, role.get("role"))
         if perm is None or not game.is_on_battlefield(perm):
             return False
@@ -2309,6 +2328,53 @@ def resolve_role_permanent(
     if isinstance(indices, list) and 0 <= slot < len(indices):
         return game.permanent_at(game.players.index(context.target), indices[slot])
     return None
+
+
+def resolve_role_player(
+    game: Game,
+    context: OracleExecutionContext,
+    payload: dict,
+    role: str,
+) -> "int | None":
+    """The seat chosen for one **player** role of a several-role spell.
+
+    :func:`resolve_role_permanent`'s sibling over a zone that is not a zone at
+    all. The two beside it turn a role name into a *slot* and read that slot of
+    a positional list; a seat has no such list, because a stack item carries the
+    one player a spell targets under ``target_player_index`` and always has —
+    the channel means exactly what this role means, and inventing a second
+    arity beside it is the defect SET_PLAYBOOK records
+    ``StackItem.target_permanent_id`` already having.
+
+    So the slot is used for a different question: **is this role the one player
+    role?** An announcement with two of them would read one seat twice, and the
+    quiet direction of that is a spell doing something the caster never chose.
+    A second player role is refused here rather than resolved to the first,
+    which is the same direction ``resolve_role_permanent`` takes on a slot that
+    no longer resolves.
+    """
+    from ..targeting import payload_role_slot, spec_roles
+
+    slot = payload_role_slot(payload, role)
+    if slot is None:
+        return None
+    roles = spec_roles((payload or {}).get("targets"))
+    seats = [index for index, entry in enumerate(roles)
+             if entry.get("kind") == "player"]
+    if seats != [slot]:
+        return None
+    # By **identity**, never by ``list.index``: ``PlayerState`` is a mutable
+    # dataclass, so two seats holding equal state compare equal and an equality
+    # search would answer with whichever came first — the same value-vs-identity
+    # trap the control seam and the hand-removal seam exist for, one zone-less
+    # object over. ``Game.seat_index`` asks the same way and raises where there
+    # is no answer; a role that no longer resolves is CR 608.2b's illegal
+    # target, so None is the answer here.
+    target = context.target
+    return next(
+        (index for index, player in enumerate(game.players) if player is target),
+        None,
+    )
 
 
 def resolve_role_graveyard_card(
