@@ -35,7 +35,8 @@ describe it.
 
 import re
 
-from .handlers._common import (evaluate_count, graveyard_card_matches,
+from .handlers._common import (evaluate_count, excluded_graveyard_slot,
+                               graveyard_card_matches,
                                permanent_matches_filter, state_holds)
 from .models import CardDefinition, Permanent, PlayerState
 from .alternative_costs import alternative_costs
@@ -2489,7 +2490,15 @@ class LegalityMixin:
                 caster_index, card, spec, for_cast=for_cast
             )
         if kind == "graveyard_creature":
-            return self._enumerate_graveyard_creatures(caster_index, spec)
+            # *card* is the source of the spell or ability doing the choosing
+            # (CR 113.7), which is what a printed "another" is measured
+            # against — and for
+            # the one shape that prints it (a dies-trigger returning a card
+            # from the pile its own source is now in) the source card really is
+            # one of the candidates.
+            return self._enumerate_graveyard_creatures(
+                caster_index, spec, source_card=card
+            )
         if kind == "stack":
             return self._enumerate_stack_targets(
                 caster_index, card, spec,
@@ -3222,7 +3231,9 @@ class LegalityMixin:
             if index != spell_index and card_matches_any(held, alternatives)
         ]
 
-    def _enumerate_graveyard_creatures(self, caster_index: int, spec: dict) -> list[dict]:
+    def _enumerate_graveyard_creatures(
+        self, caster_index: int, spec: dict, *, source_card=None
+    ) -> list[dict]:
         targets: list[dict] = []
         # Reconstruction returns an *artifact* card, Raise Dead a creature card,
         # Chandra a red instant or sorcery. One template with the type as data,
@@ -3244,8 +3255,15 @@ class LegalityMixin:
             # caster reach into their own graveyard, which is a different card.
             if spec.get("opponent_graveyard_only") and seat == caster_index:
                 continue
+            # "…**another** target artifact card from your graveyard"
+            # (Junk Diver). The printed word excludes one *slot* rather than one
+            # kind of card, so it is asked beside the predicate rather than
+            # inside it — through the one reader the handler also asks, which is
+            # what stops this picker offering a card resolution then declines.
+            # Per pile, because a slot number means nothing without the seat.
+            excluded = excluded_graveyard_slot(spec, player.graveyard, source_card)
             for idx, card in enumerate(player.graveyard):
-                if eligible(card):
+                if idx != excluded and eligible(card):
                     targets.append({"kind": "graveyard", "seat": seat, "index": idx, "name": card.name})
         return targets
 

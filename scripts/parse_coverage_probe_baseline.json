@@ -1300,8 +1300,7 @@
   "card": "Kor Chant",
   "clause": "all damage that would be dealt this turn to target creature you control by a source of your choice is dealt to another target creature instead",
   "ignored": [
-   "target",
-   "another"
+   "target"
   ]
  },
  {
@@ -2374,14 +2373,6 @@
   "ignored": [
    "being",
    "creature"
-  ]
- },
- {
-  "card": "Sylvan Hierophant",
-  "clause": "exile it, then return another target creature card from your graveyard to your hand",
-  "ignored": [
-   "another",
-   "target"
   ]
  },
  {

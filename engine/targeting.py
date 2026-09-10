@@ -1436,6 +1436,13 @@ def _graveyard_return_spec(payload: dict) -> dict:
     # just offered.
     if payload.get("graveyard_subtypes"):
         spec["graveyard_subtypes"] = list(payload["graveyard_subtypes"])
+    # "Return **another** target artifact card…" (Junk Diver). Carried onto the
+    # spec for the subtype's reason directly above: the enumerator reads it
+    # through the one predicate the handler also reads
+    # (``handlers/_common.excluded_graveyard_slot``), so the picker cannot offer
+    # the card the printed word excludes and then have resolution decline it.
+    if payload.get("exclude_source_card"):
+        spec["exclude_source_card"] = True
     return spec
 
 

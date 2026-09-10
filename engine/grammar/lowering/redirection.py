@@ -397,6 +397,23 @@ def _lower_chosen_source_redirect_between_targets(
             "filters": [first, second],
             "count": 2,
             **_optional_slot_key((protected, taker)),
+            # "…is dealt to **another** target creature instead." (Kor Chant.)
+            # CR 601.2c: a sentence printing the word "target" twice may name
+            # one object for both instances *unless* the card forbids it, and
+            # this one does. Read off the printed word rather than asserted
+            # unconditionally, because the two slots are otherwise a legitimate
+            # pair — a redirect whose sentence omitted "another" really would
+            # let the same creature fill both.
+            #
+            # Kor Chant is safe today by accident and not by this key: its two
+            # noun phrases differ ("you control" against a bare creature), so
+            # ``targeting._slot_roles_spec`` converts the pair to a roles walk,
+            # which gets distinctness free. A card printing the word over two
+            # *identical* phrases would fall back to the shared-list reading
+            # with nothing forbidding the repeat, which is the silence this
+            # line closes.
+            **({"distinct": True} if taker.distinct_from_prior
+               or protected.distinct_from_prior else {}),
         },
     }
     if node.one_shot:
