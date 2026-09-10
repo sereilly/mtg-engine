@@ -923,17 +923,62 @@ def test_the_type_word_is_what_separates_regrowth_from_raise_dead():
 
 
 def test_an_unreadable_narrowing_is_refused_rather_than_dropped():
-    """None of the three handlers reads a filter, so an adjective is invisible
-    to them. Emitting Raise Dead's instruction for "target black creature card"
-    would let it return a white one while the card still reported as
-    supported — the bug class the full-consumption invariant exists to stop."""
-    result = compile_line(
-        "Return target black creature card from your graveyard to your hand.", card_name="Test"
+    """A narrowing no handler can *test* refuses rather than being dropped:
+    emitting Raise Dead's instruction for a phrase it cannot honour would return
+    a card the sentence excluded while the card still reported supported — the
+    bug class the full-consumption invariant exists to stop.
+
+    The example used to be "target **black** creature card", on a docstring that
+    said "none of the three handlers reads a filter". That stopped being true
+    when Revive arrived: ``graveyard_card_matches`` reads ``graveyard_colors``
+    for the reanimation (Dreams of the Dead) and the graveyard-to-hand pair was
+    simply behind the same blanket refusal, so the colour is now carried, tested
+    by the picker, the cast gate and the handler alike — see the test below.
+    That was a fact about today's coverage written into a guard as an invariant,
+    which is the one way a ratchet fails for no finding.
+
+    So the example moved to a narrowing that is still genuinely unanswerable
+    here, and by a rule rather than by an omission: CR 613.1 gives a card in a
+    graveyard no computed characteristics at all, so a keyword and a power bound
+    are questions no reader of that pile can put to it.
+    """
+    for line in (
+        "Return target creature card with flying from your graveyard to your hand.",
+        "Return target creature card with power 3 or less from your graveyard "
+        "to your hand.",
+    ):
+        result = compile_line(line, card_name="Test")
+
+        assert result.parsed, line
+        assert not result.lowered, line
+        assert "restriction" in result.failure_reason, line
+
+
+def test_the_printed_colour_and_supertype_reach_the_graveyard_return():
+    """"Return target **green** card from your graveyard to your hand" (Revive)
+    and "Return target **basic land** card…" (Groundskeeper).
+
+    The other half of the guard above, and the reason it is a pair: a narrowing
+    a reader *can* test must be carried, not refused, or the card is
+    unsupported for no reason. Both keys are ones
+    ``handlers/_common.graveyard_card_matches`` already reads, so the picker,
+    the announcement gate and the handler ask one question — and Revive's line
+    has no *other* narrowing at all, which makes the colour the whole card.
+    """
+    coloured = _instructions(
+        "Return target green card from your graveyard to your hand.", "Revive"
+    )
+    basic = _instructions(
+        "Return target basic land card from your graveyard to your hand.",
+        "Groundskeeper",
     )
 
-    assert result.parsed
-    assert not result.lowered
-    assert "restriction" in result.failure_reason
+    assert coloured[0][1] == {
+        "any_card": True, "card_type": None, "graveyard_colors": ["G"],
+    }
+    assert basic[0][1] == {
+        "any_card": False, "card_type": "land", "supertypes": ["basic"],
+    }
 
 
 def test_the_named_card_type_is_carried_not_collapsed():

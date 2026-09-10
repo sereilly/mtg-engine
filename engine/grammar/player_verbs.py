@@ -72,6 +72,7 @@ from .effects import (
     _parse_return,
     _parse_reveal_hand,
     _parse_sacrifice,
+    accept_subject_reveals_counted_top_sorted,
     accept_subject_reveals_top_of_library,
     _parse_simultaneous_untap_and_tap,
     _parse_skip_step,
@@ -242,6 +243,17 @@ def parse_player_subject_verb(
         # is the reading it was leaving room for. The same node the imperative
         # spelling produces ("Reveal the top card of target opponent's
         # library", Prophecy), so which library is opened has one answer.
+        # "**Each player** reveals the top five cards of their library, puts
+        # all land cards revealed this way onto the battlefield tapped, and
+        # exiles the rest." (Clear the Land.) The counted, sorted reading, tried
+        # **before** the one-card one below: they share the first three words,
+        # and the shorter production would take "reveals the top" and then
+        # refuse on the number — which is a refusal, not a fall-through, once it
+        # has consumed. It declines without consuming, so the one-card reading
+        # keeps every line and every error it had.
+        sorted_top = accept_subject_reveals_counted_top_sorted(stream, source_spec)
+        if sorted_top is not None:
+            return sorted_top
         top = accept_subject_reveals_top_of_library(stream, source_spec)
         if top is not None:
             return top

@@ -342,7 +342,6 @@ _BY_NODE_TYPE_WITH_EVENT: dict[type, object] = {
     # event fired — and refuses under one that records none rather than
     # searching for a name nobody wrote down. It left the name-only table above
     # the moment its lowering started deciding something.
-    ast.SearchLibrary: _lower_search_library,
     # "…**that player** puts the cards in their hand on the bottom of their
     # library in any order, then draws that many cards" (Teferi's Puzzle Box).
     ast.PutHandCardsOnLibrary: _lower_put_hand_cards_on_library,
@@ -414,6 +413,15 @@ _BY_NODE_TYPE_WITH_EVENT: dict[type, object] = {
 #: the three above like every other pair of them.
 _BY_NODE_TYPE_WITH_EVENT_AND_PRODUCED: dict[type, object] = {
     ast.BlocksThisTurnIfAble: _lower_blocks_this_turn_if_able,
+    # "…a card **with the same name as that creature**" (Remembrance) reads the
+    # firing event's object; "…a card **with the same name as that card**"
+    # (Assembly Hall) reads a card an earlier step of this same effect turned
+    # face up. One node, two pronouns, two different places to look — which is
+    # exactly this table's shape, and why the search left the event-only table
+    # above the moment the second referent arrived. Under neither record the
+    # words name nothing and the lowering refuses, rather than searching the
+    # whole library.
+    ast.SearchLibrary: _lower_search_library,
 }
 
 

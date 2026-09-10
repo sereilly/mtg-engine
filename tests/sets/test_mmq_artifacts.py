@@ -272,3 +272,100 @@ def test_a_land_drop_silences_mercadian_atlas(set_pool):
 
     assert p1.hand == []
     assert [card.name for card in p1.library] == ["top", "next"]
+
+
+# --- W2G2: libraries and graveyards ---
+# Assembly Hall: a reveal out of your own hand, and a search whose name comes
+# from what that reveal turned face up.
+from engine import Game, PlayerState
+from engine.card_loader import load_cards, manifest_set_path
+from engine.models import Permanent
+from tests.helpers import resolve_stack
+
+_W2G2_LEA = {c.name: c for c in load_cards(manifest_set_path("LEA"))}
+
+
+def _w2g2_hall(card):
+    """A two-seat game with *card* on seat 0's battlefield, ready to tap."""
+    game = Game(players=[PlayerState(name="Alice"), PlayerState(name="Bob")])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    perm = Permanent(card=card)
+    perm.metadata["summoning_sickness_turn"] = -99
+    game._put_permanent_onto_battlefield(0, perm, None)
+    return game, perm, game.players[0]
+    # end of _w2g2_hall
+
+
+def test_w2g2_assembly_hall_searches_for_the_revealed_cards_name(set_pool):
+    """"{4}, {T}: Reveal a creature card in your hand. Search your library for a
+    card **with the same name as that card**, reveal it, put it into your hand,
+    then shuffle."
+
+    "That card" is a third referent for CR 201.2's name comparison: not the
+    board ("another permanent") and not the firing event's object ("that
+    creature"), but a card an earlier step of *this same effect* turned face up.
+    Its own field and its own record key for that reason -- a single field would
+    make the search read whichever of them happened to be there.
+
+    The library holds two cards the reveal did **not** name, and that is the
+    assertion: a dropped name comparison makes this a Demonic Tutor.
+    """
+    pool = set_pool("MMQ")
+    game, _perm, caster = _w2g2_hall(pool["Assembly Hall"])
+    caster.hand.extend([_W2G2_LEA["Grizzly Bears"], _W2G2_LEA["Lightning Bolt"]])
+    caster.library.extend([
+        _W2G2_LEA["Serra Angel"],
+        _W2G2_LEA["Grizzly Bears"],
+        _W2G2_LEA["Forest"],
+    ])
+
+    result = game.activate_permanent_ability(0, "Assembly Hall")
+    resolve_stack(game)
+    assert result.supported, result.details
+
+    owed = [c for c in game.pending_choices if c.kind == "search_library"]
+    assert owed, "the search should be owed once the reveal is answered"
+    restrictions = owed[0].data["restrictions"]
+    assert restrictions["named_from_record"] == "revealed_hand_cards"
+    assert restrictions["named"] == "Grizzly Bears"
+
+    from engine.search_filters import search_matches
+
+    offered = [
+        card.name for card in caster.library
+        if search_matches(card, owed[0].data, game=game, owner=0)
+    ]
+    assert offered == ["Grizzly Bears"]
+
+    assert game.resolve_pending_choice(
+        "search_library", 0, zone="library", library_index=1,
+    )
+    resolve_stack(game)
+    assert [c.name for c in caster.hand].count("Grizzly Bears") == 2
+    assert sorted(c.name for c in caster.library) == ["Forest", "Serra Angel"]
+    # end of test_w2g2_assembly_hall_searches_for_the_revealed_cards_name
+
+
+def test_w2g2_assembly_hall_reveals_only_a_creature_card(set_pool):
+    """"Reveal **a** creature card in your hand."
+
+    A printed count where every earlier printing of this sentence said "any
+    number of", and a printed noun phrase the prompt is built from rather than
+    checked against -- a prompt listing a wider set than the card names is a card
+    that reports supported and cheats. With no creature card in hand there is
+    nothing to reveal, so the search behind it has no name and finds nothing
+    rather than everything.
+    """
+    pool = set_pool("MMQ")
+    game, _perm, caster = _w2g2_hall(pool["Assembly Hall"])
+    caster.hand.append(_W2G2_LEA["Lightning Bolt"])
+    caster.library.extend([_W2G2_LEA["Serra Angel"], _W2G2_LEA["Forest"]])
+
+    result = game.activate_permanent_ability(0, "Assembly Hall")
+    resolve_stack(game)
+
+    assert result.supported, result.details
+    assert sorted(c.name for c in caster.library) == ["Forest", "Serra Angel"]
+    assert [c.name for c in caster.hand] == ["Lightning Bolt"]
+    # end of test_w2g2_assembly_hall_reveals_only_a_creature_card

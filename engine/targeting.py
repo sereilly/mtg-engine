@@ -1438,6 +1438,16 @@ def _graveyard_return_spec(payload: dict) -> dict:
     # just offered.
     if payload.get("graveyard_subtypes"):
         spec["graveyard_subtypes"] = list(payload["graveyard_subtypes"])
+    # "target **green** card" (Revive) and "target **basic** land card"
+    # (Groundskeeper). Handed over in the key names ``graveyard_card_matches``
+    # reads, for the subtype's reason directly above: the handler re-checks the
+    # chosen card against this same payload, so a spec that dropped either would
+    # offer a card the resolution then declines — and for Revive, whose line has
+    # no *other* narrowing, dropping the colour is the whole restriction gone.
+    if payload.get("graveyard_colors"):
+        spec["graveyard_colors"] = list(payload["graveyard_colors"])
+    if payload.get("supertypes"):
+        spec["supertypes"] = list(payload["supertypes"])
     # "Return **another** target artifact card…" (Junk Diver). Carried onto the
     # spec for the subtype's reason directly above: the enumerator reads it
     # through the one predicate the handler also reads
@@ -1470,6 +1480,60 @@ def _graveyard_exile_spec(payload: dict) -> dict:
         # "creature" is the enumerator's own default, so naming it changes
         # nothing; every other type is carried.
         spec["card_type"] = card_type
+    return spec
+
+
+def _graveyard_exile_pile_spec(payload: dict) -> dict | None:
+    """"Exile X target creature cards from **your** graveyard." (Midnight
+    Ritual.)
+
+    The counted graveyard exile is one instruction over three piles, and only
+    one of them is announced. Rysorian Badger's is "defending player's", frozen
+    into a *trigger's* context by the declare-attackers fire site, and Ebony
+    Charm's is "a single graveyard", named by the chooser as the spell resolves
+    — neither seat exists when the object goes on the stack, so neither has a
+    picker to derive and both keep the resolution prompt they were written with.
+    The caster's own pile does exist then, which is the whole of what separates
+    this row from those two.
+
+    So the answer is **None** for both of them rather than a spec that would
+    describe cards nobody is being asked to name: a picker the client fills for
+    an effect whose handler then prompts anyway is two questions for one
+    decision, and CLAUDE.md's rule for this module is to return None when the
+    program lacks the evidence rather than to guess.
+
+    Everything else is handed straight over in the key names
+    ``graveyard_card_matches`` reads — the arrangement every graveyard spec in
+    this module has, because the handler re-checks each announced slot against
+    that same predicate and a spec described in this module's own spelling
+    would be a second answer to which cards may be named.
+    """
+    if payload.get("graveyard_owner") != "you":
+        return None
+    spec: dict = {"kind": GRAVEYARD_TARGET_KIND, "own_graveyard_only": True}
+    card_type = payload.get("card_type")
+    if payload.get("any_card") or card_type is None:
+        spec["any_card"] = True
+    elif card_type != "creature":
+        spec["card_type"] = card_type
+    count = payload.get("count")
+    if count == "x":
+        # The announced X (CR 601.2b), which is not a number until the spell is
+        # on the stack — the flag ``_graveyard_return_spec`` already uses for
+        # Shattered Crypt's identical count, so the browser offers X cards
+        # rather than falling back to the one-target default.
+        spec["x_targets"] = True
+    elif isinstance(count, int) and count > 1:
+        spec["max_targets"] = count
+        if not payload.get("up_to"):
+            spec["exact_targets"] = True
+    if spec.get("max_targets") not in (None, 1) or spec.get("x_targets"):
+        # CR 115.3: one printed instance of "target" made plural names no
+        # object twice. ``_graveyard_return_spec``'s derivation one screen up,
+        # and unconditional for its reason — a graveyard target is named by a
+        # card, and no printing in this pool spells one sentence with two
+        # instances of "target … card" in it.
+        spec["distinct_targets"] = True
     return spec
 
 
@@ -2103,6 +2167,9 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     # exactly the Auras the resolution will take.
     "reanimate_aura_onto_source": _graveyard_aura_spec,
     "exile_target_graveyard_card": _graveyard_exile_spec,
+    # The counted twin beside it, and a spec only for the pile whose seat is
+    # known at announcement — see the builder for why the other two are None.
+    "exile_cards_from_graveyard": _graveyard_exile_pile_spec,
     "grant_prevention_shield": _prevention_shield_spec,
     "grant_whole_prevention_shield": _whole_prevention_shield_spec,
     # Honorable Passage names its protected object the way Circle of

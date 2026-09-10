@@ -504,6 +504,14 @@ class ObjectFilter:
     # handler, which resolves the name and then matches on it — the same split
     # ``attached_to`` and the blocked-pair relations already make.
     name_from_event: bool = False
+    # "…**with the same name as that card**" (Assembly Hall). The same
+    # comparison one referent over: the card is one an earlier step of *this
+    # same effect* turned face up, not one the firing event was about. Its own
+    # field for that reason — the two are answered in different places, and a
+    # single field would make the search read whichever of them happened to be
+    # there. Like the one above it, the key travels to the handler, which
+    # resolves the name out of the resolution's scratchpad and then matches.
+    name_from_recorded_card: bool = False
     # "…**other than a basic land**" / "…**except for basic lands**" (Eye of
     # Singularity prints both, one on each line). One field for two spellings,
     # because they name the same set: a permanent that is a land with the Basic

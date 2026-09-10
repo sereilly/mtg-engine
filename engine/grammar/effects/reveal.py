@@ -157,8 +157,14 @@ def _parse_reveal_top(stream: TokenStream) -> ast.Statement:
 #: rather than one, because they are different questions: the match is *kept*
 #: and the rest is *discarded*, and a card that put its finds on the bottom of
 #: the library would be a different effect from one that put the rest there.
-_SORTED_MATCH_ZONES: tuple[str, ...] = ("hand",)
-_SORTED_REST_ZONES: tuple[str, ...] = ("graveyard",)
+#:
+#: "battlefield" and "exile" joined them for Clear the Land — "puts all land
+#: cards revealed this way onto the battlefield tapped, and exiles the rest" —
+#: which is the first printing here that sorts a pile anywhere but a hand and a
+#: graveyard. Each word is still something ``_place_sorted_reveal`` performs,
+#: which is the whole point of the lists being closed.
+_SORTED_MATCH_ZONES: tuple[str, ...] = ("hand", "battlefield")
+_SORTED_REST_ZONES: tuple[str, ...] = ("graveyard", "exile")
 
 
 def _accept_counted_reveal_sorting_by_name(
@@ -654,6 +660,100 @@ def parse_graveyard_top_opponent_chooses(
     )
 
 
+def accept_subject_reveals_counted_top_sorted(
+    stream: TokenStream, subject: "ast.PlayerRef"
+) -> "ast.RevealTopSortingByFilter | None":
+    """``<player> reveals the top <N> cards of their library, puts all <filter>
+    revealed this way onto the battlefield tapped, and exiles the rest`` — or
+    None, unconsumed. (Clear the Land.)
+
+    :func:`_accept_counted_reveal_sorting_by_filter` with a printed subject and
+    the other punctuation: Mulch says "Reveal the top four cards of **your**
+    library." and starts a new sentence for the sort, and this one runs all
+    three clauses together under "each player". Both produce the **same node**,
+    which is the arrangement :func:`accept_subject_reveals_top_of_library`
+    already has one screen down and for the same reason — whose library is
+    turned over is one question, and two nodes would be two places to answer it.
+
+    Every clause is read and checked, none skipped:
+
+    * **whose library** — required to be "their", the back-reference to the
+      subject this production was handed. A second seat there is a sentence
+      nobody prints and one this node cannot express;
+    * **the destinations** — against the same two closed lists Mulch's
+      production checks, so a printing that sorted somewhere the handler cannot
+      reach refuses here rather than lowering onto a zone nothing moves to;
+    * **"tapped"** — CR 110.5b, carried onto the node. Consumed and dropped it
+      would be a strictly better card than the one printed.
+
+    Refuses without consuming, so "each player reveals the top card of their
+    library" keeps the reading and the refusal it already had.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("reveals", "reveal"):
+        return None
+    if not stream.accept_phrase("the", "top"):
+        stream.reset(mark)
+        return None
+    try:
+        count = parse_amount(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not isinstance(count, ast.Fixed) or count.value < 1:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("cards", "of", "their", "library"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_punct(","):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("puts", "all"):
+        stream.reset(mark)
+        return None
+    try:
+        filt = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    # A pile taken off a library is cards, never permanents (CR 400.1), so a
+    # phrase describing something on the battlefield is a different sentence.
+    if not filt.is_card:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("revealed", "this", "way", "onto", "the"):
+        stream.reset(mark)
+        return None
+    match_zone = stream.peek_word()
+    if match_zone not in _SORTED_MATCH_ZONES:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    tapped = stream.accept_word("tapped")
+    stream.accept_punct(",")
+    if not stream.accept_word("and"):
+        stream.reset(mark)
+        return None
+    # "and **exiles** the rest" — the verb *is* the destination here, where
+    # Mulch spells it as "into your <zone>". Read off the same closed list, so
+    # a card printing a verb nothing performs refuses instead of sorting the
+    # remainder somewhere nobody moves it.
+    rest_verb = stream.peek_word()
+    rest_zone = {"exiles": "exile", "exile": "exile"}.get(rest_verb or "")
+    if rest_zone not in _SORTED_REST_ZONES:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    if not stream.accept_phrase("the", "rest"):
+        stream.reset(mark)
+        return None
+    return ast.RevealTopSortingByFilter(
+        count, filt, match_zone=match_zone, rest_zone=rest_zone,
+        whose=subject, tapped=bool(tapped),
+    )
+
+
 def accept_subject_reveals_top_of_library(
     stream: TokenStream, subject: "ast.PlayerRef"
 ) -> "ast.RevealTop | None":
@@ -713,7 +813,18 @@ def parse_reveal_any_number_from_hand(
     mark = stream.mark()
     if not stream.accept_word("reveal"):
         return None
-    if not stream.accept_phrase("any", "number", "of"):
+    # "Reveal **a** creature card in your hand." (Assembly Hall.) One card
+    # instead of a subset, and the same node: what happens is identical and only
+    # the size of the offer differs. The article is required rather than
+    # optional, so "Reveal your hand" (Manabond) and "Reveal the top card of
+    # your library" (Prophecy) still decline here without consuming and keep
+    # every reading and every refusal they had.
+    count: int | None = None
+    if stream.accept_phrase("any", "number", "of"):
+        count = None
+    elif stream.accept_word("a", "an"):
+        count = 1
+    else:
         stream.reset(mark)
         return None
     try:
@@ -729,4 +840,4 @@ def parse_reveal_any_number_from_hand(
     ):
         stream.reset(mark)
         return None
-    return ast.RevealCardsFromHand(filt)
+    return ast.RevealCardsFromHand(filt, count)

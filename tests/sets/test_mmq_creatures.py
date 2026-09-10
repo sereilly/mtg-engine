@@ -1059,3 +1059,88 @@ def test_crag_saurian_compiles_the_damage_event_from_the_damagers_end(set_pool):
     assert trigger.condition.payload["damager_any"] == "a source"
     assert trigger.condition.payload["damaged_self"] == "this creature"
     assert trigger.instruction.payload["who"] == "event_subject_controller"
+
+
+# --- W2G2: libraries and graveyards ---
+# Groundskeeper and Saprazzan Bailiff: a graveyard return narrowed by a printed
+# supertype, and the entry half of the all-graveyards exile sweep.
+from engine import Game, PlayerState
+from engine.card_loader import load_cards, manifest_set_path
+from engine.models import Permanent
+from tests.helpers import resolve_stack
+
+_W2G2_LEA = {c.name: c for c in load_cards(manifest_set_path("LEA"))}
+
+
+def _w2g2_board(card):
+    """A two-seat game with *card* already on seat 0's battlefield and able to
+    act -- summoning sickness cleared, mana enforcement off."""
+    game = Game(players=[PlayerState(name="Alice"), PlayerState(name="Bob")])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    perm = Permanent(card=card)
+    perm.metadata["summoning_sickness_turn"] = -99
+    game._put_permanent_onto_battlefield(0, perm, None)
+    return game, perm, game.players[0], game.players[1]
+    # end of _w2g2_board
+
+
+def test_w2g2_groundskeeper_returns_only_a_basic_land(set_pool):
+    """"{1}{G}: Return target **basic land** card from your graveyard to your
+    hand."
+
+    CR 205.4a's supertype, and the whole of what separates this ability from
+    Regrowth's. ``graveyard_card_matches`` has read the key since Lodestone
+    Bauble and ``_graveyard_to_hand_payload`` has emitted it -- the blanket
+    refusal in front of the graveyard-to-hand pair was all that stood between
+    them, so this asserts both ends: the picker refuses the creature card with
+    nothing paid (CR 602.2b), and the Forest comes back.
+    """
+    pool = set_pool("MMQ")
+    game, _perm, caster, _ = _w2g2_board(pool["Groundskeeper"])
+    caster.graveyard.extend([_W2G2_LEA["Forest"], _W2G2_LEA["Grizzly Bears"]])
+
+    refused = game.activate_permanent_ability(
+        0, "Groundskeeper", target_permanent_index=1,
+    )
+    assert not refused.supported
+    assert [c.name for c in caster.graveyard] == ["Forest", "Grizzly Bears"]
+
+    taken = game.activate_permanent_ability(
+        0, "Groundskeeper", target_permanent_index=0,
+    )
+    resolve_stack(game)
+
+    assert taken.supported, taken.details
+    assert [c.name for c in caster.hand] == ["Forest"]
+    assert [c.name for c in caster.graveyard] == ["Grizzly Bears"]
+    # end of test_w2g2_groundskeeper_returns_only_a_basic_land
+
+
+def test_w2g2_saprazzan_bailiff_exiles_from_every_graveyard_on_entry(set_pool):
+    """"When this creature enters, exile all artifact and enchantment cards from
+    **all graveyards**."
+
+    The Bailiff is the card that made the second copy visible: its *leave* line
+    ("return all artifact and enchantment cards from all graveyards to their
+    owners' hands") already lowered clean, because the return sweep read the
+    plural pile. Only the exile half refused, on the identical words.
+
+    Each card goes to its own owner's exile (CR 406.3), which the two seats'
+    piles here are what check -- a sweep that pooled them would read green
+    against a single-seat assertion.
+    """
+    pool = set_pool("MMQ")
+    game, _perm, caster, other = _w2g2_board(_W2G2_LEA["Grizzly Bears"])
+    caster.graveyard.append(_W2G2_LEA["Mox Jet"])
+    other.graveyard.extend([_W2G2_LEA["Black Lotus"], _W2G2_LEA["Grizzly Bears"]])
+
+    bailiff = Permanent(card=pool["Saprazzan Bailiff"])
+    game._put_permanent_onto_battlefield(0, bailiff, None)
+    resolve_stack(game)
+
+    assert [c.name for c in caster.exile] == ["Mox Jet"]
+    assert [c.name for c in other.exile] == ["Black Lotus"]
+    assert not caster.graveyard
+    assert [c.name for c in other.graveyard] == ["Grizzly Bears"]
+    # end of test_w2g2_saprazzan_bailiff_exiles_from_every_graveyard_on_entry

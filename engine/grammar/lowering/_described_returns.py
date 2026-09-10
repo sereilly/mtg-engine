@@ -41,6 +41,7 @@ from ...oracle_types import CHOSEN_THIS_WAY_OBJECTS, OracleInstruction
 from ...subject_filters import untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
+from ._piles import _sweep_graveyard_actor
 from ._events import (EVENT_SUBJECT_OWNER, EVENT_SUBJECT_PLAYER,
                       _EVENT_SUBJECT_OWNERS, _EVENT_SUBJECT_PLAYERS)
 from ._common import (
@@ -104,6 +105,17 @@ def _graveyard_to_hand_payload(filt: ast.ObjectFilter) -> dict[str, object]:
     # the branch whose handler asks that predicate.
     if filt.supertypes:
         subtypes = {**subtypes, "supertypes": list(filt.supertypes)}
+    # "Return target **green** card from your graveyard to your hand." (Revive.)
+    # The printed colour, on the key ``graveyard_card_matches`` reads for the
+    # reanimation's identical phrase (Dreams of the Dead's "white or black") —
+    # a *union*, because CR 105.2b makes "white or black" one phrase naming two
+    # colours and answering only the first silently takes half the legal
+    # choices away. Additive like the two above it, so every payload written
+    # before this is byte-identical, and lifted out of
+    # ``_reads_no_return_restriction`` only by the graveyard-to-hand pair, whose
+    # picker, cast gate and handler all ask that one predicate.
+    if filt.colors:
+        subtypes = {**subtypes, "graveyard_colors": list(filt.colors)}
     if len(filt.card_types) > 1:
         return {
             "any_card": False,
@@ -114,41 +126,6 @@ def _graveyard_to_hand_payload(filt: ast.ObjectFilter) -> dict[str, object]:
     card_type = filt.card_types[0] if filt.card_types else None
     return {"any_card": card_type is None, "card_type": card_type, **subtypes}
 
-
-
-def _sweep_graveyard_actor(node: ast.ReturnToZone, subject) -> str | None:
-    """Who performs a sweep out of a graveyard — ``"each_player"``, ``"you"``,
-    or None when the sentence's two halves cannot be reconciled.
-
-    The actor and the graveyard's possessive are checked **against each other**
-    rather than either being read alone: "each player … from their graveyard"
-    is one claim said twice, and who returns the cards is the whole difference
-    between All Hallow's Eve and a card that wins the game. One function
-    because the two destinations ask it identically — a second copy is how the
-    battlefield sweep and the hand sweep end up disagreeing about whose pile
-    they empty.
-    """
-    actor = node.actor.kind if node.actor is not None else None
-    owner = (
-        subject.filter.zone_owner.kind
-        if subject.filter.zone_owner is not None
-        else None
-    )
-    if actor == "each_player" and owner in ("owner", "each_player"):
-        return "each_player"
-    # "Return all basic land cards from **all graveyards** …" (Planar Birth).
-    # The plural pile with no printed subject in front of it: the spell's
-    # controller performs the move, but every graveyard on the table is swept,
-    # which is the same set of piles "each player … their graveyard" names.
-    # Read here rather than as a second `who`, because what the handler does
-    # with the pair is identical — each card comes back under its own player's
-    # side either way, and that is CR 400.3 rather than a choice this sentence
-    # makes.
-    if actor is None and owner == "each_player":
-        return "each_player"
-    if actor is None and owner == "you":
-        return "you"
-    return None
 
 
 def lower_described_return(

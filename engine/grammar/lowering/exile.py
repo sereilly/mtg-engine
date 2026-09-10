@@ -34,6 +34,7 @@ from ..errors import LoweringError
 from ._bound_exiles import (_entering_counter_payload, lower_pronoun_exile,
                             lower_restated_noun_exile)
 from ._events import EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS
+from ._piles import _sweep_graveyard_actor
 from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS, _describe_several_targets,
     _describe_targets, _filter_payload,
@@ -47,7 +48,13 @@ _EXILED_CREATURE = ast.ObjectFilter(card_types=("creature",))
 #: Idiom 2 as a set rather than a fall-through: the handler resolves exactly
 #: these, and a referent it cannot name would be dropped and the pile taken
 #: from whoever the resolution happened to be carrying.
-_GRAVEYARD_PILE_SEATS = frozenset({"defending_player"})
+#: "you" joined it for Midnight Ritual — "Exile X target creature cards from
+#: **your** graveyard" — the first printing of this shape whose pile is the
+#: caster's own. That is what makes the pick *announceable*: the seat is known
+#: when the spell goes on the stack, so ``targeting`` derives a picker for it
+#: and the cards are named at CR 601.2c, where the other two piles' are chosen
+#: as the ability resolves for the reason stated at the branch below.
+_GRAVEYARD_PILE_SEATS = frozenset({"defending_player", "you"})
 
 #: The pile "from **a single** graveyard" names (Ebony Charm): not a seat the
 #: sentence prints but one the chooser picks as the spell resolves. It is a
@@ -412,18 +419,21 @@ def _lower_exile(
             # of picking a half: "each player exiles all creature cards from
             # your graveyard" is one graveyard and every player, and there is
             # no such card.
-            actor = node.actor.kind if node.actor is not None else None
-            owner = (
-                filt.zone_owner.kind if filt.zone_owner is not None else None
-            )
-            if actor is None and owner == "you":
-                graveyard_owner = "you"
-            elif actor == "each_player" and owner in ("owner", "each_player"):
-                graveyard_owner = "each_player"
-            else:
+            #
+            # Asked of ``_piles._sweep_graveyard_actor``, which is where that
+            # pairing lives for both families rather than once per family. It
+            # was open-coded here, and the copy was missing a row the original
+            # had: "from **all graveyards**" — no printed subject, every pile on
+            # the table — which is the same set of piles "each player … their
+            # graveyard" names and which Planar Birth's *return* sweep has read
+            # since it was written. So "exile all creature cards from all
+            # graveyards" refused while the identical return lowered, for no
+            # reason either sentence prints.
+            graveyard_owner = _sweep_graveyard_actor(node, subject)
+            if graveyard_owner is None:
                 raise LoweringError(
-                    "the graveyard exile sweep reads your own pile or "
-                    "\"each player … their graveyard\"",
+                    "the graveyard exile sweep reads your own pile, "
+                    "\"each player … their graveyard\", or \"all graveyards\"",
                     node=node,
                 )
             if node.counters:
@@ -599,7 +609,13 @@ def _lower_exile(
                 "a counted graveyard exile carries no counters", node=node
             )
         pile: dict[str, object] = {
-            "count": int(subject.count),
+            # "Exile **X** target creature cards" (Midnight Ritual). The
+            # announced X (CR 601.2b), which is not a number until the spell is
+            # on the stack — so it travels as the letter and the handler turns
+            # it into one, the arrangement the graveyard *return* already has
+            # for Shattered Crypt. Written as ``int(subject.count)``, every X
+            # would have arrived as a 0 and the spell would exile nothing.
+            "count": "x" if subject.count_from_x else int(subject.count),
             "graveyard_owner": pile_owner,
             # "**up to** two" is a ceiling, and the difference is the whole of
             # what the seat is being asked: a fixed count would make a pile of
@@ -620,6 +636,17 @@ def _lower_exile(
             # spells reported "no graveyard holds a card it can exile" and
             # exiled nothing at all.
             pile["any_card"] = True
+        if pile_owner == "you":
+            # The target description, for the one pile whose seat is known at
+            # announcement. ``targeting._graveyard_exile_pile_spec`` derives the
+            # picker from it and the handler resolves the announced slots. The
+            # other two piles carry no description and keep their resolution
+            # prompt, so every payload written before this is byte-identical.
+            pile["targets"] = {
+                "quantifier": subject.quantifier,
+                "kind": "card",
+                "count": "x" if subject.count_from_x else int(subject.count),
+            }
         return (OracleInstruction("exile_cards_from_graveyard", "", pile),)
     # "…**with two delay counters on it**." (Ertai's Meddling.) CR 121.1's
     # counters put on the card as it arrives in exile, which only ``exile_self``

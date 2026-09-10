@@ -217,16 +217,21 @@ class RevealCardsFromHand:
     reveal, Metalworker would add two mana for every card its controller held
     including the lands.
 
-    "Any number" is carried by construction rather than as a count field:
-    every printing of this sentence is "any number of", the offer is 0 to as
-    many as answer the phrase, and a node with a number on it would be a
-    printed count no card has.
+    ``count`` is the printed number, and **None means "any number of"** — the
+    reading every card before Assembly Hall printed. This field said so by not
+    existing ("a node with a number on it would be a printed count no card
+    has"), which stopped being true the moment "{4}, {T}: Reveal **a** creature
+    card in your hand" arrived: one card, chosen, and the sentence behind it
+    reads its *name* rather than the size of the set. The two are one node
+    because what happens is identical — a subset of your own hand becomes
+    public — and only the size of the offer differs.
 
     *filter* is the printed noun phrase, and it is what the seat is offered
     rather than a check applied afterwards — a prompt listing a wider set than
     the card names is a card that reports supported and cheats.
     """
     filter: ObjectFilter
+    count: int | None = None
 
 
 @dataclass(frozen=True)

@@ -55,7 +55,7 @@ from ._events import (ATTACHED_PERMANENT_CONTROLLER,
                       EXILED_SPELL_RECORD,
                       LAST_TARGET_CONTROLLER, LAST_TARGET_NAME,
                       LAST_TARGET_OWNER,
-                      EXILED_THIS_WAY,
+                      EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS,
                       _EVENT_SUBJECT_POWER_RECORD,
                       _EVENT_SUBJECT_TOUGHNESS_RECORD)
 # The key *names* straight from the floor that owns them. This table says which
@@ -234,7 +234,15 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # whole table's graveyards. The sweep writes one entry per seat, including
     # the empty ones — a seat the map never mentioned reads as somebody else's
     # pile the moment a later step iterates it.
-    "exile_graveyard_cards": EXILED_BY_SEAT,
+    # …and the flat pair beside it, because the same step answers a second
+    # question a card actually prints: "you gain 1 life **for each card exiled
+    # this way**" (Honor the Fallen) asks how many, over the whole table, and
+    # the per-seat map above cannot answer it without a reader that knows the
+    # map's shape. Three records for one step rather than two spellings of one:
+    # the map is *whose*, the count is *how many*, and the list is *which*.
+    "exile_graveyard_cards": (
+        EXILED_BY_SEAT, EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS,
+    ),
     # CR 705.2: only the player who flipped wins or loses that flip, and both
     # "if you win" and "if you lose" read the one result — so the flip records
     # it and the conditionals after it read the record, rather than each

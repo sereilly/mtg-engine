@@ -8,6 +8,9 @@ of them:
   cast permission that reads that same record on the other.
 * :data:`_SEARCH_EXILE_HONOURED` is the set of narrowings a card-pile picker
   can answer at all.
+* :func:`_sweep_graveyard_actor` reconciles *who empties a pile* with *whose
+  pile it is* — read by `returns`' sweeps and by `exile`'s, which is exactly
+  the two-families shape this floor exists for.
 
 A floor rather than a family, for ``_amounts``' reason one module over: both
 halves of the ``exile``/``permissions`` split ask them, and a leaf two families
@@ -115,3 +118,38 @@ def _chosen_graveyard_cards(
             }
         ),
     }
+
+
+def _sweep_graveyard_actor(node, subject) -> str | None:
+    """Who performs a sweep out of a graveyard — ``"each_player"``, ``"you"``,
+    or None when the sentence's two halves cannot be reconciled.
+
+    The actor and the graveyard's possessive are checked **against each other**
+    rather than either being read alone: "each player … from their graveyard"
+    is one claim said twice, and who returns the cards is the whole difference
+    between All Hallow's Eve and a card that wins the game. One function
+    because the two destinations ask it identically — a second copy is how the
+    battlefield sweep and the hand sweep end up disagreeing about whose pile
+    they empty.
+    """
+    actor = node.actor.kind if node.actor is not None else None
+    owner = (
+        subject.filter.zone_owner.kind
+        if subject.filter.zone_owner is not None
+        else None
+    )
+    if actor == "each_player" and owner in ("owner", "each_player"):
+        return "each_player"
+    # "Return all basic land cards from **all graveyards** …" (Planar Birth).
+    # The plural pile with no printed subject in front of it: the spell's
+    # controller performs the move, but every graveyard on the table is swept,
+    # which is the same set of piles "each player … their graveyard" names.
+    # Read here rather than as a second `who`, because what the handler does
+    # with the pair is identical — each card comes back under its own player's
+    # side either way, and that is CR 400.3 rather than a choice this sentence
+    # makes.
+    if actor is None and owner == "each_player":
+        return "each_player"
+    if actor is None and owner == "you":
+        return "you"
+    return None

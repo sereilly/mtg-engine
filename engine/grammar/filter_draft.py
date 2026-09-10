@@ -227,6 +227,7 @@ class _FilterDraft:
     # names on ``ast.ObjectFilter``.
     shares_name_with_another: bool = False
     name_from_event: bool = False
+    name_from_recorded_card: bool = False
     excluded_basic_lands: bool = False
     created_with_source: bool = False
     #: See ``ast.ObjectFilter.put_onto_battlefield_by_source``.
@@ -275,6 +276,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         not_ability_targeted_by_same_name=d.not_ability_targeted_by_same_name,
         shares_name_with_another=d.shares_name_with_another,
         name_from_event=d.name_from_event,
+        name_from_recorded_card=d.name_from_recorded_card,
         excluded_basic_lands=d.excluded_basic_lands,
         any_classes=d.any_classes,
         targets_object=d.targets_object,

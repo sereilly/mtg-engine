@@ -464,3 +464,85 @@ def test_g1_a_legate_condition_reads_back_with_the_right_article(set_pool):
     assert alternative_costs(pool["Land Grant"])[0].condition.describe() == (
         "you have no land cards in hand"
     )
+
+
+# --- W2G2: libraries and graveyards ---
+# Honor the Fallen: the graveyard sweep that reads **all** graveyards, and the
+# life it pays for what it took.
+from engine import Game, PlayerState
+from engine.card_loader import load_cards, manifest_set_path
+from tests.helpers import resolve_stack
+
+_W2G2_LEA = {c.name: c for c in load_cards(manifest_set_path("LEA"))}
+
+
+def _w2g2_sweep_table():
+    """A two-seat game, both graveyards empty, mana enforcement off."""
+    game = Game(players=[PlayerState(name="Alice"), PlayerState(name="Bob")])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    return game, game.players[0], game.players[1]
+    # end of _w2g2_sweep_table
+
+
+def test_w2g2_honor_the_fallen_empties_every_graveyard_and_pays_per_card(set_pool):
+    """"Exile all creature cards from **all graveyards**. You gain 1 life for
+    each card exiled this way."
+
+    Two gaps in one card. The sweep read "your graveyard" and "each player ...
+    their graveyard" and refused the plural pile, though the *return* sweep one
+    family over (Planar Birth) had read exactly those words since it was written
+    -- a second copy of one fact, now one predicate on the shared floor. And the
+    sweep recorded only a per-seat map, so "for each card exiled this way" had
+    no producer to read.
+
+    The life is what pins both: three creature cards across two graveyards is
+    three life, and the non-creature cards stay where they are.
+    """
+    pool = set_pool("MMQ")
+    game, caster, other = _w2g2_sweep_table()
+    caster.graveyard.extend(
+        [_W2G2_LEA["Grizzly Bears"], _W2G2_LEA["Lightning Bolt"]]
+    )
+    other.graveyard.extend([
+        _W2G2_LEA["Black Knight"],
+        _W2G2_LEA["Llanowar Elves"],
+        _W2G2_LEA["Mox Jet"],
+    ])
+    caster.life = 20
+    caster.hand.append(pool["Honor the Fallen"])
+
+    result = game.cast_from_hand(0, "Honor the Fallen")
+    resolve_stack(game)
+
+    assert result.supported, result.details
+    assert sorted(c.name for c in caster.exile) == ["Grizzly Bears"]
+    assert sorted(c.name for c in other.exile) == [
+        "Black Knight", "Llanowar Elves",
+    ]
+    assert [c.name for c in other.graveyard] == ["Mox Jet"]
+    assert caster.life == 23
+    # end of test_w2g2_honor_the_fallen_empties_every_graveyard_and_pays_per_card
+
+
+def test_w2g2_honor_the_fallen_gains_nothing_over_empty_graveyards(set_pool):
+    """A sweep that took nothing pays nothing.
+
+    The record is seeded before anything moves for exactly this: an *absent*
+    scratchpad key is a back-reference with no producer, which is a refusal
+    rather than a zero -- so the life clause would have read whatever a ``.get``
+    default happened to be.
+    """
+    pool = set_pool("MMQ")
+    game, caster, other = _w2g2_sweep_table()
+    other.graveyard.append(_W2G2_LEA["Mox Jet"])
+    caster.life = 20
+    caster.hand.append(pool["Honor the Fallen"])
+
+    result = game.cast_from_hand(0, "Honor the Fallen")
+    resolve_stack(game)
+
+    assert result.supported, result.details
+    assert caster.life == 20
+    assert [c.name for c in other.graveyard] == ["Mox Jet"]
+    # end of test_w2g2_honor_the_fallen_gains_nothing_over_empty_graveyards

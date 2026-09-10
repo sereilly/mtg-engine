@@ -141,6 +141,31 @@ def _lower_reveal_top_sorting_by_filter(
         raise LoweringError(
             "the revealed pile is a fixed number of cards", node=node
         )
+    # "**Each player** reveals the top five cards of **their** library."
+    # (Clear the Land.) Whose pile, and the only value beside the absent one:
+    # "your" is the caster's, which is what every printing before this said by
+    # saying nothing. A seat the handler cannot loop over refuses rather than
+    # turning the table's libraries into one.
+    whose = node.whose.kind if node.whose is not None else None
+    if whose not in (None, "you", "each_player"):
+        raise LoweringError(
+            f"the sorted reveal opens your own library or each player's, "
+            f"not {whose!r}",
+            node=node,
+        )
+    extra: dict[str, object] = {}
+    if whose == "each_player":
+        extra["whose"] = "each_player"
+    # "…onto the battlefield **tapped**" — CR 110.5b, and only ever on the
+    # match half, which is where the word is printed. Carried only when the
+    # sentence prints it, so Mulch's payload stays byte-identical.
+    if node.tapped:
+        if node.match_zone != "battlefield":
+            raise LoweringError(
+                "only a find that enters the battlefield can arrive tapped",
+                node=node,
+            )
+        extra["match_tapped"] = True
     return (
         OracleInstruction(
             "reveal_top_sorting_by_filter", "",
@@ -149,6 +174,7 @@ def _lower_reveal_top_sorting_by_filter(
                 "filter": described,
                 "match_zone": node.match_zone,
                 "rest_zone": node.rest_zone,
+                **extra,
             },
         ),
     )
@@ -356,7 +382,16 @@ def _lower_reveal_cards_from_hand(
                 # A key rather than a count of -1, because "how many may I
                 # pick" and "how many must I pick" are two questions and the
                 # prompt has to gate on both.
-                "any_number": True,
+                #
+                # "Reveal **a** creature card in your hand" (Assembly Hall)
+                # prints a number instead, and the prompt reads both keys —
+                # ``_how_many_cards_to_choose`` takes the count and
+                # ``_may_choose_fewer_cards_in_hand`` the flag — so a card that
+                # names one card owes one where the hand holds it. Every payload
+                # written before this stays byte-identical: absent means "any
+                # number", which is what those cards print.
+                "any_number": node.count is None,
+                **({} if node.count is None else {"count": int(node.count)}),
                 # CR 701.20a: what is picked is shown to *all* players. Its own
                 # key rather than the count below, because the two are separate
                 # questions — Sylvan Library's pick records a set and is not

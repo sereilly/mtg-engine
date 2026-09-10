@@ -150,3 +150,190 @@ def test_g1_land_grant_still_costs_its_mana_when_a_land_is_held(set_pool):
     assert result.supported, result.details
     assert not any(caster.mana_pool.values())
     assert not any("revealed their hand" in line for line in game.log)
+
+
+# --- W2G2: libraries and graveyards ---
+# Bribery, Clear the Land, Midnight Ritual and Revive. The shared question is
+# **whose pile**, and each of these four answers it with a seat that is not the
+# obvious one: an opponent's library, every player's library, the caster's own
+# graveyard read by an announced X, and a graveyard narrowed by a printed
+# colour.
+from engine import Game, PlayerState
+from engine.card_loader import load_cards, manifest_set_path
+from tests.helpers import resolve_stack
+
+_W2G2_LEA = {c.name: c for c in load_cards(manifest_set_path("LEA"))}
+
+
+def _w2g2_table(mine=(), theirs=()):
+    """A two-seat game with the two libraries stocked, top card first.
+
+    Every card in this block reads a library or a graveyard by position, so the
+    order matters and the helper takes it. Mana enforcement is off, which is the
+    standard rig.
+    """
+    game = Game(players=[PlayerState(name="Alice"), PlayerState(name="Bob")])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.players[0].library.extend(mine)
+    game.players[1].library.extend(theirs)
+    return game, game.players[0], game.players[1]
+    # end of _w2g2_table
+
+
+def test_w2g2_revive_only_reaches_the_printed_colour(set_pool):
+    """"Return target **green** card from your graveyard to your hand."
+
+    The colour is this card's *whole* restriction -- its noun phrase names no
+    card type at all -- so a lowering that dropped it would make Revive a
+    Regrowth. Both directions, because a narrowing is only implemented when the
+    illegal choice is refused as well as the legal one taken.
+    """
+    pool = set_pool("MMQ")
+    game, caster, _ = _w2g2_table()
+    caster.graveyard.extend(
+        [_W2G2_LEA["Black Knight"], _W2G2_LEA["Llanowar Elves"]]
+    )
+    caster.hand.append(pool["Revive"])
+
+    refused = game.cast_from_hand(0, "Revive", target_permanent_index=0)
+    assert not refused.supported
+    assert [c.name for c in caster.hand] == ["Revive"]
+
+    taken = game.cast_from_hand(0, "Revive", target_permanent_index=1)
+    resolve_stack(game)
+
+    assert taken.supported, taken.details
+    assert "Llanowar Elves" in [c.name for c in caster.hand]
+    assert [c.name for c in caster.graveyard] == ["Black Knight", "Revive"]
+    # end of test_w2g2_revive_only_reaches_the_printed_colour
+
+
+def test_w2g2_midnight_ritual_exiles_announced_x_and_pays_per_card(set_pool):
+    """"Exile **X target** creature cards from your graveyard. For each creature
+    card exiled this way, create a 2/2 black Zombie creature token."
+
+    Three things at once, each a separate refusal before this round: the pile is
+    the caster's **own** (the counted graveyard exile read only a named
+    opponent's), the count is the **announced X** (CR 601.2b -- written as a
+    literal it arrives as 0 and the spell exiles nothing), and the tokens are
+    one per card actually exiled rather than one per X.
+
+    The non-creature card in the pile is the assertion that matters: it stays,
+    and it buys no Zombie.
+    """
+    pool = set_pool("MMQ")
+    game, caster, _ = _w2g2_table()
+    caster.graveyard.extend([
+        _W2G2_LEA["Grizzly Bears"],
+        _W2G2_LEA["Lightning Bolt"],
+        _W2G2_LEA["Black Knight"],
+    ])
+    caster.hand.append(pool["Midnight Ritual"])
+
+    result = game.cast_from_hand(
+        0, "Midnight Ritual", x_value=2, target_permanent_index=[0, 2],
+    )
+    resolve_stack(game)
+
+    assert result.supported, result.details
+    assert sorted(c.name for c in caster.exile) == [
+        "Black Knight", "Grizzly Bears",
+    ]
+    assert [c.name for c in caster.graveyard] == [
+        "Lightning Bolt", "Midnight Ritual",
+    ]
+    zombies = [p for p in game.controlled_by(0) if p.card.name == "Zombie Token"]
+    assert len(zombies) == 2
+    assert all(p.card.colors == ("B",) for p in zombies)
+    # end of test_w2g2_midnight_ritual_exiles_announced_x_and_pays_per_card
+
+
+def test_w2g2_bribery_steals_out_of_the_opponents_library(set_pool):
+    """"Search **target opponent's** library for a creature card and put that
+    card onto the battlefield **under your control**."
+
+    The first card in this pool that separates *whose library is opened* from
+    *whose battlefield receives*. ``search_filters.landing_seat`` follows the
+    zone by default, so with the printed possessive dropped the Angel would
+    enter on the side it came from -- which is this card backwards.
+
+    And CR 108.3: it is still Bob's card. ``owner_index_of`` answered with the
+    base controller on a stated assumption that every permanent enters under its
+    owner's control, which this card is the first to falsify -- so the Angel
+    would have gone to the thief's graveyard when it died (CR 404.1).
+    """
+    pool = set_pool("MMQ")
+    game, caster, victim = _w2g2_table(theirs=[
+        _W2G2_LEA["Mox Jet"], _W2G2_LEA["Serra Angel"], _W2G2_LEA["Forest"],
+    ])
+    caster.hand.append(pool["Bribery"])
+
+    result = game.cast_from_hand(0, "Bribery", target_player_index=1)
+    resolve_stack(game)
+    assert result.supported, result.details
+
+    owed = [c for c in game.pending_choices if c.kind == "search_library"]
+    assert owed, "the caster should be owed the search"
+    assert owed[0].player_index == 0
+    assert owed[0].data["zone_seat"] == 1
+    assert game.resolve_pending_choice(
+        "search_library", 0, zone="library", library_index=1,
+    )
+    resolve_stack(game)
+
+    mine = list(game.controlled_by(0))
+    assert [p.card.name for p in mine] == ["Serra Angel"]
+    assert not list(game.controlled_by(1))
+    assert "Serra Angel" not in [c.name for c in victim.library]
+    assert game.owner_index_of(mine[0]) == 1
+    # end of test_w2g2_bribery_steals_out_of_the_opponents_library
+
+
+def test_w2g2_clear_the_land_sorts_every_players_own_top_five(set_pool):
+    """"**Each player** reveals the top five cards of **their** library, puts
+    all land cards revealed this way onto the battlefield **tapped**, and exiles
+    the rest."
+
+    One sentence performed once per seat, and every clause of it is asserted:
+    each player's *own* five (not the caster's ten), each player's lands onto
+    that player's *own* battlefield, tapped (CR 110.5b), and everything else to
+    that card's owner's exile rather than to a graveyard.
+    """
+    pool = set_pool("MMQ")
+    game, caster, other = _w2g2_table(
+        mine=[
+            _W2G2_LEA["Forest"], _W2G2_LEA["Grizzly Bears"],
+            _W2G2_LEA["Mountain"], _W2G2_LEA["Lightning Bolt"],
+            _W2G2_LEA["Plains"], _W2G2_LEA["Black Lotus"],
+        ],
+        theirs=[
+            _W2G2_LEA["Island"], _W2G2_LEA["Black Knight"],
+            _W2G2_LEA["Swamp"], _W2G2_LEA["Mox Jet"],
+            _W2G2_LEA["Llanowar Elves"], _W2G2_LEA["Serra Angel"],
+        ],
+    )
+    caster.hand.append(pool["Clear the Land"])
+
+    result = game.cast_from_hand(0, "Clear the Land")
+    resolve_stack(game)
+
+    assert result.supported, result.details
+    assert sorted(p.card.name for p in game.controlled_by(0)) == [
+        "Forest", "Mountain", "Plains",
+    ]
+    assert sorted(p.card.name for p in game.controlled_by(1)) == [
+        "Island", "Swamp",
+    ]
+    assert all(p.tapped for p in game.controlled_by(0))
+    assert all(p.tapped for p in game.controlled_by(1))
+    assert sorted(c.name for c in caster.exile) == [
+        "Grizzly Bears", "Lightning Bolt",
+    ]
+    assert sorted(c.name for c in other.exile) == [
+        "Black Knight", "Llanowar Elves", "Mox Jet",
+    ]
+    # The sixth card of each library is untouched: the reveal is five deep.
+    assert [c.name for c in caster.library] == ["Black Lotus"]
+    assert [c.name for c in other.library] == ["Serra Angel"]
+    # end of test_w2g2_clear_the_land_sorts_every_players_own_top_five
