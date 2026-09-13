@@ -82,6 +82,27 @@ PARSE_LAYERS = [
     # re-exports it so every existing caller keeps its import, exactly as
     # `readers` above is re-exported.
     "prices",
+    # A characteristic of the object a **cost** consumed, named back by the
+    # sentence that charged it — "sacrifice a creature: … where X is the
+    # sacrificed creature's power". The parse-side mirror of
+    # `lowering/_cost_records.py`, carrying that module's name for the reason
+    # the entry below carries `_records`'.
+    #
+    # Pre-split out of `records` at the Phase 0 before the next set, when that
+    # module sat 27 lines under the guard and was one of the two the whole
+    # parse side reaches. The seam is the mirror's own, not a new one: the
+    # lowering halves of these two subjects separated at ULG wave 1, because
+    # `_PRODUCES` is keyed by *instruction kind* and a cost has none — it is
+    # charged by `engine/mixins/stack/activation.py` on the way to the stack
+    # (CR 601.2h, CR 602.2b), not by anything the dispatcher runs. The parse
+    # halves had stayed in one file only because neither had yet crossed a cap.
+    #
+    # The bottom of the parse side with `filter_draft`: it reads `ast` and one
+    # token class, and not `readers` — a cost genitive names no source and
+    # takes no comparison, so the four importers (`amounts`, `where_x`,
+    # `effects/characteristics`, `effects/mana`) were pointed here directly
+    # rather than through a re-export, which is the mirror's decision restated.
+    "cost_records",
     # A quantity read off a *record* of something that already happened — the
     # parse-side mirror of `lowering/_records.py`, carrying that module's name
     # for that reason. "The sacrificed creature's toughness" names an event,

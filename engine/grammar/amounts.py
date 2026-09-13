@@ -15,11 +15,12 @@ from .lexer import GToken, NUMBER, PT, WORD
 # `parse_equal_to` below reads the record-shaped quantities too — one
 # printed "equal to …" reaches both families, which is why the split is
 # by what the quantity *is* rather than by which reader asks for it.
-from .records import (accept_damage_dealt_by_chosen_cast,
-                      accept_counters_removed_for_cost,
-                      accept_cost_characteristic_of,
-                      accept_exiled_for_cost, accept_sacrificed_for_cost,
-                      accept_tapped_for_cost)
+from .cost_records import (accept_counters_removed_for_cost,
+                           accept_cost_characteristic_of,
+                           accept_exiled_for_cost,
+                           accept_sacrificed_for_cost,
+                           accept_tapped_for_cost)
+from .records import accept_damage_dealt_by_chosen_cast
 from .stream import TokenStream
 from .vocabulary import ALL_SUBTYPES, CARD_TYPES, NUMBER_WORDS, singular as _singular
 
@@ -642,7 +643,7 @@ def _parse_equal_to_body(stream: TokenStream) -> ast.Amount | None:
     # same four payment channels the possessive readers below name, with the
     # genitive the other way round — English puts a possessor in front of its
     # noun or behind it with "of", and a card prints whichever it likes. One
-    # reader for both orders (``records.accept_cost_characteristic_of``), so a
+    # reader for both orders (``cost_records.accept_cost_characteristic_of``), so a
     # channel taught to one spelling is not a channel the other cannot find.
     #
     # Read before the possessives because the two cannot collide: this one opens

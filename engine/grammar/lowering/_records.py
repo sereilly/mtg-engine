@@ -20,11 +20,20 @@ controller's seat for as long as both riders have existed, and the table named
 one of them. The **first** entry is the *primary* record — the one "if you do"
 tests, because that rider asks whether the step took place and the primary is
 what a step of that kind always writes when it does.
+
+**The first paragraph is true again as of the Phase 0 before the next set.** Two
+CR 615.5 predicates — ``names_the_shielded_object`` and
+``counts_prevented_damage`` — had accumulated at the bottom of this file, and
+neither read ``_PRODUCES`` at all: they were here because this is a floor, not
+because this is *their* floor. They now sit in ``_prevented_riders``, whose
+stated subject is the rider a shield carries and whose docstring already cited
+the same two cards. Which is the pre-split this module needed as well as the one
+it wanted — the cut that restores a module's subject is worth more headroom than
+the cut that only buys lines.
 """
 
 from __future__ import annotations
 
-from .. import ast
 from ...oracle_types import (CHOSEN_COLOR_THIS_WAY,
                              CHOSEN_CREATURE_TYPE_THIS_WAY,
                              CHOSEN_NUMBER_THIS_WAY,
@@ -925,58 +934,3 @@ def primary_produced(kind: str) -> str | None:
     if recorded is None:
         return None
     return recorded if isinstance(recorded, str) else (recorded[0] if recorded else None)
-
-
-
-
-def names_the_shielded_object(subject) -> bool:
-    """Whether *subject* names the object an earlier step of the effect shielded.
-
-    "…put a +0/+1 counter on **that creature**" (Sacred Boon) and "…on **it**"
-    (Scars of the Veteran) are one referent with two spellings: the only object
-    either sentence has named. A bare pronoun arrives as the ability's own
-    source, because that is what ``parse_recipient`` reads it as with nothing
-    else in the sentence to name — and a spell is not a permanent, so read
-    literally it would place a counter on nothing.
-
-    A floor beside :func:`counts_prevented_damage` and for its reason: what the
-    pronoun means has to be one answer, and the branch that reads the shield
-    record is not the only one that looks at the subject.
-
-    The whole subject test, narrowing included. "That **creature**" states the
-    card type and the pronoun states nothing, and neither is a further
-    restriction the handler could honour — it addresses the object by the id the
-    shield step recorded. Any *other* field is one the sentence added and this
-    reading would drop, so it refuses.
-    """
-    from .. import ast
-    from ._common import _restrictions_beyond
-
-    if not isinstance(subject, ast.TargetSpec):
-        return False
-    if _restrictions_beyond(subject.filter, frozenset({"card_types", "is_source"})):
-        return False
-    if subject.quantifier == "that":
-        return True
-    return subject.quantifier == "it" and subject.filter.is_source
-
-
-def counts_prevented_damage(node) -> bool:
-    """Whether a placement's count is "for each 1 damage prevented this way".
-
-    (Sacred Boon, Scars of the Veteran.) A floor rather than a test written into
-    the counter lowering, because **two** branches of that module have to agree
-    about it: the branch that places a counter on the ability's own source must
-    decline this count, and the branch that reads the shield record must claim
-    it. Written twice they would eventually disagree, and the direction that
-    fails is silent — the source branch claims the sentence first and refuses
-    it, which reads as a card the grammar cannot parse.
-    """
-    from .. import ast
-    from .counters import PREVENTION_SHIELD_RECORD
-
-    count = getattr(node, "count", None)
-    return (
-        isinstance(count, ast.ThatMuch)
-        and count.source == PREVENTION_SHIELD_RECORD
-    )

@@ -30,8 +30,8 @@ from ..amounts import parse_amount
 from ..errors import GrammarError
 from ..lexer import (MANA, render)
 from ..nouns import parse_object_filter
-from ..records import (_parse_for_each_this_way,
-                       accept_counters_removed_for_cost)
+from ..cost_records import accept_counters_removed_for_cost
+from ..records import _parse_for_each_this_way
 from ..references import parse_player_ref
 from ..stream import TokenStream
 
@@ -118,7 +118,7 @@ def _parse_removed_counter_multiplier(stream: TokenStream) -> str | None:
     counters were removed to pay this ability's own cost and are gone by the
     time the mana is added, so nothing on the battlefield can be counted.
 
-    The phrase itself is ``records.accept_counters_removed_for_cost``'s, and
+    The phrase itself is ``cost_records.accept_counters_removed_for_cost``'s, and
     this is the "for each" front end of it. It used to be a private copy, which
     is the fork the shared reader was written to close: Essence Bottle prints
     the identical clause after a *life gain* and Torture Chamber after a

@@ -30,7 +30,8 @@ from ._common import (
     _is_enchanted, _is_source, _is_target, _names_several_targets,
     _restrictions_beyond, describe_target_roles, refuse_untestable
 )
-from ._records import counts_prevented_damage, names_the_shielded_object
+from ._prevented_riders import (counts_prevented_damage,
+                                names_the_shielded_object)
 from ._sweeps import lower_counter_sweep
 from ._events import trigger_quantity_key
 from ._plus_one_counters import lower_plus_one_placement

@@ -15,9 +15,10 @@ is for.
 from . import ast
 from ..oracle_types import DREW_COUNT, REVEALED_THIS_WAY
 from .amounts import accept_counters_on_source
-from .records import (accept_added_base, accept_cost_characteristic_of,
-                      accept_damage_dealt_this_turn, accept_exiled_for_cost,
-                      accept_sacrificed_for_cost)
+from .cost_records import (accept_cost_characteristic_of,
+                           accept_exiled_for_cost,
+                           accept_sacrificed_for_cost)
+from .records import accept_added_base, accept_damage_dealt_this_turn
 
 from .errors import GrammarError
 from .lexer import NUMBER

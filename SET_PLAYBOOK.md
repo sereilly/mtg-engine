@@ -174,6 +174,24 @@ reached. Grep top-level `def`/`class` names across the package after any split.
 The dead half is not harmless either, only silent: 310 such imports have
 accumulated across `engine/` from earlier splits, which is a ROADMAP item now.
 
+**And a dead import can be invisible until a move exposes it, because a
+function-level import of the same name reads as using it.** The Phase 0 after
+MMQ moved two functions out of `lowering/_records.py` and
+`test_import_hygiene.py` then failed on a module-level `from .. import ast` —
+which had been dead *before* the move as well. Its only `ast.` references were
+inside those two functions, and each of them opened with its own
+`from .. import ast`, so the module-level binding was shadowed at every use. To
+a scan asking "is this name loaded anywhere in the module" the answer was yes,
+and it stayed yes for as long as the shadowing functions sat there.
+
+Two things follow. **Run the dead-import sweep on the module you moved code
+*out of*, not only on the one you moved it into** — that is the half of the
+"imports left behind" hazard the playbook already names, and this is its
+quietest form. And **a function-level import of a name the module already
+imports at the top is worth deleting on sight**: it is not a cycle break, it is
+a shadow, and its only lasting effect is to hide whether the top-level binding
+is still earning its place.
+
 **A module crossing the 1,000-line cap with no branch at fault is the
 integrator's split, and the module usually names its own seam.** Alliances
 produced two in one wave — four groups adding a few dispatch arms each took
@@ -1884,6 +1902,34 @@ instruments current.
    groups independently made the *same* split of `lowering/stack.py`, moving
    seven byte-identical functions. Splitting at the cap beats raising the
    number.
+
+   **And the cut that restores a module's *subject* beats the cut that only
+   buys lines.** The Phase 0 after MMQ had two shared modules to pre-split and
+   the second one's obvious cut — 768 of `lowering/_records.py`'s 982 lines are
+   one table — fought the module's own docstring, which argues the table and
+   its accessors belong together because "the only thing that can say the two
+   agree is a declaration both sides are held to". The real seam was two
+   functions at the bottom that **read no part of that table**: a pair of
+   CR 615.5 predicates that had landed there because it was a convenient floor
+   rather than because it was *their* floor. Moving them to
+   `lowering/_prevented_riders.py` — whose stated subject is the rider a shield
+   carries, and whose docstring already cited the same two cards — bought 55
+   lines and made the first paragraph of `_records`' docstring true again.
+   So when the size cut and the stated subject disagree, **the module has
+   usually accumulated something that is not its subject**; look for that before
+   cutting the thing the docstring defends.
+
+   The same Phase 0's first split is the ordinary case and worth citing beside
+   it: `records.py` at 973 went to `cost_records.py` along a seam the *mirror*
+   had already taken and named — `lowering/_cost_records.py` left
+   `lowering/_records.py` at ULG wave 1 because `_PRODUCES` is keyed by
+   instruction kind and a cost has none, and the parse halves of those two
+   subjects had simply stayed in one file until this one hit the guard. Reusing
+   the mirror's name re-formed the mirror instead of forking a vocabulary, and
+   the mirror's *other* decision was reused too: point the four importers at the
+   new module rather than re-exporting, because a re-export is a hop that is
+   invisible until somebody greps for the reader. Both splits moved **0 of
+   4,026** compiled programs.
 
    **Urza's Legacy is the rule's cleanest result and the seam advice's worst.**
    Eight modules sat within 30 lines at Phase 0; the four that two or more of the
