@@ -41,7 +41,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 6ED | 335 | 404 | 95.5% | 95.5% | 65.8% | 243 |
 | UDS | 143 | 204 | 91.7% | 91.2% | 65.7% | 121 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| MMQ *(measured)* | 335 | 465 | 85.2% | 83.0% | 58.7% | 249 |
+| MMQ *(measured)* | 335 | 465 | 85.8% | 84.9% | 60.6% | 256 |
 | **All (shipped)** | **5829** | **8560** | **90.6%** | **90.0%** | **60.7%** | **4401** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -55,7 +55,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
 | 464 | 203 | expected a subject |  |
-| 143 | 73 | unrecognized effect verb |  |
+| 142 | 72 | unrecognized effect verb |  |
 | 113 | 57 | unconsumed text |  |
 | 42 | 25 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
@@ -464,6 +464,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Sacrifice this artifact: Put a +1/+1 counter on target nonartifact creature. That creature becomes an artifact in addition to its other types.`
 - **Asmira, Holy Avenger**
   - `At the beginning of each end step, put a +1/+1 counter on Asmira for each creature put into your graveyard from the battlefield this turn.`
+- **Assembly Hall**
+  - `{4}, {T}: Reveal a creature card in your hand. Search your library for a card with the same name as that card, reveal it, put it into your hand, then shuffle.`
 - **Astrolabe**
   - `{1}, {T}, Sacrifice this artifact: Add two mana of any one color. Draw a card at the beginning of the next turn's upkeep.`
 - **Atog**
@@ -912,6 +914,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever a creature attacks you, it gets -1/-0 until end of turn.`
 - **Briar Shield**
   - `Sacrifice this Aura: Enchanted creature gets +3/+3 until end of turn.`
+- **Bribery**
+  - `Search target opponent's library for a creature card and put that card onto the battlefield under your control. Then that player shuffles.`
 - **Brilliant Halo**
   - `When this Aura is put into a graveyard from the battlefield, return it to its owner's hand.`
 - **Brine Hag**
@@ -1328,6 +1332,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `For each land, destroy that land unless any player pays 1 life.`
 - **Clear**
   - `Destroy target enchantment.`
+- **Clear the Land**
+  - `Each player reveals the top five cards of their library, puts all land cards revealed this way onto the battlefield tapped, and exiles the rest.`
 - **Clergy en-Vec**
   - `{T}: Prevent the next 1 damage that would be dealt to any target this turn.`
 - **Clergy of the Holy Nimbus**
@@ -3254,6 +3260,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{R}: This creature gets +2/+0 until end of turn. Activate only during the declare blockers step, only if at least one creature is blocking this creature, and only once each turn.`
 - **Grollub**
   - `Whenever this creature is dealt damage, each opponent gains that much life.`
+- **Groundskeeper**
+  - `{1}{G}: Return target basic land card from your graveyard to your hand.`
 - **Guerrilla Tactics**
   - `Guerrilla Tactics deals 2 damage to any target.`
   - `When a spell or ability an opponent controls causes you to discard this card, it deals 4 damage to any target.`
@@ -3511,6 +3519,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{U}: This creature gains shroud until end of turn and doesn't untap during your next untap step. Tap it. (A creature with shroud can't be the target of spells or abilities.)`
 - **Honor Guard**
   - `{W}: This creature gets +0/+1 until end of turn.`
+- **Honor the Fallen**
+  - `Exile all creature cards from all graveyards. You gain 1 life for each card exiled this way.`
 - **Honorable Passage**
   - `The next time a source of your choice would deal damage to any target this turn, prevent that damage. If damage from a red source is prevented this way, Honorable Passage deals that much damage to the source's controller.`
 - **Hooded Blightfang**
@@ -4757,6 +4767,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Metrognome**
   - `When a spell or ability an opponent controls causes you to discard this card, create four 1/1 colorless Gnome artifact creature tokens.`
   - `{4}, {T}: Create a 1/1 colorless Gnome artifact creature token.`
+- **Midnight Ritual**
+  - `Exile X target creature cards from your graveyard. For each creature card exiled this way, create a 2/2 black Zombie creature token.`
 - **Midsummer Revel**
   - `At the beginning of your upkeep, you may put a verse counter on this enchantment.`
   - `{G}, Sacrifice this enchantment: Create X 3/3 green Beast creature tokens, where X is the number of verse counters on this enchantment.`
@@ -6149,6 +6161,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Revitalize**
   - `You gain 3 life.`
   - `Draw a card.`
+- **Revive**
+  - `Return target green card from your graveyard to your hand.`
 - **Rewind**
   - `Counter target spell. Untap up to four lands.`
   - `Counter target spell. Untap up to four lands.`
@@ -6443,6 +6457,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `• Target creature gains flying until end of turn.`
   - `• Target creature an opponent controls phases out. (While it's phased out, it's treated as though it doesn't exist. It phases in before its controller untaps during their next untap step.)`
 - **Saprazzan Bailiff**
+  - `When this creature enters, exile all artifact and enchantment cards from all graveyards.`
   - `When this creature leaves the battlefield, return all artifact and enchantment cards from all graveyards to their owners' hands.`
 - **Saprazzan Cove**
   - `{T}: Put a storage counter on this land.`
@@ -7055,6 +7070,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Target player gains 5 life.`
 - **Soothsaying**
   - `{3}{U}{U}: Shuffle your library.`
+  - `{X}: Look at the top X cards of your library, then put them back in any order.`
 - **Soraya the Falconer**
   - `Bird creatures get +1/+1.`
   - `{1}{W}: Target Bird creature gains banding until end of turn. (Any creatures with banding, and up to one without, can attack in a band. Bands are blocked as a group. If any creatures with banding a player controls are blocking or being blocked by a creature, that player divides that creature's combat damage, not its controller, among any of the creatures it's being blocked by or is blocking.)`

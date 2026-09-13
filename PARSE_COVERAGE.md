@@ -25,7 +25,7 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**7 unclaimed sentence(s) across 6 supported card(s).**
+**6 unclaimed sentence(s) across 5 supported card(s).**
 
 - **Barbed Wire**
   - `{2}: prevent the next 1 damage that would be dealt by this artifact this turn`
@@ -38,8 +38,6 @@ anything anyone did, and every ingest would arrive red.
   - `{t}, remove x charge counters from this artifact: add an amount of {c} equal to x plus one`
 - **Mercadian Lift**
   - `{t}, remove x winch counters from this artifact: you may put a creature card with mana value x from your hand onto the battlefield`
-- **Soothsaying**
-  - `{x}: look at the top x cards of your library, then put them back in any order`
 
 ## Acknowledged simplifications
 
