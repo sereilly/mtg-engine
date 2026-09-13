@@ -1734,6 +1734,43 @@ def choose_color(game: Game, instruction: OracleInstruction, context: OracleExec
             game.log.append(f"{card_name}: no recorded player to choose a colour")
             return True, "resolved"
         seat = recorded
+    # "Target creature gains protection from the color of **its controller's**
+    # choice until end of turn." (Wishmonger.) The third seat this sentence can
+    # name, and the one that is not on either end of the ability: not the seat
+    # that activated it — which is the ability's own controller and what "you"
+    # would mean (CR 602.2a, CR 109.5) — and not the controller of the permanent
+    # the ability is on, who under CR 602.2's "unless the object specifically
+    # says otherwise" need not be the activator at all. The creature's
+    # controller is asked, and CR 608.2d puts the question inside this
+    # resolution — which is why the grant
+    # is the *step behind* this one rather than a handler that arms its own
+    # prompt: a prompt that suspends is answered after the handler that armed it
+    # has returned.
+    #
+    # Through the same reader the grant resolves its own target with, over the
+    # same ``targets`` description the lowering copies onto both steps: two
+    # readings of one announcement is how a chooser and a grantee come apart.
+    records_on = permanent
+    if instruction.payload.get("chooser") == "target_controller":
+        from ._common import resolve_target_permanent
+        from .pump import granted_target_legal
+
+        chosen = resolve_target_permanent(
+            game, context,
+            predicate=granted_target_legal(game, instruction, context),
+        )
+        if chosen is None:
+            game.log.append(f"{card_name}: no creature was chosen to choose a colour")
+            return True, "resolved"
+        seat = game.controller_index_of(chosen)
+        # And **nothing standing is recorded**. ``chosen_color`` on a permanent
+        # is the colour that permanent's own continuous ability keeps asking
+        # about (Chromatic Armor's shield, Hall of Gemstone's mana swap); this
+        # card has no such ability, and the source it would otherwise be written
+        # on is the granting creature rather than the one being protected. The
+        # scratchpad key below is the whole of the answer, and the step behind
+        # it is its only reader.
+        records_on = None
     if seat is None:
         return True, "resolved"
     counts: dict[str, int] = {}
@@ -1746,11 +1783,12 @@ def choose_color(game: Game, instruction: OracleInstruction, context: OracleExec
             for color in game._effective_colors(perm):
                 counts[color] = counts.get(color, 0) + 1
     default_color = max(sorted(counts), key=lambda c: counts[c]) if counts else "W"
-    permanent.metadata["chosen_color"] = default_color
+    if records_on is not None:
+        records_on.metadata["chosen_color"] = default_color
     context.results[CHOSEN_COLOR_THIS_WAY] = default_color
     game.arm_color_choice(
         seat,
-        card_name=permanent.card.name, permanent=permanent,
+        card_name=permanent.card.name, permanent=records_on,
         result_key=CHOSEN_COLOR_THIS_WAY, context=context,
         default=default_color,
     )

@@ -50,8 +50,9 @@ from .references import (PAIR_ORDINALS,  # noqa: F401
 from .stream import TokenStream
 from .zones import accept_zone_possessive
 from .vocabulary import KEYWORD_INDEX, NUMBER_WORDS, match_longest
-from .keywords import (PROTECTION_FROM_CHOSEN_COLOR, _parse_keywords,
-                       parse_keyword_list)
+from .keywords import (PROTECTION_FROM_CHOSEN_COLOR,
+                       PROTECTION_FROM_TARGETS_CONTROLLERS_CHOSEN_COLOR,
+                       _parse_keywords, parse_keyword_list)
 
 
 _DURATIONS: tuple[tuple[str, tuple[str, ...]], ...] = (

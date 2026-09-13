@@ -754,6 +754,24 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
                 if _singular(following) != "spell":
                     bare_spell = False
                 stream.advance()
+            # "counter target spell **or ability** that targets a creature"
+            # (Diplomatic Escort). Not part of the union loop above, because
+            # "ability" is deliberately not a generic noun — an ability on the
+            # stack has no card, so none of the questions this filter parser
+            # asks can be asked of one, and `references.parse_player_ref` keeps
+            # the word out of `_GENERIC_NOUNS` for exactly that reason.
+            #
+            # Read here all the same, and only here, because what follows the
+            # union is the union's own relative clause: "that targets a
+            # creature" is an ordinary postmodifier and the loop that reads one
+            # runs below this. A production that consumed "or ability" itself
+            # would be standing between the head noun and its clause.
+            #
+            # Gated on `bare_spell`, so "target artifact spell or ability" —
+            # which no card prints and which would ask a card question of an
+            # ability — keeps refusing on the unconsumed words.
+            if bare_spell and stream.accept_phrase("or", "ability"):
+                d.also_ability = True
             if bare_spell:
                 d.zone = "stack"
             d.saw_head = True

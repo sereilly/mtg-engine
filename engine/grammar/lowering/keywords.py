@@ -19,6 +19,7 @@ from ...oracle_types import OracleInstruction
 from ...subject_filters import untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
+from ..keywords import PROTECTION_FROM_TARGETS_CONTROLLERS_CHOSEN_COLOR
 from ..vocabulary import IMPLEMENTED_KEYWORDS
 from ._events import _RECORDED_PERMANENTS, binds_block_pair
 from ._record_keys import CREATED_TOKEN
@@ -106,6 +107,18 @@ def _binds_a_recorded_permanent(subject, produced: frozenset[str]) -> bool:
         and subject.quantifier in ("that", "those")
         and bool(produced & _RECORDED_PERMANENTS)
     )
+
+
+def _targets_description(payload: dict[str, object]) -> dict[str, object]:
+    """Just the ``targets`` description out of *payload*, or nothing.
+
+    Named rather than spelled inline at its one call site, because what it
+    copies is a **claim**: that the two steps Wishmonger's sentence lowers to
+    point at one permanent. A second, differently-written description would be
+    a chooser and a grantee the engine could disagree about.
+    """
+    described = payload.get("targets")
+    return {"targets": described} if described is not None else {}
 
 
 def _lower_gain_keyword(
@@ -560,6 +573,20 @@ def _lower_gain_keyword(
     scope = "self" if _is_source(node.subject) else ("target" if _is_target(node.subject) else None)
     if scope is None:
         raise LoweringError("unsupported keyword-grant subject", node=node)
+    # "Target creature gains protection from the color of **its controller's**
+    # choice until end of turn." (Wishmonger.) The word "its" names the subject
+    # of this very sentence, so a grant whose subject is the source — or a
+    # sweep, which has no single controller — would leave the possessive
+    # pointing at nobody. Refused where the scope is known rather than at the
+    # arm below, so the message names the phrase that is wrong.
+    asks_the_targets_controller = (
+        PROTECTION_FROM_TARGETS_CONTROLLERS_CHOSEN_COLOR in node.keywords
+    )
+    if asks_the_targets_controller and scope != "target":
+        raise LoweringError(
+            "'its controller's choice' names the creature this sentence "
+            "targets", node=node,
+        )
     if len(node.keywords) == 1:
         kind = _KEYWORD_GRANTS.get((node.keywords[0], scope))
         if kind is not None:
@@ -601,7 +628,29 @@ def _lower_gain_keyword(
         return (OracleInstruction("grant_self_keyword_until_eot", "", payload),)
     assert isinstance(node.subject, ast.TargetSpec)
     _describe_targets(payload, node.subject)
-    return (OracleInstruction("grant_target_keyword_until_eot", "", payload),)
+    grant = OracleInstruction("grant_target_keyword_until_eot", "", payload)
+    if not asks_the_targets_controller:
+        return (grant,)
+    # **Two steps for one printed sentence** (Wishmonger), because CR 608.2d
+    # makes the colour a choice taken *during* this resolution and the seat
+    # taking it is not the one that announced anything: it is the controller of
+    # the creature the grant lands on. A prompt that suspends cannot be armed
+    # and answered inside one handler — the answer arrives after the handler has
+    # returned — so the ask and the grant are a ``sequence``, which is the loop
+    # ``engine/resumption.py`` records the rest of. ``choose_color`` already
+    # declares ``CHOSEN_COLOR_THIS_WAY`` as what it produces, and
+    # ``_grant_one_keyword`` is the step behind it that spends the record.
+    #
+    # The **same** ``targets`` description rides both steps, so the two resolve
+    # one creature through one reader: a chooser found by a second reading of
+    # the announcement is a seat that can disagree with the seat the grant
+    # lands on, and the printed word "its" is precisely the claim that they are
+    # the same.
+    ask = OracleInstruction(
+        "choose_color", "",
+        {"chooser": "target_controller", **_targets_description(payload)},
+    )
+    return (ask, grant)
 
 
 

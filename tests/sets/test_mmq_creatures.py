@@ -1512,3 +1512,323 @@ def test_caller_of_the_hunt_offers_the_choice_to_the_picker(set_pool):
     assert spec["default_creature_type"] == "bear"
     # Nothing else on the card targets, so the picker is still told so.
     assert spec["requires_target"] is False
+
+
+# --- W3G2: a chooser who is not the activator, and countering an ability ---
+# Two cards whose subject is *who the rules ask*, one on each side of the stack.
+# Wishmonger's colour is named by the controller of the creature it protects --
+# not by the seat that activated the ability (which is the ability's own
+# controller, CR 602.2a, and what "you" would have meant, CR 109.5) and not by
+# the controller of the Wishmonger, who under CR 602.2's "unless the object
+# specifically says otherwise" need not be the activator at all.
+# Diplomatic Escort's counter reaches either kind of object on the stack, and
+# CR 113.7a is the whole difference: the spell has a card to bin (CR 701.6a) and
+# the ability has none.
+import pytest
+
+from engine import Game, PlayerState
+from engine.damage_events import deal_damage
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+from engine.targeting import derive_activation_spec
+from tests.helpers import resolve_stack
+
+
+def _w3g2_table(interactive=()):
+    """Two seats, no mana costs, the seats named *interactive* driving prompts.
+
+    Which seats are interactive is the whole point on this block's first card: a
+    non-interactive seat takes the registry's default the instant the prompt is
+    armed, so a test that never names one can never see *who* was asked.
+    """
+    p1, p2 = PlayerState(name="A", life=20), PlayerState(name="B", life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    return game, p1, p2
+
+
+def _w3g2_onto(game, seat, card):
+    """One card onto *seat*'s battlefield, ready to act this turn."""
+    perm = Permanent(card=card)
+    perm.metadata["summoning_sick"] = False
+    game.players[seat].battlefield.append(perm)
+    return perm
+
+
+def _w3g2_protections(permanent):
+    """The colours *permanent* has protection from, as printed words."""
+    return sorted(
+        key[len("protection_from_"):]
+        for key, value in permanent.metadata.items()
+        if key.startswith("protection_from_") and value
+    )
+
+
+@pytest.mark.parametrize(
+    "activator, target_seat, expected_chooser",
+    [(0, 1, 1), (1, 0, 0), (0, 0, 0)],
+)
+def test_wishmonger_asks_the_targets_controller_not_the_activator(
+    set_pool, activator, target_seat, expected_chooser
+):
+    """"Target creature gains protection from the color of **its controller's**
+    choice until end of turn. Any player may activate this ability."
+
+    CR 608.2d puts the choice inside the resolution and the card says whose it
+    is. Three rows because the seat that is asked has to be independent of both
+    of the other two: the activator (either player, since CR 602.2 lets the card
+    say so) and the controller of the Wishmonger itself (always seat 0 here).
+    Only the third row is a case where the chooser and the activator coincide,
+    and a handler that simply asked the activator would pass that row alone.
+    """
+    pool = set_pool("MMQ")
+    game, p1, p2 = _w3g2_table(interactive={0, 1})
+    _w3g2_onto(game, 0, pool["Wishmonger"])
+    creature = _w3g2_onto(game, target_seat, pool["Rushwood Dryad"])
+
+    queued = game.queue_permanent_ability(
+        activator, "Wishmonger",
+        target_player_index=target_seat,
+        target_permanent_ids=[creature.permanent_id],
+        source_controller_index=0,
+    )
+    assert queued.supported, queued
+    resolve_stack(game)
+
+    owed = [choice for choice in game.pending_choices if choice.kind == "color_choice"]
+    assert len(owed) == 1
+    assert owed[0].player_index == expected_chooser
+    # Nothing is granted until the answer arrives: the record the grant spends
+    # is written by the step in front of it.
+    assert _w3g2_protections(creature) == []
+
+
+def test_wishmonger_grants_the_colour_the_chooser_named(set_pool):
+    """The answer, not the deterministic default, is what the creature gains --
+    and the seat that was not asked cannot supply it.
+
+    The default is stamped before the prompt is armed so a headless seat is
+    never blocked; asserting a colour the default would not have picked is what
+    keeps that from passing for an answer nobody gave.
+    """
+    pool = set_pool("MMQ")
+    game, p1, p2 = _w3g2_table(interactive={0, 1})
+    _w3g2_onto(game, 0, pool["Wishmonger"])
+    # A red permanent on the activator's side makes red the chooser's default.
+    _w3g2_onto(game, 0, pool["Kyren Sniper"])
+    creature = _w3g2_onto(game, 1, pool["Rushwood Dryad"])
+
+    game.queue_permanent_ability(
+        0, "Wishmonger", target_player_index=1,
+        target_permanent_ids=[creature.permanent_id],
+    )
+    resolve_stack(game)
+
+    assert not game.confirm_color_choice(0, "U"), "the activator is not the chooser"
+    assert game.confirm_color_choice(1, "U")
+    assert _w3g2_protections(creature) == ["blue"]
+
+
+def test_wishmonger_records_no_standing_colour_on_itself(set_pool):
+    """``chosen_color`` on a permanent is the colour that permanent's *own*
+    continuous ability keeps asking about (Chromatic Armor's shield, Hall of
+    Gemstone's mana swap).
+
+    Wishmonger has no such ability, and the creature it protects is not the
+    permanent a source-keyed record would land on anyway -- so the answer lives
+    only in this resolution's scratchpad. A standing record here would be a
+    second, staler answer for any card that reads one.
+    """
+    pool = set_pool("MMQ")
+    game, p1, p2 = _w3g2_table()
+    monger = _w3g2_onto(game, 0, pool["Wishmonger"])
+    creature = _w3g2_onto(game, 1, pool["Rushwood Dryad"])
+
+    game.activate_permanent_ability(
+        0, "Wishmonger", target_player_index=1,
+        target_permanent_ids=[creature.permanent_id],
+    )
+    game.auto_resolve_pending_choices()
+
+    assert "chosen_color" not in monger.metadata
+    assert "chosen_color" not in creature.metadata
+    assert _w3g2_protections(creature) == ["white"]
+
+
+def test_wishmonger_protection_actually_stops_that_colours_damage(set_pool):
+    """The grant is behaviour, not a metadata key: CR 702.16e is what the
+    chooser is buying.
+
+    Asserted in both directions, because a shield that stopped *every* source
+    would pass the first half and be a different card.
+    """
+    pool = set_pool("MMQ")
+    game, p1, p2 = _w3g2_table(interactive={1})
+    _w3g2_onto(game, 0, pool["Wishmonger"])
+    creature = _w3g2_onto(game, 1, pool["Rushwood Dryad"])
+
+    game.queue_permanent_ability(
+        0, "Wishmonger", target_player_index=1,
+        target_permanent_ids=[creature.permanent_id],
+    )
+    resolve_stack(game)
+    assert game.confirm_color_choice(1, "R")
+
+    assert deal_damage(
+        game, {"recipient": creature, "amount": 2, "source": pool["Kyren Sniper"]}
+    ).dealt == 0
+    assert deal_damage(
+        game, {"recipient": creature, "amount": 1, "source": pool["Rushwood Dryad"]}
+    ).dealt == 1
+
+
+def _w3g2_escort_spec(set_pool):
+    """What Diplomatic Escort's ability offers, derived from its program."""
+    program = compile_card_oracle(set_pool("MMQ")["Diplomatic Escort"])
+    return derive_activation_spec(program.activated_abilities[0])
+
+
+def _w3g2_escort_offers(game, set_pool, escort):
+    """The stack objects the Escort's picker would show its controller."""
+    return [
+        entry["name"]
+        for entry in game._enumerate_targets(
+            0, set_pool("MMQ")["Diplomatic Escort"], _w3g2_escort_spec(set_pool),
+            for_cast=False, source_permanent=escort, ability_source=escort,
+        )
+    ]
+
+
+def _w3g2_escort_table(set_pool):
+    """Seat 0 holding a Diplomatic Escort with a card to discard for it."""
+    pool = set_pool("MMQ")
+    game, p1, p2 = _w3g2_table()
+    escort = _w3g2_onto(game, 0, pool["Diplomatic Escort"])
+    p1.hand = [pool["Rushwood Dryad"]]
+    return game, p1, p2, escort
+
+
+def test_diplomatic_escort_counters_a_spell_and_bins_its_card(set_pool):
+    """"Counter target spell or ability that targets a creature."
+
+    The spell half: CR 701.6a removes it from the stack **and** puts the card
+    into its owner's graveyard, which is the sentence an ability has no object
+    for.
+    """
+    pool = set_pool("MMQ")
+    game, p1, p2, escort = _w3g2_escort_table(set_pool)
+    creature = _w3g2_onto(game, 1, pool["Rushwood Dryad"])
+    p2.hand = [pool["Last Breath"]]
+
+    game.queue_from_hand(
+        1, "Last Breath", target_player_index=1,
+        target_permanent_ids=[creature.permanent_id],
+    )
+    assert _w3g2_escort_offers(game, set_pool, escort) == ["Last Breath"]
+
+    activated = game.activate_permanent_ability(
+        0, "Diplomatic Escort", target_stack_index=0
+    )
+    assert activated.supported, activated
+    resolve_stack(game)
+
+    assert [card.name for card in p2.graveyard] == ["Last Breath"]
+    assert creature in p2.battlefield
+    assert [card.name for card in p1.graveyard] == ["Rushwood Dryad"]
+
+
+def test_diplomatic_escort_counters_an_ability_and_bins_nothing(set_pool):
+    """The ability half. CR 113.7a: an ability on the stack has no card, so the
+    object is removed and **nothing** moves zones.
+
+    The permanent it came from is asserted still on the battlefield and its
+    owner's graveyard unchanged, because the failure this guards against is not
+    "the ability resolved anyway" -- it is the counter reaching CR 701.6a's
+    second sentence, finding the *source permanent's* card standing in for the
+    ability's, and putting a copy of a card that never left the battlefield into
+    a graveyard.
+    """
+    pool = set_pool("MMQ")
+    game, p1, p2, escort = _w3g2_escort_table(set_pool)
+    creature = _w3g2_onto(game, 1, pool["Rushwood Dryad"])
+    rampart = _w3g2_onto(game, 1, pool["Battle Rampart"])
+
+    queued = game.queue_permanent_ability(
+        1, "Battle Rampart", target_player_index=1,
+        target_permanent_ids=[creature.permanent_id],
+    )
+    assert queued.supported, queued
+    assert _w3g2_escort_offers(game, set_pool, escort) == [
+        "Battle Rampart's activated ability"
+    ]
+
+    activated = game.activate_permanent_ability(
+        0, "Diplomatic Escort", target_stack_index=0
+    )
+    assert activated.supported, activated
+    resolve_stack(game)
+
+    assert game.stack == []
+    assert not creature.has_keyword("haste")
+    assert rampart in p2.battlefield
+    assert p2.graveyard == []
+
+
+def test_diplomatic_escort_is_refused_against_an_object_targeting_a_player(set_pool):
+    """"...**that targets a creature**" is the printed narrowing, and it has to
+    reach the ability half of the offer as well as the spell half.
+
+    Refused at activation (CR 602.2b) with nothing paid, which is what the
+    picker and the gate agreeing buys: the {U}, the tap and a card out of hand
+    are all spent before a resolution could decline.
+    """
+    pool = set_pool("MMQ")
+    game, p1, p2, escort = _w3g2_escort_table(set_pool)
+    _w3g2_onto(game, 1, pool["Kyren Negotiations"])
+    _w3g2_onto(game, 1, pool["Rushwood Dryad"])       # the creature the cost taps
+
+    queued = game.queue_permanent_ability(
+        1, "Kyren Negotiations", target_player_index=0
+    )
+    assert queued.supported, queued
+    assert _w3g2_escort_offers(game, set_pool, escort) == []
+
+    refused = game.activate_permanent_ability(
+        0, "Diplomatic Escort", target_stack_index=0
+    )
+    assert not refused.supported
+    assert [card.name for card in p1.hand] == ["Rushwood Dryad"]
+    assert not escort.tapped
+
+
+def test_a_plain_counterspell_over_an_ability_conjures_no_card(set_pool):
+    """The half of the union that is a *regression*, and it predates both cards.
+
+    "Counter target spell." names no ability, but the counter flow falls back to
+    the top of the stack when the object it chose is gone -- and the top of the
+    stack is very often an activated ability. Reaching CR 701.6a's graveyard
+    from there put the source permanent's card into a graveyard while the
+    permanent stayed on the battlefield: a card made out of nothing. The
+    countering itself is wrong too (the card named a spell), so the answer is to
+    counter nothing at all.
+    """
+    pool = set_pool("MMQ")
+    game, p1, p2 = _w3g2_table()
+    creature = _w3g2_onto(game, 1, pool["Rushwood Dryad"])
+    rampart = _w3g2_onto(game, 1, pool["Battle Rampart"])
+    p1.hand = [pool["Counterspell"]]
+
+    game.queue_permanent_ability(
+        1, "Battle Rampart", target_player_index=1,
+        target_permanent_ids=[creature.permanent_id],
+    )
+    cast = game.cast_from_hand(0, "Counterspell")
+    assert cast.supported, cast
+    resolve_stack(game)
+
+    assert rampart in p2.battlefield
+    assert p2.graveyard == []
+    assert [card.name for card in p1.graveyard] == ["Counterspell"]
+    # …and the ability the counter had no business touching goes on to resolve.
+    assert creature.has_keyword("haste")

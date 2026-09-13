@@ -1310,6 +1310,15 @@ def _counter_spec(payload: dict) -> dict:
         # then counters nothing, which is the {U} paid for no effect the
         # narrowing beside it exists to prevent.
         spec["stack_targets_source"] = True
+    if payload.get("also_ability"):
+        # "Counter target spell **or ability** that targets a creature."
+        # (Diplomatic Escort.) CR 113.7a: an ability on the stack is not a
+        # spell, so the enumeration folds a second list in rather than widening
+        # the first — the same key and the same reading the retarget one family
+        # over already gives Silver Wyvern. Emitted only when the card prints
+        # the union, so every counterspell before it keeps a byte-identical
+        # spec.
+        spec["stack_include_abilities"] = True
     return spec
 
 

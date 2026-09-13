@@ -3516,9 +3516,34 @@ class LegalityMixin:
             ):
                 continue
             if source_types:
-                source = item.source_permanent
-                if source is None or not _spell_is_one_of(
-                    source.effective_card, source_types
+                # A **local**: ``source`` is this method's own argument, the
+                # permanent whose ability is doing the looking, and rebinding
+                # it here pointed every later question in this loop — and every
+                # later iteration — at whatever permanent the last candidate
+                # came from. No card in the pool prints both narrowings, so
+                # nothing has read the wrong one yet; the "…that targets a
+                # creature" gate below is the second reader that would.
+                from_permanent = item.source_permanent
+                if from_permanent is None or not _spell_is_one_of(
+                    from_permanent.effective_card, source_types
+                ):
+                    continue
+            # "…**that targets a creature**" (Diplomatic Escort). The same
+            # narrowing the spell loop above asks, through the same reader: an
+            # ability announced its targets at CR 602.2b exactly as a spell
+            # announced them at CR 601.2c, so "what did this object choose" is
+            # one question with one answer for both kinds. Without it the union
+            # offers every ability on the stack, the {U} and the card are spent,
+            # and the counter then declines — the printed rider dropped on
+            # exactly the half of the offer it was added for.
+            targets_filter = spec.get("stack_targets_filter")
+            targets_source = source if spec.get("stack_targets_source") else None
+            if targets_filter or targets_source is not None:
+                from .handlers.stack import _spell_targets_matching
+
+                if not _spell_targets_matching(
+                    self, item, dict(targets_filter or {}), caster_index,
+                    source=targets_source,
                 ):
                     continue
             # CR 115.9a's count and what the card asks about that one target,
