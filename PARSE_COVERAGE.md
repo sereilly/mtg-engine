@@ -25,15 +25,11 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**4 unclaimed sentence(s) across 3 supported card(s).**
+**2 unclaimed sentence(s) across 1 supported card(s).**
 
 - **Conspiracy**
   - `creatures you control are the chosen type`
   - `the same is true for creature spells you control and creature cards you own that aren't on the battlefield`
-- **Kyren Toy**
-  - `{t}, remove x charge counters from this artifact: add an amount of {c} equal to x plus one`
-- **Mercadian Lift**
-  - `{t}, remove x winch counters from this artifact: you may put a creature card with mana value x from your hand onto the battlefield`
 
 ## Acknowledged simplifications
 
@@ -495,7 +491,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 
 | Channel | Sentences claimed |
 | --- | --- |
-| parse rule | 3589 |
+| parse rule | 3590 |
 | activation cost | 1562 |
 | trigger table | 1144 |
 | static-line table | 870 |
@@ -508,7 +504,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | oracle.py (modal trigger head) | 30 |
 | cost_modifiers.py | 29 |
 | auras.py (attached effect) | 25 |
-| mixin text scan | 16 |
+| mixin text scan | 14 |
 | special_actions.py (permanent offer) | 14 |
 | activation_permissions.py | 12 |
 | cast_timing.py (granted flash) | 10 |

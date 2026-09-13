@@ -19,7 +19,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | LEA | 290 | 388 | 88.1% | 86.3% | 49.2% | 174 |
 | LEB | 292 | 389 | 88.2% | 86.4% | 49.4% | 175 |
 | 2ED | 292 | 389 | 88.2% | 86.4% | 49.4% | 175 |
-| ARN | 78 | 108 | 80.6% | 76.9% | 54.6% | 48 |
+| ARN | 78 | 108 | 81.5% | 77.8% | 55.6% | 49 |
 | ATQ | 85 | 120 | 90.8% | 90.8% | 63.3% | 68 |
 | 3ED | 296 | 389 | 89.7% | 87.4% | 51.2% | 179 |
 | LEG | 310 | 431 | 89.6% | 88.4% | 58.7% | 217 |
@@ -41,8 +41,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 6ED | 335 | 404 | 95.5% | 95.5% | 65.8% | 243 |
 | UDS | 143 | 204 | 91.7% | 91.2% | 65.7% | 121 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| MMQ *(measured)* | 335 | 465 | 86.9% | 86.2% | 61.9% | 261 |
-| **All (shipped)** | **5829** | **8560** | **90.6%** | **90.0%** | **60.7%** | **4401** |
+| MMQ *(measured)* | 335 | 465 | 88.6% | 88.0% | 62.6% | 262 |
+| **All (shipped)** | **5829** | **8560** | **90.7%** | **90.0%** | **60.7%** | **4402** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
 
@@ -54,8 +54,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 460 | 199 | expected a subject |  |
-| 142 | 72 | unrecognized effect verb |  |
+| 458 | 197 | expected a subject |  |
+| 137 | 71 | unrecognized effect verb |  |
 | 113 | 57 | unconsumed text |  |
 | 42 | 25 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
@@ -82,7 +82,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 ## Cards executing through the grammar
 
-4401 cards, 5196 lines.
+4402 cards, 5197 lines.
 
 - **Abandon Hope**
   - `Look at target opponent's hand and choose X cards from it. That player discards those cards.`
@@ -2745,6 +2745,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature blocks, it gets +2/+0 until end of turn.`
 - **Folk of the Pines**
   - `{1}{G}: This creature gets +1/+0 until end of turn.`
+- **Food Chain**
+  - `Exile a creature you control: Add X mana of any one color, where X is 1 plus the exiled creature's mana value. Spend this mana only to cast creature spells.`
 - **Fool's Tome**
   - `{2}, {T}: Draw a card. Activate only if you have no cards in hand.`
 - **Foratog**
@@ -4209,6 +4211,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, you may have this creature deal 1 damage to target player or planeswalker.`
 - **Kyren Toy**
   - `{1}, {T}: Put a charge counter on this artifact.`
+  - `{T}, Remove X charge counters from this artifact: Add an amount of {C} equal to X plus one.`
 - **Kyscu Drake**
   - `{G}: This creature gets +0/+1 until end of turn. Activate only once each turn.`
   - `Sacrifice this creature and a creature named Spitting Drake: Search your library for a card named Viashivan Dragon, put that card onto the battlefield, then shuffle.`
@@ -4740,6 +4743,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Remove any number of storage counters from this land: Add {R} for each storage counter removed this way.`
 - **Mercadian Lift**
   - `{1}, {T}: Put a winch counter on this artifact.`
+  - `{T}, Remove X winch counters from this artifact: You may put a creature card with mana value X from your hand onto the battlefield.`
 - **Mercenaries**
   - `{3}: The next time this creature would deal damage to you this turn, prevent that damage. Any player may activate this ability.`
 - **Merchant Scroll**
@@ -4768,6 +4772,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{U}, Discard a card: Draw a card.`
 - **Metalworker**
   - `{T}: Reveal any number of artifact cards in your hand. Add {C}{C} for each card revealed this way.`
+- **Metamorphosis**
+  - `Add X mana of any one color, where X is 1 plus the sacrificed creature's mana value. Spend this mana only to cast creature spells.`
 - **Meteor Shower**
   - `Meteor Shower deals X plus 1 damage divided as you choose among any number of targets.`
 - **Meteorite**
