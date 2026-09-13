@@ -568,6 +568,51 @@ def _lower_prevent_damage(
         "to_self": bool(_is_you(recipient)),
         "to_source": bool(_is_source(recipient)),
     }
+    # "{2}: Prevent the next 1 damage that would be dealt **by this artifact**
+    # this turn." (Barbed Wire.) CR 615.7's point pool with no recipient printed
+    # at all — CR 615.8's recipientless shield is defined by its source alone,
+    # and this is the same absence on the counted family. It stops the source's
+    # next point of damage whoever it was headed for, which on this card is the
+    # difference between shielding the controller and shielding the player whose
+    # upkeep it is.
+    #
+    # `any_recipient` is the flag Penance already put on the colour shield for
+    # exactly this absence, and `prevention._table_shields` is what makes every
+    # recipient find it — so the reach costs nothing new here.
+    #
+    # Only the ability's **own** source, and refused otherwise: `is_source` is
+    # not a key `subject_matches` can test (a permanent has no "am I the
+    # source of the ability that armed this" property), so the source travels
+    # as the object itself, which only this spelling names. A described class of
+    # sources with no recipient is a printing that does not exist, and admitting
+    # one would arm a table-wide shield off a sentence nobody has written.
+    if recipient is None:
+        if not _is_source(node.dealt_by):
+            raise LoweringError(
+                "a shield with no recipient answers only to the ability's own "
+                "source",
+                node=node,
+            )
+        if _restrictions_beyond(
+            node.dealt_by.filter, frozenset({"card_types", "is_source"})
+        ):
+            raise LoweringError(
+                "the ability's own source carries no narrowing the shield "
+                "could honour",
+                node=node,
+            )
+        if node.division is not None or node.prevented_rider is not None:
+            # Both riders in the pool name a recipient ("that creature", "you"),
+            # and this shield has none to name — so borrowing either would place
+            # counters on nothing or pay a seat the sentence never mentions.
+            raise LoweringError(
+                "a shield with no recipient carries no effect after the "
+                "prevention",
+                node=node,
+            )
+        payload["any_recipient"] = True
+        payload["from_source"] = True
+        return (OracleInstruction("grant_prevention_shield", "", payload),)
     if alternate is not None:
         payload["amount_if"] = alternate
     if counter_rider is not None:

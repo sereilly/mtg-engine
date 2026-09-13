@@ -18,6 +18,7 @@ from ..shields import (
     make_half_source,
     make_life_gain_charge,
     make_life_gain_source,
+    make_named_source_pool,
     make_numeric_pool,
     make_reflect_charge,
     make_reflect_source,
@@ -352,6 +353,44 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
             game.log.append(
                 f"{name} gains prevention shield for {share} damage"
             )
+        return True, "resolved"
+
+    # "{2}: Prevent the next 1 damage that would be dealt **by this artifact**
+    # this turn." (Barbed Wire.) CR 615.7's pool with CR 615.8's absent
+    # recipient: it answers to one source and shields whoever that source was
+    # about to damage. The shield hangs on the activator's seat, which is where
+    # the cleanup sweep walks; `prevention._table_shields` is what lets every
+    # recipient find it.
+    #
+    # Read before the three recipient branches below, because the sentence names
+    # none of them: `to_self` is False here and falling through would arm the
+    # pool on the activator, which on this card shields exactly the player the
+    # artifact is *not* about to damage on three turns out of four.
+    if instruction.payload.get("any_recipient") and instruction.payload.get(
+        "from_source"
+    ):
+        source_permanent = context.source_permanent
+        if source_permanent is None:
+            # The permanent armed the shield and then left (it was sacrificed to
+            # pay a cost, or the ability was copied off a card that is not on
+            # the battlefield). A shield waiting for a source nobody can name
+            # would answer to *every* source, which is wider than the card.
+            game.log.append(
+                f"{source_name}: the source that would be shielded against is gone"
+            )
+            return True, "resolved"
+        _record_shield(
+            context,
+            add_shield(
+                caster,
+                make_named_source_pool(amount, source_permanent, source_name),
+            ),
+            None,
+        )
+        game.log.append(
+            f"{caster.name} prevents the next {amount} damage "
+            f"{source_permanent.card.name} would deal this turn"
+        )
         return True, "resolved"
 
     if instruction.payload.get("to_self"):

@@ -61,23 +61,43 @@ def _parse_prevent(stream: TokenStream) -> ast.PreventDamage:
     # than to a missing effect. Read here, before the "to", so the recipient
     # reader below sees the same stream either way.
     duration = _parse_duration(stream)
-    if not stream.accept_word("to"):
-        raise stream.error("expected 'to' in a prevention effect")
-    recipient = parse_recipient(stream)
-    if recipient is None:
-        raise stream.error("expected something to shield")
+    # "…that would be dealt **by this artifact** this turn." (Barbed Wire.)
+    # CR 615.7's point pool with **no recipient printed at all** — the shield is
+    # keyed on the source and stops that source's next point of damage to
+    # whoever it was headed for. The blanket branch below has read a recipientless
+    # "by" clause since Kry Shield; this one required the word "to" and refused
+    # the line at it, with nothing else wrong with the sentence.
+    #
+    # Read here, in front of the "to", because it is where the card prints it
+    # and because the recipient reader below would otherwise be handed the
+    # word "by" and fail on the noun. The "by" clause the two spellings after
+    # the recipient already read stays exactly where it is: a card naming both
+    # ends still reads both, and only one of the two may be printed.
+    recipient: ast.Recipient | None = None
+    dealt_by: ast.Recipient | None = None
+    if not stream.at_word("to"):
+        dealt_by = _accept_prevention_source(stream)
+        if dealt_by is None:
+            raise stream.error("expected 'to' in a prevention effect")
+    if dealt_by is None:
+        stream.expect_word("to")
+        recipient = parse_recipient(stream)
+        if recipient is None:
+            raise stream.error("expected something to shield")
     # "…dealt to target player **or planeswalker** this turn" (Wandering Mage).
     # CR 115.4's union, read from ``phrases`` because damage prints the same two
     # words (Chandra's Magmutt) and the two families may not import each other.
     # Read before the trailing duration, which is where the card prints it.
-    recipient = accept_or_planeswalker(stream, recipient)
+    if recipient is not None:
+        recipient = accept_or_planeswalker(stream, recipient)
     # "…dealt to this creature **by Torrent of Lava** this turn." Whose damage
     # the shield stops — which the blanket branch below has read since
     # Al-abara's Carpet and this one never had, so those words ran off the end
     # of the line and the card refused at "by" with nothing else wrong with it.
     # Read on **both** sides of the trailing duration, exactly as that branch
     # reads its own: the printed orders differ between cards.
-    dealt_by = _accept_prevention_source(stream)
+    if dealt_by is None:
+        dealt_by = _accept_prevention_source(stream)
     # The trailing spelling. Only one of the two may be printed: a duration on
     # both sides is not a sentence this reads, and taking the second silently
     # would let two windows disagree about how long the shield lasts.

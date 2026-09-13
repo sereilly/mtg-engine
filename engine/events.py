@@ -673,6 +673,22 @@ def _cast_narrowing_admits(
         trig.condition.payload.get("cast_colors"), _cast_colors(game, card, caster)
     ):
         return False
+    # "…casts a spell **of the chosen color**" (Jeweled Torque). CR 614.1c's
+    # choice, recorded on the permanent as it entered — so, unlike every
+    # narrowing above, the colour is not in the trigger's text at all and the
+    # answer comes off the *source*. Read here beside the printed colours
+    # because it is the same question of the same event, and a dispatcher of its
+    # own would be a second opinion about what "a spell of that colour" means.
+    #
+    # Nothing recorded fires nothing: a permanent with no colour on it is one
+    # whose entry choice never happened, and a trigger with no colour to compare
+    # would answer every spell — the widest possible reading of a sentence that
+    # names one. The same reading ``grant_prevention_shield`` takes of the same
+    # record one file over.
+    if "cast_chosen_color" in trig.condition.payload:
+        recorded = (getattr(permanent, "metadata", {}) or {}).get("chosen_color")
+        if not recorded or str(recorded) not in _cast_colors(game, card, caster):
+            return False
     cast_types = trig.condition.payload.get("cast_types")
     if cast_types and not any(word in type_line for word in cast_types.split(" or ")):
         return False

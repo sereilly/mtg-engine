@@ -27,7 +27,7 @@ from ..amounts import parse_amount
 from ..errors import GrammarError
 from ..nouns import parse_object_filter
 from ..phrases import accept_graveyard_position
-from ..references import parse_player_ref
+from ..references import parse_player_ref, parse_recipient
 from ..stream import TokenStream
 from ..vocabulary import NUMBER_WORDS
 
@@ -240,6 +240,29 @@ def _parse_shuffle_graveyard_into_library(stream: TokenStream) -> ast.Statement 
             stream.reset(mark)
             return None
         return ast.ShuffleGraveyardIntoLibrary(ast.PlayerRef("you"), cards=cards)
+    # "Shuffle **target nontoken permanent you control** into its owner's
+    # library." (Rishadan Pawnshop.) The "it" branch above with the object
+    # chosen instead of named, so it is a branch of this production rather than
+    # one of its own: the verb and the destination are the same words, and two
+    # productions racing for "shuffle" would make which reading a card gets
+    # depend on their order.
+    #
+    # Read **last**, after every pile reading, and non-consuming on refusal:
+    # ``parse_recipient`` reads a great many phrases, and one asked first would
+    # take "your graveyard" for a noun phrase and strand the destination. The
+    # trailing possessive is required for the "it" branch's reason — a card
+    # printing "your library" would be a different card the moment a permanent
+    # changed hands.
+    chosen_mark = stream.mark()
+    try:
+        chosen_one = parse_recipient(stream)
+    except GrammarError:
+        chosen_one = None
+    if chosen_one is not None and stream.accept_phrase(
+        "into", "its", "owner", "'s", "library"
+    ):
+        return ast.ShuffleTargetIntoLibrary(chosen_one, ast.PlayerRef("owner"))
+    stream.reset(chosen_mark)
     if not stream.accept_phrase("your", "graveyard", "into", "your", "library"):
         stream.reset(mark)
         return None
@@ -360,8 +383,22 @@ def _parse_shuffle_hand_into_library(stream: TokenStream) -> ast.Statement | Non
     # (CR 402.1). Read before the whole-hand phrase below, and non-consuming on
     # refusal, so "the cards from" keeps the reading it has.
     count: int | None = None
+    any_number = False
     counted = stream.mark()
-    if stream.accept_word("a", "an"):
+    # "shuffles **any number of** cards from their hand" (Credit Voucher). The
+    # counted branch below with the number left to the player, read here rather
+    # than as a production of its own because everything after the quantifier is
+    # the identical clause — and read *before* the article, whose "a" would
+    # otherwise never be reached by these words but whose ordering is what keeps
+    # the two quantifiers from racing if one ever prints "any one".
+    if stream.accept_phrase("any", "number", "of"):
+        if stream.accept_word("cards", "card") and stream.accept_word("from"):
+            any_number = True
+        else:
+            stream.reset(counted)
+    if any_number:
+        pass
+    elif stream.accept_word("a", "an"):
         count = 1
     else:
         word = stream.peek_word()
@@ -372,7 +409,7 @@ def _parse_shuffle_hand_into_library(stream: TokenStream) -> ast.Statement | Non
         if not (stream.accept_word("card", "cards") and stream.accept_word("from")):
             stream.reset(counted)
             count = None
-    if count is None:
+    if count is None and not any_number:
         # "shuffles **the cards from** their hand" is the current wording and
         # "shuffles their hand" the older one; they name the same cards, so the
         # phrase is optional rather than a second production.
@@ -426,7 +463,7 @@ def _parse_shuffle_hand_into_library(stream: TokenStream) -> ast.Statement | Non
             stream.reset(counted)
     return ast.ShuffleHandIntoLibrary(
         player, then_draw=then_draw, then_draw_count=then_draw_count,
-        count=count, with_graveyard=with_graveyard,
+        count=count, any_number=any_number, with_graveyard=with_graveyard,
     )
 
 

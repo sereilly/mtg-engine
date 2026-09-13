@@ -142,6 +142,7 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     "reorder_target_library_top": "zones",
     "reorder_own_library_top": "zones",
     "shuffle_source_card_into_library": "zones",
+    "shuffle_target_permanent_into_library": "zones",
     # A library search moves a card between hidden zones — same module, same
     # category as the other zone-change handlers.
     "search_library": "zones",
