@@ -11,6 +11,7 @@ from .ai_policy import (choose_activation_action, choose_cast_action,
                         choose_hand_activation_action)
 from .card_loader import load_cards
 from .game import Game
+from .search_filters import card_has_type
 from .oracle import compile_card_oracle
 from .models import CardDefinition, Permanent, PlayerState
 
@@ -453,16 +454,42 @@ def _assert_expected(
         prevention_gain = after_target.damage_prevention_pool - before_target.damage_prevention_pool
         if life_gain != 3 and prevention_gain != 3:
             return "Healing Salve did not apply expected life-gain or prevention mode"
-    if card.name == "Unsummon" and any(perm.card.primary_type == "creature" for perm in before_target.battlefield):
-        creature_before = sum(1 for perm in before_target.battlefield if perm.card.primary_type == "creature")
-        creature_after = sum(1 for perm in after_target.battlefield if perm.card.primary_type == "creature")
+    # CR 205.2b: a card has **every** type its line names, so Ornithopter is an
+    # artifact card *and* a creature card. Both checks below used
+    # ``card.primary_type``, which picks one of them by the order of a list --
+    # and the Disenchant one was therefore wrong for every artifact creature on
+    # the board, which is the class ``search_filters.card_has_type`` exists to
+    # end. It reported a **false** issue at Mercadian Masques' Phase 5: Toymaker
+    # ("Artifact Creature -- Spellshaper") answers "creature" to
+    # ``primary_type``, so the destroyed permanent was in neither count and the
+    # total looked unchanged. The engine had destroyed exactly the right
+    # permanent; only the honesty check was lying, in the direction that costs
+    # an investigation rather than a game.
+    #
+    # Unsummon's twin was right **by accident** -- no land creature exists in
+    # this pool, so "creature" is always ``primary_type``'s answer for one --
+    # and it is routed through the same function anyway, so the next reader of
+    # this pair does not have to work out which of the two was safe.
+    if card.name == "Unsummon" and any(
+        card_has_type(perm.card, "creature") for perm in before_target.battlefield
+    ):
+        creature_before = sum(
+            1 for perm in before_target.battlefield if card_has_type(perm.card, "creature")
+        )
+        creature_after = sum(
+            1 for perm in after_target.battlefield if card_has_type(perm.card, "creature")
+        )
         if creature_after != creature_before - 1:
             return "Unsummon did not remove one target creature"
+
+    def _artifact_or_enchantment(perm) -> bool:
+        return card_has_type(perm.card, "artifact") or card_has_type(perm.card, "enchantment")
+
     if card.name == "Disenchant" and any(
-        perm.card.primary_type in {"artifact", "enchantment"} for perm in before_target.battlefield
+        _artifact_or_enchantment(perm) for perm in before_target.battlefield
     ):
-        ae_before = sum(1 for perm in before_target.battlefield if perm.card.primary_type in {"artifact", "enchantment"})
-        ae_after = sum(1 for perm in after_target.battlefield if perm.card.primary_type in {"artifact", "enchantment"})
+        ae_before = sum(1 for perm in before_target.battlefield if _artifact_or_enchantment(perm))
+        ae_after = sum(1 for perm in after_target.battlefield if _artifact_or_enchantment(perm))
         if ae_after != ae_before - 1:
             return "Disenchant did not destroy one target artifact or enchantment"
 
