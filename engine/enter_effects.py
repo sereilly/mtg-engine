@@ -539,9 +539,26 @@ def enters_with_pt_counters(line: str, card_name: str | None = None) -> tuple[in
 #: The count is optional in the printed text and never in the answer: an article
 #: is the number one, which is the reading `ENTERS_WITH_PT_COUNTERS` beside this
 #: one already gives its own spelled-out number.
+#:
+#: **"enters *tapped* with two depletion counters on it"** (the five Mercadian
+#: Masques depletion lands) is this sentence with the other entry-state phrase
+#: in this file folded into it, and the word is optional here rather than a
+#: sixth phrase of its own because *two independent readers already perform the
+#: composed line*: the tapping is `ENTERS_TAPPED`, which the mixin probes as a
+#: **substring** of the card's whole text and therefore fires on this sentence
+#: unchanged, and the counters are this pattern. Nothing else about the line
+#: differs, so a phrase spelled out in full here would be a second copy of both
+#: halves — the drift this module exists to prevent.
+#:
+#: Only the named-counter form takes it. The P/T forms above are left anchored
+#: on the bare "enters with", not because the composition would be wrong there
+#: but because no card in the pool prints one: widening a pattern to admit a
+#: sentence nothing prints is claiming a wording nothing has ever exercised,
+#: and the whole point of `enter_effect_line` is that a claim means the mixin
+#: really did it.
 ENTERS_WITH_NAMED_COUNTER = re.compile(
-    r"^this [a-z]+ enters with (?P<count>a|[a-z]+) (?P<counter>[a-z]+) "
-    r"counters? on it$"
+    r"^this [a-z]+ enters(?: tapped)? with (?P<count>a|[a-z]+) "
+    r"(?P<counter>[a-z]+) counters? on it$"
 )
 
 
@@ -1373,6 +1390,12 @@ def enter_effect_line(line: str, card_name: str | None = None) -> str | None:
     # Equipment's effect lines, so the omission cost nothing until the
     # Equipment gate (engine/oracle.py) started asking.
     if enters_with_named_counter(normalized) is not None:
+        # "This land enters **tapped** with two depletion counters on it" is
+        # claimed here too, and both halves are really performed: the counters
+        # by the reader this asks and the tapping by `ENTERS_TAPPED`, which the
+        # mixin probes as a substring of the whole card. The label names the
+        # counters because that is the half whose *shape* was read; nothing
+        # dispatches on it.
         return "enters with named counters"
     if enters_with_pt_counters(normalized) is not None:
         return "enters with P/T counters"

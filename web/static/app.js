@@ -11482,6 +11482,21 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
   // "{X}" activation costs (Illusionary Mask, Clockwork Beast) need an X chosen
   // before the ability is sent — without it the engine receives X = 0 and e.g.
   // Illusionary Mask finds no castable creature regardless of the hand.
+  //
+  // "**Remove X charge counters from this artifact**" (Kyren Toy, Mercadian
+  // Lift) is the same announcement (CR 601.2b) written as a word instead of a
+  // mana symbol, so this test cannot see it and the ability was sent with X
+  // undeclared — which the engine reads as zero. It is asked here, beside the
+  // symbol, rather than folded into the regex: the cost is paid in *counters*,
+  // so the ceiling is what the permanent holds and not what the pool can cover.
+  const counterX = counterRemovalXKind(activationCost);
+  if (counterX) {
+    startActivationXPrompt(
+      card, cardName, targetSeat, permanentIndex, abilityIndex,
+      Number(card?.counters?.[counterX] ?? 0),
+    );
+    return;
+  }
   if (/\{x\}/i.test(activationCost)) {
     startActivationXPrompt(card, cardName, targetSeat, permanentIndex, abilityIndex);
     return;
@@ -13113,7 +13128,23 @@ function sendForkCopyCast(forkPending, stackArrayIndex, targetSeat, permanentInd
 // A function rather than a branch inside `startCastXPrompt` because there are
 // two callers now: the ordinary activation cascade, and the several-targets
 // prompt for an ability whose X *is* how many targets it names.
-function startActivationXPrompt(card, cardName, targetSeat, permanentIndex, abilityIndex) {
+// The counter kind an activation cost spends **X of**, or "" when it spends
+// none. "{T}, Remove X charge counters from this artifact" (Kyren Toy) and
+// "Remove X winch counters" (Mercadian Lift) are the pool's two; the kind is
+// data, so a card printing a third word needs no change here.
+//
+// Its own reader rather than another arm of the `{x}` test, because the answer
+// is used twice — to raise the prompt at all, and to cap it at the counters the
+// permanent actually has (CR 601.2h: an X it cannot pay is not a legal
+// announcement, and the engine refuses one).
+function counterRemovalXKind(activationCost) {
+  const match = /remove x ([a-z]+) counters?/i.exec(activationCost || "");
+  return match ? match[1].toLowerCase() : "";
+}
+
+function startActivationXPrompt(
+  card, cardName, targetSeat, permanentIndex, abilityIndex, maxXOverride = null,
+) {
   const activationCost = getActivatedAbilityCost(card, abilityIndex);
   pendingCastX = {
     kind: "cast_x",
@@ -13128,7 +13159,12 @@ function startActivationXPrompt(card, cardName, targetSeat, permanentIndex, abil
     manaRequirement: parseManaCostSymbols(activationCost),
     costString: activationCost,
     costCard: null,
-    maxX: getMaxAffordableX(getCurrentPlayerState()?.mana_pool, activationCost, null),
+    // A counter-removal X is bounded by the counters, not by the pool: pricing
+    // it against mana would offer a maximum of 0 on a cost with no mana in it
+    // at all, which is every card that prints this shape.
+    maxX: maxXOverride === null
+      ? getMaxAffordableX(getCurrentPlayerState()?.mana_pool, activationCost, null)
+      : Math.max(0, maxXOverride),
     awaitingCustomValue: false,
   };
   renderActivationPrompt();

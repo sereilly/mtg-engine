@@ -1000,6 +1000,38 @@ class AbilityActivationMixin:
                 counters_removed_for_cost = (
                     held if x_value is None else max(0, min(held, int(x_value)))
                 )
+            elif wanted == "x":
+                # "Remove **X** charge counters from this artifact" (Kyren Toy,
+                # Mercadian Lift). CR 107.3a: an X in an activation cost that
+                # the card does not define is announced by the activator, as
+                # part of activating. The counters are the cost that X sizes --
+                # so unlike "any number of" above, an X larger than the
+                # permanent holds is an announcement that **cannot be paid**
+                # (CR 601.2h, reached through CR 602.2b) and the activation is
+                # refused with nothing spent rather than clamped down to what is
+                # there. Clamping would let a player announce five on a
+                # two-counter artifact and be charged two, which is a cheaper
+                # card than the one printed.
+                #
+                # A caller that named no X gets **zero**, which is this engine's
+                # stated default for a headless or AI seat rather than a rule:
+                # CR 107.3a makes announcing mandatory, and no rule turns an
+                # omission into a number. Zero is a legal announcement here
+                # because removing zero counters is always payable (CR 601.2h
+                # forbids only what cannot be done) -- and it is the whole
+                # difference from the branch above, where naming nothing removes
+                # every counter.
+                total = max(0, int(x_value or 0))
+                if held < total:
+                    details = (
+                        f"{permanent.card.name} has {held} {kind} counter(s), "
+                        f"fewer than the {total} announced for X"
+                    )
+                    self.log.append(details)
+                    return SimulationResult(
+                        permanent.card.name, False, "unsupported", details
+                    )
+                counters_removed_for_cost = total
             elif wanted == "all":
                 # "Remove **all** elixir counters from this artifact" (Essence
                 # Bottle, Torture Chamber). Every one of them and no choice to
@@ -2650,6 +2682,16 @@ class AbilityActivationMixin:
                     target=target_player,
                     card=permanent.card,
                     source_permanent=permanent,
+                    # **And the X the activator announced** (CR 601.2b), for
+                    # that same reason one field over: this context was built
+                    # without it, so an announced X was readable from the queued
+                    # path and simply absent from the inline one. Kyren Toy's
+                    # "Add an amount of {C} equal to X plus one" removed the
+                    # right number of counters and then made one mana, however
+                    # many the seat announced — a mana ability being the *only*
+                    # kind that comes down here, and the kind whose whole output
+                    # the number decides.
+                    x_value=x_value,
                     # The same last-known-information channel the queued path
                     # below records. An ability that resolves without touching
                     # the stack still had its cost paid, and an effect reading

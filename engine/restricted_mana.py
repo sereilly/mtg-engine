@@ -268,6 +268,29 @@ def restriction_admits(key: str, purpose: "PaymentPurpose | None") -> bool:
     return False
 
 
+def mana_bucket(player, key: "str | None") -> dict[str, int]:
+    """Where mana carrying restriction *key* goes — the seat's pool when there
+    is none.
+
+    **One seam, for the reason every other seam in this engine has one.** Three
+    places add mana that a "spend this mana only to…" clause narrowed — the
+    structured-pip producer, the any-one-colour producer, and the resolver that
+    finishes a colour *prompt* — and the second and third of them wrote
+    ``player.mana_pool`` unconditionally. Nothing in the pool reached them with
+    a restriction, because the one card that printed the pair (Metamorphosis)
+    was a card hook that added the mana itself; the moment Food Chain made that
+    sentence a production, "Add X mana of any one color … spend this mana only
+    to cast creature spells" would have put unrestricted mana in the pool and
+    reported the restriction as understood.
+
+    A restriction the payer never sees is an ability that works *more often*
+    than the card allows, which is the direction that never announces itself.
+    """
+    if not key:
+        return player.mana_pool
+    return player.restricted_mana.setdefault(str(key), {})
+
+
 def spendable_restricted_mana(player, purpose: "PaymentPurpose | None") -> dict[str, int]:
     """Every restricted bucket *purpose* may be paid from, merged by symbol.
 

@@ -229,22 +229,33 @@ def _parse_counter_removal_cost(stream: TokenStream) -> ast.RemoveCounterCost:
     counter = _expect_counter_kind(stream, " to remove").text
     stream.expect_word("counter", "counters")
     stream.expect_word("from")
-    # "Remove **X** winch counters from this artifact" (Mercadian Lift). Three
-    # count shapes reach a charger -- a printed number, "any number of" and
-    # "all" -- and every other one is charged as ``a``, which is this
-    # production's own invariant broken from the inside: the grammar admits the
-    # ability, the payment path removes one counter or none, and the effect
-    # behind it reads an X nobody announced. An announced X is a real cost shape
-    # (CR 601.2b) and it wants the announcement channel, the payability check
-    # against what the permanent holds, and a client that offers the box -- none
-    # of which exist for a cost whose ``{X}`` is a printed word rather than a
-    # mana symbol. Until they do, refusing is the honest answer: the card
-    # reports unsupported naming this clause instead of being activated for
-    # free, for ever.
-    if not isinstance(count, (ast.Fixed, ast.AnyNumber, ast.AllOf)):
+    # "Remove **X** winch counters from this artifact" (Mercadian Lift, Kyren
+    # Toy). **Four** count shapes reach a charger now -- a printed number, "any
+    # number of", "all", and an announced X -- and every other one would be
+    # charged as ``a``, which is this production's own invariant broken from the
+    # inside: the grammar admits the ability, the payment path removes one
+    # counter or none, and the effect behind it reads an X nobody announced.
+    #
+    # The X arrived one round after that refusal was written, and the four
+    # things it was waiting for were three: the announcement channel already
+    # existed (``activate_permanent_ability(x_value=…)``, the same one "any
+    # number of" reads), so what this round added is the payability check
+    # against what the permanent holds (CR 601.2h), the client's X box -- gated
+    # on a ``{x}`` **mana symbol** the printed word does not have -- and, for
+    # Kyren Toy alone, a production for the sentence that reads X back.
+    #
+    # ``Var`` is admitted only under the name "x": a counter-removal cost whose
+    # count is some other binder would be a quantity nothing announces, and
+    # charging it as one is exactly the free ability this refusal exists to
+    # prevent.
+    if isinstance(count, ast.Var) and count.name != "x":
+        raise stream.error(
+            "a counter-removal cost announces X and no other variable"
+        )
+    if not isinstance(count, (ast.Fixed, ast.AnyNumber, ast.AllOf, ast.Var)):
         raise stream.error(
             "a counter-removal cost is charged as a printed number, "
-            '"any number of" or "all"'
+            '"any number of", "all" or an announced X'
         )
     if accept_source_reference(stream):
         return ast.RemoveCounterCost(counter, count)
@@ -254,6 +265,17 @@ def _parse_counter_removal_cost(stream: TokenStream) -> ast.RemoveCounterCost:
     except GrammarError:
         subject = None
     if subject is not None and _is_chargeable_counter_target(subject):
+        # …but only for a *printed* count. The chosen-permanent charger reads
+        # its number as ``int(wanted) if isinstance(wanted, int) else 1``, so an
+        # announced X would be charged as one counter off a permanent the payer
+        # picked — and the derivation that feeds it (``oracle._chosen_removal``)
+        # matches only "remove a/an <kind> counter from a …", so the whole cost
+        # would go uncharged and the ability be free. No card prints the pair;
+        # the refusal is what keeps it that way rather than a comment saying so.
+        if isinstance(count, ast.Var):
+            raise stream.error(
+                "an announced X is charged only off the ability's own source"
+            )
         return ast.RemoveCounterCost(counter, count, subject=subject)
     stream.reset(marked)
     raise stream.error(

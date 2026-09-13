@@ -22,7 +22,7 @@ from ._common import (
 )
 from ._events import (_DEFENDING_PLAYER_EVENTS, _EVENT_SUBJECT_PLAYERS,
                       _RECORDED_PERMANENTS)
-from ._amounts import recorded_count_spec
+from ._amounts import recorded_count_spec, x_offset_amount
 from ._cost_records import SACRIFICED_FOR_COST, UNTAPPED_FOR_COST
 
 #: Which cost payment each printed back-reference names, and how to say so when
@@ -224,6 +224,21 @@ def _lower_add_mana(
         payload: dict[str, object] = {key: node.pips}
         if node.spend_only is not None:
             payload["spend_only"] = node.spend_only
+        # "Add an amount of {C} equal to **X plus one**." (Kyren Toy.) One pip
+        # is the unit and this says how many of it, so the handler's existing
+        # pip multiplier carries the whole clause — the same arrangement "Add
+        # {G} for each …" already uses, with the number coming from the
+        # announcement instead of a board.
+        #
+        # Through ``x_offset_amount``/``_amount_payload`` rather than a shape of
+        # its own: ``resolve_amount`` is the single reader of every amount, and
+        # a payload it cannot read is a card that reports supported and makes
+        # no mana.
+        if node.amount_of_x is not None:
+            payload["pips_amount"] = (
+                x_offset_amount(node.amount_of_x)
+                or _amount_payload(node.amount_of_x)
+            )
         if node.per_each_counter_removed is not None:
             # "…for each charge counter removed this way" (the Mana Batteries).
             # The multiplier is the ability's own cost payment, which the
@@ -369,14 +384,6 @@ def _lower_add_mana(
                 # target, and this is the first step of the sentence.
                 payload["targets"] = {"kind": "player", "opponents_only": True}
         return (OracleInstruction("add_mana_from_text", "", payload),)
-    # The any-colour branch keeps its clause text for a *text-keyed* handler
-    # probe, so a restriction folded onto it would be carried in the payload and
-    # ignored by the branch that reads the text. No card prints the pair; it
-    # refuses rather than adding unrestricted mana.
-    if node.spend_only is not None:
-        raise LoweringError(
-            "no handler restricts what any-colour mana may pay for", node=node
-        )
     # ``any_color`` is a *count* now, not a flag. The handler used to probe the
     # clause text for the literal "one mana of any color", which is why every
     # other number had to refuse; it reads the number, so "add two mana of any
@@ -391,6 +398,18 @@ def _lower_add_mana(
         "any_color": True,
         "any_color_count": amount,
     }
+    # "Add X mana of any one color … **Spend this mana only to cast creature
+    # spells**" (Food Chain, Metamorphosis). This raised
+    # ``LoweringError("no handler restricts what any-colour mana may pay for")``
+    # on the ground that the branch "keeps its clause text for a *text-keyed*
+    # handler probe" and would carry the key unread. That was true of the
+    # handler and is no longer: every exit of the counted any-colour branch goes
+    # through ``_produce_one_color``, which reads this key and puts the mana in
+    # the restricted bucket — including through the colour *prompt*, which is
+    # the exit a human seat takes. The refusal was the honest answer while the
+    # producer ignored the key; carrying it is the honest answer now.
+    if node.spend_only is not None:
+        payload["spend_only"] = node.spend_only
     if node.any_type_from is not None:
         record, phrase, verb = ANY_TYPE_FROM_RECORDS[node.any_type_from]
         if record not in produced:

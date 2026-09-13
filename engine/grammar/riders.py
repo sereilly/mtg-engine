@@ -419,7 +419,26 @@ def _attach_spend_only(stream: TokenStream, steps: list[ast.Statement]) -> bool:
         and last.reflexive is None
         and isinstance(last.action, ast.AddMana)
     )
-    if not isinstance(last, ast.AddMana) and not inside_may:
+    # "Add X mana of any one color, **where X is 1 plus the exiled creature's
+    # mana value**. Spend this mana only to cast creature spells." (Food Chain,
+    # and Metamorphosis one cost-record over.) A second wrapper the sentence
+    # layer folds on before this rider runs, for the same reason ``May`` is one:
+    # the where-clause is read by the mana production itself and returned around
+    # it, so by the time the rider arrives the ``AddMana`` is a level down.
+    #
+    # Unwrapped and rewrapped rather than given a ``spend_only`` of its own: the
+    # restriction is on the mana, and a key on the binder would be a second
+    # place to look for it. Without this the whole sentence refused — "expected
+    # a subject" on a rider nothing could attach — which is why the pair was a
+    # card hook for as long as only one card printed it.
+    inside_where_x = (
+        isinstance(last, ast.WhereX) and isinstance(last.statement, ast.AddMana)
+    )
+    if (
+        not isinstance(last, ast.AddMana)
+        and not inside_may
+        and not inside_where_x
+    ):
         return False
     mark = stream.mark()
     start = stream.pos
@@ -434,6 +453,11 @@ def _attach_spend_only(stream: TokenStream, steps: list[ast.Statement]) -> bool:
         steps[-1] = dataclasses.replace(
             last,
             action=dataclasses.replace(last.action, spend_only=restriction.key),
+        )
+    elif inside_where_x:
+        steps[-1] = dataclasses.replace(
+            last,
+            statement=dataclasses.replace(last.statement, spend_only=restriction.key),
         )
     else:
         steps[-1] = dataclasses.replace(last, spend_only=restriction.key)

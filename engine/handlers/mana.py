@@ -189,10 +189,15 @@ def _mana_bucket(caster, spend_only) -> dict:
     ``spend_only`` — so a printed "Add {B} or {R}. Spend this mana only to …"
     would have made unrestricted mana. Nothing in the pool prints that pair
     today, which is exactly why the miss was invisible.
+
+    A thin name over ``restricted_mana.mana_bucket`` now: the *colour-choice*
+    producer below and the prompt resolver that finishes its offer add mana
+    too, and neither is in this module, so the seam had to move to the module
+    that owns the buckets.
     """
-    if spend_only:
-        return caster.restricted_mana.setdefault(str(spend_only), {})
-    return caster.mana_pool
+    from ..restricted_mana import mana_bucket
+
+    return mana_bucket(caster, spend_only)
 
 
 def _restriction_suffix(spend_only) -> str:
@@ -428,6 +433,13 @@ def _produce_one_color(
     caster = context.caster
     card = context.card
     record = str(instruction.payload.get(MANA_RECORD_PAYLOAD_KEY) or "")
+    # "Add X mana of any one color … **Spend this mana only to cast creature
+    # spells**" (Food Chain). CR 106.6 belongs to the mana, not to the shape of
+    # the sentence that made it, so this producer owes the restriction exactly
+    # as the structured-pip one does — and it rides through the *prompt* too,
+    # because the colour may be answered a step later and the bucket must not
+    # depend on who was asked.
+    spend_only = instruction.payload.get("spend_only")
     seat = game.players.index(caster) if caster in game.players else None
     colors = list(available) if available else ["W", "U", "B", "R", "G"]
     if named is None and seat is not None and amount > 0 and len(colors) > 1:
@@ -439,6 +451,7 @@ def _produce_one_color(
             default_color=symbol,
             note=note,
             record=record,
+            spend_only=spend_only,
             source=context.source_permanent,
         )
         if armed is not None:
@@ -447,9 +460,13 @@ def _produce_one_color(
             )
         return True, "resolved"
     if amount > 0:
-        caster.mana_pool[symbol] = caster.mana_pool.get(symbol, 0) + amount
+        bucket = _mana_bucket(caster, spend_only)
+        bucket[symbol] = bucket.get(symbol, 0) + amount
         note_mana_added(game, context.source_permanent, record)
-    game.log.append(f"{card.name} produced {amount} {symbol} mana{note}")
+    game.log.append(
+        f"{card.name} produced {amount} {symbol} mana{note}"
+        f"{_restriction_suffix(spend_only)}"
+    )
     return True, "resolved"
 
 
@@ -691,6 +708,18 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
         #
         # Zero is a real answer — "any number" includes none — and adds only the
         # flat pips the sentence in front of this one already produced.
+        # "Add an amount of {C} equal to **X plus one**." (Kyren Toy.) The pip
+        # is one unit and this is how many, read through ``resolve_amount`` —
+        # the one reader of every amount payload, so "X" and "X plus n" arrive
+        # here as the arithmetic the sentence printed.
+        #
+        # The X is the ability's own announcement (CR 107.3a), which for this
+        # card is the number of charge counters its cost took off; a seat that
+        # named none is defaulted to zero by the activation path and gets the
+        # one mana the sentence's constant prints, which is exactly the card.
+        pips_amount = instruction.payload.get("pips_amount")
+        if pips_amount is not None:
+            multiplier = max(0, resolve_amount(pips_amount, context.x_value))
         if instruction.payload.get("per_each_counter_removed") is not None:
             multiplier = max(0, int((context.choices or {}).get(
                 "counters_removed_for_cost", 0
