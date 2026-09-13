@@ -231,6 +231,47 @@ def _full_mana_payload(cost: ast.ManaCost) -> dict[str, int]:
     payload["generic"] = int(pips.get("generic", 0))
     return payload
 
+
+def variable_mana_payload(
+    cost: "ast.ManaCost", *, what: str, node: object = None
+) -> dict[str, object]:
+    """The symbol dict a printed cost becomes, with ``{X}`` left variable.
+
+    ``{X}`` becomes a **generic** pip whose amount is the string ``"x"``, which
+    is the one channel every amount in this engine resolves an X through: by the
+    time a handler runs, the announced X is on ``context.x_value``. So "you may
+    pay {X}" (Primordial Ooze) and "unless their controller pays {X}" (War Tax)
+    are ordinary costs with one number read late, not a second prompt.
+
+    A second X refuses: "{X}{X}" would mean twice the announced number and this
+    carries the amount once. So does "{X}{2}", which would fold a printed
+    constant and a variable into one number the card never named. Nothing in the
+    pool prints either, and guessing which reading was meant is exactly what a
+    refusal is for.
+
+    Here rather than in one of the families that reads it: the optional payment
+    (``lowering/control_flow.py``) and the combat tolls (``lowering/combat.py``)
+    are two families and neither may import the other, so the conversion sits on
+    the floor they share. Two copies would be two answers to "what does a
+    printed {X} become", free to differ — and the one that differed would be a
+    cost charged at a number the card never announced.
+
+    *what* names the clause in a refusal, because the two callers describe
+    themselves differently and a shared message would name the wrong one.
+    """
+    pips = dict(cost.pips)
+    variable = pips.pop("X", 0)
+    if variable > 1:
+        raise LoweringError(f"{what} reads one X, not several", node=node)
+    if variable and pips.get("generic"):
+        raise LoweringError(
+            f"{what} cannot mix X with a printed generic cost", node=node
+        )
+    payload: dict[str, object] = dict(pips)
+    if variable:
+        payload["generic"] = "x"
+    return payload
+
 # Durations meaning "for the rest of this turn". Both handlers below set a flag
 # listed in engine/mixins/_constants.py's _EOT_METADATA_KEYS, which is cleared
 # in the cleanup step — so these two wordings are the same effect, and any other

@@ -101,11 +101,51 @@ def _parse_counted_sacrifice(
         return ast.Sacrifice(
             player, ast.TargetSpec("a", that_many, count_amount=ast.ThatMuch(None))
         )
+    # "Each player sacrifices **X** lands of their choice." (Tectonic Break.)
+    # Read before the counted phrase for :func:`_accept_that_many_sacrifice`'s
+    # reason: there is no number here until the spell is cast (CR 601.2b), so
+    # ``parse_counted_subject`` — which answers with an ``int`` — has no branch
+    # that could grow one and refused the whole line.
+    x_count = _accept_x_sacrifice(stream)
+    if x_count is not None:
+        return ast.Sacrifice(
+            player, ast.TargetSpec("a", x_count, count=0, count_from_x=True)
+        )
     counted = parse_counted_subject(stream)
     if counted is None:
         raise stream.error("expected what to sacrifice")
     count, described = counted
     return ast.Sacrifice(player, ast.TargetSpec("a", described, count=count))
+
+
+def _accept_x_sacrifice(stream: TokenStream) -> "ast.ObjectFilter | None":
+    """``X <plural noun>`` — the noun phrase, or None with the cursor untouched.
+
+    "Each player sacrifices **X lands** of their choice." (Tectonic Break.)
+
+    Its own reader beside :func:`_accept_that_many_sacrifice` and for that
+    reader's reason: the count is not an ``int`` and cannot be a branch of a
+    reader that returns one. It carries the announced X of the spell or ability
+    that is sacrificing (CR 107.3), which the lowering puts on the payload as
+    ``"x"`` and the handler resolves against ``context.x_value``.
+
+    The count is **zero with a flag** and never 1: a count of 1 would parse, the
+    card would compile supported, and each player would sacrifice one land
+    however large X was — the quiet direction of wrong ``references.py`` records
+    the same lesson about.
+
+    Both parts are required before anything is consumed, and the noun phrase is
+    read plural, as every counted position in this grammar is.
+    """
+    mark = stream.mark()
+    if (stream.peek_word() or "").lower() != "x":
+        return None
+    stream.advance()
+    described = parse_subject_filter_at(stream, plural=True)
+    if described is None:
+        stream.reset(mark)
+        return None
+    return described
 
 
 def _accept_that_many_sacrifice(

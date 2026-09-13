@@ -128,6 +128,12 @@ class CleanupStepMixin:
                         self._discard_card(active_player, discarded)
                     self.log.append(f"{active_player.name} discarded {excess} card(s) in cleanup")
 
+        # "Target player skips their next combat phase **this turn**." (Moment
+        # of Silence.) CR 514.2 closes the window the card named; the record is
+        # already inert past its stamp, so this is the sweep for what nobody
+        # came back for — beside the "this turn" clears below rather than
+        # anywhere else, so every turn-bounded record ends in one place.
+        self.expire_stamped_phase_skips()
         self.combat_damage_prevented_until_eot = False
         # "…this turn" (Blind Fury). Cleared here and **not** at the end of
         # combat, unlike the Fog flag above: the sentence names the turn, so a

@@ -1683,7 +1683,7 @@ def test_layers_only_import_downward(layers):
         # library shares with it the printed word "Search" and no vocabulary at
         # all.
         ("effects", ("_strips",), ()),
-        ("lowering", ("_common", "_filters", "_events", "_frozen_seats", "_deaths", "_delays", "_amounts", "_counted_damage", "_counted_pumps", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_conjuncts", "_bound_returns", "_bound_exiles", "_described_returns", "_piles", "_counter_stores", "_plus_one_counters", "_blankets", "_prevented_riders", "_pump_categories", "_zone_categories", "_record_keys", "_record_conditions", "_cost_records", "_superlatives", "_recipients", "_collapses", "categories", "conditions"), ()),
+        ("lowering", ("_common", "_filters", "_events", "_frozen_seats", "_deaths", "_delays", "_amounts", "_counted_damage", "_counted_pumps", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_conjuncts", "_bound_returns", "_bound_exiles", "_described_returns", "_piles", "_counter_stores", "_plus_one_counters", "_blankets", "_prevented_riders", "_pump_categories", "_zone_categories", "_record_keys", "_record_conditions", "_cost_records", "_superlatives", "_recipients", "_collapses", "_declaration_costs", "categories", "conditions"), ()),
         # `costs` is shared beside `_core` rather than a family: a cost is
         # charged on the way to the stack and never lowered, so it has no
         # `effects/` or `lowering/` twin to be a family of — and both
@@ -1945,6 +1945,21 @@ FAMILY_SHARED = {
     # `_events` re-exports every name under the spelling it had, so this has one
     # importer by construction — the `_recipients` shape below.
     "_frozen_seats",
+    # `lowering/_declaration_costs`, split out of `lowering/combat.py` at
+    # Mercadian Masques' wave 2, when War Tax and War Cadence — the same
+    # board-wide declaration toll with its cost in mana — took that module three
+    # lines past the size guard. The seam is one the rules already draw and the
+    # enforcement already honours: a CR 508.1c / CR 509.1b *restriction* is
+    # answered by `can_attack` / `_can_block_attacker` asking whether a
+    # declaration is legal at all, and a CR 508.1g / CR 509.1d *cost* is
+    # answered by the four cost readers and charged over the whole declaration.
+    # Everything in the new module lowers into the second half; everything left
+    # in `combat` lowers into the first.
+    # A single-importer floor, precedented by `_recipients` and `_bites` below
+    # and for their reason exactly: `combat` is the only family that asks, and
+    # the module exists because that family crossed the guard. It reads
+    # `_common` and the AST and nothing back.
+    "_declaration_costs",
     # `effects/_strips`, split out of `effects/search.py` at Urza’s Destiny’s
     # wave 1 — the multi-zone strip by a recorded name (Lobotomy; Eradicate and
     # its four siblings). A single-importer floor, precedented by `_recipients`

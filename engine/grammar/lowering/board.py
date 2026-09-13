@@ -445,6 +445,18 @@ def _lower_sacrifice(
             payload.update(
                 _back_reference_payload(node.subject.count_amount, produced, event)
             )
+        elif node.subject.count_from_x:
+            # "Each player sacrifices **X** lands of their choice." (Tectonic
+            # Break.) CR 107.3's announced X, which is not known until the spell
+            # is cast — so it travels as the pool's existing ``"x"`` spelling
+            # and the handler resolves it against ``context.x_value``, the same
+            # channel every other announced X already reads.
+            #
+            # Ahead of the printed-count branch below rather than after it,
+            # because the flag carries a count of **zero**: read as a number
+            # this would sacrifice nothing whatever X was announced at, which is
+            # the same silent direction the flag exists to avoid.
+            payload["count"] = "x"
         elif node.subject.count != 1:
             # "Sacrifice **two** Swamps" (Mold Demon). How many is payload on
             # the one prompt, never a second kind: the forced-sacrifice queue

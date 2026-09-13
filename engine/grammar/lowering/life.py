@@ -28,6 +28,7 @@ from ._seats import _player_recipient
 from ._amounts import (count_spec, halved_count_spec, recorded_count_spec,
                        x_offset_amount)
 from ._common import (
+    dropped_narrowings,
     _amount_payload,
     _describe_targets,
     _restrictions_beyond,
@@ -479,6 +480,51 @@ def _lower_gain_life(
                 "the death tally counts creatures and nothing narrower", node=node
             )
         payload["per_each"] = {"history": "creatures_died_this_turn"}
+        return (OracleInstruction("target_gains_life", "", payload),)
+    if isinstance(node.per_each, ast.CountOfSacrificesThisWay):
+        # "Sacrifice any number of permanents. You gain 2 life **for each
+        # permanent sacrificed this way**." (Renounce.) The number is what the
+        # sentence in front of this one actually took, and nothing on a board
+        # holds it: "any number" prints no count and the permanents are cards in
+        # a graveyard by now (CR 400.7), among everything else that ever arrived
+        # there.
+        #
+        # It travels on ``recorded_cards`` — the channel Reprocess's draw and
+        # Song of Blood's pump already read for this same record — which counts
+        # the entries of a recorded *list* against a printed phrase rather than
+        # reading a slot holding a number. The printed 2 stays the *rate* on
+        # ``amount`` and the count multiplies it, which is what ``per_each``
+        # means everywhere else in this function.
+        if node.player.kind != "you":
+            raise LoweringError(
+                "a gain counted off this effect's own sacrifice is the "
+                "effect's controller's",
+                node=node,
+            )
+        if "sacrificed_cards" not in produced:
+            raise LoweringError(
+                "back-reference to 'sacrificed_cards' with no producer in "
+                "this effect",
+                node=node,
+            )
+        from ...subject_filters import card_only_filter
+
+        described = card_only_filter(node.per_each.filter.to_payload())
+        if described is None or dropped_narrowings(
+            node.per_each.filter, node.per_each.filter.to_payload()
+        ):
+            # Only what is *printed* is testable off a record (CR 613.1): the
+            # permanents are gone and what was kept is their cards. A narrowing
+            # the card matcher cannot answer refuses rather than being counted
+            # as though it were not there — a count that is too large is life
+            # the card never offered.
+            raise LoweringError(
+                "a sacrificed-permanent count cannot test this restriction",
+                node=node,
+            )
+        payload["per_each"] = {
+            "recorded_cards": "sacrificed_cards", "filter": described,
+        }
         return (OracleInstruction("target_gains_life", "", payload),)
     if isinstance(node.per_each, ast.CountersRemovedForCost):
         # "You gain 2 life **for each elixir counter removed this way**."

@@ -8,7 +8,9 @@ at all.
 """
 
 from .. import ast
+from ..errors import GrammarError
 from ..nouns import parse_object_filter
+from ..prices import _parse_mana_payment
 from ..references import parse_recipient
 from ..stream import TokenStream
 from ..phrases import (_accept_number, _parse_duration, parse_subject_filter_at)
@@ -184,6 +186,38 @@ def _parse_cant_attack_or_block(
         # cost scales with, and lowering holds it to the subject the sentence
         # opened with. A tail consumed and dropped would be a card that charges
         # once for a whole team.
+        # "This turn, creatures can't attack unless **their controller pays
+        # {X}** for each attacking creature they control." (War Tax.) The
+        # sacrifice tail below with the cost paid in mana instead — CR 508.1g's
+        # other currency — and it is read *before* that branch because the two
+        # share their first three words and differ on the fourth.
+        #
+        # Three things distinguish it from Koskun Falls' and Propaganda's
+        # printing, which ``engine/combat_restrictions.py`` reads as a static:
+        # this one has no "you" (the toll is owed for attacking *anybody*), it
+        # is the effect of a **resolving ability** rather than a permanent's
+        # standing text, and it therefore carries a printed window. That is why
+        # it is a production here and a turn-scoped record rather than a row in
+        # that table, which derives what a permanent on the battlefield says.
+        #
+        # The "for each" tail is read and kept for the sacrifice branch's stated
+        # reason: it says what the toll scales with, and a tail consumed and
+        # dropped would be a card that charges once for a whole team.
+        pay_mark = stream.mark()
+        if stream.accept_phrase("unless", "their", "controller", "pays"):
+            try:
+                cost = _parse_mana_payment(stream, allow_variable=True)
+            except GrammarError:
+                stream.reset(pay_mark)
+            else:
+                if not stream.accept_phrase("for", "each"):
+                    raise stream.error("expected 'for each' after the attack toll")
+                per = parse_object_filter(stream)
+                return ast.CombatRestriction(
+                    subject,
+                    "creatures_cant_attack_unless_pay_until_eot",
+                    (("mana", cost), ("per", per)),
+                )
         per_mark = stream.mark()
         if stream.accept_phrase("unless", "their", "controller", "sacrifices"):
             counted = parse_counted_subject(stream)
@@ -257,6 +291,31 @@ def _parse_cant_attack_or_block(
         # attack branch above reads, and the same declaration-wide question:
         # the creatures compared are the ones declared as blockers, which the
         # blocker gate cannot see one pair at a time.
+        # "This turn, creatures can't block unless **their controller pays {X}**
+        # for each blocking creature they control." (War Cadence.) The exact
+        # mirror of the attack toll above — CR 509.1d is CR 508.1g's blocking
+        # side, one sentence with two verbs — and its own kind for the reason
+        # ``cant_attack`` and ``cant_block`` are two: the gate that answers it
+        # is a different step, and one kind asked at two steps is a kind one of
+        # them gets wrong.
+        #
+        # Read first among the "unless" branches here for the attack side's
+        # reason: it opens on words none of them takes past the fourth.
+        pay_block = stream.mark()
+        if stream.accept_phrase("unless", "their", "controller", "pays"):
+            try:
+                cost = _parse_mana_payment(stream, allow_variable=True)
+            except GrammarError:
+                stream.reset(pay_block)
+            else:
+                if not stream.accept_phrase("for", "each"):
+                    raise stream.error("expected 'for each' after the block toll")
+                per = parse_object_filter(stream)
+                return ast.CombatRestriction(
+                    subject,
+                    "creatures_cant_block_unless_pay_until_eot",
+                    (("mana", cost), ("per", per)),
+                )
         greater_block = stream.mark()
         if stream.accept_phrase(
             "unless", "a", "creature", "with", "greater", "power", "also", "blocks"

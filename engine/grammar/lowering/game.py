@@ -303,6 +303,38 @@ def _lower_skip_step(node: "ast.SkipStep") -> tuple[OracleInstruction, ...]:
     )
 
 
+def _lower_skip_phase(node: "ast.SkipPhase") -> tuple[OracleInstruction, ...]:
+    """"Target player skips their next combat phase this turn."
+    (Moment of Silence.)
+
+    :func:`_lower_skip_step` one level of the turn structure up, and it refuses
+    the same seats by name for the same reason: ``Game.skip_next_phase`` records
+    against one seat, so "each opponent skips their next combat phase" would
+    have to be a set and is not a card in the pool.
+
+    The window rides the payload rather than being folded into the count. They
+    are different facts — how many phases and until when — and a skip that lost
+    its window would take the target's combat phase on a later turn, which is a
+    card nobody printed.
+    """
+    who = getattr(node.subject, "kind", None)
+    if who not in _SKIPPABLE_SEATS:
+        raise LoweringError(
+            f"no handler skips a phase for {who!r}", node=node
+        )
+    return (
+        OracleInstruction(
+            "skip_next_phase", "",
+            {
+                "phase": node.phase,
+                "seat": who,
+                "count": int(node.count),
+                "this_turn": bool(node.this_turn),
+            },
+        ),
+    )
+
+
 def _lower_skip_turn(node: "ast.SkipTurn") -> tuple[OracleInstruction, ...]:
     """"You skip your next turn." (Chronatog.)
 

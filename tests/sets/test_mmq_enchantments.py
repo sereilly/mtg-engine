@@ -1541,3 +1541,157 @@ def test_w2g1_food_chain_needs_no_hook_and_retires_one(set_pool):
     assert compile_card_oracle(set_pool("MMQ")["Food Chain"]).supported is True
     assert "Food Chain" not in CARD_LINE_INSTRUCTIONS
     assert "Metamorphosis" not in CARD_LINE_INSTRUCTIONS
+
+
+# --- W2G4: combat taxes and mass effects ---
+from engine import Game as _G4Game
+from engine import PlayerState as _G4PlayerState
+from engine.models import CardDefinition as _G4Card
+from engine.models import Permanent as _G4Permanent
+from tests.helpers import _mk_creature_card as _g4_creature_card
+from tests.helpers import resolve_stack as _g4_resolve
+
+
+def _w2g4_land(name="Wastes"):
+    """A land that taps for one generic, so a toll has something to be paid with."""
+    return _G4Card(
+        name=name,
+        mana_cost="",
+        cmc=0.0,
+        type_line="Land",
+        oracle_text="{T}: Add {C}.",
+        colors=(),
+        color_identity=(),
+        keywords=(),
+        produced_mana=("C",),
+        raw={"name": name, "type_line": "Land"},
+    )
+
+
+def _w2g4_board(set_pool, enchantment, *, attackers=1, blockers=1, lands=0):
+    """A duel with *enchantment* on seat 0, plus creatures and untapped lands.
+
+    Seat 0 attacks and seat 1 blocks, so the attack toll is charged to seat 0
+    and the block toll to seat 1 — which is what keeps the two halves of this
+    block from asserting each other's answer.
+    """
+    attacking = [_G4Permanent(card=_g4_creature_card(f"Attacker{i}", 2, 2)) for i in range(attackers)]
+    blocking = [_G4Permanent(card=_g4_creature_card(f"Blocker{i}", 2, 2)) for i in range(blockers)]
+    seats = [
+        _G4PlayerState(name="P1", battlefield=list(attacking), life=20),
+        _G4PlayerState(name="P2", battlefield=list(blocking), life=20),
+    ]
+    seats[0].battlefield.append(_G4Permanent(card=set_pool("MMQ")[enchantment]))
+    for seat in seats:
+        for i in range(lands):
+            seat.battlefield.append(_G4Permanent(card=_w2g4_land(f"Waste{i}")))
+    game = _G4Game(players=seats)
+    game._settle()
+    for perm in attacking + blocking:
+        perm.metadata["summoning_sickness_turn"] = -99
+    game.active_player_index = 0
+    return game, attacking, blocking
+
+
+def _w2g4_arm(game, enchantment, x_value):
+    """Activate *enchantment*'s only ability for X, then let it resolve."""
+    result = game.activate_permanent_ability(
+        0, enchantment, x_value=x_value,
+    )
+    assert result.supported, result.details
+    _g4_resolve(game)
+
+
+def test_war_tax_taxes_each_attacker_and_refuses_an_unpayable_declaration(set_pool):
+    """"{X}{U}: This turn, creatures can't attack unless their controller pays
+    {X} for each attacking creature they control." (War Tax.)
+
+    CR 508.1g: the toll is an additional cost to declare, summed over the whole
+    declaration — so two attackers under X=1 owe {2}, and a seat holding one
+    land cannot declare both. The refusal is the point: a restriction whose cost
+    nobody charges is silently absent, and this asserts the charge as well as
+    the gate.
+    """
+    game, attacking, _ = _w2g4_board(
+        set_pool, "War Tax", attackers=2, blockers=0, lands=1,
+    )
+    _w2g4_arm(game, "War Tax", 1)
+    game._set_phase_and_step("combat", "declare_attackers")
+
+    # One land, {1} owed per attacker: one may attack, both may not.
+    assert not game.declare_attackers(0, [0, 1], defending_player_index=1)[0]
+    ok, _ = game.declare_attackers(0, [0], defending_player_index=1)
+    assert ok
+    # And the land actually paid for it (CR 508.1h/j), rather than the
+    # declaration being approved and the cost forgotten.
+    lands = [p for p in game.controlled_by(0) if p.card.name.startswith("Waste")]
+    assert [p.tapped for p in lands] == [True]
+
+
+def test_war_tax_at_x_zero_forbids_nothing(set_pool):
+    """CR 107.3b: X is what was announced, and an announced 0 is a toll of {0}.
+
+    The restriction is still armed — it is filed in the same list the blanket
+    prohibitions use — so this is the assertion that the two gates read an
+    entry carrying a cost as a *cost*. Read as a ban it would ground the board.
+    """
+    game, _, _ = _w2g4_board(set_pool, "War Tax", attackers=1, blockers=0, lands=0)
+    _w2g4_arm(game, "War Tax", 0)
+    game._set_phase_and_step("combat", "declare_attackers")
+
+    assert game.declare_attackers(0, [0], defending_player_index=1)[0]
+
+
+def test_war_tax_ends_with_the_turn(set_pool):
+    """"**This turn**" — CR 514.2 closes the window at cleanup.
+
+    Without the sweep the toll would tax every combat for the rest of the game,
+    which is the direction a missing duration always errs in.
+    """
+    game, _, _ = _w2g4_board(set_pool, "War Tax", attackers=1, blockers=0, lands=0)
+    _w2g4_arm(game, "War Tax", 3)
+    assert game.attack_restrictions_until_eot
+
+    game.resolve_cleanup_step(0)
+    assert not game.attack_restrictions_until_eot
+
+
+def test_war_cadence_taxes_each_blocking_creature_once(set_pool):
+    """"{X}{R}: This turn, creatures can't block unless their controller pays
+    {X} for each blocking creature they control." (War Cadence.)
+
+    CR 509.1d, and the count is of **blocking creatures** rather than of blocks
+    — CR 802.4b makes each defending player's own blockers the set, and a
+    creature blocking two attackers is still one of them. Two blockers under
+    X=1 owe {2}; a defender with one land can block with one and not with two.
+    """
+    game, attacking, blocking = _w2g4_board(
+        set_pool, "War Cadence", attackers=2, blockers=2, lands=1,
+    )
+    _w2g4_arm(game, "War Cadence", 1)
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.declare_attackers(0, [0, 1], defending_player_index=1)[0]
+    _g4_resolve(game)
+    game._set_phase_and_step("combat", "declare_blockers")
+
+    assert not game.declare_blockers(1, {0: 0, 1: 1})[0]
+    ok, _ = game.declare_blockers(1, {0: 0})
+    assert ok
+    lands = [p for p in game.controlled_by(1) if p.card.name.startswith("Waste")]
+    assert [p.tapped for p in lands] == [True]
+
+
+def test_war_cadence_taxes_the_attacking_seat_with_nothing(set_pool):
+    """The block toll is owed by the *blocker's* controller, never the attacker.
+
+    Seat 0 owns War Cadence and is the one attacking; if the toll were charged
+    to whoever activated it, this declaration would be refused for want of a
+    land. It is the defender who pays, and here they can.
+    """
+    game, _, _ = _w2g4_board(
+        set_pool, "War Cadence", attackers=1, blockers=1, lands=0,
+    )
+    _w2g4_arm(game, "War Cadence", 2)
+    game._set_phase_and_step("combat", "declare_attackers")
+
+    assert game.declare_attackers(0, [0], defending_player_index=1)[0]

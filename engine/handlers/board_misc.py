@@ -2729,9 +2729,16 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
     # would read the sacrificing opponent's tally and ask for nothing whenever
     # they had lost nothing.
     shared = instruction.payload.get(X_FROM_COUNT)
+    # A printed ``"x"`` is CR 107.3's announced X — "Each player sacrifices **X**
+    # lands of their choice" (Tectonic Break) — resolved through the one channel
+    # every other announced X reads. It used to read **zero** here, which was
+    # right only because no payload reached this line carrying ``"x"`` alone:
+    # every producer paired it with one of the count specs below, each of which
+    # overwrites this. A bare one would have sacrificed nothing and logged
+    # itself resolved.
     count = int(instruction.payload.get("count", 1)) if instruction.payload.get(
         "count"
-    ) != "x" else 0
+    ) != "x" else max(0, int(context.x_value or 0))
     if shared is not None:
         # The source travels with the spec, because one of the shapes it can
         # carry is a pile of counters sitting on the ability's own permanent —

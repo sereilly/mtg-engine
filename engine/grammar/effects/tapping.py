@@ -59,6 +59,19 @@ def _parse_doesnt_untap_next_step(
     # is printed with it, and inventing one would accept text no card carries.
     if stream.accept_word("your"):
         return _parse_next_untap_steps(stream, subject, whose="you")
+    # "…don't untap during **that player's** next untap step." (Misstep.) The
+    # third seat this production knows, and it is neither of the two above: the
+    # subject named a player ("Creatures **target player** controls") and this
+    # names that same player's step. It coincides with "their controller's" on
+    # every board where nothing changes hands and diverges the moment one of
+    # those creatures does — the step stays the *named* player's while the
+    # controller's would follow the creature — so it travels as its own word for
+    # exactly the reason "your" does rather than being read as a spelling of the
+    # elision below.
+    that_player = stream.mark()
+    if stream.accept_phrase("that", "player", "'s"):
+        return _parse_next_untap_steps(stream, subject, whose="target_player")
+    stream.reset(that_player)
     stream.expect_word("their", "its")
     # "…don't untap during **their next** untap step." (Exhaustion.) The same
     # step with the possessive elided: an untap step belongs to a player

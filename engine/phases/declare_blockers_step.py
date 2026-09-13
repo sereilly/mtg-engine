@@ -954,6 +954,15 @@ class DeclareBlockersStepMixin:
         # this turn", Destructive Tampering). Keywords are asked of layer 6, so
         # a creature granted flying after the spell resolved may block.
         for entry in self.blocking_restrictions_until_eot:
+            # A toll is not a ban. "Creatures can't block **unless their
+            # controller pays {X}**" (War Cadence) is CR 509.1b's second half —
+            # a restriction with a condition that can be met — so its entry sits
+            # here beside the blanket ones and is answered as a *cost*, by
+            # ``_block_toll_of`` and the gate below. Read as a prohibition it
+            # would stop every creature the noun phrase names from blocking at
+            # all, which on War Cadence is the whole defending board.
+            if entry.get("toll"):
+                continue
             filt = entry.get("filter") or {}
             type_filter = filt.get("type_filter", "creature")
             if type_filter == "creature" and not blocker.is_creature:
@@ -1377,6 +1386,18 @@ class DeclareBlockersStepMixin:
             if owed and self.players[blocker_seat].life < owed:
                 return False
         if blocker_seat is not None:
+            # The turn-scoped toll (War Cadence), owed once for this creature
+            # rather than once per attacker it blocks — see ``_block_toll_of``.
+            # Gated here as well as charged below for the reason every other
+            # cost in this file is: a per-pair predicate is what "blocks if
+            # able" reads, and a defender who cannot cover the toll is not able.
+            toll = self._block_toll_of(blocker)
+            if toll and plan_payment(
+                self.players[blocker_seat].mana_pool,
+                untapped_mana_lands(self.controlled_by(blocker_seat)),
+                toll,
+            ) is None:
+                return False
             for cost in self._block_mana_costs_of(blocker, attacker):
                 if plan_payment(
                     self.players[blocker_seat].mana_pool,
@@ -1522,6 +1543,45 @@ class DeclareBlockersStepMixin:
                 costs.append(cost)
         return costs
 
+    def _block_toll_of(self, blocker: Permanent) -> dict[str, int]:
+        """The mana *blocker*'s controller owes **once** for blocking with it.
+
+        "This turn, creatures can't block unless their controller pays {X} for
+        each blocking creature they control." (War Cadence.) CR 509.1d again,
+        and it takes the blocker **alone** where :meth:`_block_mana_costs_of`
+        beside it takes the pair. That is the whole reason it is a second
+        reader rather than a fourth channel in that one:
+
+        * Hipparion's toll and Awesome Presence's are owed **per attacker
+          blocked** — "for each creature they control that's blocking **it**" —
+          so asking once per pair is what the card says, and a creature that
+          blocks two attackers disobeys the restriction twice if it pays once.
+        * War Cadence's is owed per **blocking creature**. A creature blocking
+          two attackers (Two-Headed Giant of Foriys) is still one blocking
+          creature, and charging it per pair would bill twice what the card
+          asks.
+
+        CR 802.4b is what makes the per-controller sum right in multiplayer:
+        determining whether a defending player's blocks are legal ignores
+        blocking creatures controlled by other players, so each defender pays
+        for their own and ``_block_declaration_mana_plan`` — which is already
+        per-controller — sums exactly the right set.
+
+        Asked with no observer, for ``_attack_mana_costs_of``'s reason on the
+        other side: the toll is a record on the game rather than text on a
+        permanent, so there is no seat whose "you" the noun phrase could mean.
+        """
+        total: dict[str, int] = {}
+        for entry in self.blocking_restrictions_until_eot:
+            if not entry.get("toll"):
+                continue
+            cost = entry.get("mana") or {}
+            if not subject_matches(self, blocker, dict(entry.get("filter") or {})):
+                continue
+            for symbol, amount in cost.items():
+                total[symbol] = total.get(symbol, 0) + int(amount)
+        return total
+
     def _block_life_cost_of(self, blocker: Permanent, attacker: Permanent) -> int:
         """The life *blocker*'s controller owes to block *attacker* (CR 509.1d).
 
@@ -1619,6 +1679,12 @@ class DeclareBlockersStepMixin:
             blocker = resolved_blockers.get(blocker_idx)
             if blocker is None:
                 continue
+            # War Cadence's toll, added **once for the creature** and outside
+            # the per-attacker loop below — see ``_block_toll_of``. Inside it, a
+            # creature blocking two attackers would be billed twice for being
+            # one blocking creature.
+            for symbol, amount in self._block_toll_of(blocker).items():
+                total[symbol] = total.get(symbol, 0) + amount
             for attacker_idx in attacker_indices:
                 attacker = resolved_attackers.get(attacker_idx)
                 if attacker is None:

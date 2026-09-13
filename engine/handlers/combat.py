@@ -17,6 +17,7 @@ from ._common import (recorded_permanent_ids,
 )
 from .registry import effect_handler
 from ..keywords import grant_keyword
+from ..mana_payment import mana_cost_label
 from ..combat_assignment import (ASSIGNS_NO_COMBAT_DAMAGE,
                                 MUST_ASSIGN_AS_UNBLOCKED,
                                  BLOCKED_WITHOUT_BLOCKERS)
@@ -1651,6 +1652,85 @@ def cant_block_until_eot(game: Game, instruction: OracleInstruction, context: Or
     })
     game.log.append(f"{context.card.name}: the named creatures can't block this turn")
     return True, "resolved"
+
+
+#: The two turn-scoped declaration tolls, mapped to the list each is filed in
+#: and the word a log line uses. One table because the two handlers below differ
+#: in nothing else: CR 508.1g and CR 509.1d are the same rule on two sides of
+#: combat, and the *readers* are what tell them apart.
+_PAY_TOLL_LISTS: dict[str, tuple[str, str]] = {
+    "creatures_cant_attack_unless_pay_until_eot": (
+        "attack_restrictions_until_eot", "attack",
+    ),
+    "creatures_cant_block_unless_pay_until_eot": (
+        "blocking_restrictions_until_eot", "block",
+    ),
+}
+
+
+def _arm_declaration_toll(game, instruction, context, kind: str):
+    """File a "creatures can't <verb> unless their controller pays <cost>" toll.
+
+    It goes in the very list the blanket prohibitions use, and that is the
+    decision worth writing down: CR 508.1c and CR 509.1b make "can't attack"
+    and "can't attack **unless some condition is met**" one rule, so one list is
+    "what this turn forbids" and the cost is what the condition asks for. The
+    two gates skip an entry carrying ``mana`` — a toll is not a ban, and a
+    payable one forbids nothing — and the two *cost* readers pick it up
+    instead. Cleanup already sweeps the list, so the window needs nothing new.
+
+    **The cost is resolved here and stored concrete.** The ability announced X
+    as it was activated (CR 601.2b) and that number is fixed for the life of the
+    effect (CR 107.3b); the declaration readers charge ``int()`` off the entry
+    and would raise on a string, and a toll re-resolved at the declaration would
+    read whichever X the *next* activation announced. A toll announced at X=0 is
+    filed all the same and costs nothing, which is what the card says.
+    """
+    list_name, verb = _PAY_TOLL_LISTS[kind]
+    cost = {
+        symbol: max(0, int(context.x_value or 0)) if amount == "x" else int(amount)
+        for symbol, amount in (instruction.payload.get("mana") or {}).items()
+    }
+    entry = {
+        "filter": dict(instruction.payload.get("subject") or {}),
+        # **The flag, not the cost, is what says this is a toll.** An entry
+        # announced at X=0 owes {0}, which is a real and legal answer
+        # (CR 107.3b) — and a gate that told a toll from a ban by "does it carry
+        # a price" would read that entry as a prohibition and ground every
+        # creature the noun phrase names. The two readers key on this instead.
+        "toll": True,
+        "mana": {symbol: amount for symbol, amount in cost.items() if amount},
+        "source_name": context.card.name,
+    }
+    getattr(game, list_name).append(entry)
+    game.log.append(
+        f"{context.card.name}: the named creatures can't {verb} this turn "
+        f"unless their controller pays {mana_cost_label(entry['mana']) or '{0}'} "
+        f"for each"
+    )
+    return True, "resolved"
+
+
+@effect_handler("creatures_cant_attack_unless_pay_until_eot")
+def creatures_cant_attack_unless_pay_until_eot(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """"This turn, creatures can't attack unless their controller pays {X} for
+    each attacking creature they control." (War Tax.) CR 508.1g."""
+    return _arm_declaration_toll(
+        game, instruction, context, "creatures_cant_attack_unless_pay_until_eot"
+    )
+
+
+@effect_handler("creatures_cant_block_unless_pay_until_eot")
+def creatures_cant_block_unless_pay_until_eot(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """"This turn, creatures can't block unless their controller pays {X} for
+    each blocking creature they control." (War Cadence.) CR 509.1d."""
+    return _arm_declaration_toll(
+        game, instruction, context, "creatures_cant_block_unless_pay_until_eot"
+    )
 
 
 @effect_handler("attack_as_though_no_defender_until_eot")

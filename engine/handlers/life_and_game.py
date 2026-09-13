@@ -594,6 +594,17 @@ def target_gains_life(game: Game, instruction: OracleInstruction, context: Oracl
         # real answer: the cost is payable with no counters on the artifact and
         # gains no life.
         life_gain *= count_from_payload(game, context, per_each)
+    if per_each is not None and per_each.get("recorded_cards") is not None:
+        # "Sacrifice any number of permanents. You gain 2 life **for each
+        # permanent sacrificed this way**." (Renounce.) The list an earlier
+        # step of this same resolution recorded, counted against the printed
+        # noun phrase — through `count_from_payload`, the reader Reprocess's
+        # draw and Song of Blood's pump already answer this record with, so
+        # one printed clause has one count however many families print it.
+        #
+        # Zero is a real answer: "any number" includes none, and a seat that
+        # sacrificed nothing gains nothing.
+        life_gain *= count_from_payload(game, context, per_each)
     if per_each is not None and per_each.get("counters_on_source"):
         # "…**for each credit counter on this creature**" (Icatian
         # Moneychanger). Through the one counter reader, `counters_on`, which
@@ -879,6 +890,52 @@ def skip_next_step(game: Game, instruction: OracleInstruction, context: OracleEx
     game.skip_next_step(step, int(instruction.payload.get("count", 1) or 1), seat=seat)
     game.log.append(
         f"{game.players[seat].name} will skip their next {step} step"
+    )
+    return True, "resolved"
+
+
+@effect_handler("skip_next_phase")
+def skip_next_phase(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Target player skips their next combat phase this turn."
+    (Moment of Silence.)
+
+    CR 500.11 and CR 614.10: the phase never begins, so no step inside it runs
+    and nothing in it triggers. Its own bucket rather than the step one above,
+    for that handler's own reason one level down: CR 506.1 gives the combat
+    phase five steps and none of them is named "combat", so a phase filed as a
+    step is a record nothing consumes.
+
+    "**Target player**" is a seat chosen as the spell was cast (CR 115.1), which
+    only the resolution knows — read back here exactly as the step handler reads
+    the identical word. A pronoun with nobody chosen answers False rather than
+    falling back to the caster: skipping your own combat phase where the card
+    names an opponent's is a strictly different card.
+
+    ``this_turn`` is the printed window and it is carried, not assumed: the
+    target's next combat phase falls on their own turn, so an unstamped record
+    would wait for it and skip a combat phase a turn after the card said.
+    """
+    phase = str(instruction.payload.get("phase") or "")
+    if not phase:
+        return False, "no phase named"
+    who = str(instruction.payload.get("seat") or "you")
+    if who == "you":
+        seat = game.seat_index(context.caster)
+    else:
+        chosen = context.target
+        if chosen not in game.players:
+            return False, f"no player was chosen for {who!r}"
+        seat = game.players.index(chosen)
+    on_turn = game.turn if instruction.payload.get("this_turn") else None
+    game.skip_next_phase(
+        phase,
+        int(instruction.payload.get("count", 1) or 1),
+        seat=seat,
+        on_turn=on_turn,
+    )
+    window = " this turn" if on_turn is not None else ""
+    game.log.append(
+        f"{game.players[seat].name} will skip their next {phase} phase{window}"
     )
     return True, "resolved"
 

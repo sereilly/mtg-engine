@@ -5,10 +5,8 @@ whose power limit the handler hardcodes — recorded here as a value so the
 lowering can check it rather than assume it.
 """
 
-import dataclasses
-
 from ...oracle_types import CHOSEN_THIS_WAY_OBJECTS, OracleInstruction
-from ...subject_filters import OBJECT_ONLY_FILTER_KEYS, untestable_filter_keys
+from ...subject_filters import untestable_filter_keys
 from ...turn_state import THAT_PLAYERS_NEXT_TURN
 from .. import ast
 from ..errors import LoweringError
@@ -18,10 +16,14 @@ from ._common import (
     _is_source, _REST_OF_TURN, RESTRICTION_TURNS,
     _names_several_targets, _restrictions_beyond, refuse_untestable,
 )
+from ._declaration_costs import lower_declaration_cost
 from ._events import (
     _TAPPED_PERMANENTS,
     _UNTAPPED_PERMANENTS,
 )
+
+
+
 
 
 
@@ -306,35 +308,14 @@ def _lower_combat_restriction(
         return (
             OracleInstruction("cant_attack_until_eot", "", armed),
         )
-    # "This creature can't attack unless you sacrifice two Islands." (Leviathan
-    # — "This cost is paid as attackers are declared".) CR 508.1g. The filter is
-    # held to what the *charger* can test: `_sacrifice_candidate_indices` reads
-    # a payload through the same matcher every other sacrifice does, and a
-    # narrowing it cannot answer would either charge the wrong permanents or
-    # charge none — so an untestable key refuses the line rather than riding
-    # along.
-    if node.kind == "cant_attack_unless_sacrifice":
-        payload = dict(node.payload)
-        if not _is_source(node.subject):
-            raise LoweringError(
-                "the attack cost is paid by the source's controller and "
-                "restricts the source",
-                node=node,
-            )
-        described = _filter_payload(payload["sacrifice_filter"])
-        untestable = untestable_filter_keys(described, allowed=OBJECT_ONLY_FILTER_KEYS)
-        if untestable:
-            raise LoweringError(
-                "the attack cost cannot be charged against: "
-                + ", ".join(sorted(untestable)),
-                node=node,
-            )
-        return (
-            OracleInstruction(
-                "cant_attack_unless_sacrifice", "",
-                {"filter": described, "count": int(payload["sacrifice_count"])},
-            ),
-        )
+    # CR 508.1g / CR 509.1d: what a declaration *costs*, as against the
+    # restrictions this function answers. One question asked once, in
+    # ``_declaration_costs`` — the floor those four branches moved to when the
+    # two mana tolls took this module past the size guard. It answers None for
+    # every kind it does not own, so the branches below keep their reading.
+    declaration_cost = lower_declaration_cost(node)
+    if declaration_cost is not None:
+        return declaration_cost
     # "…unless defending player controls an Island" (Sea Serpent) / "…if
     # defending player controls an untapped creature with power 3 or greater"
     # (Goblin Mutant). One kind, one payload: the printed noun phrase and the
@@ -370,82 +351,6 @@ def _lower_combat_restriction(
             OracleInstruction(
                 "cant_attack_unless_defender_controls", "",
                 {"subject": described, "required": bool(payload["required"])},
-            ),
-        )
-    # "Green creatures can't attack unless their controller sacrifices a land of
-    # their choice **for each green creature they control that's attacking**."
-    # (Flooded Woodlands, Reclamation.) The board-wide twin of Leviathan's cost
-    # above: the sentence is printed on a permanent naming a *class*, the payer
-    # is that class's controller, and the cost is charged once per attacking
-    # member — which is exactly the per-attacker shape `_attack_costs_of`
-    # already returns, so the charge and the gate need nothing new.
-    if node.kind == "creatures_cant_attack_unless_sacrifice":
-        payload = dict(node.payload)
-        spec = node.subject
-        if not isinstance(spec, ast.TargetSpec) or spec.quantifier != "all":
-            raise LoweringError(
-                "the board-wide attack cost restricts a printed class of "
-                "creatures",
-                node=node,
-            )
-        # The "for each" tail says what the cost scales with, and the only
-        # scaling this shape has a charge for is **one per attacking member of
-        # the very class the sentence restricts**. Held by equality against the
-        # subject with those two words lifted off: a tail naming anything else
-        # is a different card, and admitting it would charge for the wrong set
-        # while the card compiled clean. Equality rather than a field-by-field
-        # probe for the reason `_lower_cant_be` gives — a filter field added to
-        # the AST later cannot slip through one.
-        per = payload["per"]
-        if per.attacking is not True or per.controller != "that_player":
-            raise LoweringError(
-                "the scaling tail counts the attacking members its controller "
-                "controls",
-                node=node,
-            )
-        if dataclasses.replace(per, attacking=None, controller=None) != spec.filter:
-            raise LoweringError(
-                "the scaling tail names a different set than the restriction",
-                node=node,
-            )
-        subject = _filter_payload(spec.filter)
-        untestable = untestable_filter_keys(subject)
-        if untestable or not subject:
-            raise LoweringError(
-                "the attack gate cannot test the restricted class: "
-                + (", ".join(sorted(untestable)) or "nothing was described"),
-                node=node,
-            )
-        # "…a land **of their choice**". Lifted off rather than carried: it says
-        # the paying player picks, which is what the charger does already
-        # (`default_sacrifice_pick` stands in for a chooser it can hand off to),
-        # so a payload key would be one nothing reads. What is *not* satisfied
-        # by that is somebody else picking, and `chosen_by_opponent` is outside
-        # the allowed set below, so it refuses.
-        #
-        # Named at the call site because ``_filter_payload`` now refuses the
-        # word outright: it is the caller's claim that the choice is really
-        # made somewhere, and an unnamed key is a refusal.
-        described = _filter_payload(
-            payload["sacrifice_filter"],
-            carried_separately=frozenset({"their_choice"}),
-        )
-        described.pop("their_choice", None)
-        untestable = untestable_filter_keys(described, allowed=OBJECT_ONLY_FILTER_KEYS)
-        if untestable:
-            raise LoweringError(
-                "the attack cost cannot be charged against: "
-                + ", ".join(sorted(untestable)),
-                node=node,
-            )
-        return (
-            OracleInstruction(
-                "creatures_cant_attack_unless_sacrifice", "",
-                {
-                    "subject": subject,
-                    "filter": described,
-                    "count": int(payload["sacrifice_count"]),
-                },
             ),
         )
     # "This creature can't block white creatures with power 2 or greater."

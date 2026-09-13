@@ -351,6 +351,23 @@ def count_from_payload(
             seats = game.opponents_of(game.players.index(context.caster))
             chosen = game.players[seats[0]] if seats else context.caster
         owner = chosen
+    elif scope == "defending_player":
+        # "…for each nonbasic land **defending player** controls." (Mercadia's
+        # Downfall.) CR 506.2's seat, which exists only inside a combat phase
+        # and which no read of a permanent can supply — through
+        # ``defending_player_seat``, the one reader every other handler already
+        # asks, so the count and a damage or a sweep in the same sentence can
+        # never land on two different players.
+        #
+        # A spell asks the *live* combat rather than a frozen record: this
+        # sentence is not a trigger, so nothing froze a seat for it, and by the
+        # time a combat trick resolves the defending player is exactly the one
+        # the board says. No combat, no seat, and the count is zero — which is
+        # what "defending player" names outside combat.
+        seat = defending_player_seat(game, context)
+        if seat is None:
+            return 0
+        owner = game.players[seat]
     elif scope == "event_subject_player":
         # "At the beginning of each opponent's upkeep, … the number of …
         # **they control**" (Psychic Allergy). Nobody chose this seat, so

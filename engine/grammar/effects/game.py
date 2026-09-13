@@ -676,6 +676,23 @@ def _parse_life_total_becomes(stream: TokenStream) -> ast.Statement | None:
 _SKIPPABLE_STEPS: dict[str, str] = {
     "draw": "draw",
     "untap": "untap",
+}
+
+#: The **phases** a printed "skip your next <phase> phase" may name, mapped to
+#: the phase name ``Game.skip_next_phase`` is keyed by (``_constants``'
+#: ``_PHASE_STEPS``). A table beside the step one and not a row inside it,
+#: because CR 500.11 counts the two in different buckets and the engine runs
+#: them at different levels: ``_phase_steps`` spends a step skip and
+#: ``next_unskipped_phase_after`` spends a phase one.
+#:
+#: "combat" used to sit in the table above, which was the mistake this split
+#: fixes: there is no *step* called "combat" — the combat phase has five, all
+#: named — so a card printing "skip your next combat step" would have compiled,
+#: reported supported, recorded a skip against a step name nothing runs, and
+#: skipped nothing. Unreachable in the pool (nothing prints the word "step"
+#: after "combat"), which is why it never showed; the row was a claim the
+#: engine could not honour rather than a live bug.
+_SKIPPABLE_PHASES: dict[str, str] = {
     "combat": "combat",
 }
 
@@ -712,11 +729,28 @@ def _parse_skip_step(stream: TokenStream, subject) -> ast.Statement:
         # would demand a word this sentence does not print.
         stream.advance()
         return ast.SkipTurn(subject)
+    # "…skips their next **combat phase** this turn." (Moment of Silence.)
+    # CR 506.1: the combat phase has five steps and is not one, so the printed
+    # noun decides which counter the skip goes into — and the two are read here
+    # together rather than by two productions, because every word before them is
+    # shared and a second production would have to re-read all of it.
+    phase = _SKIPPABLE_PHASES.get(word or "")
+    if phase is not None and stream.peek_word(1) == "phase":
+        stream.advance()
+        stream.advance()
+        # "**this turn**" — the window the card bounds the skip to. Consumed and
+        # carried rather than skipped: a phase skip that outlived its turn would
+        # eat the target's combat phase on their *next* turn, which is a
+        # strictly larger effect than the card prints. Optional because no rule
+        # requires it; a card printing the phase without it is an unbounded skip
+        # and says so by carrying no window.
+        this_turn = bool(stream.accept_phrase("this", "turn"))
+        return ast.SkipPhase(subject, phase, this_turn=this_turn)
     step = _SKIPPABLE_STEPS.get(word or "")
     if step is None:
         raise stream.error(
-            f"no skippable step named {word!r} (and only a turn may be "
-            "skipped without the word 'step')"
+            f"no skippable step or phase named {word!r} (and only a turn may "
+            "be skipped without the word 'step')"
         )
     stream.advance()
     if not stream.accept_word("step"):

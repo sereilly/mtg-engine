@@ -550,6 +550,32 @@ class SkipStep:
 
 
 @dataclass(frozen=True)
+class SkipPhase:
+    """``Target player skips their next combat phase this turn.``
+    (Moment of Silence.)
+
+    :class:`SkipStep`'s sibling one level of the turn structure up, and its own
+    node for :class:`SkipTurn`'s reason: CR 500.11 lets a step, a phase *or* a
+    turn be skipped and this engine counts all three in different buckets
+    (``Game.skip_next_phase`` against ``skip_next_step`` against
+    ``skip_next_turn``). A phase routed through the step counter would be a
+    record keyed on a step name nothing runs — CR 506.1 gives the combat phase
+    five steps and none of them is called "combat" — so the card would report
+    supported and skip nothing.
+
+    ``this_turn`` is the printed window. It matters because a skip with no
+    window waits: the target's next combat phase is on their own turn, and a
+    record that survived this cleanup would eat it a turn later than the card
+    says.
+    """
+
+    subject: "PlayerRef"
+    phase: str
+    count: int = 1
+    this_turn: bool = False
+
+
+@dataclass(frozen=True)
 class SkipTurn:
     """``You skip your next turn.`` (Chronatog, Time Vault.)
 
