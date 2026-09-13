@@ -38,19 +38,25 @@ from ._filters import (_PAYLOAD_HONOURED_FILTER_FIELDS, _filter_payload,
                        graveyard_position_payload, is_mana_value_x,
                        refuse_untestable, testable_filter_payload)
 # Re-exported for the families that read them; `_targets` holds the definitions.
-# Three of its names are deliberately *not* here — `DEPENDENT_TARGET_RELATIONS`,
-# `_targeted_specs` and `card_divided_target_description` have no reader outside
-# that module, and a re-export nobody pulls through is the dead binding
-# `test_import_hygiene` exists to catch.
-from ._targets import (PRIMARY_TARGET_ROLE, SEVERAL_DESTROY_NARROWINGS,
+# Two of its names are deliberately *not* here — `_targeted_specs` and
+# `card_divided_target_description` have no reader outside that module, and a
+# re-export nobody pulls through is the dead binding `test_import_hygiene`
+# exists to catch.
+from ._targets import (SEVERAL_DESTROY_NARROWINGS,
                        _describe_several_card_targets,
                        _describe_several_targets, _describe_targets, _is_target,
                        _names_several_targets, _refuse_unfused_distinctness,
                        _targets_only, _targets_payload,
                        card_divided_each_description,
-                       card_divided_shares_payload, describe_target_roles,
-                       describe_independent_target_roles,
+                       card_divided_shares_payload,
                        divided_target_description, _optional_slot_key)
+# …and the ordered-roles half of the same subject, from the module it split
+# into (`_roles`). Imported from its own home rather than pulled through
+# `_targets`, which would be a re-export chain nobody reads the middle of;
+# `DEPENDENT_TARGET_RELATIONS` and `describe_sequence_target_roles` stay out
+# for the reason above — their readers are that module and `lower` itself.
+from ._roles import (PRIMARY_TARGET_ROLE, describe_independent_target_roles,
+                     describe_target_roles)
 
 
 def split_creature_type_choice(described: dict) -> tuple[tuple, dict, dict]:

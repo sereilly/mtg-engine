@@ -1945,6 +1945,17 @@ FAMILY_SHARED = {
     # `_events` re-exports every name under the spelling it had, so this has one
     # importer by construction — the `_recipients` shape below.
     "_frozen_seats",
+    # `lowering/_roles`, split out of `lowering/_targets` at Mercadian Masques'
+    # wave 3, when the ordered-roles builders took that floor thirteen lines
+    # past the size guard. The seam is the last clause of `_targets`' own
+    # docstring: that module holds CR 601.2b-d — how many objects a sentence
+    # announces and how a division is shared out — and this one holds "which of
+    # several slots is asked for first", whose readers are a *walk*
+    # (`legality.role_target_options`, the announcement gate, the CR 608.2b
+    # re-check) rather than the handler that acts on one chosen object.
+    # A floor rather than a family, like `_targets` above it: three lowering
+    # families read a builder from here through `_common`.
+    "_roles",
     # `lowering/_declaration_costs`, split out of `lowering/combat.py` at
     # Mercadian Masques' wave 2, when War Tax and War Cadence — the same
     # board-wide declaration toll with its cost in mana — took that module three

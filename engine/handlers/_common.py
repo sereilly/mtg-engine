@@ -2289,6 +2289,7 @@ def roles_still_legal(
     blocked.
     """
     from ..subject_filters import subject_matches
+    from ..targeting import role_is_seat
 
     targets = (payload or {}).get("targets") or {}
     roles = list(targets.get("roles") or ())
@@ -2322,7 +2323,7 @@ def roles_still_legal(
         # (``opponents_only`` and the rest) are properties of the announcement
         # and are re-asked by ``roles_still_legal``'s caller through the same
         # picker, exactly as a permanent role's filter is.
-        if role.get("kind") == "player":
+        if role_is_seat(role):
             seat = resolve_role_player(game, context, payload, role.get("role"))
             if seat is None or game.players[seat].lost:
                 return False
@@ -2498,14 +2499,13 @@ def resolve_role_player(
     which is the same direction ``resolve_role_permanent`` takes on a slot that
     no longer resolves.
     """
-    from ..targeting import payload_role_slot, spec_roles
+    from ..targeting import payload_role_slot, role_is_seat, spec_roles
 
     slot = payload_role_slot(payload, role)
     if slot is None:
         return None
     roles = spec_roles((payload or {}).get("targets"))
-    seats = [index for index, entry in enumerate(roles)
-             if entry.get("kind") == "player"]
+    seats = [index for index, entry in enumerate(roles) if role_is_seat(entry)]
     if seats != [slot]:
         return None
     # By **identity**, never by ``list.index``: ``PlayerState`` is a mutable

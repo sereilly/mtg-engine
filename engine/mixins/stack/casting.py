@@ -69,7 +69,8 @@ from ...subject_filters import card_matches_any, filter_head_noun, subject_match
 from ...targeting import (_ENCHANT_LAND_SUBTYPES, derive_cast_spec,
                           enchant_subject_colours,
                           enchant_subject_keyword_exclusion,
-                          enchant_subject_seat, spec_roles, targets_mana_value_x)
+                          enchant_subject_seat, role_is_seat, spec_roles,
+                          targets_mana_value_x)
 
 def _optional_cost_offers(
     costs: "tuple[AdditionalCost, ...]",
@@ -3327,7 +3328,7 @@ class SpellCastingMixin:
         """
         player_slots = {
             index for index, role in enumerate(roles)
-            if isinstance(role, dict) and role.get("kind") == "player"
+            if isinstance(role, dict) and role_is_seat(role)
         }
         seated = (
             self.players[target_player_index]

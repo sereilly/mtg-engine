@@ -2055,6 +2055,38 @@ def _divided_announcement_total(spec: dict, x_value: int | None) -> int:
     return int(x_value or 0) + bonus
 
 
+def _preferred_role_option(
+    options: list[dict], caster_index: int, card: CardDefinition, game: Game
+) -> dict:
+    """Which of one role's legal answers this seat takes.
+
+    The first, for every role whose object is on a battlefield — the policy
+    :func:`_choose_role_targets` documents, safe because the walk has already
+    dropped any first choice that leaves a later role with nothing.
+
+    **A seat is the exception, and it is a valuation rather than a policy
+    weight.** "Lunge deals 2 damage to target creature and 2 damage to target
+    player or planeswalker" offers every living seat for its player role, and
+    the caster's own is first in the list — so taking the first burned the
+    caster for two. Which seat a spell wants is a question this module already
+    answers for every one-target spell (:func:`_choose_target_for_spell`,
+    scoring the caster against the seat the attack policy picks), and the roles
+    walk is the same question about the same card: asking it here is one
+    reader of one answer rather than a second rule about who to point a spell
+    at.
+
+    The preference is applied only when that seat is one the walk offered, so
+    a role narrowed to "target **opponent**" is never widened by it — and the
+    first option stays the answer whenever it is not.
+    """
+    if not options or options[0].get("kind") != "player":
+        return options[0]
+    wanted = _choose_target_for_spell(card, caster_index, game)
+    return next(
+        (option for option in options if option.get("seat") == wanted), options[0]
+    )
+
+
 def _choose_role_targets(
     game: Game, caster_index: int, card: CardDefinition
 ):
@@ -2077,8 +2109,9 @@ def _choose_role_targets(
     options = game.cast_target_spec(caster_index, card).get("valid_targets") or []
     picks: list[dict] = []
     while options:
-        picks.append(options[0])
-        options = options[0].get("next") or []
+        pick = _preferred_role_option(options, caster_index, card, game)
+        picks.append(pick)
+        options = pick.get("next") or []
     if not picks:
         return ()
     # A **player** role's answer is the seat itself (Donate's "target player"),

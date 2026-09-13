@@ -758,3 +758,128 @@ def test_w2g4_renounce_with_an_empty_board_gains_nothing(set_pool):
     _i4_resolve(game)
 
     assert caster.life == 20
+
+
+# --- W3G4: a sequence's targets are several roles ---
+# "Lunge deals 2 damage to target creature **and** 2 damage to target player or
+# planeswalker." Two instances of the printed word "target", so CR 601.2c
+# announces two objects — and the line lowers to a `sequence` of two ordinary
+# `deal_damage` steps, each carrying one target description.
+# `targeting._from_instructions` answers with the *first* spec any step
+# describes, so the caster was asked for a creature, the seat was never
+# announced, and the second step resolved against the target the first one was
+# still holding: the log read "Lunge dealt 2 damage to Grizzly Bears" twice and
+# the player took nothing.
+#
+# What made the class hard is not the fix but telling this sentence from the one
+# it looks like: the parser resolves a printed back-reference ("Untap target
+# Griffin. **It** gets +2/+2") into a *copy* of its antecedent, so by lowering
+# time one target named twice and two targets named once are the same shape.
+# Forty-six announcements in the pool carry two or more of them and forty-two
+# are the first kind. What separates them here is the one thing a
+# back-reference cannot do — change what kind of thing it points at — so a line
+# whose two announced targets are one seat and one object announces two.
+# The shipped half of the class, the CR 608.2b behaviour and the pool-wide
+# ratchet are in `tests/regressions/test_sequence_target_roles.py`.
+from engine import Game, PlayerState
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+from engine.targeting import derive_cast_spec, spec_roles
+from tests.helpers import resolve_stack
+
+
+def _w3g4_lunge_duel(set_pool, catalog_by_name, *, creatures=("Grizzly Bears",)):
+    """Seat 0 holding Lunge, seat 1 holding *creatures*.
+
+    The creature comes from the whole-manifest catalog because a vanilla body to
+    burn is furniture rather than a fact about Mercadian Masques, and the point
+    of the test is which of the two announced targets each point of damage
+    reaches.
+    """
+    pool = set_pool("MMQ")
+    caster = PlayerState(name="P0", life=20, hand=[pool["Lunge"]])
+    other = PlayerState(
+        name="P1", life=20,
+        battlefield=[Permanent(card=catalog_by_name[n]) for n in creatures],
+    )
+    game = Game(players=[caster, other])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game._sync_control()
+    return game
+
+
+def test_w3g4_lunge_announces_a_creature_and_a_seat(set_pool):
+    """The compiled announcement: one shared ordered-roles description on both
+    steps, each naming the slot it spends.
+
+    The roles are in printed order and neither depends on the other — what makes
+    them two slots rather than one list is that a creature and a seat are not
+    answered by the same click.
+    """
+    lunge = set_pool("MMQ")["Lunge"]
+    program = compile_card_oracle(lunge)
+
+    (sequence,) = [i for i in program.instructions if i.kind == "sequence"]
+    first, second = sequence.payload["steps"]
+    assert first.payload["targets"]["role"] == "creature"
+    assert second.payload["targets"]["role"] == "player"
+    assert first.payload["targets"]["roles"] == second.payload["targets"]["roles"]
+
+    roles = spec_roles(derive_cast_spec(lunge, program))
+    assert [role["kind"] for role in roles] == ["creature", "player_or_planeswalker"]
+
+
+def test_w3g4_lunge_burns_the_creature_and_the_player(set_pool, catalog_by_name):
+    """The whole card: 2 to the named creature and 2 to the named seat."""
+    game = _w3g4_lunge_duel(set_pool, catalog_by_name)
+    (bear,) = game.players[1].battlefield
+
+    result = game.cast_from_hand(
+        0, "Lunge", target_player_index=1,
+        target_permanent_ids=[game.permanent_id_of(bear), None],
+    )
+    resolve_stack(game)
+
+    assert result.supported, game.log[-3:]
+    assert game.players[1].life == 18
+    assert sum("dealt 2 damage to Grizzly Bears" in line for line in game.log) == 1
+    assert not game.players[1].battlefield
+
+
+def test_w3g4_lunge_refuses_a_cast_that_names_only_a_creature(
+    set_pool, catalog_by_name
+):
+    """CR 601.2c: every target is chosen as part of one announcement, so an
+    announcement with a hole in it is not one.
+
+    Refused before any mana is spent rather than resolved against a seat
+    nobody named — which is what the old single-slot reading did, and it chose
+    the creature again.
+    """
+    game = _w3g4_lunge_duel(set_pool, catalog_by_name)
+    (bear,) = game.players[1].battlefield
+
+    result = game.cast_from_hand(
+        0, "Lunge", target_player_index=1,
+        target_permanent_ids=[game.permanent_id_of(bear)],
+    )
+
+    assert not result.supported
+    assert not game.stack
+    assert game.players[1].life == 20
+
+
+def test_w3g4_lunge_is_not_castable_with_no_creature_to_name(
+    set_pool, catalog_by_name
+):
+    """Both roles are mandatory "target", so an empty board leaves the first
+    one unanswerable and the spell has no legal announcement at all — the walk
+    returns nothing and the cast gate refuses, rather than the spell being cast
+    to burn a face for half its printed effect."""
+    game = _w3g4_lunge_duel(set_pool, catalog_by_name, creatures=())
+
+    result = game.cast_from_hand(0, "Lunge", target_player_index=1)
+
+    assert not result.supported
+    assert game.players[1].life == 20
