@@ -41,7 +41,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 6ED | 335 | 404 | 95.5% | 95.5% | 65.8% | 243 |
 | UDS | 143 | 204 | 91.7% | 91.2% | 65.7% | 121 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| MMQ *(measured)* | 335 | 465 | 88.6% | 88.0% | 62.6% | 262 |
+| MMQ *(measured)* | 335 | 465 | 89.9% | 89.7% | 64.3% | 270 |
 | **All (shipped)** | **5829** | **8560** | **90.7%** | **90.0%** | **60.7%** | **4402** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -54,9 +54,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 458 | 197 | expected a subject |  |
+| 456 | 195 | expected a subject |  |
 | 137 | 71 | unrecognized effect verb |  |
-| 113 | 57 | unconsumed text |  |
+| 112 | 56 | unconsumed text |  |
 | 42 | 25 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 16 | 14 | expected 'unless defending player controls' |  |
@@ -4736,6 +4736,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Counter target spell. If that spell is countered this way, put it on top of its owner's library instead of into that player's graveyard.`
 - **Mental Discipline**
   - `{1}{U}, Discard a card: Draw a card.`
+- **Mercadia's Downfall**
+  - `Each attacking creature gets +1/+0 until end of turn for each nonbasic land defending player controls.`
 - **Mercadian Atlas**
   - `At the beginning of your end step, if you didn't play a land this turn, you may draw a card.`
 - **Mercadian Bazaar**
@@ -4896,6 +4898,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {C}{C}{C}. Spend this mana only to cast artifact spells.`
 - **Misinformation**
   - `Put up to three target cards from an opponent's graveyard on top of their library in any order.`
+- **Misstep**
+  - `Creatures target player controls don't untap during that player's next untap step.`
 - **Mist Dragon**
   - `{0}: This creature gains flying. (This effect lasts indefinitely.)`
   - `{0}: This creature loses flying. (This effect lasts indefinitely.)`
@@ -4943,6 +4947,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Remove all +1/+1 counters from this creature: It deals damage to any target equal to the number of +1/+1 counters removed this way.`
 - **Molting Harpy**
   - `At the beginning of your upkeep, sacrifice this creature unless you pay {2}.`
+- **Moment of Silence**
+  - `Target player skips their next combat phase this turn.`
 - **Momentum**
   - `At the beginning of your upkeep, you may put a growth counter on this Aura.`
 - **Mongrel Pack**
@@ -6108,6 +6114,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Renewal**
   - `Search your library for a basic land card, put that card onto the battlefield, then shuffle.`
   - `Draw a card at the beginning of the next turn's upkeep.`
+- **Renounce**
+  - `Sacrifice any number of permanents. You gain 2 life for each permanent sacrificed this way.`
 - **Reparations**
   - `Whenever an opponent casts a spell that targets you or a creature you control, you may draw a card.`
 - **Repentance**
@@ -7558,6 +7566,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{2}, {T}: Target creature gets +1/+1 for as long as this artifact remains tapped.`
   - `{2}, {T}: Target creature gets +1/+1 for as long as this artifact remains tapped.`
   - `{2}, {T}: Target creature gets +1/+1 for as long as this artifact remains tapped.`
+- **Tectonic Break**
+  - `Each player sacrifices X lands of their choice.`
 - **Teferi's Honor Guard**
   - `{U}{U}: This creature phases out. (While it's phased out, it's treated as though it doesn't exist. It phases in before you untap during your next untap step.)`
 - **Teferi's Imp**
@@ -8497,11 +8507,15 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of the upkeep of enchanted creature's controller, this Aura deals 1 damage to that player.`
 - **War Barge**
   - `{3}: Target creature gains islandwalk until end of turn. When this artifact leaves the battlefield this turn, destroy that creature. A creature destroyed this way can't be regenerated. (A creature with islandwalk can't be blocked as long as defending player controls an Island.)`
+- **War Cadence**
+  - `{X}{R}: This turn, creatures can't block unless their controller pays {X} for each blocking creature they control.`
 - **War Chariot**
   - `{3}, {T}: Target creature gains trample until end of turn.`
 - **War Dance**
   - `At the beginning of your upkeep, you may put a verse counter on this enchantment.`
   - `Sacrifice this enchantment: Target creature gets +X/+X until end of turn, where X is the number of verse counters on this enchantment.`
+- **War Tax**
+  - `{X}{U}: This turn, creatures can't attack unless their controller pays {X} for each attacking creature they control.`
 - **Warded Battlements**
   - `Attacking creatures you control get +1/+0.`
 - **Warden of the Woods**
@@ -8547,6 +8561,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, sacrifice this creature unless you return an untapped Island you control to its owner's hand.`
 - **Wave Elemental**
   - `{U}, {T}, Sacrifice this creature: Tap up to three target creatures without flying.`
+- **Wave of Reckoning**
+  - `Each creature deals damage to itself equal to its power.`
 - **Wave of Terror**
   - `At the beginning of your draw step, destroy each creature with mana value equal to the number of age counters on this enchantment. They can't be regenerated.`
 - **Waylay**
