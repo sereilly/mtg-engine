@@ -417,29 +417,35 @@ class TurnManagementMixin:
         return SimulationResult("Channel", True, "spell_pattern", f"added {amount} C")
 
     @staticmethod
-    def _land_mana_instruction(land):
-        """The instruction a land's own ``{T}: Add …`` ability produces, or None.
+    def _land_mana_abilities(land):
+        """``(free_instruction, priced)`` for the land's own mana abilities.
 
-        None for a basic (no compiled ability at all) and for a land whose only
-        abilities are something else — Bazaar of Baghdad draws and discards, and
-        must not be mistaken for a mana source here.
+        The first is the instruction an ability whose cost is **the tap alone**
+        produces -- what this entry point may run, having already tapped the
+        land and charging nothing further. The second says whether the land has
+        a mana ability the tap does *not* pay for.
 
-        Requires the ability's cost to be the tap alone: this entry point has
-        already tapped the land and charges nothing further, so an ability
-        wanting mana or a sacrifice on top would be performed unpaid.
+        Both, from one walk, because the caller needs them together and the
+        difference decides opposite answers. A land with neither is a basic or a
+        Bazaar of Baghdad and falls through to the ``produced_mana`` summary; a
+        land with the second and not the first must be **refused**, because that
+        summary is Scryfall's list of symbols the land can make and says nothing
+        at all about what they cost.
         """
         from ..mana_payment import is_mana_ability
 
+        priced = False
         for ability in compile_card_oracle(land.effective_card).activated_abilities:
             instruction = ability.instruction
             if instruction is None or not ability.supported:
                 continue
-            cost = ability.cost
-            if not cost.requires_tap or not _is_free_beyond_tapping(cost):
+            if not (is_mana_ability(ability) or instruction.kind == "if_then"):
                 continue
-            if is_mana_ability(ability) or instruction.kind == "if_then":
-                return instruction
-        return None
+            cost = ability.cost
+            if cost.requires_tap and _is_free_beyond_tapping(cost):
+                return instruction, priced
+            priced = True
+        return None, priced
 
     def tap_land_for_mana(
         self,
@@ -480,9 +486,30 @@ class TurnManagementMixin:
         # A land with no mana ability at all (Island of Wak-Wak, Bazaar of
         # Baghdad) can't be tapped for mana — without this, the color fallback
         # below would invent a green mana out of nothing.
+        mana_ability, priced_mana_ability = self._land_mana_abilities(land)
         if not land.effective_produced_mana:
             if not land.basic_land_types:
                 return False
+
+        # **And a land whose mana ability costs more than the tap cannot be
+        # tapped for mana here either** (CR 602.2b: every cost, at one moment).
+        # "{T}, Remove a depletion counter from this land: Add {B}{B}" (Peat Bog
+        # and its four siblings) and "{T}, Remove any number of storage
+        # counters ...: Add {B} for each" (the storage-land cycles, Gemstone
+        # Mine) all fall past the compiled-ability branch below -- it takes only
+        # a tap-alone cost, correctly -- and landed on the ``produced_mana``
+        # fallback, which adds **one** mana of the summary's colour and charges
+        # nothing. Sixteen lands in the pool tapped for a free mana for ever,
+        # spending no counter and so never sacrificing themselves; six of them
+        # ship. The amount is wrong too, but the unpaid cost is what makes it a
+        # different card.
+        #
+        # Refused rather than approximated: the seat activates the ability and
+        # pays, which is the path that works. Producing nothing is the honest
+        # answer for a caller -- the AI's auto-tap, the web's land click -- that
+        # asked to tap a land and cannot pay what the land asks.
+        if mana_ability is None and priced_mana_ability:
+            return False
 
         # CR 701.26a's event, announced by the one tap seam. City of Brass
         # ("Whenever this land becomes tapped, it deals 1 damage to you") and
@@ -559,7 +586,6 @@ class TurnManagementMixin:
         # which is the answer for a land that offers a choice and the closest
         # honest one for a land that does not.
         mana_symbol = chosen_color
-        mana_ability = self._land_mana_instruction(land)
         if mana_ability is not None:
             instruction = mana_ability
             if chosen_color:

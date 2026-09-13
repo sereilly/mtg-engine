@@ -242,7 +242,15 @@ def count_from_payload(
         if exiled is None:
             return 0
         if cost_exile == "mana_value":
-            return max(0, int(getattr(exiled, "cmc", 0) or 0))
+            # Through `_scaled`, exactly as its sacrifice twin below already
+            # was. This branch returned the bare number, so "1 plus the exiled
+            # creature's mana value" (Food Chain) would have added the constant
+            # nowhere — the multiplier, the halving and the offset every other
+            # count spec carries were all silently dropped on this one channel.
+            # Nothing printed the pair while the only card here was Necropolis'
+            # unadorned "the exiled card's mana value", which is why the
+            # asymmetry cost nothing until it did.
+            return max(0, _scaled(int(getattr(exiled, "cmc", 0) or 0), spec))
         return 0
     # "…where X is **the sacrificed creature's mana value**" (Burnt Offering).
     # The branch above one zone over: what the spell's own additional cost ate

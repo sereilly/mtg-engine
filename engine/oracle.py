@@ -3244,6 +3244,25 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
             remove_counter = all_of.group(1)
             remove_counter_count = "all"
     if remove_counter is None:
+        # "Remove **X** charge counters from this artifact" (Kyren Toy,
+        # Mercadian Lift). The count the *activator* announces (CR 601.2b),
+        # which is what separates it from the three rows around it: a printed
+        # number is on the card, "all" is on the permanent, and this one is not
+        # known until the ability is activated.
+        #
+        # Its own row rather than a letter added to the counted row below,
+        # because that row reads its word through ``_NUMBER_WORDS`` and "x" is
+        # not a number -- it looked up to 0, failed the ``>= 2`` gate and left
+        # ``remove_counter`` None, so the whole clause matched nothing and the
+        # ability would have been activated for free. The grammar refused it,
+        # which is the only reason that was invisible rather than exploitable.
+        x_removal = re.search(
+            r"\bremove x ([a-z]+) counters from ", cost_lower
+        )
+        if x_removal is not None:
+            remove_counter = x_removal.group(1)
+            remove_counter_count = "x"
+    if remove_counter is None:
         # "Remove **three spore** counters from this creature" (Thallid and the
         # rest of Fallen Empires' Saproling engine), "Remove **two carrion**
         # counters from this creature" (Osai Vultures). A *printed* count, and

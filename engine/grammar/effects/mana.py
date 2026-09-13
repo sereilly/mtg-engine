@@ -36,6 +36,26 @@ from ..references import parse_player_ref
 from ..stream import TokenStream
 
 
+def _names_announced_x(amount: "ast.Amount") -> bool:
+    """Whether *amount* is the announced X, alone or with a printed constant.
+
+    "Add an amount of {C} equal to **X plus one**." (Kyren Toy.) Two shapes and
+    no more: ``X`` and ``<X> plus <n>``. Anything else the amount parser can
+    produce — a board count, a characteristic, a halving — is a quantity whose
+    reader is somewhere else entirely, and admitting it here would emit an
+    ``amount_of_x`` that ``resolve_amount`` answers with the cast's X: zero, on
+    every card that never announced one.
+    """
+    if isinstance(amount, ast.Var):
+        return amount.name == "x"
+    return (
+        isinstance(amount, ast.Plus)
+        and isinstance(amount.left, ast.Var)
+        and amount.left.name == "x"
+        and isinstance(amount.right, ast.Fixed)
+    )
+
+
 def _parse_mana_multiplier(stream: TokenStream) -> "ast.ObjectFilter | None":
     """``for each <objects>`` after a mana clause (Leafkin Avenger).
 
@@ -364,6 +384,29 @@ def _parse_add_mana(stream: TokenStream) -> ast.Statement:
                 return ast.AddMana(
                     (), source_text=_clause(), from_mana_lost=symbol,
                 )
+            # "…equal to **X plus one**." (Kyren Toy.) The fifth referent of
+            # this printed shape and the only one that is not a back-reference:
+            # the quantity is the X the activator announced (CR 601.2b), which
+            # for this card is how many charge counters its own cost removed.
+            #
+            # Read through ``parse_amount`` so the arithmetic the sentence
+            # prints is the grammar's own, and gated on the amount really
+            # naming X — an "amount of {C} equal to three" is a printed number
+            # and belongs in ``pips``, and admitting it here would emit a
+            # quantity that resolves against a cast's X instead.
+            x_mark = stream.mark()
+            if stream.accept_phrase("equal", "to"):
+                try:
+                    quantity = parse_amount(stream)
+                except GrammarError:
+                    quantity = None
+                if quantity is not None and _names_announced_x(quantity):
+                    return ast.AddMana(
+                        ((symbol, 1),),
+                        source_text=_clause(),
+                        amount_of_x=quantity,
+                    )
+                stream.reset(x_mark)
             if stream.accept_phrase("equal", "to", "the", "sacrificed") and stream.peek_word():
                 # The noun repeats what the cost already named ("artifact"), so
                 # it is consumed rather than re-read: the cost decided what was

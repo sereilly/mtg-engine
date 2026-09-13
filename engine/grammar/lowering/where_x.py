@@ -128,10 +128,22 @@ def lower_where_x(
     # what is left to check is that a step of this effect writes it.
     if isinstance(node.definition, ast.ThatMuch):
         return _lower_where_x_recorded(node, inner, produced)
-    if isinstance(node.definition, ast.ExiledForCost):
-        return _lower_where_x_exiled_for_cost(node, inner)
-    if isinstance(node.definition, ast.SacrificedForCost):
-        return _lower_where_x_sacrificed_for_cost(node, inner)
+    # "…where X is **1 plus** the exiled creature's mana value" (Food Chain) /
+    # "…1 plus the sacrificed creature's mana value" (Metamorphosis). The
+    # constant is unwrapped here rather than in the `Plus`/`Minus` arm further
+    # down, because that arm ends by demanding a ``CountOf`` — a cost record is
+    # not a count of a zone, so both cards fell straight through it to "only a
+    # count can define X in a where-clause" and needed a card hook to be played
+    # at all. ``plus`` is the same key `_source_counter_spec` uses and
+    # `_scaled`/`_plus` apply it at the single evaluation point, so the two
+    # branches below stay exactly what they were.
+    cost_plus, cost_definition = _cost_record_offset(node.definition)
+    if isinstance(cost_definition, ast.ExiledForCost):
+        return _lower_where_x_exiled_for_cost(node, inner, cost_definition, cost_plus)
+    if isinstance(cost_definition, ast.SacrificedForCost):
+        return _lower_where_x_sacrificed_for_cost(
+            node, inner, cost_definition, cost_plus
+        )
     if isinstance(node.definition, ast.LifePaidAsEntered):
         return _lower_where_x_life_paid(node, inner)
     counter_spec = _source_counter_spec(node.definition)
@@ -258,8 +270,33 @@ def _is_cast_time_countable(definition: "ast.Amount") -> bool:
         else:
             return isinstance(definition, ast.CountOf)
 
+def _cost_record_offset(
+    definition: "ast.Amount",
+) -> tuple[int, "ast.Amount"]:
+    """``(constant, definition)`` for "<n> plus <a cost record>", else
+    ``(0, definition)``.
+
+    Only a printed constant on the **left** and only addition, which is the one
+    shape the pool prints ("1 plus the exiled creature's mana value"). A
+    subtraction, or a constant on the right, is left wrapped so the dispatcher
+    falls to its own refusal rather than reading a sentence with its arithmetic
+    silently changed — a cost record is last-known information about one object
+    (CR 608.2h) and a card that printed either would be a card nobody has read.
+    """
+    if (
+        isinstance(definition, ast.Plus)
+        and isinstance(definition.left, ast.Fixed)
+        and not isinstance(definition.right, ast.Fixed)
+    ):
+        return definition.left.value, definition.right
+    return 0, definition
+
+
 def _lower_where_x_exiled_for_cost(
-    node: ast.WhereX, inner: tuple[OracleInstruction, ...]
+    node: ast.WhereX,
+    inner: tuple[OracleInstruction, ...],
+    definition: "ast.ExiledForCost",
+    plus: int = 0,
 ) -> tuple[OracleInstruction, ...]:
     """"…, where X is **the exiled card's mana value**." (Necropolis.)
 
@@ -277,18 +314,24 @@ def _lower_where_x_exiled_for_cost(
     """
     if not _mentions_x(inner):
         raise LoweringError("a where-clause defined an X nothing reads", node=node)
-    if node.definition.characteristic != "mana_value":
+    if definition.characteristic != "mana_value":
         raise LoweringError(
             "only the exiled card's mana value is recorded by a cost payment",
             node=node,
         )
-    return _stamp_x_from_count(
-        inner, {"cost_exile_characteristic": node.definition.characteristic}
-    )
+    spec: dict[str, object] = {
+        "cost_exile_characteristic": definition.characteristic
+    }
+    if plus:
+        spec["plus"] = plus
+    return _stamp_x_from_count(inner, spec)
 
 
 def _lower_where_x_sacrificed_for_cost(
-    node: ast.WhereX, inner: tuple[OracleInstruction, ...]
+    node: ast.WhereX,
+    inner: tuple[OracleInstruction, ...],
+    definition: "ast.SacrificedForCost",
+    plus: int = 0,
 ) -> tuple[OracleInstruction, ...]:
     """"…, where X is **the sacrificed creature's mana value**." (Burnt
     Offering.)
@@ -311,15 +354,18 @@ def _lower_where_x_sacrificed_for_cost(
     """
     if not _mentions_x(inner):
         raise LoweringError("a where-clause defined an X nothing reads", node=node)
-    if node.definition.characteristic not in _READABLE_COST_SACRIFICE_CHARACTERISTICS:
+    if definition.characteristic not in _READABLE_COST_SACRIFICE_CHARACTERISTICS:
         raise LoweringError(
             "no handler reads the sacrificed permanent's "
-            f"{node.definition.characteristic!r} back from a cost payment",
+            f"{definition.characteristic!r} back from a cost payment",
             node=node,
         )
-    return _stamp_x_from_count(
-        inner, {"cost_sacrifice_characteristic": node.definition.characteristic}
-    )
+    spec: dict[str, object] = {
+        "cost_sacrifice_characteristic": definition.characteristic
+    }
+    if plus:
+        spec["plus"] = plus
+    return _stamp_x_from_count(inner, spec)
 
 
 def _source_counter_spec(definition: "ast.Amount") -> dict[str, object] | None:

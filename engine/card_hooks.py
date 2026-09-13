@@ -322,19 +322,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         "may attach this aura to a land of their choice":
             _line("destroy_tapped_land_and_reoffer_aura", "triggered_destruction"),
     },
-    # Mana bought with the mana value of the creature its additional cost ate.
-    # The cost itself is not the hook's — it is the general CR 601.2b table
-    # (engine/cast_costs.py), paid while casting — so the key is the *effect*
-    # sentence alone. Sacrifice's plainer spelling ("an amount of {B} equal to
-    # the sacrificed creature's mana value") is a production now and its entry
-    # went with it; what keeps this one is the "1 plus" and the spend
-    # restriction, which no second card prints together.
-    'Metamorphosis': {
-        "add x mana of any one color, where x is 1 plus the sacrificed creature's "
-        "mana value. spend this mana only to cast creature spells":
-            _line("sacrifice_creature_for_mana", "spell_pattern",
-                color=None, bonus=1, spend_only="creature"),
-    },
     'Mijae Djinn': {
         "whenever this creature attacks, flip a coin. if you lose the flip, remove "
         "this creature from combat and tap it":

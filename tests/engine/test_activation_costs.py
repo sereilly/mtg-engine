@@ -222,6 +222,15 @@ def test_every_admitted_cost_clause_is_charged(pool):
                         # this guard read the charger's silence as agreement
                         # because both sides came out None.
                         else "all" if isinstance(cost.count, ast.AllOf)
+                        # "Remove **X** charge counters from this artifact"
+                        # (Kyren Toy, Mercadian Lift). The fourth spelling, and
+                        # this guard is the reason the first three are honest:
+                        # it caught the grammar admitting Mercadian Lift while
+                        # the charger read ``(None, 1)`` — one counter, or none,
+                        # for a cost the card prints as X — which is why the
+                        # production refused an announced X until the charger,
+                        # the payability check and the client's box existed.
+                        else "x" if isinstance(cost.count, ast.Var)
                         else None
                     )
                     if (charged.remove_counter, charged.remove_counter_count) != (

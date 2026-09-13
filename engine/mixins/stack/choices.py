@@ -8079,20 +8079,32 @@ class PendingChoicesMixin:
         One method because the record is the thing that must not drift — Carpet
         of Flowers' second trigger reads it, and a default that added mana
         without writing it down would let the enchantment fire twice in a turn.
+
+        **The restriction is the second thing that must not drift** (CR 106.6).
+        "Add X mana of any one color … spend this mana only to cast creature
+        spells" (Food Chain) reaches this method whenever the colour was not
+        already named, so a bucket decided in the producer and forgotten here
+        would mean the restriction applied to a headless seat and not to a human
+        one — the same mana, spendable on anything, depending only on who was
+        asked.
         """
         from ...mana_ability_records import note_mana_added
+        from ...restricted_mana import mana_bucket
 
         player = self.players[choice.player_index]
         amount = int(choice.data.get("amount", 0) or 0)
+        spend_only = choice.data.get("spend_only")
         if amount > 0:
-            player.mana_pool[symbol] = player.mana_pool.get(symbol, 0) + amount
+            bucket = mana_bucket(player, spend_only)
+            bucket[symbol] = bucket.get(symbol, 0) + amount
             note_mana_added(
                 self, choice.data.get("source"), str(choice.data.get("record") or "")
             )
         note = str(choice.data.get("note") or "")
+        restricted = f" (spendable only on {spend_only})" if spend_only else ""
         self.log.append(
             f"{choice.data.get('card_name', 'An ability')} produced "
-            f"{amount} {symbol} mana{note}"
+            f"{amount} {symbol} mana{note}{restricted}"
         )
 
     def confirm_color_set_choice(self, player_index: int, colors) -> bool:

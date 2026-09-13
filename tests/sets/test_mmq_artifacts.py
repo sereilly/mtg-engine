@@ -814,3 +814,142 @@ def test_rishadan_pawnshop_refuses_a_token_with_nothing_paid(set_pool):
     assert [perm.card.name for perm in game.controlled_by(0)] == [
         "Rishadan Pawnshop", "Tok",
     ]
+
+
+# --- W2G1: counters as a resource — an announced X paid in counters ---
+from engine import Game as _W2G1Game
+from engine import PlayerState as _W2G1PlayerState
+from engine.models import CardDefinition as _W2G1Card
+from engine.models import Permanent as _W2G1Permanent
+from engine.named_counters import add_counters as _w2g1_add_counters
+from engine.named_counters import counters_on as _w2g1_counters_on
+from engine.oracle import compile_card_oracle as _w2g1_compile
+from tests.helpers import resolve_stack as _w2g1_resolve
+
+
+def _w2g1_artifact_in_play(set_pool, name, kind, held):
+    """That artifact on seat 0's battlefield holding *held* counters."""
+    game = _W2G1Game(players=[
+        _W2G1PlayerState(name="P0"), _W2G1PlayerState(name="P1"),
+    ])
+    game.interactive_seats = set()
+    perm = _W2G1Permanent(card=set_pool("MMQ")[name])
+    game._put_permanent_onto_battlefield(0, perm, None)
+    _w2g1_add_counters(perm, kind, held)
+    perm.tapped = False
+    return game, perm
+
+
+def _w2g1_creature(name, cmc):
+    """A vanilla creature card of a chosen mana value, for the Lift to fetch."""
+    line = "Creature - Bear"
+    return _W2G1Card(
+        name=name, mana_cost="{%d}" % int(cmc), cmc=float(cmc), type_line=line,
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": line, "power": "2", "toughness": "2"},
+    )
+
+
+def test_w2g1_kyren_toy_pays_the_announced_x_in_charge_counters(set_pool):
+    """"{T}, Remove X charge counters from this artifact: Add an amount of {C}
+    equal to X plus one."
+
+    Both ends of one announcement (CR 601.2b): the cost takes exactly X
+    counters and the effect makes exactly X + 1 mana. Checked together because
+    they were separately wrong — the grammar refused the whole ability until
+    the charger existed, and the inline mana-ability path built its execution
+    context without ``x_value``, so the counters came off and one mana came
+    back however many the seat announced.
+    """
+    game, toy = _w2g1_artifact_in_play(set_pool, "Kyren Toy", "charge", 3)
+
+    result = game.activate_permanent_ability(0, "Kyren Toy", ability_index=1, x_value=2)
+
+    assert result.supported is True
+    assert _w2g1_counters_on(toy, "charge") == 1
+    assert game.players[0].mana_pool["C"] == 3
+
+
+def test_w2g1_kyren_toy_announcing_nothing_announces_zero(set_pool):
+    """A caller that names no X gets zero, not "all of them".
+
+    CR 107.3a makes the announcement the activator's and makes it part of
+    activating, so no rule turns an omission into a number: zero is this
+    engine's stated default for a headless or AI seat, and it is a legal
+    announcement because removing zero counters is always payable (CR 601.2h
+    forbids only what cannot be done). That is the whole difference from the
+    "any number of" cost one row over in ``mixins/stack/activation.py``, where
+    naming nothing removes every counter — and getting it wrong here would
+    empty the artifact for one mana. The constant the sentence prints still
+    applies, so the ability is never free of effect: zero counters buy one
+    colourless.
+    """
+    game, toy = _w2g1_artifact_in_play(set_pool, "Kyren Toy", "charge", 3)
+
+    game.activate_permanent_ability(0, "Kyren Toy", ability_index=1)
+
+    assert _w2g1_counters_on(toy, "charge") == 3
+    assert game.players[0].mana_pool["C"] == 1
+
+
+def test_w2g1_kyren_toy_refuses_an_x_the_counters_cannot_pay(set_pool):
+    """CR 601.2h: an announcement that cannot be paid is not a legal one.
+
+    Refused with **nothing spent** rather than clamped down to what is there:
+    clamping would let a seat announce five on a two-counter artifact and be
+    charged two, which is a cheaper card than the one printed. The artifact is
+    left untapped too, because CR 602.2b unwinds the whole activation.
+    """
+    game, toy = _w2g1_artifact_in_play(set_pool, "Kyren Toy", "charge", 2)
+
+    result = game.activate_permanent_ability(0, "Kyren Toy", ability_index=1, x_value=5)
+
+    assert result.supported is False
+    assert _w2g1_counters_on(toy, "charge") == 2
+    assert game.players[0].mana_pool["C"] == 0
+
+
+def test_w2g1_mercadian_lift_puts_a_creature_of_mana_value_x_into_play(set_pool):
+    """"{T}, Remove X winch counters from this artifact: You may put a creature
+    card with mana value X from your hand onto the battlefield."
+
+    The same announcement read by the *effect* rather than by an amount: the
+    printed X is a bound on the noun phrase, substituted at the single dispatch
+    point, so a hand holding a cheaper creature keeps it.
+    """
+    game, lift = _w2g1_artifact_in_play(set_pool, "Mercadian Lift", "winch", 5)
+    player = game.players[0]
+    player.hand = [_w2g1_creature("Big Bear", 3), _w2g1_creature("Small Bear", 1)]
+
+    game.activate_permanent_ability(0, "Mercadian Lift", ability_index=1, x_value=3)
+    _w2g1_resolve(game)
+    game.auto_resolve_pending_choices()
+
+    assert _w2g1_counters_on(lift, "winch") == 2
+    assert [perm.card.name for perm in player.battlefield] == [
+        "Mercadian Lift", "Big Bear",
+    ]
+    assert [card.name for card in player.hand] == ["Small Bear"]
+
+
+def test_w2g1_the_announced_x_costs_are_charged_and_unhooked(set_pool):
+    """Both cards supported, both charged, neither hooked.
+
+    The charged half is the invariant that caught this pair at the set's
+    ingest: the grammar admitted Mercadian Lift while the cost derivation read
+    ``(None, 1)``, an ability activated for one counter or none for a cost the
+    card prints as X. ``("<kind>", "x")`` on both sides is what says the two
+    readers agree.
+    """
+    from engine.card_hooks import CARD_LINE_INSTRUCTIONS
+
+    for name, kind in (("Kyren Toy", "charge"), ("Mercadian Lift", "winch")):
+        program = _w2g1_compile(set_pool("MMQ")[name])
+        spender = program.activated_abilities[1]
+        assert program.supported is True
+        assert spender.supported is True
+        assert (spender.cost.remove_counter, spender.cost.remove_counter_count) == (
+            kind, "x",
+        )
+        assert name not in CARD_LINE_INSTRUCTIONS

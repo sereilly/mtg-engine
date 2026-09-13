@@ -74,6 +74,18 @@ class AddMana:
     # else's pool. The symbol travels, so a card printing another colour needs
     # no code, and the *count* is read out of the record that step wrote.
     from_mana_lost: str | None = None
+    # "Add an amount of {C} equal to **X plus one**." (Kyren Toy.) The fifth of
+    # this printed shape and the first whose quantity is not a back-reference at
+    # all: it is the X the *activator announced* as the ability was activated
+    # (CR 601.2b) — here, the number of charge counters the cost took off.
+    #
+    # An :class:`Amount` rather than a flag, because the sentence prints
+    # arithmetic on it ("X plus one") and the constant belongs to the sentence
+    # that spends the quantity rather than to whatever defined it — the same
+    # split ``lowering/_amounts.x_offset_amount`` makes for "You gain X plus 1
+    # life". The symbol stays in :attr:`pips` as one unit, so this reads as
+    # "that many of them" and every rider on a pips payload keeps working.
+    amount_of_x: "Amount | None" = None
     # "…and you add **the mana lost this way**." (Drain Power.) The same
     # record read the other way: not a count of colourless, but the mana
     # itself, symbol for symbol, into the adding player's pool. Its own field

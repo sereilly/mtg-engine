@@ -1443,3 +1443,101 @@ def test_w2g2_soothsaying_looks_at_exactly_x_cards(set_pool):
     assert owed, "the look should owe its seat an ordering"
     assert owed[0].data["top_count"] == 3
     # end of test_w2g2_soothsaying_looks_at_exactly_x_cards
+
+
+# --- W2G1: counters as a resource — Food Chain's exile cost and its mana ---
+from engine import Game as _W2G1Game
+from engine import PlayerState as _W2G1PlayerState
+from engine.models import CardDefinition as _W2G1Card
+from engine.models import Permanent as _W2G1Permanent
+from engine.restricted_mana import CAST as _W2G1_CAST
+from engine.restricted_mana import PaymentPurpose as _W2G1Purpose
+from engine.restricted_mana import spendable_restricted_mana as _w2g1_spendable
+
+
+def _w2g1_bear(name, cmc):
+    """A vanilla creature for Food Chain to eat, or to try to cast."""
+    line = "Creature - Bear"
+    return _W2G1Card(
+        name=name, mana_cost="{%d}" % int(cmc), cmc=float(cmc), type_line=line,
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": line, "power": "2", "toughness": "2"},
+    )
+
+
+def _w2g1_food_chain_board(set_pool, victim_cmc):
+    """Food Chain and one creature of *victim_cmc*, both under seat 0."""
+    game = _W2G1Game(players=[
+        _W2G1PlayerState(name="P0"), _W2G1PlayerState(name="P1"),
+    ])
+    game.interactive_seats = set()
+    game._put_permanent_onto_battlefield(
+        0, _W2G1Permanent(card=set_pool("MMQ")["Food Chain"]), None,
+    )
+    game._put_permanent_onto_battlefield(
+        0, _W2G1Permanent(card=_w2g1_bear("Fodder", victim_cmc)), None,
+    )
+    return game
+
+
+def test_w2g1_food_chain_exiles_a_creature_for_one_plus_its_mana_value(set_pool):
+    """"Exile a creature you control: Add X mana of any one color, where X is 1
+    plus the exiled creature's mana value."
+
+    The cost eats the creature before the ability resolves, so the mana value
+    is last-known information (CR 608.2h) off the record the activation kept —
+    and the "1 plus" is the constant the *sentence* prints on top of it, which
+    the where-clause lowering dropped silently until this round: the exiled-cost
+    channel returned its number without the scaling every other count spec gets.
+    """
+    game = _w2g1_food_chain_board(set_pool, victim_cmc=2)
+    player = game.players[0]
+
+    result = game.activate_permanent_ability(0, "Food Chain", mana_color="R")
+
+    assert result.supported is True
+    assert [card.name for card in player.exile] == ["Fodder"]
+    assert player.restricted_mana["creature"]["R"] == 3
+
+
+def test_w2g1_food_chain_mana_is_spendable_only_on_creature_spells(set_pool):
+    """"Spend this mana only to cast creature spells." (CR 106.6.)
+
+    An unenforced restriction is an ability that works *more often* than the
+    card allows, and this one was one production away from being exactly that:
+    the any-one-colour producer wrote straight into ``mana_pool`` and ignored
+    the key its own lowering carried, which nothing in the pool could reveal
+    while the only card printing the pair was a name-keyed hook.
+    """
+    game = _w2g1_food_chain_board(set_pool, victim_cmc=1)
+    player = game.players[0]
+    game.activate_permanent_ability(0, "Food Chain", mana_color="G")
+
+    creature_spell = _W2G1Purpose(_W2G1_CAST, card=_w2g1_bear("Buyer", 2))
+    instant = _W2G1Card(
+        name="Shock", mana_cost="{R}", cmc=1.0, type_line="Instant",
+        oracle_text="", colors=("R",), color_identity=("R",), keywords=(),
+        produced_mana=(), raw={"name": "Shock", "type_line": "Instant"},
+    )
+
+    assert player.mana_pool["G"] == 0
+    assert _w2g1_spendable(player, creature_spell) == {"G": 2}
+    assert _w2g1_spendable(player, _W2G1Purpose(_W2G1_CAST, card=instant)) == {}
+
+
+def test_w2g1_food_chain_needs_no_hook_and_retires_one(set_pool):
+    """The entry bar, tested by behaviour rather than asserted.
+
+    Food Chain is the *second* card to print "1 plus the <verb>ed creature's
+    mana value. Spend this mana only to cast creature spells", one cost record
+    over from Metamorphosis — whose hook's own comment said what kept it was
+    that pair, "which no second card prints together". The second card is why
+    the pair became a production and the hook came out.
+    """
+    from engine.card_hooks import CARD_LINE_INSTRUCTIONS
+    from engine.oracle import compile_card_oracle
+
+    assert compile_card_oracle(set_pool("MMQ")["Food Chain"]).supported is True
+    assert "Food Chain" not in CARD_LINE_INSTRUCTIONS
+    assert "Metamorphosis" not in CARD_LINE_INSTRUCTIONS
