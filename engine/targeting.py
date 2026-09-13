@@ -2442,8 +2442,14 @@ def _from_instructions(instructions) -> dict | None:
         # round uses the seat the announcement chose. `picker_sweep` caught it
         # the round the kind was invented, which is the Roots class arriving
         # through the door a new wrapper opens.
+        # "…destroy target creature you control unless you pay {3} and repeat
+        # this process." (Crooked Scales.) The fourth wrapper and the same
+        # reading for the same reason as the two repeats beside it: both
+        # targets are announced once as the ability is activated (CR 602.2b),
+        # and every round spends the ones the announcement chose.
         if instruction.kind in (
             "sequence", "repeat_optional_process", "repeat_process_while",
+            "repeat_process_on_request",
         ):
             nested = _from_instructions(instruction.payload.get("steps") or ())
             if nested is not None:

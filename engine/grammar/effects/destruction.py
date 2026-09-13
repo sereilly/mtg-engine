@@ -121,9 +121,25 @@ def _parse_destroy(stream: TokenStream) -> ast.Statement:
     mark = stream.mark()
     if stream.accept_phrase("unless", "you", "pay") and not further:
         cost = _parse_mana_payment(stream)
-        return ast.DestroyUnlessPay(
-            subject, cost, per_counter=_accept_per_counter_multiplier(stream)
-        )
+        per_counter = _accept_per_counter_multiplier(stream)
+        # **A toll that goes on with "and" is not this node's sentence.**
+        # ``DestroyUnlessPay`` is fused — the upkeep dispatcher runs the whole
+        # pay-or-destroy prompt off the pair (trigger condition, instruction
+        # kind) — so there is nowhere in it for a second thing the payment
+        # buys. "…unless you pay {3} **and repeat this process**" (Crooked
+        # Scales) buys both the absence of the destruction and another run of
+        # the whole ability.
+        #
+        # Handed back whole rather than read here: ``tolls._accept_trailing_toll``
+        # already decomposes an "unless" into the :class:`ast.May` it is, and an
+        # offer has a ``then`` branch for exactly what paying buys. Nothing that
+        # parses today changes — this production returns the moment it builds
+        # the fused node, so a word behind it already failed the line as
+        # unconsumed text; what moves is which reader gets to refuse it.
+        if not stream.at_word("and"):
+            return ast.DestroyUnlessPay(
+                subject, cost, per_counter=per_counter
+            )
     stream.reset(mark)
 
     # "… unless you **sacrifice two Islands**" (Psychic Allergy) — the destroy

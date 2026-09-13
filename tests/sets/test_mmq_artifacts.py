@@ -953,3 +953,248 @@ def test_w2g1_the_announced_x_costs_are_charged_and_unhooked(set_pool):
             kind, "x",
         )
         assert name not in CARD_LINE_INSTRUCTIONS
+
+
+# --- W4G1: a coin-flip toll loop with two announced targets ---
+from unittest.mock import patch as _w4g1_patch
+
+from engine import Game as _W4G1Game
+from engine import PlayerState as _W4G1PlayerState
+from engine.models import Permanent as _W4G1Permanent
+from engine.oracle import compile_card_oracle as _w4g1_compile
+from engine.targeting import derive_activation_spec as _w4g1_activation_spec
+from tests.helpers import _mk_creature_card as _w4g1_creature_card
+from tests.helpers import resolve_stack as _w4g1_drain
+
+
+def _w4g1_scales_and_a_creature_each(set_pool, *, mana=20, interactive=False):
+    """Crooked Scales, one creature of mine and one of my opponent's.
+
+    The smallest board the card can be activated on: CR 601.2c announces both
+    of its targets, so a seat controlling no creature cannot activate it at
+    all — which is one of the tests below.
+    """
+    scales = _W4G1Permanent(card=set_pool("MMQ")["Crooked Scales"])
+    mine = _W4G1Permanent(card=_w4g1_creature_card("My Bear", 2, 2))
+    theirs = _W4G1Permanent(card=_w4g1_creature_card("Their Bear", 2, 2))
+    game = _W4G1Game(players=[
+        _W4G1PlayerState(name="A", battlefield=[scales, mine]),
+        _W4G1PlayerState(name="B", battlefield=[theirs]),
+    ])
+    for permanent in (scales, mine, theirs):
+        permanent.summoning_sick = False
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0} if interactive else set()
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.players[0].mana_pool.update({"C": mana})
+    return game, scales, mine, theirs
+
+
+def _w4g1_flip_the_scales(game, flips, **announcement):
+    """Activate Crooked Scales with *flips* as the coins it will turn up.
+
+    One entry per round, and the list running out is a lost flip — so a test
+    that expects two rounds says so by naming two coins, and a loop that ran a
+    third would be a test failure rather than a hang.
+    """
+    coins = iter(flips)
+    with _w4g1_patch(
+        "engine.handlers.control_flow.flip_coin",
+        side_effect=lambda: next(coins, False),
+    ):
+        result = game.activate_permanent_ability(
+            0, "Crooked Scales", **announcement
+        )
+        _w4g1_drain(game)
+        game.auto_resolve_pending_choices()
+        _w4g1_drain(game)
+    return result
+
+
+def _w4g1_names_on(player):
+    return [permanent.card.name for permanent in player.battlefield]
+
+
+def test_w4g1_crooked_scales_announces_two_targets_and_keeps_them_apart(set_pool):
+    """"{4}, {T}: Flip a coin. If you win the flip, destroy target creature an
+    opponent controls. If you lose the flip, destroy target creature you
+    control unless you pay {3} and repeat this process."
+
+    Two printed instances of the word "target", so CR 601.2c — reached for an
+    activated ability by CR 602.2b — announces two objects as the ability is
+    activated, and neither is inside a mode or behind an additional cost. The
+    coin is flipped on resolution (CR 705.1), long after both were chosen.
+
+    The picker therefore has to ask for **both**, in order, each against its own
+    printed narrowing. Derived as one spec it answered "a creature an opponent
+    controls" — the first slot it met — and the creature the card destroys on
+    the other arm of the flip was never asked for at all.
+    """
+    program = _w4g1_compile(set_pool("MMQ")["Crooked Scales"])
+    assert program.supported is True
+
+    spec = _w4g1_activation_spec(program.activated_abilities[0])
+    assert spec["kind"] == "roles"
+    assert [
+        (role["kind"], role.get("opponent_only", False), role.get("own_only", False))
+        for role in spec["roles"]
+    ] == [("creature", True, False), ("creature", False, True)]
+
+
+def test_w4g1_crooked_scales_is_not_hooked(set_pool):
+    """The set's standing invariant, on the card most tempting to break it for.
+
+    Every part of this line is a template a second card could print: a toll
+    (nine cards), a coin flip with two arms (six), and "repeat this process"
+    (eight, of which Forgotten Lore prints this very shape — a payment whose
+    "if you do" is another run of the whole effect).
+    """
+    from engine.card_hooks import CARD_LINE_INSTRUCTIONS, ON_SELF_RESOLVED
+
+    assert "Crooked Scales" not in CARD_LINE_INSTRUCTIONS
+    assert "Crooked Scales" not in ON_SELF_RESOLVED
+
+
+def test_w4g1_winning_the_flip_destroys_the_opponents_creature(set_pool):
+    """The won arm spends the role it was announced for and no other.
+
+    Both slots are creatures and the shared ``roles`` list rides on both steps,
+    so the arm that runs has to say which of the two is its own — the ``role``
+    key ``control_flow._role_scoped`` reads. Without it the step spent whichever
+    target the announcement happened to list first, which on the lost arm is the
+    opponent's creature and not the payer's.
+    """
+    game, _scales, mine, theirs = _w4g1_scales_and_a_creature_each(set_pool)
+
+    result = _w4g1_flip_the_scales(
+        game, [True],
+        target_permanent_ids=[theirs.permanent_id, mine.permanent_id],
+    )
+
+    assert result.supported, result
+    assert _w4g1_names_on(game.players[1]) == []
+    assert _w4g1_names_on(game.players[0]) == ["Crooked Scales", "My Bear"]
+
+
+def test_w4g1_paying_the_toll_repeats_the_flip_and_not_just_the_sentence(set_pool):
+    """"…unless you pay {3} **and repeat this process**."
+
+    "This process" is the whole printed effect — the coin flip two sentences
+    back included — so a round bought on the lost arm starts over at the flip.
+    A loop around the sentence that charged for it would re-offer the toll for
+    ever and never flip again, which is the shape this asserts against: one
+    payment, a second flip, and the *winning* arm's destruction off it.
+    """
+    game, _scales, mine, theirs = _w4g1_scales_and_a_creature_each(set_pool)
+
+    _w4g1_flip_the_scales(
+        game, [False, True],
+        target_permanent_ids=[theirs.permanent_id, mine.permanent_id],
+    )
+
+    assert game.players[0].mana_pool["C"] == 17, "one toll, once"
+    assert game.log.count("Crooked Scales: repeating the process") == 1
+    assert _w4g1_names_on(game.players[1]) == [], "the second flip was won"
+    assert _w4g1_names_on(game.players[0]) == ["Crooked Scales", "My Bear"]
+
+
+def test_w4g1_declining_the_toll_destroys_your_own_creature(set_pool):
+    """The offer's decline branch, which is what the printed "unless" means.
+
+    A seat that cannot cover the price is never offered it and the penalty
+    still applies (``control_flow._offer_to_seat``), so a pool holding the
+    activation cost and nothing more is the honest way to say "declined" — and
+    it is also the loop's bound: a round nobody pays for asks for no other.
+    """
+    game, _scales, mine, theirs = _w4g1_scales_and_a_creature_each(set_pool, mana=4)
+    game.enforce_mana_costs = True
+
+    _w4g1_flip_the_scales(
+        game, [False],
+        target_permanent_ids=[theirs.permanent_id, mine.permanent_id],
+    )
+
+    assert _w4g1_names_on(game.players[0]) == ["Crooked Scales"]
+    assert _w4g1_names_on(game.players[1]) == ["Their Bear"], "the won arm never ran"
+    assert "Crooked Scales: repeating the process" not in game.log
+
+
+def test_w4g1_the_toll_stops_when_the_mana_runs_out(set_pool):
+    """The loop terminates on a finite board, which is the whole of its bound.
+
+    Every round costs {3} and the coin never comes up heads here, so what ends
+    it is the pool emptying — {4} to activate and then three tolls of {3},
+    with the fourth declined and the payer's own creature destroyed. A repeat
+    that read its record *between* rounds would have ended after the first one
+    instead: an ``optional_pay`` does not suspend the resolution that armed it,
+    so the answer arrives after the round has returned.
+    """
+    game, _scales, mine, theirs = _w4g1_scales_and_a_creature_each(set_pool, mana=13)
+    game.enforce_mana_costs = True
+
+    _w4g1_flip_the_scales(
+        game, [False, False, False, False],
+        target_permanent_ids=[theirs.permanent_id, mine.permanent_id],
+    )
+
+    assert game.log.count("Crooked Scales: repeating the process") == 3
+    assert game.players[0].mana_pool["C"] == 0
+    assert _w4g1_names_on(game.players[0]) == ["Crooked Scales"]
+
+
+def test_w4g1_both_targets_are_required_to_activate_at_all(set_pool):
+    """CR 601.2c: a seat that cannot choose for **every** slot cannot announce.
+
+    The rule exempts a target only where a mode or an alternative or additional
+    cost was chosen; an "if" inside the effect is neither. So Crooked Scales is
+    unactivatable with no creature of your own on the board, even though the
+    creature you would destroy is on the arm of a flip that has not happened —
+    and unactivatable with nothing of the opponent's for the same reason.
+
+    Which is the announcement half of what makes the picker's two slots safe:
+    a roles walk answers every role or refuses, and this is a card where that
+    is exactly what the rule says.
+    """
+    game, _scales, mine, theirs = _w4g1_scales_and_a_creature_each(set_pool)
+
+    game.remove_from_battlefield(mine)
+    refused = game.activate_permanent_ability(
+        0, "Crooked Scales", target_permanent_ids=[theirs.permanent_id],
+    )
+    assert refused.supported is False
+
+    game.remove_from_battlefield(theirs)
+    game.players[0].battlefield.append(mine)
+    game._settle()
+    assert game.activate_permanent_ability(
+        0, "Crooked Scales", target_permanent_ids=[mine.permanent_id],
+    ).supported is False
+
+
+def test_w4g1_a_role_that_left_before_resolution_is_skipped(set_pool):
+    """CR 608.2b: one illegal target among several does not stop the rest.
+
+    The opponent's creature leaves while the ability is on the stack, so the
+    won arm has nothing to destroy — and the ability still resolves, still
+    flips, and the payer's own creature is still the announced answer to the
+    other role. Skipped rather than slid onto the neighbouring role, which is
+    what a positional read of one shared list would have done.
+    """
+    game, _scales, mine, theirs = _w4g1_scales_and_a_creature_each(
+        set_pool, interactive=True
+    )
+    coins = iter([True])
+    with _w4g1_patch(
+        "engine.handlers.control_flow.flip_coin",
+        side_effect=lambda: next(coins, False),
+    ):
+        game.activate_permanent_ability(
+            0, "Crooked Scales",
+            target_permanent_ids=[theirs.permanent_id, mine.permanent_id],
+        )
+        game.remove_from_battlefield(theirs)
+        _w4g1_drain(game)
+
+    assert _w4g1_names_on(game.players[0]) == ["Crooked Scales", "My Bear"]
+    assert "Crooked Scales: nothing to destroy" not in game.log

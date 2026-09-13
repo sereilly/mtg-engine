@@ -128,6 +128,64 @@ def stamp_payload_key(
 #: none of them inherits from another, so at most one branch could ever have
 #: matched a given node.
 from .statement_dispatch import lower_statement
+
+
+#: Where a repeat request can be printed: every key an instruction carries
+#: other instructions under. Derived from :data:`_REWRITE_NESTED_KEYS` — every
+#: wrapper plus the offer's two branches — so a wrapper added there is searched
+#: by construction, and widened by the branch keys a *decision* holds. A flat
+#: set rather than a per-kind table because this is a search and not a rewrite:
+#: a key an instruction does not carry simply answers nothing.
+_REQUEST_SEARCH_KEYS = tuple(sorted(
+    {key for keys in _REWRITE_NESTED_KEYS.values() for key in keys}
+    | {"then", "else", "unpaid", "paid", "steps"}
+))
+
+
+def _requests_a_repeat(instruction: OracleInstruction) -> bool:
+    """Whether *instruction* or anything it carries asks for another round."""
+    if instruction.kind == "request_process_repeat":
+        return True
+    for key in _REQUEST_SEARCH_KEYS:
+        for step in instruction.payload.get(key) or ():
+            if isinstance(step, OracleInstruction) and _requests_a_repeat(step):
+                return True
+    return False
+
+
+def wrap_requested_repeat(
+    instructions: tuple[OracleInstruction, ...],
+) -> tuple[OracleInstruction, ...]:
+    """One line's steps, wrapped in the loop a ``request_process_repeat`` asks for.
+
+    Beside :func:`_lower_line_statement`, its one caller, and for CR 601.2c's
+    roles walk's reason one function down: "this process" is the **line**, and
+    that is the one place holding all of it. Here rather than in
+    ``lowering/repeats.py`` with the five loops it joins, because the search
+    above reads :data:`_REWRITE_NESTED_KEYS` and a ``lowering/`` family may not
+    import another one.
+
+    Returns *instructions* unchanged when no step of them asked, which is every
+    line in the pool but one — so nothing else's compiled program moves. The
+    search descends through every wrapper's nested instructions and through an
+    offer's branches, because that is where the marker is printed: Crooked
+    Scales' sits in the ``then`` of a ``may`` inside the ``then`` of an
+    ``if_then``, two levels below the line.
+
+    The loop is put **around the whole tuple** rather than around the step that
+    asked. What the card repeats is the process, not the sentence that bought
+    another run of it; a loop around the last sentence would re-offer the toll
+    without ever flipping the coin again.
+    """
+    if not any(_requests_a_repeat(step) for step in instructions):
+        return instructions
+    return (
+        OracleInstruction(
+            "repeat_process_on_request", "", {"steps": tuple(instructions)}
+        ),
+    )
+
+
 def _lower_line_statement(
     statement: ast.Statement,
     *,
@@ -149,12 +207,22 @@ def _lower_line_statement(
     # target a spell or an ability names is chosen in one announcement, so the
     # place to notice that a line announced two is the place that has the whole
     # line's instructions. ``describe_sequence_target_roles`` returns them
-    # unchanged unless exactly two of them announce a target and one of the two
-    # is a seat — see there for why that is the only pair a lowering can tell
-    # apart from one target named twice.
-    return describe_sequence_target_roles(lower_statement(
+    # unchanged unless exactly two of them announce a target and the two can be
+    # told apart from one target named twice — see there for the two ways a
+    # line proves that.
+    lowered = describe_sequence_target_roles(lower_statement(
         statement, produced, event=event, event_subject=event_subject
     ))
+    # …and the same argument for a **repeat printed inside a sentence**.
+    # "…unless you pay {3} and repeat this process" (Crooked Scales) names the
+    # whole printed effect — the coin flip two sentences back included — from
+    # two branches down inside the last of them, so the loop can only be put on
+    # here. ``request_process_repeat`` is the marker the price reader left; the
+    # wrapper's handler runs the round again whenever a round wrote it.
+    #
+    # After the roles walk rather than before it: that one reads the line's own
+    # steps, and a line already folded into one wrapper has none.
+    return wrap_requested_repeat(lowered)
 
 
 def _rebind_blocking_pronoun(statement: ast.Statement) -> ast.Statement:

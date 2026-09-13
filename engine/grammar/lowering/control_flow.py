@@ -719,6 +719,10 @@ WRAPPER_KINDS: dict[str, tuple[str, ...]] = {
     # above it: what the round *does* is the steps it carries, and the stopping
     # question is not an effect.
     "repeat_process_while": ("steps",),
+    # A process a toll inside it may ask for again (Crooked Scales). The fourth
+    # repeat that is a wrapper, and the same reason once more: what the round
+    # *does* is the steps it carries, and asking for another is not an effect.
+    "repeat_process_on_request": ("steps",),
 }
 
 

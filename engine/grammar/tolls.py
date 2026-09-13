@@ -328,6 +328,41 @@ def _accept_price_action(
     return None
 
 
+def _accept_repeat_request(stream: TokenStream) -> "ast.RepeatProcessRequest | None":
+    """``… and repeat this process`` — what a toll buys besides its penalty.
+
+    "If you lose the flip, destroy target creature you control **unless you pay
+    {3} and repeat this process**." (Crooked Scales.)
+
+    The **sixth** printed "repeat this process" in the pool and the first one
+    printed *inside* a sentence. ``engine/grammar/repeats.py`` holds the other
+    five and every one of them is an **attacher**: the clause is its own
+    sentence, or opens one, and is read where the sentence loop has just
+    finished a statement it can fold into. This one is joined to a price by the
+    printed "and", so the sentence loop never sees it — the toll reader
+    consumes the whole clause, and the words would be unconsumed text if it
+    stopped at the cost.
+
+    Which is why it is read here rather than there, and why it is one
+    ``accept_phrase`` rather than a production: ``repeats`` sits **above**
+    ``statements`` (two of its readers re-enter the statement parser to check a
+    restatement) and this module sits below it, so the import cannot go that
+    way — and there is nothing to parse, because what is repeated is not named
+    in the clause at all. It is "this process", which is the whole printed
+    effect, and the only place holding that is ``grammar/lower``'s line-level
+    lowering. :class:`ast.RepeatProcessRequest` is the marker that carries the
+    fact up to it.
+
+    Returns None with the cursor untouched for every other "and", so a toll
+    whose clause goes on with something else keeps its own refusal.
+    """
+    mark = stream.mark()
+    if stream.accept_phrase("and", "repeat", "this", "process"):
+        return ast.RepeatProcessRequest()
+    stream.reset(mark)
+    return None
+
+
 def _accept_price_alternatives(
     stream: TokenStream, payer: ast.PlayerRef, first: ast.Statement, first_at: int
 ) -> ast.Statement:
@@ -368,6 +403,41 @@ def _accept_price_alternatives(
         return first
     return ast.OneOf(
         tuple(options), tuple(stream.text_between(a, b) for a, b in spans)
+    )
+
+
+def _under_a_leading_condition(body: ast.Statement, offer: ast.Statement) -> ast.Statement:
+    """*offer*, moved **inside** a condition the sentence opened with.
+
+    "**If you lose the flip,** destroy target creature you control unless you
+    pay {3} …" (Crooked Scales.) The toll is read around the whole sentence —
+    see :func:`_accept_trailing_toll` for why it cannot be read inside the verb
+    — and a sentence that opened with "if" has already been wrapped in its
+    condition by the time this reader runs. Left there, the offer is made
+    **whichever way the coin lands**: the payment buys off a destruction that
+    was never going to happen, and on Crooked Scales it buys another flip for
+    the player who just won one.
+
+    So the two are swapped: the condition stays outermost, because it is what
+    the sentence says happens at all, and the offer wraps only the consequent.
+    CR 608.2c — "read the whole text and apply the rules of English to it": the
+    "unless" clause qualifies the verb in the consequent, not the "if".
+
+    Only a bare consequent, and the three refusals are each a sentence this
+    must not rewrite: a condition with its own "otherwise" already names what
+    happens on the false branch, a negated one is the *trailing* "unless
+    <condition>" a later reader attaches (two "unless"es in one sentence mean
+    different things and the offer is not about that one), and an offer whose
+    decline branch is not this body is one that already found its own home.
+    """
+    if not isinstance(body, ast.Conditional):
+        return offer
+    if body.otherwise is not None or body.negated:
+        return offer
+    if getattr(offer, "otherwise", None) is not body:
+        return offer
+    return dataclasses.replace(
+        body, then=dataclasses.replace(offer, otherwise=body.then)
     )
 
 
@@ -425,11 +495,11 @@ def _accept_trailing_toll(
         if payer.kind in _ENUMERATED_PAYERS:
             stream.reset(mark)
             return None
-        return ast.May(
+        return _under_a_leading_condition(body, ast.May(
             actor=payer,
             action=_accept_price_alternatives(stream, payer, action, price_at),
             otherwise=body,
-        )
+        ))
     if not stream.accept_word("pays", "pay"):
         stream.reset(mark)
         return None
@@ -442,13 +512,21 @@ def _accept_trailing_toll(
         stream.reset(mark)
         return None
     if payer.kind in _ENUMERATED_PAYERS:
-        return ast.UnlessPlayerPays(payer, cost, body)
-    return ast.May(
+        return _under_a_leading_condition(
+            body, ast.UnlessPlayerPays(payer, cost, body)
+        )
+    life_alternative = _accept_life_alternative(stream)
+    return _under_a_leading_condition(body, ast.May(
         actor=payer,
         cost=cost,
-        life_alternative=_accept_life_alternative(stream),
+        life_alternative=life_alternative,
+        # "…unless you pay {3} **and repeat this process**." (Crooked Scales.)
+        # What paying buys, which for every other toll in the pool is nothing
+        # but the absence of ``otherwise``. The ``then`` branch is already that
+        # field — "if you do" — so the clause needs no second place to go.
+        then=_accept_repeat_request(stream),
         otherwise=body,
-    )
+    ))
 
 
 def accept_delayed_toll(

@@ -3291,6 +3291,87 @@ def repeat_optional_process(game: Game, instruction: OracleInstruction, context:
     return True, "resolved"
 
 
+#: The loop a round is running under, for the step inside it that asks for
+#: another. In the resolution's own scratchpad because that is the one thing
+#: every step of a resolution shares, and because the asking step is not
+#: reached by the loop at all: it runs from an ``optional_pay`` prompt's
+#: resolver, after the round that armed it has finished.
+REPEAT_PROCESS = "repeat_process_this_way"
+
+
+@effect_handler("request_process_repeat")
+def request_process_repeat(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"…unless you pay {3} **and repeat this process**." (Crooked Scales.)
+
+    What the toll bought, as the offer's "if you do" branch — and the thing
+    that *runs* the next round, rather than a flag some loop reads afterwards.
+
+    That is the shape ``repeat_optional_process`` and ``coin_flip_stakes_loop``
+    already have, and here it is forced rather than chosen: an ``optional_pay``
+    does not suspend the resolution that armed it, so by the time the seat has
+    answered, the round — and every loop around it — has returned. A record
+    read between rounds would be read before the payment existed, and Crooked
+    Scales would flip exactly once however much its controller paid.
+
+    So the round hands its own instruction down the scratchpad
+    (:data:`REPEAT_PROCESS`) and this step runs it again. The dispatch is
+    ``_execute_oracle_instruction``'s, not a direct call, so the next round
+    goes through the same door as the first, and it is the last thing this
+    handler does — ``engine/resumption.py``'s rule, since the round it starts
+    can suspend on the very next toll.
+    """
+    again = context.results.get(REPEAT_PROCESS)
+    if again is None:
+        # Nothing to repeat. Only reachable if the marker outlived the wrapper
+        # its lowering puts round the line, which no compiled program does —
+        # said rather than assumed, because a silent no-op here is a card that
+        # charges its controller {3} for nothing.
+        game.log.append(
+            f"{getattr(context.card, 'name', 'Effect')}: no process to repeat"
+        )
+        return True, "resolved"
+    game.log.append(
+        f"{getattr(context.card, 'name', 'Effect')}: repeating the process"
+    )
+    game._execute_oracle_instruction(again, context)
+    return True, "resolved"
+
+
+@effect_handler("repeat_process_on_request")
+def repeat_process_on_request(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Flip a coin. If you win the flip, destroy target creature an opponent
+    controls. If you lose the flip, destroy target creature you control
+    **unless you pay {3} and repeat this process**." (Crooked Scales.)
+
+    The fourth repeat in this file and the fourth mechanism.
+    ``repeat_offer_round`` ends on a round nobody took,
+    ``repeat_optional_process`` on a seat's answer to a question printed as its
+    own sentence, ``repeat_process_while`` on a condition asked of what the
+    round did — and this one on a **price inside the round**, charged on one
+    arm of a coin flip that may not even have been taken.
+
+    So the loop is round the *line*: what repeats is the flip and both of its
+    arms, and the sentence that charges for another round is two branches down
+    inside the third of them. All this handler does is run the round and say,
+    in the scratchpad, which instruction another round would be — the asking is
+    :func:`request_process_repeat`'s, because the answer arrives after this has
+    returned.
+
+    Through ``_run`` like every other wrapper here, so a step naming its own
+    role of a shared announcement is scoped to it (``_role_scoped``) and a
+    round that stops to ask something takes the rest of itself with it.
+
+    Termination is the card's. Every round costs its controller {3} out of a
+    finite pool and a round nobody pays for asks for nothing, so declining —
+    or being unable to pay — ends it, as does winning the flip.
+    """
+    steps = _steps(instruction, "steps")
+    if not steps:
+        return True, "resolved"
+    context.results[REPEAT_PROCESS] = instruction
+    return _run(game, steps, context)
+
+
 @effect_handler("repeat_process_while")
 def repeat_process_while(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Target player mills two cards. **If two cards that share a color were

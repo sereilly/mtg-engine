@@ -626,6 +626,28 @@ class RepeatForEachType:
 
 
 @dataclass(frozen=True)
+class RepeatProcessRequest:
+    """"…unless you pay {3} **and repeat this process**." (Crooked Scales.)
+
+    The **sixth** printed "repeat this process" and the first one printed
+    *inside* a sentence rather than as a clause about the sentences before it.
+    The five in ``engine/grammar/repeats.py`` are all attachers — each is read
+    where a sentence has just ended and folds into what it names — and this one
+    is the consequence a toll buys: "pay {3}" and "repeat this process" are one
+    offer, joined by the printed "and", so the words are read by the price
+    reader and never reach the sentence loop at all.
+
+    So the node is a *marker* rather than a wrapper. What it names is the whole
+    printed effect, which the place holding this statement does not have — the
+    toll is two branches down inside the last of three sentences. The wrap
+    happens where the line's instructions are all in hand
+    (``grammar/lower._lower_line_statement``, the same function CR 601.2c's
+    roles walk runs in), and this node is how that function is told the words
+    were printed.
+    """
+
+
+@dataclass(frozen=True)
 class OneOf:
     """"sacrifice a creature **or** discard a creature card" (Crypt Lurker).
 
@@ -791,7 +813,7 @@ class NextDrawReplacement:
     effect: "Statement"
 
 
-Statement = Union[Sequence, Conjunction, Conditional, May, UnlessPlayerPays, ForEach, RepeatProcess, RepeatProcessWhile, RepeatUntilPileChosen, RepeatOptionalProcess, RepeatForEachType, WhereX, CreateDelayedTrigger, NextDrawReplacement, Effect]
+Statement = Union[Sequence, Conjunction, Conditional, May, UnlessPlayerPays, ForEach, RepeatProcess, RepeatProcessWhile, RepeatUntilPileChosen, RepeatOptionalProcess, RepeatForEachType, RepeatProcessRequest, WhereX, CreateDelayedTrigger, NextDrawReplacement, Effect]
 
 
 # ---------------------------------------------------------------------------
