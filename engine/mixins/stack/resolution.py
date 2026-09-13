@@ -1252,6 +1252,26 @@ class StackResolutionMixin:
             # and the stack item is gone by the time the cleanup step looks.
             if (choices or {}).get(CAST_AT_INSTANT_SPEED):
                 permanent.metadata[CAST_AT_INSTANT_SPEED] = True
+            # "As an additional cost to cast this spell, choose a creature
+            # type." (Caller of the Hunt.) The word was chosen at CR 601.2b and
+            # rode the stack item; it is copied onto the permanent here because
+            # the permanent is what the card's other line reads it off
+            # ("creatures of the chosen type"), through the same
+            # ``chosen_creature_type`` metadata key An-Zerrin Ruins' *entry*
+            # choice writes — one key, so `subject_filters` has one reader
+            # whichever step of CR 601 or CR 614 made the choice.
+            #
+            # Stamped **before** the permanent enters, which is the whole of
+            # what makes this a cast-time cost rather than an entry effect: the
+            # characteristic-defining P/T is computed from the moment the
+            # permanent is on the battlefield (CR 604.3, CR 613.1), and a
+            # creature that arrived without its word would be a 0/0 that
+            # CR 704.5f bins before anyone could answer a prompt. It is also
+            # why a Caller of the Hunt put onto the battlefield *without being
+            # cast* is that 0/0 — correctly: no cast, no CR 601.2b, no type.
+            chosen_creature_type = (choices or {}).get("chosen_creature_type")
+            if chosen_creature_type:
+                permanent.metadata["chosen_creature_type"] = chosen_creature_type
             self._put_permanent_onto_battlefield(
                 caster_index, permanent, target_player_index,
                 was_cast=True, from_zone=cast_from_zone,

@@ -2301,23 +2301,89 @@ class PermanentStateMixin:
         choice there, and the printed catalog's most common type is the one most
         likely to matter if a board arrives later.
         """
+        counts = self._creature_type_counts(
+            skip_seat=caster_index, include_tokens=False
+        )
+        if not counts:
+            return "human"
+        return max(sorted(counts), key=lambda word: counts[word])
+
+    def _creature_type_counts(
+        self, *, skip_seat: int | None = None, include_tokens: bool = True
+    ) -> dict[str, int]:
+        """How many creatures of each type the named battlefields hold.
+
+        One counting loop for the two defaults that need it, which is this
+        file's own stated reason for `_default_chosen_color` being a method:
+        two spellings of one count is how a card comes to be armed with one
+        value and resolved against another.
+
+        Read through ``computed_types`` (CR 613 layer 4), so an animated land
+        counts as the creature it is and a retyped creature counts as what it
+        *is* rather than as what it was printed as — the same read
+        ``subject_matches`` makes when the chosen word is finally applied.
+
+        The two knobs are exactly what the two callers disagree about, and
+        neither disagreement is cosmetic. ``skip_seat`` drops a seat because
+        An-Zerrin Ruins' choice hoses an opponent and counting the chooser's
+        own board would aim the hoser at themselves; the cast-time choice below
+        names no seat at all, so it counts every one. ``include_tokens`` is the
+        same split one object kind over: a hoser aimed at a token type is aimed
+        at whatever died last, while a count that *is* a creature's power
+        (Caller of the Hunt) counts every creature the battlefield actually has
+        — CR 111.1 makes a token a creature like any other.
+        """
         from ..layer_bridge import computed_types
 
         counts: dict[str, int] = {}
         for seat, player in enumerate(self.players):
-            if seat == caster_index or player.lost:
+            if seat == skip_seat or player.lost:
                 continue
             for perm in self.controlled_by(seat):
-                if perm.metadata.get("is_token"):
+                if not include_tokens and perm.metadata.get("is_token"):
                     continue
                 card_types, subtypes = computed_types(perm)
                 if "creature" not in card_types:
                     continue
                 for subtype in subtypes:
                     counts[subtype] = counts.get(subtype, 0) + 1
-        if not counts:
-            return "human"
-        return max(sorted(counts), key=lambda word: counts[word])
+        return counts
+
+    def _default_cast_creature_type(self, caster_index: int, card=None) -> str:
+        """The creature type a CR 601.2b "choose a creature type" cost takes
+        when the caster names none.
+
+        The *cast-time* sibling of `_default_chosen_creature_type` above, and a
+        separate default rather than a second caller of it, because the two
+        clauses name different boards. "As this enchantment enters, choose a
+        creature type" is printed on cards that hose what the chosen type does
+        (An-Zerrin Ruins), so its default reads the **opponents'** board. "As an
+        additional cost to cast this spell, choose a creature type" names no
+        seat whatever — Caller of the Hunt then counts "creatures of the chosen
+        type **on the battlefield**", every battlefield — so the default counts
+        every seat, tokens included.
+
+        The card's own printed creature types are the fallback before the
+        catalog's, which is the choice a player makes on an empty board: Caller
+        of the Hunt is a Human, so naming Human makes it at least a 1/1 the
+        moment it arrives rather than a 0/0 that dies to CR 704.5f on an empty
+        table. "Human" behind that for the reason the entry default gives: any
+        word is legal there, and it is the pool's most common type.
+
+        Stated as policy rather than left to the first word of a catalog
+        (idiom 8): a type nobody controls makes every reader of the choice inert,
+        which is legal and is not a choice any player would make.
+        """
+        counts = self._creature_type_counts()
+        if counts:
+            return max(sorted(counts), key=lambda word: counts[word])
+        from ..layer_bridge import printed_shape
+
+        if card is not None:
+            types, printed = printed_shape(card)
+            if "creature" in types and printed:
+                return sorted(printed)[0]
+        return "human"
 
     def _nameable_cards(
         self, chooser_index: int, *, exclude: str | None = None

@@ -217,6 +217,24 @@ class AdditionalCost:
     #: card is chosen out of a hand large enough cannot make the cost unpayable
     #: (CR 601.2h).
     discard_at_random: bool = False
+    #: "As an additional cost to cast this spell, **choose a creature type**."
+    #: (Caller of the Hunt.) The one cost in this file that consumes **nothing**
+    #: — it takes no object off a board, out of a hand or out of a graveyard —
+    #: and it is a cost all the same, because CR 601.2b is where the choice is
+    #: made and the card's other line reads the answer back.
+    #:
+    #: A flag rather than the word itself, for the reason ``pay_life_x`` is a
+    #: flag: the *word* is announced per cast (CR 601.2b) and this object is
+    #: compiled once per card and cached, so a chosen type stored here would be
+    #: one cast's answer serving every later cast of every copy.
+    #:
+    #: It is never part of ``_unpayable_additional_cost``: every creature type
+    #: is a legal choice, so this cost is paid on any board at all — the same
+    #: reasoning ``sacrifice_all_filter`` and ``discard_whole_hand`` carry, and
+    #: the reason a cost that charges nothing still has to be *claimed*: a
+    #: clause this table cannot read leaves the sentence unread, and the card
+    #: then reports supported with its choice never made (``unread_cost_sentence``).
+    choose_creature_type: bool = False
     #: "…by paying **3 life** and discarding a card" (Demonic Embrace).
     #: CR 119.4 caps a life payment at the payer's life total and CR 601.2h then
     #: makes an unpayable cost an uncastable spell, checked with
@@ -367,6 +385,8 @@ class AdditionalCost:
                 + ("" if how_many == "1" else "s")
                 + " from your graveyard"
             )
+        if self.choose_creature_type:
+            parts.append("choose a creature type")
         if self.pay_life_x:
             parts.append("pay X life")
         elif self.pay_life:
@@ -442,6 +462,16 @@ _COST_CLAUSES: tuple[tuple[re.Pattern[str], str], ...] = (
         ),
         "optional_mana",
     ),
+    # "…, **choose a creature type**." (Caller of the Hunt.) CR 601.2b's
+    # choice-shaped additional cost: it charges nothing, and it is a cost
+    # because the rule says the choice is made *here* — the card's other line
+    # ("creatures of the chosen type") reads the answer back off the permanent,
+    # and an entry-time reading would make a countered spell one that never
+    # chose and a reanimated creature one that chose anyway.
+    #
+    # Above the life rows only in source order; no row in this table shares a
+    # first word with it.
+    (re.compile(r"^choose a creature type$"), "choose_creature_type"),
     (re.compile(r"^(?:pay )?x life$"), "pay_life_x"),
     (re.compile(r"^(?:pay )?(\d+) life$"), "pay_life"),
     # "discard a card", and its **narrowed** spelling: "discard a red or green
@@ -792,6 +822,7 @@ def _read_cost_clauses(costs: str) -> dict | None:
         "return_filter": None, "return_count": 1, "return_count_x": False,
         "optional_mana": (),
         "optional_key": None,
+        "choose_creature_type": False,
     }
     # CR 601.2b's optional non-mana price. Tested **after** the mana-offer row,
     # which claims "you may pay {1}{R} …" whole: stripping the prefix first
@@ -828,6 +859,8 @@ def _read_cost_clauses(costs: str) -> dict | None:
                     # function's rule everywhere else.
                     return None
                 fields["optional_mana"] = fields["optional_mana"] + offers
+            elif field == "choose_creature_type":
+                fields["choose_creature_type"] = True
             elif field == "pay_life_x":
                 fields["pay_life_x"] = True
             elif field == "pay_life":

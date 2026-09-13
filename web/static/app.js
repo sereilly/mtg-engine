@@ -88,6 +88,13 @@ let pendingCastCost = null;
 // is copied onto `pendingCastCost` when the prompt is confirmed, so from there
 // it rides sendAction like every other payment announced before the target.
 let pendingCastOffers = null;
+// CR 601.2b's *choice-shaped* additional cost, mid-prompt: "As an additional
+// cost to cast this spell, choose a creature type" (Caller of the Hunt). Like
+// the offers above, the answer is copied onto `pendingCastCost` when confirmed
+// so it rides whichever body the rest of the cast finally sends — the choice is
+// announced a prompt before the targets are, and the card that prints it may
+// yet print a target too.
+let pendingCastCreatureType = null;
 let debugSearchTimer = null;
 let debugAddManaMode = false;
 let symbolMap = {};
@@ -3736,6 +3743,7 @@ function beginPendingHandCast(card, handIndex = null) {
   pendingCastFromZone = null;
   pendingCastCost = null;
   pendingCastOffers = null;
+  pendingCastCreatureType = null;
   pendingCastHandCard = {
     cardName,
     handIndex: Number.isInteger(handIndex) && handIndex >= 0 ? handIndex : null,
@@ -3755,6 +3763,7 @@ function clearPendingHandCast() {
   pendingCastFromZone = null;
   pendingCastCost = null;
   pendingCastOffers = null;
+  pendingCastCreatureType = null;
   document.querySelectorAll(".casting-card").forEach((el) => el.classList.remove("casting-card"));
 }
 
@@ -10000,6 +10009,42 @@ function renderActivationPrompt() {
     return;
   }
 
+  // CR 601.2b's choice-shaped price — "choose a creature type" (Caller of the
+  // Hunt) — asked before the targets and the X box below for the same reason
+  // the offers are: the rule makes every announcement in this step, and for
+  // this card the answer *is* the spell's power and toughness (CR 604.3), so a
+  // cast that reached the stack before the question was asked would have no
+  // number at all. A dropdown rather than buttons, for the reason the entry
+  // choice's is one: this offers CR 205.3m's whole catalog.
+  if (pendingCastCreatureType) {
+    const pending = pendingCastCreatureType;
+    panel.classList.remove("hidden");
+    okBtn.classList.add("hidden");
+    customRow.classList.add("hidden");
+    cancelBtn.classList.remove("hidden");
+    cancelBtn.disabled = false;
+    customOkBtn.disabled = true;
+    title.textContent = `Cast ${pending.cardName}`;
+    body.textContent = "As an additional cost, choose a creature type.";
+    const options = pending.types
+      .map((type) => {
+        const label = escapeHtml(type.charAt(0).toUpperCase() + type.slice(1));
+        const mark = type === pending.selected ? " selected" : "";
+        return `<option value="${escapeHtml(type)}"${mark}>${label}</option>`;
+      })
+      .join("");
+    steps.innerHTML =
+      `<div class="prompt-choice-column">`
+      + `<select id="castCreatureTypeSelect">${options}</select>`
+      + `<button type="button" class="prompt-choice-btn" id="castCreatureTypeOk">Choose</button>`
+      + `</div>`;
+    const picker = steps.querySelector("#castCreatureTypeSelect");
+    steps.querySelector("#castCreatureTypeOk").addEventListener("click", () => {
+      confirmCastCreatureType(picker.value);
+    });
+    return;
+  }
+
   // CR 601.2b's optional prices, before CR 601.2c's targets and before the X
   // box below — the order the rule puts them in, and the order the numbers
   // need: how many artifacts Primitive Justice destroys is decided by what was
@@ -12120,7 +12165,66 @@ function confirmCastOffers() {
 // Village Rites the cost is the whole announcement and its own prompt sends the
 // cast, while Demonic Embrace, Goblin Grenade and Soul Exchange still owe a
 // target and continue into the cascade above.
+// CR 601.2b's choice-shaped additional cost. `announces_creature_type` is the
+// backend's answer (`engine/legality.cast_target_spec`), with CR 205.3m's
+// catalog and the engine's own default beside it — neither is something this
+// client can derive: the catalog is ingested data and the default counts a
+// board only the game can read.
+function castAnnouncesCreatureType(card) {
+  const spec = targetSpecOf(card);
+  if (!spec.announces_creature_type) return null;
+  return Array.isArray(spec.creature_types) && spec.creature_types.length
+    ? spec
+    : null;
+}
+
+// Opens that picker and returns true when it did. Asked by
+// `startCastCostPrompt` below, which every cast entry point runs *before* the
+// target cascade — so a card that both chooses a type and names a target asks
+// for the type first, which is the order CR 601.2b and CR 601.2c are in.
+function startCastCreatureTypePrompt(card, castAction = "cast") {
+  const spec = castAnnouncesCreatureType(card);
+  if (!spec) return false;
+  const cardName = normalizeCardName(card);
+  if (!cardName) return false;
+  const types = spec.creature_types;
+  const fallback = spec.default_creature_type;
+  pendingCastCreatureType = {
+    card,
+    cardName,
+    castAction,
+    types,
+    selected: types.includes(fallback) ? fallback : types[0],
+  };
+  renderActivationPrompt();
+  updateActionHint(`Choose a creature type to cast ${cardName}.`);
+  return true;
+}
+
+// The announcement is made: copy it onto `pendingCastCost` (which every cast
+// path merges into whatever body it sends) and continue into the rest of the
+// cast, exactly as `confirmCastOffers` does one step earlier.
+function confirmCastCreatureType(word) {
+  const pending = pendingCastCreatureType;
+  if (!pending) return;
+  const { card, castAction } = pending;
+  pendingCastCreatureType = null;
+  pendingCastCost = { ...(pendingCastCost || {}), chosen_creature_type: word };
+  renderActivationPrompt();
+  // Back through the cost stage, not straight into the targets: a card may
+  // print this choice *and* a price the caster picks a permanent for, and the
+  // answer just recorded is what stops this re-opening the same prompt.
+  if (startCastCostPrompt(card, castAction)) return;
+  continueCastAfterCost(card, castAction);
+}
+
 function startCastCostPrompt(card, castAction = "cast") {
+  // The choice-shaped cost first: it charges nothing, so it can never be the
+  // reason a payment picker has nothing to offer, and the rest of the cast
+  // re-enters this function from `confirmCastCreatureType` above.
+  if (pendingCastCreatureType) return true;
+  const chosenType = (pendingCastCost || {}).chosen_creature_type;
+  if (chosenType == null && startCastCreatureTypePrompt(card, castAction)) return true;
   const costSpec = castCostSpec(card);
   if (!costSpec) return false;
   if (costSpec.discard_cost) return startCastDiscardCostPrompt(card, castAction);
@@ -19239,9 +19343,10 @@ for (const elementId of ["selfName", "oppName", "selfLife", "oppLife"]) {
 
 q("promptCancelBtn").addEventListener("click", () => {
   SFX.onMenuCancel();
-  const wasCasting = !!(pendingCastTarget || pendingCastX || pendingCastDivision || pendingAutoTap || pendingModalChoice || pendingDiscardCost || pendingCastOffers);
+  const wasCasting = !!(pendingCastTarget || pendingCastX || pendingCastDivision || pendingAutoTap || pendingModalChoice || pendingDiscardCost || pendingCastOffers || pendingCastCreatureType);
   pendingActivation = null;
   pendingCastOffers = null;
+  pendingCastCreatureType = null;
   pendingCastTarget = null;
   pendingCastX = null;
   pendingCastDivision = null;

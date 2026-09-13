@@ -127,6 +127,20 @@ CHOICE_KEYS = (
     # the sentence; the permanent's resolution copies the answer onto the
     # permanent and the cleanup step acts on it.
     "cast_at_instant_speed",
+    # The creature type a printed additional cost made the caster choose
+    # (CR 601.2b: "As an additional cost to cast this spell, choose a creature
+    # type" — Caller of the Hunt). On this channel for the cost spoils' reason
+    # exactly, with the object they record replaced by a word: the choice is
+    # made while the spell is being cast and nothing in the game state can be
+    # asked for it afterwards — the spell has no permanent yet, and the
+    # permanent it becomes is a new object (CR 400.7).
+    #
+    # Spelled the same as the permanent metadata key `subject_filters` reads
+    # ("creatures **of the chosen type**"), deliberately: the resolution copies
+    # this value straight onto the entering permanent, and one word from the
+    # announcement to the matcher is what keeps a cast-time choice and an
+    # entry-time choice (An-Zerrin Ruins) answerable by one reader.
+    "chosen_creature_type",
 )
 
 
