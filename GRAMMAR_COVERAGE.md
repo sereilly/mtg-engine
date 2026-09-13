@@ -16,22 +16,22 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Set | Cards | Lines | Parsed | Lowered | Executed | Cards executing |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 388 | 88.1% | 86.3% | 49.2% | 174 |
-| LEB | 292 | 389 | 88.2% | 86.4% | 49.4% | 175 |
-| 2ED | 292 | 389 | 88.2% | 86.4% | 49.4% | 175 |
+| LEA | 290 | 388 | 88.7% | 86.9% | 49.7% | 174 |
+| LEB | 292 | 389 | 88.7% | 86.9% | 49.9% | 175 |
+| 2ED | 292 | 389 | 88.7% | 86.9% | 49.9% | 175 |
 | ARN | 78 | 108 | 81.5% | 77.8% | 55.6% | 49 |
 | ATQ | 85 | 120 | 90.8% | 90.8% | 63.3% | 68 |
-| 3ED | 296 | 389 | 89.7% | 87.4% | 51.2% | 179 |
+| 3ED | 296 | 389 | 90.0% | 87.7% | 51.4% | 179 |
 | LEG | 310 | 431 | 89.6% | 88.4% | 58.7% | 217 |
 | DRK | 119 | 167 | 96.4% | 96.4% | 73.7% | 101 |
 | FEM | 102 | 191 | 99.0% | 99.0% | 75.9% | 99 |
-| 4ED | 368 | 520 | 92.9% | 91.9% | 55.2% | 251 |
+| 4ED | 368 | 520 | 93.1% | 92.1% | 55.4% | 251 |
 | ICE | 373 | 601 | 89.9% | 89.4% | 63.4% | 301 |
 | HML | 115 | 189 | 93.7% | 93.7% | 65.1% | 93 |
 | ALL | 144 | 251 | 90.4% | 90.0% | 70.5% | 132 |
 | MIR | 335 | 545 | 93.4% | 93.2% | 63.9% | 281 |
 | VIS | 167 | 278 | 89.6% | 89.6% | 61.5% | 138 |
-| 5ED | 434 | 631 | 94.6% | 94.0% | 60.9% | 319 |
+| 5ED | 434 | 631 | 94.8% | 94.1% | 61.0% | 319 |
 | WTH | 167 | 249 | 88.4% | 88.4% | 64.7% | 140 |
 | TMP | 335 | 478 | 92.7% | 92.3% | 65.7% | 271 |
 | STH | 143 | 215 | 88.4% | 88.4% | 62.8% | 124 |
@@ -41,8 +41,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 6ED | 335 | 404 | 95.5% | 95.5% | 65.8% | 243 |
 | UDS | 143 | 204 | 91.7% | 91.2% | 65.7% | 121 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| MMQ *(measured)* | 335 | 465 | 89.9% | 89.7% | 64.3% | 270 |
-| **All (shipped)** | **5829** | **8560** | **90.7%** | **90.0%** | **60.7%** | **4402** |
+| MMQ *(measured)* | 335 | 465 | 90.8% | 90.5% | 65.2% | 273 |
+| **All (shipped)** | **5829** | **8560** | **90.8%** | **90.1%** | **60.8%** | **4402** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
 
@@ -54,8 +54,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 456 | 195 | expected a subject |  |
-| 137 | 71 | unrecognized effect verb |  |
+| 445 | 191 | expected a subject |  |
+| 136 | 70 | unrecognized effect verb |  |
 | 112 | 56 | unconsumed text |  |
 | 42 | 25 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
@@ -82,7 +82,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 ## Cards executing through the grammar
 
-4402 cards, 5197 lines.
+4402 cards, 5206 lines.
 
 - **Abandon Hope**
   - `Look at target opponent's hand and choose X cards from it. That player discards those cards.`
@@ -764,6 +764,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Blood Frenzy**
   - `Target attacking or blocking creature gets +4/+0 until end of turn. Destroy that creature at the beginning of the next end step.`
 - **Blood Hound**
+  - `Whenever you're dealt damage, you may put that many +1/+1 counters on this creature.`
   - `At the beginning of your end step, remove all +1/+1 counters from this creature.`
 - **Blood Lust**
   - `If target creature has toughness 5 or greater, it gets +4/-4 until end of turn. Otherwise, it gets +4/-X until end of turn, where X is its toughness minus 1.`
@@ -1775,6 +1776,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{U}: Until end of turn, if you tap a land you control for mana, it produces {U} instead of any other type.`
 - **Deepwood Drummer**
   - `{G}, {T}, Discard a card: Target creature gets +2/+2 until end of turn.`
+- **Deepwood Elder**
+  - `{X}{G}{G}, {T}, Discard a card: X target lands become Forests until end of turn.`
 - **Deepwood Ghoul**
   - `Pay 2 life: Regenerate this creature.`
 - **Deepwood Legate**
@@ -4331,8 +4334,11 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `• You draw three cards at the beginning of the next turn's upkeep.`
   - `• You search your library for a card, put that card into your hand, then shuffle.`
 - **Lich**
+  - `Whenever you're dealt damage, sacrifice that many nontoken permanents. If you can't, you lose the game.`
   - `When this enchantment is put into a graveyard from the battlefield, you lose the game.`
+  - `Whenever you're dealt damage, sacrifice that many nontoken permanents. If you can't, you lose the game.`
   - `When this enchantment is put into a graveyard from the battlefield, you lose the game.`
+  - `Whenever you're dealt damage, sacrifice that many nontoken permanents. If you can't, you lose the game.`
   - `When this enchantment is put into a graveyard from the battlefield, you lose the game.`
 - **Lichenthrope**
   - `At the beginning of your upkeep, remove a -1/-1 counter from this creature.`
@@ -4419,11 +4425,17 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Living Armor**
   - `{T}, Sacrifice this artifact: Put X +0/+1 counters on target creature, where X is that creature's mana value.`
 - **Living Artifact**
+  - `Whenever you're dealt damage, put that many vitality counters on this Aura.`
   - `At the beginning of your upkeep, you may remove a vitality counter from this Aura. If you do, you gain 1 life.`
+  - `Whenever you're dealt damage, put that many vitality counters on this Aura.`
   - `At the beginning of your upkeep, you may remove a vitality counter from this Aura. If you do, you gain 1 life.`
+  - `Whenever you're dealt damage, put that many vitality counters on this Aura.`
   - `At the beginning of your upkeep, you may remove a vitality counter from this Aura. If you do, you gain 1 life.`
+  - `Whenever you're dealt damage, put that many vitality counters on this Aura.`
   - `At the beginning of your upkeep, you may remove a vitality counter from this Aura. If you do, you gain 1 life.`
+  - `Whenever you're dealt damage, put that many vitality counters on this Aura.`
   - `At the beginning of your upkeep, you may remove a vitality counter from this Aura. If you do, you gain 1 life.`
+  - `Whenever you're dealt damage, put that many vitality counters on this Aura.`
   - `At the beginning of your upkeep, you may remove a vitality counter from this Aura. If you do, you gain 1 life.`
 - **Living Death**
   - `Each player exiles all creature cards from their graveyard, then sacrifices all creatures they control, then puts all cards they exiled this way onto the battlefield.`
@@ -6484,6 +6496,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Saprazzan Bailiff**
   - `When this creature enters, exile all artifact and enchantment cards from all graveyards.`
   - `When this creature leaves the battlefield, return all artifact and enchantment cards from all graveyards to their owners' hands.`
+- **Saprazzan Breaker**
+  - `{U}: Mill a card. If a land card was milled this way, this creature can't be blocked this turn.`
 - **Saprazzan Cove**
   - `{T}: Put a storage counter on this land.`
   - `{T}, Remove any number of storage counters from this land: Add {U} for each storage counter removed this way.`
@@ -6516,6 +6530,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature attacks, you may have it deal 1 damage to each creature without flying defending player controls.`
 - **Scalding Tongs**
   - `At the beginning of your upkeep, if you have three or fewer cards in hand, this artifact deals 1 damage to target opponent or planeswalker.`
+- **Scandalmonger**
+  - `{2}: Target player discards a card. Any player may activate this ability but only as a sorcery.`
 - **Scapegoat**
   - `Return any number of target creatures you control to their owner's hand.`
 - **Scarab of the Unseen**

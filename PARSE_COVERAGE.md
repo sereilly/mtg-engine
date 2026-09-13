@@ -12,25 +12,6 @@ unclaimed text. Do not edit by hand.
 - With UNCLAIMED text (must fix or acknowledge): **0**
 - With deletion-probe findings (ignored words): **426**
 
-## Measured sets — reported, not gated
-
-Cards in a `measured` set (see `cards/manifest.json`) that the
-compiler calls **supported** while carrying a printed line nothing
-implements. They are the debt behind that set's progress number, and
-`--hollow-lines` sees only the ones that produced an *ability part* —
-a line yielding nothing at all leaves that probe nothing to find.
-
-Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
-`HOOK_RELIANCE.md`'s ceilings exclude the same sets: a ratchet over a
-set nobody has implemented fires on its composition rather than on
-anything anyone did, and every ingest would arrive red.
-
-**2 unclaimed sentence(s) across 1 supported card(s).**
-
-- **Conspiracy**
-  - `creatures you control are the chosen type`
-  - `the same is true for creature spells you control and creature cards you own that aren't on the battlefield`
-
 ## Acknowledged simplifications
 
 | Card | Sentence | Why it is acceptable |
@@ -491,9 +472,9 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 
 | Channel | Sentences claimed |
 | --- | --- |
-| parse rule | 3590 |
+| parse rule | 3592 |
 | activation cost | 1562 |
-| trigger table | 1144 |
+| trigger table | 1146 |
 | static-line table | 870 |
 | keyword table | 750 |
 | aura enchant noun (oracle_instructions attach) | 263 |
@@ -503,10 +484,10 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | loyalty cost | 33 |
 | oracle.py (modal trigger head) | 30 |
 | cost_modifiers.py | 29 |
-| auras.py (attached effect) | 25 |
-| mixin text scan | 14 |
+| auras.py (attached effect) | 24 |
 | special_actions.py (permanent offer) | 14 |
 | activation_permissions.py | 12 |
+| mixin text scan | 12 |
 | cast_timing.py (granted flash) | 10 |
 | cast_timing.py (cleanup sacrifice rider) | 10 |
 | aura static (oracle_instructions/permanent_state) | 9 |
