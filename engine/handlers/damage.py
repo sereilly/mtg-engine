@@ -1878,6 +1878,67 @@ def target_bites_itself(game, instruction, context):
     return True, "resolved"
 
 
+@effect_handler("each_matching_bites_itself")
+def each_matching_bites_itself(game, instruction, context):
+    """"Each creature deals damage to itself equal to its power."
+    (Wave of Reckoning.)
+
+    :func:`target_bites_itself` over a *described* set instead of a chosen one:
+    nothing is targeted and nobody picks, so every permanent the printed noun
+    phrase names bites itself (CR 611.2c fixes that set when the effect begins).
+    The set resolves through ``subject_matches`` — the one answer for what a
+    printed noun phrase means — with the resolving controller as the observer,
+    because "you control" is that seat's "you" (CR 109.5).
+
+    CR 120.7: each creature is the **source** of the damage it takes, so the
+    dealer is the permanent and never ``context.card``. That is the whole point
+    of the kind — routed through the spell, a creature with protection from
+    white would shrug off Wave of Reckoning and a lifelinking one would gain its
+    controller nothing.
+
+    The amount is ``effective_power``, CR 613's computed value read as the
+    damage is dealt rather than a printed number. Reading it inside the loop is
+    the same answer as reading it up front: state-based actions do not run until
+    the spell finishes resolving (CR 704.3), so nothing here dies or shrinks
+    part-way and every creature deals what it had.
+
+    A zero-power creature is not dealt to at all rather than dealt 0 — CR 120.8:
+    damage of 0 is not damage, so nothing is marked and no damage trigger fires.
+    """
+    from ..subject_filters import subject_matches
+
+    described = instruction.payload.get("filter") or {}
+    caster = context.caster
+    observer = game.players.index(caster) if caster in game.players else None
+    targeted = (
+        game.players.index(context.target)
+        if context.target is not None and context.target in game.players
+        else None
+    )
+    defending = defending_player_seat(game, context)
+    struck: list[str] = []
+    for perm in list(game.all_permanents()):
+        if not subject_matches(
+            game, perm, described, observer=observer,
+            source=context.source_permanent, targeted_player=targeted,
+            defending=defending,
+        ):
+            continue
+        amount = max(0, int(perm.effective_power))
+        if amount <= 0:
+            continue
+        apply_damage_to_creature(game, perm, amount, perm)
+        struck.append(f"{perm.card.name} ({amount})")
+    if not struck:
+        game.log.append(f"{context.card.name} found nothing to damage")
+    else:
+        game.log.append(
+            f"{context.card.name}: each creature dealt damage to itself — "
+            + ", ".join(struck)
+        )
+    return True, "resolved"
+
+
 @effect_handler("target_bites_target")
 def target_bites_target(game, instruction, context):
     """"Target creature you control deals damage equal to its power to another

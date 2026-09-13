@@ -778,6 +778,33 @@ def _legal_declaration(
     # is a set, and it is returned in the caller's order below.
     pruned.sort(key=lambda entry: -_permanent_value(entry[1]))
     while pruned:
+        # **What the declaration costs is pruned against too, and it was not.**
+        # CR 508.1g's costs are summed over the whole declaration
+        # (`_declaration_mana_plan`, `_declaration_sacrifice_plan`), where
+        # `legal_attackers` above can only ask "could this seat afford *this*
+        # creature". So a seat with one land under a {1}-per-attacker toll
+        # proposed three attackers, the declaration refused all three, and
+        # `ai_combat`'s superset fallback — every legal attacker, the same
+        # three — was refused for the same reason: the seat attacked with
+        # nobody while it could plainly have attacked with one. Measured on
+        # War Tax and true of every shipped card that prints a summed
+        # declaration cost (Koskun Falls, Elephant Grass, Propaganda,
+        # Brainwash, Leviathan, Flooded Woodlands, Reclamation).
+        #
+        # Asked of the engine's own planners rather than re-totalled here, for
+        # the restriction loop's stated reason: a second copy would drift, and
+        # the direction it drifts is a seat that stops attacking for reasons
+        # the rules do not give. Weakest-last ordering means the creature
+        # dropped is the one this seat can most afford to leave home, exactly
+        # as it is for a cap.
+        unaffordable = _unaffordable_attacker(
+            game, attacking_player_index, [perm for _idx, perm in pruned], against
+        )
+        if unaffordable is not None:
+            pruned = [
+                (idx, perm) for idx, perm in pruned if perm is not unaffordable
+            ]
+            continue
         refusal = game.attack_declaration_refusal(
             [perm for _idx, perm in pruned],
             # Who this seat is aiming at, when the caller knows. Omitting it is
@@ -984,6 +1011,25 @@ def _legal_block_declaration(
     ordered.sort(key=lambda entry: -entry[2])
 
     while ordered:
+        # What the declaration *costs*, pruned against for the attack side's
+        # reason exactly: CR 509.1d totals the costs of every chosen blocker, so
+        # a defender with one land under a {1}-per-blocker toll (War Cadence)
+        # would propose two blocks, have the declaration refused whole, and fall
+        # through `ai_combat`'s superset rung to blocking with nobody — while it
+        # could plainly have blocked with one. True of every shipped card
+        # printing a summed block cost too (Hipparion, Awesome Presence, and
+        # Heat Wave's life half).
+        unaffordable = _unaffordable_blocker(
+            game, defending_player_index, attacker_player,
+            {idx: chosen[idx] for idx, _perm, _score in ordered},
+            {idx: perm for idx, perm, _score in ordered},
+            [perm for _idx, perm, _score in ordered],
+        )
+        if unaffordable is not None:
+            ordered = [
+                entry for entry in ordered if entry[1] is not unaffordable
+            ]
+            continue
         refusal = game.block_declaration_refusal(
             [perm for _idx, perm, _score in ordered]
         )
@@ -999,6 +1045,72 @@ def _legal_block_declaration(
         for blocker_idx, assigned in chosen.items()
         if blocker_idx in kept
     }
+
+
+
+def _unaffordable_attacker(game, seat, attackers, against):
+    """The attacker to drop when this whole declaration cannot be paid for.
+
+    None when it can. CR 508.1h locks in a *total* cost, so affordability is a
+    property of the set rather than of any member — which means, exactly as for
+    a cap, that no rule can say which creature to leave home. The weakest is
+    last in the list this is handed, so naming it is the same policy the
+    restriction prune already applies.
+
+    Both halves of the cost are asked, because either can be the one that does
+    not fit: mana (Koskun Falls, War Tax) and sacrifice (Flooded Woodlands,
+    Leviathan). Asked of the engine's own planners, so what the AI believes it
+    can afford and what the declaration will charge are one answer.
+    """
+    if not attackers:
+        return None
+    seats = None if against is None else [against] * len(attackers)
+    total, plan = game._declaration_mana_plan(seat, list(attackers), seats)
+    if total and plan is None:
+        return attackers[-1]
+    if game._declaration_sacrifice_plan(seat, list(attackers)) is None:
+        return attackers[-1]
+    return None
+
+
+
+def _unaffordable_blocker(
+    game, defender_seat, attacker_owner, assigned, blockers, ordered_perms
+):
+    """The blocker to drop when this whole block declaration cannot be paid for.
+
+    None when it can. :func:`_unaffordable_attacker`'s twin one step of combat
+    over, and every word of that docstring applies: CR 509.1d locks in a total,
+    affordability is a property of the set, and no rule can say which block to
+    give up — so the weakest, which is last in the list handed here, is named.
+
+    Both currencies are asked, because either can be the one that does not fit:
+    mana (Hipparion, Awesome Presence, War Cadence) and life (Heat Wave,
+    CR 119.4). Through the engine's own planners, so what the AI believes it can
+    afford and what the declaration will charge are one answer.
+    """
+    if not ordered_perms:
+        return None
+    plan_assignments = {
+        idx: (list(a) if isinstance(a, list) else [a]) for idx, a in assigned.items()
+    }
+    resolved_attackers = {}
+    for attacker_indices in plan_assignments.values():
+        for attacker_idx in attacker_indices:
+            perm = game.permanent_at(attacker_owner, attacker_idx)
+            if perm is not None:
+                resolved_attackers[attacker_idx] = perm
+    life_owed = game._block_declaration_life(
+        plan_assignments, blockers, resolved_attackers
+    )
+    if life_owed and game.players[defender_seat].life < life_owed:
+        return ordered_perms[-1]
+    total, plan = game._block_declaration_mana_plan(
+        defender_seat, plan_assignments, blockers, resolved_attackers
+    )
+    if total and plan is None:
+        return ordered_perms[-1]
+    return None
 
 
 def choose_combat_blockers(

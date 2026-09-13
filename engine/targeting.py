@@ -2077,6 +2077,10 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     "mill_target_player": _player_recipient_spec,
     "grant_extra_turn": _extra_turn_spec,
     "skip_next_step": _skipped_seat_spec,
+    # Moment of Silence names a seat the same way Fatigue does, so it derives
+    # the same picker: the spec is about what is being *chosen*, not about
+    # which part of the turn structure is then skipped.
+    "skip_next_phase": _skipped_seat_spec,
     "counter_top_stack_spell": _counter_spec,
     "counter_stack_ability": _counter_ability_spec,
     "choose_permanent": _chosen_permanent_spec,

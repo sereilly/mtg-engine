@@ -17,7 +17,8 @@ from ..bounds import accept_life_gain_cap
 from ..records import (_parse_for_each_this_way, accept_counters_removed_for_cost,
                        scaled_by_recorded_count,
                       accept_plus_per_cost_paid,
-                      parse_for_each_milled_this_way)
+                      parse_for_each_milled_this_way,
+                      parse_for_each_sacrificed_this_way)
 
 from ..errors import GrammarError
 from ..lexer import PT, PUNCT, QUOTE, SELF, tokenize
@@ -281,6 +282,25 @@ def _parse_gains(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
                         return ast.GainLife(
                             player, scaled_by_recorded_count(amount, counted, stream)
                         )
+                if per_each is None:
+                    # "You gain 2 life **for each permanent sacrificed this
+                    # way**." (Renounce.) A count of what the sentence in front
+                    # of this one took off the battlefield, which no reading of
+                    # a board or of ``_THIS_WAY_COUNTS`` can answer: "any
+                    # number" prints no count, and the record holds the *cards*
+                    # rather than a number — which is exactly why that table
+                    # declines the phrase and this production owns it.
+                    #
+                    # Read **before** the plain noun-phrase fallback below for
+                    # the reason the draw one file over states: that reading
+                    # consumes "permanent" and leaves "sacrificed this way" as
+                    # unconsumed text, having already claimed the clause for a
+                    # count of the whole battlefield — a strictly larger number
+                    # than the card prints, and the failure that took this line
+                    # down.
+                    per_each = parse_for_each_sacrificed_this_way(
+                        stream, parse_object_filter
+                    )
                 if per_each is None:
                     for_each_mark = stream.mark()
                     if stream.accept_phrase("for", "each"):

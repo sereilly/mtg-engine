@@ -36,7 +36,7 @@ from ._collapses import (_each_player_optional_discard,
                          _each_player_optional_pay_mana,
                          _each_player_optional_tap,
                          _referent_seat_optional_draw)
-from ._common import _amount_payload, _is_source
+from ._common import _amount_payload, _is_source, variable_mana_payload
 from ._events import (EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER,
                       _DEFENDING_PLAYER_EVENTS, _EVENT_SUBJECT_CONTROLLERS,
                       _EVENT_SUBJECT_PLAYERS, LOOP_BOUND_OBJECT,
@@ -79,33 +79,18 @@ def _lower_one_of(
 def _may_cost_payload(node: ast.May) -> dict[str, object]:
     """The symbol dict an optional payment offers, with ``{X}`` left variable.
 
-    ``{X}`` becomes a **generic** pip whose amount is the string "x", which is
-    the one channel every amount in this engine resolves an X through: by the
-    time the handler runs, ``_execute_oracle_instruction`` has already turned
-    the sentence's where-clause into ``context.x_value``. So "you may pay {X},
-    where X is the number of +1/+1 counters on it" (Primordial Ooze) is the
-    ordinary optional payment with one number read late, not a second prompt.
+    "You may pay {X}, where X is the number of +1/+1 counters on it"
+    (Primordial Ooze) is the ordinary optional payment with one number read
+    late, not a second prompt.
 
-    A second X pip refuses: "{X}{X}" would mean twice the count, and this
-    carries the amount once. No card in the pool prints it, and guessing which
-    reading was meant is exactly what a refusal is for.
+    The conversion itself is ``_common.variable_mana_payload``, shared with the
+    combat tolls that print the same ``{X}``: what a printed symbol run becomes
+    does not depend on which clause printed it, and two copies would be two
+    answers free to differ.
     """
-    pips = dict(node.cost.pips)
-    variable = pips.pop("X", 0)
-    if variable > 1:
-        raise LoweringError("an optional payment reads one X, not several", node=node)
-    if variable and pips.get("generic"):
-        # "{X}{2}" — a printed constant beside the variable. Nothing prints it,
-        # and folding them together would make the offer a number the card
-        # never named.
-        raise LoweringError(
-            "an optional payment cannot mix X with a printed generic cost",
-            node=node,
-        )
-    payload: dict[str, object] = dict(pips)
-    if variable:
-        payload["generic"] = "x"
-    return payload
+    return variable_mana_payload(
+        node.cost, what="an optional payment", node=node
+    )
 
 
 #: The player references an offer can be made to. Held to what

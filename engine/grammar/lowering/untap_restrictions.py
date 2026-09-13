@@ -41,6 +41,26 @@ from ._events import (_RECORDED_PERMANENTS, _TAPPED_PERMANENTS,
                       binds_block_pair)
 
 
+#: The payload a printed possessive in "…during **<whose>** next untap step"
+#: lowers to, keyed by the word ``ast.DoesntUntapNextStep.whose`` carries.
+#:
+#: Absent from the table is not a default seat — it is the per-creature
+#: "its controller's", which needs none: the untap step only ever reaches
+#: permanents the active player controls, so the controller's step is the one
+#: that finds the marker. A row exists only where the card named a *player*,
+#: and then the handler freezes that seat because a creature that changes hands
+#: in between would otherwise wait for the wrong player's step.
+#:
+#: The two rows name two different seats and neither is a spelling of the
+#: other: ``you`` is the seat that resolved the effect (CR 701.43a's exert
+#: wording, Deep Spawn) and ``target_player`` is the seat the sentence's own
+#: subject targeted (Misstep).
+_SEATED_UNTAP_STEP: dict[str, dict[str, str]] = {
+    "you": {"whose_untap_step": "controller"},
+    "target_player": {"whose_untap_step": "target_player"},
+}
+
+
 def _lower_untap_restriction(
     node: "ast.DoesntUntapNextStep | ast.DoesntUntapWhileCounter",
     produced: frozenset[str],
@@ -233,6 +253,16 @@ def _lower_doesnt_untap_next_step(
             "subject does not name them",
             node=node,
         )
+    # CR 701.43a's "your", carried as a seat the handler freezes. Absent for the
+    # per-creature spelling, which leaves every payload written before this word
+    # existed byte-identical — and the untap step reads an unseated marker as
+    # "the controller's next untap step", which is what that spelling means.
+    #
+    # "**That player's** next untap step" (Misstep) is the second seated word
+    # and it names a *different* seat: the player the sentence's subject
+    # targeted, not the seat that resolved the spell. One table rather than two
+    # conditionals, so a third printed possessive is a row.
+    seated = _SEATED_UNTAP_STEP.get(node.whose, {})
     if swept:
         # The handler asks ``subject_matches`` with the resolving seat as
         # observer, so a key outside what that answers would be carried and
@@ -244,19 +274,21 @@ def _lower_doesnt_untap_next_step(
             node=node,
             require_narrowing=False,
         )
+        # The seat rides a sweep too. It did not before, because the only seated
+        # spelling was "your" and nothing printed it over a swept subject —
+        # so a sweep that named a player's step would have dropped the word and
+        # held the creatures down at whichever untap step reached them first.
         return (
             OracleInstruction(
                 "skip_next_untap", "",
-                {**described, "sweep": True, "untap_steps": node.count},
+                {
+                    **described, "sweep": True, "untap_steps": node.count,
+                    **seated,
+                },
             ),
         )
     if node.count < 1:
         raise LoweringError("a skipped-untap count of none is no restriction", node=node)
-    # CR 701.43a's "your", carried as a seat the handler freezes. Absent for the
-    # per-creature spelling, which leaves every payload written before this word
-    # existed byte-identical — and the untap step reads an unseated marker as
-    # "the controller's next untap step", which is what that spelling means.
-    seated = {"whose_untap_step": "controller"} if node.whose == "you" else {}
     if own_source:
         if _restrictions_beyond(
             subject.filter, frozenset({"card_types", "is_source"})

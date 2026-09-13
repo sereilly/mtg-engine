@@ -63,7 +63,13 @@ def _is_global_per_each_buff(node: ast.Pump) -> bool:
     return (
         node.per_each is not None
         and isinstance(node.subject, ast.TargetSpec)
-        and node.subject.quantifier == "all"
+        # "**Each** attacking creature gets …" (Mercadia's Downfall) against
+        # "Attacking creatures get …" (Márton Stromgald): two printed spellings
+        # of one set, and the noun parser keeps them apart because elsewhere the
+        # words differ. Here they cannot: a sweep over every member of a class
+        # is the same sweep however the class was written, and reading only one
+        # of them left the other refused on its quantifier.
+        and node.subject.quantifier in ("all", "each")
         and not node.subject.targeted
         and node.duration.kind is not None
     )

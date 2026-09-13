@@ -149,7 +149,14 @@ def count_spec(
     # Reachable on the battlefield alone, and by construction rather than by a
     # second condition: a count in any other zone refuses a ``controller`` key
     # outright at the `_CARD_ZONE_KEYS` gate above, before this line runs.
-    if controller not in (None, "you", TARGET_OPPONENT_SCOPE):
+    # "…the number of nonbasic lands **defending player** controls" (Mercadia's
+    # Downfall). The second narrowing that is lifted rather than dropped, and
+    # for the target-opponent branch's reason exactly: it names a *seat* rather
+    # than a property of each object, and ``count_from_payload`` resolves that
+    # seat through ``defending_player_seat`` — the one reader of CR 506.2's
+    # player. Left in the filter it would be handed to a matcher that does not
+    # test a controller and silently counts the whole table's lands.
+    if controller not in (None, "you", TARGET_OPPONENT_SCOPE, "defending_player"):
         raise LoweringError(
             f"a count cannot be narrowed to the {controller}'s permanents", node=node
         )
@@ -218,6 +225,12 @@ def count_spec(
     # way two seats can be named at once.
     if controller == TARGET_OPPONENT_SCOPE:
         owner = TARGET_OPPONENT_SCOPE
+    # The same lift for CR 506.2's seat, and it has to come after the combat-role
+    # widening above rather than before it: "each nonbasic land **defending
+    # player** controls" is scoped to a seat even though the *pumped* subject is
+    # an attacking class, and the `all` reading would count both boards' lands.
+    elif controller == "defending_player":
+        owner = "defending_player"
     spec: dict = {
         "zone": filt.zone,
         "owner": owner,

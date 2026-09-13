@@ -503,6 +503,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # is a change to the turn's structure rather than to the board — the family
     # `grant_extra_turn` is already in.
     "skip_next_step": "turns",
+    # "Target player skips their next combat phase this turn." (Moment of
+    # Silence.) The same family as its step and turn siblings — one printed
+    # sentence about the turn structure — and a different counter, which is
+    # the kind rather than the category.
+    "skip_next_phase": "turns",
     # CR 500.11's *turn* counter beside CR 500.7's step counter (Chronatog).
     # The same family the skip above and `grant_extra_turn` are already in —
     # what changes is the size of the thing skipped, not the kind of effect.
@@ -581,6 +586,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "add_loyalty_counters_to_chosen": "counters",
     "target_bites_target": "damage",
     "target_bites_itself": "damage",
+    # "Each creature deals damage to itself equal to its power." (Wave of
+    # Reckoning.) The sweep beside the targeted bite above, in the same family
+    # for the same reason: what differs is how many creatures bite.
+    "each_matching_bites_itself": "damage",
     "source_fights_target": "damage",
     # The same CR 701.14 exchange with **neither** fighter being the ability's
     # source (Triangle of War) — two announcements rather than one, which is a
@@ -617,6 +626,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # CR 508.1g printed on a permanent that names a class of creatures
     # rather than itself (Flooded Woodlands, Reclamation).
     "creatures_cant_attack_unless_sacrifice": "combat_restrictions",
+    # War Tax and War Cadence: the same board-wide declaration toll with the
+    # cost in mana and a window on it (CR 508.1g, CR 509.1d). Two kinds
+    # because the gate that charges each is a different step of combat.
+    "creatures_cant_attack_unless_pay_until_eot": "combat_restrictions",
+    "creatures_cant_block_unless_pay_until_eot": "combat_restrictions",
     "cant_block_unless_others_block": "combat_restrictions",
     # "…unless a creature with greater power also attacks/blocks." (Okk.) The
     # same CR 508.1c / 509.1b declaration-wide restriction asking a comparison

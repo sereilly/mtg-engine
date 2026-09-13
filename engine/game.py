@@ -166,8 +166,15 @@ class Game(
     # is left has no such ambiguity, because a repeated phase is two entries.
     turn_phases_remaining: list[str] | None = None
     skip_turn_counts: dict[int, int] = field(default_factory=dict)
-    skip_phase_counts: dict[str, int] = field(default_factory=dict)
-    skip_step_counts: dict[str, int] = field(default_factory=dict)
+    # CR 500.11's phase and step skips. Keyed by ``object`` rather than by
+    # ``str`` because a skip that names a seat — and, for a phase, the turn its
+    # card bounded it to — carries that in the key: an unseated record is spent
+    # by whichever player's phase or step comes round first, which on somebody
+    # else's turn is the wrong player's. Written and read through
+    # ``skip_next_phase``/``_consume_phase_skip`` and their step twins, which
+    # are the only places the key shapes are spelled.
+    skip_phase_counts: dict[object, int] = field(default_factory=dict)
+    skip_step_counts: dict[object, int] = field(default_factory=dict)
     combat_damage_prevented_until_eot: bool = False
     # "If a creature would deal combat damage to a creature this turn, it deals
     # **double** that damage to that creature instead." (Blind Fury.) A CR 614

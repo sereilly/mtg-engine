@@ -464,3 +464,215 @@ def test_g1_a_legate_condition_reads_back_with_the_right_article(set_pool):
     assert alternative_costs(pool["Land Grant"])[0].condition.describe() == (
         "you have no land cards in hand"
     )
+
+
+# --- W2G4: combat-window instants and a counted sacrifice ---
+from engine import Game as _I4Game
+from engine import PlayerState as _I4PlayerState
+from engine.models import Permanent as _I4Permanent
+from tests.helpers import _mk_creature_card as _i4_creature_card
+from tests.helpers import resolve_stack as _i4_resolve
+
+
+def _w2g4_duel(set_pool, hand, mine=(), theirs=()):
+    """A duel with *hand* on seat 0 and named permanents on both battlefields.
+
+    Its own helper rather than the sorcery block's, for the file convention's
+    reason: a block is self-contained so a mechanical union cannot splice one
+    group's helper body onto another's signature.
+    """
+    pool = set_pool("MMQ")
+    caster, other = _I4PlayerState("Caster"), _I4PlayerState("Opponent")
+    caster.hand = [pool[name] for name in hand]
+    game = _I4Game(players=[caster, other])
+    game.enforce_mana_costs = False
+    for perm in mine:
+        caster.battlefield.append(
+            _I4Permanent(card=pool[perm] if isinstance(perm, str) else perm)
+        )
+    for perm in theirs:
+        other.battlefield.append(
+            _I4Permanent(card=pool[perm] if isinstance(perm, str) else perm)
+        )
+    game._settle()
+    return game, caster, other
+
+
+def test_w2g4_downfall_scales_off_the_defenders_nonbasic_lands(set_pool):
+    """"Each attacking creature gets +1/+0 until end of turn for each nonbasic
+    land defending player controls." (Mercadia’s Downfall.)
+
+    Three narrowings, and each has a permanent here that it must exclude:
+    *nonbasic* (the defender’s Plains does not count), *defending player’s*
+    (the caster’s own nonbasic land does not either), and *attacking* (the
+    defender’s creature gets nothing). CR 506.2’s seat is read off the live
+    combat, because a spell froze no event to read it from.
+    """
+    game, _caster, _other = _w2g4_duel(
+        set_pool, ["Mercadia's Downfall"],
+        mine=[_i4_creature_card("Raider", 2, 2), "Rushwood Grove"],
+        theirs=[_i4_creature_card("Guard", 2, 2), "Plains", "Saprazzan Skerry",
+                "Henge of Ramos"],
+    )
+    raider = next(p for p in game.controlled_by(0) if p.card.name == "Raider")
+    guard = next(p for p in game.controlled_by(1) if p.card.name == "Guard")
+    raider.metadata["summoning_sickness_turn"] = -99
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.declare_attackers(0, [0], defending_player_index=1)[0]
+    _i4_resolve(game)
+
+    result = game.cast_from_hand(0, "Mercadia's Downfall")
+    _i4_resolve(game)
+
+    assert result.supported, result.details
+    # Two nonbasic lands on the defender’s side, so +2/+0 — never +3 (both
+    # boards’ nonbasics) and never +3 either way round from counting the Plains.
+    assert (raider.effective_power, raider.effective_toughness) == (4, 2)
+    assert (guard.effective_power, guard.effective_toughness) == (2, 2)
+
+
+def test_w2g4_downfall_outside_combat_pumps_nobody(set_pool):
+    """CR 506.2’s seat exists only inside a combat phase.
+
+    With no combat there is no defending player, so the count is zero — and
+    nothing is attacking either. The spell resolves having done nothing rather
+    than counting somebody’s lands because a seat had to be guessed, which is
+    what a count with no seat does: it guesses the caster.
+    """
+    game, _caster, _other = _w2g4_duel(
+        set_pool, ["Mercadia's Downfall"],
+        mine=[_i4_creature_card("Raider", 2, 2), "Rushwood Grove"],
+        theirs=["Saprazzan Skerry", "Henge of Ramos"],
+    )
+    raider = next(p for p in game.controlled_by(0) if p.card.name == "Raider")
+
+    game.cast_from_hand(0, "Mercadia's Downfall")
+    _i4_resolve(game)
+
+    assert (raider.effective_power, raider.effective_toughness) == (2, 2)
+
+
+def test_w2g4_moment_of_silence_skips_the_named_players_combat_phase(set_pool):
+    """"Target player skips their next combat phase this turn."
+    (Moment of Silence.)
+
+    CR 500.11 and CR 506.1: a *phase*, not a step — the combat phase has five
+    steps and none of them is called "combat", so a skip filed in the step
+    bucket would be a record nothing ever consumes. The assertion is that the
+    turn now runs from the precombat main phase straight to the postcombat one.
+    """
+    game, _caster, _other = _w2g4_duel(set_pool, ["Moment of Silence"])
+    game.active_player_index = 0
+    game._set_phase_and_step("precombat_main", "precombat_main")
+
+    result = game.cast_from_hand(0, "Moment of Silence", target_player_index=0)
+    _i4_resolve(game)
+
+    assert result.supported, result.details
+    assert game.next_unskipped_phase_after("precombat_main") == "postcombat_main"
+
+
+def test_w2g4_moment_of_silence_leaves_the_other_seats_combat_alone(set_pool):
+    """The skip is the *named* seat’s, so the other player’s combat phase runs.
+
+    Keyed on the seat rather than on the phase name alone, which is the whole of
+    what this asserts: an unseated record is spent by whichever combat phase
+    comes round first, and on the opponent’s turn that is the wrong player’s.
+    """
+    game, _caster, _other = _w2g4_duel(set_pool, ["Moment of Silence"])
+    game.active_player_index = 0
+    game._set_phase_and_step("precombat_main", "precombat_main")
+    game.cast_from_hand(0, "Moment of Silence", target_player_index=1)
+    _i4_resolve(game)
+
+    assert game.next_unskipped_phase_after("precombat_main") == "combat"
+
+
+def test_w2g4_moment_of_silence_expires_with_the_turn(set_pool):
+    """"…**this turn**." CR 514.2 closes the window at cleanup.
+
+    Without the stamp the record would wait for the target’s own next turn and
+    eat a combat phase the card never named — the direction a missing duration
+    always errs in, and one a compiled program cannot show.
+    """
+    game, _caster, _other = _w2g4_duel(set_pool, ["Moment of Silence"])
+    game.active_player_index = 0
+    game._set_phase_and_step("precombat_main", "precombat_main")
+    game.cast_from_hand(0, "Moment of Silence", target_player_index=0)
+    _i4_resolve(game)
+    assert game.skip_phase_counts
+
+    game.resolve_cleanup_step(0)
+    game.turn += 1
+
+    assert not game.skip_phase_counts
+    assert game.next_unskipped_phase_after("precombat_main") == "combat"
+
+
+def test_w2g4_renounce_gains_two_life_per_permanent_sacrificed(set_pool):
+    """"Sacrifice any number of permanents. You gain 2 life for each permanent
+    sacrificed this way." (Renounce.)
+
+    The number is what the first sentence actually took: "any number" prints no
+    count, and by the time the gain runs the permanents are cards in a graveyard
+    (CR 400.7) among everything else that ever arrived there. So the count comes
+    off the resolution’s own record, and the printed 2 is the *rate* over it.
+
+    The seat is **interactive**, which is what makes this a test of the record
+    rather than of a default: "any number" lets a non-interactive seat answer
+    none, and a gain that read the printed 2 instead of the count would pass a
+    zero-sacrifice board by gaining nothing either. Two of three permanents, so
+    the answer is neither the board nor one.
+    """
+    game, caster, _other = _w2g4_duel(
+        set_pool, ["Renounce"],
+        mine=["Mountain", "Mountain", _i4_creature_card("Bear", 2, 2)],
+    )
+    caster.life = 20
+    game.interactive_seats = {0}
+
+    result = game.cast_from_hand(0, "Renounce")
+    assert game.pending_sacrifice is not None
+    assert game.confirm_sacrifice(0, [0, 2]) is True
+    _i4_resolve(game)
+
+    assert result.supported, result.details
+    assert len(list(game.controlled_by(0))) == 1
+    assert caster.life == 24
+
+
+def test_w2g4_renounce_sacrificing_one_gains_exactly_two(set_pool):
+    """The rate is per permanent, so one sacrifice is 2 life and not 4.
+
+    Beside the test above rather than folded into it: together they pin the
+    count as the multiplier. A gain that read the printed 2 as the whole amount
+    passes the pair’s first half and fails here.
+    """
+    game, caster, _other = _w2g4_duel(
+        set_pool, ["Renounce"], mine=["Mountain", "Mountain"],
+    )
+    caster.life = 20
+    game.interactive_seats = {0}
+
+    game.cast_from_hand(0, "Renounce")
+    assert game.confirm_sacrifice(0, [1]) is True
+    _i4_resolve(game)
+
+    assert caster.life == 22
+
+
+def test_w2g4_renounce_with_an_empty_board_gains_nothing(set_pool):
+    """"Any number" includes none, and none is a legal answer.
+
+    Zero is what the record holds and zero is what the rate multiplies — not
+    the printed 2, which is what a gain reading the number instead of the count
+    would pay out for sacrificing nothing at all.
+    """
+    game, caster, _other = _w2g4_duel(set_pool, ["Renounce"])
+    caster.life = 20
+
+    game.cast_from_hand(0, "Renounce")
+    _i4_resolve(game)
+
+    assert caster.life == 20

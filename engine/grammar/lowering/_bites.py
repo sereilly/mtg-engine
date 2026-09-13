@@ -146,6 +146,55 @@ def lower_bite(
         _describe_targets(payload, node.source)
         payload["filter"] = _filter_payload(node.source.filter)
         return (OracleInstruction("target_bites_itself", "", payload),)
+    # "**Each** creature deals damage to itself equal to its power." (Wave of
+    # Reckoning.) The branch above with the quantifier changed, and its own kind
+    # for the same reason that one is not ``target_bites_target``: what differs
+    # is *how many creatures bite*, and the targeted kind builds a cast-time
+    # picker this sentence announces nothing for.
+    #
+    # It is **not** the sweep further down either, which is the opposite
+    # sentence: there one source bites a described set, here every member of the
+    # set bites itself. Routed through that kind the whole board would take the
+    # spell's own source's power — zero for a sorcery — which is the silent
+    # direction.
+    #
+    # "Itself" is each *iteration's* creature, not the ability's source: a
+    # sorcery has no permanent, so the reflexive can only mean the creature the
+    # sweep is on. That is what makes the dealer the permanent (CR 120.7) rather
+    # than the printed card, which the handler is held to.
+    if (
+        isinstance(node.amount, ast.ThatMuch)
+        and node.amount.source == "its_power"
+        and not node.amount.bonus
+        and node.source is not None
+        and isinstance(node.source, ast.TargetSpec)
+        and not node.source.targeted
+        and node.source.quantifier in ("all", "each")
+        and len(node.recipients) == 1
+        and _is_source(node.recipients[0])
+        and node.riders == ast.DamageRiders()
+        and node.per_each is None
+    ):
+        if node.source.filter.card_types != ("creature",):
+            # CR 120.3: damage is dealt only to a battle, a creature or a
+            # planeswalker, and only a creature has the power this sentence
+            # reads. A sweep written over any other noun would mark damage
+            # nothing could read, off a number nothing has.
+            raise LoweringError(
+                "only a creature sweep bites itself for its own power",
+                node=node,
+            )
+        described = testable_filter_payload(
+            node.source.filter,
+            refusal="the bite sweep cannot test this restriction",
+            node=node,
+            require_narrowing=False,
+        )
+        return (
+            OracleInstruction(
+                "each_matching_bites_itself", "", {"filter": described},
+            ),
+        )
     # "This creature deals damage equal to its power to target **player** or
     # planeswalker." (Leafkin Avenger.) The recipient is not an object, so the
     # bites handler below — which resolves a permanent — cannot carry it. The

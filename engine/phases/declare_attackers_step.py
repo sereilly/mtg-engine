@@ -586,6 +586,32 @@ class DeclareAttackersStepMixin:
                     observer=attacked_seat, source=permanent,
                 )
             ]
+        # "This turn, creatures can't attack unless their controller pays {X}
+        # for each attacking creature they control." (War Tax.) A fourth
+        # channel, and the only one that is not read off a permanent at all: the
+        # sentence was the effect of a resolving ability, so the toll is a
+        # turn-scoped record on the game and the ability that armed it may be
+        # long gone. Filed in ``attack_restrictions_until_eot`` beside the
+        # blanket prohibitions, which is where CR 508.1c puts it — a restriction
+        # whose condition is a payment — and skipped by the gate that reads that
+        # list as bans.
+        #
+        # Once per attacker, exactly as Koskun Falls' tail above: the printed
+        # "for each attacking creature they control" is what the declaration's
+        # sum already is, because every attacker is one attacking creature and
+        # ``_declaration_mana_plan`` adds them up. A multiplier here would
+        # charge the square of what the card asks.
+        #
+        # The noun phrase is asked with **no** observer, unlike the three
+        # channels above: there is no permanent whose "you" the phrase could
+        # mean (CR 109.5), and War Tax's unnarrowed "creatures" reduces to every
+        # attacker either way.
+        sources += [
+            entry
+            for entry in self.attack_restrictions_until_eot
+            if entry.get("toll")
+            and subject_matches(self, attacker, dict(entry.get("filter") or {}))
+        ]
         for payload in sources:
             cost = {
                 symbol: int(amount)
@@ -1074,6 +1100,16 @@ class DeclareAttackersStepMixin:
             # carries a `turn_state` window stamp and is inert on every other
             # turn. Asked before the noun phrase, which is what makes an entry
             # waiting for a later turn cost nothing on this one.
+            # A toll is not a ban. "Creatures can't attack **unless their
+            # controller pays {X}**" (War Tax) is CR 508.1c's second half — a
+            # restriction with a condition that can be met — so its entry is
+            # filed here beside the blanket ones and answered as a *cost*, by
+            # ``_attack_mana_costs_of`` and the gate above that already asked
+            # whether this seat can cover it. Read as a prohibition it would
+            # ground every creature the noun phrase names, which on War Tax is
+            # the board.
+            if entry.get("toll"):
+                continue
             window = entry.get("on_seat_turn")
             if window is not None and not stamped_turn_is_now(self, window):
                 continue

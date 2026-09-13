@@ -325,6 +325,80 @@ class PhaseStepsMixin:
         key = step_name if seat is None else (self.seat_index(seat), step_name)
         self.skip_step_counts[key] = self.skip_step_counts.get(key, 0) + max(0, count)
 
+    def skip_next_phase(
+        self, phase_name: str, count: int = 1, *, seat=None, on_turn: int | None = None
+    ) -> None:
+        """CR 500.11 / CR 614.10: skip the next *phase_name*, once per *count*.
+
+        The phase twin of :meth:`skip_next_step`, and it needs the same seat for
+        the same reason: a phase belongs to a turn and a turn belongs to a
+        player, so a record keyed on the phase's name alone is spent by
+        whichever player's phase comes round first.
+
+        *on_turn* is the second half, and no step skip in the pool has needed
+        it: "Target player skips their next combat phase **this turn**"
+        (Moment of Silence) is bounded by the turn it resolved on, so a target
+        whose combat phase does not come round before cleanup loses nothing.
+        Without the stamp the record survives to that player's *next* turn and
+        eats a combat phase the card never named — silent, and a strictly larger
+        effect than is printed.
+
+        A skip with neither is the bare phase name the field was born with:
+        everybody's next such phase, unbounded.
+        """
+        key = (
+            phase_name if seat is None and on_turn is None
+            else (None if seat is None else self.seat_index(seat), phase_name, on_turn)
+        )
+        self.skip_phase_counts[key] = self.skip_phase_counts.get(key, 0) + max(0, count)
+
+    def _consume_phase_skip(self, phase: str, seat) -> bool:
+        """Whether *seat*'s *phase* is skipped, spending one record if so.
+
+        Most specific key first, exactly as :meth:`_consume_step_skip` orders
+        its two: a skip aimed at this player *and* stamped for this turn is
+        narrower than one aimed at the player, which is narrower than one aimed
+        at everybody — and spending a wider record leaves the narrower one to
+        eat a phase nobody named. The one consumer of the bucket asks through
+        here, so "whose phase is skipped" has one answer.
+        """
+        seat_index = None if seat is None else self.seat_index(seat)
+        for key in (
+            (seat_index, phase, self.turn),
+            (seat_index, phase, None),
+            (None, phase, self.turn),
+            (None, phase, None),
+            phase,
+        ):
+            if self._consume_skip(self.skip_phase_counts, key):
+                return True
+        return False
+
+    def expire_stamped_phase_skips(self) -> None:
+        """Drop every turn-stamped phase skip that is not this turn's.
+
+        CR 500.11 says nothing about how long a skip waits; the *card* does, and
+        "this turn" is a window that closes at cleanup (CR 514.2). A stamped
+        record is already inert on a later turn — :meth:`_consume_phase_skip`
+        asks for the current turn's stamp and never finds an older one — so this
+        is the sweep for what nobody came back for rather than the enforcement.
+
+        **The turn that is ending goes too, and that is the whole of the bug
+        this line had.** Written as "drop every stamp that is not this turn's"
+        it fired on nothing: cleanup runs *inside* the turn it ends, so the only
+        stamps present are the current one's, and the dict grew a row per
+        Moment of Silence for the length of the game. The comparison is
+        ``<=`` because a window that closes at this cleanup is closed.
+        """
+        self.skip_phase_counts = {
+            key: count for key, count in self.skip_phase_counts.items()
+            if not (
+                isinstance(key, tuple)
+                and isinstance(key[2], int)
+                and key[2] <= self.turn
+            )
+        }
+
     def _consume_step_skip(self, step: str, seat) -> bool:
         """Whether *seat*'s *step* is skipped, spending one record if so.
 
@@ -377,15 +451,19 @@ class PhaseStepsMixin:
     def next_unskipped_phase_after(self, phase: str) -> str | None:
         """:meth:`_next_phase_after`, with CR 500.11's phase skips spent.
 
-        Nothing in the pool writes ``skip_phase_counts`` yet - the engine's
-        skips are per *step* (Ivory Gargoyle) and per *turn* (Chronatog). This
-        is the consumer, and it sits on the live path, so the card that prints
-        "skip your next combat phase" needs only the producer. That is the
-        opposite of what the extra-phase machinery here used to be: a recorder
-        with no consumer, which reads as a feature and is not one.
+        The producer arrived with Moment of Silence ("Target player skips their
+        next combat phase this turn"), which is the card this docstring named
+        while it was still hypothetical. It needed two things this consumer did
+        not have: a **seat**, because a phase belongs to a turn and a turn to a
+        player, and a **turn stamp**, because the card bounds the window — both
+        answered by :meth:`_consume_phase_skip`, which is now the one reader of
+        the bucket and still finds the bare phase-name key the field was born
+        with.
         """
         candidate = self._next_phase_after(phase)
-        while candidate is not None and self._consume_skip(self.skip_phase_counts, candidate):
+        while candidate is not None and self._consume_phase_skip(
+            candidate, self.active_player_index
+        ):
             remaining = self._remaining_turn_phases()
             if remaining and remaining[0] == candidate:
                 # CR 500.11: proceed past it as though it did not exist.

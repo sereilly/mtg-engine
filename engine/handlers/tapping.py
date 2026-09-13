@@ -890,13 +890,23 @@ def skip_next_untap(game: Game, instruction: OracleInstruction, context: OracleE
     else:
         recorded = context.results.get(key) or ()
     # CR 701.43a's seat, read once for the whole batch: the ability's own
-    # controller, which is who "your" names (CR 109.5).
-    seat = (
-        game.players.index(context.caster)
-        if instruction.payload.get("whose_untap_step") == "controller"
-        and context.caster in game.players
-        else None
-    )
+    # controller, which is who "your" names (CR 109.5) — or, where the card
+    # printed "**that player's** next untap step" (Misstep), the seat its own
+    # subject targeted (CR 115.4). Two words naming two seats, so the payload
+    # says which rather than the handler assuming; an absent key is still the
+    # unseated per-creature marker and every payload written before this word
+    # existed reads exactly as it did.
+    whose_step = instruction.payload.get("whose_untap_step")
+    if whose_step == "controller" and context.caster in game.players:
+        seat = game.players.index(context.caster)
+    elif (
+        whose_step == "target_player"
+        and context.target is not None
+        and context.target in game.players
+    ):
+        seat = game.players.index(context.target)
+    else:
+        seat = None
     # "…next **two** untap steps" (Telekinesis). The marker is a count of steps
     # rather than a flag, because how many of the same turn-based action the
     # restriction survives is the only thing that differs between the two
