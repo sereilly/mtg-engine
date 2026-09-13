@@ -25,15 +25,11 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**6 unclaimed sentence(s) across 5 supported card(s).**
+**4 unclaimed sentence(s) across 3 supported card(s).**
 
-- **Barbed Wire**
-  - `{2}: prevent the next 1 damage that would be dealt by this artifact this turn`
 - **Conspiracy**
   - `creatures you control are the chosen type`
   - `the same is true for creature spells you control and creature cards you own that aren't on the battlefield`
-- **Jeweled Torque**
-  - `whenever a player casts a spell of the chosen color, you may pay {2}. if you do, you gain 2 life`
 - **Kyren Toy**
   - `{t}, remove x charge counters from this artifact: add an amount of {c} equal to x plus one`
 - **Mercadian Lift**

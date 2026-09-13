@@ -41,7 +41,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 6ED | 335 | 404 | 95.5% | 95.5% | 65.8% | 243 |
 | UDS | 143 | 204 | 91.7% | 91.2% | 65.7% | 121 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| MMQ *(measured)* | 335 | 465 | 85.8% | 84.9% | 60.6% | 256 |
+| MMQ *(measured)* | 335 | 465 | 86.9% | 86.2% | 61.9% | 261 |
 | **All (shipped)** | **5829** | **8560** | **90.6%** | **90.0%** | **60.7%** | **4401** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -54,7 +54,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 464 | 203 | expected a subject |  |
+| 460 | 199 | expected a subject |  |
 | 142 | 72 | unrecognized effect verb |  |
 | 113 | 57 | unconsumed text |  |
 | 42 | 25 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -582,8 +582,11 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `All Sliver creatures have "{2}: This creature gets +1/+0 until end of turn."`
 - **Barbed Wire**
   - `At the beginning of each player's upkeep, this artifact deals 1 damage to that player.`
+  - `{2}: Prevent the next 1 damage that would be dealt by this artifact this turn.`
 - **Barbed-Back Wurm**
   - `{B}: Target green creature blocking this creature gets -1/-1 until end of turn.`
+- **Bargaining Table**
+  - `{X}, {T}: Draw a card. X is the number of cards in an opponent's hand.`
 - **Barishi**
   - `When this creature dies, exile it, then shuffle all creature cards from your graveyard into your library.`
 - **Barl's Cage**
@@ -1539,6 +1542,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When enchanted creature dies, this Aura deals damage equal to that creature's toughness to the creature's controller.`
   - `When enchanted creature dies, this Aura deals damage equal to that creature's toughness to the creature's controller.`
   - `When enchanted creature dies, this Aura deals damage equal to that creature's toughness to the creature's controller.`
+- **Credit Voucher**
+  - `{2}, {T}, Sacrifice this artifact: Shuffle any number of cards from your hand into your library, then draw that many cards.`
 - **Creeping Mold**
   - `Destroy target artifact, enchantment, or land.`
   - `Destroy target artifact, enchantment, or land.`
@@ -1950,6 +1955,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Counter target spell unless its controller pays {1}.`
 - **Dissipate**
   - `Counter target spell. If that spell is countered this way, exile it instead of putting it into its owner's graveyard.`
+- **Distorting Lens**
+  - `{T}: Target permanent becomes the color of your choice until end of turn.`
 - **Disturbed Burial**
   - `Return target creature card from your graveyard to your hand.`
 - **Divine Intervention**
@@ -3912,6 +3919,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Jeweled Amulet**
   - `{1}, {T}: Put a charge counter on this artifact. Note the type of mana spent to pay this activation cost. Activate only if there are no charge counters on this artifact.`
   - `{T}, Remove a charge counter from this artifact: Add one mana of this artifact's last noted type.`
+- **Jeweled Torque**
+  - `Whenever a player casts a spell of the chosen color, you may pay {2}. If you do, you gain 2 life.`
 - **Jhoira's Toolbox**
   - `{2}: Regenerate target artifact creature.`
 - **Jihad**
@@ -6204,6 +6213,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this creature enters, each opponent sacrifices a permanent of their choice unless they pay {1}.`
 - **Rishadan Footpad**
   - `When this creature enters, each opponent sacrifices a permanent of their choice unless they pay {2}.`
+- **Rishadan Pawnshop**
+  - `{2}, {T}: Shuffle target nontoken permanent you control into its owner's library.`
 - **Rishadan Port**
   - `{T}: Add {C}.`
   - `{1}, {T}: Tap target land.`
