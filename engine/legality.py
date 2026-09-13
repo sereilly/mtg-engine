@@ -829,7 +829,8 @@ class LegalityMixin:
         # CR 107.3a's *other three* places an X can live. The browser asked only
         # the mana-cost string, so Fire Covenant ({1}{B}{R}, "pay X life") and
         # Infernal Harvest ({1}{B}, "return X Swamps") were offered no X box at
-        # all and cast at CR 107.3b's 0 -- legal and useless. Reported as a flag
+        # all and cast at the 0 an unmade CR 107.3a announcement reads as here
+        # -- legal and useless. Reported as a flag
         # rather than left to a substring probe for the reason `defined_x` is:
         # what a card's costs say is the compiler's answer, not the client's.
         # CR 601.2b's other announcement: a printed additional cost that makes

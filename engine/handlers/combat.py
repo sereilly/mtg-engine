@@ -1680,8 +1680,10 @@ def _arm_declaration_toll(game, instruction, context, kind: str):
     instead. Cleanup already sweeps the list, so the window needs nothing new.
 
     **The cost is resolved here and stored concrete.** The ability announced X
-    as it was activated (CR 601.2b) and that number is fixed for the life of the
-    effect (CR 107.3b); the declaration readers charge ``int()`` off the entry
+    as it was activated (CR 601.2b, reached through CR 602.2b) and that number
+    is fixed while the ability is on the stack (CR 107.3a) and so, once it has
+    resolved, for the life of the effect; the declaration readers charge
+    ``int()`` off the entry
     and would raise on a string, and a toll re-resolved at the declaration would
     read whichever X the *next* activation announced. A toll announced at X=0 is
     filed all the same and costs nothing, which is what the card says.
@@ -1695,7 +1697,8 @@ def _arm_declaration_toll(game, instruction, context, kind: str):
         "filter": dict(instruction.payload.get("subject") or {}),
         # **The flag, not the cost, is what says this is a toll.** An entry
         # announced at X=0 owes {0}, which is a real and legal answer
-        # (CR 107.3b) — and a gate that told a toll from a ban by "does it carry
+        # (CR 107.3a: the choice is the activator's, and 0 is one of them) —
+        # and a gate that told a toll from a ban by "does it carry
         # a price" would read that entry as a prohibition and ground every
         # creature the noun phrase names. The two readers key on this instead.
         "toll": True,

@@ -391,7 +391,10 @@ def test_601_2h_an_x_life_cost_is_charged_the_announced_x():
 
     assert cost is not None and cost.pay_life_x
     assert cost.life_charged(4) == 4
-    assert cost.life_charged(None) == 0, "an unannounced X is CR 107.3b's zero"
+    assert cost.life_charged(None) == 0, (
+        "an X CR 107.3a left with the caster and the caster never announced "
+        "is read as zero"
+    )
     assert cost.describe() == "pay X life"
 
 
@@ -632,7 +635,8 @@ def test_107_3a_an_x_is_announced_for_a_cost_outside_the_mana_cost():
     first one alone — as a substring probe of the printed mana-cost string.
     Fire Covenant's is ``{1}{B}{R}`` and Infernal Harvest's is ``{1}{B}``: both
     spell their X only in an additional cost, so both were offered no X and cast
-    at CR 107.3b's default of 0, which is legal and does nothing at all.
+    at the 0 an unmade CR 107.3a announcement reads as, which is legal and
+    does nothing at all.
     """
     from engine.cast_costs import cast_announces_x
 

@@ -1427,7 +1427,8 @@ def test_a_variable_mana_value_sweep_carries_the_bound_for_the_dispatcher():
     payload = result.instructions[0].payload
     assert payload["mana_value"] == {"op": "le", "value": "x"}
     assert substitute_x_bounds(payload, 3)["mana_value"] == {"op": "le", "value": 3}
-    # CR 107.3b: an unspecified X is zero, which is what every other amount
+    # CR 107.3a leaves X with the caster, and unannounced it is read as zero
+    # here, which is what every other amount
     # reader takes it as.
     assert substitute_x_bounds(payload, None)["mana_value"] == {"op": "le", "value": 0}
     # A payload with no bound comes back as the same object, so the scan costs

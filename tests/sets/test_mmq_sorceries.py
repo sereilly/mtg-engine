@@ -441,7 +441,7 @@ def test_w2g4_tectonic_break_sacrifices_x_lands_from_each_player(set_pool):
 
 
 def test_w2g4_tectonic_break_at_x_zero_takes_nothing(set_pool):
-    """An announced X of 0 is a real answer (CR 107.3b) and costs both seats
+    """An announced X of 0 is a real answer (CR 107.3a) and costs both seats
     nothing — the assertion that the count is resolved rather than defaulted to
     the one every other printed sacrifice carries."""
     game, _caster, _other = _w2g4_table(

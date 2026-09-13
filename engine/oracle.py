@@ -6774,7 +6774,8 @@ def _derived_static_claims(
     ):
         claims.append("cast_x_definitions")
     # "X can't be 0." (Ertai's Meddling, CR 601.2b.) The floor half, and the
-    # only bound that forbids CR 107.3b's default of 0 — so a card printing it
+    # only bound that forbids the default of 0 an unmade CR 107.3a
+    # announcement reads as here — so a card printing it
     # with nothing reading it is castable for nothing at all.
     if any(
         cast_x_floor_line(line) is not None

@@ -339,9 +339,9 @@ def cast_x_ceiling(game, caster_index: int, oracle_text: str) -> "tuple[int, str
 # The fourth question and the ceiling's mirror. "X can't be 0." (Ertai's
 # Meddling) leaves CR 601.2b's announcement with the caster exactly as
 # ``cast_x_ceiling`` does and bounds it from below instead of above — and
-# CR 107.3b makes the difference load-bearing rather than cosmetic: a spell cast
-# without announcing X has an X of 0, so a floor is the one bound that forbids
-# the *default*. Unenforced, the card is castable for nothing and does nothing,
+# CR 107.3a makes the difference load-bearing rather than cosmetic: the
+# announcement is the caster's, and a spell cast without making it has an X of
+# 0 here, so a floor is the one bound that forbids the *default*. Unenforced, the card is castable for nothing and does nothing,
 # which is the direction an unenforced restriction always fails in.
 #
 # **The sentence has one reader and it is not here.**

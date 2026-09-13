@@ -1880,13 +1880,14 @@ def test_601_2c_a_type_exclusion_reaches_the_announcement_gate(set_pool):
 
 # --- W3G5: the printed *floor* on the announced X ---
 
-@pytest.mark.cr("601.2b", "107.3b")
+@pytest.mark.cr("601.2b", "107.3a")
 def test_601_2b_an_announced_x_may_not_fall_below_a_floor_the_card_prints():
     """"X can't be 0." (Ertai's Meddling.)
 
     The mirror of the ceiling above, and the only bound that forbids a
-    *default*: CR 107.3b makes an unannounced X zero, so a floor nothing reads
-    leaves the spell castable for nothing at all — the shape of an unenforced
+    *default*: CR 107.3a leaves X with the caster and an unannounced one is
+    read as zero here, so a floor nothing reads leaves the spell castable for
+    nothing at all — the shape of an unenforced
     restriction, wrong in the caster's favour and silent.
 
     The sentence has one reader,
@@ -1921,9 +1922,10 @@ def test_601_2b_an_announced_x_may_not_fall_below_a_floor_the_card_prints():
     assert len(p1.hand) == 3, "one card drawn, the spell gone"
 
 
-@pytest.mark.cr("601.2b", "107.3b")
+@pytest.mark.cr("601.2b", "107.3a")
 def test_601_2b_a_floor_catches_the_caster_who_announced_nothing():
-    """CR 107.3b's default is the value the sentence forbids, so a cast that
+    """An unmade CR 107.3a announcement reads as the value the sentence
+    forbids, so a cast that
     names no X at all must be refused too. The assertion above passes on a gate
     that only reads an explicit 0."""
     floored = _mk_card(

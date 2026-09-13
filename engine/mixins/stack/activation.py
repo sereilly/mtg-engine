@@ -2663,12 +2663,37 @@ class AbilityActivationMixin:
                 )
 
 
-        mana_like_kinds = {
-            "add_mana_from_text",
-            "sacrifice_self_for_mana",
-            "sacrifice_creature_for_mana",
-        }
-        if instruction.kind in mana_like_kinds:
+        # **CR 605.3b: an activated mana ability does not use the stack.** Which
+        # abilities those are is CR 605.1a, and CR 605.1a is a question about
+        # what the whole ability *does* — so it is asked of
+        # ``mana_payment.is_mana_ability``, the one reader the five CR 602.5
+        # gates at the top of this method already ask.
+        #
+        # It used to be a three-name set of instruction **kinds**
+        # (``add_mana_from_text``, ``sacrifice_self_for_mana``,
+        # ``sacrifice_creature_for_mana``), which is the same question answered
+        # off the *first* step instead of the effect. Every "Add mana. ⟨rider⟩"
+        # lowers to a ``sequence`` and every "…add {C}{C} instead" to an
+        # ``if_then``, so **43 abilities in the pool** that CR 605.1a admits
+        # went on the stack: the five Ice Age and five Tempest painlands, the
+        # five Mercadian Masques depletion lands, the five Ice Age depletion
+        # lands, the five Mana Batteries, the Urza tri-land cycle, Gemstone
+        # Mine, Ancient Tomb, Elves of Deep Shadow and the rest.
+        #
+        # Three consequences, none of them a crash. The mana did not arrive
+        # until the ability resolved, so it could not be produced during a cost
+        # payment (CR 605.3a) — a seat mid-cast simply had no way to reach it.
+        # The ability could be responded to and **countered** (CR 605.3b):
+        # Imprison's "activates an ability … that isn't a mana ability" fired on
+        # Elves of Deep Shadow and Metalworker, because the ``emit`` at the
+        # bottom of this method derives that clause from *the site* on the
+        # strength of the comment there — which was true of the kind set's three
+        # kinds and false of the rule. And CR 605.3c's "can't be activated again
+        # until it has resolved" had a window it should not have.
+        #
+        # The reverse direction was measured too, and is empty: nothing the kind
+        # set admitted is outside CR 605.1a. This is a widening, not a swap.
+        if is_mana_ability(ability):
             # A second `card.name == "Basalt Monolith"` branch stood here,
             # refusing add_mana_from_text while the permanent was untapped. It
             # was unreachable: the {T} cost above has already run
@@ -2715,6 +2740,21 @@ class AbilityActivationMixin:
                                 if discard_cost_card is not None else []
                             )
                         ),
+                        # **The colour the activator chose**, on the key every
+                        # mana handler's choice branch already falls back to.
+                        # The payload injection a hundred lines up delivers it
+                        # by rewriting ``instruction.payload["color"]`` and is
+                        # keyed on the **outer** kind — which was right while
+                        # only three kinds came down here and blind the moment a
+                        # ``sequence`` did, because a painland's ``pips_choice``
+                        # sits on the nested ``add_mana_from_text``. Without
+                        # this key an Adarkar Wastes asked for {U} would have
+                        # produced the first printed alternative whatever the
+                        # seat said. The queued path below has carried it as
+                        # ``new_color`` since the Lace cycle; this is the same
+                        # channel, so a handler still need not know which path
+                        # resolved it.
+                        "new_color": self._chosen_mana_color(mana_color),
                     },
                 ),
             )
@@ -2853,7 +2893,7 @@ class AbilityActivationMixin:
                     # not an address, and the battlefield renumbers the moment
                     # anything leaves it.
                     DIVIDED_TARGETS: divided_targets,
-                    "new_color": self._normalize_mana_color(mana_color),
+                    "new_color": self._chosen_mana_color(mana_color),
                     # The word a text change replaces, beside the one it
                     # replaces it with. See the parameter's note above.
                     "old_color": self._normalize_mana_color(old_color),
@@ -2873,8 +2913,15 @@ class AbilityActivationMixin:
         #
         # Everything reaching this line is an ability that uses the stack —
         # this engine resolves its mana abilities inline above, which is
-        # CR 605.3a — so the printed "that isn't a mana ability" is satisfied
+        # CR 605.3b — so the printed "that isn't a mana ability" is satisfied
         # by the site rather than by a second reading of the ability.
+        #
+        # **That sentence is load-bearing and it was false for a year.** The
+        # inline branch above keyed on three instruction kinds where the rule
+        # asks CR 605.1a, so 43 mana abilities reached this line and Imprison
+        # fired on the ones with {T} in their cost. Deriving the clause from the
+        # site is still right — it is exactly one reading of the rule rather
+        # than two — but only because the site now asks the rule.
         emit(
             self, "nonmana_ability_activated",
             subject=permanent, seat=controller_index,
@@ -2882,6 +2929,30 @@ class AbilityActivationMixin:
             activated_ability_item=self.stack[-1] if self.stack else None,
         )
         return SimulationResult(permanent.card.name, True, ability.effect_kind, "queued")
+    def _chosen_mana_color(self, mana_color: str | None) -> str | None:
+        """The colour an activation announced, or None where it named none.
+
+        ``_normalize_mana_color`` **raises** on anything outside WUBRG, which is
+        right for every other caller: a text change that must replace a colour
+        word has no honest answer but an error. This channel is different, and
+        the difference is one symbol. ``ActionRequest.mana_color`` is a
+        ``Literal[..., "C"]`` because the same wire field carries a *symbol* for
+        the land-tap action (``chosen_color``) and a *colour* for the choice
+        channel here — and CR 105.1 is explicit that colourless is not a colour,
+        so ``"C"`` can never be an answer to "choose a color".
+
+        Sent for an ability that offers no choice at all — clicking an Urza's
+        Mine, a Sol Ring, any ``{T}: Add {C}`` — it reached the unconditional
+        ``new_color`` normalisation below and raised ``ValueError`` out of the
+        route, which the web layer turns into a 500. Read here as "no colour
+        named", which is what it means.
+        """
+        if mana_color is None:
+            return None
+        if mana_color.strip().upper() not in {"W", "U", "B", "R", "G"}:
+            return None
+        return self._normalize_mana_color(mana_color)
+
     def _pay_exile_cost(
         self, cost, controller, controller_index: int, permanent,
         cost_permanent_index,

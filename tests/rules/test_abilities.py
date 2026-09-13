@@ -1630,3 +1630,278 @@ def test_113_6g_the_uncounterable_spell_is_still_a_legal_target():
     assert [c.name for c in p2.graveyard] == ["Counterspell"], (
         "the counter resolved and was spent"
     )
+
+
+# ---------------------------------------------------------------------------
+# W3G5 — CR 605.3b over the whole pool: which abilities skip the stack
+# ---------------------------------------------------------------------------
+#
+# ``test_605_3b_mana_ability_does_not_use_the_stack`` above asks the question of
+# one Llanowar Elves, whose ability lowers to a bare ``add_mana_from_text``.
+# That is exactly the shape the seam's old three-name kind set admitted, so it
+# passed on an engine where 43 other abilities in the pool used the stack. The
+# census below is the same question asked of every ability the rule admits, with
+# a floor on how many it examined — the shape
+# ``tests/engine/test_land_mana_tap_costs.py`` uses one seam over, and for its
+# reason: asked of a predicate that had drifted, a sweep with no population
+# finds no counter-example and passes on the broken engine.
+
+import dataclasses as _w3g5_dataclasses
+
+from engine.card_loader import manifest_set_paths as _w3g5_manifest_set_paths
+from engine.mana_payment import _every_nested_step as _w3g5_nested_steps
+from engine.named_counters import add_counters as _w3g5_add_counters
+
+
+def _w3g5_pool():
+    return load_cards(_w3g5_manifest_set_paths(include_measured=True))
+
+
+#: Cost fields the harness below can satisfy on a bare board: the tap, and
+#: counters it puts on the permanent itself. Everything else — a mana price, a
+#: sacrifice, a discard, an exile — needs a board this sweep does not build, and
+#: an ability whose cost cannot be paid never reaches the seam under test.
+_W3G5_PAYABLE_COST_FIELDS = frozenset({
+    "requires_tap", "remove_counter", "remove_counter_count",
+    "remove_counter_filter", "sacrifice_count", "exile_count",
+    "exile_zone", "exile_zone_owner", "mana",
+})
+
+
+def _w3g5_payable_from_a_bare_board(cost) -> bool:
+    for field in _w3g5_dataclasses.fields(cost):
+        if field.name in _W3G5_PAYABLE_COST_FIELDS:
+            continue
+        if getattr(cost, field.name) not in (None, False, 0, (), []):
+            return False
+    if any(int(amount) for amount in (cost.mana or {}).values()):
+        return False
+    return bool(cost.requires_tap)
+
+
+def _w3g5_stack_payable_mana_abilities(cards):
+    """Every ability CR 605.1a admits whose cost this harness can pay."""
+    found = []
+    for card in cards:
+        for index, ability in enumerate(compile_card_oracle(card).activated_abilities):
+            if ability.instruction is None or not ability.supported:
+                continue
+            if not is_mana_ability(ability):
+                continue
+            if not _w3g5_payable_from_a_bare_board(ability.cost):
+                continue
+            found.append((card, index, ability))
+    return found
+
+
+def _w3g5_activate(card, index, ability):
+    """Put *card* on a bare board and activate its *index*'th ability.
+
+    Interactive seats on both sides, because that is what stops
+    ``activate_permanent_ability``'s own ``_settle()`` from resolving a queued
+    ability and reporting "resolved" either way — the harness would then read a
+    stack use as a non-use, which is the one thing this test must not do. The
+    wire calls ``queue_permanent_ability`` for the same reason.
+    """
+    game = Game(players=[PlayerState(name="P0"), PlayerState(name="P1")])
+    game.interactive_seats = {0, 1}
+    permanent = Permanent(card=card)
+    game._put_permanent_onto_battlefield(0, permanent, None)
+    if game.permanent_by_id(permanent.permanent_id) is None:
+        # "…sacrifice it unless you pay {1}" on entry (Balduvian Trading Post):
+        # the permanent is already gone and has no ability to activate.
+        return None, None, None
+    permanent.tapped = False
+    permanent.metadata.pop("summoning_sickness_turn", None)
+    game.stack.clear()
+    game.pending_choices.clear()
+    if ability.cost.remove_counter:
+        _w3g5_add_counters(permanent, ability.cost.remove_counter, 3)
+    result = game.queue_permanent_ability(
+        0, card.name, permanent_index=0, ability_index=index, mana_color=None,
+    )
+    return game, permanent, result
+
+
+@pytest.mark.cr("605.3b", "605.1a")
+def test_605_3b_no_ability_cr_605_1a_admits_ever_reaches_the_stack():
+    """Every mana ability in the pool, driven, and a floor on how many.
+
+    605.3b is unconditional: an activated mana ability doesn't go on the stack,
+    it resolves immediately after it is activated. The seam that decides used to
+    key on the instruction **kind** — three names, all of them the shape a
+    one-sentence "Add {G}" lowers to — where 605.1a asks what the whole ability
+    *does*. So every "Add mana. ⟨rider⟩" (a ``sequence``) and every "…add {C}{C}
+    instead" (an ``if_then``) queued: the painlands, the depletion lands, the
+    Mana Batteries, the Urza tri-lands, Gemstone Mine, Ancient Tomb.
+
+    A stack item this test finds is the ability itself, never a trigger the
+    activation legitimately fired: City of Brass's "whenever this land becomes
+    tapped, it deals 1 damage to you" is not a mana ability under 605.1b — it
+    triggers from a tap rather than from a mana ability or from mana being added
+    — so 603.3 puts it on the stack and it must stay there.
+    """
+    abilities = _w3g5_stack_payable_mana_abilities(_w3g5_pool())
+    assert len(abilities) >= 150, (
+        "the sweep found almost nothing to examine, which is how a census "
+        "passes on a broken engine"
+    )
+
+    queued = []
+    examined = 0
+    for card, index, ability in abilities:
+        game, _permanent, result = _w3g5_activate(card, index, ability)
+        if game is None or not result.supported:
+            continue
+        examined += 1
+        on_stack = [
+            item for item in game.stack
+            if item.ability_instruction is ability.instruction
+        ]
+        if result.details == "queued" or on_stack:
+            queued.append((card.name, index, ability.source_line))
+
+    assert examined >= 150, "too few activations actually ran to prove anything"
+    assert queued == []
+
+
+@pytest.mark.cr("605.5a", "605.1a")
+def test_605_5a_an_ability_that_targets_still_uses_the_stack():
+    """The control, and the direction the widening must not go.
+
+    "{T}: Add {B}{B}{B}{B}. Target opponent gains control of this creature."
+    (Witch Engine.) It could add mana and it is not a loyalty ability, but it
+    targets, so 605.5a says it is not a mana ability and follows the normal
+    rules — it uses the stack and can be responded to.
+
+    It is here because the engine nearly got it wrong twice over. The compiled
+    payload spells the target as ``{"who": "target_opponent"}`` rather than on
+    the ``targets`` key ``is_mana_ability`` used to be the only reader of, so the
+    predicate answered True; had the seam above been widened to that predicate
+    without this clause, the pool's one famous non-mana-ability would have
+    stopped using the stack.
+    """
+    cards = {card.name: card for card in _w3g5_pool()}
+    engine_card = cards["Witch Engine"]
+    ability = compile_card_oracle(engine_card).activated_abilities[0]
+
+    assert is_mana_ability(ability) is False
+
+    game, _permanent, result = _w3g5_activate(engine_card, 0, ability)
+    assert result.details == "queued"
+    assert [item.card.name for item in game.stack] == ["Witch Engine"]
+
+
+@pytest.mark.cr("605.1a", "606.2")
+def test_605_1a_a_loyalty_ability_is_never_a_mana_ability():
+    """"−9: … Add six {R}." (Chandra, Heart of Fire.)
+
+    605.1a's third clause is "and it's not a loyalty ability", and 606.2 makes an
+    activated ability with a loyalty symbol in its cost one. ``is_mana_ability``
+    used to say in its own docstring that the clause needed no code because "a
+    loyalty ability never produces mana in this pool" — measurably false, and
+    the counter-example is shipped. Left alone it would have sent a planeswalker
+    ultimate that searches two zones, exiles, shuffles and grants a cast
+    permission down the no-stack path.
+    """
+    cards = {card.name: card for card in _w3g5_pool()}
+    chandra = cards["Chandra, Heart of Fire"]
+    ultimate = next(
+        ability for ability in compile_card_oracle(chandra).activated_abilities
+        if ability.cost.loyalty == -9
+    )
+
+    assert "add_mana_from_text" in {
+        step.kind for step in ultimate.instruction.payload["steps"]
+    }, "the ability really does add mana, which is what makes the clause bite"
+    assert is_mana_ability(ultimate) is False
+
+
+@pytest.mark.cr("605.3a", "605.3b")
+def test_605_3a_a_priced_mana_ability_produces_while_a_spell_is_on_the_stack():
+    """The player-visible half: the mana is there to spend the moment it is made.
+
+    605.3a lets a player activate a mana ability whenever they have priority or
+    are paying a cost, and 605.3b has it resolve at once. A depletion land that
+    queued produced nothing until its controller passed priority — so with a
+    spell already on the stack there was no way to reach the mana at all.
+    """
+    cards = {card.name: card for card in _w3g5_pool()}
+    game = Game(players=[PlayerState(name="P0"), PlayerState(name="P1")])
+    game.interactive_seats = {0, 1}
+    bog = Permanent(card=cards["Peat Bog"])
+    game._put_permanent_onto_battlefield(0, bog, None)
+    bog.tapped = False
+    _w3g5_add_counters(bog, "depletion", 2)
+
+    game.players[0].hand.append(cards["Shock"])
+    game.players[0].mana_pool["R"] = 1
+    game.queue_from_hand(0, "Shock", target_player_index=1)
+    assert len(game.stack) == 1, "the spell is on the stack and unresolved"
+
+    result = game.queue_permanent_ability(
+        0, "Peat Bog", permanent_index=0, ability_index=0,
+    )
+
+    assert result.details == "resolved"
+    assert len(game.stack) == 1, "only the spell — the mana ability added nothing"
+    assert game.players[0].mana_pool.get("B", 0) == 2
+
+
+@pytest.mark.cr("605.3b", "601.2b")
+def test_605_3b_the_no_stack_path_still_honours_the_colour_the_activator_named():
+    """The census's second dimension, and the one it was built without.
+
+    Whether an ability used the stack and what it produced are different
+    questions, and the first is blind to the second: an ability moved onto the
+    no-stack path resolves at once and can still put the wrong colour in the
+    pool. The seam delivers the activator's choice two ways — by rewriting
+    ``instruction.payload["color"]`` for a bare mana instruction, and on
+    ``choices["new_color"]`` for everything else — and the first is keyed on the
+    **outer** instruction kind, so a painland's ``pips_choice``, which sits on a
+    nested ``add_mana_from_text`` inside a ``sequence``, is invisible to it. Left
+    to that route alone, every "Add {W} or {U}" in the pool would have produced
+    the first printed alternative whatever the seat asked for, with the stack
+    census above entirely green.
+
+    Both alternatives of every such ability, because asking for only one is a
+    test that passes on a seam that ignores the question.
+    """
+    wrong = []
+    examined = 0
+    for card, index, ability in _w3g5_stack_payable_mana_abilities(_w3g5_pool()):
+        alternatives = ()
+        for step in (ability.instruction, *_w3g5_nested_steps(ability.instruction)):
+            alternatives = (step.payload or {}).get("pips_choice") or ()
+            if alternatives:
+                break
+        if len(alternatives) < 2:
+            continue
+        for symbol, count in alternatives:
+            game = Game(players=[PlayerState(name="P0"), PlayerState(name="P1")])
+            game.interactive_seats = {0, 1}
+            permanent = Permanent(card=card)
+            game._put_permanent_onto_battlefield(0, permanent, None)
+            if game.permanent_by_id(permanent.permanent_id) is None:
+                continue
+            permanent.tapped = False
+            permanent.metadata.pop("summoning_sickness_turn", None)
+            game.stack.clear()
+            if ability.cost.remove_counter:
+                _w3g5_add_counters(permanent, ability.cost.remove_counter, 3)
+            result = game.queue_permanent_ability(
+                0, card.name, permanent_index=0, ability_index=index,
+                mana_color=symbol,
+            )
+            if not result.supported:
+                continue
+            examined += 1
+            produced = game.players[0].mana_pool.get(symbol, 0)
+            if produced < int(count):
+                wrong.append((card.name, symbol, dict(game.players[0].mana_pool)))
+
+    assert examined >= 60, (
+        "the colour sweep examined almost nothing, which is how a census "
+        "passes on a broken engine"
+    )
+    assert wrong == []

@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**411 / 617 tracked rules covered (66%)** — 2482 tests, 0 unannotated.
+**411 / 617 tracked rules covered (66%)** — 2487 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -666,7 +666,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(251 tests, subrules abcdefghi)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(252 tests, subrules abcdefghi)*
 - [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(26 tests, subrules a)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [x] **601.5** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*
@@ -708,16 +708,16 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 605. Mana Abilities
 
-- [x] **605.1** Some activated abilities and some triggered abilities are mana abilities, which are subject to sp... *(10 tests, subrules ab)*
+- [x] **605.1** Some activated abilities and some triggered abilities are mana abilities, which are subject to sp... *(13 tests, subrules ab)*
 - [x] **605.2** A mana ability remains a mana ability even if the game state doesn’t allow it to produce mana. *(1 tests)*
-- [x] **605.3** Activating an activated mana ability follows the rules for activating any other activated ability... *(13 tests, subrules abc)*
+- [x] **605.3** Activating an activated mana ability follows the rules for activating any other activated ability... *(17 tests, subrules abc)*
 - [x] **605.4** Triggered mana abilities follow all the rules for other triggered abilities (see rule 603, “Handl... *(6 tests, subrules a)*
-- [x] **605.5** Abilities that don’t meet the criteria specified in rules 605.1a–b and spells aren’t mana abilities. *(3 tests, subrules ab)*
+- [x] **605.5** Abilities that don’t meet the criteria specified in rules 605.1a–b and spells aren’t mana abilities. *(4 tests, subrules ab)*
 
 ### 606. Loyalty Abilities
 
 - [x] **606.1** Some activated abilities are loyalty abilities, which are subject to special rules. *(1 tests)*
-- [x] **606.2** An activated ability with a loyalty symbol in its cost is a loyalty ability. Normally, only plane... *(3 tests)*
+- [x] **606.2** An activated ability with a loyalty symbol in its cost is a loyalty ability. Normally, only plane... *(4 tests)*
 - [x] **606.3** A player may activate a loyalty ability of a permanent they control any time they have priority a... *(7 tests)*
 - [x] **606.4** The cost to activate a loyalty ability of a permanent is to put on or remove from that permanent ... *(4 tests)*
 - [ ] **606.5** If the total cost to activate a loyalty ability contains multiple costs to add or remove loyalty ...

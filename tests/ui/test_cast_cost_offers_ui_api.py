@@ -6,8 +6,9 @@ Everything here was already true of the engine and untrue of the client.
 additional cost, and/or activation cost". ``web/static/app.js`` asked the first
 one, as a substring probe of the printed mana-cost string, so Fire Covenant
 ({1}{B}{R}, "pay X life") and Infernal Harvest ({1}{B}, "return X Swamps you
-control to their owner's hand") were offered no X box and cast at CR 107.3b's
-default of 0 — legal, and nothing, on two spells that are nothing but X. Fire
+control to their owner's hand") were offered no X box and cast at the 0 an
+unmade CR 107.3a announcement reads as — legal, and nothing, on two spells
+that are nothing but X. Fire
 Covenant is an **Ice Age** card, so that was live in the shipped pool.
 
 **CR 118.9 and CR 601.2b's optional half** had a wire (``alternative_cost``,
