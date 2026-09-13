@@ -1601,6 +1601,34 @@ counts** the way `test_control_reads.py` and this wave's `web/` guard do, so a
 *new* offence in an already-exempt file fails. A guard that exempts a file
 cannot ratchet, which is why this one went four sets without moving.
 
+**Part two drained 2026-09-13, at the Phase 0 before the next set; part one is
+now a ratchet instead of a round.** All four patterns in
+`tests/engine/test_layer_reads.py` — type/colour, the non-permanent colour,
+text/keywords, and `primary_type` at last — are **per-module counts** that may
+only go down, with a companion test that refuses a baseline sitting *above* the
+real count (which subsumes the three stale-exemption checks: an entry for a
+module with no such read left is slack of exactly its own size).
+
+The triage of the 64 is still a round and is still unclaimed — each site needs a
+judgement about whether it means the card or the permanent, and some cannot be
+fixed on this side alone (Balance's land/creature counts are the worked example,
+five engine sites and a rule for a permanent that is both). What changed is that
+there cannot be a **65th**, which is what four sets of one-site instalments were
+failing to buy.
+
+**Two corrections to this entry, both from measuring rather than reading it.**
+The population is **64**, not 70 — the difference is the instalments each
+promotion paid, `engine/ai_simulator.py`'s among them. And the file exemption was
+not merely unable to ratchet, it was **already covering live offences**:
+`mixins/helpers.py` sat on the list for "the Aura shape, plus a stack item's card
+colours" and holds two Licid-class `"Aura" in permanent.card.type_line` reads and
+**no colour read at all**. Half the stated reason had gone stale while the other
+half hid the offences, and `test_no_printed_read_exemption_has_gone_stale` passed
+throughout because it only ever asked whether *any* hit remained. Backwards-
+validated in all three directions before being believed: a new read in an
+already-exempt module fails, a 65th `primary_type` read fails, and a baseline
+above the truth fails.
+
 **Added at 6ED's W1G3, and it is a divergence the same wave created:** the
 engine now prices a spell through `cost_modifiers` and `web/serialization.py`
 still prices Gloom by hand. W1G2 replaced the *castable highlight*'s copy —
@@ -1735,6 +1763,14 @@ was one of them, and it produced a **false** promotion-gate issue on Disenchant
 artifact creatures that `primary_type` mis-answers is now **114**, up from the
 77 measured at Weatherlight. The instalment is fixed and the scan is not; this
 is the fifth consecutive promotion to turn up one of these.
+
+**The scan is fixed 2026-09-13, at the Phase 0 before the next set** — see the
+6ED entry above, which this one is the fifth instalment of. `primary_type` is in
+the pattern, and all four patterns ratchet per module rather than exempting a
+file. The remaining 64 reads are recorded in `PRIMARY_TYPE_BASELINE` as
+**untriaged debt rather than blessings** — the one baseline in that file whose
+entries deliberately carry no reason, because nobody has yet asked of those
+sites whether they mean the card or the permanent.
 
 ## Phase 0 — Pre-flight
 

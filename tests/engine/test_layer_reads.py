@@ -76,6 +76,45 @@ def _hits(pattern: re.Pattern, skip: set[str]) -> list[tuple[str, int, str]]:
     return found
 
 
+def _module(hit: tuple[str, int, str]) -> str:
+    return hit[0].replace("\\", "/")
+
+
+def _counts(pattern: re.Pattern) -> dict[str, int]:
+    """How many times *pattern* matches, per engine module."""
+    counted: dict[str, int] = {}
+    for hit in _hits(pattern, skip=set()):
+        counted[_module(hit)] = counted.get(_module(hit), 0) + 1
+    return counted
+
+
+def _assert_within_baseline(
+    pattern: re.Pattern, baseline: dict[str, int], message: str
+) -> None:
+    """No module may carry more matches of *pattern* than its recorded count.
+
+    A count rather than a file on an exempt list, so a *new* read in a module
+    that already has one fails. The companion check below refuses a baseline
+    that sits above the truth, which is what keeps the two directions honest.
+    """
+    hits = _hits(pattern, skip=set())
+    counted = _counts(pattern)
+    over = {
+        module for module, count in counted.items()
+        if count > baseline.get(module, 0)
+    }
+    assert not over, (
+        message
+        + ":\n"
+        + "\n".join(
+            f"  {hit[0]}:{hit[1]}: {hit[2]}" for hit in hits if _module(hit) in over
+        )
+        + "\n(baselines: "
+        + ", ".join(f"{m}={baseline.get(m, 0)} now {counted[m]}" for m in sorted(over))
+        + ")"
+    )
+
+
 @pytest.mark.parametrize("owner,keys", sorted(STORAGE_OWNERS.items()))
 def test_the_storage_keys_are_touched_only_by_their_write_api(owner, keys):
     """A raw ``metadata["land_type_effects"]`` poke outside the write API is a
@@ -166,8 +205,18 @@ def test_no_acknowledgement_has_gone_stale():
 #     them — it computes layer 4's card types and subtypes, which do not
 #     include supertypes at all.
 #
-# The list may only shrink. A new entry means either a real exemption with a
-# reason written here, or a read that should have been an accessor.
+# The numbers below may only go **down**. A rise is either a real exemption
+# with a reason written here, or a read that should have been an accessor.
+#
+# A **count per module**, not a file on an exempt list, and the difference is
+# what this guard was missing for four sets. An exempt file is exempt for ever:
+# `mixins/helpers.py` was on the old list for "the Aura shape, plus a stack
+# item's card colours" and by the time anyone looked again it held two live
+# Licid-class reads and no colour read at all — the stated reason had gone stale
+# in one half while the other half hid the offences. A count cannot do that,
+# because a *new* read in an already-listed module fails. Same mechanism as
+# `test_control_reads.py`'s positional ratchet and the `web/` twin in
+# `tests/ui/test_layer_reads_in_web.py`.
 
 # The pattern is deliberately ``<something>.card.<field>`` and not a bare
 # ``card.type_line``: a local named ``card`` already *is* a CardDefinition, so
@@ -175,20 +224,28 @@ def test_no_acknowledgement_has_gone_stale():
 # — a permanent reaching past itself into its card — that is the smell.
 _PRINTED_READS = re.compile(r"\.card\.(type_line|colors)\b")
 
-# file -> why its printed reads are the right question.
-PRINTED_READ_EXEMPTIONS: dict[str, str] = {
+#: module -> how many printed type/colour reads survive in it, and why.
+PRINTED_READ_BASELINE: dict[str, int] = {
     # The layer system's own input: the computed answer is built out of the
     # printed shape, so somewhere has to read it first.
-    "models.py": "Permanent's accessors start from the printed basic land types",
+    "models.py": 2,
     # Asking the computed type here would include the type this very effect is
     # about to add, so the answer would depend on whether it had already been
     # asked — a self-reference, not a shortcut. Both sites say so in place.
-    "auras.py": "animating_auras must not see the creature type it grants",
-    "mixins/permanent_state.py": "the same self-reference, for global statics",
+    "auras.py": 1,
+    "mixins/permanent_state.py": 1,  # the same self-reference, for global statics
     # Card shapes this engine models on the printed line alone. The supertype
     # sweeps that used to be covered by this entry read the effective card now.
-    "mixins/game_ending.py": "Aura/Equipment/Saga/Role shapes",
-    "mixins/helpers.py": "the Aura shape, plus a stack item's card colours",
+    #
+    # **Not all of these are blessed.** The Aura reads are the Licid class: a
+    # Gliding Licid "becomes an Aura enchantment" by a CR 613 layer-4 type
+    # change, which moves neither the printed line nor `effective_card` (layer 1
+    # folds a copy, layer 3 a text change, and this is neither), so only
+    # `has_type("aura")` answers. They are counted rather than fixed because
+    # `_unattach_illegal_auras` and its callers are the CR 704.5m/n sweep and
+    # changing what it matches is a rules round, not a guard one.
+    "mixins/game_ending.py": 5,   # 3 Aura (Licid-class debt), Saga, Role
+    "mixins/helpers.py": 2,       # both Aura — Licid-class debt, see above
     # `mixins/stack/casting.py` used to be exempt here, on the reason "an object
     # on the stack is not a permanent and has no layers applied to it". The
     # first half is true and the second was the mistake this list is meant to
@@ -201,15 +258,13 @@ PRINTED_READ_EXEMPTIONS: dict[str, str] = {
 def test_printed_type_and_colour_reads_stay_where_they_belong():
     """"What type/colour is this permanent?" has one answer, and it is the
     computed one."""
-    offenders = [
-        hit for hit in _hits(_PRINTED_READS, skip=set())
-        if hit[0].replace("\\", "/") not in PRINTED_READ_EXEMPTIONS
-    ]
-    assert not offenders, (
-        "printed type_line/colors read outside the exempt list — ask "
-        "permanent.has_type / permanent.effective_colors, or add the file to "
-        "PRINTED_READ_EXEMPTIONS with the reason it really means the card:\n"
-        + "\n".join(f"  {f}:{n}: {t}" for f, n, t in offenders)
+    _assert_within_baseline(
+        _PRINTED_READS,
+        PRINTED_READ_BASELINE,
+        "printed type_line/colors read above its module's baseline — ask "
+        "permanent.has_type / permanent.effective_colors, or raise the "
+        "module's entry in PRINTED_READ_BASELINE with the reason it really "
+        "means the card",
     )
 
 
@@ -242,58 +297,105 @@ def test_printed_type_and_colour_reads_stay_where_they_belong():
 # overlaps that list on purpose and is the stricter of the two.
 _PRINTED_COLOR_READS = re.compile(r"\b\w*card\.colors\b")
 
-# file -> why the printed colours are the right question there.
-PRINTED_COLOR_EXEMPTIONS: dict[str, str] = {
+#: module -> how many printed colour reads survive in it, and why.
+PRINTED_COLOR_BASELINE: dict[str, int] = {
     # The layer system's own input, both of them: layer 5 is seeded from the
     # printed colours and layer 1 copies them as a copiable value (CR 707.2a).
-    "layer_bridge.py": "the layer-5 seed",
-    "copies.py": "the copiable values a copy starts from",
+    "layer_bridge.py": 1,       # the layer-5 seed
+    "copies.py": 1,             # the copiable values a copy starts from
     # A weight over a card with no board in hand. AI tuning, not a rule.
-    "ai_valuation.py": "a valuation predicate with no game to ask",
+    "ai_valuation.py": 1,       # a valuation predicate with no game to ask
     # Known gaps, both named in the 6ED w1g3 report rather than left silent:
     # `graveyard_card_matches` has nineteen call sites and takes neither a game
     # nor the pile's owner, and `_exile_search_matches` is a staticmethod. Both
     # want the seat threaded to them, which is its own round.
-    "handlers/_common.py": "graveyard_card_matches takes no game or owner yet",
-    "mixins/stack/choices.py": "_exile_search_matches is a staticmethod",
+    "handlers/_common.py": 1,   # graveyard_card_matches takes no game or owner yet
+    "mixins/stack/choices.py": 1,  # _exile_search_matches is a staticmethod
 }
 
 
 def test_printed_colour_reads_of_a_non_permanent_stay_where_they_belong():
     """"What colour is this card?" is CR 613.1e's question wherever the card
     is, and ``object_colors`` is the one place it is answered."""
-    offenders = [
-        hit for hit in _hits(_PRINTED_COLOR_READS, skip=set())
-        if hit[0].replace("\\", "/") not in PRINTED_COLOR_EXEMPTIONS
-    ]
-    assert not offenders, (
-        "printed card.colors read outside the exempt list — ask "
+    _assert_within_baseline(
+        _PRINTED_COLOR_READS,
+        PRINTED_COLOR_BASELINE,
+        "printed card.colors read above its module's baseline — ask "
         "engine.object_colors.object_colors / card_colors with the object's "
-        "seat, or add the file to PRINTED_COLOR_EXEMPTIONS with the reason it "
-        "really means the printed mana cost:\n"
-        + "\n".join(f"  {f}:{n}: {t}" for f, n, t in offenders)
+        "seat, or raise the module's entry in PRINTED_COLOR_BASELINE with the "
+        "reason it really means the printed mana cost",
     )
 
 
-def test_no_printed_colour_exemption_has_gone_stale():
-    """The list may only shrink: an exemption for a file with no such read left
-    is how the next one gets in free."""
-    live = {hit[0].replace("\\", "/") for hit in _hits(_PRINTED_COLOR_READS, skip=set())}
-    stale = sorted(set(PRINTED_COLOR_EXEMPTIONS) - live)
-    assert not stale, (
-        f"exemptions with no printed colour read left: {stale} — drop them "
-        "from PRINTED_COLOR_EXEMPTIONS"
-    )
+# ---------------------------------------------------------------------------
+# The collapsed printed type — ``card.primary_type``
+# ---------------------------------------------------------------------------
+#
+# The pattern above covers ``type_line`` and ``colors`` and has never covered
+# ``primary_type``, which is the **same wrong answer twice over**:
+#
+#   * it is the card as printed, so every layer-4 type change is missing from
+#     it — an animated Mishra's Factory is not a creature, a Kormus Bell Swamp
+#     is not a creature, a Licid is not an Aura;
+#   * and it *collapses* a multi-type line to one word (``models.py``: the
+#     first of land/creature/artifact/… that appears), so an Artifact Creature
+#     answers "creature" and is invisible to any count of artifacts. That is
+#     the half a `type_line` substring test gets right and this one cannot.
+#
+# The second half is what five consecutive promotions have each paid for, most
+# recently at MMQ, where `engine/ai_simulator.py` reported Disenchant destroying
+# nothing on a game whose log said `Destroyed Toymaker` one line above —
+# Toymaker being an Artifact Creature, counted as neither. The engine was right
+# and the honesty check was lying, which is the expensive direction.
+#
+# So the field is in the scan at last, as a **ratchet rather than a ban**:
+# draining the 64 sites is a round of its own (SET_PLAYBOOK.md, Known gaps —
+# each one needs a judgement about whether it means the card or the permanent,
+# and some of them, like Balance's land/creature counts, cannot be fixed on this
+# side alone). What the ratchet buys is that there cannot be a 65th.
+
+_PRINTED_PRIMARY_TYPE = re.compile(r"\.card\.primary_type\b")
+
+#: module -> how many ``.card.primary_type`` reads survive in it. **Untriaged
+#: debt, not blessings**: unlike every other baseline in this file, no entry
+#: here carries a reason, because no one has yet asked of these sites whether
+#: they mean the card or the permanent. Lower an entry when you drain one; the
+#: only rule the guard enforces is that no entry may rise.
+PRIMARY_TYPE_BASELINE: dict[str, int] = {
+    "ai_policy.py": 11,
+    "card_hooks.py": 1,
+    "handlers/board_misc.py": 5,
+    "handlers/destruction.py": 2,
+    "handlers/mana.py": 1,
+    "handlers/prevention.py": 1,
+    "handlers/stack.py": 2,
+    "handlers/tapping.py": 2,
+    "legality.py": 2,
+    "mana_payment.py": 1,
+    "mixins/effects.py": 1,
+    "mixins/game_ending.py": 1,
+    "mixins/helpers.py": 1,
+    "mixins/oracle_instructions.py": 6,
+    "mixins/permanent_state.py": 10,
+    "mixins/stack/casting.py": 3,
+    "mixins/stack/choices.py": 7,
+    "mixins/stack/resolution.py": 1,
+    "mixins/turn_management.py": 1,
+    "phases/untap_step.py": 2,
+    "phases/upkeep_step.py": 3,
+}
 
 
-def test_no_printed_read_exemption_has_gone_stale():
-    """An exemption for a file that no longer has such a read is how the next
-    one gets in free. The list may only shrink."""
-    live = {hit[0].replace("\\", "/") for hit in _hits(_PRINTED_READS, skip=set())}
-    stale = sorted(set(PRINTED_READ_EXEMPTIONS) - live)
-    assert not stale, (
-        f"exemptions with no printed read left: {stale} — drop them from "
-        "PRINTED_READ_EXEMPTIONS"
+def test_no_new_collapsed_printed_type_read():
+    """``card.primary_type`` is the printed line *and* collapsed to one word.
+    The population may only shrink."""
+    _assert_within_baseline(
+        _PRINTED_PRIMARY_TYPE,
+        PRIMARY_TYPE_BASELINE,
+        "new card.primary_type read — it is the printed type line (so no "
+        "layer-4 change is in it) collapsed to a single word (so an Artifact "
+        "Creature answers only \"creature\"). Ask permanent.has_type / "
+        "permanent.is_creature",
     )
 
 
@@ -327,37 +429,58 @@ def test_no_printed_read_exemption_has_gone_stale():
 
 _PRINTED_TEXT_READS = re.compile(r"\.card\.(oracle_text|keywords)\b")
 
-# file -> why its printed text reads are the right question.
-PRINTED_TEXT_EXEMPTIONS: dict[str, str] = {
+#: module -> how many printed text/keyword reads survive in it, and why.
+PRINTED_TEXT_BASELINE: dict[str, int] = {
     # A cycle, not a preference: ``effective_card`` appends the abilities these
     # statics grant, so asking the effective text which permanents grant them
     # would make the answer depend on itself. Both readers live here for that
     # reason — ``_refresh_global_statics`` calls in rather than keeping its own.
-    "global_statics.py": "the text that defines a static cannot be read through it",
+    "global_statics.py": 1,
 }
 
 
 def test_printed_text_and_keyword_reads_stay_where_they_belong():
     """"What does this permanent say?" has one answer, and it is the computed
     one."""
-    offenders = [
-        hit for hit in _hits(_PRINTED_TEXT_READS, skip=set())
-        if hit[0].replace("\\", "/") not in PRINTED_TEXT_EXEMPTIONS
-    ]
-    assert not offenders, (
-        "printed oracle_text/keywords read outside the exempt list — ask "
+    _assert_within_baseline(
+        _PRINTED_TEXT_READS,
+        PRINTED_TEXT_BASELINE,
+        "printed oracle_text/keywords read above its module's baseline — ask "
         "permanent.effective_card (or _has_keyword, which also asks layer 6), "
-        "or add the file to PRINTED_TEXT_EXEMPTIONS with the reason it really "
-        "means the card:\n"
-        + "\n".join(f"  {f}:{n}: {t}" for f, n, t in offenders)
+        "or raise the module's entry in PRINTED_TEXT_BASELINE with the reason "
+        "it really means the card",
     )
 
 
-def test_no_printed_text_exemption_has_gone_stale():
-    """The list may only shrink, for the same reason as the one above."""
-    live = {hit[0].replace("\\", "/") for hit in _hits(_PRINTED_TEXT_READS, skip=set())}
-    stale = sorted(set(PRINTED_TEXT_EXEMPTIONS) - live)
-    assert not stale, (
-        f"exemptions with no printed text read left: {stale} — drop them from "
-        "PRINTED_TEXT_EXEMPTIONS"
+@pytest.mark.parametrize(
+    "baseline,pattern",
+    [
+        (PRINTED_READ_BASELINE, _PRINTED_READS),
+        (PRINTED_COLOR_BASELINE, _PRINTED_COLOR_READS),
+        (PRINTED_TEXT_BASELINE, _PRINTED_TEXT_READS),
+        (PRIMARY_TYPE_BASELINE, _PRINTED_PRIMARY_TYPE),
+    ],
+    ids=["type-and-colour", "colour-of-a-non-permanent", "text", "primary-type"],
+)
+def test_no_baseline_sits_above_its_real_count(baseline, pattern):
+    """The half that makes a ratchet ratchet.
+
+    A baseline above the truth is room for the next read to appear for free —
+    and a module that has dropped to zero is the old stale-exemption check,
+    which this subsumes: an entry for a module with no such read left is slack
+    of exactly its own size.
+    """
+    counted = _counts(pattern)
+    slack = {
+        module: (recorded, counted.get(module, 0))
+        for module, recorded in baseline.items()
+        if recorded > counted.get(module, 0)
+    }
+    assert not slack, (
+        "baseline above the real count — lower (or drop) these entries so the "
+        "ratchet keeps its teeth:\n"
+        + "\n".join(
+            f"  {module}: recorded {recorded}, really {real}"
+            for module, (recorded, real) in sorted(slack.items())
+        )
     )
