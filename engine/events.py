@@ -1266,8 +1266,17 @@ def _damage_dealt_filter(
         # derives the seat for both.
         if event.payload.get("damager_seat") != observer:
             return False
-    elif payload.get("damager_any"):
-        # "Whenever **a source** deals damage to this creature" (Crag Saurian).
+    elif "damager_any" in payload:
+        # "Whenever **a source** deals damage to this creature" (Crag Saurian);
+        # "Whenever **you're dealt damage**" (Blood Hound), which is the same
+        # thing said by leaving the damager out of the sentence entirely.
+        #
+        # Tested by **presence**, not by truthiness: the passive row carries the
+        # marker as an empty named group — this table's documented idiom for a
+        # narrowing a row states by matching rather than by capturing text — and
+        # an empty string is falsy, so a truthiness test sent the one card that
+        # prints no damager at all down to the `else` that refuses.
+        #
         # No narrowing on the damager at all: CR 109.5's "source" is a spell, an
         # ability or a permanent, and the card watches every one of them. The
         # *recipient* half below is what keeps this from firing on the whole

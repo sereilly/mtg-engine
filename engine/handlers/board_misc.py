@@ -1355,19 +1355,58 @@ def change_land_type_until(game: Game, instruction: OracleInstruction, context: 
         game.controller_index_of(context.source_permanent)
         if context.source_permanent is not None else None
     )
+    def _eligible(perm) -> bool:
+        return subject_matches(
+            game, perm, filt, observer=seat, source=context.source_permanent
+        )
+
+    # "**X target lands** become Forests until end of turn." (Deepwood Elder.)
+    # The several-target reading of this same instruction, and the branch
+    # `pump_target_creature_until_eot` already takes for "X target creatures":
+    # the printed count rides the description and is resolved against the
+    # announced X, because a printed "X" is a string until the spell is cast.
+    #
+    # Above the single-target read rather than beside it, because that one falls
+    # back to scanning the battlefield when the chosen target no longer answers
+    # — right for one land and wrong for several, which would turn "X target
+    # lands" into X changes on whichever land the scan met first.
+    printed_count = (instruction.payload.get("targets") or {}).get("count")
+    maximum = (
+        resolve_amount(printed_count, context.x_value)
+        if printed_count is not None else None
+    )
+    land_type = str(instruction.payload.get("land_type", ""))
+    duration = str(instruction.payload.get("duration", "permanent"))
+    if isinstance(maximum, int) and maximum > 1:
+        chosen = resolve_target_permanents(game, context, predicate=_eligible)
+        if not chosen:
+            game.log.append(f"{context.card.name}: no land to change")
+            return True, "resolved"
+        for land in chosen[:maximum]:
+            # One label per land, for the reason the single-target branch below
+            # gives twice: two contributions keyed on the same source would have
+            # the second replace the first, and here that is one *sentence*
+            # changing several lands rather than two activations.
+            change_land_type(
+                land, land_type,
+                source=f"{duration}:{next_timestamp()}",
+                label=context.card.name,
+            )
+        game.log.append(
+            ", ".join(land.card.name for land in chosen[:maximum])
+            + f" each became a {land_type.title()} ({context.card.name})"
+        )
+        return True, "resolved"
+
     target = resolve_target_permanent(
         game,
         context,
-        predicate=lambda perm: subject_matches(
-            game, perm, filt, observer=seat, source=context.source_permanent
-        ),
+        predicate=_eligible,
         fallback_on_invalid_choice=False,
     )
     if target is None:
         game.log.append(f"{context.card.name}: no land to change")
         return True, "resolved"
-    land_type = str(instruction.payload.get("land_type", ""))
-    duration = str(instruction.payload.get("duration", "permanent"))
     if duration == LAND_TYPE_UNTIL_UNTAP:
         # A label, not the permanent: the change outlives its source, and two
         # activations of the same Farmer aimed at two lands must not have the
@@ -1921,7 +1960,17 @@ def add_named_counter_to_self(game: Game, instruction: OracleInstruction, contex
     # cast's announced X, resolved through the same reader every other
     # amount in this engine uses — a printed number passes through it
     # unchanged, so every payload written before this is untouched.
-    count = resolve_amount(instruction.payload.get("count", 1), context.x_value)
+    raw_count = instruction.payload.get("count", 1)
+    from_trigger = instruction.payload.get("amount_from_trigger")
+    if raw_count == "trigger_count" and from_trigger is not None:
+        # "…put **that many** vitality counters on this Aura." (Living
+        # Artifact.) The firing event's number, out of the context its fire
+        # site froze (CR 603.10) — the same channel `add_counter_to_self` reads
+        # for Light of Promise, and never the resolution scratchpad, which for
+        # a sentence with no earlier step of its own is a key nothing writes.
+        count = int((context.trigger_context or {}).get(str(from_trigger), 0) or 0)
+    else:
+        count = resolve_amount(raw_count, context.x_value)
     if count <= 0:
         # X may be announced as zero, which CR 122.1 places no counters for.
         return True, "resolved"

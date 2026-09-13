@@ -355,13 +355,32 @@ def test_604_3_a_counted_cda_refuses_a_noun_phrase_it_cannot_count():
         "x's power and toughness are each equal to 1 plus the number of "
         "wishes you have made this game"
     ) is None
-    # Read, but the count cannot be narrowed to another player's permanents:
-    # nothing downstream tests a controller, so the key would be handed over
-    # and ignored and the count taken on the wrong battlefield.
+    # Read, but the count cannot be narrowed to a seat the *event* picked:
+    # "that player" is known only to the resolution holding a trigger's
+    # context, and a characteristic-defining ability has none — so the key
+    # would be handed over and ignored and the count taken on the wrong
+    # battlefield.
     assert dynamic_pt_for(
         "x's power and toughness are each equal to 1 plus the number of "
-        "creatures an opponent controls"
+        "creatures that player controls"
     ) is None
+    # "…creatures **an opponent controls**" used to be the second refusal here,
+    # for the reason above one seat over: nothing tested a ``controller`` key on
+    # a count. Chameleon Spirit is the card that made that false — the
+    # battlefield scan asks ``subject_matches``, which has always been able to
+    # answer "not the observer's", and what was missing was a *scope* saying
+    # which piles to read while the observer stayed the counting seat. So the
+    # narrowing is **answered** rather than refused, and the assertion that
+    # keeps it honest is that both halves survive into the spec: widen the scan
+    # without keeping the key and the count is of every permanent in the game.
+    opponents = dynamic_pt_for(
+        "x's power and toughness are each equal to 1 plus the number of "
+        "creatures an opponent controls"
+    )
+    assert opponents is not None
+    spec = opponents.payload["count_spec"]
+    assert spec["owner"] == "opponents"
+    assert spec["filter"]["controller"] == "opponent"
     # A keyword is CR 613 layer 6, and this used to be the third refusal here:
     # the count asked ``permanent_matches_filter``, the pure half, which would
     # have dropped the adjective and counted every creature. The battlefield

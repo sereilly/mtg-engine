@@ -233,6 +233,21 @@ _EVENT_QUANTITIES: dict[str, str] = {
 }
 
 
+def trigger_quantity_key(event: str | None) -> str | None:
+    """The trigger context key *event* freezes its number under, or None.
+
+    The read side of :data:`_EVENT_QUANTITIES`, for callers outside this module
+    that have a bare "that much"/"that many" and an effect family of their own
+    to emit into. They were reaching for the scratchpad instead — which is the
+    exact failure the table's own comment describes ("reading a trigger's
+    number out of the scratchpad silently yields zero") and which two shipped
+    cards were living: Light of Promise put zero +1/+1 counters on the creature
+    it enchants, and Living Artifact's whole first line put zero vitality
+    counters.
+    """
+    return _EVENT_QUANTITIES.get(event or "")
+
+
 #: The **toughness** twin of the table above, keyed by trigger kind the same way.
 #:
 #: A second table rather than more rows in that one, and ``amounts.py`` already

@@ -410,12 +410,26 @@ def add_types(
     subtypes: Iterable[str] = (),
     supertypes: Iterable[str] = (),
     replace_subtypes: bool = False,
+    replaces_subtypes_from: Iterable[str] = (),
     replace_card_types: bool = False,
     timestamp: int,
     label: str = "",
 ) -> ContinuousEffect:
     """Layer 4: type-changing. ``replace_subtypes`` covers "is a Swamp"-style
     effects, which replace the land's types rather than adding to them.
+
+    ``replaces_subtypes_from`` is the **scoped** replacement CR 205.1a actually
+    states: "the new subtype(s) replaces any existing subtypes *from the
+    appropriate set* (creature types, land types, artifact types, …)". The
+    blanket flag beside it is that sentence with the parenthesis dropped, which
+    is right for every caller that has one so far — a land-type change lands on
+    a permanent whose only subtypes are land types — and wrong the moment an
+    effect sets a subtype on a permanent that has some of another set's.
+    Conspiracy is that effect: "Creatures you control are the chosen type" over
+    an animated Forest replaces its *creature* types and must leave "forest"
+    alone, or the land stops tapping for green as a side effect of a tribal
+    enchantment. So the appropriate set travels as data rather than as a second
+    flag per set, and this module needs no vocabulary of its own.
 
     ``replace_card_types`` is CR 205.1a's other half and its **default**: "in
     most such cases, the new card type(s) replaces any existing card types."
@@ -429,6 +443,7 @@ def add_types(
     can be on the battlefield, and every caller here holds a permanent.
     """
     card_types, subtypes, supertypes = tuple(card_types), tuple(subtypes), tuple(supertypes)
+    scoped_replacement = frozenset(replaces_subtypes_from)
 
     def modify(char: Characteristics) -> None:
         if replace_card_types:
@@ -437,6 +452,11 @@ def add_types(
             char.card_types.update(card_types)
         if replace_subtypes:
             char.subtypes = set(subtypes)
+        elif scoped_replacement:
+            char.subtypes = {
+                held for held in char.subtypes if held not in scoped_replacement
+            }
+            char.subtypes.update(subtypes)
         else:
             char.subtypes.update(subtypes)
         char.supertypes.update(supertypes)

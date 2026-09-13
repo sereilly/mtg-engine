@@ -230,8 +230,27 @@ def _parse_becomes_land_type(
             subject, ast.CHOSEN_LAND_TYPE, _parse_duration(stream)
         )
     if not (stream.accept_word("a") or stream.accept_word("an")):
-        stream.reset(mark)
-        return None
+        # "**X target lands become Forests** until end of turn." (Deepwood
+        # Elder.) A plural subject takes a plural noun and no article, which is
+        # printed English rather than a different effect — so it is the same
+        # node with the same land type, singularised here the way every other
+        # plural noun in this package is.
+        #
+        # The **plural form is required**: a bare singular after "become" is not
+        # a sentence Magic prints, and admitting it would let this branch claim
+        # "becomes Forest" ahead of the supertype and copy branches that follow
+        # a bare word for their own reasons.
+        plural = stream.peek_word()
+        singular = _singular_type(plural) if plural else None
+        if (
+            plural is None
+            or singular == plural
+            or singular not in LAND_TYPES
+        ):
+            stream.reset(mark)
+            return None
+        stream.advance()
+        return ast.ChangeLandType(subject, singular, _parse_duration(stream))
     word = stream.peek_word()
     if word is None or word not in LAND_TYPES:
         stream.reset(mark)

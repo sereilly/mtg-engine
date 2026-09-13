@@ -335,7 +335,15 @@ def count_from_payload(
             spec,
         )
     scope = spec.get("owner", "you")
-    if scope == "you":
+    if scope in ("you", "opponents"):
+        # "…the number of permanents of the chosen color **your opponents
+        # control**" (Chameleon Spirit). ``opponents`` widens the *scan*, not
+        # the seat: the phrase's "your" is still CR 109.5's, so the seat this
+        # resolves is the same one "you control" would resolve to, and
+        # `evaluate_count` reads it as the observer the filter's own
+        # ``controller`` key is relative to. Landing it on the "target" fallback
+        # below would make the observer whichever player the spell happened to
+        # point at, and the count would be of the wrong seat's opponents.
         owner = context.caster
     elif scope == "target_opponent":
         # "…the number of creatures **target opponent** controls" (Superior
@@ -979,6 +987,16 @@ def evaluate_count(
         # Through the control seam, because "on the battlefield" is every
         # permanent in play and `all_permanents` is the one answer to that.
         every_seat = spec.get("owner") == "all"
+        # "…the number of permanents of the chosen color **your opponents
+        # control**" (Chameleon Spirit). Which piles to scan and whose "you" the
+        # filter's seat words mean were one variable here, and this is the scope
+        # that needs them to be two: every battlefield is read, and the observer
+        # stays the counting seat so the ``controller`` key the lowering left in
+        # the payload can be answered by `subject_matches` — the same reader
+        # that answers it in every other sentence printing the phrase. ``all``
+        # is the scope that really does mean nobody (CR 403.1's shared zone),
+        # and it keeps its ``observer=None``.
+        opponents_only = spec.get("owner") == "opponents"
         seat = None if every_seat else game.players.index(owner)
         # "**Other** …" (CR 109.5) is an identity comparison against the ability's
         # own source, which the matcher deliberately does not answer — it is
@@ -999,7 +1017,10 @@ def evaluate_count(
         # *source* entered and lives on that permanent, and the pure matcher
         # refuses the unresolved key so a caller with no source counts nothing.
         filt = _resolve_chosen_subtype(filt, source)
-        scanned = game.all_permanents() if every_seat else game.controlled_by(seat)
+        scanned = (
+            game.all_permanents() if every_seat or opponents_only
+            else game.controlled_by(seat)
+        )
         # Through ``subject_matches`` rather than the pure half, because the
         # pure half cannot answer a **keyword** (CR 613 layer 6, which needs
         # the game): "you gain 1 life for each creature you control with
@@ -1078,6 +1099,24 @@ def _zone_card_colors(card, *, game=None, owner=None) -> tuple[str, ...]:
     return tuple(card_colors(game, card, owner))
 
 
+def _zone_card_creature_types(
+    card, *, printed=(), game=None, owner=None
+) -> frozenset[str]:
+    """The creature types of a card in a zone, for the two subtype keys.
+
+    ``printed`` is what the caller already read off the type line, returned
+    unchanged whenever nothing is rewriting it -- so the common path costs one
+    board scan and the answer for every card in the pool but one is byte the
+    same as before this existed.
+    """
+    from ..object_creature_types import creature_type_override_for_seat
+
+    if "creature" not in (getattr(card, "type_line", "") or "").lower():
+        return frozenset(printed)
+    override = creature_type_override_for_seat(game, owner)
+    return frozenset({override}) if override is not None else frozenset(printed)
+
+
 def _card_matches_filter(card, filt: dict, *, game=None, owner=None) -> bool:
     """Whether a *card* — not a permanent — answers a filter payload.
 
@@ -1123,6 +1162,19 @@ def _card_matches_filter(card, filt: dict, *, game=None, owner=None) -> bool:
         tuple(wanted_sub) if isinstance(wanted_sub, (list, tuple))
         else ((wanted_sub,) if wanted_sub else ())
     )
+    # The printed subtypes unless a board-wide static says otherwise -- "the
+    # same is true for … creature cards you own that aren't on the battlefield"
+    # (Conspiracy) is what makes an off-battlefield creature type more than what
+    # is printed, and it is a property of a *seat*, so a caller that cannot say
+    # whose card this is gets the printed answer it always got. Exactly the
+    # arrangement `_zone_card_colors` already has for CR 202.2 further down this
+    # function, and asked here rather than at the top because only the two
+    # subtype tests want the computed answer -- a card's *card types* are not
+    # something anything in the pool rewrites off the battlefield.
+    if wanted_subtypes or filt.get("subtype_filter_all"):
+        subtypes = _zone_card_creature_types(
+            card, printed=subtypes, game=game, owner=owner
+        )
     if wanted_subtypes and not any(s in subtypes for s in wanted_subtypes):
         return False
     # The conjunction spelling, AND'd — see `subtype_filter_all` in

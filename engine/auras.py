@@ -325,6 +325,20 @@ _TEMPLATES: tuple[tuple[re.Pattern[str], str], ...] = (
         ),
         "Vitality counters — phases/upkeep_effects.py",
     ),
+    (
+        # Living Artifact's accumulating half. The row survives its *reason*:
+        # what carried this line out used to be a substring branch inside
+        # ``mixins/effects._on_player_dealt_damage``, and the line now compiles
+        # to an ordinary triggered ability through CR 120.4b's passive condition
+        # row. The Aura gate still has to be told the line is implemented — that
+        # is what this table is — so the entry stays and only the attribution
+        # moves.
+        re.compile(
+            r"^whenever you're dealt damage, put that many vitality counters "
+            r"on this aura$"
+        ),
+        "Vitality counter accumulation — the damage_dealt trigger",
+    ),
     # --- other triggers ------------------------------------------------------
     # An attached trigger ("when(ever) enchanted/equipped …") used to be claimed
     # here by a `.+` wildcard. `attached_trigger_claim` below claims it instead,
@@ -363,10 +377,6 @@ _TEMPLATES: tuple[tuple[re.Pattern[str], str], ...] = (
             r"if (?:enchanted|this) creature has flying"
         ),
         "enters-the-battlefield Aura trigger — _apply_aura_effect",
-    ),
-    (
-        re.compile(r"^whenever you're dealt damage, put that many vitality counters on this aura$"),
-        "Vitality counter accumulation — damage hooks",
     ),
 )
 

@@ -1144,3 +1144,217 @@ def test_w2g2_saprazzan_bailiff_exiles_from_every_graveyard_on_entry(set_pool):
     assert not caster.graveyard
     assert [c.name for c in other.graveyard] == ["Grizzly Bears"]
     # end of test_w2g2_saprazzan_bailiff_exiles_from_every_graveyard_on_entry
+
+
+# --- W2G5: a chosen type or colour as a live value, and the Spellshapers ---
+# The thread through these is that a card **chooses a characteristic** and
+# something else reads it back — as the permanent enters (Chameleon Spirit), on
+# every subsequent question (Conspiracy, in the enchantments file), or out of
+# the firing event (Blood Hound).
+from engine import Game, PlayerState
+from engine.layer_bridge import computed_types as _w2g5_computed_types
+from engine.models import Permanent
+from tests.helpers import _nosick, resolve_stack
+
+
+def _w2g5_board(set_pool, *names, seat=0):
+    """A two-seat game with *names* on *seat*'s battlefield, none of them sick.
+
+    Returns ``(game, p1, p2, permanents)`` — the permanents in the order given,
+    so a test addresses each by the name it asked for rather than by a slot that
+    moves when the board grows. Mana costs are off, as everywhere in this file:
+    what is under test is what the cards say, not what they cost.
+    """
+    pool = set_pool("MMQ")
+    p1, p2 = PlayerState(name="A"), PlayerState(name="B")
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    made = []
+    for name in names:
+        perm = _nosick(Permanent(card=pool[name]))
+        game.players[seat].battlefield.append(perm)
+        made.append(perm)
+    return game, p1, p2, made
+
+
+def _w2g5_put(game, seat, card):
+    """One card onto *seat*'s battlefield with summoning sickness cleared."""
+    perm = _nosick(Permanent(card=card))
+    game.players[seat].battlefield.append(perm)
+    return perm
+
+
+def test_scandalmonger_is_reachable_by_any_player_and_only_at_sorcery_speed(set_pool):
+    """"{2}: Target player discards a card. Any player may activate this ability
+    **but only as a sorcery**." (CR 602.1a's permission, CR 602.5's timing.)
+
+    Both halves, because the failure modes point in opposite directions and each
+    is invisible on its own: unenforced, the permission leaves an ability only
+    its controller can reach (the controller's activation still works, so
+    nothing looks wrong), and the restriction leaves one that works more often
+    than the card allows.
+
+    The card is the first in the pool to print a "but only" tail that is not
+    Armageddon Clock's, and the tail was being rebuilt **without its verb** — so
+    it matched no row, was collected by neither the support gate nor the
+    enforcement, and the sentence refused the whole card.
+    """
+    pool = set_pool("MMQ")
+    game, p1, p2, (monger,) = _w2g5_board(set_pool, "Scandalmonger")
+    p2.hand = [pool["Rushwood Dryad"], pool["Vine Trellis"]]
+
+    # The opponent's own main phase: the permission reaches across the table and
+    # the timing is satisfied.
+    game.start_turn(1)
+    game._close_current_priority_step()
+    allowed = game.activate_permanent_ability(
+        1, "Scandalmonger", target_player_index=1, source_controller_index=0,
+    )
+    assert allowed.supported, allowed
+    resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    assert len(p2.hand) == 1
+    assert len(p2.graveyard) == 1
+
+    # …and the same seat in the same step of somebody *else's* turn is refused by
+    # the timing rather than by the permission. The message is asserted, not
+    # merely the refusal: a bare `not supported` would pass with the clause
+    # unenforced and the permission broken instead.
+    game.start_turn(0)
+    game._close_current_priority_step()
+    refused = game.activate_permanent_ability(
+        1, "Scandalmonger", target_player_index=1, source_controller_index=0,
+    )
+    assert not refused.supported
+    assert refused.details.endswith("this ability is sorcery-speed")
+
+
+def test_chameleon_spirit_counts_only_the_opponents_permanents_of_the_chosen_color(
+    set_pool,
+):
+    """"Chameleon Spirit's power and toughness are each equal to the number of
+    permanents of the chosen color **your opponents control**." (CR 604.3.)
+
+    Two questions that had to be separated before either could be answered:
+    *which* battlefields the count reads, and whose "you" the phrase's seat word
+    is relative to. The count's scope used to be one variable doing both jobs, so
+    "on the battlefield" (every seat, observer nobody) was the only widening
+    there was and a phrase narrowed to an opponent refused outright.
+
+    Driven through ``check_state_based_actions``, which a real game runs
+    constantly: a characteristic-defining P/T is recomputed there, and a probe
+    that never runs one reads a working CDA as a 0/0.
+    """
+    pool = set_pool("MMQ")
+    game, p1, p2, (spirit,) = _w2g5_board(set_pool, "Chameleon Spirit")
+    game._initialize_permanent_state(spirit, 0, None)
+    spirit.metadata["chosen_color"] = "R"
+
+    # One red permanent each. Only the opponent's counts — the seat word is read
+    # against the Spirit's own controller, never against the scanned board.
+    _w2g5_put(game, 1, pool["Wild Jhovall"])
+    _w2g5_put(game, 0, pool["Wild Jhovall"])
+    game.check_state_based_actions()
+    assert (spirit.effective_power, spirit.effective_toughness) == (1, 1)
+
+    # A second red one on the opponent's side moves it; a green one does not —
+    # the colour narrowing survives the widened scan rather than being dropped
+    # by it, which is the half that would read "every permanent in the game".
+    _w2g5_put(game, 1, pool["Battle Rampart"])
+    _w2g5_put(game, 1, pool["Rushwood Dryad"])
+    game.check_state_based_actions()
+    assert spirit.effective_power == 2
+
+
+def test_deepwood_elder_changes_every_land_its_x_named(set_pool):
+    """"{X}{G}{G}, {T}, Discard a card: **X target lands** become Forests until
+    end of turn." (CR 305.7, CR 613 layer 4.)
+
+    The several-target reading of a land-type change, which the single-target
+    handler could not have given: that one falls back to scanning the
+    battlefield when a chosen target no longer answers, and a fallback per slot
+    would turn "X target lands" into X changes on whichever land the scan met
+    first.
+
+    A land the activation did **not** name is asserted untouched, which is the
+    half a per-slot fallback or a shared contribution key would break while the
+    log still read right.
+    """
+    pool = set_pool("MMQ")
+    game, p1, p2, (elder,) = _w2g5_board(set_pool, "Deepwood Elder")
+    lands = [_w2g5_put(game, 0, pool["Saprazzan Skerry"]) for _ in range(3)]
+    p1.hand = [pool["Rushwood Dryad"]]
+
+    result = game.activate_permanent_ability(
+        0, "Deepwood Elder", x_value=2,
+        target_permanent_ids=[lands[0].permanent_id, lands[1].permanent_id],
+    )
+    assert result.supported, result
+    resolve_stack(game)
+    game.auto_resolve_pending_choices()
+
+    assert sorted(_w2g5_computed_types(lands[0])[1]) == ["forest"]
+    assert sorted(_w2g5_computed_types(lands[1])[1]) == ["forest"]
+    assert "forest" not in _w2g5_computed_types(lands[2])[1]
+    # The discard was charged: the Spellshaper frame is a cost, not a rider.
+    assert p1.hand == []
+
+
+def test_blood_hound_takes_counters_equal_to_the_damage_you_were_dealt(set_pool):
+    """"Whenever **you're dealt damage**, you may put **that many** +1/+1
+    counters on this creature."
+
+    CR 120.4b's event printed in the passive voice, which is the active row with
+    the damager left out — and leaving it out is the sentence saying "any
+    source". One kind, one announcement and one dispatcher, so the trigger sees
+    a ping from an ability exactly as it sees combat damage.
+
+    And "that many" is the *event's* number. Read out of the resolution
+    scratchpad — where it was — the placement resolves, reports itself done and
+    places **zero**, because a triggered ability whose whole effect is one
+    sentence has no earlier step to have written a record.
+    """
+    from engine.damage_events import deal_damage
+
+    game, p1, p2, (hound,) = _w2g5_board(set_pool, "Blood Hound")
+    deal_damage(game, {"recipient": p1, "amount": 3, "source": None})
+    resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    assert (hound.effective_power, hound.effective_toughness) == (4, 4)
+
+    # Damage to the *other* seat is not this trigger's event: "you" on a card's
+    # own text is its controller (CR 109.5).
+    deal_damage(game, {"recipient": p2, "amount": 5, "source": None})
+    resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    assert hound.effective_power == 4
+
+
+def test_saprazzan_breaker_reads_what_its_own_mill_put_in_the_graveyard(set_pool):
+    """"{U}: Mill a card. **If a land card was milled this way**, this creature
+    can't be blocked this turn."
+
+    An intervening read of what the first sentence produced (CR 608.2), off the
+    record the mill already writes — the same clause Helm of Obedience prints as
+    "if one or more land cards were put into that graveyard this way", which is
+    why both spellings are one production rather than two.
+
+    Asserted in both directions on purpose: a condition read off the *graveyard*
+    rather than off the record would pass the first case and also pass the second
+    the moment any land was already in the pile.
+    """
+    pool = set_pool("MMQ")
+    game, p1, p2, (breaker,) = _w2g5_board(set_pool, "Saprazzan Breaker")
+    p1.library = [pool["Saprazzan Skerry"], pool["Rushwood Dryad"]]
+    assert game.activate_permanent_ability(0, "Saprazzan Breaker").supported
+    resolve_stack(game)
+    assert breaker.metadata.get("cant_be_blocked_until_eot")
+
+    game, p1, p2, (breaker,) = _w2g5_board(set_pool, "Saprazzan Breaker")
+    # A land already in the graveyard and a creature on top of the library: the
+    # clause is about what *this* mill put there, not about what is in the pile.
+    p1.graveyard = [pool["Saprazzan Skerry"]]
+    p1.library = [pool["Rushwood Dryad"], pool["Saprazzan Skerry"]]
+    assert game.activate_permanent_ability(0, "Saprazzan Breaker").supported
+    resolve_stack(game)
+    assert not breaker.metadata.get("cant_be_blocked_until_eot")

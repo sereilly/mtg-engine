@@ -74,6 +74,14 @@ class GlobalStatic:
     # ``()``: were the two spelled the same, every static in this table that is
     # not about colour would set every permanent it reaches colourless.
     sets_colors: tuple[str, ...] | None = None
+    # "Creatures you control **are the chosen type**." (Conspiracy.) CR 205.1a's
+    # subtype *set*, layer 4 -- the row above one characteristic over, and a
+    # **flag** where that one is a tuple of printed words, because the type this
+    # static sets is not on the card at all: it is the creature type the source
+    # permanent chose as it entered (CR 614.1c), read off that permanent at
+    # every recompute. So the word cannot ride the template the way a colour
+    # word does, and what the table can say is only that this static sets one.
+    sets_creature_type: bool = False
     # "**The same is true** for spells you control and nonland cards you own
     # that aren't on the battlefield." The rest of the same sentence, and a flag
     # rather than a second static because it names no new effect -- it says the
@@ -230,6 +238,34 @@ _TEMPLATES: tuple[tuple[re.Pattern[str], GlobalStatic], ...] = (
         GlobalStatic(name="board_wide_color", applies_to="nonland_permanent_you_control"),
     ),
     (
+        # Conspiracy. Celestial Dawn's two sentences one characteristic over --
+        # a creature *type* where that card sets a colour, reaching the same
+        # three populations (the battlefield; the seat's creature spells; the
+        # seat's creature cards in every other zone) and for the same reason it
+        # matters: a tribal effect that reached the board and not the hand would
+        # leave "Sacrifice a Goblin" and "search for a Goblin card" reading the
+        # printed line while the battlefield had moved on.
+        #
+        # The second sentence is optional in the pattern and mandatory in the
+        # *card*, exactly as it is above: reading them as one line is what keeps
+        # them from drifting apart.
+        #
+        # CR 205.1a: "are the chosen type" **sets** the creature types, so a
+        # Grizzly Bears under a Conspiracy naming Goblin is a Goblin and not a
+        # Bear Goblin -- and only its *creature* types are replaced, which is
+        # what `continuous.add_types`' scoped replacement is for.
+        re.compile(
+            r"^creatures you control are the chosen type"
+            r"(?P<extends>\. the same is true for creature spells you control "
+            r"and creature cards you own that aren't on the battlefield)?$"
+        ),
+        GlobalStatic(
+            name="board_wide_creature_type",
+            applies_to="creature_you_control",
+            sets_creature_type=True,
+        ),
+    ),
+    (
         # Darkest Hour. Celestial Dawn's sentence above with no controller
         # narrowing and no second half, which is why the noun is payload
         # exactly as it is on the granted-ability row: "all creatures are
@@ -368,6 +404,18 @@ def global_static_for(oracle_text: str) -> GlobalStatic | None:
                     # has to know that one of the six words it can carry is not
                     # a colour.
                     sets_colors=() if sets == "colorless" else (sets,),
+                    extends_to_spells_and_cards=bool(groups.get("extends")),
+                )
+            if static.sets_creature_type:
+                # The "the same is true for …" tail, carried the way the colour
+                # row beside it carries its own: the flag says the effect
+                # reaches spells and off-battlefield cards, and the *word* it
+                # sets is never here at all -- it lives on the source permanent
+                # and is read at every recompute.
+                return GlobalStatic(
+                    name=static.name,
+                    applies_to=static.applies_to,
+                    sets_creature_type=True,
                     extends_to_spells_and_cards=bool(groups.get("extends")),
                 )
             granted = groups.get("ability")
