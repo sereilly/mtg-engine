@@ -346,6 +346,31 @@ def _action_activate(session, req, seat_type):
     # previously every land activation fell into tap_land_for_mana, which
     # invented a green mana for mana-less lands and made Library's draw
     # unreachable.
+    #
+    # **This set is the third copy of a question CR 605.1a answers, and it is
+    # the one still standing.** ``engine/mana_payment.is_mana_ability`` reads
+    # the rule off the whole ability; the activation seam used to key on these
+    # same three kinds and no longer does (CR 605.3b). Here the two are not
+    # interchangeable, because the destinations are: ``tap_land_for_mana``
+    # takes no ability index and runs the land's **first** tap-alone mana
+    # ability, so rerouting Adarkar Wastes' second one ("Add {W} or {U}. This
+    # land deals 1 damage to you") would quietly produce {C} and no damage.
+    #
+    # The consequence of leaving it is measured and named: **32 lands** whose
+    # mana ability lowers to a ``sequence`` or an ``if_then`` never reach the
+    # tap-for-mana seam at all — 26 with a tap-alone cost (the ten painlands,
+    # the Urza tri-lands, Ancient Tomb, Rainbow Vale, Undiscovered Paradise,
+    # the five Ice Age depletion lands …) and 6 priced (Gemstone Mine and the
+    # five Mercadian Masques depletion lands). So clicking one sets no
+    # ``tapped_land_for_mana_this_turn`` (Desolation), applies no
+    # ``land_mana_produced`` replacement (Deep Water, Infernal Darkness,
+    # Contamination) and announces no ``land_tapped_for_mana`` (Mana Flare
+    # doubles a Forest and not a Karplusan Forest, driven through this route).
+    #
+    # Closing it is one round of its own: the tap-for-mana announcement belongs
+    # in the mana ability's resolution rather than in one of two seams the wire
+    # chooses between, which is what would cover the six priced lands as well —
+    # ``tap_land_for_mana`` refuses those by design (CR 602.2b) and always will.
     land_as_mana_tap = permanent.has_type("land")
     if land_as_mana_tap:
         usable = usable_activated_abilities(compile_card_oracle(permanent.effective_card))

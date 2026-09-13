@@ -138,8 +138,9 @@ class AdditionalCost:
     #: **The client could not make that announcement, and the reason was one
     #: string.** ``web/static/app.js``'s "does this card need an X?" test was a
     #: substring probe of the printed *mana cost*, which for Infernal Harvest is
-    #: ``{1}{B}`` -- so a human seat was offered no X box and the cast took
-    #: CR 107.3b's default of 0: legal (0 is a choice) and useless. The probe
+    #: ``{1}{B}`` -- so a human seat was offered no X box and the cast fell
+    #: back to the 0 an unmade CR 107.3a announcement reads as here: legal
+    #: (0 is a choice) and useless. The probe
     #: was one place short of CR 107.3a, which names four ("a mana cost,
     #: alternative cost, additional cost, and/or activation cost"), and Fire
     #: Covenant ({1}{B}{R}, "pay X life") lost the same way in the **shipped**
@@ -1363,8 +1364,9 @@ def cast_announces_x(card: CardDefinition, *, from_zone: str = "hand") -> bool:
     Covenant's is ``{1}{B}{R}`` and Infernal Harvest's is ``{1}{B}``: neither
     prints an {X} anywhere, because both spell their X in an *additional* cost
     ("pay X life", "return X Swamps you control to their owner's hand"). So the
-    browser offered no X box, the cast announced the CR 107.3b default of 0, and
-    two spells that are entirely about X resolved doing nothing at all -- legal,
+    browser offered no X box, the cast took the 0 an unmade CR 107.3a
+    announcement reads as here, and two spells that are entirely about X
+    resolved doing nothing at all -- legal,
     since 0 is a choice, and useless.
 
     Here rather than beside either reader for the reason

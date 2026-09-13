@@ -297,8 +297,9 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
         return "cost_x_definitions"
 
     # engine/cost_x_definitions.py — "X can't be 0." (Ertai's Meddling.) The
-    # same rule's other bound, and the one that forbids CR 107.3b's *default*:
-    # a spell cast without announcing X has an X of 0, so a floor nothing read
+    # same rule's other bound, and the one that forbids the *default*:
+    # CR 107.3a leaves the announcement with the caster, and a spell cast
+    # without making it has an X of 0 here, so a floor nothing read
     # would leave the card castable for nothing. Claimed here rather than
     # lowered for the ceiling's reason — the announcement stays the caster's
     # and there is no effect, only a number the cast path refuses.

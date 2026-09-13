@@ -2674,7 +2674,8 @@ def _pick_x_value(
     asked only that one. Fire Covenant ({1}{B}{R}, "pay X life"), Infernal
     Harvest ({1}{B}, "return X Swamps") and Haunting Misery ({1}{B}{B}, "exile
     X creature cards") print no {X} anywhere, so the AI announced nothing, the
-    cast took CR 107.3b's default of 0, and all three shipped spells resolved
+    cast fell back to the 0 an unmade CR 107.3a announcement reads as here, and
+    all three shipped spells resolved
     doing precisely nothing — legal, since 0 is a choice, and invisible to both
     honesty checks: the cast is not refused and it does interact. This is the
     same one-place-short reading ``cast_announces_x`` was written for on the

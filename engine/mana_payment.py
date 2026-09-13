@@ -365,14 +365,68 @@ def is_mana_ability(ability) -> bool:
     The no-target clause is asked of every step for the same reason: a sentence
     that adds mana and then targets something is not a mana ability, and asking
     only the outer instruction would have admitted it.
+
+    **And "doesn't require a target" is not the same question as "carries a
+    ``targets`` payload"** (CR 605.5a). That key is how a lowering spells a
+    targeted *object*; a targeted **player** is spelled as a payload value out
+    of the lowering's own reference vocabulary — ``"target"``,
+    ``"target_player"``, ``"target_opponent"`` — on whatever key the effect
+    happens to use. Witch Engine's "Target opponent gains control of this
+    creature" arrives as ``{"who": "target_opponent"}`` and so read as a mana
+    ability, which is the one card in the pool that is famously *not* one for
+    exactly this reason. Asked by value at any depth rather than by naming the
+    keys, because the key is the effect's business and the word is the rule's.
+
+    **The loyalty clause is real, and it is the third one this function used to
+    say it could skip.** The docstring above claimed "a loyalty ability never
+    produces mana in this pool, so asking the kind answers it too" — measurably
+    false: Chandra, Heart of Fire's "−9: … Add six {R}" is shipped, and it read
+    as a mana ability. A loyalty cost is a property of the **cost**, so it can
+    only be answered when this is handed an ability; given a bare
+    ``OracleInstruction`` there is no cost to read and the caller gets the
+    other two clauses alone. That is the honest answer rather than a silent
+    one — the four AI call sites pass a bare instruction and no planeswalker
+    reaches them.
     """
     instruction = getattr(ability, "instruction", ability)
     if instruction is None or not hasattr(instruction, "kind"):
         return False
+    cost = getattr(ability, "cost", None)
+    if getattr(cost, "loyalty", None) is not None:
+        return False
     steps = (instruction, *_every_nested_step(instruction))
     if not any(step.kind in MANA_PRODUCING_KINDS for step in steps):
         return False
-    return not any((step.payload or {}).get("targets") for step in steps)
+    return not any(
+        (step.payload or {}).get("targets") or _names_a_target(step.payload)
+        for step in steps
+    )
+
+
+#: How a lowering spells "this names a target" as a payload **value**, at any
+#: depth. Collected off the pool rather than invented: these three are the only
+#: ``target``-prefixed strings any compiled payload in either manifest role
+#: holds as a value, and every one of them is CR 115's word.
+_TARGET_REFERENCE_WORDS: frozenset[str] = frozenset({
+    "target", "target_player", "target_opponent",
+})
+
+
+def _names_a_target(value) -> bool:
+    """Whether *value* holds one of :data:`_TARGET_REFERENCE_WORDS` anywhere.
+
+    Values only — a payload **key** named ``targets_filter`` or ``target_color``
+    describes a target the sentence has already announced elsewhere or a colour
+    the effect asks about, and reading keys would make every "change the colour
+    of target permanent" rider answer this question twice.
+    """
+    if isinstance(value, str):
+        return value in _TARGET_REFERENCE_WORDS
+    if isinstance(value, dict):
+        return any(_names_a_target(inner) for inner in value.values())
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return any(_names_a_target(inner) for inner in value)
+    return False
 
 
 def _every_nested_step(instruction) -> tuple:

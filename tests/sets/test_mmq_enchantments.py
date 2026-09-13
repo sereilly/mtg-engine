@@ -1629,7 +1629,8 @@ def test_war_tax_taxes_each_attacker_and_refuses_an_unpayable_declaration(set_po
 
 
 def test_war_tax_at_x_zero_forbids_nothing(set_pool):
-    """CR 107.3b: X is what was announced, and an announced 0 is a toll of {0}.
+    """CR 107.3a: X is what the activator announced, and an announced 0 is a
+    toll of {0}.
 
     The restriction is still armed — it is filed in the same list the blanket
     prohibitions use — so this is the assertion that the two gates read an

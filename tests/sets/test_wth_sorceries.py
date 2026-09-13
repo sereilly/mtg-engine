@@ -48,7 +48,8 @@ def test_haunting_misery_announces_an_x_its_mana_cost_never_prints(set_pool):
     """CR 107.3a names four places an X can live, and Haunting Misery's is the
     *additional cost*: its printed mana cost is {1}{B}{B} with no {X} in it. A
     reader that probed only the mana cost would offer no X box and the cast
-    would take CR 107.3b's default of 0 — legal, and useless."""
+    would take the 0 an unmade CR 107.3a announcement reads as — legal, and
+    useless."""
     misery = set_pool("WTH")["Haunting Misery"]
     assert "{X}" not in (misery.mana_cost or "")
     assert cast_announces_x(misery)

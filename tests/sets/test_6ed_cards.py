@@ -187,7 +187,8 @@ def test_blaze_announces_x_and_asks_for_any_target(set_pool):
     `cast_announces_x` is the single reader of "does this cast need an X?" — it
     exists because `web/static/app.js` used to answer by substring-probing the
     printed mana cost, which is one of the four places CR 107.3a names, so a
-    card announcing X anywhere else was cast at CR 107.3b's default of 0. Blaze
+    card announcing X anywhere else was cast at the 0 an unmade CR 107.3a
+    announcement reads as. Blaze
     announces it in the mana cost, which is the case that always worked; it is
     pinned here beside the picker because the two answers together are what the
     client needs to offer the cast at all.
@@ -225,7 +226,8 @@ def test_blaze_deals_the_announced_x_to_a_creature(set_pool):
 
 def test_blaze_deals_the_announced_x_to_a_player(set_pool):
     """The other half of "any target" (CR 115.4). Cast for X=0 as well, because
-    CR 107.3b's default is the value a client that never asked would send, and
+    The 0 an unmade CR 107.3a announcement reads as is the value a client that
+    never asked would send, and
     "deals 0 damage" must not be a damage event that heals or crashes.
     """
     pool = set_pool("6ED")

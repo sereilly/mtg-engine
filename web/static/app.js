@@ -1719,7 +1719,8 @@ function manaPoolCanPayCost(manaPool, required) {
 // substring probe. Fire Covenant's cost is {1}{B}{R} and Infernal Harvest's is
 // {1}{B} — both spell their X in an *additional* cost ("pay X life", "return X
 // Swamps you control to their owner's hand"), so no X box was ever offered and
-// the cast took CR 107.3b's default of 0: legal, and useless, on two spells
+// the cast took the 0 an unmade announcement reads as: legal, and useless,
+// on two spells
 // that are nothing but X. `engine/cast_costs.cast_announces_x` is the one
 // reader; `announces_x` is what it puts on the spec.
 function hasXCost(card) {

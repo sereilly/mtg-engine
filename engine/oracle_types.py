@@ -47,7 +47,10 @@ def substitute_x_bounds(payload: dict, x_value: int | None) -> dict:
     and the cost of getting it wrong is ``int("x")``.
 
     An unannounced X resolves to 0, which is what ``resolve_amount`` reads it
-    as everywhere else: CR 107.3b makes an unspecified X zero.
+    as everywhere else. That is this engine's fallback for an announcement
+    CR 107.3a leaves with the caster and the caster did not make -- **not**
+    CR 107.3b, which locks X at 0 only for a spell cast while paying neither
+    its mana cost nor an alternative cost that includes X.
     """
     if not _carries_x_bound(payload):
         return payload

@@ -1608,7 +1608,7 @@ class SpellCastingMixin:
         # CR 601.2b's other bound: "X can't be 0." (Ertai's Meddling.) Beside
         # the ceiling because it is the same rule read the other way, and
         # **after** the inference above for the same reason — a caster who
-        # announced nothing has announced CR 107.3b's 0, which is exactly the
+        # announced nothing has announced 0 here, which is exactly the
         # value this sentence forbids. Refused here, before any cost is paid,
         # so CR 601.2e returns the game to the moment before the proposal.
         if floors_cast_x(card.oracle_text):
