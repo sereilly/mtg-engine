@@ -515,6 +515,36 @@ def _spell_targets_matching(
     return False
 
 
+def _counter_targets_refusal(game, instruction, context, target) -> bool:
+    """Whether the chosen object fails the counter's "…that targets …" rider.
+
+    "…that targets a permanent you control" (Avoid Fate, Ring of Immortals),
+    "…that targets **this creature**" (Mistfolk), "…that targets a creature"
+    (Diplomatic Escort). One reader, because it is one question and a spell is
+    not the only object that can be asked it: a spell announced its targets at
+    CR 601.2c and an ability announced its own at CR 602.2b, and the union
+    counter below reaches this from its own branch. Two copies would be a rider
+    honoured on the spell half of an offer and dropped on the ability half,
+    which is the whole of Diplomatic Escort's printed narrowing.
+
+    ``targets_source`` is Mistfolk's half, asked with the ability's own
+    permanent in hand — with the source gone there is no permanent the object
+    could still be aimed at, and the counter finds nothing, which is CR 608.2b's
+    answer rather than a missing check.
+    """
+    targets_filter = instruction.payload.get("targets_filter")
+    targets_source = (
+        context.source_permanent
+        if instruction.payload.get("targets_source") else None
+    )
+    if not targets_filter and targets_source is None:
+        return False
+    return not _spell_targets_matching(
+        game, target, dict(targets_filter or {}),
+        game.players.index(context.caster), source=targets_source,
+    )
+
+
 @effect_handler("counter_top_stack_spell")
 def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     card = context.card
@@ -544,6 +574,46 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
                 )
                 return True, "resolved"
         target = chosen if (chosen is not None and chosen in game.stack) else game.stack[-1]
+        # **The one place this engine decides which kind of object it
+        # countered.** CR 701.6a counters a spell and an ability alike, and
+        # CR 113.7a is the entire difference between them: a countered spell's
+        # card goes to its owner's graveyard, and an ability has no card at all
+        # — so every step below this one is a question about a card, and
+        # ``target.card`` on an ability is the *source permanent's* card, which
+        # answers all of them wrongly. Asked here, ahead of them, so a branch
+        # is needed exactly once rather than at each gate.
+        #
+        # ``also_ability`` is "Counter target spell **or ability**"
+        # (Diplomatic Escort); the lowering refuses every card question beside
+        # that union, so the rider below is all there is left to ask.
+        #
+        # **Without the union the answer is to counter nothing**, and that is
+        # not defensive tidiness: the fallback above takes the top of the stack
+        # when the chosen object is gone, and the top of the stack is very often
+        # an activated ability. Reaching CR 701.6a's graveyard from there would
+        # put the *source permanent's* card into a graveyard while the permanent
+        # itself stayed on the battlefield — a card conjured out of a counter
+        # that had nothing to counter.
+        if target.is_ability:
+            if not instruction.payload.get("also_ability"):
+                game.log.append(
+                    f"{card.name}: the top of the stack is "
+                    f"{target.card.name}'s ability, not a spell; nothing is countered"
+                )
+                return True, "resolved"
+            if _counter_targets_refusal(game, instruction, context, target):
+                game.log.append(
+                    f"{card.name}: {target.card.name}'s ability does not target "
+                    "a matching permanent, cannot counter"
+                )
+                return True, "resolved"
+            # The same seam the spell path ends with, and the whole of the
+            # effect here: CR 701.6a removes the object from the stack, and
+            # there is no card to bin, no "exile it instead" rider to honour
+            # and no destination to redirect.
+            game.counter_stack_object(target)
+            game.log.append(f"{card.name} countered {target.card.name}'s ability")
+            return True, "resolved"
         # What this step **chose**, recorded the moment it is known and not
         # where the counter succeeds. CR 608.2 does as much of the effect as it
         # can: "Counter target instant or sorcery spell. Search its controller's
@@ -634,23 +704,7 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
         # "…**that targets a permanent you control**" (Avoid Fate, Ring of
         # Immortals). A restriction on what the chosen spell itself chose, so it
         # is asked of the stack item's recorded targets rather than of the card.
-        targets_filter = instruction.payload.get("targets_filter")
-        # "…that targets **this creature**" (Mistfolk). The second half of the
-        # same question, asked with the ability's own source in hand. With the
-        # source already gone there is no permanent the spell could still be
-        # targeting, and the counter finds nothing — which is CR 608.2b's
-        # answer, not a missing check.
-        targets_source = (
-            context.source_permanent
-            if instruction.payload.get("targets_source") else None
-        )
-        if (
-            (targets_filter or targets_source is not None)
-            and not _spell_targets_matching(
-                game, target, dict(targets_filter or {}),
-                game.players.index(context.caster), source=targets_source,
-            )
-        ):
+        if _counter_targets_refusal(game, instruction, context, target):
             game.log.append(
                 f"{card.name}: {target.card.name} does not target a matching "
                 "permanent, cannot counter"

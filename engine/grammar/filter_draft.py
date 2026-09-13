@@ -237,6 +237,10 @@ class _FilterDraft:
     put_there_from_battlefield_this_turn: bool = False
     dealt_damage_to_source_this_turn: bool = False
     zone: str = "battlefield"
+    #: See ``ast.ObjectFilter.also_ability`` — "target **spell or ability**"
+    #: (Diplomatic Escort). Set only by the bare-"spell" head noun, so it never
+    #: travels without ``zone == "stack"``.
+    also_ability: bool = False
     zone_owner: ast.PlayerRef | None = None
     saw_head: bool = False
     type_match: str = "any"
@@ -314,6 +318,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         power_at_most_source_counters=d.power_at_most_source_counters,
         power_greater_than_cards_in_hand=d.power_greater_than_cards_in_hand,
         zone=d.zone,
+        also_ability=d.also_ability,
         zone_owner=d.zone_owner,
         is_card=d.is_card,
         with_plus1_counter=d.with_plus1_counter,

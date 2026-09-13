@@ -241,6 +241,28 @@ class ObjectFilter:
     # target activated ability" and "counter target triggered ability" are
     # different cards and the difference is exactly this tuple.
     ability_kinds: tuple[str, ...] = ()
+    # "counter target **spell or ability** that targets a creature."
+    # (Diplomatic Escort.) The union across the two kinds of object on the
+    # stack, which is not ``ability_kinds`` beside it: that field says "this
+    # phrase names abilities and no spell", and this one says "either". CR
+    # 113.7a keeps them apart, so the difference is the whole card — a counter
+    # that read the union as the field above would decline every spell.
+    #
+    # On the **filter** rather than on the node, where the same printed union
+    # rides ``ChangeTarget.also_ability`` one family over (Silver Wyvern).
+    # The difference is what follows the union: Silver Wyvern prints "that
+    # targets only this creature", which is no object filter at all and so is
+    # read by its own production, while this card prints "that targets a
+    # creature" — an ordinary relative clause that ``_parse_postmodifiers``
+    # attaches to the noun phrase. Read anywhere but here, the union would sit
+    # between the head noun and its own relative clause, and the clause would
+    # be left for whoever reads the rest of the line.
+    #
+    # Set only after a bare "spell" head noun, so it never travels without
+    # ``zone == "stack"``; ``_restrictions_beyond`` is what makes every
+    # lowering not written for it refuse the phrase by name rather than drop
+    # the union and counter (or exile, or recolour) a spell alone.
+    also_ability: bool = False
     # "…activated ability **from an artifact source**" (Rust, Ayesha Tanaka).
     # A narrowing on the *permanent the ability came from*, which is the only
     # thing about an ability on the stack there is to narrow by — it has no card

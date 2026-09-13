@@ -679,6 +679,17 @@ def _lower_become_color(
             )
         raise LoweringError("no handler for recolouring a non-targeted object", node=node)
     payload: dict[str, object] = {"target_color": node.color}
+    if node.subject.filter.also_ability:
+        # "target spell **or ability**" — the union the counter one family over
+        # reads (Diplomatic Escort). CR 113.7a: an ability on the stack has no
+        # card and no colour to change, so recolouring one is not a thing this
+        # sentence could mean; admitting the phrase would drop the union and
+        # aim the picker at spells alone. No card prints it. Refused rather than
+        # dropped, because the only other reader of this filter field is an
+        # explicit one and a *silent* one here is how a rider disappears.
+        raise LoweringError(
+            "an ability on the stack has no colour to change", node=node
+        )
     if node.subject.filter.zone == "stack":
         # "{T}: Target **spell** becomes colorless." (Ersatz Gnomes.) The
         # printed noun names an object on the stack and nothing else, so the

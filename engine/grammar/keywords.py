@@ -23,6 +23,24 @@ from .vocabulary import (KEYWORD_FAMILIES, KEYWORD_INDEX, NUMERIC_ARGUMENT_KEYWO
 
 PROTECTION_FROM_CHOSEN_COLOR = "protection from the color of your choice"
 
+#: "…protection from the color of **its controller's** choice" (Wishmonger).
+#: Its own keyword string beside the one above, and the difference is *who is
+#: asked*: "your choice" is the controller of the spell or ability doing the
+#: granting (CR 109.5 — for an activated ability, the player who activated it),
+#: and this one is the controller of the creature being granted to. On this card
+#: that is a third player: "Any player may activate this ability" is CR 602.2's
+#: "unless the object specifically says otherwise", so the activator need not
+#: control the permanent the ability is on either.
+#:
+#: A second string rather than a flag beside the first, for the reason the first
+#: is a string rather than a flag on the node: the grant handler has to know
+#: **which channel to read the answer off**, and one name with a rider beside it
+#: has a state where the two disagree and nothing to say which the handler
+#: should believe.
+PROTECTION_FROM_TARGETS_CONTROLLERS_CHOSEN_COLOR = (
+    "protection from the color of its controller's choice"
+)
+
 
 def _accept_bands_with_other(stream: TokenStream) -> str | None:
     """One "bands with other [quality]" item of a keyword list, or None.
@@ -171,7 +189,18 @@ def parse_keyword_list(stream: TokenStream) -> tuple[tuple[str, ...], bool]:
             # the same resolution, so they name one colour and read one channel
             # — a second keyword string would be a second answer to it, and the
             # grant handler would have to learn which sentence had asked.
-            if stream.accept_phrase("the", "color", "of", "your", "choice") or (
+            # "…from **the color of its controller's choice**" (Wishmonger).
+            # The same CR 608.2d choice asked of a different seat — the
+            # controller of the creature the grant lands on, not the controller
+            # of the ability granting it. Read before the two below because all
+            # three open on "the color of", and the lexer splits the possessive
+            # into two words ("controller" + "'s"), so the phrase is seven
+            # tokens rather than six.
+            if stream.accept_phrase(
+                "the", "color", "of", "its", "controller", "'s", "choice"
+            ):
+                name = PROTECTION_FROM_TARGETS_CONTROLLERS_CHOSEN_COLOR
+            elif stream.accept_phrase("the", "color", "of", "your", "choice") or (
                 stream.accept_phrase("the", "chosen", "color")
             ):
                 name = PROTECTION_FROM_CHOSEN_COLOR

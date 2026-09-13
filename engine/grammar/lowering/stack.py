@@ -43,7 +43,21 @@ _COUNTER_HONOURED_FILTER_FIELDS = frozenset({
     # ``card_types``, and honoured by the same three readers it is — the
     # handler's test, the picker's spec and the stack enumeration behind it.
     "excluded_types",
+    # "Counter target spell **or ability**…" (Diplomatic Escort). Honoured by
+    # ``_refuse_card_questions_of_the_union`` below, which is what makes the
+    # word mean something rather than merely be allowed through.
+    "also_ability",
 })
+
+#: The ``ObjectFilter`` fields a "spell **or ability**" union may carry beside
+#: the union itself. Everything else in :data:`_COUNTER_HONOURED_FILTER_FIELDS`
+#: is a question about a **card** — its colour, its types, its mana value, who
+#: cast it — and an ability on the stack has none (CR 113.7a), so a union
+#: carrying one would describe a set half of which could never be tested.
+#: ``targets_object`` survives because it asks what the object *chose*, which a
+#: spell answered at CR 601.2c and an ability at CR 602.2b — one question, both
+#: kinds.
+_UNION_HONOURED_FILTER_FIELDS = frozenset({"zone", "also_ability", "targets_object"})
 
 # The "unless … pays" costs the counter flow can offer: ``{X}`` (Power Sink,
 # sized from the caster's chosen X) and a fixed generic amount (Miscast's
@@ -365,6 +379,48 @@ def _lower_counter_spell(
         # postmodifier actually named is an object the counter flow cannot see.
         raise LoweringError("the counter flow reads spells on the stack", node=node)
     payload: dict[str, object] = {}
+    if filt.also_ability:
+        # "Counter target spell **or ability** that targets a creature."
+        # (Diplomatic Escort.) CR 701.6a counters either kind of object on the
+        # stack, and CR 113.7a is the whole of the difference: a countered
+        # spell's card goes to its owner's graveyard and a countered ability
+        # has no card to send anywhere. **That is the only difference**, which
+        # is why this stays ``counter_top_stack_spell`` rather than becoming a
+        # third kind or routing to ``counter_stack_ability`` — the ability
+        # counter is the handler for a card that names abilities *and no
+        # spell*, and it carries the two narrowings ("activated or triggered",
+        # "from an artifact source") a union never prints.
+        #
+        # The decision is made once, at resolution, where the object is in
+        # hand: everything the counter could ask that only a card can answer is
+        # refused **here**, so the handler's single ``is_ability`` branch is the
+        # whole of it and no gate below it can be reached by an ability.
+        beyond = _restrictions_beyond(filt, _UNION_HONOURED_FILTER_FIELDS)
+        if beyond:
+            raise LoweringError(
+                "a spell-or-ability counter cannot ask a card question: "
+                + ", ".join(beyond),
+                node=node,
+            )
+        if (
+            node.unless_pays is not None
+            or node.only_if is not None
+            or node.countered_to is not None
+            or node.unpaid_penalty is not None
+        ):
+            # Each of these is a spell-shaped tail: an offer whose decline
+            # counters, a condition read off the other spell's own program, a
+            # replacement destination for the card. The first is performed for
+            # an ability by ``counter_stack_ability``'s own flow and the last
+            # two name a card the union may not have — so the union refuses
+            # rather than performing half of what is printed. No card prints
+            # one today; this is what keeps the first one that does from
+            # arriving silently.
+            raise LoweringError(
+                "a spell-or-ability counter takes no payment, condition or "
+                "redirect", node=node,
+            )
+        payload["also_ability"] = True
     if filt.card_types:
         # "target instant or sorcery **spell**" (Miscast), "target artifact
         # **spell**" (Artifact Blast). The handler tests the chosen spell's type

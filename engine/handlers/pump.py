@@ -2126,9 +2126,11 @@ def _grant_one_keyword(game, permanent, keyword: str, context, lifetime=None) ->
     than defaulting to a colour: a protection the player did not pick is a
     protection from the wrong things, and doing nothing is the honest failure.
     """
-    from ..grammar.phrases import PROTECTION_FROM_CHOSEN_COLOR
+    from ..grammar.phrases import (PROTECTION_FROM_CHOSEN_COLOR,
+                                   PROTECTION_FROM_TARGETS_CONTROLLERS_CHOSEN_COLOR)
     from ..keywords import (LINE_DERIVED_KEYWORDS, grant_ability_line,
                             keyword_ability_name)
+    from ..oracle_types import CHOSEN_COLOR_THIS_WAY
 
     # …and layer 6's word-set is not where a *line-derived* ability's reader
     # looks either. CR 702.23a defines "Rampage N" as a triggered ability, so
@@ -2147,8 +2149,26 @@ def _grant_one_keyword(game, permanent, keyword: str, context, lifetime=None) ->
     if not keyword.startswith("protection from "):
         grant_keyword(permanent, keyword, **lifetime)
         return
-    if keyword == PROTECTION_FROM_CHOSEN_COLOR:
-        symbol = game._normalize_mana_color((context.choices or {}).get("new_color"))
+    if keyword in (
+        PROTECTION_FROM_CHOSEN_COLOR,
+        PROTECTION_FROM_TARGETS_CONTROLLERS_CHOSEN_COLOR,
+    ):
+        # Two printed phrasings, two channels, and **which one is read is the
+        # keyword's own business** rather than a fallback chain. "The color of
+        # your choice" is named by whoever announced the spell or ability, so it
+        # rides the announcement (``choices["new_color"]``). "The color of its
+        # controller's choice" (Wishmonger) is named by the controller of the
+        # creature being granted to, who announced nothing — the step in front
+        # of this one asked them and wrote the answer into this resolution's
+        # scratchpad. Reading both keys for either phrase would let an
+        # announcement made for some other purpose answer a question it was
+        # never asked.
+        named = (
+            context.results.get(CHOSEN_COLOR_THIS_WAY)
+            if keyword == PROTECTION_FROM_TARGETS_CONTROLLERS_CHOSEN_COLOR
+            else (context.choices or {}).get("new_color")
+        )
+        symbol = game._normalize_mana_color(named)
         if symbol is None:
             game.log.append(
                 f"{context.card.name}: no colour was chosen, so nothing is protected from"
