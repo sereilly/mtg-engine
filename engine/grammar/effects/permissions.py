@@ -19,6 +19,23 @@ reached from the statement dispatcher and from nothing else, and
 nothing else; neither is called by anything left behind, and neither calls
 anything left behind.
 
+**And the withholding half arrived at Mercadian Masques' third Phase 0**, when
+``effects/game.py`` sat eight lines under the guard. Five productions came over:
+"can't play lands" (CR 305.1), "can't cast ⟨types⟩ spells", "can't activate
+abilities that aren't mana abilities", the bound-permanent activation ban and
+the targeting ban (CR 115.2). They are this file's own question with the sign
+flipped — who may do what — and ``game``'s docstring had never listed them,
+which is the tell that they were somebody else's subject sitting in the nearest
+module.
+
+They are **not** ``prohibitions``, and that name was the first answer here
+before the collision was checked: ``lowering/prohibitions.py`` is "can't be
+blocked / can't be regenerated", a restriction on what may be done **to** a
+permanent, and naming a second module for what a *player* may not do would put
+one word on two subjects in mirror positions — the duplicate-idea hazard, which
+no textual guard can see. A permission granted and a permission withheld are
+one family, so they get one home.
+
 Both definitions moved byte-identically, so no card's compiled program moves —
 which is the only thing a parse-side split can get wrong, and it can get it
 wrong only by renaming a lowering **category**. Nothing here has one: a
@@ -371,3 +388,178 @@ def _parse_play_with_top_revealed(
         stream.reset(mark)
         return None
     return ast.PlayWithTopRevealed(ast.PlayerRef("you"))
+
+
+def parse_cant_play_lands(
+    stream: TokenStream, subject: "ast.Recipient"
+) -> "ast.CantPlayLands | None":
+    """``… can't play lands this turn.`` (Solfatara.) The verb only — the
+    subject has already been read by the caller.
+
+    CR 305.1's permission withdrawn from one seat for one turn, and the mirror
+    of :func:`parse_extra_land_plays`. Non-consuming on refusal, because the
+    ``can't`` dispatcher hands every other sentence on to the combat production
+    and a consumed word there would replace its refusal with one naming a verb
+    the line never printed.
+
+    The duration is required for the same reason as above: "Players can't play
+    lands" (Worms of the Earth) is a permanent's static ability read by
+    ``engine/land_play_allowance.py``, and it prints no duration at all.
+    """
+    if not isinstance(subject, ast.PlayerRef):
+        return None
+    mark = stream.mark()
+    if not stream.accept_phrase("play", "lands"):
+        stream.reset(mark)
+        return None
+    duration = _parse_duration(stream)
+    if duration.kind != "this_turn":
+        stream.reset(mark)
+        return None
+    return ast.CantPlayLands(subject, duration)
+
+
+#: The card types a printed "can't cast <types> spells" may name. The same list
+#: ``cast_restrictions._BANNABLE_SPELL_TYPES`` holds one module over, and for
+#: that list's reason: what a card may forbid is a card type, and a word outside
+#: the type line describes nothing the gate can test.
+_BANNABLE_CAST_TYPES = (
+    "artifact", "creature", "enchantment", "instant", "sorcery",
+    "planeswalker", "battle", "land",
+)
+
+
+def parse_cant_cast_spell_types(
+    stream: TokenStream, subject: "ast.Recipient"
+) -> "ast.CantCastSpellTypes | None":
+    """``… can't cast <type>[ or <type>]* spells.`` (Abeyance.) The verb only —
+    the subject has already been read by the caller.
+
+    CR 601.3's permission withdrawn from one named seat, the resolved-effect
+    twin of the three board-scanned bans in ``engine/cast_restrictions.py``.
+
+    Every type must be one the gate can test, and the list must be **exhausted
+    by the word "spells"**: a phrase this reader could only half-consume would
+    leave the rest as unconsumed text, which is the loud direction, rather than
+    a ban narrower than the card prints.
+
+    Non-consuming on refusal, because the ``can't`` dispatcher hands every other
+    sentence on to the combat production and a consumed word there would replace
+    its refusal with one naming a verb the line never printed — the arrangement
+    ``parse_cant_play_lands`` above already documents.
+
+    The **duration** is not read here. Abeyance prints it in front of the whole
+    sentence, and ``sentence_clauses._distribute_duration`` attaches a leading
+    prefix to the node afterwards; the lowering is what refuses a node that
+    still has none, for ``CantPlayLands``' reason — a durationless "can't cast"
+    is a permanent's static ability that ``cast_restrictions.py`` already reads.
+    """
+    if not isinstance(subject, ast.PlayerRef):
+        return None
+    mark = stream.mark()
+    if not stream.accept_word("cast"):
+        stream.reset(mark)
+        return None
+    types: list[str] = []
+    while True:
+        word = stream.peek_word()
+        if word not in _BANNABLE_CAST_TYPES:
+            stream.reset(mark)
+            return None
+        stream.advance()
+        types.append(word)
+        if not stream.accept_word("or"):
+            break
+    if not stream.accept_word("spells"):
+        stream.reset(mark)
+        return None
+    return ast.CantCastSpellTypes(subject, tuple(types))
+
+
+def parse_cant_activate_nonmana_abilities(
+    stream: TokenStream, subject: "ast.Recipient"
+) -> "ast.CantActivateNonManaAbilities | None":
+    """``… can't activate abilities that aren't mana abilities.`` (Abeyance.)
+    The verb only — the subject has already been read by the caller.
+
+    CR 602.5 for one named seat. Every word of the exception is required: "can't
+    activate abilities" with the rest dropped is a prohibition that also stops
+    the player tapping a Forest, which is a strictly larger card — and the
+    exception names a **rule** (CR 605.1a) rather than a set the card chooses, so
+    a different exception is a different sentence and refuses here.
+
+    Non-consuming on refusal, for the reason its sibling above gives.
+    """
+    if not isinstance(subject, ast.PlayerRef):
+        return None
+    mark = stream.mark()
+    if stream.accept_phrase(
+        "activate", "abilities", "that", "aren't", "mana", "abilities"
+    ):
+        return ast.CantActivateNonManaAbilities(subject)
+    stream.reset(mark)
+    return None
+
+
+def _parse_bound_permanent_activation_ban(
+    stream: TokenStream,
+) -> "ast.BoundPermanentActivationBan | None":
+    """``that permanent's activated abilities can't be activated <duration>``
+    (Interdict), or None with the cursor exactly where it was.
+
+    Read whole, with no payload in it, for :func:`_parse_targeting_ban`'s
+    reason: every word is the rule. "Activated" is required — a ban with the
+    word dropped would stop triggered and static abilities the card leaves
+    alone — and the pronoun is required to be "that permanent", the restated
+    noun phrase CR 113.7a forces on a spell that targeted an ability, because
+    an ability has no card of its own to name.
+
+    Refuses without consuming, so every other sentence opening on "that" keeps
+    its reading.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase(
+        "that", "permanent", "'s", "activated", "abilities",
+        "can't", "be", "activated",
+    ):
+        stream.reset(mark)
+        return None
+    duration = _parse_duration(stream)
+    if duration.kind == "none":
+        # The trailing window is the whole of what makes this liftable; a
+        # sentence without one is refused rather than read as "for ever",
+        # which is the lowering's rule stated at the parse so the line fails
+        # where the words are.
+        stream.reset(mark)
+        return None
+    return ast.BoundPermanentActivationBan(duration)
+
+
+def _parse_targeting_ban(stream: TokenStream) -> "ast.TargetingBan | None":
+    """``players and permanents can't be the targets of spells or activated
+    abilities [<duration>]`` (Peace Talks).
+
+    CR 115.1 denied outright for a stated window. Read here rather than by the
+    subject-verb table because the sentence's subject is *two* populations at
+    once — a player and an object — and that reader carries one subject; a
+    production per half would be two rules for one printed clause, and the half
+    that arrived second would be free to disagree about the window.
+
+    Refuses without consuming, so every other sentence opening with "players"
+    keeps the reading it has. The clause is spelled out whole: this is one
+    printed sentence with nothing in it that is payload, and a looser match
+    would claim a narrowed printing ("players can't be the targets of **red**
+    spells") and then ban more than the card does.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase(
+        "players", "and", "permanents", "can't", "be", "the", "targets", "of",
+        "spells", "or", "activated", "abilities",
+    ):
+        stream.reset(mark)
+        return None
+    # The trailing spelling of the window; Peace Talks prints the leading one,
+    # which `sentence_clauses._distribute_duration` attaches to this node's
+    # field afterwards. Both, because which end a card prints it on is not a
+    # difference in the rule.
+    return ast.TargetingBan(_parse_duration(stream))

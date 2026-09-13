@@ -267,13 +267,19 @@ from .game import (
     _parse_extra_turn,
     parse_extra_phases,
     _parse_skip_step,
+    parse_choose_card_type,
+    parse_extra_land_plays,
+)
+# The five withheld-permission productions left `game` at Mercadian Masques'
+# third Phase 0 — a subject its docstring had never listed — and joined the
+# granting half in `permissions`. Re-exported under the names they had, so
+# no caller moved.
+from .permissions import (
     _parse_bound_permanent_activation_ban,
     _parse_targeting_ban,
     parse_cant_activate_nonmana_abilities,
     parse_cant_cast_spell_types,
     parse_cant_play_lands,
-    parse_choose_card_type,
-    parse_extra_land_plays,
 )
 
 __all__ = [
