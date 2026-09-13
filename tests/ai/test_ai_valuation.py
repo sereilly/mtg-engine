@@ -398,6 +398,17 @@ def test_every_divided_card_in_the_pool_is_described(catalog):
         # reason CR 615 gives. A shield is a gift, so the pool's second divided
         # prevention needed no new rule at all.
         "Arc Lightning", "Serra's Hymn",
+        # Reviewed at Mercadian Masques' promotion, and the set's only one.
+        # Volcanic Wind answers "opponent" off the `damage` category like every
+        # burn spell above it, and it is derived rather than assigned — but the
+        # *shape* is new twice over: the total is an announced X (Firestorm's
+        # half) **and** that X is read off the board as the spell is cast
+        # ("the number of creatures on the battlefield"), so the caster picks
+        # neither the number nor the ceiling. Named here rather than counted
+        # because a division whose size nobody chooses is the one an AI side
+        # list could plausibly have wanted a different answer for, and it does
+        # not: who to aim at is still the question, and it is still "opponent".
+        "Volcanic Wind",
         # Reviewed at Tempest's promotion, and it is the entry that adds
         # nothing -- which is the reviewable result rather than the absence of
         # one. Rolling Thunder's every derived field already matched four cards

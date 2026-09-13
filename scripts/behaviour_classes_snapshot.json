@@ -15,6 +15,7 @@
     "Elvish Ranger",
     "Femeref Scouts",
     "Fire Elemental",
+    "Fresh Volunteers",
     "Garruk's Gorehorn",
     "Giant Cockroach",
     "Goblin Hero",
@@ -62,7 +63,25 @@
     "Vodalian Soldiers",
     "Walking Corpse",
     "Water Elemental",
+    "Wild Jhovall",
     "Wishcoin Crab"
+  ],
+  [
+    "Abbey Gargoyles",
+    "Cerulean Wyvern",
+    "Duskrider Falcon",
+    "Freewind Falcon",
+    "Hazerider Drake",
+    "Melesse Spirit",
+    "Nightwind Glider",
+    "Sea Sprite",
+    "Thermal Glider",
+    "Voice of Duty",
+    "Voice of Grace",
+    "Voice of Law",
+    "Voice of Reason",
+    "Weatherseed Faeries",
+    "Windreaper Falcon"
   ],
   [
     "Air Elemental",
@@ -73,6 +92,7 @@
     "Feral Shadow",
     "Fighting Drake",
     "Flying Men",
+    "Misshapen Fiend",
     "Phantom Monster",
     "Roc of Kher Ridges",
     "Scryb Sprites",
@@ -81,23 +101,9 @@
     "Wind Drake"
   ],
   [
-    "Abbey Gargoyles",
-    "Cerulean Wyvern",
-    "Duskrider Falcon",
-    "Freewind Falcon",
-    "Hazerider Drake",
-    "Melesse Spirit",
-    "Sea Sprite",
-    "Voice of Duty",
-    "Voice of Grace",
-    "Voice of Law",
-    "Voice of Reason",
-    "Weatherseed Faeries",
-    "Windreaper Falcon"
-  ],
-  [
     "Anaconda",
     "Bog Raiders",
+    "Bog Smugglers",
     "Bog Wraith",
     "Lost Soul",
     "Marsh Goblins",
@@ -110,6 +116,7 @@
     "Elvish Archers",
     "Hornet Cobra",
     "Land Leeches",
+    "Lightning Hounds",
     "Ramirez DePietro",
     "Sabretooth Tiger",
     "Serra Zealot",
@@ -121,6 +128,7 @@
     "Crash of Rhinos",
     "Goliath Beetle",
     "Iron Tusk Elephant",
+    "Jhovall Rider",
     "Moorish Cavalry",
     "War Mammoth",
     "Wild Elephant"
@@ -224,6 +232,13 @@
     "Circle of Protection: White"
   ],
   [
+    "Craven Giant",
+    "Goblin Raider",
+    "Hulking Cyclops",
+    "Hulking Ogre",
+    "Ogre Taskmaster"
+  ],
+  [
     "Crystal Rod",
     "Iron Star",
     "Ivory Cup",
@@ -250,6 +265,13 @@
     "Pearl Medallion",
     "Ruby Medallion",
     "Sapphire Medallion"
+  ],
+  [
+    "Fetid Horror",
+    "Frozen Shade",
+    "Hoar Shade",
+    "Looming Shade",
+    "Primeval Shambler"
   ],
   [
     "Hematite Talisman",
@@ -285,16 +307,34 @@
     "Plated Spider"
   ],
   [
+    "Canyon Wildcat",
+    "Goblin Spelunkers",
+    "Mountain Goat",
+    "Rock Badger"
+  ],
+  [
+    "Cat Warriors",
+    "Heartwood Treefolk",
+    "Rushwood Dryad",
+    "Shanodin Dryads"
+  ],
+  [
+    "Cloud Djinn",
+    "Cloud Elemental",
+    "Cloud Spirit",
+    "Rishadan Airship"
+  ],
+  [
     "Colossal Dreadmaw",
     "Rootbreaker Wurm",
     "Wildwood Patrol",
     "Yavimaya Wurm"
   ],
   [
-    "Craven Giant",
-    "Goblin Raider",
-    "Hulking Cyclops",
-    "Hulking Ogre"
+    "Crossbow Infantry",
+    "D'Avenant Archer",
+    "Elite Archers",
+    "Heavy Ballista"
   ],
   [
     "Deathlace",
@@ -315,12 +355,6 @@
     "Zelyon Sword"
   ],
   [
-    "Fetid Horror",
-    "Frozen Shade",
-    "Hoar Shade",
-    "Looming Shade"
-  ],
-  [
     "Firefly",
     "Granite Gargoyle",
     "Hellkite Punisher",
@@ -331,6 +365,11 @@
     "Obsianus Golem",
     "Phyrexian Hulk",
     "Phyrexian Walker"
+  ],
+  [
+    "Ardent Militia",
+    "Jhovall Queen",
+    "Standing Troops"
   ],
   [
     "Army of Allah",
@@ -348,29 +387,14 @@
     "Tolarian Drake"
   ],
   [
-    "Canyon Wildcat",
-    "Goblin Spelunkers",
-    "Mountain Goat"
-  ],
-  [
-    "Cat Warriors",
-    "Heartwood Treefolk",
-    "Shanodin Dryads"
+    "Cateran Brute",
+    "Cateran Kidnappers",
+    "Cateran Persuader"
   ],
   [
     "Cave Tiger",
     "Rabid Wolverines",
     "Viashino Weaponsmith"
-  ],
-  [
-    "Cloud Djinn",
-    "Cloud Elemental",
-    "Cloud Spirit"
-  ],
-  [
-    "D'Avenant Archer",
-    "Elite Archers",
-    "Heavy Ballista"
   ],
   [
     "Darkness",
@@ -408,9 +432,19 @@
     "Thundering Giant"
   ],
   [
+    "Metathran Soldier",
+    "Phantom Warrior",
+    "Tidal Kraken"
+  ],
+  [
     "Prodigal Sorcerer",
     "Rootwater Hunter",
     "Zuran Spellcaster"
+  ],
+  [
+    "Ramosian Commander",
+    "Ramosian Lieutenant",
+    "Ramosian Sergeant"
   ],
   [
     "About Face",
@@ -437,6 +471,10 @@
     "Righteousness"
   ],
   [
+    "Alpine Watchdog",
+    "Steadfast Guard"
+  ],
+  [
     "Ambush Party",
     "Goblin Berserker"
   ],
@@ -449,16 +487,16 @@
     "Serra Advocate"
   ],
   [
-    "Ardent Militia",
-    "Standing Troops"
-  ],
-  [
     "Armor Sliver",
     "Barbed Sliver"
   ],
   [
     "Armor of Faith",
     "Holy Armor"
+  ],
+  [
+    "Azimaet Drake",
+    "Drake Hatchling"
   ],
   [
     "Bad Moon",
@@ -483,6 +521,10 @@
   [
     "Blue Elemental Blast",
     "Red Elemental Blast"
+  ],
+  [
+    "Bog Rats",
+    "Rampart Crawler"
   ],
   [
     "Brassclaw Orcs",
@@ -523,6 +565,18 @@
   [
     "Dand\u00e2n",
     "Sea Serpent"
+  ],
+  [
+    "Deathgazer",
+    "Dread Specter"
+  ],
+  [
+    "Deepwood Tantiv",
+    "Sacred Prey"
+  ],
+  [
+    "Deepwood Wolverine",
+    "Snorting Gahr"
   ],
   [
     "Defender of Chaos",
@@ -569,6 +623,10 @@
     "Spitting Drake"
   ],
   [
+    "Flailing Ogre",
+    "Flailing Soldier"
+  ],
+  [
     "Flame Spirit",
     "Storm Shaman"
   ],
@@ -593,6 +651,10 @@
     "Snow-Covered Forest"
   ],
   [
+    "Fyndhorn Bow",
+    "Iron Lance"
+  ],
+  [
     "Goblin Mutant",
     "Orgg"
   ],
@@ -615,6 +677,14 @@
   [
     "Hell Swarm",
     "Marsh Gas"
+  ],
+  [
+    "Henge Guardian",
+    "Igneous Golem"
+  ],
+  [
+    "Henge of Ramos",
+    "School of the Unseen"
   ],
   [
     "Hydroblast",
@@ -693,8 +763,8 @@
     "Teremko Griffin"
   ],
   [
-    "Metathran Soldier",
-    "Phantom Warrior"
+    "Mogg Fanatic",
+    "Shock Troops"
   ],
   [
     "Mountain",
@@ -761,6 +831,10 @@
     "Rise Again"
   ],
   [
+    "Rishadan Cutpurse",
+    "Rishadan Footpad"
+  ],
+  [
     "Rock Basilisk",
     "Thicket Basilisk"
   ],
@@ -779,6 +853,10 @@
   [
     "Sisay's Ring",
     "Sol Ring"
+  ],
+  [
+    "Skulking Fugitive",
+    "Tar Pit Warrior"
   ],
   [
     "Snow-Covered Swamp",

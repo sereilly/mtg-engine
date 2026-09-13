@@ -1549,14 +1549,34 @@ def _graveyard_exile_pile_spec(payload: dict) -> dict | None:
 def _prevention_shield_spec(payload: dict) -> dict | None:
     """A "prevent the next N damage" shield, and who is being shielded.
 
-    One kind, five answers, and the payload settles which: the shield sits on
+    One kind, six answers, and the payload settles which: the shield sits on
     the caster (Conservator), on the source permanent itself (Rock Hydra), on
     the permanent this Aura is attached to (Fylgja), on a *source of the named
     colour* the controller chooses (the Circles of Protection), or on a target
-    the ability picks (Oasis, Samite Healer, Guardian Angel). The first three
-    choose nothing at all, which is why this returns None rather than a spec.
+    the ability picks (Oasis, Samite Healer, Guardian Angel), or on whoever the
+    *source itself* would have damaged (Barbed Wire). Four of the six choose
+    nothing at all, which is why this returns None rather than a spec.
     """
     if payload.get("to_self") or payload.get("to_source"):
+        return None
+    if payload.get("from_source"):
+        # "Prevent the next 1 damage that would be dealt **by this artifact**
+        # this turn." (Barbed Wire.) The **sixth** answer, and the one this
+        # function's twin had already written down: ``_whole_prevention_shield_
+        # spec`` below carries the same branch with the reason spelled out —
+        # "the source is printed rather than chosen, so there is nothing to
+        # ask", and "a flat entry would have raised a picker on the card that
+        # names its own source". That is exactly what happened here, because
+        # the twin's branch was never copied back.
+        #
+        # ``any_recipient`` is what makes it look like a target and is not one:
+        # it says the shield answers to whoever the damage would have hit
+        # (CR 615.1 fixes the recipient at the damage event), not that the
+        # activator picks one. Barbed Wire is the pool's only activated
+        # ``from_source`` shield, measured over both manifest roles, and it
+        # reached the client asking for "any target" for an ability that names
+        # none — which `picker_sweep` cannot see, because it asks whether a
+        # picker is *derived*, not whether the line wanted one.
         return None
     if payload.get("to_attached"):
         # "…that would be dealt to **enchanted creature**" (Fylgja). The fifth

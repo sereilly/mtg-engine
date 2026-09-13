@@ -247,6 +247,13 @@
   ]
  },
  {
+  "card": "Bifurcate",
+  "clause": "search your library for a permanent card with the same name as target nontoken creature, put that card onto the battlefield, then shuffle",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
   "card": "Blazing Effigy",
   "clause": "it deals x damage to target creature, where x is 3 plus the amount of damage dealt to this creature this turn by other sources named blazing effigy",
   "ignored": [
@@ -265,6 +272,13 @@
   "clause": "tap all nonwhite creatures",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Blood Oath",
+  "clause": "choose a card type. target opponent reveals their hand. blood oath deals 3 damage to that player for each card of the chosen type revealed this way",
+  "ignored": [
+   "oath"
   ]
  },
  {
@@ -325,6 +339,13 @@
   ]
  },
  {
+  "card": "Brawl",
+  "clause": "until end of turn, all creatures gain \"{t}: this creature deals damage equal to its power to target creature.\"",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Brine Hag",
   "clause": "change the base power and toughness of all creatures that dealt damage to it this turn to 0/2",
   "ignored": [
@@ -346,6 +367,48 @@
   ]
  },
  {
+  "card": "Cateran Brute",
+  "clause": "search your library for a mercenary permanent card with mana value 2 or less, put it onto the battlefield, then shuffle",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Cateran Enforcer",
+  "clause": "search your library for a mercenary permanent card with mana value 4 or less, put it onto the battlefield, then shuffle",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Cateran Kidnappers",
+  "clause": "search your library for a mercenary permanent card with mana value 3 or less, put it onto the battlefield, then shuffle",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Cateran Overlord",
+  "clause": "search your library for a mercenary permanent card with mana value 6 or less, put it onto the battlefield, then shuffle",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Cateran Persuader",
+  "clause": "search your library for a mercenary permanent card with mana value 1 or less, put it onto the battlefield, then shuffle",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Cateran Slaver",
+  "clause": "search your library for a mercenary permanent card with mana value 5 or less, put it onto the battlefield, then shuffle",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
   "card": "Chandra, Flame's Catalyst",
   "clause": "you may cast target red instant or sorcery card from your graveyard. if that spell would be put into your graveyard, exile it instead",
   "ignored": [
@@ -358,6 +421,13 @@
   "clause": "search your graveyard and library for any number of red instant and/or sorcery cards, exile them, then shuffle. you may cast them this turn. add six {r}",
   "ignored": [
    "and/or"
+  ]
+ },
+ {
+  "card": "Charmed Griffin",
+  "clause": "each other player may put an artifact or enchantment card onto the battlefield from their hand",
+  "ignored": [
+   "card"
   ]
  },
  {
@@ -678,6 +748,13 @@
   ]
  },
  {
+  "card": "Erithizon",
+  "clause": "put a +1/+1 counter on target creature of defending player's choice",
+  "ignored": [
+   "target"
+  ]
+ },
+ {
   "card": "Errant Minion",
   "clause": "that player may pay any amount of mana. this aura deals 2 damage to that player. prevent x of that damage, where x is the amount of mana that player paid this way",
   "ignored": [
@@ -822,6 +899,13 @@
   ]
  },
  {
+  "card": "Forced March",
+  "clause": "destroy all creatures with mana value x or less",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Freyalise Supplicant",
   "clause": "this creature deals damage to any target equal to half the sacrificed creature's power, rounded down",
   "ignored": [
@@ -889,6 +973,13 @@
   "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {2}{r}",
   "ignored": [
    "permanent"
+  ]
+ },
+ {
+  "card": "Ghoul's Feast",
+  "clause": "target creature gets +x/+0 until end of turn, where x is the number of creature cards in your graveyard",
+  "ignored": [
+   "cards"
   ]
  },
  {
@@ -1027,6 +1118,13 @@
   ]
  },
  {
+  "card": "Hammer Mage",
+  "clause": "destroy all artifacts with mana value x or less",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Harbinger of Night",
   "clause": "put a -1/-1 counter on each creature",
   "ignored": [
@@ -1097,6 +1195,13 @@
   ]
  },
  {
+  "card": "Hickory Woodlot",
+  "clause": "add {g}{g}. if there are no depletion counters on this land, sacrifice it",
+  "ignored": [
+   "land,"
+  ]
+ },
+ {
   "card": "Hidden Ancients",
   "clause": "if this permanent is an enchantment, it becomes a 5/5 treefolk creature",
   "ignored": [
@@ -1157,6 +1262,20 @@
   "clause": "if this land is tapped, put a storage counter on it",
   "ignored": [
    "land"
+  ]
+ },
+ {
+  "card": "Honor the Fallen",
+  "clause": "exile all creature cards from all graveyards. you gain 1 life for each card exiled this way",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Hoodwink",
+  "clause": "return target artifact, enchantment, or land to its owner's hand",
+  "ignored": [
+   "or"
   ]
  },
  {
@@ -1234,6 +1353,13 @@
   "clause": "this aura deals x damage to any target, where x is the number of fuse counters on this aura",
   "ignored": [
    "aura"
+  ]
+ },
+ {
+  "card": "Indentured Djinn",
+  "clause": "each other player may draw up to three cards",
+  "ignored": [
+   "may"
   ]
  },
  {
@@ -1378,6 +1504,14 @@
   "clause": "all damage that would be dealt this turn to target creature you control by a source of your choice is dealt to another target creature instead",
   "ignored": [
    "target"
+  ]
+ },
+ {
+  "card": "Kyren Sniper",
+  "clause": "you may have this creature deal 1 damage to target player or planeswalker",
+  "ignored": [
+   "have",
+   "creature"
   ]
  },
  {
@@ -1574,6 +1708,20 @@
   ]
  },
  {
+  "card": "Mercadia's Downfall",
+  "clause": "each attacking creature gets +1/+0 until end of turn for each nonbasic land defending player controls",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
+  "card": "Midnight Ritual",
+  "clause": "exile x target creature cards from your graveyard. for each creature card exiled this way, create a 2/2 black zombie creature token",
+  "ignored": [
+   "card"
+  ]
+ },
+ {
   "card": "Midsummer Revel",
   "clause": "create x 3/3 green beast creature tokens, where x is the number of verse counters on this enchantment",
   "ignored": [
@@ -1655,6 +1803,13 @@
  {
   "card": "Multani's Decree",
   "clause": "destroy all enchantments. you gain 2 life for each enchantment destroyed this way",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Natural Affinity",
+  "clause": "all lands become 2/2 creatures until end of turn. they're still lands",
   "ignored": [
    "all"
   ]
@@ -1845,6 +2000,13 @@
   ]
  },
  {
+  "card": "Peat Bog",
+  "clause": "add {b}{b}. if there are no depletion counters on this land, sacrifice it",
+  "ignored": [
+   "land,"
+  ]
+ },
+ {
   "card": "Perish",
   "clause": "destroy all green creatures. they can't be regenerated",
   "ignored": [
@@ -1923,10 +2085,32 @@
   ]
  },
  {
+  "card": "Pretender's Claim",
+  "clause": "tap all lands defending player controls",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Private Research",
   "clause": "draw a card for each page counter on this aura",
   "ignored": [
    "aura"
+  ]
+ },
+ {
+  "card": "Pulverize",
+  "clause": "destroy all artifacts",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Puppet's Verdict",
+  "clause": "flip a coin. if you win the flip, destroy all creatures with power 2 or less. if you lose the flip, destroy all creatures with power 3 or greater",
+  "ignored": [
+   "all",
+   "all"
   ]
  },
  {
@@ -1969,6 +2153,41 @@
   "clause": "each player may tap any number of untapped white creatures they control. for each creature tapped this way, that player chooses up to two plains. then destroy all plains that weren't chosen this way by any player",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Ramosian Captain",
+  "clause": "search your library for a rebel permanent card with mana value 4 or less, put it onto the battlefield, then shuffle",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Ramosian Commander",
+  "clause": "search your library for a rebel permanent card with mana value 5 or less, put it onto the battlefield, then shuffle",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Ramosian Lieutenant",
+  "clause": "search your library for a rebel permanent card with mana value 3 or less, put it onto the battlefield, then shuffle",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Ramosian Sergeant",
+  "clause": "search your library for a rebel permanent card with mana value 2 or less, put it onto the battlefield, then shuffle",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Ramosian Sky Marshal",
+  "clause": "search your library for a rebel permanent card with mana value 6 or less, put it onto the battlefield, then shuffle",
+  "ignored": [
+   "permanent"
   ]
  },
  {
@@ -2044,6 +2263,13 @@
   ]
  },
  {
+  "card": "Remote Farm",
+  "clause": "add {w}{w}. if there are no depletion counters on this land, sacrifice it",
+  "ignored": [
+   "land,"
+  ]
+ },
+ {
   "card": "Remove Enchantments",
   "clause": "return to your hand all enchantments you both own and control, all auras you own attached to permanents you control, and all auras you own attached to attacking creatures your opponents control. then destroy all other enchantments you control, all other auras attached to permanents you control, and all other auras attached to attacking creatures your opponents control",
   "ignored": [
@@ -2086,6 +2312,13 @@
  {
   "card": "Retribution of the Meek",
   "clause": "destroy all creatures with power 4 or greater. they can't be regenerated",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Reverent Mantra",
+  "clause": "choose a color. all creatures gain protection from the chosen color until end of turn",
   "ignored": [
    "all"
   ]
@@ -2186,6 +2419,34 @@
   "clause": "if this land is tapped, put a storage counter on it",
   "ignored": [
    "land"
+  ]
+ },
+ {
+  "card": "Sandstone Needle",
+  "clause": "add {r}{r}. if there are no depletion counters on this land, sacrifice it",
+  "ignored": [
+   "land,"
+  ]
+ },
+ {
+  "card": "Saprazzan Bailiff",
+  "clause": "exile all artifact and enchantment cards from all graveyards",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Saprazzan Bailiff",
+  "clause": "return all artifact and enchantment cards from all graveyards to their owners' hands",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Saprazzan Skerry",
+  "clause": "add {u}{u}. if there are no depletion counters on this land, sacrifice it",
+  "ignored": [
+   "land,"
   ]
  },
  {
@@ -2321,6 +2582,13 @@
   "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {2}{r}",
   "ignored": [
    "permanent"
+  ]
+ },
+ {
+  "card": "Shoving Match",
+  "clause": "until end of turn, all creatures gain \"{t}: tap target creature.\"",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -2474,6 +2742,13 @@
   ]
  },
  {
+  "card": "Squall",
+  "clause": "squall deals 2 damage to each creature with flying",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
   "card": "Stench of Evil",
   "clause": "destroy all plains. for each land destroyed this way, stench of evil deals 1 damage to that land's controller unless they pay {2}",
   "ignored": [
@@ -2576,6 +2851,13 @@
  {
   "card": "The Wretched",
   "clause": "gain control of all creatures blocking this creature for as long as you control this creature",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Thieves' Auction",
+  "clause": "exile all nontoken permanents. starting with you, each player chooses one of the exiled cards and puts it onto the battlefield tapped under their control. repeat this process until all cards exiled this way have been chosen",
   "ignored": [
    "all"
   ]
@@ -2900,6 +3182,13 @@
   ]
  },
  {
+  "card": "Volcanic Wind",
+  "clause": "volcanic wind deals x damage divided as you choose among any number of target creatures, where x is the number of creatures on the battlefield as you cast this spell",
+  "ignored": [
+   "target"
+  ]
+ },
+ {
   "card": "Voodoo Doll",
   "clause": "if this artifact is untapped, destroy this artifact and it deals damage to you equal to the number of pin counters on it",
   "ignored": [
@@ -2977,6 +3266,21 @@
   "clause": "target creature gets +x/+x until end of turn, where x is the number of verse counters on this enchantment",
   "ignored": [
    "enchantment"
+  ]
+ },
+ {
+  "card": "Warpath",
+  "clause": "warpath deals 3 damage to each blocking creature and each blocked creature",
+  "ignored": [
+   "each",
+   "each"
+  ]
+ },
+ {
+  "card": "Wave of Reckoning",
+  "clause": "each creature deals damage to itself equal to its power",
+  "ignored": [
+   "each"
   ]
  },
  {

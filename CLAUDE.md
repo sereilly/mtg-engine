@@ -14,9 +14,9 @@ Fallen Empires (102), Fourth Edition (368), Ice Age (373), Homelands (115),
 Alliances (144), Mirage (335), Visions (167), Fifth Edition (434),
 Weatherlight (167), Tempest (335), Stronghold (143), Exodus (143),
 Urza's Saga (335), Urza's Legacy (143), Classic Sixth Edition (335),
-Urza's Destiny (143) and Core Set 2021 (285), 3,715 unique cards, all
-classified as supported.
-**Twenty-five sets, and their sizes are the whole spread**: 4ED and 5ED are pure
+Urza's Destiny (143), Mercadian Masques (335) and Core Set 2021 (285),
+4,026 unique cards, all classified as supported.
+**Twenty-six sets, and their sizes are the whole spread**: 4ED and 5ED are pure
 reprint sets, every one of their cards already in the pool, so they are the two
 sets that ship without implementing a card, and **6ED is the third of that shape
 and the first where it is only *almost* true** — 333 of its 335 were already
@@ -42,6 +42,16 @@ new and the 26 that were not are almost all furniture — twenty basic lands plu
 Counterspell, Dark Ritual, Pacifism and a few more — so its insert position
 moves **no card's origin at all**, and the printing-order guard is the only
 thing that can catch a wrong one.
+
+**Mercadian Masques is Tempest's shape again and the most emphatic instance of
+it**: 311 of its 335 are new, and every one of its 24 reprints already had a
+printing earlier than 1999 in this pool — so, uniquely among the sets that
+carry reprints, *no* card's origin turns on its insert position, checked
+rather than assumed. The rehearsal was run anyway and is what makes that a
+statement instead of a hope: appended after M21 it fails
+`test_the_shipped_sets_are_in_printing_order` at index 24 while the prefix
+guard stays green, which is the division of labour those two guards are
+documented to have.
 
 **Stronghold is the shape that looks like Tempest's and is not, and the
 difference is one card.** 142 of its 143 are new, so it reads as an all-new set
@@ -72,7 +82,7 @@ Rehearsed at the wrong end before the real promotion, the prefix guard passed
 and `test_the_shipped_sets_are_in_printing_order` failed at index 20 — which is
 exactly the division of labour those two guards are documented to have, observed
 rather than assumed. Which is why
-the per-set totals sum to far more than 3,715 — they are printings (5,829 of
+the per-set totals sum to far more than 4,026 — they are printings (6,164 of
 them). Alliances was the
 first set to reach 100% with **zero name-keyed hooks**, across all 144, Visions
 is the second across all 167, **Weatherlight is the third** across all 167
@@ -88,8 +98,10 @@ the first to move the count downward on purpose**: 335 cards across fifteen
 parallel groups in three waves, adding no hook and **retiring five** — and
 **Urza's Legacy is the eighth**, 143 of 143 across ten parallel groups in two
 waves, adding none.
-Reliance is **1.4% of supported cards**, 53 of 3,715, down from 53 of 3,572 —
-the count has not moved in three sets while the pool grew by 621.
+Reliance is **1.3% of supported cards**, 52 of 4,026, down from 53 of 3,715 —
+and Mercadian Masques is the first set in four to move the numerator, *down*:
+Food Chain is the second card to print Metamorphosis' cost-record-plus-spend-
+restriction pair, which that hook's own comment said no second card printed.
 
 USG's five are worth naming because four of them were hooks that were *wrong*,
 and wrong in one way: **a hook writes the end state directly, so it is a place a

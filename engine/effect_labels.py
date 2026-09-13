@@ -653,6 +653,59 @@ ACTIVATED_LABELS: dict[str, str] = {
     # reason one bucket covers a fourth: which zone the card comes from is not
     # what the ability does, and the library is still the object it acts on.
     "put_hand_cards_on_library": "activated_library",
+    # --- Mercadian Masques, at its promotion -----------------------------
+    # Eleven kinds the set brought that take the grammar category's default
+    # until they are named here. Each is settled against its **nearest existing
+    # sibling** rather than against the family its lowering lives in, which is
+    # this table's standing method: what the ability is *for* decides the
+    # bucket, and the grammar family is the thing the default already answers.
+    #
+    # Cho-Arrim Alchemist's shield is Reverse Damage's, one activation over: a
+    # source of your choice, the whole of its damage, and life for what was
+    # prevented. It goes beside `grant_whole_prevention_shield`, the shield it
+    # is a variant of.
+    "grant_reverse_damage_shield": "activated_prevention",
+    # General's Regalia moves damage from a chosen source onto a creature. The
+    # redirect family is split across two spellings of one bucket name and this
+    # one takes `activated_prevent`, beside
+    # `redirect_chosen_source_damage_off_target_until_eot` — same phrase, same
+    # chosen source, opposite end.
+    "redirect_damage_from_chosen_source_until_eot": "activated_prevent",
+    # Credit Voucher puts cards from a hand into a library and draws that many;
+    # Soothsaying reorders the top of its own. Both beside
+    # `put_hand_cards_on_library` and `reorder_target_library_top`, whose note
+    # is the reason one bucket covers them: which zone the cards come from is
+    # not what the ability does, and the library is still the object it acts on.
+    "shuffle_hand_cards_into_library": "activated_library",
+    "reorder_own_library_top": "activated_library",
+    # Rishadan Pawnshop shuffles a permanent into its owner's library — the
+    # same destination, reached from the battlefield instead, and beside
+    # `put_target_on_library_top` for that row's reason.
+    "shuffle_target_permanent_into_library": "activated_library",
+    # Crooked Scales' coin-flip toll loop, beside `repeat_process_while`.
+    # **A wrapper, so it must not borrow a leaf bucket**: what it repeats is a
+    # destroy, and labelling it `activated_destroy` is the borrowing
+    # `test_a_wrapper_kind_never_borrows_a_leaf_effects_bucket` exists to
+    # forbid — the repeat is what the ability is, the destroy is what it
+    # repeats.
+    "repeat_process_on_request": "activated_repeated",
+    # Instigator compels an attack and Trap Runner makes an unblocked attacker
+    # blocked. Both are the declaration itself rather than a restriction on
+    # one, which is the line `force_target_to_block_until_eot` and
+    # `reassign_blockers_between_attackers` already draw against
+    # `target_cant_block_until_eot` below.
+    "force_subject_to_attack_until_eot": "activated_combat",
+    "become_blocked": "activated_combat",
+    # War Tax and War Cadence price a declaration rather than making one, so
+    # they take the other side of that same line, beside
+    # `target_cant_block_until_eot`: the ability's whole effect is that a
+    # declaration the rules would allow now costs something.
+    "creatures_cant_attack_unless_pay_until_eot": "activated_restriction",
+    "creatures_cant_block_unless_pay_until_eot": "activated_restriction",
+    # Warmonger's sweep, and the one row here the fallback would have got
+    # right — named anyway, because a kind that is only correct by accident of
+    # which grammar family it lowered in is the debt this table exists to pay.
+    "earthquake_damage": "activated_damage",
 }
 
 # Instruction kind -> label, for an ability the grammar reads in the **triggered**
@@ -775,6 +828,28 @@ TRIGGERED_LABELS: dict[str, str] = {
     # defaulted so the shipped card keeps the bucket its card hook
     # reported before the grammar took the template over — the reason
     # this table exists.
+    # --- Mercadian Masques, at its promotion -----------------------------
+    # Four leaf kinds, each beside the nearest name its own family already
+    # carries. The five `may` wrappers this set also brought are in
+    # TRIGGERED_LABELS_BY_CONDITION below, for the reason the Dark's block
+    # states: a wrapper says nothing about its contents, so the condition is
+    # the only half of the pair that does.
+    #
+    # Charisma gains control of the creature its host damaged, beside
+    # `steal_blockers_of_source`.
+    "steal_target_linked_to_source": "triggered_steal",
+    # Ignoble Soldier shields the damage its own becoming-blocked trigger
+    # names, beside `prevent_damage_to_target_until_eot` — the same phrase with
+    # the other preposition, which is where the damage starts rather than a
+    # different kind of ability.
+    "prevent_damage_by_target_until_eot": "triggered_prevention",
+    # Indentured Djinn fills every hand to a number, beside `draw_target_cards`.
+    "each_player_draws_up_to_cards": "triggered_draw",
+    # Saprazzan Bailiff hands every graveyard's artifacts and enchantments back
+    # when it leaves. Beside `return_creature_from_graveyard_to_hand` and not
+    # `return_all_matching`: the sweep is over *graveyards*, and it is the pile
+    # a card comes out of that this family is named for.
+    "return_all_cards_from_graveyard": "triggered_recursion",
     "destroy_creatures_in_combat_with_source": "spell_pattern",
     # Animate Dead and Dance of the Dead, whose whole entry line the grammar
     # now reads as one template. Declared for the same reason the row above is:
@@ -1123,6 +1198,20 @@ TRIGGERED_LABELS_BY_CONDITION: dict[tuple[str, str], str] = {
     # condition is the only half of the pair that says anything -- and what it
     # says is that this is a counterspell, which is the bucket Mana Vortex's
     # own cast trigger already takes below.
+    # --- Mercadian Masques, at its promotion -----------------------------
+    # Five `may` wrappers over three conditions, each taking the bucket the
+    # condition's nearest neighbour already has. The set prints
+    # "whenever this creature becomes blocked, you may …" four times
+    # (Chambered Nautilus, Port Inspector, Saprazzan Heir — and Robber Fly's
+    # sibling shape), which is `creature_blocks_or_blocked_by` one narrowing
+    # over and takes its bucket.
+    ("creature_becomes_blocked", "may"): "triggered_combat",
+    # Saber Ants, beside `damage_dealt` above: being dealt damage is a combat
+    # moment whatever dealt it.
+    ("creature_dealt_damage", "may"): "triggered_combat",
+    # Foster, beside `dies` and `attached_creature_dies`: whose creature died
+    # narrows the trigger, not what the ability is about.
+    ("creature_you_control_dies", "may"): "triggered_death",
     ("spell_cast", "if_then"): "triggered_counterspells",
     ("creature_dies", "may"): "spell_pattern",
     ("enchantment_cast", "may"): "triggered_draw",
