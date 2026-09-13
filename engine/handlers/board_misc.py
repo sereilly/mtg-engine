@@ -679,8 +679,23 @@ def recolor_target_chosen_color(game: Game, instruction: OracleInstruction, cont
             f"{context.card.name}: no colour was chosen, so nothing is recoloured"
         )
         return True, "resolved"
-    target.metadata["color_override"] = symbol
-    game.log.append(f"{target.card.name} became {symbol} ({context.card.name})")
+    # "…**until end of turn**" (Distorting Lens). The turn-long layer-5 channel
+    # rather than the indefinite one — layer_bridge reads both and the cleanup
+    # step sweeps this one, so a permanent laced permanently earlier in the game
+    # keeps its colour when the Lens wears off. Which channel is written is the
+    # printed duration and nothing else, which is why the key is read here
+    # rather than inferred from the card.
+    channel = (
+        "color_override_until_eot"
+        if instruction.payload.get("until_eot")
+        else "color_override"
+    )
+    target.metadata[channel] = symbol
+    game.log.append(
+        f"{target.card.name} became {symbol}"
+        + (" until end of turn" if instruction.payload.get("until_eot") else "")
+        + f" ({context.card.name})"
+    )
     return True, "resolved"
 
 

@@ -568,6 +568,39 @@ def make_numeric_pool(
     )
 
 
+def make_named_source_pool(
+    amount: int, source, source_name: str | None = None
+) -> Shield:
+    """CR 615.7's point pool answering to **one named source** and no recipient.
+
+    "{2}: Prevent the next 1 damage that would be dealt by this artifact this
+    turn." (Barbed Wire.) The pool above with the two ends of the event swapped:
+    that one names who is protected and answers to any source, and this one
+    names the source and protects nobody in particular — CR 615.8's
+    recipientless shield, on the counted family.
+
+    ``source`` is the object itself rather than a ``source_filter`` phrase,
+    because the phrase the card prints is "this artifact": the permanent the
+    ability is on, which is an *identity* and not a property ``subject_matches``
+    could recheck. ``_source_matches`` compares it the way every other chosen
+    source in the engine is compared, so a second copy of the card on the board
+    is a different source and spends nothing here.
+
+    ``any_recipient`` is Penance's flag, and it buys the same reach:
+    ``prevention._table_shields`` finds this shield from whichever player or
+    permanent the damage was headed for, while the shield still lives on the
+    seat that armed it so the cleanup sweep can expire it.
+    """
+    return Shield(
+        kind=PREVENT_NEXT_N,
+        amount=amount,
+        uses=None,
+        source=source,
+        any_recipient=True,
+        source_name=source_name,
+    )
+
+
 def make_resolving_object_shield(source, source_name: str | None = None) -> Shield:
     """Hidden Retreat's blanket over one cast spell's damage.
 

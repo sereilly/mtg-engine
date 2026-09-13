@@ -760,6 +760,33 @@ class ShuffleSourceIntoLibrary:
 
 
 @dataclass(frozen=True)
+class ShuffleTargetIntoLibrary:
+    """``{2}, {T}: Shuffle target nontoken permanent you control into its
+    owner's library.`` (Rishadan Pawnshop.)
+
+    :class:`ShuffleSourceIntoLibrary` with the object **chosen** instead of
+    named. Its own node rather than a ``subject`` field on that one, because
+    the two ask different things of everything downstream: this one is a target
+    (CR 601.2c — announced, offered by a picker, rechecked at resolution) where
+    that one is the ability's own card, and a node that meant either would give
+    the picker nothing to enumerate on half the cards it reached.
+
+    Deliberately not :class:`PutOnLibraryTop` with a flag: that node's whole
+    subject is a *position* in the library, and a shuffle has none — CR 701.24a
+    randomises the pile, so "where did it go" stops being a question rather than
+    getting a different answer.
+
+    ``owner`` is read for :class:`ShuffleSourceIntoLibrary`'s reason and it
+    matters more here: the phrase says "you control", so the permanent's
+    controller is the activator, while CR 400.3 sends the *card* to its owner's
+    library — and on a permanent taken with a control-change effect those are
+    two different players.
+    """
+    target: Recipient
+    owner: PlayerRef
+
+
+@dataclass(frozen=True)
 class ShuffleHandIntoLibrary:
     """``Each player shuffles the cards from their hand into their library,
     then draws that many cards.`` (Winds of Change.)
@@ -793,6 +820,19 @@ class ShuffleHandIntoLibrary:
     #: cards, and a hidden zone means nobody else can (CR 402.1). So the two
     #: readings lower to two handlers, and this field is what tells them apart.
     count: int | None = None
+    #: "Shuffle **any number of** cards from your hand into your library."
+    #: (Credit Voucher.) The count above with the number left to the player
+    #: instead of printed — CR 601.2b's kind of announcement made during a
+    #: resolution, so nothing knows it until the hand's owner says.
+    #:
+    #: Its own flag rather than a sentinel in ``count`` for that field's own
+    #: reason: a number and "as many as you like" are different questions of the
+    #: handler, and an integer that also meant "ask" would make ``count=0`` and
+    #: "shuffle none" the same payload. It is also what makes the trailing "then
+    #: draw that many cards" legal here where a *printed* number refuses it —
+    #: behind a printed number "that many" would be the number said twice, and
+    #: behind this one it is the only place the number exists.
+    any_number: bool = False
     #: "Each player shuffles their hand **and graveyard** into their library."
     #: (Diminishing Returns.) A second pile joining the same move, and part of
     #: this node rather than a `ShuffleGraveyardIntoLibrary` beside it because

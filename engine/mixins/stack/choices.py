@@ -2597,7 +2597,17 @@ class PendingChoicesMixin:
         count = int(choice.data["count"])
         hand = self.players[choice.player_index].hand
         chosen = [i for i in dict.fromkeys(hand_indices) if 0 <= i < len(hand)][:count]
-        if len(chosen) != count:
+        # "Shuffle **any number of** cards from your hand into your library."
+        # (Credit Voucher.) The count the prompt carries is a ceiling rather
+        # than an exact number, so a shorter answer is a legal one — including
+        # the empty answer, which is the player declining the offer. Every other
+        # card reaching this prompt names an exact number and keeps the equality
+        # it had: a Brainstorm that put back one card would leave a hand the
+        # spell says it does not.
+        if bool(choice.data.get("up_to")):
+            if len(chosen) > count:
+                return False
+        elif len(chosen) != count:
             return False
         # "…both on top of your library **or both on the bottom of your
         # library**" (Dream Cache). Which end is part of the answer, and only
@@ -2640,6 +2650,19 @@ class PendingChoicesMixin:
             self.log.append(
                 f"{player.name} shuffled {len(cards)} card(s) into their library"
             )
+            # "…, **then draw that many cards**." (Credit Voucher.) The draw is
+            # part of this move rather than a step after it, for the reason the
+            # shuffle above already is: "that many" is the number the answer
+            # just decided, and this is the only place in the engine that knows
+            # it — a later step would be reading a count recorded before the
+            # question was asked.
+            #
+            # Through ``_draw_with_replacements``, the one draw seam, so an
+            # armed draw replacement applies here exactly as it would in a draw
+            # step.
+            if choice.data.get("draw_after") and cards:
+                drawn = self._draw_with_replacements(player, len(cards))
+                self.log.append(f"{player.name} draws {drawn} card(s)")
         else:
             self.log.append(
                 f"{player.name} put {len(cards)} card(s) on the {position} of "

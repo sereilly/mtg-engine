@@ -565,13 +565,38 @@ def _lower_become_color(
             raise LoweringError(
                 "no handler recolours an object nobody targeted", node=node
             )
-        if node.duration.kind is not None:
+        # "{T}: Target permanent becomes the color of your choice **until end of
+        # turn**." (Distorting Lens.) The same offer on the same object with a
+        # window on it, so it is a key on this instruction rather than a kind of
+        # its own: CR 613's layer 5 reads the indefinite channel and the
+        # turn-long one side by side (`engine/layer_bridge.py`), and which of
+        # the two a resolution writes is not a different effect — it is the one
+        # sentence with the duration the card printed.
+        #
+        # Alchor's Tomb, one printing over, says exactly this with no duration
+        # and keeps the write it had. A missing duration must stay the
+        # indefinite write and not become a turn-long one, which is why the flag
+        # is set from the printed kind rather than defaulted either way.
+        until_eot = node.duration.kind in ("until_end_of_turn", "this_turn")
+        if node.duration.kind is not None and not until_eot:
             raise LoweringError(
                 f"no handler recolours for {node.duration.kind!r}", node=node
+            )
+        if until_eot and several:
+            # The set offer goes on the standing prompt queue
+            # (`arm_color_set_choice`), which writes the indefinite channel and
+            # has no notion of a window — so a card printing "the color **or
+            # colors** of your choice until end of turn" would be recoloured for
+            # ever off a sentence that says "this turn". No such card is
+            # printed; refusing is what keeps that true if one is.
+            raise LoweringError(
+                "the colour-set prompt writes no turn-long channel", node=node
             )
         payload: dict[str, object] = {}
         if several:
             payload["several"] = True
+        if until_eot:
+            payload["until_eot"] = True
         _describe_targets(payload, node.subject)
         return (OracleInstruction("recolor_target_chosen_color", "", payload),)
     if node.duration.kind in ("until_end_of_turn", "this_turn"):

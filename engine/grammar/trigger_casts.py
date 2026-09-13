@@ -134,6 +134,34 @@ def _parse_cast_event(
     Every branch resets on refusal, so a clause this cannot read leaves the
     stream untouched for the productions behind it.
     """
+    # "…casts a spell **of the chosen color**" (Jeweled Torque). CR 614.1c's
+    # choice, recorded on the permanent as it entered, so the narrowing is a
+    # colour the sentence never names — which is why it is the filter's
+    # ``chosen_color`` key and not a colour word. The whole line has to be
+    # consumed here or the four words fall through to the effect parser, which
+    # is where they were refusing the card: the trigger's own dispatcher is
+    # ``events._cast_narrowing_admits``, reading the key ``oracle.py``'s table
+    # captures from the same words.
+    #
+    # Read **first**, ahead of the colour union below: that branch opens on the
+    # same four words and refuses cleanly when no colour word follows, but
+    # ordering the longer reading first is what this file does everywhere and
+    # what keeps the two from racing if a card ever prints "a white or chosen
+    # color spell".
+    #
+    # Only the player-scoped spelling, because only it is printed. The
+    # opponent-scoped row would cost one branch and one pattern, and an
+    # untested narrowing is exactly the silent widening this file is ordered to
+    # prevent — it goes in with the card that prints it.
+    mark = stream.mark()
+    if stream.accept_phrase("a", "player", "casts", "a", "spell") and (
+        stream.accept_phrase("of", "the", "chosen", "color")
+    ):
+        return ast.TriggerEvent(
+            "spell_cast", trigger_word,
+            subject=ast.ObjectFilter(chosen_color=True),
+        )
+    stream.reset(mark)
     # "…casts a *blue* spell" (the Rod/Cup/Sphere cycle, Freyalise's Charm,
     # Leshrac's Sigil). The colour is part of the condition rather than a
     # per-card hook, which is what lets one dispatcher serve every card

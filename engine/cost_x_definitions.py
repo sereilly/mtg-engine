@@ -40,6 +40,36 @@ def _counters_on_source(
     return max(0, counters_on(source, match.group(1)))
 
 
+def _opponent_hand_count(
+    game: "Game", source: "Permanent", match: re.Match, target=None
+) -> int | None:
+    """"X is the number of cards in **an opponent's** hand." (Bargaining Table.)
+
+    The activation-side twin of :func:`_opponent_graveyard_count` one table
+    down, and it answers the same way for the same reason: "an opponent's" is a
+    choice CR 601.2b puts on the activating player, and this engine has no
+    channel for a non-target choice made while announcing an ability. With a
+    single opponent there is nothing to choose; with several, ``None`` refuses
+    the activation rather than picking a hand for the activator — an engine that
+    chose the largest would price the ability higher than the player need pay
+    and one that chose the smallest would price it lower, and both are a card
+    nobody printed.
+
+    ``None`` is also the answer when the source has no controller (it has left
+    the battlefield mid-announcement), because a cost of X with nobody to be
+    the opponent of is not zero — and zero is free.
+    """
+    seat = game.controller_index_of(source)
+    if seat is None:
+        return None
+    opponents = [
+        player for index, player in enumerate(game.players) if index != seat
+    ]
+    if len(opponents) != 1:
+        return None
+    return len(opponents[0].hand)
+
+
 def _twice_target_spell_mana_value(
     game: "Game", source: "Permanent", match: re.Match, target=None
 ) -> int | None:
@@ -87,6 +117,15 @@ COST_X_DEFINITIONS: tuple[tuple[re.Pattern[str], Callable[..., int]], ...] = (
     (
         re.compile(r"^x is twice the mana value of that spell$"),
         _twice_target_spell_mana_value,
+    ),
+    (
+        # "X is the number of cards in an opponent's hand." (Bargaining Table.)
+        # A number off a *player* rather than off the source, which is why the
+        # reader takes the game as well: the first two rows above could be
+        # answered from the permanent alone, and this one cannot be answered
+        # from it at all.
+        re.compile(r"^x is the number of cards in an opponent's hand$"),
+        _opponent_hand_count,
     ),
 )
 

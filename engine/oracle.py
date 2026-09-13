@@ -1136,6 +1136,16 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # rather than each growing its own type test. Must precede the bare row.
     ("spell_cast",
      r"whenever a player casts an? (?P<cast_type>noncreature|nonartifact|creature|artifact|enchantment|instant|sorcery|land) spell"),
+    # "Whenever a player casts a spell **of the chosen color**" (Jeweled
+    # Torque). CR 614.1c's choice, made as the permanent entered and recorded on
+    # it, so the narrowing is a colour the sentence never names and only a
+    # dispatcher holding the *source* can answer — which is why it is a marker
+    # group rather than a colour word. Before the bare row below, whose pattern
+    # is its strict prefix: matched there the four words were left to the effect
+    # parser, which is the one thing that saved the card from firing on every
+    # spell in the game.
+    ("spell_cast",
+     r"whenever a player casts a spell of the chosen (?P<cast_chosen_color>)color"),
     ("spell_cast",                  r"whenever a player casts a spell"),
     # "…from anywhere other than their hand" (Ghostly Pilferer). A narrowing on
     # the *zone the spell was cast from*, which the stack item already records

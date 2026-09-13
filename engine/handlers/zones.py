@@ -7757,13 +7757,27 @@ def shuffle_hand_cards_into_library(game: Game, instruction: OracleInstruction, 
     rather than the answer: CR 608.2 does as much as it can, and with no card to
     move the sentence did not happen.
     """
-    amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
     player = context.caster
-    actual = min(amount, len(player.hand))
+    # "Shuffle **any number of** cards from your hand into your library, then
+    # draw that many cards." (Credit Voucher.) The same move with the count left
+    # to the hand's owner, so the prompt carries a *ceiling* — the whole hand —
+    # and `up_to` lets the answer be smaller. CR 402.1 is why it is asked at all
+    # and CR 601.2b-style announcement is why the number is not known here.
+    open_ended = bool(instruction.payload.get("any_number"))
+    if open_ended:
+        actual = len(player.hand)
+    else:
+        amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+        actual = min(amount, len(player.hand))
     # Recorded before the prompt and whatever the answer is, exactly as the
     # Brainstorm handler records its own count: the number is settled here and
     # the prompt only decides which cards. "If you do, draw two cards at the
     # beginning of the next turn's upkeep" is the step that reads it.
+    #
+    # For the open-ended spelling the number is *not* settled here — it is
+    # whatever the answer says — so what is recorded is the ceiling, and the
+    # draw that reads the real number is performed by the answer itself rather
+    # than by a later step reading this key.
     context.results[HAND_CARDS_TO_LIBRARY] = actual
     if actual <= 0:
         game.log.append(f"{player.name} has no card to shuffle away")
@@ -7771,9 +7785,15 @@ def shuffle_hand_cards_into_library(game: Game, instruction: OracleInstruction, 
     game.arm_pending_choice(
         "hand_to_library", game.players.index(player),
         count=actual, shuffle=True,
+        **(
+            {"up_to": True, "draw_after": bool(instruction.payload.get("then_draw"))}
+            if open_ended else {}
+        ),
     )
     game.log.append(
-        f"{player.name} must choose {actual} card(s) to shuffle into their library"
+        f"{player.name} must choose "
+        + (f"up to {actual}" if open_ended else f"{actual}")
+        + " card(s) to shuffle into their library"
     )
     return True, "pending_hand_to_library"
 
@@ -7965,6 +7985,66 @@ def shuffle_source_card_into_library(game: Game, instruction: OracleInstruction,
     else:
         game.log.append(f"{card.name} was shuffled into {owner.name}'s library")
     random.shuffle(owner.library)
+    return True, "resolved"
+
+
+@effect_handler("shuffle_target_permanent_into_library")
+def shuffle_target_permanent_into_library(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"{2}, {T}: Shuffle target nontoken permanent you control into its owner's
+    library." (Rishadan Pawnshop.)
+
+    A zone change, not a destruction: nothing dies, no regeneration applies and
+    no dies-trigger fires. The card lands in its **owner's** library
+    (CR 400.3/CR 108.3), asked through ``Game.owner_index_of`` — the one
+    accessor for that question, never a field read here — so a permanent stolen
+    from the other seat goes back into *their* deck, not the activator's. The
+    printed phrase says "you control" and CR 400.3 says whose library, and those
+    are two different players exactly when it matters.
+
+    The printed noun phrase is re-asked here through ``subject_matches``, the
+    same answer the picker enumerated with: CR 608.2b only says the target must
+    still be *legal*, and a permanent that stopped being nontoken or changed
+    hands since the announcement is no longer what the card described.
+
+    ``put_card_into_library`` is the seam rather than an append, for CR 903.9b's
+    reason — a commander headed for a library goes to the command zone instead —
+    and the shuffle is part of the move rather than a step after it
+    (CR 701.24a).
+
+    A target that has left is CR 608.2b's "does as much as it can": nothing
+    moves. The library is still shuffled, because the sentence names one and a
+    player who could tell "it worked" from "it fizzled" by watching the deck
+    would know something the card never tells them (CR 701.24c).
+    """
+    from ..subject_filters import subject_matches
+
+    described = (instruction.payload.get("targets") or {}).get("filter") or {}
+    observer = game.players.index(context.caster)
+    target_perm = resolve_target_permanent(
+        game, context,
+        predicate=lambda perm: subject_matches(
+            game, perm, described, observer=observer,
+            source=context.source_permanent,
+        ),
+        fallback_on_invalid_choice=False,
+    )
+    if target_perm is None or not game.is_on_battlefield(target_perm):
+        game.log.append(f"{context.card.name}: no valid permanent to shuffle away")
+        random.shuffle(context.caster.library)
+        return True, "resolved"
+    owner_index = game.owner_index_of(target_perm)
+    owner = (
+        game.players[owner_index] if owner_index is not None else context.caster
+    )
+    card = target_perm.card
+    game.remove_from_battlefield(target_perm)
+    game._remove_aura_effects(target_perm)
+    game.put_card_into_library(owner, card, from_battlefield=target_perm)
+    random.shuffle(owner.library)
+    game.log.append(
+        f"{context.card.name}: {card.name} was shuffled into "
+        f"{owner.name}'s library"
+    )
     return True, "resolved"
 
 

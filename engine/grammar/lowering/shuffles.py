@@ -140,6 +140,48 @@ def _lower_shuffle_source_into_library(
     )
 
 
+def _lower_shuffle_target_into_library(
+    node: ast.ShuffleTargetIntoLibrary,
+) -> tuple[OracleInstruction, ...]:
+    """"{2}, {T}: Shuffle target nontoken permanent you control into its owner's
+    library." (Rishadan Pawnshop.)
+
+    The seat is refused when it is not the owner's, exactly as
+    :func:`_lower_shuffle_source_into_library` refuses it and for a reason that
+    bites harder here: this sentence names a *controller* ("you control") and a
+    different *owner*, so a handler that shuffled into the activator's library
+    would move a stolen permanent into the wrong deck.
+
+    The printed noun phrase is described onto the payload rather than checked
+    here — ``_describe_targets`` is what the picker enumerates from and what the
+    handler re-asks at resolution (CR 608.2b), so a narrowing dropped at either
+    end is an ability aimed at a permanent the card excludes. A phrase the
+    matcher cannot test refuses at the compiler, which is what
+    ``_describe_targets`` and the support gate arrange between them.
+    """
+    if node.owner.kind != "owner":
+        raise LoweringError(
+            f"no handler shuffles a permanent into {node.owner.kind!r}'s library",
+            node=node,
+        )
+    if (
+        not isinstance(node.target, ast.TargetSpec)
+        or not node.target.targeted
+        or node.target.quantifier != "target"
+    ):
+        # Only a chosen single object. Nothing enumerates this move over a set,
+        # and a sweep spelled as a target would shuffle away whichever permanent
+        # a targetless resolution defaulted to.
+        raise LoweringError(
+            "a shuffle into a library moves one chosen permanent", node=node
+        )
+    payload: dict[str, object] = {}
+    _describe_targets(payload, node.target)
+    return (
+        OracleInstruction("shuffle_target_permanent_into_library", "", payload),
+    )
+
+
 def _lower_shuffle_hand_into_library(
     node: ast.ShuffleHandIntoLibrary,
 ) -> tuple[OracleInstruction, ...]:
@@ -156,6 +198,42 @@ def _lower_shuffle_hand_into_library(
         raise LoweringError(
             f"no handler shuffles {node.whose.kind!r}'s hand into their library",
             node=node,
+        )
+    if node.any_number:
+        # "Shuffle **any number of** cards from your hand into your library,
+        # then draw that many cards." (Credit Voucher.) The counted branch below
+        # with the number left to the player, so it reaches the same handler and
+        # the same prompt — what differs is that the prompt carries a ceiling
+        # instead of an exact count.
+        #
+        # The trailing draw is legal *here* and refused below, and the
+        # difference is real rather than an exception: behind a printed number
+        # "that many" would be the same number said twice, and behind this one
+        # the answer is the only place the number exists at all. So it rides the
+        # instruction, exactly as the whole-hand branch's does — the number a
+        # draw reads is the number the move made, and nothing else in the
+        # sentence knows it.
+        if node.then_draw_count is not None:
+            raise LoweringError(
+                "an open-ended shuffle draws what it moved, not a printed "
+                "number",
+                node=node,
+            )
+        if node.with_graveyard:
+            raise LoweringError(
+                "an open-ended shuffle takes cards from a hand alone", node=node
+            )
+        if node.whose.kind != "you":
+            raise LoweringError(
+                "an open-ended shuffle into a library is the controller's own "
+                "hand",
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "shuffle_hand_cards_into_library", "",
+                {"any_number": True, "then_draw": node.then_draw},
+            ),
         )
     if node.count is not None:
         # "Shuffle **a card** from your hand into your library."
