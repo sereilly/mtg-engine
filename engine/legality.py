@@ -832,6 +832,25 @@ class LegalityMixin:
         # all and cast at CR 107.3b's 0 -- legal and useless. Reported as a flag
         # rather than left to a substring probe for the reason `defined_x` is:
         # what a card's costs say is the compiler's answer, not the client's.
+        # CR 601.2b's other announcement: a printed additional cost that makes
+        # the caster **choose a creature type** (Caller of the Hunt). Reported
+        # on the spec for ``announces_x``'s reason exactly — what a card's costs
+        # say is the compiler's answer, not the client's — and with the catalog
+        # and the default beside it, because neither is something a browser can
+        # derive: CR 205.3m's list is ingested data and the default counts a
+        # board only the game can read.
+        #
+        # Without this the picker asks nothing, the cast takes the default, and
+        # a human seat silently gets the engine's guess at the one choice the
+        # card is entirely about.
+        if any(cost.choose_creature_type for cost in costs_charged_from(card, from_zone)):
+            from .grammar.vocabulary import CREATURE_TYPES
+
+            spec["announces_creature_type"] = True
+            spec["creature_types"] = sorted(CREATURE_TYPES)
+            spec["default_creature_type"] = self._default_cast_creature_type(
+                caster_index, card
+            )
         if cast_announces_x(card, from_zone=from_zone):
             spec["announces_x"] = True
             # And the ceiling that goes with it, which the mana pool cannot

@@ -527,6 +527,15 @@ class SpellCastingMixin:
         # known. Absent means the offers were declined, which is what an
         # *optional* cost means and the only default that cannot overcharge.
         optional_cost_payments: dict[str, int] | None = None,
+        # CR 601.2b's *choice-shaped* additional cost: "As an additional cost
+        # to cast this spell, choose a creature type" (Caller of the Hunt).
+        # Announced with the cast for the reason every cost choice here is —
+        # CR 601.2b is one step, and this one has nowhere else to go at all: the
+        # spell's own P/T is defined by the answer (CR 604.3), so a queued
+        # prompt would put a creature spell on the stack with no power. A seat
+        # that names nothing gets `_default_cast_creature_type`, which keeps AI
+        # and headless play unblocked exactly as the cost pickers above do.
+        chosen_creature_type: str | None = None,
         # CR 609.7a's "a source of your choice", announced with the cast. Not a
         # target (CR 115.1) and not a cost, so it is its own trio of fields: a
         # battlefield permanent by seat and slot, or a spell on the stack by a
@@ -563,6 +572,7 @@ class SpellCastingMixin:
             alternative_cost=alternative_cost,
             alternative_cost_hand_index=alternative_cost_hand_index,
             optional_cost_payments=optional_cost_payments,
+            chosen_creature_type=chosen_creature_type,
             chosen_source_seat=chosen_source_seat,
             chosen_source_permanent_index=chosen_source_permanent_index,
             chosen_source_stack_index=chosen_source_stack_index,
@@ -835,6 +845,15 @@ class SpellCastingMixin:
         # known. Absent means the offers were declined, which is what an
         # *optional* cost means and the only default that cannot overcharge.
         optional_cost_payments: dict[str, int] | None = None,
+        # CR 601.2b's *choice-shaped* additional cost: "As an additional cost
+        # to cast this spell, choose a creature type" (Caller of the Hunt).
+        # Announced with the cast for the reason every cost choice here is —
+        # CR 601.2b is one step, and this one has nowhere else to go at all: the
+        # spell's own P/T is defined by the answer (CR 604.3), so a queued
+        # prompt would put a creature spell on the stack with no power. A seat
+        # that names nothing gets `_default_cast_creature_type`, which keeps AI
+        # and headless play unblocked exactly as the cost pickers above do.
+        chosen_creature_type: str | None = None,
         # CR 609.7a's "a source of your choice", announced with the cast. Not a
         # target (CR 115.1) and not a cost, so it is its own trio of fields: a
         # battlefield permanent by seat and slot, or a spell on the stack by a
@@ -1314,6 +1333,38 @@ class SpellCastingMixin:
             return SimulationResult(
                 card.name, False, classification.effect_kind, optional_denial,
             )
+        # CR 601.2b's choice-shaped price, announced here — beside the optional
+        # offers above and before any mana is spent, which is where CR 601.2b
+        # puts every choice a cast makes. It charges nothing, so there is no
+        # CR 601.2h gate to pass: every creature type is a legal answer.
+        #
+        # Refused rather than repaired when the word is not a creature type
+        # (idiom 9): a picker's list is only true if the engine declines what is
+        # not on it, and a silently-corrected answer would make the spell's own
+        # P/T disagree with what the player chose.
+        chosen_type_word: str | None = None
+        if any(cost.choose_creature_type for cost in cast_costs):
+            from ...grammar.vocabulary import CREATURE_TYPES
+
+            if chosen_creature_type is not None:
+                chosen_type_word = str(chosen_creature_type).strip().lower()
+                if chosen_type_word not in CREATURE_TYPES:
+                    denial = (
+                        f"{chosen_creature_type} is not a creature type "
+                        f"(CR 601.2b, CR 205.3m)"
+                    )
+                    self.log.append(denial)
+                    return SimulationResult(
+                        card.name, False, classification.effect_kind, denial,
+                    )
+            else:
+                chosen_type_word = self._default_cast_creature_type(
+                    caster_index, card
+                )
+            self.log.append(
+                f"{caster.name} chose {chosen_type_word} to cast {card.name}"
+            )
+
         # "Buyback costs cost {2} less." (Memory Crystal.) CR 601.2f applied to
         # CR 702.27a's offer, so it is read here — where the offer's symbols
         # become mana this cast owes — and nowhere near the spell's own mana
@@ -1960,6 +2011,15 @@ class SpellCastingMixin:
                         # a delta cannot tell those apart. The allocation is the
                         # cost, so the number is exact.
                         "x_mana_spent": x_mana_spent,
+                        # The word CR 601.2b made the caster choose. Here
+                        # rather than nowhere because the spell has no
+                        # permanent yet and the permanent it becomes is a new
+                        # object (CR 400.7), so the announcement is the only
+                        # place the answer survives the trip to resolution —
+                        # the cost spoils above are on this channel for exactly
+                        # that reason. `_resolve_card` copies it onto the
+                        # permanent as it is built.
+                        "chosen_creature_type": chosen_type_word,
                         # "If you cast it any time a sorcery couldn't have been
                         # cast, …" (Mirage's five flash Auras). Answered *here*
                         # because here is the only moment it can be: CR 601.3d's

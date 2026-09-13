@@ -183,6 +183,10 @@ def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
         # quietly declined a price the caller announced, and the effect that
         # reads the count back does nothing.
         optional_cost_payments=req.optional_cost_payments,
+        # …and CR 601.2b's choice-shaped price, forwarded for the same reason:
+        # dropped, the cast silently takes the engine's default and the one
+        # choice Caller of the Hunt is about is made by nobody.
+        chosen_creature_type=req.chosen_creature_type,
         # CR 609.7a's "a source of your choice", on its own trio of fields for
         # the reason the cost fields above are on theirs: a spell may name a
         # source *and* its own targets (Kor Chant names two), so one field could

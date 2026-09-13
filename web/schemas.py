@@ -538,6 +538,18 @@ class GameActionRequest(BaseModel):
     # counter and a payability ceiling, and neither is a thing a picker for a
     # fixed price has anywhere to put.
     optional_cost_payments: dict[str, int] | None = None
+    # CR 601.2b's *choice-shaped* additional cost: "As an additional cost to
+    # cast this spell, choose a creature type" (Caller of the Hunt). Its own
+    # field beside the prices above for their reason — CR 118.9d keeps every
+    # price in force on one cast, so a shared field could not say which one a
+    # click was answering — and distinct from `creature_type` below, which
+    # answers the *entry* choice prompt (An-Zerrin Ruins) through a different
+    # action entirely. One cast can make both choices.
+    #
+    # Absent takes `Game._default_cast_creature_type`, which is what keeps an
+    # AI seat and an old client casting rather than blocked. The picker that
+    # fills it reads `announces_creature_type` off the card's target spec.
+    chosen_creature_type: str | None = None
     # Which zone `hand_index` addresses when a search may look in more than one
     # ("search your library and/or graveyard"). Absent means the library, so
     # every existing client is unchanged.

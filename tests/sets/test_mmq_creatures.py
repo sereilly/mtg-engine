@@ -1358,3 +1358,157 @@ def test_saprazzan_breaker_reads_what_its_own_mill_put_in_the_graveyard(set_pool
     assert game.activate_permanent_ability(0, "Saprazzan Breaker").supported
     resolve_stack(game)
     assert not breaker.metadata.get("cant_be_blocked_until_eot")
+
+
+# --- W3G1: a creature type chosen as an additional cost of casting ---
+# "As an additional cost to cast this spell, choose a creature type. / Caller of
+# the Hunt's power and toughness are each equal to the number of creatures of
+# the chosen type on the battlefield."
+#
+# CR 601.2b puts the choice in the *cast*, and this file's tests are written
+# against that rather than against the entry-time choice An-Zerrin Ruins makes
+# (CR 614.1c). The two are one metadata key and two moments, and the moment is
+# what is observable: a Caller that reaches the battlefield without being cast
+# never chose, so it is a 0/0 and CR 704.5f bins it.
+import pytest
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+from tests.helpers import resolve_stack
+
+
+def _w3g1_duel():
+    """A two-seat game with mana costs off, for the announcement's sake.
+
+    Its own builder rather than a shared one, with an ending nothing else in
+    this file has: the block convention's helper rule, because git matches
+    identical trailing lines as common context.
+    """
+    p1, p2 = PlayerState(name="P1"), PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    return game, p1, p2
+
+
+def _w3g1_bears(game, seat, how_many, set_pool):
+    """*how_many* Grizzly Bears on *seat*'s battlefield, through the entry seam."""
+    bears = set_pool("LEA")["Grizzly Bears"]
+    made = []
+    for _ in range(how_many):
+        perm = Permanent(card=bears)
+        game._put_permanent_onto_battlefield(seat, perm, None)
+        made.append(perm)
+    return made
+
+
+@pytest.mark.parametrize("chosen,expected", [("bear", 3), ("human", 1)])
+def test_caller_of_the_hunt_counts_the_type_chosen_as_it_was_cast(
+    set_pool, chosen, expected
+):
+    """The announced word decides the P/T, and it counts every battlefield.
+
+    Both answers on one board, because the failure this guards against is a
+    choice that is recorded but never read: a Caller whose filter found no word
+    counts nothing and is a 0/0, which looks the same as a badly chosen type
+    until a second choice on the same board gives a different number.
+
+    "Human" is the Caller's own printed type and counts **itself** — the
+    sentence says "creatures of the chosen type on the battlefield" with no
+    "other", so CR 201.4's self-reference is a counted creature like any other.
+    """
+    pool = set_pool("MMQ")
+    game, p1, p2 = _w3g1_duel()
+    _w3g1_bears(game, 1, 2, set_pool)
+    _w3g1_bears(game, 0, 1, set_pool)
+    p1.hand.append(pool["Caller of the Hunt"])
+
+    assert game.cast_from_hand(0, "Caller of the Hunt", chosen_creature_type=chosen).supported
+    resolve_stack(game)
+    caller = p1.battlefield[-1]
+    assert caller.card.name == "Caller of the Hunt"
+    assert caller.metadata["chosen_creature_type"] == chosen
+    game.check_state_based_actions()
+    assert (caller.effective_power, caller.effective_toughness) == (expected, expected)
+
+
+def test_caller_of_the_hunt_refuses_a_word_that_is_not_a_creature_type(set_pool):
+    """CR 205.3m bounds the answer, and the refusal spends nothing.
+
+    Refused rather than repaired (idiom 9): the picker is handed CR 205.3m's
+    catalog and an engine that quietly corrected an answer off it would make
+    the creature's P/T disagree with what the player chose. Nothing is spent
+    because CR 601.2b is announced before CR 601.2h's payment.
+    """
+    pool = set_pool("MMQ")
+    game, p1, _p2 = _w3g1_duel()
+    p1.hand.append(pool["Caller of the Hunt"])
+
+    result = game.cast_from_hand(0, "Caller of the Hunt", chosen_creature_type="doughnut")
+    assert not result.supported
+    assert "creature type" in (result.details or "")
+    assert [c.name for c in p1.hand] == ["Caller of the Hunt"]
+    assert not game.stack
+    assert not p1.battlefield
+
+
+def test_caller_of_the_hunt_defaults_to_the_commonest_type_on_the_board(set_pool):
+    """A seat that names nothing still casts, and the default is a real choice.
+
+    AI and headless play take this path, and it is the reason the announcement
+    has a default at all — the same reasoning the cost pickers beside it carry.
+    The count is over **every** battlefield because the printed clause names no
+    seat, which is what separates this default from An-Zerrin Ruins'.
+    """
+    pool = set_pool("MMQ")
+    game, p1, _p2 = _w3g1_duel()
+    _w3g1_bears(game, 1, 2, set_pool)
+    p1.hand.append(pool["Caller of the Hunt"])
+
+    assert game.cast_from_hand(0, "Caller of the Hunt").supported
+    resolve_stack(game)
+    caller = p1.battlefield[-1]
+    assert caller.metadata["chosen_creature_type"] == "bear"
+    game.check_state_based_actions()
+    assert caller.effective_power == 2
+
+
+def test_caller_of_the_hunt_put_onto_the_battlefield_uncast_never_chose(set_pool):
+    """No cast, no CR 601.2b, no type — so it is a 0/0 and CR 704.5f bins it.
+
+    The whole of why the choice is a *cast* cost rather than the entry effect
+    it superficially resembles. An entry-time reading would have a reanimated
+    Caller choosing a type it was never cast to choose, and would leave a
+    countered one having chosen — both differences the printed sentence
+    forbids.
+    """
+    pool = set_pool("MMQ")
+    game, p1, _p2 = _w3g1_duel()
+    _w3g1_bears(game, 1, 2, set_pool)
+    arrival = Permanent(card=pool["Caller of the Hunt"])
+    game._put_permanent_onto_battlefield(0, arrival, None)
+
+    assert arrival.metadata.get("chosen_creature_type") is None
+    game.check_state_based_actions()
+    assert not game.is_on_battlefield(arrival)
+
+
+def test_caller_of_the_hunt_offers_the_choice_to_the_picker(set_pool):
+    """The browser is told to ask, and told what to offer.
+
+    `announces_creature_type` is the cast side's twin of `announces_x`: without
+    it the client asks nothing and the cast silently takes the engine's default
+    on the one choice the card is entirely about. The catalog and the default
+    ride with it because neither is something a browser can derive — CR 205.3m's
+    list is ingested data and the default counts a board.
+    """
+    pool = set_pool("MMQ")
+    game, p1, _p2 = _w3g1_duel()
+    _w3g1_bears(game, 1, 2, set_pool)
+    p1.hand.append(pool["Caller of the Hunt"])
+
+    spec = game.cast_target_spec(0, pool["Caller of the Hunt"])
+    assert spec["announces_creature_type"] is True
+    assert "bear" in spec["creature_types"]
+    assert spec["default_creature_type"] == "bear"
+    # Nothing else on the card targets, so the picker is still told so.
+    assert spec["requires_target"] is False
