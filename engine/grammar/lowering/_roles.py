@@ -221,14 +221,124 @@ def _sequence_role_name(described: dict, taken: set) -> str | None:
     """
     from ...targeting import SEAT_ROLE_KINDS
 
+    filt = described.get("filter") or {}
     if described.get("kind") in SEAT_ROLE_KINDS:
         name = "player"
     else:
-        filt = described.get("filter") or {}
         name = filt.get("type_filter") or filt.get("subtype_filter")
+    # **A repeat of a name already taken is qualified by the seat the slot
+    # names, not refused.** "Destroy target creature an opponent controls …
+    # destroy target creature you control" (Crooked Scales) prints one noun
+    # twice and the whole of what tells the two slots apart is that word —
+    # which is also what makes them two announcements rather than one named
+    # twice, so refusing on the shared noun would throw the pair away for the
+    # very fact that admits it. The name is a *key* for an object role and not
+    # a label: the client shows a battlefield role by its ``kind``
+    # (``roleTargetNoun``, ``web/static/app.js``), so no caster reads it.
+    if isinstance(name, str) and name in taken:
+        controller = filt.get("controller")
+        name = f"{controller} {name}" if isinstance(controller, str) else None
     if not isinstance(name, str) or name in taken:
         return None
     return name
+
+
+#: The ``controller`` values no one permanent can answer at once, which is what
+#: makes two slots narrowed by them **two** announcements rather than one named
+#: twice.
+#:
+#: A printed back-reference is lowered to a *copy* of its antecedent and so
+#: names the same object; a pair of slots no permanent could answer both of
+#: therefore cannot be one. That is the evidence
+#: :func:`describe_sequence_target_roles` otherwise has only for a seat beside
+#: an object, and it is the same fact ``targeting._slot_roles_spec`` states
+#: about its own shared list: "the intersection of 'you control' and 'an
+#: opponent controls' is *nothing*".
+#:
+#: One pair, because it is the one the pool prints. A second is a row here, and
+#: the bar for adding one is the bar this pair meets: no permanent on any board
+#: answers both printed words.
+_CONTRADICTORY_CONTROLLERS = frozenset({frozenset({"you", "opponent"})})
+
+
+def _cannot_be_one_permanent(first: dict, second: dict) -> bool:
+    """Whether no single permanent could answer both slots' narrowings."""
+    return frozenset({
+        (first.get("filter") or {}).get("controller"),
+        (second.get("filter") or {}).get("controller"),
+    }) in _CONTRADICTORY_CONTROLLERS
+
+
+#: Where, below a line's own steps, an announced target can be printed.
+#:
+#: CR 601.2c is about the **printed instance of the word "target"** and says
+#: nothing about which half of a sentence it stands in: the target in "if you
+#: lose the flip, destroy target creature you control" (Crooked Scales) is
+#: chosen as the ability is activated, whichever way the coin then lands. So
+#: the walk descends, and what keeps it from claiming a line it should not is
+#: the evidence it demands afterwards, never where the words were printed.
+#:
+#: ``reflexive`` is deliberately absent: CR 603.12 makes it a separate ability
+#: that chooses its own targets when the payment creates it, which is a
+#: different announcement made at a later moment.
+_ANNOUNCEMENT_BRANCH_KEYS = ("steps", "then", "else", "action", "otherwise")
+
+
+def _announced_slot_descriptions(instructions) -> list[dict]:
+    """Every ``targets`` description under *instructions*, in printed order."""
+    found: list[dict] = []
+    for instruction in instructions:
+        payload = getattr(instruction, "payload", None) or {}
+        described = payload.get("targets")
+        if isinstance(described, dict):
+            found.append(described)
+        for key in _ANNOUNCEMENT_BRANCH_KEYS:
+            nested = payload.get(key)
+            if isinstance(nested, (list, tuple)):
+                found.extend(_announced_slot_descriptions(nested))
+    return found
+
+
+def _stamp_slot_roles(instructions, roles: list, by_position: dict, seen: list):
+    """*instructions* with each announced slot carrying the shared roles list.
+
+    The same walk :func:`_announced_slot_descriptions` makes, in the same
+    order, so a slot's position means the same thing to both — which is what
+    lets a role be matched to the step carrying it without holding a
+    description's object identity. Two steps may legitimately share one payload
+    dict, and an identity map would then stamp one of them twice.
+    """
+    rewritten = []
+    for instruction in instructions:
+        payload = getattr(instruction, "payload", None) or {}
+        updated = dict(payload)
+        changed = False
+        described = payload.get("targets")
+        if isinstance(described, dict):
+            position = len(seen)
+            seen.append(described)
+            role = by_position.get(position)
+            if role is not None:
+                updated["targets"] = {
+                    **described,
+                    "kind": "roles",
+                    "roles": roles,
+                    "role": role["role"],
+                }
+                changed = True
+        for key in _ANNOUNCEMENT_BRANCH_KEYS:
+            nested = payload.get(key)
+            if not isinstance(nested, (list, tuple)):
+                continue
+            inner = _stamp_slot_roles(tuple(nested), roles, by_position, seen)
+            if inner != tuple(nested):
+                updated[key] = inner
+                changed = True
+        rewritten.append(
+            dataclasses.replace(instruction, payload=updated)
+            if changed else instruction
+        )
+    return tuple(rewritten)
 
 
 def describe_sequence_target_roles(
@@ -256,8 +366,16 @@ def describe_sequence_target_roles(
     **change what kind of thing it points at.** "It" names an object because
     its antecedent was one; "they" names a seat for the same reason. So a line
     whose two announced targets are one seat and one object announces two —
-    there is no antecedent either could be a copy of. Two of a kind may be
-    either, and this refuses them rather than guessing; that remainder is in
+    there is no antecedent either could be a copy of.
+
+    **Two of a kind answer the same question a second way**, and only when
+    they answer it outright: a back-reference names the *same object* as its
+    antecedent, so a pair of slots **no one permanent could satisfy both of**
+    cannot be one named twice either. Today that is one printed pair —
+    "target creature an opponent controls" beside "target creature you
+    control" (Crooked Scales) — and it is a table
+    (:data:`_CONTRADICTORY_CONTROLLERS`), not a guess. Every other two of a
+    kind is still handed back rather than guessed at; that remainder is in
     SET_PLAYBOOK's Known gaps with the cards it costs.
 
     Narrow in four further ways, each of which is a card this must not claim:
@@ -273,16 +391,25 @@ def describe_sequence_target_roles(
       resolution ignore — the silent widening every neighbour here refuses.
     * a description that is not already a roles one, so a lowering that built
       its own slots (Fumarole, Goblin Welder) keeps them.
-    * the line's **own** steps, never a branch inside one. This walks the
-      instructions the line lowered to and does not descend into ``then`` /
-      ``else`` / ``action``, which is the same narrowing
-      ``legality._announced_target_slots`` already makes and for the same
-      reason: a roles walk answers every role or refuses the announcement, so a
-      target that only a taken branch would choose would become mandatory at
-      announcement time. Goblin Artisans — "if you lose the flip, counter
-      target artifact spell you control" — would then be unactivatable with an
-      empty stack. (``_from_instructions`` *does* read branches, for the
-      picker; the asymmetry is deliberate and this side keeps the strict half.)
+
+    **The walk descends into branches, and the evidence is what narrows it.**
+    This used to read the line's own steps alone — never ``then`` / ``else`` /
+    ``action`` — on the ground that a roles walk answers every role or refuses
+    the announcement, so a target only a taken branch would choose would become
+    mandatory at announcement time. Under CR 601.2c that is not a wrongness:
+    every printed instance of the word "target" is announced as the spell is
+    cast or the ability activated, and the rule exempts only a mode and an
+    alternative or additional cost — never which half of a sentence the word
+    stands in. "If you lose the flip, destroy target creature you control"
+    (Crooked Scales) is chosen with the coin still in the air.
+
+    What the narrowing was really protecting is a *one*-target ability, where
+    nothing but the branch target exists and refusing the announcement refuses
+    the whole ability: Goblin Artisans with an empty stack. This function
+    cannot reach one — it claims a line only when it announces **two** — so the
+    exclusion cost the pool its two-in-branches cards and bought nothing here.
+    ``legality._announced_target_slots`` keeps its own copy of the exclusion,
+    which is where that argument does bite and is left alone.
 
     The description is *shared*: both steps carry the same ordered list, each
     with the ``role`` key naming its own slot, so the picker reads one
@@ -295,11 +422,7 @@ def describe_sequence_target_roles(
     from ...subject_filters import untestable_filter_keys
     from ...targeting import SEAT_ROLE_KINDS
 
-    slots = [
-        (position, instruction.payload["targets"])
-        for position, instruction in enumerate(instructions)
-        if isinstance(instruction.payload.get("targets"), dict)
-    ]
+    slots = list(enumerate(_announced_slot_descriptions(instructions)))
     announced = [
         (position, described) for position, described in slots
         if described.get("quantifier") == "target"
@@ -307,9 +430,20 @@ def describe_sequence_target_roles(
     if len(slots) != 2 or len(announced) != 2:
         return instructions
     kinds = [described.get("kind") for _position, described in announced]
-    if len([kind for kind in kinds if kind in SEAT_ROLE_KINDS]) != 1:
-        return instructions
-    if len([kind for kind in kinds if kind == "object"]) != 1:
+    seats = len([kind for kind in kinds if kind in SEAT_ROLE_KINDS])
+    objects = len([kind for kind in kinds if kind == "object"])
+    # One seat beside one object, or **two objects no one permanent could
+    # answer both of** — the two ways a line can prove it named two targets
+    # rather than one twice. See :data:`_CONTRADICTORY_CONTROLLERS`; everything
+    # else is handed back, which is the 42-announcement remainder the paragraph
+    # above is about.
+    if not (
+        (seats == 1 and objects == 1)
+        or (
+            objects == 2
+            and _cannot_be_one_permanent(announced[0][1], announced[1][1])
+        )
+    ):
         return instructions
     roles: list[dict[str, object]] = []
     names: set = set()
@@ -345,18 +479,4 @@ def describe_sequence_target_roles(
         position: role
         for (position, _described), role in zip(announced, roles)
     }
-    return tuple(
-        instruction if position not in by_position else dataclasses.replace(
-            instruction,
-            payload={
-                **instruction.payload,
-                "targets": {
-                    **instruction.payload["targets"],
-                    "kind": "roles",
-                    "roles": roles,
-                    "role": by_position[position]["role"],
-                },
-            },
-        )
-        for position, instruction in enumerate(instructions)
-    )
+    return _stamp_slot_roles(tuple(instructions), roles, by_position, [])

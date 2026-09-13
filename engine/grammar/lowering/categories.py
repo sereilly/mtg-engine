@@ -837,6 +837,14 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # damage effect must not be able to turn "damage" on.
     "flip_coin": "coin_flips",
     "coin_flip_stakes_loop": "coin_flips",
+    # "…unless you pay {3} **and repeat this process**." (Crooked Scales.) The
+    # loop the line is wrapped in, and the record one round writes to ask for
+    # another. Both sit with the flip rather than with the destruction the
+    # process performs, for the reason stated just above it: what the round
+    # *does* keeps its own category, and a switch over repetition must not be
+    # able to turn a destruction on or off.
+    "repeat_process_on_request": "coin_flips",
+    "request_process_repeat": "coin_flips",
     # "Choose a number between 0 and 7." (Shapeshifter.) Its own category for
     # the reason the coin flip has one: the number is a *value* a player picks,
     # and what reads it back is a different sentence with a category of its own.

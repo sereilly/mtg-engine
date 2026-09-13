@@ -602,6 +602,11 @@ def _record_destroyed_this_way(
 
 @effect_handler("destroy_target_permanent")
 def destroy_target_permanent(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    # Function-level, like every other `..targeting` reader in `handlers/`:
+    # that module reads the cast-cost tables, which read the filters, which
+    # read this package.
+    from ..targeting import payload_own_role
+
     target = context.target
     card = context.card
     source_permanent = context.source_permanent
@@ -646,7 +651,23 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
     # (CR 608.2b) — the same reading `untap_target_permanent` takes for
     # Candelabra of Tawnos, through the same helper.
     targets_desc = instruction.payload.get("targets") or {}
-    if isinstance(targets_desc, dict) and targets_desc.get("kind") == "roles":
+    if (
+        isinstance(targets_desc, dict)
+        and targets_desc.get("kind") == "roles"
+        # **…and the announcement is this instruction's whole business.** A
+        # roles description reaches a handler in two shapes, and they mean
+        # opposite things. Fumarole's one instruction *is* the announcement and
+        # spends every slot, which the branch below does. Crooked Scales' two
+        # slots are announced together and spent a step at a time — the same
+        # ordered list on both steps, each naming its own slot with ``role``
+        # (``grammar/lowering/_roles.describe_sequence_target_roles``) — and by
+        # the time such a step runs, ``control_flow._role_scoped`` has already
+        # put *its* object in the ordinary target channels. So the singular
+        # path below is the right one, and taking this branch instead destroyed
+        # nothing at all: the scoped context carries one id where
+        # ``resolve_role_permanent`` reads a list.
+        and payload_own_role(instruction.payload) is None
+    ):
         # "Destroy target creature **and target land**." (Fumarole.) Several
         # targeted phrases of one announcement, each with its own noun — so each
         # slot is resolved *by its role* rather than by position, through the

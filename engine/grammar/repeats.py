@@ -1,11 +1,11 @@
 """``Repeat this process …`` — the sentence that says the sentences before it
 happen again.
 
-Five cards print one and **no two of them are the same mechanism**, which is
+Six cards print one and **no two of them are the same mechanism**, which is
 why they are one module rather than one production. The count in this paragraph
 has been wrong twice — it said three while the file held four — so it is worth
-stating that it is the number of *readers below*, not the number of cards a
-wave happened to look at:
+stating that it is the number of *readers*, five of them below and one of them
+elsewhere, and not the number of cards a wave happened to look at:
 
 * "Repeat this process **until no one** puts a card onto the battlefield."
   (Eureka.) A round of offers made to every seat in turn, repeated while
@@ -27,6 +27,20 @@ wave happened to look at:
   (Thieves' Auction.) A loop that ends on a *pile emptying*, which is also the
   one bound that can end a round part-way through: four cards among three
   players is two passes, and the second stops after the first seat.
+
+* "…unless you pay {3} **and repeat this process**." (Crooked Scales.) A loop
+  bought by a *price inside the round*, on one arm of a coin flip that may not
+  even have been taken. The sixth, and the only one whose reader is **not in
+  this module**: every clause above is its own sentence or opens one, and is
+  read where the sentence loop has just finished a statement it can fold into,
+  while this one is joined to a price by the printed "and" and is consumed by
+  the toll. So its reader is ``tolls._accept_repeat_request``, two layers
+  down — this module imports ``statements`` and the toll family sits under it —
+  and what it leaves behind is a *marker*
+  (:class:`ast.RepeatProcessRequest`), because "this process" is the whole
+  printed effect and nothing at that depth is holding it. The loop goes on in
+  ``grammar/lower.wrap_requested_repeat``, the one place a line's instructions
+  are all in hand.
 
 Fusing them would mean a mechanism that is a round-of-offers, a decision and a
 parameter list at once, and each card would reach it through a payload flag

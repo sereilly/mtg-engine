@@ -226,6 +226,35 @@ def _lower_repeat_optional_process(
     )
 
 
+def _lower_repeat_process_request(
+    node: "ast.RepeatProcessRequest",
+) -> tuple[OracleInstruction, ...]:
+    """"…unless you pay {3} **and repeat this process**." (Crooked Scales.)
+
+    The **sixth** printed "repeat this process" and the only one whose lowering
+    produces no loop. The five above each hold the round they repeat, because
+    each is printed as a clause *about* that round; this one is printed inside
+    a price, two branches down inside the last of three sentences, and what it
+    names — "this process" — is the whole printed effect. Nothing at this depth
+    is holding that.
+
+    So it lowers to a *request*: one instruction that records, in the
+    resolution's own scratchpad, that the round asked for another. The loop is
+    put round the line by ``grammar/lower._lower_line_statement`` — the one
+    function that has every instruction a line lowered to, which is the same
+    reason CR 601.2c's roles walk runs there — and its handler reads the record
+    at the end of each round.
+
+    Splitting it that way is what keeps the coin flip honest. The request is
+    made only on the branch that ran, so a round that won the flip never writes
+    the key and the loop stops; a round that lost it and was paid for does, and
+    the loop runs the *whole* process again — the flip included, which is what
+    "this process" says and what a loop holding only the last sentence could
+    not do.
+    """
+    return (OracleInstruction("request_process_repeat", "", {}),)
+
+
 def _lower_repeat_process_while(
     node: ast.RepeatProcessWhile, lower, lower_condition, produced, event,
 ) -> tuple[OracleInstruction, ...]:
