@@ -871,7 +871,20 @@ def add_counter_to_self(game: Game, instruction: OracleInstruction, context: Ora
     # payload means one, which is what every earlier caller emitted.
     raw_count = instruction.payload.get("count", 1)
     if raw_count == "trigger_count":
-        count = int(context.results.get("trigger_count", 0))
+        # …and under a *trigger* the number is the firing event's, frozen into
+        # the trigger's context by the fire site (CR 603.10). "Whenever you gain
+        # life, put that many +1/+1 counters on this creature" (Light of
+        # Promise) has no earlier step in its own resolution to have written the
+        # scratchpad key below, so it read zero and placed nothing while
+        # reporting itself resolved. The lowering says which key when the event
+        # has one; without it this stays the scratchpad read Tetravus needs.
+        from_trigger = instruction.payload.get("amount_from_trigger")
+        if from_trigger is not None:
+            count = int(
+                (context.trigger_context or {}).get(str(from_trigger), 0) or 0
+            )
+        else:
+            count = int(context.results.get("trigger_count", 0))
     else:
         # "Put **X** +0/+1 counters on this creature" (Necropolis): the count
         # may be the where-clause's X, resolved through the same

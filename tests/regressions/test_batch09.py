@@ -644,6 +644,22 @@ class TestPowerSinkCounters:
 # Non-interactive (AI/headless) play sacrifices N nontoken permanents with a
 # deterministic heuristic (game-losing ones kept last). A human seat instead gets
 # an interactive prompt (pending_sacrifice) and chooses which permanents to give up.
+#
+# **These tests now drain the stack, and that is the point of the change that
+# made them.** The sentence used to be carried out by a substring branch inside
+# ``mixins/effects._on_player_dealt_damage``, which sacrificed the permanents as
+# part of the damage event itself — so the ability never used the stack at all.
+# CR 603.2 makes it a triggered ability: it goes on the stack above whatever is
+# there, opponents get priority, and it happens when it resolves. A hook writes
+# the end state directly, and that is exactly the kind of place a general rule
+# gets skipped in silence; retiring it (MMQ wave 2) put Lich on the stack, and
+# every assertion below is the same one asked after the resolution rather than
+# during the damage.
+#
+# One assertion did change, in ``test_too_few_permanents_loses_the_game``: with
+# fewer nontoken permanents than the damage dealt, "if you can't" is decided
+# when the trigger resolves, so the seat loses without being offered a prompt it
+# could not legally answer. The hook prompted first and lost afterwards.
 # ---------------------------------------------------------------------------
 
 class TestLichSacrifice:
@@ -655,6 +671,7 @@ class TestLichSacrifice:
         game = _game(p1, PlayerState(name="P2"))
         before = len(p1.battlefield)
         game._deal_damage_to_player(p1, 2)
+        resolve_stack(game)
         assert before - len(p1.battlefield) == 2  # two nontoken permanents sacrificed
         assert lich in p1.battlefield              # Lich (game-losing) sacrificed last
 
@@ -666,6 +683,7 @@ class TestLichSacrifice:
         game = _game(p1, PlayerState(name="P2"))
         game.interactive_seats = {0}
         game._deal_damage_to_player(p1, 2)
+        resolve_stack(game)
         # Nothing sacrificed yet: the player is prompted to choose.
         assert len(p1.battlefield) == 3
         assert game.pending_sacrifice["player_index"] == 0
@@ -681,6 +699,7 @@ class TestLichSacrifice:
         game = _game(p1, PlayerState(name="P2"))
         game.interactive_seats = {0}
         game._deal_damage_to_player(p1, 1)
+        resolve_stack(game)
         # The player elects to sacrifice Lich itself (index 2) rather than a creature.
         assert game.confirm_sacrifice(0, [2]) is True
         assert lich not in p1.battlefield
@@ -696,6 +715,10 @@ class TestLichSacrifice:
         game.interactive_seats = {0}
         game._deal_damage_to_player(p1, 1)
         game._deal_damage_to_player(p1, 1)  # e.g. two combat damage events this step
+        resolve_stack(game)
+        # Two events are two triggers (CR 603.3), and the second merges into the
+        # standing prompt rather than queueing a second one — so the seat owes
+        # two permanents once, which is what the sentence adds up to.
         assert game.pending_sacrifice["count"] == 2
 
     def test_wrong_count_is_rejected(self, cards):
@@ -706,6 +729,7 @@ class TestLichSacrifice:
         game = _game(p1, PlayerState(name="P2"))
         game.interactive_seats = {0}
         game._deal_damage_to_player(p1, 2)
+        resolve_stack(game)
         assert game.confirm_sacrifice(0, [0]) is False  # must choose exactly 2
         assert len(p1.battlefield) == 3                 # unchanged, still pending
         assert game.pending_sacrifice is not None
@@ -717,7 +741,11 @@ class TestLichSacrifice:
         game = _game(p1, PlayerState(name="P2"))
         game.interactive_seats = {0}
         game._deal_damage_to_player(p1, 3)  # owes 3, only 2 nontoken permanents
-        assert game.confirm_sacrifice(0, [0, 1]) is True
+        resolve_stack(game)
+        # "If you can't, you lose the game" is decided at the resolution, on the
+        # board as it stands — a seat that cannot pay is never offered a prompt
+        # it could not legally answer.
+        assert game.pending_sacrifice is None
         assert p1.lost is True
 
 

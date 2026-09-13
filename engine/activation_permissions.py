@@ -252,7 +252,13 @@ def permission_clause_readable(sentence: str) -> bool:
     head, joined, tail = cleaned.partition(" but only ")
     if not activation_permission_line(head):
         return False
-    if joined and not activation_restriction_line(f"only {tail}"):
+    # With the verb, because every row in that table is anchored on the clause
+    # as it would be printed alone — the same rebuild `_clauses` does on the
+    # enforcement side, and the same reason `_conjuncts` carries the verb across
+    # an "and". Asked verblessly this gate said "unreadable" for every tail but
+    # the one whose row had been widened to take both spellings, so a card
+    # printing "…but only as a sorcery" was refused outright.
+    if joined and not activation_restriction_line(f"activate only {tail}"):
         return False
     return True
 

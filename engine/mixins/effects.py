@@ -1592,31 +1592,24 @@ class EffectsMixin:
             type_line = getattr(source_perm, "type_line", "") or ""
             if "artifact" in str(type_line).lower():
                 target.artifact_damage_taken_this_turn += damage
-        # Living Artifact: "Whenever you're dealt damage, put that many vitality
-        # counters on this Aura." Counters accumulate on the enchantment so its
-        # upkeep ability can later trade them for life (and the UI can show them).
-        if damage > 0:
-            for perm in self.controlled_by(target):
-                if "put that many vitality counters" in perm.effective_card.oracle_text.lower():
-                    perm.metadata["vitality_counters"] = int(perm.metadata.get("vitality_counters", 0)) + damage
-                    self.log.append(
-                        f"{perm.card.name} got {damage} vitality counter(s) "
-                        f"(now {perm.metadata['vitality_counters']})"
-                    )
-        if not self._player_controls_text(
-            target, "whenever you're dealt damage, sacrifice that many nontoken permanents"
-        ):
-            return
-        # CR 701.21a: the sacrificing player chooses which nontoken permanents to
-        # give up (a human is prompted; AI/headless resolves inline). "If you can't,
-        # you lose the game." Multiple damage events this step accumulate the count.
-        self.arm_forced_sacrifice(
-            self.players.index(target),
-            damage,
-            filter={"nontoken": True},
-            reason="Lich",
-            on_short={"kind": "lose"},
-        )
+        # **Two per-card branches used to stand here and are gone**, and what
+        # retired them is one grammar row rather than any work on either card.
+        #
+        # "Whenever you're dealt damage, put that many vitality counters on this
+        # Aura" (Living Artifact) and "…sacrifice that many nontoken permanents.
+        # If you can't, you lose the game" (Lich) were both carried out here, by
+        # substring against every permanent the damaged seat controlled — a
+        # name-keyed hook wearing a substring, in the middle of a damage path.
+        # They were written because CR 120.4b's event had no *passive* trigger
+        # row: the condition table read "whenever <someone> deals damage", and
+        # a sentence that leaves the damager out reached no dispatcher at all.
+        #
+        # With the row in place both lines compile to ordinary triggered
+        # abilities that announce through ``events.collect`` like every other
+        # damage trigger, so leaving these would not have been dead code — it
+        # would have been each card happening **twice**: Living Artifact took six
+        # vitality counters from three damage, and Lich sacrificed its permanents
+        # and then lost the game trying to sacrifice them again.
 
     def _add_mana_from_text(self, controller: PlayerState, text: str, preferred_color: str | None = None) -> None:
         # Prefer lexing the oracle text for mana symbols

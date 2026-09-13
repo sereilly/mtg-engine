@@ -7,7 +7,7 @@ import web.session_store as web_session_store
 
 from engine.models import CardDefinition, Permanent
 from web.app import app, store
-from tests.helpers import LEA_PATH
+from tests.helpers import LEA_PATH, resolve_stack
 
 
 client = TestClient(app)
@@ -728,8 +728,15 @@ def test_forced_sacrifice_prompts_human_and_honors_choice():
 
     # Deal 1 damage to the human; the engine arms an interactive prompt instead of
     # auto-sacrificing (both seats are human in this mode).
+    #
+    # The stack is drained first, and that is what changed: the sentence is a
+    # triggered ability (CR 603.2) and used to be carried out inside the damage
+    # event by a substring branch in `mixins/effects`. Retiring that branch (MMQ
+    # wave 2) put it on the stack where the rules put it, so the prompt is armed
+    # by the *resolution* rather than by the damage.
     session.game.interactive_seats = {0}
     session.game._deal_damage_to_player(p0, 1)
+    resolve_stack(session.game)
     assert len(p0.battlefield) == 3  # nothing sacrificed yet
 
     state = client.get(f"/api/sessions/{sid}/state?seat=0").json()

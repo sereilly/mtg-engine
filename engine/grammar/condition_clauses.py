@@ -497,13 +497,39 @@ def _accept_record_condition(stream: TokenStream) -> "ast.Condition | None":
     stream.reset(named_mark)
 
     milled_mark = stream.mark()
-    if stream.accept_phrase("one", "or", "more"):
+    # "if **one or more <noun> cards were put into that graveyard this way**"
+    # (Helm of Obedience) and "if **a <noun> card was milled this way**"
+    # (Saprazzan Breaker). One test — was there at least one such card in the
+    # record the mill in front of it wrote — printed two ways, so it is one
+    # clause with the noun phrase as the whole of what differs.
+    #
+    # The printed floor is one either way: "a" is the indefinite article, not a
+    # count, and "one or more" states the same minimum in words. Reading them as
+    # two clauses would be two answers to one question, and the second would
+    # have to demand the same producer and refuse the same filters.
+    #
+    # The article is consumed *here* rather than by the noun parser, which
+    # refuses one outright ("expected an object noun") — the same split every
+    # caller of that parser makes.
+    if stream.accept_phrase("one", "or", "more") or stream.accept_word("a", "an"):
         try:
             milled_filter = parse_object_filter(stream)
         except GrammarError:
             milled_filter = None
-        if milled_filter is not None and stream.accept_phrase(
-            "were", "put", "into", "that", "graveyard", "this", "way"
+        # Both verbs and both spellings of the move. "Milled" is CR 701.17a's
+        # keyword action and "put into that graveyard" is the words it stands
+        # for, so a card printing either names the same record; the number
+        # agreement follows the opening the card chose and neither is a
+        # different question.
+        if milled_filter is not None and (
+            stream.accept_phrase(
+                "were", "put", "into", "that", "graveyard", "this", "way"
+            )
+            or stream.accept_phrase(
+                "was", "put", "into", "that", "graveyard", "this", "way"
+            )
+            or stream.accept_phrase("were", "milled", "this", "way")
+            or stream.accept_phrase("was", "milled", "this", "way")
         ):
             return ast.MilledThisWay(milled_filter)
     stream.reset(milled_mark)

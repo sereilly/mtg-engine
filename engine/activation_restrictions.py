@@ -1997,8 +1997,19 @@ def _clauses(text: str, card_name: str | None = None) -> list[str]:
             # the head is a different rule, checked elsewhere. Split rather than
             # matched loosely, so the clause is still anchored at both ends.
             if " but only " in cleaned:
-                cleaned = cleaned.split(" but only ", 1)[1].strip()
-                cleaned = f"only {cleaned}"
+                # …and the verb travels to the tail, exactly as `_conjuncts`
+                # moves it across an "and". Every row here is anchored on the
+                # clause **as it would be printed alone** ("activate only as a
+                # sorcery"), and the split leaves the tail without its verb —
+                # so rebuilding it verbless collected only the clauses whose row
+                # happened to also admit that spelling. `only during any upkeep
+                # step` is one, because Armageddon Clock's row was widened to
+                # take both, and the collector below carries a matching special
+                # case for it; every other tail fell out of this list entirely
+                # and its restriction was **never enforced**. Scandalmonger's
+                # "…but only as a sorcery" is the first card in the pool to
+                # print a different tail.
+                cleaned = "activate only " + cleaned.split(" but only ", 1)[1].strip()
             # "**Only** during any upkeep step" (Armageddon Clock) drops the
             # verb; every other printed clause keeps it. Both spellings are the
             # same kind of sentence, so both are collected.

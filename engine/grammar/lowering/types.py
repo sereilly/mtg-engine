@@ -430,9 +430,22 @@ def _lower_change_land_type(node: ast.ChangeLandType) -> tuple[OracleInstruction
         raise LoweringError(
             f"no sweep ends a land-type change at {node.duration.kind}", node=node
         )
-    if not _is_target(node.subject):
+    # "**X target lands** become Forests until end of turn." (Deepwood Elder.)
+    # The several-target reading of the same sentence, opted into here the way
+    # `_describe_several_targets` requires — the handler resolves a list, so
+    # saying so is what stops the picker offering a second choice nothing
+    # collects. Refused for the *choose a land type* form: Jinx's prompt is
+    # armed for one land by its permanent id, and a list of lands would need a
+    # prompt per land or a prompt that answers for all of them, neither of which
+    # any card prints.
+    several = _names_several_targets(node.subject)
+    if not (_is_target(node.subject) or several):
         raise LoweringError(
             "a land-type change names one target land", node=node
+        )
+    if several and node.land_type == ast.CHOSEN_LAND_TYPE:
+        raise LoweringError(
+            "a chosen land type is asked of one land at a time", node=node
         )
     # The named type keeps its place at the front of the payload: these dicts
     # are compared by ``repr`` in the behavioural signatures and in the
@@ -448,7 +461,10 @@ def _lower_change_land_type(node: ast.ChangeLandType) -> tuple[OracleInstruction
     }
     if not named:
         payload["choose_land_type"] = True
-    _describe_targets(payload, node.subject)
+    if several:
+        _describe_several_targets(payload, node.subject)
+    else:
+        _describe_targets(payload, node.subject)
     return (OracleInstruction("change_land_type_until", "", payload),)
 
 

@@ -35,7 +35,7 @@ from .auras import (
 )
 from .named_counters import counters_on
 from .control import control_changes, has_control_change
-from .global_statics import global_statics_applying_to
+from .global_statics import global_static_sources, global_statics_applying_to
 from .continuous import (
     Characteristics,
     ContinuousEffect,
@@ -825,6 +825,45 @@ def collect_type_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
             effects.append(
                 add_types(only, card_types=["creature"], timestamp=0, label=static.name)
             )
+
+    # "Creatures you control are the chosen type." (Conspiracy.) The one global
+    # static whose effect is not in its own text: the creature type was chosen
+    # as the **source** entered (CR 614.1c) and is recorded on that permanent,
+    # so this reads the source/static *pairs* rather than the statics the loop
+    # above walks. Derived on every recompute like the rest of the family —
+    # the source leaving ends the effect by dropping out of the list, with
+    # nothing to sweep.
+    #
+    # CR 205.1a's scoped replacement, not the blanket one: the chosen type
+    # replaces the creature's *creature* types and leaves any others alone, so
+    # a Forest this seat has animated is a Goblin **and still a Forest**.
+    for source, static in global_static_sources(
+        perm.metadata.get("global_static_sources") or ()
+    ):
+        if not static.sets_creature_type:
+            continue
+        # Imported here rather than at module scope: this module is pulled in
+        # by ``handlers/_common`` long before ``engine.grammar`` finishes
+        # importing, and a top-level import of the vocabulary closes a cycle
+        # through the grammar package.
+        from .grammar.vocabulary import CREATURE_TYPES
+
+        chosen = source.metadata.get("chosen_creature_type")
+        if not chosen:
+            # The source is still entering, or the choice was never made. No
+            # contribution rather than an empty replacement: wiping every
+            # creature's types on the strength of an unanswered choice is the
+            # card doing something much larger than it says.
+            continue
+        effects.append(
+            add_types(
+                only,
+                subtypes=[str(chosen).lower()],
+                replaces_subtypes_from=CREATURE_TYPES,
+                timestamp=0,
+                label=f"{static.name}:{chosen}",
+            )
+        )
 
     # "…it becomes your choice of … a 1/6 **Wall** artifact creature with
     # defender" (Primal Clay). The body's P/T is layer 7b and its keyword is

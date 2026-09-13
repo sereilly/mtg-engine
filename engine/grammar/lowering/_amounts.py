@@ -89,6 +89,35 @@ _UNCOUNTABLE_FILTER_KEYS: frozenset[str] = frozenset()
 #: one scope would be two answers to "whose board is this?".
 TARGET_OPPONENT_SCOPE = "target_opponent"
 
+#: How a count is scoped when the printed noun phrase narrows it to *every*
+#: seat but the counting one — "the number of permanents of the chosen color
+#: **your opponents control**" (Chameleon Spirit).
+#:
+#: The scope's twin above names one seat a spell picked; this one names a set
+#: the rules define (CR 102.1), so nothing is announced and nothing has to be
+#: resolved — but it is still a scope rather than a filter key, and for a reason
+#: the ``target_opponent`` comment one paragraph up only half states. What the
+#: evaluator needs from it is **two** answers that ``owner`` used to give as
+#: one: which piles to scan, and whose "you" the filter's seat words are
+#: relative to. ``"all"`` answers both with nobody, which is right for CR 403.1's
+#: shared battlefield and wrong here; this answers the first with everybody and
+#: the second with the counting seat, and leaves the narrowing itself in the
+#: filter where ``subject_matches`` reads it — the same key, the same reader, as
+#: anywhere else the phrase is printed.
+#:
+#: The three printed spellings — "your opponents control", "each opponent
+#: controls", "an opponent controls" — all reach ``ObjectFilter.controller`` as
+#: the one value ``"opponent"``, which means "controlled by a seat that is not
+#: the observer". Counting every permanent that answers to it *is* the union of
+#: every opponent's board, so the first two readings are exact and the third
+#: (which no count in the pool prints, and which Magic templates as one of the
+#: other two) is read as the same union rather than as an unanswerable "some
+#: one of them".
+OPPONENTS_SCOPE = "opponents"
+
+#: The ``ObjectFilter.controller`` value the scope above is lifted from.
+_OPPONENT_CONTROLLER = "opponent"
+
 
 def count_spec(
     filt: "ast.ObjectFilter", node, *, aggregate: str = "count", multiplier: int = 1,
@@ -149,7 +178,9 @@ def count_spec(
     # Reachable on the battlefield alone, and by construction rather than by a
     # second condition: a count in any other zone refuses a ``controller`` key
     # outright at the `_CARD_ZONE_KEYS` gate above, before this line runs.
-    if controller not in (None, "you", TARGET_OPPONENT_SCOPE):
+    if controller not in (
+        None, "you", TARGET_OPPONENT_SCOPE, _OPPONENT_CONTROLLER,
+    ):
         raise LoweringError(
             f"a count cannot be narrowed to the {controller}'s permanents", node=node
         )
@@ -218,6 +249,18 @@ def count_spec(
     # way two seats can be named at once.
     if controller == TARGET_OPPONENT_SCOPE:
         owner = TARGET_OPPONENT_SCOPE
+    # The second lift, and the one that keeps its key. "…the number of permanents
+    # of the chosen color **your opponents control**" (Chameleon Spirit): the
+    # scope says which piles to scan and the *filter* still says which of the
+    # permanents in them count, because "not the observer's" is a question
+    # ``subject_matches`` already answers for every other sentence that prints
+    # it. Dropping the key here and scoping alone would work only while the
+    # scope and the narrowing agree — they do today and would not the moment a
+    # phrase pairs "your opponents control" with anything the scan cannot
+    # express — so the key is put back rather than trusted to the scope.
+    elif controller == _OPPONENT_CONTROLLER:
+        owner = OPPONENTS_SCOPE
+        payload["controller"] = controller
     spec: dict = {
         "zone": filt.zone,
         "owner": owner,

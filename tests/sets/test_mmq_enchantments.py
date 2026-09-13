@@ -1362,3 +1362,136 @@ def test_cornered_market_claims_both_of_its_printed_lines(set_pool):
 
     assert halves == ["cast spells", "play nonbasic lands"]
     assert compile_card_oracle(market).supported
+
+
+# --- W2G5: a chosen creature type, on the battlefield and off it ---
+from engine import Game, PlayerState
+from engine.handlers._common import _card_matches_filter as _w2g5e_card_matches
+from engine.layer_bridge import computed_types as _w2g5e_computed_types
+from engine.models import Permanent
+from engine.object_creature_types import card_creature_types as _w2g5e_card_types
+from engine.search_filters import search_matches as _w2g5e_search_matches
+
+
+def _w2g5e_conspiracy_board(set_pool, chosen="goblin"):
+    """A Conspiracy naming *chosen* on seat 0's board, plus a creature each side.
+
+    Returns ``(game, p1, p2, mine, theirs)``. The chosen type is written onto
+    the enchantment's own record rather than answered through the prompt, so the
+    test is about what the static then *does* — which is the half a prompt-only
+    test never reaches.
+    """
+    pool = set_pool("MMQ")
+    p1, p2 = PlayerState(name="A"), PlayerState(name="B")
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    mine = Permanent(card=pool["Rushwood Dryad"])
+    p1.battlefield.append(mine)
+    theirs = Permanent(card=pool["Rushwood Dryad"])
+    p2.battlefield.append(theirs)
+    conspiracy = Permanent(card=pool["Conspiracy"])
+    p1.battlefield.append(conspiracy)
+    game._initialize_permanent_state(conspiracy, 0, None)
+    conspiracy.metadata["chosen_creature_type"] = chosen
+    game.check_state_based_actions()
+    return game, p1, p2, mine, theirs
+
+
+def test_conspiracy_sets_the_creature_type_of_the_creatures_you_control(set_pool):
+    """"Creatures you control are the chosen type." (CR 205.1a, CR 613 layer 4.)
+
+    A **set**, not an addition: the rule says the new subtype replaces any
+    existing subtypes *from the appropriate set*, so a Dryad under a Conspiracy
+    naming Goblin is a Goblin and is no longer a Dryad.
+
+    The parenthesis in that rule is the half that needed saying out loud. A
+    blanket replacement is right for every earlier caller — a land-type change
+    lands on a permanent whose only subtypes are land types — and wrong here:
+    applied to a land this seat has animated it would take the land's own type
+    away, and the land would stop tapping for its colour as a side effect of a
+    tribal enchantment.
+    """
+    pool = set_pool("MMQ")
+    game, p1, p2, mine, theirs = _w2g5e_conspiracy_board(set_pool)
+
+    assert sorted(_w2g5e_computed_types(mine)[1]) == ["goblin"]
+    assert mine.has_type("goblin")
+    assert not mine.has_type("dryad")
+    # "You control" is CR 109.5's seat, read against the enchantment's own
+    # controller: the opponent's identical creature is untouched.
+    assert sorted(_w2g5e_computed_types(theirs)[1]) == ["dryad"]
+
+    # A land is not a creature and keeps its own subtype — and so would an
+    # animated one keep it, which is what the scoped replacement is for.
+    land = Permanent(card=pool["Saprazzan Skerry"])
+    p1.battlefield.append(land)
+    game.check_state_based_actions()
+    assert "forest" not in _w2g5e_computed_types(land)[1]
+
+
+def test_conspiracy_reaches_the_creature_cards_you_own_outside_the_battlefield(
+    set_pool,
+):
+    """"**The same is true** for creature spells you control and creature cards
+    you own that aren't on the battlefield."
+
+    Celestial Dawn's second sentence one characteristic over, and it is what
+    makes an off-battlefield creature type a real question at all: CR 613.1
+    applies the layers to a permanent, so a card in a hand or a library has no
+    layer stack and this engine reads its printed type line — right for every
+    card in the pool but this one.
+
+    Asserted through the two readers that ask, rather than through the seam
+    alone: a filter payload matched against a card in a zone
+    (``_card_matches_filter``) and a library search (``search_matches``). A
+    seam nothing consults is a claimed sentence with nothing behind it, which is
+    the debt this card was carrying in the first place.
+    """
+    pool = set_pool("MMQ")
+    game, p1, p2, mine, theirs = _w2g5e_conspiracy_board(set_pool)
+    dryad = pool["Rushwood Dryad"]
+
+    # The same printed card reads one type in my hand and another in theirs:
+    # "cards **you own**" is CR 108.3's owner, so the seat is not optional.
+    assert sorted(_w2g5e_card_types(game, dryad, p1)) == ["goblin"]
+    assert sorted(_w2g5e_card_types(game, dryad, p2)) == ["dryad"]
+
+    # A noncreature card is never retyped — the sentence says "creature cards",
+    # and CR 205.3d forbids it independently.
+    assert "goblin" not in _w2g5e_card_types(game, pool["Saprazzan Skerry"], p1)
+
+    # …and the two readers that ask the question agree with the seam.
+    assert _w2g5e_card_matches(dryad, {"subtype_filter": "goblin"}, game=game, owner=p1)
+    assert not _w2g5e_card_matches(
+        dryad, {"subtype_filter": "dryad"}, game=game, owner=p1
+    )
+    assert not _w2g5e_card_matches(
+        dryad, {"subtype_filter": "goblin"}, game=game, owner=p2
+    )
+    assert _w2g5e_search_matches(
+        dryad, {"restrictions": {"subtypes": ["goblin"]}}, game=game, owner=p1
+    )
+    assert not _w2g5e_search_matches(
+        dryad, {"restrictions": {"subtypes": ["goblin"]}}, game=game, owner=p2
+    )
+
+
+def test_conspiracy_contributes_nothing_until_its_type_is_chosen(set_pool):
+    """A source still resolving its entry choice names no type.
+
+    The contribution is derived from the source's own record on every recompute
+    (CR 611.3a), so the honest answer with no record is *no contribution* — not
+    an empty replacement, which would wipe every creature's types on the
+    strength of a choice nobody has made yet.
+    """
+    pool = set_pool("MMQ")
+    p1, p2 = PlayerState(name="A"), PlayerState(name="B")
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    mine = Permanent(card=pool["Rushwood Dryad"])
+    p1.battlefield.append(mine)
+    conspiracy = Permanent(card=pool["Conspiracy"])
+    p1.battlefield.append(conspiracy)
+    conspiracy.metadata.pop("chosen_creature_type", None)
+    game.check_state_based_actions()
+    assert sorted(_w2g5e_computed_types(mine)[1]) == ["dryad"]

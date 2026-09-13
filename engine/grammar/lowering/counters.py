@@ -32,6 +32,7 @@ from ._common import (
 )
 from ._records import counts_prevented_damage, names_the_shielded_object
 from ._sweeps import lower_counter_sweep
+from ._events import trigger_quantity_key
 from ._plus_one_counters import lower_plus_one_placement
 from ._counter_stores import lower_loyalty_counters
 from ._events import (CHOSEN_PERMANENT, OTHER_CHOSEN_PERMANENT, EVENT_SUBJECT_CONTROLLER, _EVENT_SUBJECT_OBJECTS, binds_block_pair, _REANIMATED_PERMANENTS, _RECORDED_PERMANENTS)
@@ -301,10 +302,28 @@ def _lower_put_counter(
         # handler resolves through ``context.x_value`` like every other
         # amount. The refusal below is what a count this branch cannot read
         # at all still gets.
+        # "Whenever you're dealt damage, put **that many** vitality counters on
+        # this Aura." (Living Artifact.) The number the firing event carried,
+        # frozen into the trigger's context by the fire site — the same third
+        # channel `_plus_one_counters` reads for Light of Promise, and here for
+        # the same reason: the sentence has no earlier step of its own to have
+        # recorded anything, so a scratchpad read would place zero while
+        # reporting itself resolved. The bare back-reference only; a named
+        # source or a printed bonus is a different number.
+        event_key = trigger_quantity_key(trigger_event)
+        extra: dict[str, object] = {}
         if isinstance(node.count, ast.Fixed):
             placed: int | str = node.count.value
         elif isinstance(node.count, ast.Var):
             placed = node.count.name
+        elif (
+            event_key is not None
+            and isinstance(node.count, ast.ThatMuch)
+            and node.count.source is None
+            and not node.count.bonus
+        ):
+            placed = "trigger_count"
+            extra["amount_from_trigger"] = event_key
         else:
             raise LoweringError(
                 "a named counter is placed a fixed or variable number at a "
@@ -313,7 +332,7 @@ def _lower_put_counter(
         return (
             OracleInstruction(
                 "add_named_counter_to_self", "",
-                {"counter": node.counter, "count": placed},
+                {"counter": node.counter, "count": placed, **extra},
             ),
         )
     # The same CR 122.1 marker on a permanent the ability **chose** ("put a

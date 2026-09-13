@@ -200,9 +200,29 @@ def search_matches(card, data: dict, *, game=None, owner=None) -> bool:
     # there is to ask. AND'd like the supertypes above — a phrase naming two
     # subtypes wants a card that is both, and the pool prints no search that
     # names an either/or.
-    for subtype in restrictions.get("subtypes") or ():
-        if subtype not in type_line:
-            return False
+    #
+    # …unless a board-wide static has rewritten it. "The same is true for …
+    # creature cards you own that aren't on the battlefield" (Conspiracy) is the
+    # one thing in the pool that makes an off-battlefield creature type more
+    # than what is printed, and a library is exactly the zone the sentence is
+    # played for: "search your library for a Goblin card" finds every creature
+    # in it while a Conspiracy naming Goblin is out. Asked through the same seam
+    # `card_colors` above asks for CR 202.2, so a caller with no seat gets the
+    # printed answer it always got.
+    wanted_subtypes = restrictions.get("subtypes") or ()
+    if wanted_subtypes:
+        from .object_creature_types import creature_type_override_for_seat
+
+        override = (
+            creature_type_override_for_seat(game, owner)
+            if "creature" in type_line else None
+        )
+        for subtype in wanted_subtypes:
+            if override is not None:
+                if subtype.lower() != override:
+                    return False
+            elif subtype not in type_line:
+                return False
     named = restrictions.get("named")
     if named is not None and name_key(card.name) != name_key(named):
         return False

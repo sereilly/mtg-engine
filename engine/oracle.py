@@ -396,6 +396,23 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # The comma bound on the subject group is load-bearing, as everywhere in
     # this table: a trigger condition ends at one, so the group can never reach
     # into the effect clause.
+    # "Whenever **you're dealt damage**, you may put that many +1/+1 counters on
+    # this creature." (Blood Hound.) CR 120.4b's event in the passive voice,
+    # which is the row below with the damager left out — and leaving it out is
+    # the sentence saying *any* source, exactly what `damager_any` means there.
+    # So it is the same kind, the same announcement and the same dispatcher,
+    # with markers rather than captures: `damage_recipient` names the seat and
+    # `damager_any` is the empty-group idiom this table uses wherever a row
+    # states a narrowing by matching rather than by capturing text.
+    #
+    # **Above** the active row, which it is not a prefix of and which would
+    # claim it anyway: `(?P<damager_subject>[^,]+?)` matches "you're" and then
+    # fails on the missing "deals", and a subject group the noun parser cannot
+    # read refuses the whole condition rather than falling through to a later
+    # pattern — the ordering rule this table states a few rows up.
+    ("damage_dealt",
+     r"whenever (?P<damage_recipient>you)(?:'re| are) dealt "
+     r"(?:(?P<damage_combat>combat|noncombat) )?damage(?P<damager_any>)"),
     ("damage_dealt",
      r"whenever (?:"
      r"(?P<damager_self>this (?:creature|artifact|enchantment|land|aura|permanent))"

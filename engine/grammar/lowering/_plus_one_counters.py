@@ -30,11 +30,13 @@ from ._amounts import recorded_count_spec
 from ._common import (_describe_several_targets, _describe_targets,
                       _filter_payload, _is_source, _is_target,
                       _names_several_targets)
-from ._events import CHOSEN_PERMANENT, EVENT_SUBJECT_PLAYER, _EVENT_SUBJECT_PLAYERS
+from ._events import (CHOSEN_PERMANENT, EVENT_SUBJECT_PLAYER,
+                      _EVENT_SUBJECT_PLAYERS, trigger_quantity_key)
 
 
 def _lower_recorded_count_placement(
-    node: ast.PutCounter, produced: frozenset[str]
+    node: ast.PutCounter, produced: frozenset[str],
+    trigger_event: str | None = None,
 ) -> tuple[OracleInstruction, ...]:
     """"…put **that many** +1/+1 counters on this creature" (Tetravus), and
     "For each card discarded this way, put **two** +1/+1 counters on this
@@ -59,6 +61,40 @@ def _lower_recorded_count_placement(
     one evaluator (``count_from_payload``), which is also what carries the
     printed multiplier without a payload key of its own.
     """
+    # …and a **third** channel, which is neither: a bare "that many" under a
+    # *trigger* names the number the firing event carried, frozen into the
+    # trigger's context by the fire site. "Whenever you gain life, put that many
+    # +1/+1 counters on this creature" (Light of Promise) has no earlier step in
+    # its own resolution at all — the life gain is the event, not a step — so
+    # the scratchpad key below is one nothing ever writes and the placement
+    # resolved, reported itself done and placed **zero**. That card is shipped
+    # and was doing exactly that; Blood Hound's "whenever you're dealt damage"
+    # is the same sentence one event over.
+    #
+    # Read before the scratchpad, and the order is the ordinary one for a
+    # back-reference: the event's number is the one the words name whenever a
+    # trigger fired, and `recorded_count_spec` below still wins for a *named*
+    # producer ("for each card discarded this way"), which says which record it
+    # means.
+    event_key = trigger_quantity_key(trigger_event)
+    # The **bare** back-reference only. A ``source`` names the record the words
+    # picked out and a ``bonus`` is CR 107.3 arithmetic on top of it; either is
+    # a sentence this branch would answer with the wrong number.
+    if (
+        event_key is not None
+        and isinstance(node.count, ast.ThatMuch)
+        and node.count.source is None
+        and not node.count.bonus
+    ):
+        return (
+            OracleInstruction(
+                "add_counter_to_self", "",
+                {
+                    "power": 1, "toughness": 1, "count": "trigger_count",
+                    "amount_from_trigger": event_key,
+                },
+            ),
+        )
     spec = recorded_count_spec(node.count, produced, node)
     if spec is None:
         if isinstance(node.count, ast.Times):
@@ -95,7 +131,7 @@ def lower_plus_one_placement(
     if node.counter != "+1/+1" or node.up_to:
         raise LoweringError(f"no handler for {node.counter} counters", node=node)
     if isinstance(node.count, (ast.ThatMuch, ast.Times)) and _is_source(node.subject):
-        return _lower_recorded_count_placement(node, produced)
+        return _lower_recorded_count_placement(node, produced, trigger_event)
     if isinstance(node.count, ast.DamageDealtThisTurn) and _is_source(node.subject):
         # "…put a +1/+1 counter on this creature **for each 1 damage dealt to
         # you this turn**." (Discordant Spirit.) The turn's damage ledger rather

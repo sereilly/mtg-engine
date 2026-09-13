@@ -67,6 +67,29 @@ def _parse_damage_dealt_event(
     mark = stream.mark()
     subject: ast.ObjectFilter | None = None
     narrowings: tuple[tuple[str, ast.ObjectFilter], ...] = ()
+    # "Whenever **you're dealt damage**, …" (Blood Hound). CR 120.4b's event in
+    # the passive voice: the recipient leads and the damager is not printed at
+    # all, which is the sentence saying *any* source — the same reading the
+    # "a source" branch below gives when a card spells the words out.
+    #
+    # Read first, and it has to be: the noun parser at the bottom of the chain
+    # would take "you" for a damager and then fail on the missing "deals",
+    # refusing the line rather than falling through to here. The recipient is
+    # consumed and not carried, exactly as the active form's is —
+    # `engine/oracle.py`'s row marks the seat and `events._damage_dealt_filter`
+    # tests it, which is where every other recipient narrowing is answered.
+    passive = stream.mark()
+    if stream.accept_word("you're") or (
+        stream.accept_word("you") and stream.accept_word("are")
+    ):
+        if stream.accept_word("dealt"):
+            stream.accept_word("combat", "noncombat")
+            if stream.accept_word("damage"):
+                return ast.TriggerEvent(
+                    "damage_dealt", word,
+                    subject=ast.ObjectFilter(), narrowings=narrowings,
+                )
+    stream.reset(passive)
     if stream.at_kind(SELF) or stream.at_word("this"):
         stream.advance()
         if not stream.at_kind(SELF):
