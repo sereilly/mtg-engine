@@ -2672,6 +2672,30 @@ def _from_instruction(instruction) -> dict | None:
 ROLES_TARGET_KIND = "roles"
 
 
+#: The role kinds whose object is a **seat**, not a permanent or a card.
+#:
+#: One vocabulary, five readers: the picker's ``role_object_at``, the cast
+#: gate's ``_named_role_targets``, the announcement stamper on the activation
+#: path, ``resolve_role_player`` at resolution and the CR 608.2b re-check
+#: beside it. Every one of them used to spell the question ``kind == "player"``
+#: on its own, which was the whole of the vocabulary right up until a printed
+#: "target player **or planeswalker**" (Lunge, Shower of Sparks) became a role:
+#: CR 115.4's widened slot is answered by the same seats the narrow one is, and
+#: a reader that did not know the second spelling would fill a *permanent*
+#: slot from the seat channel and then find nothing in it.
+#:
+#: A frozenset rather than a second constant beside ``ROLES_TARGET_KIND``
+#: because the readers ask "is this slot a seat?", never "which of the two
+#: spellings is it?" — the difference between the two words is what the
+#: *picker* offers, and that is settled by ``_enumerate_targets``.
+SEAT_ROLE_KINDS = frozenset({"player", "player_or_planeswalker"})
+
+
+def role_is_seat(role: dict | None) -> bool:
+    """Whether *role*'s object is a seat rather than an object in a zone."""
+    return bool(role) and role.get("kind") in SEAT_ROLE_KINDS
+
+
 #: The narrowings a **graveyard** role carries, and the whole of what separates
 #: one from the battlefield roles beside it.
 #:
@@ -2857,6 +2881,32 @@ def payload_role_slot(payload: dict | None, role: str | None) -> int | None:
         if isinstance(entry, dict) and entry.get("role") == role:
             return index
     return None
+
+
+def payload_own_role(payload: dict | None) -> str | None:
+    """Which role of the shared announcement **this instruction** acts on.
+
+    A roles announcement used to be one instruction naming every slot (Donate,
+    Goblin Welder), so "which role is mine?" never arose: the handler asked for
+    each by name. A sentence whose targets are announced together and *spent* a
+    step at a time — "Lunge deals 2 damage to target creature **and** 2 damage
+    to target player or planeswalker" — puts the same ``roles`` list on every
+    step, and each step then has to say which one it is.
+
+    The key rides inside the ``targets`` description rather than beside it,
+    because it is a fact about the announcement and not about the effect: a
+    reader holding the description holds the whole answer, and no payload can
+    carry a role name with no roles list under it.
+
+    None for every instruction that is not a step of such a sentence, which is
+    every other instruction in the pool — so the scoping this feeds is inert
+    until a lowering writes the key.
+    """
+    targets = (payload or {}).get("targets")
+    if not isinstance(targets, dict) or targets.get("kind") != ROLES_TARGET_KIND:
+        return None
+    role = targets.get("role")
+    return role if isinstance(role, str) else None
 
 
 def role_slot(spec: dict | None, role: str | None) -> int | None:

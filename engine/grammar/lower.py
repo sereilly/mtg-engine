@@ -40,6 +40,7 @@ from .derived import derived_instruction_for_line
 from .errors import LoweringError
 from .statics import _lower_static_ability
 from .lowering.control_flow import WRAPPER_KINDS
+from .lowering._roles import describe_sequence_target_roles
 from .lowering import (
     GRAMMAR_ONLY_PAYLOAD_KEYS,
     INSTRUCTION_CATEGORIES,
@@ -144,9 +145,16 @@ def _lower_line_statement(
     """
     if isinstance(statement, ast.ModalNode):
         return _lower_modal_head(statement)
-    return lower_statement(
+    # CR 601.2c is about the **line**, not about any one step of it: every
+    # target a spell or an ability names is chosen in one announcement, so the
+    # place to notice that a line announced two is the place that has the whole
+    # line's instructions. ``describe_sequence_target_roles`` returns them
+    # unchanged unless exactly two of them announce a target and one of the two
+    # is a seat — see there for why that is the only pair a lowering can tell
+    # apart from one target named twice.
+    return describe_sequence_target_roles(lower_statement(
         statement, produced, event=event, event_subject=event_subject
-    )
+    ))
 
 
 def _rebind_blocking_pronoun(statement: ast.Statement) -> ast.Statement:

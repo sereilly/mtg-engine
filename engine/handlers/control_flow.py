@@ -71,11 +71,86 @@ def _run(game: Game, steps: tuple, context: OracleExecutionContext) -> tuple[boo
     outcome = {"resolved": False}
 
     def run_step(step) -> None:
-        supported, _ = game._execute_oracle_instruction(step, context)
+        scoped = _role_scoped(game, step, context)
+        if scoped is None:
+            # CR 608.2b's last sentence: the announcement named this step's
+            # object and it is no longer there, so the step does nothing while
+            # the rest of the effect goes on. Skipped rather than run against a
+            # context with a hole in it, which is how a damage step whose
+            # creature had died came to hit a face instead.
+            return
+        supported, _ = game._execute_oracle_instruction(step, scoped)
         outcome["resolved"] = outcome["resolved"] or supported
 
     run_resumable(game, steps, run_step)
     return True, "resolved" if outcome["resolved"] else "no effect"
+
+
+def _role_scoped(
+    game: Game, step: OracleInstruction, context: OracleExecutionContext
+):
+    """*context* narrowed to the one **role** *step* spends, or *context*.
+
+    A sentence whose targets are announced together and spent a step at a time
+    — "Lunge deals 2 damage to target creature **and** 2 damage to target
+    player or planeswalker" — puts the whole ordered ``roles`` list on every
+    step and names each step's own slot beside it
+    (``grammar/lowering/_roles.describe_sequence_target_roles``). What each
+    step then needs is the context a one-target effect would have had: its own
+    object in the target channels, and nothing of its neighbour's.
+
+    **Here rather than in each handler**, which is the difference between one
+    reader and a dozen. A step's handler is an ordinary ``deal_damage`` or
+    ``may`` that has never heard of roles; scoping the context is what lets it
+    go on reading ``context.target`` and ``context.target_permanent_id`` and be
+    right, where a per-handler ``resolve_role_*`` call would be the same fact
+    spelled once per effect family — and the family that forgot would silently
+    resolve against whichever target the previous step left behind, which is
+    precisely the defect this fixes.
+
+    Returns *context* unchanged for every step that names no role, which is
+    every other instruction in the pool: the narrowing is inert until a
+    lowering writes the key. Returns None where the role no longer resolves,
+    which the caller reads as "skip this step" (CR 608.2b).
+    """
+    from ..targeting import payload_own_role, role_is_seat, spec_roles
+    from ._common import resolve_role_permanent, resolve_role_player
+
+    role = payload_own_role(step.payload)
+    if role is None:
+        return context
+    entry = next(
+        (
+            described for described in spec_roles(step.payload.get("targets"))
+            if described.get("role") == role
+        ),
+        None,
+    )
+    if entry is None:  # pragma: no cover - a payload with a name and no list
+        return context
+    if role_is_seat(entry):
+        seat = resolve_role_player(game, context, step.payload, role)
+        if seat is None or game.players[seat].lost:
+            return None
+        return dataclasses.replace(
+            context, target=game.players[seat],
+            target_permanent_index=None, target_permanent_id=None,
+        )
+    permanent = resolve_role_permanent(game, context, step.payload, role)
+    if permanent is None or not game.is_on_battlefield(permanent):
+        return None
+    seat = game.controller_index_of(permanent)
+    return dataclasses.replace(
+        context,
+        # The seat whose battlefield the object is on, because that is what a
+        # one-target announcement's ``target`` means to every index-reading
+        # resolver beneath this. Never the announced *player* role's seat: the
+        # two slots of one announcement may sit on two battlefields, and an
+        # index read against the wrong one addresses a different permanent.
+        target=game.players[seat] if seat is not None else context.target,
+        target_permanent_index=game.battlefield_index_of(permanent),
+        target_permanent_id=game.permanent_id_of(permanent),
+    )
 
 
 @effect_handler("sequence")

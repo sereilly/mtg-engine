@@ -12510,9 +12510,16 @@ function roleTargetNoun(role) {
   return role.kind || "permanent";
 }
 
+// The role kinds whose object is a **seat**, mirroring
+// `engine/targeting.SEAT_ROLE_KINDS`. Two spellings rather than one because CR
+// 115.4's widened slot ("target player **or planeswalker**", Lunge) is answered
+// by the same life pills the narrow one is, and a client that knew only the
+// narrow word waited for a card click on a role no card can answer.
+const SEAT_ROLE_KINDS = ["player", "player_or_planeswalker"];
+
 /** Whether this role is answered by clicking a player rather than a card. */
 function roleChoosesAPlayer(role) {
-  return !!role && role.kind === "player";
+  return !!role && SEAT_ROLE_KINDS.includes(role.kind);
 }
 
 /** Whether this role's objects are chosen from a graveyard rather than a board. */
