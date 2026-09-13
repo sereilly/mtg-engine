@@ -29,6 +29,7 @@ from typing import Any, Callable
 from engine.grammar.phrases import BASIC_LAND_WORDS
 from engine.grammar.vocabulary import CREATURE_TYPES, LAND_TYPES
 from engine.mana_payment import mana_cost_label
+from engine.oracle_types import CLAIMABLE_EXILED_CARDS
 from engine.pending_choices import CHOICE_SPECS, public_data
 from engine.search_filters import search_matches, searched_seat
 
@@ -337,6 +338,37 @@ def _name_then_reveal_top(ctx: PromptContext, choices: list) -> dict:
         "card_name": choice.data.get("card_name", ""),
         "match_zone": choice.data.get("match_zone", "hand"),
         "miss_zone": choice.data.get("miss_zone", "graveyard"),
+    }
+
+
+@prompt_renderer("exiled_pile_claim")
+def _exiled_pile_claim(ctx: PromptContext, choices: list) -> dict:
+    """Thieves' Auction's "each player chooses one of the exiled cards".
+
+    The cards come off the **resolution's own pile** rather than off any zone,
+    and that is the whole reason the prompt exists: exile is public (CR 400.2),
+    but a player's exile also holds everything that ever went there by any other
+    route, and this spell is handing out exactly what it took. The list is
+    therefore what is still unclaimed, in the order it is offered, and the index
+    a client sends back is an index into *that* — the same list the resolver
+    re-checks the answer against (idiom 9), so the picker cannot show a card the
+    answer path would decline.
+
+    Re-read on every render rather than snapshotted with the arming: the pile
+    shrinks as the seats ahead of this one answer, and a stale list would offer
+    a card that has already been taken.
+    """
+    choice = choices[0]
+    context = choice.data.get("_context")
+    pile = (context.results.get(CLAIMABLE_EXILED_CARDS) or []) if context else []
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "tapped": bool(choice.data.get("tapped")),
+        "options": [
+            {"index": index, "card": ctx.serialize_card(card)}
+            for index, (_, card) in enumerate(pile)
+        ],
     }
 
 

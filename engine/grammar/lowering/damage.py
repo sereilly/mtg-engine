@@ -34,6 +34,7 @@ from ._counted_damage import (
     _lower_cost_tap_damage,
     _lower_counted_damage,
     lower_difference_damage,
+    lower_revealed_this_way_damage,
 )
 
 from ._bites import lower_bite
@@ -306,9 +307,25 @@ def _lower_damage_shape(
     # the one definition below that can carry a factor: a `Times` over anything
     # else falls to the refusal at the end of this function rather than silently
     # losing the word, which on this card would be half the damage it prints.
+    #
+    # ``CountOfRevealsThisWay`` joins it for the same reason one record over:
+    # "deals **3** damage … for each card of the chosen type revealed this way"
+    # (Blood Oath) is a rate over a count, and its spec carries the identical
+    # ``multiplier`` key. Every other amount still falls to the refusal at the
+    # end of this function rather than losing the word.
     multiplier, amount = 1, node.amount
-    if isinstance(amount, ast.Times) and isinstance(amount.of, ast.CountOf):
+    if isinstance(amount, ast.Times) and isinstance(
+        amount.of, (ast.CountOf, ast.CountOfRevealsThisWay)
+    ):
         multiplier, node = amount.factor, dataclasses.replace(node, amount=amount.of)
+    # "…for each card of the chosen type **revealed this way**" (Blood Oath).
+    # Beside the board count below rather than inside it: what is counted is a
+    # list of *cards* an earlier sentence of this same effect recorded, and no
+    # reading of any zone is that set — the hand it came from goes on changing.
+    if isinstance(node.amount, ast.CountOfRevealsThisWay):
+        return lower_revealed_this_way_damage(
+            node, produced, multiplier=multiplier
+        )
     if isinstance(node.amount, ast.CountOf):
         # "…deals damage to **each nonblue creature without flying** equal to
         # half the number of Islands you control" (Floodgate). A described set

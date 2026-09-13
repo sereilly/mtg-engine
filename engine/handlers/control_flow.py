@@ -29,7 +29,9 @@ from ..damage_deaths import DAMAGED_BY_SOURCE_DIED
 from ..exiled_records import is_live, record_in_context, source_object
 from ..named_counters import counters_on
 from ..oracle_types import (CHOSEN_CARD_TYPE_THIS_WAY, CHOSEN_COLOR_THIS_WAY,
-                            CHOSEN_NUMBER_THIS_WAY, MANA_PAID_BY_SEAT,
+                            CHOSEN_NUMBER_THIS_WAY, CLAIMABLE_EXILED_CARDS,
+                            EXILED_THIS_WAY_OBJECTS, MANA_PAID_BY_SEAT,
+                            SWEPT_OWNER_SEATS,
                             REVEALED_HAND_CARDS, REVEALED_TOP_CARDS_BY_SEAT,
                             MILLED_THIS_WAY,
                             PER_OBJECT_SEAT_RECORDS,
@@ -3043,6 +3045,121 @@ def repeat_offer_round(game: Game, instruction: OracleInstruction, context: Orac
             _run(game, steps, dataclasses.replace(context, target=game.players[item]))
 
         run_resumable(game, [*seats, _END_OF_ROUND], offer)
+
+    run_round()
+    return True, "resolved"
+
+
+def _claimable_exile_pile(game: Game, context) -> list[tuple[int, object]]:
+    """The pile "one of the exiled cards" names, as ``(owner_seat, card)`` pairs.
+
+    Read off ``EXILED_THIS_WAY_OBJECTS``, whose element type is a property of the
+    zone the exile emptied — see that key. Both shapes are named here rather
+    than told apart by a type test that happens to work: a battlefield sweep
+    records ``Permanent``s, whose owner is the one thing CR 400.7 makes
+    unanswerable once the card is in exile, and an exile out of a graveyard
+    records the cards, whose owner is the seat whose pile they came out of.
+
+    The seat is resolved **now**, while the record still says who each object
+    belonged to, and carried on the pile: several decks share one
+    ``CardDefinition`` object, so a scan of the exile zones later would answer
+    with whichever seat was asked first.
+    """
+    owners = context.results.get(SWEPT_OWNER_SEATS) or {}
+    pile: list[tuple[int, object]] = []
+    for entry in context.results.get(EXILED_THIS_WAY_OBJECTS) or ():
+        card = getattr(entry, "card", None)
+        if card is not None:
+            # Off the record the sweep wrote, never off the permanent: by the
+            # time this runs the object has left the battlefield, so
+            # ``owner_index_of`` has nothing but a metadata key a hand-built
+            # board never stamps — and it would answer None for exactly the
+            # permanents the sweep routed correctly a moment earlier.
+            seat = owners.get(entry.permanent_id)
+            if seat is None:
+                seat = game.owner_index_of(entry)
+        else:
+            card = entry
+            seat = next(
+                (
+                    index for index, player in enumerate(game.players)
+                    if any(held is card for held in player.exile)
+                ),
+                None,
+            )
+        if seat is None or card is None:
+            continue
+        pile.append((seat, card))
+    return pile
+
+
+@effect_handler("claim_exiled_cards_in_turn")
+def claim_exiled_cards_in_turn(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Exile all nontoken permanents. **Starting with you, each player chooses
+    one of the exiled cards and puts it onto the battlefield tapped under their
+    control. Repeat this process until all cards exiled this way have been
+    chosen.**" (Thieves' Auction.)
+
+    One round is the pick offered to every seat in turn (CR 101.4), and the
+    rounds go on while the pile has cards in it. ``repeat_offer_round``'s shape
+    one decision over, with two differences that are the whole of why it is its
+    own handler: the pick is **mandatory**, so there is no record of takers to
+    end on, and the bound is the pile rather than the round — four cards among
+    three players is two passes, and the second stops after the first seat.
+
+    The loop is ``run_resumable`` for that handler's stated reason: an
+    interactive seat's pick suspends the resolution, and the seats behind it —
+    and the rounds behind *that* — are the work still owed, so the question of
+    whether there is another round has to be the loop's own last step rather
+    than a line after it (``_END_OF_ROUND``).
+
+    Termination is a property of the act: every answered pick takes a card off
+    the pile, so the rounds are bounded by the cards there were. A round that
+    took **nothing** ends the loop outright rather than being repeated — a
+    prompt whose answer was refused would otherwise hand the same pile round
+    for ever, which is a hang rather than a wrong number.
+    """
+    pile = context.results.get(CLAIMABLE_EXILED_CARDS)
+    if pile is None:
+        pile = _claimable_exile_pile(game, context)
+        context.results[CLAIMABLE_EXILED_CARDS] = pile
+    tapped = bool(instruction.payload.get("tapped"))
+    repeat = bool(instruction.payload.get("until_pile_empty"))
+    # "Starting with you" — the seat that put the spell on the stack. Without
+    # the words CR 101.4's default stands, which is the active player.
+    start_seat = (
+        game.players.index(context.caster)
+        if instruction.payload.get("claim_order") == "you"
+        and context.caster in game.players
+        else None
+    )
+    card_name = getattr(context.card, "name", "an effect")
+
+    def run_round() -> None:
+        # Re-asked each round: a seat that has left the game is nobody
+        # (CR 800.4a), and a round is not a snapshot of who was there first.
+        seats = _offered_seats(game, "each_player", context, start_seat=start_seat)
+        at_round_start = len(pile)
+
+        def claim(item) -> None:
+            if item is _END_OF_ROUND:
+                if repeat and pile and len(pile) < at_round_start:
+                    run_round()
+                return
+            if not pile:
+                # The pile ran out part-way through the round. The seats behind
+                # this one are asked nothing at all, which is what "until all
+                # cards have been chosen" means when the cards run out first.
+                return
+            game.arm_pending_choice(
+                "exiled_pile_claim", item,
+                card_name=card_name,
+                options=[card.name for _, card in pile],
+                tapped=tapped,
+                _context=context,
+            )
+
+        run_resumable(game, [*seats, _END_OF_ROUND], claim)
 
     run_round()
     return True, "resolved"

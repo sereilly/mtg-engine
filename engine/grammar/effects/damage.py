@@ -21,7 +21,8 @@ from ..seat_comparisons import accept_player_control
 from ..errors import GrammarError
 from ..readers import accept_source_reference_spec
 from ..nouns import parse_object_filter
-from ..records import accept_player_deed
+from ..records import (accept_player_deed, parse_for_each_revealed_this_way,
+                      scaled_by_recorded_count)
 from ..references import parse_player_ref, parse_recipient
 from ..lexer import NUMBER, WORD
 from ..stream import TokenStream
@@ -468,6 +469,23 @@ def _parse_damage(stream: TokenStream, source: ast.TargetSpec | None) -> ast.Sta
         bound = _parse_where_x_is(stream)
         if bound is not None:
             amount = bound
+
+    # "…deals 3 damage to that player **for each card of the chosen type
+    # revealed this way**." (Blood Oath.) A **rate** over what an earlier
+    # sentence of this same effect recorded, not a multiplier on a set the
+    # board holds — so it replaces the printed amount rather than riding
+    # alongside it, exactly as the identical clause does one family over
+    # ("you gain 2 life for each card revealed this way", Jasmine Seer).
+    #
+    # Read **before** the per-each reader below, and that order is the whole of
+    # why the line compiles: `_parse_per_each_objects` reads "for each card"
+    # happily, claims the clause for a count of every card there is, and leaves
+    # "revealed this way" as unconsumed text — the failure that took this
+    # sentence down. It refuses without consuming, so every other damage clause
+    # keeps the reading it has.
+    counted_reveals = parse_for_each_revealed_this_way(stream, parse_object_filter)
+    if counted_reveals is not None:
+        amount = scaled_by_recorded_count(amount, counted_reveals, stream)
 
     # "…deals 2 damage to each creature **for each Aura attached to that
     # creature**." (Baki's Curse.) A multiplier on the printed amount, read

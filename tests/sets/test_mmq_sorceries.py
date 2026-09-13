@@ -500,3 +500,211 @@ def test_w2g4_misstep_waits_for_the_named_players_untap_step(set_pool):
 
     marked = next(p for p in game.all_permanents() if p.card.name == "Theirs")
     assert marked.metadata[SKIP_NEXT_UNTAP_SEAT] == 1
+
+
+# --- W3G3: a round-robin over a shared pile of exiled cards ---
+# Thieves' Auction: "Exile all nontoken permanents. Starting with you, each
+# player chooses one of the exiled cards and puts it onto the battlefield tapped
+# under their control. Repeat this process until all cards exiled this way have
+# been chosen." One pile, every seat in turn (CR 101.4), and the loop ends on the
+# pile rather than on a round -- so a board that does not divide evenly is the
+# case worth asserting. What is checked below is the two boards, who owns what
+# and what is left in exile, never that a sentence parsed.
+from engine import Game as _W3G3Game
+from engine import PlayerState as _W3G3PlayerState
+from engine.models import Permanent as _W3G3Permanent
+
+
+def _w3g3_auction(set_pool, mine=(), theirs=(), seats=2, interactive=()):
+    """A table with Thieves' Auction in seat 0's hand and the named permanents
+    on the first two boards."""
+    pool = set_pool("MMQ")
+    players = [
+        _W3G3PlayerState(name) for name in ("Caster", "Opponent", "Third")[:seats]
+    ]
+    game = _W3G3Game(players=players)
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    players[0].hand = [pool["Thieves' Auction"]]
+    for name in mine:
+        players[0].battlefield.append(_W3G3Permanent(card=pool[name]))
+    for name in theirs:
+        players[1].battlefield.append(_W3G3Permanent(card=pool[name]))
+    return game, players
+
+
+def _w3g3_settle(game):
+    """Resolve the spell and answer every pick the round-robin arms.
+
+    ``resolve_stack`` is not enough on its own here: the object leaves the stack
+    on the headless path and the prompts are drained afterwards, which is the
+    arrangement that keeps a seeded run reproducible.
+    """
+    game.resolve_top_of_stack()
+    for _ in range(60):
+        if not game.pending_choices:
+            return
+        game.auto_resolve_pending_choices()
+    raise AssertionError(
+        f"the auction never finished; owed {[c.kind for c in game.pending_choices]}"
+    )
+
+
+def test_w3g3_auction_deals_the_whole_pile_out_in_turn(set_pool):
+    """CR 101.4: every seat picks in turn, starting with the spell's controller,
+    and the rounds go on while cards are left.
+
+    Five permanents between two seats is three picks for the caster and two for
+    the opponent -- which is the round-robin rather than a split of each board,
+    and the exile zones being empty is what says the pile really ran out.
+    """
+    game, players = _w3g3_auction(
+        set_pool,
+        mine=("Alabaster Wall", "Plains"),
+        theirs=("Charm Peddler", "Forest", "Cho-Manno, Revolutionary"),
+    )
+    game.queue_from_hand(0, "Thieves' Auction")
+
+    _w3g3_settle(game)
+
+    assert len(players[0].battlefield) == 3
+    assert len(players[1].battlefield) == 2
+    assert [card.name for card in players[0].exile] == []
+    assert [card.name for card in players[1].exile] == []
+    assert all(
+        perm.tapped for player in players for perm in player.battlefield
+    ), "'onto the battlefield tapped' is printed and is not a default"
+
+
+def test_w3g3_auction_keeps_the_owner_when_it_changes_hands(set_pool):
+    """CR 108.3: the card enters under the chooser's control and stays *owned*
+    by the player whose permanent it was.
+
+    The one fact the entry cannot re-derive, and the one that is invisible until
+    the creature dies: without it Thieves' Auction quietly rewrites who owns a
+    deck, and every card it handed over goes to the wrong graveyard.
+    """
+    game, players = _w3g3_auction(
+        set_pool, mine=("Alabaster Wall",), theirs=("Cho-Manno, Revolutionary",),
+    )
+    game.queue_from_hand(0, "Thieves' Auction")
+
+    _w3g3_settle(game)
+
+    owners = {
+        perm.card.name: game.owner_index_of(perm)
+        for player in players for perm in player.battlefield
+    }
+    controllers = {
+        perm.card.name: seat
+        for seat, player in enumerate(players) for perm in player.battlefield
+    }
+    assert owners == {"Alabaster Wall": 0, "Cho-Manno, Revolutionary": 1}
+    assert controllers["Cho-Manno, Revolutionary"] == 0, (
+        "the caster picks first and takes the biggest card on the pile"
+    )
+    assert controllers["Alabaster Wall"] == 1
+
+
+def test_w3g3_auction_stops_when_the_pile_runs_out_mid_round(set_pool):
+    """"...until all cards exiled this way have been chosen" ends a round
+    part-way.
+
+    Four cards among three seats is one full pass and then one more pick: the
+    seats behind the caster in the second round are asked nothing at all. A loop
+    bounded by the *round* instead of the pile would either deal a fifth card
+    that does not exist or stop a card early.
+    """
+    game, players = _w3g3_auction(
+        set_pool,
+        mine=("Alabaster Wall", "Plains"),
+        theirs=("Charm Peddler", "Forest"),
+        seats=3,
+    )
+    game.queue_from_hand(0, "Thieves' Auction")
+
+    _w3g3_settle(game)
+
+    assert [len(player.battlefield) for player in players] == [2, 1, 1]
+    assert not any(player.exile for player in players)
+
+
+def test_w3g3_auction_waits_for_an_interactive_seat(set_pool):
+    """CR 608.2 / CR 117.3b: the spell stays on the stack while a pick is owed.
+
+    And the offered list is the pile as it *stands* -- the answer is an index
+    into what the prompt showed, and the resolver re-checks it against the same
+    list, so a seat cannot claim a card another seat has already taken.
+    """
+    game, players = _w3g3_auction(
+        set_pool,
+        mine=("Alabaster Wall",),
+        theirs=("Charm Peddler", "Cho-Manno, Revolutionary"),
+        interactive=(0,),
+    )
+    game.queue_from_hand(0, "Thieves' Auction")
+    game.resolve_top_of_stack(pause_for_choices=True)
+
+    owed = game.waiting_prompt()
+    assert owed is not None and owed.kind == "exiled_pile_claim"
+    assert owed.player_index == 0
+    assert owed.data["options"] == [
+        "Alabaster Wall", "Charm Peddler", "Cho-Manno, Revolutionary"
+    ]
+    assert game.stack, "a resolution that stopped to ask keeps its object"
+
+    assert game.confirm_exiled_pile_claim(0, 1) is True
+    for _ in range(60):
+        if not game.pending_choices:
+            break
+        game.auto_resolve_pending_choices()
+
+    # The answered pick, and then the third card on the caster's second turn of
+    # the round-robin: the opponent's default took the most expensive of what
+    # was left in between.
+    assert [perm.card.name for perm in players[0].battlefield] == [
+        "Charm Peddler", "Alabaster Wall",
+    ]
+    assert [perm.card.name for perm in players[1].battlefield] == [
+        "Cho-Manno, Revolutionary",
+    ]
+    assert not game.stack
+
+
+def test_w3g3_auction_refuses_a_pile_index_that_is_not_on_offer(set_pool):
+    """Idiom 9: the answer is re-checked against the pile, not trusted.
+
+    A client holding a list from before the seats ahead answered would otherwise
+    hand out a card that is no longer there -- or, past the end, nothing at all
+    while the loop counted it as a pick and moved on.
+    """
+    game, _players = _w3g3_auction(
+        set_pool, mine=("Alabaster Wall",), theirs=("Charm Peddler",),
+        interactive=(0,),
+    )
+    game.queue_from_hand(0, "Thieves' Auction")
+    game.resolve_top_of_stack(pause_for_choices=True)
+
+    assert game.confirm_exiled_pile_claim(0, 7) is False
+    assert game.waiting_prompt() is not None, "a refused answer leaves the prompt"
+
+
+def test_w3g3_auction_carries_the_repeat_clause_into_the_round(set_pool):
+    """The printed "repeat this process" is the difference between this card and
+    one where each seat takes exactly one.
+
+    Asserted on the compiled payload because a duel cannot tell the two apart on
+    a two-card board -- and the flag is what the handler reads to decide whether
+    there is another round at all.
+    """
+    from engine.oracle import compile_card_oracle
+
+    program = compile_card_oracle(set_pool("MMQ")["Thieves' Auction"])
+    steps = program.instructions[0].payload["steps"]
+
+    assert [step.kind for step in steps] == [
+        "exile_all_matching", "claim_exiled_cards_in_turn",
+    ]
+    assert steps[1].payload == {
+        "claim_order": "you", "tapped": True, "until_pile_empty": True,
+    }

@@ -264,6 +264,15 @@ def test_the_kinds_that_suspend_are_the_ones_that_shape_a_later_step():
     suspending = {kind for kind, spec in CHOICE_SPECS.items() if spec.suspends}
     assert suspending == {
         "effect_order",     # CR 616.1e — the event itself has not happened yet
+        # "Starting with you, each player chooses one of the exiled cards
+        # and puts it onto the battlefield tapped under their control.
+        # **Repeat this process until all cards exiled this way have been
+        # chosen.**" (Thieves' Auction.) Every later step of the resolution
+        # is another seat picking out of the pile this answer shortens, and
+        # the loop's own decision about whether there is another round reads
+        # what is left of it. Run ahead of the answer, the seat behind this
+        # one would be offered a card that has already been taken.
+        "exiled_pile_claim",
         # "If it's a creature card, that player discards it **unless they pay
         # 3 life**." (Breathstealer's Crypt.) The answer decides whether the
         # card that was just drawn stays in the hand, and the step behind it is

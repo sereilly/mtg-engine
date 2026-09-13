@@ -342,12 +342,32 @@ def parse_choose_card_type(
     a second noun parser, and what the sentence is doing is naming an option a
     player picks by its printed words.
 
+    ``Choose a card type.`` (Blood Oath) is the same sentence with the list left
+    off, and it is the *unbounded* offer — CR 205.2a's card types, every one of
+    them, which is what the card's own reminder text spells out. Read here
+    rather than as a production of its own because what it produces is the same
+    node with the same meaning: the difference is only whether the card printed
+    the options or the rules supply them, and two productions would be two
+    answers to "who may be chosen". The catalog comes from
+    ``vocabulary.CARD_TYPES`` — data refreshed by ``fetch_vocabulary.py``, never
+    a list spelled out here — and is sorted so the offer, the prompt and the
+    deterministic default are the same order on every run.
+
     Non-consuming on refusal, because the ``chooses`` dispatcher hands every
     sentence it cannot finish to the readers below it and one that had eaten a
     word would replace their refusals with its own.
     """
     mark = stream.mark()
     if not stream.accept_word("chooses", "choose"):
+        return None
+    if stream.accept_phrase("a", "card", "type"):
+        # The whole phrase and nothing after it, exactly as the printed list
+        # below requires: "choose a card type **and a color**" is a sentence
+        # this has not read, and stopping at "type" would leave the rest to be
+        # dropped.
+        if stream.exhausted or stream.at_punct(".", ","):
+            return ast.ChooseCardType(tuple(sorted(CARD_TYPES)), chooser)
+        stream.reset(mark)
         return None
     options: list[str] = []
     while True:

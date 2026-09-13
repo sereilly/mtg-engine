@@ -81,6 +81,8 @@ from .lowering import (
     _lower_put_library_top_into_hand,
     _lower_repeat_process,
     _lower_repeat_process_while,
+    _lower_repeat_until_pile_chosen,
+    _lower_each_player_claims_exiled_card,
     _lower_for_each_destroyed,
     _lower_for_each_exiled,
     _lower_for_each_tapped,
@@ -719,6 +721,20 @@ def lower_statement(
         return _lower_repeat_process_while(
             statement, lower_statement, _lower_condition, produced, event,
         )
+    # The fifth, and the only one whose bound is a *pile*. It takes the
+    # statement lowering back like the four above and ``produced`` besides,
+    # because the round it wraps is a back-reference to what an earlier
+    # sentence of the same line exiled.
+    if isinstance(statement, ast.RepeatUntilPileChosen):
+        return _lower_repeat_until_pile_chosen(
+            statement, lower_statement, produced,
+        )
+    if isinstance(statement, ast.EachPlayerClaimsExiledCard):
+        # Takes ``produced``: "one of the exiled cards" names what a step of
+        # this same effect exiled, which is a reading only the producer set can
+        # admit — the row cannot sit in ``by_node``, whose rows take the node
+        # and nothing else.
+        return _lower_each_player_claims_exiled_card(statement, produced)
 
     if isinstance(statement, ast.ChoosePermanent):
         # Two lowerings, told apart by the printed quantifier. The plural needs

@@ -722,3 +722,40 @@ class PlayWithHandRevealed:
     """
     player: PlayerRef
     duration: "Duration" = field(default_factory=lambda: Duration())
+
+
+@dataclass(frozen=True)
+class EachPlayerClaimsExiledCard:
+    """"Exile all nontoken permanents. **Starting with you, each player chooses
+    one of the exiled cards and puts it onto the battlefield tapped under their
+    control.** Repeat this process until all cards exiled this way have been
+    chosen." (Thieves' Auction.)
+
+    A pick out of a pile an **earlier sentence** made, which is what makes it a
+    node rather than a noun phrase: "one of the exiled cards" names no zone the
+    noun grammar can describe — a player's exile also holds everything that ever
+    went there by any other route — and it names one *shared* set that every
+    seat picks out of in turn, shrinking as they do.
+
+    ``chooser`` is the printed subject ("each player"); ``starting_with`` is the
+    seat asked first, with :class:`May`'s meaning exactly — CR 101.4 already
+    orders a multi-seat decision from the active player, and for a sorcery those
+    are the same seat but not the same rule, so the printed words are carried
+    rather than dropped.
+
+    ``tapped`` is the printed entry state, and ``until_pile_empty`` is set by the
+    repeat clause behind the sentence (``grammar/repeats.py``). One round is one
+    pass over the seats; the clause is what says the passes go on while cards
+    are left, and without it a card printing only this sentence would take one
+    card per seat and stop — which is a different card and a smaller effect.
+
+    What the pick does **not** move is ownership: the card enters under the
+    chooser's control while owned by whoever's permanent it was (CR 108.3), so
+    it goes to that player's graveyard when it dies. That is the one fact the
+    entry cannot re-derive, which is why the lowering carries it and the handler
+    records it.
+    """
+    chooser: "PlayerRef"
+    starting_with: "PlayerRef | None" = None
+    tapped: bool = False
+    until_pile_empty: bool = False

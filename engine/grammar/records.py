@@ -437,7 +437,9 @@ def _parse_for_each_this_way(stream: TokenStream) -> ast.ThatMuch | None:
 
 
 def scaled_by_recorded_count(
-    printed: "ast.Amount", counted: "ast.ThatMuch", stream: TokenStream
+    printed: "ast.Amount",
+    counted: "ast.ThatMuch | ast.CountOfRevealsThisWay",
+    stream: TokenStream,
 ) -> "ast.Amount":
     """The one number *"<printed> X for each <unit> <participle> this way"* names.
 
@@ -451,6 +453,13 @@ def scaled_by_recorded_count(
     A printed 1 folds away rather than becoming ``Times(1, …)``, which is what
     keeps every card written before a multiplier existed compiling to the
     byte-identical program it did.
+
+    *counted* is whichever node the record reading produced — the bare
+    :class:`ast.ThatMuch` the table above mints, or the **filtered**
+    :class:`ast.CountOfRevealsThisWay` ("3 damage for each card **of the chosen
+    type** revealed this way", Blood Oath). The rate is a property of the
+    printed clause and not of which record it names, so both reach it here
+    rather than the second growing its own copy of the fold and the refusal.
 
     Refuses anything that is not a printed number, and the refusal is the point:
     a rate over a quantity the resolution has yet to compute is two unknowns
@@ -870,6 +879,53 @@ def parse_for_each_sacrificed_this_way(
         stream.reset(mark)
         return None
     return ast.CountOfSacrificesThisWay(filt)
+
+
+def parse_for_each_revealed_this_way(
+    stream: TokenStream, parse_filter,
+) -> "ast.CountOfRevealsThisWay | None":
+    """``for each <objects> revealed this way`` — how many of what an earlier
+    step of this same effect *revealed* answer a printed noun phrase.
+
+    "Choose a card type. Target opponent reveals their hand. Blood Oath deals 3
+    damage to that player **for each card of the chosen type revealed this
+    way**."
+
+    Its own reader beside :func:`parse_for_each_sacrificed_this_way` and
+    :func:`parse_for_each_milled_this_way`, which it is shaped exactly like and
+    which name different records — a sacrifice took permanents off the
+    battlefield and a mill moved cards out of a library, so reading any of the
+    three as another counts a set the card never named.
+
+    And distinct from the ``("card", "revealed")`` row of ``_THIS_WAY_COUNTS``
+    above, which reads the same five printed words. That row answers the **bare**
+    noun with the number the reveal recorded; this answers a *narrowed* one off
+    the cards themselves, which is the only thing that can be asked how many of
+    them were of a type.
+
+    The two are read from different sentences rather than competing for one, and
+    that is worth saying because they look like rivals. Every caller of the row
+    (a life gain, a counter placement, a mana addition, a cost multiplier) asks
+    it and never this; the damage sentence asks this and never the row, because
+    the only reveal that damage is printed behind is a *hand* reveal — and that
+    step records the cards and no count at all. A bare "for each card revealed
+    this way" on a damage clause therefore reaches this reader with an empty
+    filter, which is the same number the row would have given if it had one.
+
+    Returning None leaves the cursor where it was.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("for", "each"):
+        return None
+    try:
+        filt = parse_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("revealed", "this", "way"):
+        stream.reset(mark)
+        return None
+    return ast.CountOfRevealsThisWay(filt)
 
 
 def parse_for_each_milled_this_way(

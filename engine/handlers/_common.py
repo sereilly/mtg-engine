@@ -211,6 +211,16 @@ def count_from_payload(
     recorded_cards = spec.get("recorded_cards")
     if recorded_cards is not None:
         described = spec.get("filter") or {}
+        # "…for each card **of the chosen type** revealed this way" (Blood
+        # Oath). CR 608.2d's choice, made by an earlier step of this same
+        # resolution and spent here — the same resolution that wrote the record
+        # this branch is counting, which is what makes the scratchpad the place
+        # to read it. Left untouched by every spec that printed no such phrase,
+        # and refusing every card if the key is there with nothing behind it:
+        # ``_card_matches_filter`` answers False for an unresolved
+        # ``chosen_card_type``, which for a count is the direction that is too
+        # small rather than too large.
+        described = resolve_chosen_card_type_in_resolution(described, context)
         return max(0, _scaled(sum(
             1 for card in (context.results.get(str(recorded_cards)) or ())
             if _card_matches_filter(card, described)

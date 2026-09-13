@@ -78,6 +78,7 @@ from .effects import (
     _parse_skip_step,
     _parse_tap_untap,
     parse_choose_card_type,
+    parse_claims_one_exiled_card,
     parse_exile_random_card_from_hand,
     parse_graveyard_top_opponent_chooses,
     parse_player_chooses_permanent,
@@ -308,6 +309,18 @@ def parse_player_subject_verb(
         types = parse_choose_card_type(stream, source_spec)
         if types is not None:
             return types
+        # "Starting with you, **each player chooses one of the exiled cards and
+        # puts it onto the battlefield tapped under their control**." (Thieves'
+        # Auction.) A pick out of a pile the sentence in front of this one made,
+        # read beside the two above for their reason: it is the only reading of
+        # the verb whose object is that pile, and it declines without consuming.
+        #
+        # Read **before** the bare permanent pick below, which reaches
+        # `parse_target_spec` for its object and would fail the line on "one of
+        # the exiled cards" — the words name a record, not a board.
+        claimed = parse_claims_one_exiled_card(stream, source_spec)
+        if claimed is not None:
+            return claimed
         # "Each player **chooses five lands they control and sacrifices the
         # rest**." (Limited Resources; Cataclysm prints the four-slot
         # spelling.) Read **before** the bare pick below, and that order is

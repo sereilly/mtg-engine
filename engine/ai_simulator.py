@@ -123,6 +123,14 @@ _SIMULATED_CHOICES = (
     # puts *that many* cards from the library into the hand. A simulated TMP
     # deck really can arm it.
     "exile_hand_pile_choice",
+    # "Starting with you, each player chooses one of the exiled cards and
+    # puts it onto the battlefield tapped under their control." (Thieves'
+    # Auction.) Appended for the reason every entry above it is — the
+    # position cannot change an existing seed — and it suspends hardest of
+    # any of them: the whole of the rest of the resolution is other seats
+    # picking out of the pile this answer shortens, so a seat left owing it
+    # would wedge the round-robin and every later resumable loop with it.
+    "exiled_pile_claim",
 )
 
 
