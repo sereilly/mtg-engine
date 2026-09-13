@@ -45,7 +45,7 @@ Held at this rate, supporting the 26,113-card release line would need about **40
 | 6ED | 335 | 335 (100.0%) | 2 (0.6%) | 405 | 1 (0.2%) | 2 | 0.6 |
 | UDS | 143 | 143 (100.0%) | 0 (0.0%) | 204 | 0 (0.0%) | 0 | 0.0 |
 | M21 | 285 | 285 (100.0%) | 0 (0.0%) | 503 | 0 (0.0%) | 0 | 0.0 |
-| MMQ *(measured)* | 335 | 330 (98.5%) | 0 (0.0%) | 460 | 0 (0.0%) | 0 | 0.0 |
+| MMQ *(measured)* | 335 | 332 (99.1%) | 0 (0.0%) | 462 | 0 (0.0%) | 0 | 0.0 |
 | **Whole pool (shipped, deduped)** | **3715** | **3715 (100.0%)** | **52 (1.4%)** | **5754** | **48 (0.8%)** | **58** | **1.6** |
 
 *(measured)* — MMQ are ingested for measurement and **not shipped**: `cards/manifest.json` lists them under `measured`, the engine's catalog does not load them, and no player can put one in a deck. They are reported here and excluded from the ALL row and from the ceilings, because a ratchet over a set nobody has implemented would fire on its composition rather than on anything anyone did. A measured set moves up to `sets` when it is fully supported.

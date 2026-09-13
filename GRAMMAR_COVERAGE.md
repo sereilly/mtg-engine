@@ -41,7 +41,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 6ED | 335 | 404 | 95.5% | 95.5% | 65.8% | 243 |
 | UDS | 143 | 204 | 91.7% | 91.2% | 65.7% | 121 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| MMQ *(measured)* | 335 | 465 | 90.8% | 90.5% | 65.2% | 273 |
+| MMQ *(measured)* | 335 | 465 | 91.2% | 91.0% | 65.6% | 275 |
 | **All (shipped)** | **5829** | **8560** | **90.8%** | **90.1%** | **60.8%** | **4402** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -56,7 +56,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ---: | ---: | --- | --- |
 | 445 | 191 | expected a subject |  |
 | 136 | 70 | unrecognized effect verb |  |
-| 112 | 56 | unconsumed text |  |
+| 110 | 54 | unconsumed text |  |
 | 42 | 25 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 16 | 14 | expected 'unless defending player controls' |  |
@@ -1890,6 +1890,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever a land is put into a graveyard from the battlefield, this artifact deals 2 damage to that land's controller.`
 - **Dingus Staff**
   - `Whenever a creature dies, this artifact deals 2 damage to that creature's controller.`
+- **Diplomatic Escort**
+  - `{U}, {T}, Discard a card: Counter target spell or ability that targets a creature.`
 - **Dire Fleet Warmonger**
   - `At the beginning of combat on your turn, you may sacrifice another creature. If you do, this creature gets +2/+2 and gains trample until end of turn. (It can deal excess combat damage to the player or planeswalker it's attacking.)`
 - **Dirtcowl Wurm**
@@ -8700,6 +8702,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Destroy target land.`
 - **Winter's Night**
   - `Whenever a player taps a snow land for mana, that player adds one mana of any type that land produced. That land doesn't untap during its controller's next untap step.`
+- **Wishmonger**
+  - `{2}: Target creature gains protection from the color of its controller's choice until end of turn. Any player may activate this ability.`
 - **Witch Engine**
   - `{T}: Add {B}{B}{B}{B}. Target opponent gains control of this creature. (Activate only as an instant.)`
 - **Witch Hunter**
