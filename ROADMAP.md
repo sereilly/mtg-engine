@@ -1,8 +1,8 @@
 # Scaling Roadmap
 
-Target: grow the card pool from **3,715** unique cards — twenty-five sets,
+Target: grow the card pool from **4,026** unique cards — twenty-six sets,
 LEA/LEB/2ED/ARN/ATQ/3ED/LEG/DRK/FEM/4ED/ICE/HML/ALL/MIR/VIS/5ED/WTH/TMP/STH/EXO/
-USG/ULG/6ED/UDS/M21, all shipped and all supported — to the full release line:
+USG/ULG/6ED/UDS/MMQ/M21, all shipped and all supported — to the full release line:
 **140 sets, 33,594 printings, 26,113 unique cards** per `set_progress.json`.
 
 **The reprint shape recurs and is worth planning for.** `set_progress.json`
@@ -51,12 +51,13 @@ Anything that weakens these is a regression regardless of what it enables:
 
 1. **No silent wrongness.** A card may fail loudly as unsupported with a
    reason; it may never resolve as something other than what it says.
-2. **The suite stays fast.** **20,132 tests**, CI budget **940s**, CI-measured
+2. **The suite stays fast.** **21,127 tests**, CI budget **940s**, CI-measured
    baseline **677s** (`ci.yml`), read from run 34296564407: `suite wall time:
-   677s`, **72% of budget**. The test count is UDS's Phase 6 reading
-   (2026-09-10) and is up 550 on 6ED's; the baseline is still the freshest
-   runner number and now predates two sets, so the next Phase 0 owes CI
-   another rather than trusting this one.
+   677s`, **72% of budget**. The test count is MMQ's Phase 6 reading
+   (2026-09-13) and is up 995 on UDS's — the largest single-set rise the
+   project has recorded. The baseline is unchanged and now predates **three**
+   sets and a thousand tests, so it is the stalest number in this file: the
+   next Phase 0 owes CI a fresh one rather than trusting it.
 
    **The creep warning no longer fires first**, and that is the live cost of the
    refresh rather than a thing to fix by raising the budget. At BASELINE 677 the
@@ -962,6 +963,7 @@ a wave is five parallel worktree groups integrated serially.
 | ULG | 143 | 80.4% | 2 waves |
 | 6ED | 335 | 100% | 0 (2 new cards, both already parsed) |
 | UDS | 143 | 69.9% | 2 waves + 1 closer |
+| MMQ | 335 | 73.7% | 3 waves + 1 closer |
 
 Three data points shape an estimate. **Legends** is the warning: the lowest
 starting coverage and the flattest ranking — after eight rounds, 113 of its 135

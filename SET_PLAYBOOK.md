@@ -247,6 +247,24 @@ condition was built by *Chaos Lord's* group; Winter's Chill's cast-time X
 plumbing by Spoils of War's. All ten eventually landed. **State in each brief
 which pieces other groups have already finished**, or the wave rebuilds them.
 
+**A group that verifies an inherited diagnosis before building on it is worth
+a group that builds.** MMQ's W3G5 was handed a one-paragraph CR 605.3a finding
+from an earlier wave and told to measure it first. The diagnosis held — unusually
+— but measuring it caught two defects the fix would have *introduced* (a mana
+ability that targets, and a loyalty ability that produces mana, both of which a
+naive widening would have broken), and corrected the symptom: the reachable
+failure was a counterspell hitting a mana ability, not the "cannot tap mid-cast"
+the brief described. **Budget the verification as part of the round, not as a
+preamble to it.**
+
+**And require a census to disbelieve its own author.** The same Phase 5 nearly
+recorded a second finding — the client's activated-line regex looked blind to a
+priced land's cost — and the census killed it: 577 of 1,743 lines miss that
+regex, Black Lotus among them. One measurement, one commit before it became a
+retrospective paragraph about a defect that does not exist. A suspicion that
+survives its own census is worth writing down; one that does not is worth the
+census.
+
 **Ask every group what the brief got wrong, and expect a third of it to be.**
 Every report across four waves corrected roughly a third of its own brief, and
 that section was consistently the most valuable part. The corrections were not
@@ -1685,6 +1703,38 @@ acquired from another object. **CR 113.7** is the rule that makes "another" mean
 the source (113.7a for last-known information); several comments in
 `engine/subject_filters.py` and around it miscite **CR 109.5**, which is about
 "you"/"your", and `test_cr_citation_subjects.py` polices only the 701 block.
+
+**Added at MMQ's Phase 6: a *priced* mana ability has no land-click route, and
+32 lands are on the far side of it.** `tap_land_for_mana` takes no ability index
+and pays only the tap, so it refuses by design (CR 602.2b) any land whose mana
+ability costs something else — Gemstone Mine and the five MMQ depletion lands.
+The wire's land-click branch routes there, so clicking such a land in the app
+does nothing; the ability *is* reachable, and correct, through
+`{"action": "activate", "ability_index": N}`, which was driven end to end in the
+running app at Phase 5 (Peat Bog: counter 2 -> 1, `{B}{B}` produced, stack
+empty). W3G5 measured the population at **32** lands that never reach the
+tap-for-mana seam — 26 tap-alone and 6 priced — and named the fix: move the
+tap-for-mana announcement into the mana ability's *resolution* rather than
+having the wire choose between two seams, which is the only shape that also
+covers the priced six.
+
+**Do not read this as "the client cannot see these abilities".** That was the
+first diagnosis here and a census killed it: the client's activated-line regex
+is symbol-only and misses **577 of 1,743** lines (33%) — including Black Lotus,
+which is plainly playable — so it is not the offer gate and the routing is the
+whole question. Whoever takes the round should start by establishing what the
+canvas click actually dispatches for a land, which this Phase 5 did not manage
+to exercise before the turn cycle ran out of patience.
+
+**Added at MMQ's Phase 6: `test_layer_reads.py`'s pattern still omits
+`primary_type`, and Phase 5 paid for it again.** The entry two sets ago recorded
+that the engine guard's pattern is `\.card\.(type_line|colors)` and that
+**70** `primary_type` reads in `engine/` are outside it. `engine/ai_simulator.py`
+was one of them, and it produced a **false** promotion-gate issue on Disenchant
+— the engine had destroyed exactly the right permanent. The population of
+artifact creatures that `primary_type` mis-answers is now **114**, up from the
+77 measured at Weatherlight. The instalment is fixed and the scan is not; this
+is the fifth consecutive promotion to turn up one of these.
 
 ## Phase 0 — Pre-flight
 
@@ -3579,3 +3629,70 @@ reconstruction reads the merge base with `git show` — and doing that in **text
 mode decodes UTF-8 as cp1252 on Windows and silently mangles every em dash in
 both branches' blocks. Read bytes. The per-line survival sweep caught it because
 the mangled lines stopped matching, which is the sweep earning its place.
+
+### MMQ — 2026-09-13
+
+*Three waves, eleven groups, 335 cards from 73.7% — and the two rounds with no
+cards in them again outweighed the cards.* W3G5 verified an inherited CR 605.3a
+diagnosis instead of building on it, and the verification is the whole finding:
+the symmetric difference between "what CR 605.1a calls a mana ability" and
+"what the engine's fast path admitted" was **45 abilities, all one-directional**,
+so every painland, storage land, Mana Battery, Urza tri-land and Gemstone Mine
+put its mana ability on the stack. The reachable symptom was not the one the
+brief named — there is no mid-cast state on this wire — it was **Imprison
+countering a mana ability**, on the strength of a comment asserting every mana
+ability resolves inline. Verifying first also caught two bugs the widening would
+have *introduced*: Witch Engine targets (CR 605.5a) and Chandra's `−9: Add six
+{R}` is a loyalty ability, which the reader's docstring said could not produce
+mana in this pool.
+
+*W3G4 named the hard part of a three-set-old entry, and it is a fact the AST
+throws away.* The parser resolves anaphora at parse time, so "Untap target
+Griffin. **It** gets +2/+2" produces two identical `TargetSpec`s — by lowering,
+one target named twice and two targets named once are literally the same shape.
+Of 46 announcements carrying two or more target descriptions, **42 are one
+target named twice**. Any fix must first re-acquire a fact that was discarded,
+which is why five parts had been enumerated three times without anyone building
+them. It also settled a census disagreement the entry had carried: UDS's list of
+seven was four false positives, and its live list matched W3G1's exactly.
+
+*Four groups were interrupted mid-round with nothing committed, and all four
+were recovered.* Their worktrees held 20+ modified files each and every one
+compiled — +6, +4, +8 and +5 cards. The playbook's "check a dead agent's branch
+before writing its work off" is worth more than it reads: the cost of checking
+is one census per worktree, and the cost of not checking was four rounds.
+
+*Zero hooks added across 88 cards, and the count moved **down**.* W2G1 retired
+Metamorphosis' entry — Food Chain is the second card to print its
+cost-record-plus-spend-restriction pair, which that hook's own comment said no
+second card printed. Pool reliance 53/3,715 -> 52/4,026, and ARN fell 23.1% ->
+21.8%.
+
+*Phase 5's finding was the instrument, not the engine.* `simulate_ai_games.py
+--set MMQ` reported Disenchant destroying nothing on a game whose own log read
+`Destroyed Toymaker` one line above. Toymaker is an Artifact Creature and
+`primary_type` answers "creature", so the destroyed permanent was in neither
+count. The engine was right; the honesty check was lying, which is the expensive
+direction — a false issue costs an investigation, and a check that cries wolf is
+one nobody reads. CLAUDE.md records this class from Weatherlight at **77**
+artifact creatures; the sweep that closed it did not reach `engine/ai_simulator.py`
+and the population is now **114**.
+
+*And a suspicion that measurement killed, which is worth as much as one it
+confirmed.* Chasing the same Phase 5 pass, the client's activated-line regex
+looked like a second instance: it is symbol-only, and a priced land's
+`{T}, Remove a depletion counter from this land:` has a word in its cost. The
+census said **577 of 1,743 activated lines (33%) miss it — including Black
+Lotus**, which is plainly playable, so that predicate is not the offer gate and
+there was no finding. A census disbelieving its own author, one commit before it
+would have become a retrospective paragraph about a defect that does not exist.
+
+*Two near-misses on one name meaning two things, in one set.* My own Phase 0
+split nearly created a second `effects/prohibitions.py` where
+`lowering/prohibitions.py` already means "can't be blocked"; the block went into
+`effects/permissions.py` instead, the same question with the sign flipped, on
+that module's own stated rule. And W3G3 added a row to `PER_OBJECT_SEAT_RECORDS`
+under the key `"owner"` — which is a *printed possessive* that table is keyed by
+— silently rerouting Exhume and turning four guards red. Neither is visible to a
+duplicate-definition sweep: there is one definition per module either way.
+
