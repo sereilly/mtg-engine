@@ -275,6 +275,12 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     # a handler cannot be half a handler.
     "finish_repeated_graveyard_pick": "zones",
     "exile_all_matching": "zones",
+    # "Starting with you, each player chooses one of the exiled cards and
+    # puts it onto the battlefield tapped under their control." (Thieves'
+    # Auction.) Exile to the battlefield, one card at a time and one seat at
+    # a time — two zones named, which is what puts it here rather than among
+    # the kinds that act on an object where it stands.
+    "claim_exiled_cards_in_turn": "zones",
     # "…then **the chosen permanents** phase out." (Equipoise.) The same zone
     # question as every other phase-out beside it — CR 702.26 is not a zone
     # change, and this table is where the family says so — with the set read

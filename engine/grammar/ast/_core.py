@@ -121,6 +121,33 @@ class CountOfMillsThisWay:
 
 
 @dataclass(frozen=True)
+class CountOfRevealsThisWay:
+    """"…for each card of the chosen type **revealed this way**" (Blood Oath) —
+    how many of what an earlier step of this same effect *revealed* answer a
+    printed noun phrase.
+
+    :class:`CountOfMillsThisWay` one zone over, and its own node for that
+    class's reason: what the reveal recorded is the cards of one hand, and
+    neither that hand as it stands now nor any zone count is that set — the
+    hand goes on changing, and by the time a later sentence asks, a discard may
+    already have emptied it.
+
+    Its own node rather than a row in ``records._THIS_WAY_COUNTS``, and that is
+    the same distinction :class:`CountOfSacrificesThisWay` draws against the
+    same table: every key there names a scratchpad slot holding a **number**, so
+    a narrowed phrase would be counted as though the adjective were not printed.
+    A reveal records both — ``REVEALED_THIS_WAY`` for the bare count and
+    ``REVEALED_HAND_CARDS`` for the cards — and this node is the reading that
+    can only be answered off the cards.
+
+    A back-reference, so lowering refuses it unless a step of the same effect
+    really revealed something: with no producer "this way" names nothing, and a
+    zero is a number the card never printed.
+    """
+    filter: "ObjectFilter"
+
+
+@dataclass(frozen=True)
 class GreatestDiscardedThisWay:
     """"Each player discards their hand, then draws cards equal to **the
     greatest number of cards a player discarded this way**." (Windfall.)

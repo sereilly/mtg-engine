@@ -73,6 +73,7 @@ from ._core import (
     CountOfDeaths,
     CountOfDeathsThisWay,
     CountOfMillsThisWay,
+    CountOfRevealsThisWay,
     CountOfSacrificesThisWay,
     GreatestDiscardedThisWay,
     CountOfTapsThisWay,
@@ -323,6 +324,7 @@ from .library import (
 )
 from .cards import (
     Draw,
+    EachPlayerClaimsExiledCard,
     Discard,
     Mill,
     MillUntil,
@@ -444,6 +446,7 @@ from .statements import (
     RepeatOptionalProcess,
     RepeatProcess,
     RepeatProcessWhile,
+    RepeatUntilPileChosen,
     OneOf,
     WhereX,
     CreateDelayedTrigger,
@@ -473,6 +476,7 @@ __all__ = [
     "CountOfDeaths",
     "CountOfDeathsThisWay",
     "CountOfMillsThisWay",
+    "CountOfRevealsThisWay",
     "CountOfSacrificesThisWay",
     "GreatestDiscardedThisWay",
     "CountOfTapsThisWay",
@@ -701,6 +705,7 @@ __all__ = [
     "SacrificeUnlessPay",
     # cards
     "Draw",
+    "EachPlayerClaimsExiledCard",
     "Discard",
     "LookTopCycleForLife",
     "SeparateLibraryTopIntoPiles",
@@ -845,6 +850,7 @@ __all__ = [
     "RepeatOptionalProcess",
     "RepeatProcess",
     "RepeatProcessWhile",
+    "RepeatUntilPileChosen",
     "OneOf",
     "WhereX",
     "Statement",

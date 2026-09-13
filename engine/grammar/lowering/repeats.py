@@ -268,3 +268,34 @@ def _lower_repeat_process_while(
             },
         ),
     )
+
+
+def _lower_repeat_until_pile_chosen(
+    node: "ast.RepeatUntilPileChosen", lower, produced,
+) -> tuple[OracleInstruction, ...]:
+    """"Starting with you, each player chooses one of the exiled cards and puts
+    it onto the battlefield tapped under their control. **Repeat this process
+    until all cards exiled this way have been chosen.**" (Thieves' Auction.)
+
+    The round and the repetition are one instruction, for
+    :func:`_lower_repeat_process`'s reason: what ends the loop is a fact only
+    the thing running the round can see — here the pile it is handing out
+    running empty — and this bound also ends a round *part-way*, which a
+    wrapper around the round could not express at all.
+
+    So the clause is lowered by setting the round's own flag and lowering that,
+    rather than by building a second instruction. What is checked is that the
+    round really is a pick out of the pile the clause names: a repeat clause
+    about "cards exiled this way" behind any other sentence would be a loop with
+    no bound in reach, and the refusal is the loud direction.
+    """
+    round_ = node.round
+    if not isinstance(round_, ast.EachPlayerClaimsExiledCard):
+        raise LoweringError(
+            "'until all cards exiled this way have been chosen' bounds a pick "
+            "out of that same pile, and this sentence makes none", node=node,
+        )
+    return lower(
+        dataclasses.replace(round_, until_pile_empty=True),
+        produced, whole_effect=False,
+    )

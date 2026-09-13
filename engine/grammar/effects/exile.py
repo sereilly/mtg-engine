@@ -775,3 +775,61 @@ def parse_exile_graveyard_arrivals_this_turn(
         stream.reset(mark)
         return None
     return ast.ExileGraveyardArrivalsThisTurn(whose)
+
+
+def parse_claims_one_exiled_card(
+    stream: TokenStream, chooser: "ast.PlayerRef",
+) -> "ast.EachPlayerClaimsExiledCard | None":
+    """``chooses one of the exiled cards and puts it onto the battlefield
+    tapped under their control`` — the verb and its object, without the subject.
+
+    "Exile all nontoken permanents. Starting with you, **each player chooses one
+    of the exiled cards and puts it onto the battlefield tapped under their
+    control.** Repeat this process until all cards exiled this way have been
+    chosen." (Thieves' Auction.)
+
+    "One of the exiled cards" is a **bound reference to a pile an earlier
+    sentence made**, which is why it is read here rather than by the noun
+    parser: no description of the exile zone is that set — a player's exile also
+    holds everything that ever went there by any other route — and the phrase
+    names one *shared* pile that shrinks as the seats pick out of it.
+
+    The pick and the put are one act and are read as one sentence, because they
+    are: a card chosen and not put anywhere is not something this effect can
+    leave behind, and splitting them would leave "it" in the second half naming
+    a card no step of the line records.
+
+    "Tapped" and "under their control" are both read rather than assumed. The
+    first is the printed entry state and the second is what says the *chooser*
+    gets it — an exiled card's owner is somebody else, and a card entering under
+    its owner's control instead is the whole difference between this spell and a
+    board reset.
+
+    Non-consuming on refusal, like every arm of the ``chooses`` dispatcher that
+    calls it.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("chooses", "choose"):
+        return None
+    if not stream.accept_phrase("one", "of", "the", "exiled", "cards"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("and"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("puts", "put"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("it", "onto", "the", "battlefield"):
+        stream.reset(mark)
+        return None
+    # Read, never defaulted: a printing without the word puts the card onto the
+    # battlefield untapped, which is a different card and a better one.
+    tapped = bool(stream.accept_word("tapped"))
+    if not stream.accept_phrase("under", "their", "control"):
+        stream.reset(mark)
+        return None
+    if not (stream.exhausted or stream.at_punct(".", ",")):
+        stream.reset(mark)
+        return None
+    return ast.EachPlayerClaimsExiledCard(chooser=chooser, tapped=tapped)

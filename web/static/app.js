@@ -2911,6 +2911,17 @@ function getGraveyardPickForPriceInfo(state = currentState) {
   return info;
 }
 
+// Thieves' Auction: every seat in turn takes one card off the pile the spell
+// exiled, until the pile is empty. The list shrinks as the seats ahead answer,
+// so it is read fresh off each state rather than remembered.
+function getExiledPileClaimInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.exiled_pile_claim;
+  if (!info || info.player_seat !== seat) return null;
+  if (!Array.isArray(info.options) || info.options.length === 0) return null;
+  return info;
+}
+
 // Demonic Consultation: the caster names a card, then pays the top of their
 // own library to go looking for it.
 function getNameThenConsultInfo(state = currentState) {
@@ -6613,6 +6624,54 @@ function applyGraveyardPickForPricePrompt(info) {
   });
 }
 
+// Thieves' Auction's pick. Exile is a public zone (CR 400.2) and this pile is
+// the spell's own, so every option is shown by name — and the index is an index
+// into the offered list, which is what the engine re-checks the answer against.
+function applyExiledPileClaimPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  // The pick is mandatory: there is no declining it while cards are left, so
+  // no cancel affordance is offered.
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  title.textContent = "Choose an exiled card";
+  body.textContent =
+    `${info.card_name || "The spell"}: choose one of the exiled cards. ` +
+    `It enters the battlefield ${info.tapped ? "tapped " : ""}under your control.`;
+  const buttons = (info.options || [])
+    .map((option) => {
+      const label = escapeHtml((option.card && option.card.name) || "Card");
+      return `<button type="button" class="prompt-choice-btn" data-pile-index="${Number(option.index)}">${label}</button>`;
+    })
+    .join("");
+  steps.innerHTML = `<div class="prompt-choice-column">${buttons}</div>`;
+  steps.querySelectorAll("[data-pile-index]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      try {
+        await sendAction({
+          seat,
+          action: "exiled_pile_claim_confirm",
+          pile_index: Number(btn.dataset.pileIndex),
+        });
+      } catch (e) {
+        updateActionHint(e.message, true);
+      }
+    });
+  });
+}
+
 // Demonic Consultation's naming prompt. No suggestion list either, and for the
 // mirror-image reason: the cards it will turn over are in this seat's *own*
 // library, and a list of them would hand the player the order they are betting
@@ -9755,6 +9814,12 @@ function renderActivationPrompt() {
   const graveyardPickInfo = getGraveyardPickForPriceInfo();
   if (graveyardPickInfo) {
     applyGraveyardPickForPricePrompt(graveyardPickInfo);
+    return;
+  }
+
+  const exiledPileClaimInfo = getExiledPileClaimInfo();
+  if (exiledPileClaimInfo) {
+    applyExiledPileClaimPrompt(exiledPileClaimInfo);
     return;
   }
 

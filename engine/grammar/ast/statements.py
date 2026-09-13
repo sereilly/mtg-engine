@@ -162,6 +162,7 @@ from .cards import (
     CastPermission,
     Discard,
     Draw,
+    EachPlayerClaimsExiledCard,
     PlayWithHandRevealed,
     RevealCardsFromHand,
     RevealHand,
@@ -337,6 +338,7 @@ Effect = Union[
     RevealHandAndChoose,
     RevealRandomFromHand,
     ExileRandomFromHand,
+    EachPlayerClaimsExiledCard,
     DiscardRevealedMatchingUnlessPayLife,
     DiscardRevealedUnlessPayLife,
     Shuffle, ExtraTurn, ExtraLandPlays, CantPlayLands,
@@ -561,6 +563,31 @@ class RepeatProcessWhile:
 
 
 @dataclass(frozen=True)
+class RepeatUntilPileChosen:
+    """"**Repeat this process until all cards exiled this way have been
+    chosen.**" (Thieves' Auction.)
+
+    The **fifth** printed "repeat this process" and a fifth mechanism, for the
+    reason :class:`RepeatProcessWhile` is a fourth: what ends this loop is a
+    *pile emptying*, and none of the four around it has anywhere to put that.
+    Eureka's ends on a round nobody took, Forbidden Ritual's on its controller's
+    answer, Grindstone's on a condition asked of the round, and Equipoise's is
+    not a loop at all.
+
+    The bound is also the one that ends a round **part-way**: four cards among
+    three players is two passes, and the second stops after the first seat. So
+    the clause and the round it wraps are one loop rather than a loop around a
+    loop, which is why the lowering collapses this into the round's own
+    instruction exactly as Eureka's does.
+
+    ``round`` is the sentence before the clause. The lowering refuses anything
+    but a pick out of that same pile: a repeat clause naming a record the
+    sentence in front of it does not write would be a loop with no bound at all.
+    """
+    round: "Statement"
+
+
+@dataclass(frozen=True)
 class RepeatOptionalProcess:
     """"**You may repeat this process any number of times.**" (Forbidden
     Ritual.)
@@ -764,7 +791,7 @@ class NextDrawReplacement:
     effect: "Statement"
 
 
-Statement = Union[Sequence, Conjunction, Conditional, May, UnlessPlayerPays, ForEach, RepeatProcess, RepeatProcessWhile, RepeatOptionalProcess, RepeatForEachType, WhereX, CreateDelayedTrigger, NextDrawReplacement, Effect]
+Statement = Union[Sequence, Conjunction, Conditional, May, UnlessPlayerPays, ForEach, RepeatProcess, RepeatProcessWhile, RepeatUntilPileChosen, RepeatOptionalProcess, RepeatForEachType, WhereX, CreateDelayedTrigger, NextDrawReplacement, Effect]
 
 
 # ---------------------------------------------------------------------------

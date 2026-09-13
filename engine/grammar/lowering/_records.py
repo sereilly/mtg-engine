@@ -218,7 +218,14 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # (Martyr's Cry.) The exile sweep's twin of the four rows above, and its own
     # marker rather than theirs: a sweep that exiles kills nothing, so "died
     # this way" over it would name an empty set.
-    "exile_all_matching": EXILED_THIS_WAY,
+    # …and the **list** beside the count, which the handler has written
+    # since it was first read for "For each creature exiled this way" and
+    # this table did not say so. A record written and undeclared is a
+    # back-reference gate that refuses a sentence the effect can answer:
+    # "each player chooses one of the exiled cards" (Thieves' Auction)
+    # reads exactly this list. Two records for the one step, for the
+    # ``exile_graveyard_cards`` row's stated reason — how many, and which.
+    "exile_all_matching": (EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS),
     # "…exile up to two target creature cards from defending player's
     # graveyard. If you do, you gain 1 life **for each card exiled this way**"
     # (Rysorian Badger). The same key the sweep above writes, because the

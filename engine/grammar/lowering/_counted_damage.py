@@ -37,13 +37,14 @@ first place: the counted amounts ask it and so does the pay-or-else prompt in
 import dataclasses
 
 from ...oracle_types import (
-    DISCARDED_BY_SEAT, OracleInstruction, X_FROM_COUNT,
+    DISCARDED_BY_SEAT, OracleInstruction, REVEALED_HAND_CARDS, X_FROM_COUNT,
     X_FROM_COUNT_PER_RECIPIENT,
 )
 from .. import ast
 from ..errors import LoweringError
 from ._amounts import TARGET_OPPONENT_SCOPE, count_spec
 from ._common import _describe_targets, _is_target
+from ._filters import dropped_narrowings, split_bound_card_type
 from ._events import (CHOSEN_CAST_DAMAGE, CHOSEN_PLAYER,
                       EVENT_SUBJECT_PLAYER, _EVENT_SUBJECT_PLAYERS)
 
@@ -491,6 +492,85 @@ def _lower_counted_damage(
         payload["recipient"] = "target_player"
     _describe_targets(payload, recipient)
     return (OracleInstruction("deal_damage", "", payload),)
+
+
+def lower_revealed_this_way_damage(
+    node: ast.DealDamage, produced: frozenset[str], *, multiplier: int = 1
+) -> tuple[OracleInstruction, ...]:
+    """"Choose a card type. Target opponent reveals their hand. Blood Oath deals
+    3 damage to that player **for each card of the chosen type revealed this
+    way**."
+
+    The third reading of a counted damage and the one this module had no branch
+    for: :func:`_lower_counted_damage` counts a **board**, ``recorded_count_spec``
+    one file down reads a scratchpad slot holding a **number**, and this counts
+    the entries of a recorded **list of cards** against a printed noun phrase.
+    The channel itself is not new — ``count_from_payload``'s ``recorded_cards``
+    branch has answered it for Song of Blood's pump and Reprocess's draw since
+    those cards landed — so what is added here is the damage sentence's way in,
+    and every rider, scaling and recipient key stays the one every other
+    ``deal_damage`` payload carries.
+
+    *multiplier* is the printed rate, unwrapped by the caller: "deals **3**
+    damage … for each card" is three times the count, and it rides the spec's
+    own ``multiplier`` key, which ``handlers/_common._scaled`` already applies
+    to every aggregate. No handler learns a new key.
+
+    Three refusals, each the direction that fails loudly:
+
+    * **The recipient is the player the reveal named.** "That player" is the one
+      seat the resolution can resolve, and the reveal in front of this sentence
+      is what put them in the context. A clause damaging anybody else while
+      counting this record has no handler at all, and admitting it is how a
+      supported card hits the wrong face.
+    * **A step of this same effect must have revealed a hand.** With no producer
+      the words name nothing and the count would be a zero the card never
+      printed — the gate every back-reference in this grammar carries.
+    * **Only what is printed on a card is testable** (CR 613.1,
+      ``subject_filters.CARD_ONLY_FILTER_KEYS``): the record holds cards in a
+      hand, which have no computed characteristics. "Of the chosen type" is the
+      one narrowing beyond that list, and it travels as its own payload key —
+      ``split_bound_card_type`` strips the relation off the filter and
+      ``resolve_chosen_card_type_in_resolution`` spends it at resolution, the
+      same pair Turnabout's tap sweep already uses one family over.
+    """
+    assert isinstance(node.amount, ast.CountOfRevealsThisWay)
+    if node.riders != ast.DamageRiders():
+        raise LoweringError("a counted damage carries no riders yet", node=node)
+    if len(node.recipients) != 1 or not _damaged_player_is(
+        node.recipients, "that_player"
+    ):
+        raise LoweringError(
+            "no handler aims a revealed-card count at this recipient", node=node
+        )
+    if REVEALED_HAND_CARDS not in produced:
+        raise LoweringError(
+            f"back-reference to {REVEALED_HAND_CARDS!r} with no producer in "
+            "this effect",
+            node=node,
+        )
+    from ...subject_filters import card_only_filter
+
+    filt, bound = split_bound_card_type(node.amount.filter)
+    payload_filter = filt.to_payload()
+    described = card_only_filter(payload_filter)
+    if described is None or dropped_narrowings(filt, payload_filter):
+        raise LoweringError(
+            "a revealed-card count cannot test this restriction", node=node
+        )
+    spec: dict[str, object] = {
+        "recorded_cards": REVEALED_HAND_CARDS, "filter": {**described, **bound},
+    }
+    if multiplier != 1:
+        # Omitted at 1 for ``count_spec``'s reason: a spec written without the
+        # factor stays byte-identical.
+        spec["multiplier"] = multiplier
+    return (
+        OracleInstruction(
+            "deal_damage", "",
+            {"amount": "x", X_FROM_COUNT: spec, "recipient": "target_player"},
+        ),
+    )
 
 
 #: Named counts whose number is **one per seat** and comes out of this

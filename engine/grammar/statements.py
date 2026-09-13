@@ -193,10 +193,18 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
             first = parse_player_ref(stream)
             if first is not None and stream.accept_punct(","):
                 inner = _parse_statement_body(stream)
-                if not isinstance(inner, ast.May):
+                # An **offer** (Eureka) or a mandatory pick out of a shared pile
+                # (Thieves' Auction): both are one decision made by every seat
+                # in turn, which is the only shape the phrase can be about. Two
+                # nodes rather than one because what a seat is asked differs —
+                # and both carry the same ``starting_with`` field, so the phrase
+                # is read once here rather than inside each of them.
+                if not isinstance(
+                    inner, (ast.May, ast.EachPlayerClaimsExiledCard)
+                ):
                     raise stream.error(
-                        "'starting with …' orders an offer made to several "
-                        "seats, and this sentence makes none"
+                        "'starting with …' orders a decision made by several "
+                        "seats, and this sentence asks none"
                     )
                 return dataclasses.replace(inner, starting_with=first)
         stream.reset(mark)

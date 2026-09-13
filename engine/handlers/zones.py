@@ -40,6 +40,7 @@ from ..oracle_types import (DISCARDED_BY_SEAT, DREW_BY_SEAT, DREW_COUNT,
                             EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS,
                             HAND_CARDS_TO_LIBRARY, MILLED_THIS_WAY,
                             PER_OBJECT_SEAT_RECORDS,
+                            SWEPT_OWNER_SEATS,
                             X_FROM_COUNT_PER_RECIPIENT)
 from ..oracle_types import OracleInstruction as _OracleInstruction
 from ..replacements import EXILE_ON_LEAVING_BATTLEFIELD
@@ -5949,8 +5950,17 @@ def exile_all_matching(game: Game, instruction: OracleInstruction, context: Orac
         for seat in (game.controller_index_of(perm),)
         if seat is not None
     }
+    # …and who **owned** each of them, read in the same place and for a reason
+    # one relation over (CR 108.3): "each player chooses one of the exiled cards
+    # and puts it onto the battlefield under their control" (Thieves' Auction)
+    # gives the card to somebody who does not own it, and after CR 400.7 there
+    # is no object left to ask. Filled in the loop below, where the owner is
+    # already being resolved to route the card to the right pile.
+    owners: dict[int, int] = {}
     for perm in victims:
         owner_idx = game.owner_index_of(perm)
+        if owner_idx is not None:
+            owners[perm.permanent_id] = owner_idx
         owner = game.players[owner_idx] if owner_idx is not None else context.caster
         if not perm.metadata.get("is_token", False):
             owner.exile.append(perm.card)
@@ -5970,6 +5980,7 @@ def exile_all_matching(game: Game, instruction: OracleInstruction, context: Orac
     context.results[EXILED_THIS_WAY_OBJECTS] = victims
     context.results[EXILED_THIS_WAY] = len(victims)
     context.results[PER_OBJECT_SEAT_RECORDS["controller"]] = controllers
+    context.results[SWEPT_OWNER_SEATS] = owners
     game.log.append(f"{context.card.name} exiled {len(victims)} permanent(s)")
     return True, "resolved"
 

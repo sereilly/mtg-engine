@@ -884,3 +884,53 @@ def _lower_exile_graveyard_arrivals_this_turn(
     return (
         OracleInstruction("exile_graveyard_arrivals_this_turn", "", {}),
     )
+
+
+def _lower_each_player_claims_exiled_card(
+    node: "ast.EachPlayerClaimsExiledCard", produced: frozenset[str],
+) -> tuple[OracleInstruction, ...]:
+    """"Exile all nontoken permanents. **Starting with you, each player chooses
+    one of the exiled cards and puts it onto the battlefield tapped under their
+    control.**" (Thieves' Auction.)
+
+    One instruction, and the repeat clause behind the sentence is a key on it
+    rather than a wrapper around it — ``_lower_repeat_process``'s argument one
+    card over: the loop ends when the pile empties, which is something only the
+    thing handing out the cards can see, and a round that emptied it part-way
+    has to stop mid-round rather than after it.
+
+    Refused without a producer, as every back-reference in this grammar is: "the
+    exiled cards" names what a step of *this same effect* exiled, and with no
+    such step the words name nothing — a spell that reports supported and hands
+    out nothing at all.
+
+    ``until_pile_empty`` is carried even when it is False, because the two
+    readings are genuinely different cards: without the clause each seat takes
+    exactly one card and the rest stay exiled.
+    """
+    if EXILED_THIS_WAY_OBJECTS not in produced:
+        raise LoweringError(
+            "'one of the exiled cards' names what an earlier step of this "
+            "effect exiled, and no step of it exiles anything", node=node,
+        )
+    if node.chooser.kind != "each_player":
+        raise LoweringError(
+            "a pick out of the exiled pile is made by every seat in turn",
+            node=node,
+        )
+    return (
+        OracleInstruction(
+            "claim_exiled_cards_in_turn", "",
+            {
+                # "Starting with you" — CR 101.4 orders a multi-seat decision
+                # from the active player and this names the seat that put the
+                # effect on the stack. The same seat for a sorcery, not the
+                # same rule, which is why the word is carried.
+                "claim_order": (
+                    node.starting_with.kind if node.starting_with else None
+                ),
+                "tapped": node.tapped,
+                "until_pile_empty": node.until_pile_empty,
+            },
+        ),
+    )

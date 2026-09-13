@@ -72,6 +72,7 @@ ActionKind = Literal[
     "name_then_reveal_top_confirm",
     "name_then_consult_confirm",
     "graveyard_pick_for_price_confirm",
+    "exiled_pile_claim_confirm",
     "reorder_library_confirm",
     "scry_confirm",
     "discard_confirm",
@@ -435,6 +436,11 @@ class GameActionRequest(BaseModel):
     # picked. Its own field rather than `hand_index`, because the zone is
     # not the answering seat's and not a hand.
     graveyard_index: int | None = Field(default=None, ge=0)
+    # Thieves' Auction: which of the cards still unclaimed this seat is taking.
+    # Its own field rather than an index into anybody's exile *zone*, because
+    # the pile is the resolution's — a seat's exile holds everything that ever
+    # went there, and two copies of one card in it are the same object.
+    pile_index: int | None = Field(default=None, ge=0)
     # Gustha's Scepter: which entry in a permanent's linked-exile record
     # (CR 610.3) the seat is taking back. Its own field rather than an index
     # into the exile *pile*, because two copies of one card in a deck are the

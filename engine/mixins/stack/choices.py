@@ -33,7 +33,8 @@ from ...enter_effects import LIFE_PAID_AS_ENTERED
 from ...land_types import CHOSEN_LAND_TYPES, change_land_type
 from ...linked_exile import link_exiled_card, shuffle_linked_pile
 from ...models import CardDefinition, Permanent
-from ...oracle_types import (DISCARDED_BY_SEAT, DREW_BY_SEAT, EXILED_THIS_WAY,
+from ...oracle_types import (CLAIMABLE_EXILED_CARDS, DISCARDED_BY_SEAT,
+                             DREW_BY_SEAT, EXILED_THIS_WAY,
                              MANA_PAID_BY_SEAT,
                              EXILED_THIS_WAY_OBJECTS)
 from ...grammar.lowering._events import PUT_FROM_HAND_PERMANENTS
@@ -506,6 +507,10 @@ class PendingChoicesMixin:
     @property
     def pending_card_type_choice(self) -> dict | None:
         return self._choice_view("card_type_choice", "player_index")
+
+    @property
+    def pending_exiled_pile_claim(self) -> dict | None:
+        return self._choice_view("exiled_pile_claim", "player_index")
 
     @property
     def pending_mana_payment(self) -> dict | None:
@@ -3695,6 +3700,87 @@ class PendingChoicesMixin:
         if not self._resolve_name_then_reveal_top(
             choice, choice.data.get("default_name", "")
         ):
+            self.discard_pending_choice(choice)
+
+    # -- Each seat in turn taking one card out of a shared exile pile --------
+
+    def confirm_exiled_pile_claim(self, player_index: int, pile_index: int) -> bool:
+        """Answer Thieves' Auction's "each player chooses one of the exiled
+        cards"."""
+        return self.resolve_pending_choice(
+            "exiled_pile_claim", player_index, pile_index=pile_index,
+        )
+
+    def _resolve_exiled_pile_claim(
+        self, choice: PendingChoice, pile_index: int
+    ) -> bool:
+        """Take the chosen card off the shared pile and put it onto the
+        battlefield under the chooser's control (CR 701.3 is not this — nothing
+        is attached; this is an ordinary entry from exile).
+
+        The pile is read back out of the **resolution's** scratchpad rather than
+        off the choice, and that is what makes the round-robin one pile: every
+        seat of every round is looking at the same list, and an answer that
+        copied it would let two seats claim one card.
+
+        Ownership is the one fact the entry cannot re-derive (CR 108.3). The
+        card came out of somebody's exile and goes onto somebody else's
+        battlefield, so the owner is recorded on the arrival — without it the
+        card would go to the *thief's* graveyard when it dies, and Thieves'
+        Auction would quietly rewrite who owns a deck.
+
+        The index is re-checked against the pile rather than trusted from the
+        wire, exactly as every other pick here is: a client offering a stale
+        list would otherwise claim a card another seat has already taken.
+        """
+        context = choice.data.get("_context")
+        if context is None:
+            return False
+        pile = context.results.get(CLAIMABLE_EXILED_CARDS)
+        if not pile or not isinstance(pile_index, int):
+            return False
+        if not 0 <= pile_index < len(pile):
+            return False
+        owner_index, card = pile.pop(pile_index)
+        owner = self.players[owner_index]
+        # Through the one transition that takes a card out of exile, which is
+        # what retires the exile register with it (CR 400.7, CR 406.7): the card
+        # is about to become a new object on a battlefield, and a record left
+        # behind is a memory the next effect to exile it would find live.
+        self.take_card_from_exile(owner, card)
+        seat = choice.player_index
+        arrival = Permanent(card=card)
+        if seat != owner_index:
+            arrival.metadata["owner_player_index"] = owner_index
+        self._put_permanent_onto_battlefield(seat, arrival, None)
+        if choice.data.get("tapped"):
+            arrival.tapped = True
+        self.discard_pending_choice(choice)
+        self.log.append(
+            f"{self.players[seat].name} chose {card.name} from the exiled cards"
+            + (" (tapped)" if choice.data.get("tapped") else "")
+        )
+        self._recompute_continuous_effects()
+        return True
+
+    def _default_exiled_pile_claim(self, choice: PendingChoice) -> None:
+        """A non-interactive seat takes the **most expensive** card left.
+
+        A stated policy, like every other default here, and the one ranking
+        every card in the pool answers: the chooser is picking for themselves
+        out of a pile they will not see again, so the biggest thing on it is a
+        real answer where "the first one" is only an order of exile. Ties keep
+        the pile's order, which is what keeps a seeded simulation reproducible.
+        """
+        context = choice.data.get("_context")
+        pile = (context.results.get(CLAIMABLE_EXILED_CARDS) or []) if context else []
+        if not pile:
+            self.discard_pending_choice(choice)
+            return
+        best = max(
+            range(len(pile)), key=lambda index: (pile[index][1].cmc or 0, -index)
+        )
+        if not self._resolve_exiled_pile_claim(choice, best):
             self.discard_pending_choice(choice)
 
     # -- An opponent picking out of your graveyard, again for each payment ---
@@ -9862,6 +9948,27 @@ register_choice(
     action="name_then_reveal_top_confirm",
     prompt_key="name_then_reveal_top",
     blocked_detail="name a card before other actions",
+)
+
+register_choice(
+    "exiled_pile_claim",
+    resolve=lambda game, choice, r: game._resolve_exiled_pile_claim(
+        choice, r["pile_index"]
+    ),
+    default=lambda game, choice: game._default_exiled_pile_claim(choice),
+    action="exiled_pile_claim_confirm",
+    prompt_key="exiled_pile_claim",
+    blocked_detail="choose one of the exiled cards before other actions",
+    blocks_every_seat=True,
+    spectator_visible=True,
+    # Armed for AI seats too and drained by the auto-resolver: the round-robin
+    # is one resolution, and a seat whose prompt was never queued would be
+    # skipped rather than defaulted.
+    hidden_for_ai=False,
+    # The pile shrinks by one with every answer and the seats behind this one
+    # are picking out of what is left, so nothing later in the resolution may
+    # run before the answer arrives (CR 608.2, CR 117.3b).
+    suspends=True,
 )
 
 register_choice(

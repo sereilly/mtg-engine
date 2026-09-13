@@ -912,7 +912,54 @@ _MANA_TOKEN_RE = re.compile(r"\{([^}]+)\}")
 SEARCHED_PERMANENTS = "searched_permanents"
 
 EXILED_THIS_WAY = "exiled_this_way"
+#: What the exile step took, as objects. Written by every exile that a later
+#: sentence asks a question *about* rather than a number of.
+#:
+#: **Its element type depends on the zone the exile emptied**, and that is a
+#: fact about this key rather than an accident: a battlefield sweep records the
+#: ``Permanent``s (``exile_all_matching``), because the sentences that read it
+#: back ask whose each one was and CR 400.7 makes the exiled card a new object
+#: with no controller at all; an exile out of a graveyard records the
+#: ``CardDefinition``s, because there never was a permanent. A reader that
+#: cares which it was holding has to say so — ``_claimable_exile_pile`` is the
+#: one that does, and it names both shapes rather than guessing from a type
+#: test, which is how Equipoise came to phase out nothing.
 EXILED_THIS_WAY_OBJECTS = "exiled_this_way_objects"
+
+#: "Starting with you, each player chooses **one of the exiled cards** and puts
+#: it onto the battlefield tapped under their control. Repeat this process
+#: until all cards exiled this way have been chosen." (Thieves' Auction.)
+#:
+#: The pile as it *stands*: what the exile above took, minus everything a seat
+#: has already claimed. Its own record rather than a reading of
+#: ``EXILED_THIS_WAY_OBJECTS``, because that one is the finished history of one
+#: step and this one shrinks all the way through the next — a loop that read
+#: the history would hand the same card to every seat.
+#:
+#: **A sequence of ``(owner_seat, card)`` pairs**, and both halves of that are
+#: settled here because a scratchpad channel whose arity or element type is
+#: left to its readers is how Equipoise chose the right permanents and phased
+#: out none. The seat is carried rather than re-derived: the card is sitting in
+#: its owner's exile, several players' decks share one ``CardDefinition``
+#: object (``web/deck_builder`` repeats one per copy), and an identity scan
+#: across the exile zones would answer with whichever seat was asked first.
+CLAIMABLE_EXILED_CARDS = "claimable_exiled_cards"
+
+#: Who **owned** each permanent an exile sweep took — ``{permanent_id: seat}``,
+#: written while they are still on a battlefield and the question still has an
+#: answer (CR 400.7 makes the exiled card a new object with no controller).
+#: "…each player chooses one of the exiled cards and puts it onto the
+#: battlefield **under their control**" (Thieves' Auction) hands a card to
+#: somebody who does not own it, and CR 108.3 says the owner does not move.
+#:
+#: Its own constant and deliberately **not** a row in ``PER_OBJECT_SEAT_RECORDS``
+#: beside ``swept_controller_seats``, which is the natural-looking home and the
+#: wrong one: that table is keyed by the *printed possessive* a noun phrase
+#: carries, and ``lowering/library`` looks a ``PlayerRef.kind`` up in it. "Owner"
+#: is one of those kinds — "a creature card from **their** graveyard" (Exhume)
+#: reaches it — so a row under that key does not add a record, it reroutes every
+#: sentence that names an owner's zone into the per-object-record branch.
+SWEPT_OWNER_SEATS = "swept_owner_seats"
 
 #: The same step's record **per seat** — ``{seat: [card, …]}`` — for a sentence
 #: whose exile and whose read-back are both distributed over the table: "Each

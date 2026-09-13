@@ -71,6 +71,7 @@ from .sentence_rebinding import (
 from .repeats import (_attach_repeat_for_types,
                       _attach_repeat_optional_process,
                       _attach_repeat_this_process,
+                      _attach_repeat_until_pile_chosen,
                       _attach_repeat_while_condition)
 from .riders import (_attach_destroyed_this_way, _attach_flip_stakes_to_loop,
     _attach_no_regeneration,
@@ -350,6 +351,13 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             # just did. Read here, after the three above and before the
             # `Otherwise` rider, because it opens on "if" and none of them do.
             if _attach_repeat_while_condition(stream, steps):
+                continue
+            # "Repeat this process until all cards exiled this way have been
+            # chosen." (Thieves' Auction.) The fifth mechanism behind the same
+            # word — a loop bounded by a pile emptying. Beside the four above
+            # and after them only because it declines without consuming, like
+            # every one of them.
+            if _attach_repeat_until_pile_chosen(stream, steps):
                 continue
             # "For each blocking creature, flip a coin. **If you win the
             # flip, prevent all combat damage that would be dealt by that

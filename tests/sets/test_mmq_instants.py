@@ -758,3 +758,134 @@ def test_w2g4_renounce_with_an_empty_board_gains_nothing(set_pool):
     _i4_resolve(game)
 
     assert caster.life == 20
+
+
+# --- W3G3: a chosen card type, and a count off the revealed hand ---
+# Blood Oath: "Choose a card type. Target opponent reveals their hand. Blood Oath
+# deals 3 damage to that player for each card of the chosen type revealed this
+# way." Three sentences and one number, and the number is the whole card: a
+# filtered count over the *cards* an earlier step of the same resolution
+# recorded, times the printed rate. What is asserted below is the life total,
+# never that a sentence parsed -- a count that dropped "of the chosen type"
+# would still compile, still claim every sentence and still report no hollow
+# line, and it would deal for the whole hand.
+import pytest as _w3g3_pytest
+
+from engine import Game as _W3G3Game
+from engine import PlayerState as _W3G3PlayerState
+from engine.models import Permanent as _W3G3Permanent
+from tests.helpers import resolve_stack as _w3g3_resolve
+
+
+def _w3g3_table(set_pool, hand, theirs=(), interactive=()):
+    """A duel with Blood Oath in hand and *hand* in the opponent's, returning
+    the game and both seats."""
+    pool = set_pool("MMQ")
+    caster, other = _W3G3PlayerState("Caster"), _W3G3PlayerState("Opponent")
+    game = _W3G3Game(players=[caster, other])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    caster.hand = [pool["Blood Oath"]]
+    other.hand = [pool[name] for name in hand]
+    for name in theirs:
+        other.battlefield.append(_W3G3Permanent(card=pool[name]))
+    return game, caster, other
+
+
+@_w3g3_pytest.mark.parametrize(
+    "chosen, expected",
+    [
+        # Two creature cards in a four-card hand: 3 damage each.
+        ("creature", 6),
+        # One instant.
+        ("instant", 3),
+        # One land -- and the land is a *card* in a hand, so the count reads the
+        # printed type line rather than anything a battlefield could answer.
+        ("land", 3),
+        # A type the hand does not hold at all. Zero damage is the card working,
+        # not the card failing, and it is the reading that separates the filter
+        # from a bare count of the hand.
+        ("artifact", 0),
+    ],
+)
+def test_w3g3_blood_oath_counts_only_the_chosen_type(set_pool, chosen, expected):
+    """CR 608.2d: the type is chosen as the spell resolves, and the sentence
+    after it spends the choice.
+
+    The hand is fixed and only the chosen word moves, so what the assertion
+    measures is the *filter*: the same four revealed cards pay out four
+    different numbers.
+    """
+    game, _caster, other = _w3g3_table(
+        set_pool,
+        ["Alabaster Wall", "Charm Peddler", "Disenchant", "Plains"],
+        interactive=(0,),
+    )
+    other.life = 20
+
+    game.cast_from_hand(0, "Blood Oath", target_player_index=1)
+    assert game.confirm_card_type_choice(0, chosen) is True
+    _w3g3_resolve(game)
+
+    assert other.life == 20 - expected
+    assert [card.name for card in other.hand] == [
+        "Alabaster Wall", "Charm Peddler", "Disenchant", "Plains"
+    ], "revealing a hand moves nothing (CR 701.20a)"
+
+
+def test_w3g3_blood_oath_offers_every_card_type(set_pool):
+    """"Choose a card type" with no printed list is CR 205.2a's whole catalog.
+
+    The offer is asserted rather than the compiled payload, because the offer is
+    what a player answers: a prompt bounded by some shorter list would refuse a
+    word the card allows, and one bounded by nothing would accept a word that is
+    not a card type at all.
+    """
+    from engine.grammar.vocabulary import CARD_TYPES
+
+    game, _caster, _other = _w3g3_table(set_pool, ["Mountain"], interactive=(0,))
+
+    game.cast_from_hand(0, "Blood Oath", target_player_index=1)
+    owed = next(c for c in game.pending_choices if c.kind == "card_type_choice")
+
+    assert set(owed.data["options"]) == set(CARD_TYPES)
+    assert game.confirm_card_type_choice(0, "wizard") is False, (
+        "a creature type is not a card type"
+    )
+
+
+def test_w3g3_blood_oath_deals_nothing_to_an_empty_hand(set_pool):
+    """An opponent holding nothing takes nothing.
+
+    The reveal still records -- an absent record is a back-reference with no
+    producer, which is a different thing from a reveal that showed nothing --
+    so the damage step reads an empty list and deals zero rather than the
+    printed 3.
+    """
+    game, _caster, other = _w3g3_table(set_pool, [], interactive=(0,))
+    other.life = 20
+
+    game.cast_from_hand(0, "Blood Oath", target_player_index=1)
+    assert game.confirm_card_type_choice(0, "creature") is True
+    _w3g3_resolve(game)
+
+    assert other.life == 20
+
+
+def test_w3g3_blood_oath_damages_the_player_who_revealed(set_pool):
+    """"…to **that player**" is the seat the reveal named, not the caster.
+
+    A recipient key dropped on this branch would leave the damage aimed at
+    whatever the resolution was last carrying, which on a spell that targets a
+    player is the quiet failure: the number is right and the face is wrong.
+    """
+    game, caster, other = _w3g3_table(
+        set_pool, ["Alabaster Wall", "Charm Peddler"], interactive=(0,),
+    )
+    caster.life, other.life = 20, 20
+
+    game.cast_from_hand(0, "Blood Oath", target_player_index=1)
+    assert game.confirm_card_type_choice(0, "creature") is True
+    _w3g3_resolve(game)
+
+    assert (caster.life, other.life) == (20, 14)

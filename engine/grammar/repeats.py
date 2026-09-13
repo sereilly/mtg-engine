@@ -1,8 +1,11 @@
 """``Repeat this process …`` — the sentence that says the sentences before it
 happen again.
 
-Three cards print one and **no two of them are the same mechanism**, which is
-why they are one module rather than one production:
+Five cards print one and **no two of them are the same mechanism**, which is
+why they are one module rather than one production. The count in this paragraph
+has been wrong twice — it said three while the file held four — so it is worth
+stating that it is the number of *readers below*, not the number of cards a
+wave happened to look at:
 
 * "Repeat this process **until no one** puts a card onto the battlefield."
   (Eureka.) A round of offers made to every seat in turn, repeated while
@@ -17,6 +20,13 @@ why they are one module rather than one production:
 * "Repeat this process **for artifacts and creatures**." (Equipoise.) Not a
   loop at all: a printed *list of parameters*, known when the line is parsed,
   so the round happens exactly three times with one word changed each time.
+* "**If** two cards that share a color were milled this way, repeat this
+  process." (Grindstone.) A loop that ends on a condition asked of what the
+  round just did — the only one of the five whose clause opens on "if".
+* "Repeat this process **until all cards exiled this way have been chosen**."
+  (Thieves' Auction.) A loop that ends on a *pile emptying*, which is also the
+  one bound that can end a round part-way through: four cards among three
+  players is two passes, and the second stops after the first seat.
 
 Fusing them would mean a mechanism that is a round-of-offers, a decision and a
 parameter list at once, and each card would reach it through a payload flag
@@ -255,4 +265,46 @@ def _attach_repeat_while_condition(stream: TokenStream, steps: list) -> bool:
         stream.reset(mark)
         return False
     steps[-1] = ast.RepeatProcessWhile(round=steps[-1], condition=condition)
+    return True
+
+
+def _attach_repeat_until_pile_chosen(stream: TokenStream, steps: list) -> bool:
+    """Fold "Repeat this process until all cards exiled this way have been
+    chosen." into the pick before it (Thieves' Auction).
+
+    The **fifth** printed "repeat this process" and the fifth mechanism: this
+    one ends when the pile the sentence in front of it is picking out of runs
+    out. It wraps the last step, as Eureka's, Equipoise's and Grindstone's do —
+    the process is one printed sentence, and Forbidden Ritual's two are that
+    card's shape rather than the clause's.
+
+    The tail is **checked, not skipped**, exactly as Eureka's restatement is:
+    the clause has to name the same record the round picks out of ("cards
+    exiled this way"), because a repeat clause about some other pile would be a
+    loop whose bound nothing in this effect ever reaches. What is *not* checked
+    here is that a step of this line actually exiled anything — that is the
+    lowering's gate, where every other back-reference in this grammar is
+    refused.
+
+    Refuses without consuming, so an "until" clause behind any other sentence
+    keeps its own reading and its own refusal site.
+    """
+    if not steps:
+        return False
+    mark = stream.mark()
+    if not stream.accept_phrase(
+        "repeat", "this", "process", "until", "all", "cards", "exiled",
+        "this", "way", "have", "been", "chosen",
+    ):
+        stream.reset(mark)
+        return False
+    # The clause must **end** its sentence, for `_attach_repeat_for_types`'
+    # stated reason: a word behind it is a card this reading has not read. An
+    # exhausted stream ends it as surely as a full stop, because
+    # `parse_coverage` asks the clause with its trailing period already
+    # stripped.
+    if not (stream.accept_punct(".") or stream.exhausted):
+        stream.reset(mark)
+        return False
+    steps[-1] = ast.RepeatUntilPileChosen(round=steps[-1])
     return True

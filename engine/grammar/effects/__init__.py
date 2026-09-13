@@ -141,6 +141,7 @@ from .production_changes import (
 )
 from .exile import (
     _parse_exile_bound_card,
+    parse_claims_one_exiled_card,
     parse_exile_graveyard_arrivals_this_turn,
     _parse_bin_unplayed_exiled_card,
     _parse_bin_unplayed_exiled_cards,
@@ -364,6 +365,7 @@ __all__ = [
     "_parse_cast_permission",
     "_parse_play_with_top_revealed",
     "_parse_exile_bound_card",
+    "parse_claims_one_exiled_card",
     "parse_exile_graveyard_arrivals_this_turn",
     "_parse_bin_unplayed_exiled_card",
     "_parse_bin_unplayed_exiled_cards",
