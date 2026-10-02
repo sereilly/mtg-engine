@@ -166,3 +166,53 @@ def test_mana_cache_banks_each_players_untapped_lands_for_anyone(set_pool):
     assert opponent.mana_pool["C"] == 1, "the mana is the activator's"
     assert game.players[0].mana_pool["C"] == 0
     assert counters_on(cache, "charge") == 4
+
+
+def test_overlaid_terrain_trades_your_lands_for_two_mana_lands(set_pool):
+    """"As this enchantment enters, sacrifice all lands you control. / Lands you
+    control have "{T}: Add two mana of any one color.""
+
+    The sacrifice is the entering seat's lands, all of them and nothing else
+    (CR 614.1c — as it enters). The grant is a real activated mana ability of
+    each land that seat controls, including one played afterwards, read through
+    ``effective_card``; tapping it makes two mana of the colour asked for, and
+    the planner and the client are told the land can make any colour. The
+    opponent's lands are untouched, and the grant goes with the enchantment.
+    """
+    from web.serialization import _offered_mana
+
+    lea = set_pool("LEA")
+    ours = [Permanent(card=lea["Forest"]) for _ in range(4)]
+    bears = Permanent(card=lea["Grizzly Bears"])
+    theirs = Permanent(card=lea["Mountain"])
+    game = _w1g6_ench_game(set_pool, [*ours, bears], [theirs])
+    game.enforce_mana_costs = True
+    me = game.players[0]
+    me.hand.extend([set_pool("NEM")["Overlaid Terrain"], lea["Forest"]])
+    _w1g6_ench_take_turn(game, 0)
+    for land in ours:
+        assert game.tap_land_for_mana(0, "Forest", "G", permanent_id=land.permanent_id)
+
+    assert game.cast_from_hand(0, "Overlaid Terrain").supported
+    resolve_stack(game)
+
+    board = [perm.card.name for perm in game.controlled_by(0)]
+    assert board == ["Grizzly Bears", "Overlaid Terrain"], board
+    assert [card.name for card in me.graveyard].count("Forest") == 4
+    assert game.controller_index_of(theirs) == 1, "only the lands *you* control"
+
+    assert game.cast_from_hand(0, "Forest").supported
+    forest = next(p for p in game.controlled_by(0) if p.card.name == "Forest")
+    assert game._land_payment_colors(forest) == ("W", "U", "B", "R", "G")
+    assert _offered_mana(game, forest) == ("W", "U", "B", "R", "G")
+    assert game._land_payment_colors(theirs) == ("R",)
+    assert game.tap_land_for_mana(0, "Forest", "U", permanent_id=forest.permanent_id)
+    assert me.mana_pool["U"] == 2 and me.mana_pool["G"] == 0
+
+    terrain = next(
+        p for p in game.controlled_by(0) if p.card.name == "Overlaid Terrain"
+    )
+    game.sacrifice_permanent(terrain)
+    game._settle()
+    assert "two mana of any one color" not in forest.effective_card.oracle_text
+    assert game._land_payment_colors(forest) == ("G",)

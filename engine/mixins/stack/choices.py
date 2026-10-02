@@ -4324,7 +4324,22 @@ class PendingChoicesMixin:
         # which ``payment_colors`` answers so the client's colour prompt asks
         # the same question.
         swapped = land_mana_swaps.payment_colors(self, land)
-        return swapped if swapped else tuple(land.effective_produced_mana or ())
+        if swapped:
+            return swapped
+        own = tuple(land.effective_produced_mana or ())
+        # "Lands you control have "{T}: Add two mana of any one color.""
+        # (Overlaid Terrain.) A *granted* mana ability, which the printed
+        # ``produced_mana`` summary knows nothing about — so a Forest carrying
+        # it would read as green-only and neither the planner nor the client
+        # would ever ask for another colour. Asked of the ability the tap seam
+        # will actually run (``_land_mana_abilities``), and only where the
+        # summary does not already name all five, so a City of Brass keeps the
+        # answer and the order it has always had.
+        if not set(land_mana_swaps.COLORS) <= set(own):
+            free, _priced = self._land_mana_abilities(land)
+            if free is not None and (free.payload or {}).get("any_color"):
+                return land_mana_swaps.COLORS
+        return own
 
     def _default_mana_payment(self, choice: PendingChoice) -> None:
         controller = self.players[choice.player_index]

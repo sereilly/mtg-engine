@@ -318,8 +318,9 @@ def static_substituted_symbol(game, land) -> str | None:
 
 #: The colours "a color of your choice" ranges over (CR 105.1) — never {C},
 #: which is not a colour (CR 105.2c). Ordered WUBRG so a planner that walks it
-#: is deterministic.
-_COLORS = ("W", "U", "B", "R", "G")
+#: is deterministic. Public because the planner hook answers the same five for
+#: a land whose *own* (granted) mana ability makes any colour.
+COLORS = ("W", "U", "B", "R", "G")
 
 
 def _color_of_choice(requested, land) -> str:
@@ -332,12 +333,12 @@ def _color_of_choice(requested, land) -> str:
     of the tapper's, and never a symbol the sentence rules out.
     """
     wanted = str(requested or "").upper()
-    if wanted in _COLORS:
+    if wanted in COLORS:
         return wanted
     for symbol in getattr(land, "effective_produced_mana", ()) or ():
-        if str(symbol).upper() in _COLORS:
+        if str(symbol).upper() in COLORS:
             return str(symbol).upper()
-    return _COLORS[0]
+    return COLORS[0]
 
 
 def swapped_production(game, land, requested=None) -> "ManaSubstitution | None":
@@ -404,7 +405,7 @@ def payment_colors(game, land) -> "tuple[str, ...] | None":
     if swapped is None:
         return None
     if swapped == MANA_COLOR_OF_CHOICE:
-        return _COLORS
+        return COLORS
     return (swapped,)
 
 
@@ -419,7 +420,7 @@ def swapped_symbol(game, land) -> str | None:
 
 
 __all__ = [
-    "END_OF_TURN", "LandManaSwap", "ManaSubstitution", "add_swap",
+    "COLORS", "END_OF_TURN", "LandManaSwap", "ManaSubstitution", "add_swap",
     "clear_swaps", "payment_colors", "static_substituted_symbol",
     "static_substitution_for",
     "substitution_line", "substitutions_on", "swapped_production",
