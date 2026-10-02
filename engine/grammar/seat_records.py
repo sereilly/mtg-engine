@@ -30,7 +30,13 @@ these clauses took that module past the thousand-line guard. Both moved, not
 just the new one: a family with one member is a cut, and the point of the guard
 is to find the boundary that was already there.
 
-Below `condition_clauses`, which calls it and is never imported back.
+"That module" in the second paragraph is `record_conditions` now. The record
+reader these clauses were cut out of left `condition_clauses` at the Phase 0
+before Nemesis, and it was only ever that reader the paragraph was true of —
+`condition_clauses` also held a graveyard position, a blocker count and the
+counter-state questions, none of them a record.
+
+Below `record_conditions`, which calls it and is never imported back.
 """
 
 from . import ast
