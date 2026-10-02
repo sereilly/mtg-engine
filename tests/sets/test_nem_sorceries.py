@@ -109,3 +109,120 @@ def test_w1g5_pack_hunt_reads_a_copys_name(set_pool):
     assert game.pending_choice_of("search_library", 0).data["restrictions"]["named"] == (
         "Mogg Toady"
     )
+
+
+def _w1g5_gambit(set_pool, a_hand, b_hand, *, interactive=()):
+    """Stronghold Gambit cast by seat 0 and resolved as far as it goes.
+    Headless seats take the stated default — the first card in hand order.
+    W1G5's own."""
+    me = _W1G5PlayerState(
+        name="W1G5-A", hand=[set_pool("NEM")["Stronghold Gambit"], *a_hand]
+    )
+    them = _W1G5PlayerState(name="W1G5-B", hand=list(b_hand))
+    game = _W1G5Game(players=[me, them])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.interactive_seats = set(interactive)
+    assert game.cast_from_hand(0, "Stronghold Gambit").supported
+    game.resolve_top_of_stack()
+    return game, me, them
+
+
+def _w1g5_names_on(game, seat):
+    return sorted(p.card.name for p in game.controlled_by(seat))
+
+
+def test_w1g5_stronghold_gambit_lowest_revealed_creature_enters(set_pool):
+    """"Each player chooses a card in their hand. Then each player reveals
+    their chosen card. The owner of each creature card revealed this way with
+    the lowest mana value puts it onto the battlefield."
+
+    Seat 0 shows a two-drop and seat 1 a three-drop: only the two-drop enters,
+    under its owner, and the three-drop goes back to being a card in a hand —
+    revealed, not spent. Both reveals reach the web layer's feed.
+    """
+    nem = set_pool("NEM")
+    game, me, them = _w1g5_gambit(
+        set_pool, [nem["Mogg Toady"], nem["Wild Mammoth"]], [nem["Wild Mammoth"]],
+    )
+    game._settle()
+
+    assert _w1g5_names_on(game, 0) == ["Mogg Toady"]
+    assert _w1g5_names_on(game, 1) == []
+    assert [c.name for c in them.hand] == ["Wild Mammoth"]
+    assert [c.name for c in me.graveyard] == ["Stronghold Gambit"]
+    assert [(e["seat"], e["cards"]) for e in game.reveal_events] == [
+        (0, ["Mogg Toady"]), (1, ["Wild Mammoth"]),
+    ]
+
+
+def test_w1g5_stronghold_gambit_ties_all_enter_and_lands_do_not_compete(set_pool):
+    """"**Each** creature card … with the lowest mana value": two two-drops
+    tie and both enter, each on its owner's side. And a revealed land is not a
+    creature card, so its mana value of 0 is not "the lowest" — the Mammoth
+    across from it enters alone."""
+    nem, lea = set_pool("NEM"), set_pool("LEA")
+    game, _, _ = _w1g5_gambit(set_pool, [nem["Mogg Toady"]], [nem["Shrieking Mogg"]])
+    game._settle()
+    assert _w1g5_names_on(game, 0) == ["Mogg Toady"]
+    assert _w1g5_names_on(game, 1) == ["Shrieking Mogg"]
+
+    game, me, _ = _w1g5_gambit(set_pool, [lea["Forest"]], [nem["Wild Mammoth"]])
+    game._settle()
+    assert _w1g5_names_on(game, 0) == []
+    assert [c.name for c in me.hand] == ["Forest"]
+    assert _w1g5_names_on(game, 1) == ["Wild Mammoth"]
+
+
+def test_w1g5_stronghold_gambit_keeps_a_pick_hidden_until_the_reveal(set_pool):
+    """CR 101.4a: a card chosen out of a hand may stay face down as it is
+    chosen. Seat 1 (headless) has chosen by the time seat 0 is asked, and the
+    public log says only *that* it chose — the card is named by the reveal,
+    after seat 0 answers. The spell stays on the stack until then (CR 608.2)."""
+    nem, lea = set_pool("NEM"), set_pool("LEA")
+    game, me, _ = _w1g5_gambit(
+        set_pool, [lea["Forest"], nem["Wild Mammoth"]], [nem["Rhox"]], interactive=(0,),
+    )
+    pick = game.pending_choice_of("choose_cards_in_hand", 0)
+    assert pick is not None and game.live_choose_cards_in_hand(pick) == [0, 1]
+    assert game.stack, "the sorcery is still resolving"
+    assert not any("Rhox" in line for line in game.log), "seat 1's pick is face down"
+    assert any("W1G5-B chose 1 card(s)" in line for line in game.log)
+
+    assert game.confirm_choose_cards_in_hand(0, [1])
+    game._settle()
+
+    assert any("W1G5-B reveals Rhox" in line for line in game.log)
+    assert _w1g5_names_on(game, 0) == ["Wild Mammoth"]
+    assert [c.name for c in me.hand] == ["Forest"]
+
+
+def test_w1g5_stronghold_gambit_waits_for_every_seat_in_any_order(set_pool):
+    """Two interactive seats owe a pick at once. The first answer (seat 1's,
+    out of turn order) reveals nothing and moves nothing: the sorcery resolves
+    only when the last seat has chosen, and then compares both cards."""
+    nem, lea = set_pool("NEM"), set_pool("LEA")
+    game, me, them = _w1g5_gambit(
+        set_pool, [nem["Rhox"], nem["Mogg Toady"]], [nem["Wild Mammoth"], lea["Forest"]],
+        interactive=(0, 1),
+    )
+    owed = sorted(c.player_index for c in game.pending_choices if c.kind == "choose_cards_in_hand")
+    assert owed == [0, 1]
+
+    assert game.confirm_choose_cards_in_hand(1, [0])
+    assert game.stack and game.reveal_events == [], "nothing is revealed yet"
+    assert game.confirm_choose_cards_in_hand(0, [0])
+    game._settle()
+
+    assert not game.stack
+    assert _w1g5_names_on(game, 1) == ["Wild Mammoth"], "3 beats 6"
+    assert sorted(c.name for c in me.hand) == ["Mogg Toady", "Rhox"]
+
+
+def test_w1g5_stronghold_gambit_an_empty_hand_chooses_nothing(set_pool):
+    """A player with no cards in hand makes no choice and reveals nothing; the
+    other player's card still competes alone."""
+    game, _, _ = _w1g5_gambit(set_pool, [set_pool("NEM")["Wild Mammoth"]], [])
+    game._settle()
+    assert _w1g5_names_on(game, 0) == ["Wild Mammoth"]
+    assert [e["seat"] for e in game.reveal_events] == [0]

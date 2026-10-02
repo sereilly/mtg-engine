@@ -22,8 +22,11 @@ its own words to the end, which is what lets this module sit below
 
 from __future__ import annotations
 
+import dataclasses
+
 from . import ast
 from .amounts import expect_pt, parse_amount
+from .bounds import accept_superlative
 from .errors import GrammarError
 from .lexer import MANA, SELF
 from .nouns import parse_object_filter
@@ -510,6 +513,53 @@ def _parse_name_then_random_reveal(stream: TokenStream) -> "ast.Statement | None
             stream.reset(mark)
             return None
     return ast.NameAndRandomReveal(who, count, zone)
+
+
+def parse_reveal_chosen_hand_cards(
+    stream: TokenStream, chooser: ast.PlayerRef
+) -> "ast.RevealChosenHandCards | None":
+    """Stronghold Gambit's three sentences, from the verb of the first.
+
+    "Each player **chooses a card in their hand**. Then each player reveals
+    their chosen card. The owner of each creature card revealed this way with
+    the lowest mana value puts it onto the battlefield."
+
+    Declines without consuming until the whole first sentence has matched, so
+    every other "chooses …" keeps its arm; past it, every word is *expected*.
+    The two later sentences are the effect — a production that read the pick
+    and shrugged at the rest would compile a sorcery that hides a card and does
+    nothing with it.
+
+    The competing noun phrase and its superlative are read by the shared
+    readers, so "each artifact card revealed this way with the greatest mana
+    value" is this production with two words changed.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("chooses", "a", "card", "in", "their", "hand"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    for word in ("then", "each", "player", "reveals", "their", "chosen", "card"):
+        stream.expect_word(word)
+    if not stream.accept_punct("."):
+        raise stream.error("expected the sentence the reveal decides")
+    for word in ("the", "owner", "of", "each"):
+        stream.expect_word(word)
+    entrants = parse_object_filter(stream)
+    if not entrants.is_card:
+        raise stream.error("a revealed card is a card, not a permanent")
+    for word in ("revealed", "this", "way"):
+        stream.expect_word(word)
+    if stream.accept_word("with"):
+        superlative = accept_superlative(stream)
+        if superlative is None:
+            raise stream.error("expected the extreme the revealed cards compete on")
+        entrants = dataclasses.replace(entrants, superlative=superlative)
+    for word in ("puts", "it", "onto", "the", "battlefield"):
+        stream.expect_word(word)
+    return ast.RevealChosenHandCards(chooser, entrants)
 
 
 def _parse_name_then_reveal_top(

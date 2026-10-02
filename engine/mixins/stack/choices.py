@@ -5728,7 +5728,13 @@ class PendingChoicesMixin:
         # The card objects, not their hand slots: the step that reads this
         # record moves cards out of the hand, and an index stops naming the
         # same card the moment one leaves.
-        context.results[key] = list(cards)
+        if payload.get("actor") == "each_player":
+            # "**Each player** chooses a card in their hand." (Stronghold
+            # Gambit.) One entry per seat, seeded by the handler — a flat list
+            # would be overwritten by whichever seat answered last.
+            context.results.setdefault(key, {})[choice.player_index] = list(cards)
+        else:
+            context.results[key] = list(cards)
         # "**Reveal** any number of blue cards in your hand." (Brine Seer.) The
         # count the sentence behind it spends, beside the cards themselves —
         # two records for one step, because "for each card revealed this way"
@@ -5769,15 +5775,17 @@ class PendingChoicesMixin:
         cards = [player.hand[index] for index in picks]
         self._record_chosen_cards_in_hand(choice, cards)
         name = choice.data.get("card_name", "Effect")
-        verb = (
-            "revealed"
-            if (choice.data.get("_payload") or {}).get("reveal")
-            else "chose"
-        )
-        self.log.append(
-            f"{player.name} {verb} "
-            f"{', '.join(c.name for c in cards) or 'no cards'} ({name})"
-        )
+        payload = choice.data.get("_payload") or {}
+        verb = "revealed" if payload.get("reveal") else "chose"
+        if payload.get("hidden"):
+            # CR 101.4a: a card chosen out of a hand may stay face down as it
+            # is chosen (Stronghold Gambit). The log is public, so naming the
+            # card here would show every seat still choosing what this one
+            # hid; the sentence that reveals it is what names it.
+            chosen = f"{len(cards)} card(s)" if cards else "no cards"
+        else:
+            chosen = ", ".join(c.name for c in cards) or "no cards"
+        self.log.append(f"{player.name} {verb} {chosen} ({name})")
         return True
 
     def _default_choose_cards_in_hand(self, choice: PendingChoice) -> None:

@@ -8801,8 +8801,31 @@ def choose_cards_in_hand(game: Game, instruction: OracleInstruction, context: Or
 
     CR 608.2's "as much as possible": a hand holding fewer eligible cards than
     the printed number chooses all of them rather than none.
+
+    "**Each player** chooses a card in their hand." (Stronghold Gambit.) One
+    prompt per living seat in APNAP order (CR 101.4), each out of that seat's
+    own hand, all armed at once — CR 101.4a keeps the cards face down as they
+    are chosen, so no seat's pick waits on another's — and recorded per seat
+    (``{seat: [cards]}``) because every answer is its own. The resolution waits
+    for the last of them (the kind suspends).
     """
     payload = instruction.payload
+    if payload.get("actor") == "each_player":
+        from .control_flow import _offered_seats
+
+        result_key = str(payload.get("result_key") or "chosen_hand_cards")
+        by_seat: dict[int, list] = {}
+        context.results[result_key] = by_seat
+        for seat in _offered_seats(game, "each_player", context):
+            player = game.players[seat]
+            by_seat[seat] = []
+            if not chosen_hand_card_candidates(game, payload, player):
+                game.log.append(
+                    f"{context.card.name}: {player.name} has no card to choose"
+                )
+                continue
+            game.arm_choose_cards_in_hand(seat, payload, context)
+        return True, "resolved"
     player = context.caster
     seat = game.players.index(player)
     candidates = chosen_hand_card_candidates(game, payload, player)
@@ -8814,6 +8837,105 @@ def choose_cards_in_hand(game: Game, instruction: OracleInstruction, context: Or
         )
         return True, "resolved"
     game.arm_choose_cards_in_hand(seat, payload, context)
+    return True, "resolved"
+
+
+def _chosen_cards_still_in_hand(game, record: dict) -> list[tuple[int, object]]:
+    """``(seat, card)`` for every card a per-seat hand pick recorded that is
+    still in that seat's hand, in APNAP order.
+
+    By identity against the seat's *own* hand: every copy of a card in a hand is
+    one shared object, and two players' decks built from one catalog share the
+    object across hands too, so "is it still there" is only answerable per
+    seat. A card that left between the pick and now is not revealed and does
+    not compete (CR 608.2: do as much as possible).
+    """
+    out: list[tuple[int, object]] = []
+    for seat in sorted(record, key=lambda s: (
+        (s - (game.active_player_index or 0)) % max(len(game.players), 1), s
+    )):
+        if not (isinstance(seat, int) and 0 <= seat < len(game.players)):
+            continue
+        hand = game.players[seat].hand
+        for card in record.get(seat) or ():
+            if any(card is held for held in hand):
+                out.append((seat, card))
+    return out
+
+
+@effect_handler("reveal_chosen_hand_cards")
+def reveal_chosen_hand_cards(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Then each player reveals their chosen card." (Stronghold Gambit.)
+
+    Every hidden pick made public at once (CR 701.20a), through the one reveal
+    feed the web layer reads — one event per seat, because each player reveals
+    their own. Nothing moves; the sentence after this one reads the same record.
+    """
+    record = context.results.get(str(instruction.payload.get("cards_from"))) or {}
+    shown: dict[int, list[str]] = {}
+    for seat, card in _chosen_cards_still_in_hand(game, record):
+        shown.setdefault(seat, []).append(card.name)
+    for seat, names in shown.items():
+        game.record_reveal(seat, names)
+        game.log.append(
+            f"{game.players[seat].name} reveals {', '.join(names)} "
+            f"({context.card.name})"
+        )
+    if not shown:
+        game.log.append(f"{context.card.name}: no player revealed a card")
+    return True, "resolved"
+
+
+@effect_handler("put_chosen_hand_cards_onto_battlefield")
+def put_chosen_hand_cards_onto_battlefield(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"The owner of each creature card revealed this way with the lowest mana
+    value puts it onto the battlefield." (Stronghold Gambit.)
+
+    Only the recorded cards compete, and only those the printed phrase admits
+    (``_card_matches_filter``, the card-in-a-zone matcher) — a revealed land is
+    not in the comparison at all, so it cannot be "the lowest". The superlative
+    is then asked of the survivors and **every** card tied at the extreme
+    enters, because "each … with the lowest mana value" names all of them.
+    Mana value is the printed one (CR 202.3), which is all a card in a hand has.
+
+    Each enters under its **owner**, who is the player the sentence makes put
+    it there (CR 110.2a), out of that owner's hand through the hand seam.
+    """
+    payload = instruction.payload
+    record = context.results.get(str(payload.get("cards_from"))) or {}
+    described = payload.get("card_filter") or {}
+    entrants = [
+        (seat, card)
+        for seat, card in _chosen_cards_still_in_hand(game, record)
+        if _card_matches_filter(
+            card, described, game=game, owner=game.players[seat]
+        )
+    ]
+    superlative = payload.get("superlative") or {}
+    if entrants and superlative:
+        if superlative.get("characteristic") != "mana_value":
+            # The lowering admits nothing else; a hand-built payload naming a
+            # characteristic no card in a hand has puts nothing in rather than
+            # guessing which card was meant.
+            game.log.append(f"{context.card.name}: nothing to compare")
+            return True, "resolved"
+        pick = min if superlative.get("extreme") == "least" else max
+        best = pick(int(getattr(card, "cmc", 0) or 0) for _, card in entrants)
+        entrants = [
+            (seat, card) for seat, card in entrants
+            if int(getattr(card, "cmc", 0) or 0) == best
+        ]
+    if not entrants:
+        game.log.append(f"{context.card.name}: no revealed card enters")
+        return True, "resolved"
+    for seat, card in entrants:
+        owner = game.players[seat]
+        if not game.take_card_from_hand(owner, card):
+            continue
+        game._put_permanent_onto_battlefield(seat, Permanent(card=card), None)
+        game.log.append(
+            f"{owner.name} puts {card.name} onto the battlefield ({context.card.name})"
+        )
     return True, "resolved"
 
 
