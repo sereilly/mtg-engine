@@ -53,6 +53,16 @@ def superlative_pick(
     if not isinstance(spec, ast.TargetSpec) or spec.filter.superlative is None:
         return None
     superlative = spec.filter.superlative
+    if superlative.among is not None:
+        # "…with the greatest power **among creatures on the battlefield**"
+        # (Topple) names its own comparison set, which makes it a restriction
+        # one candidate can be tested against — a *target* restriction, read by
+        # ``subject_matches``. Stripped below it would be a pick over the
+        # described set alone, which is a different set.
+        raise LoweringError(
+            "a superlative over a named set is a restriction on a target, not "
+            "a pick", node=node,
+        )
     if spec.targeted or spec.quantifier != "all":
         # "all" is what the noun parser gives the definite article over a
         # description (``references.parse_recipient``'s identified-object

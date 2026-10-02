@@ -58,7 +58,8 @@ from ...oracle_types import (CHOSEN_COLOR_THIS_WAY,
                              SACRIFICED_COUNT,
                              LIFE_LOST_THIS_WAY,
                              MANA_LOST_COUNT, MANA_LOST_THIS_WAY,
-                             TAPPED_THIS_WAY, TAPPED_THIS_WAY_OBJECTS)
+                             TAPPED_THIS_WAY, TAPPED_THIS_WAY_OBJECTS,
+                             X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT)
 from ._events import (ATTACHED_PERMANENT_CONTROLLER,
                       EXILED_SPELL_CONTROLLER,
                       EXILED_SPELL_RECORD,
@@ -904,6 +905,22 @@ _PRODUCES_FOR_PAYLOAD: dict[str, tuple[str, object, str]] = {
 }
 
 
+#: Records a kind writes about **the one object** its step gave up, declared
+#: only when none of the listed payload keys (another payer, another count) is
+#: present. "Sacrifice a creature. Rupture deals damage equal to **that
+#: creature's power** …": frozen as it is sacrificed (CR 608.2h), under the keys
+#: the destroy step writes for Broken Visage, so one back-reference reader
+#: answers both verbs. "Each player sacrifices a creature" names several
+#: objects, so "that creature" behind it refuses rather than reading the last.
+_PRODUCES_FOR_ONE_OBJECT: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
+    "sacrifice_matching_permanent": (
+        ("who", "count", "any_number", X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT,
+         "amount_from", "amount_from_trigger"),
+        (_EVENT_SUBJECT_POWER_RECORD, _EVENT_SUBJECT_TOUGHNESS_RECORD),
+    ),
+}
+
+
 def produced_keys(instruction) -> frozenset[str]:
     """Every scratchpad value *instruction* records.
 
@@ -911,8 +928,19 @@ def produced_keys(instruction) -> frozenset[str]:
     depends on its payload (:data:`_PRODUCES_FOR_PAYLOAD`) — which is why this
     takes the instruction rather than the kind: "what does a step of this kind
     write" is not answerable for a search until you know where it was sending
-    its find.
+    its find. :data:`_PRODUCES_FOR_ONE_OBJECT` is the same question asked of
+    how *many* objects the step acts on.
     """
+    single = _PRODUCES_FOR_ONE_OBJECT.get(instruction.kind)
+    if single is not None:
+        plural_keys, records = single
+        if not any(key in (instruction.payload or {}) for key in plural_keys):
+            return _produced_by_kind(instruction) | frozenset(records)
+    return _produced_by_kind(instruction)
+
+
+def _produced_by_kind(instruction) -> frozenset[str]:
+    """:func:`produced_keys` without the single-object rows."""
     kind = instruction.kind
     recorded = _PRODUCES.get(kind)
     keys = (

@@ -81,6 +81,13 @@ class Superlative:
     """
     extreme: str          # "least" | "greatest"
     characteristic: str   # "power" | "toughness" | "mana_value"
+    #: "…target creature with the greatest power **among creatures on the
+    #: battlefield**" (Topple). The set the extreme is taken over, when the
+    #: card prints one. That is what makes this phrase answerable about one
+    #: object after all: with the comparison set named, "is this the greatest?"
+    #: is a question about the candidate against a board the game can read —
+    #: which a *target* restriction needs (CR 601.2c, re-asked at CR 608.2b).
+    among: "ObjectFilter | None" = None
 
 
 @dataclass(frozen=True)

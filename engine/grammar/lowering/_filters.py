@@ -58,6 +58,24 @@ def _filter_payload(
         raise LoweringError(
             f"{', '.join(dropped)} has no payload form here", node=filt
         )
+    # "…with the greatest power **among creatures on the battlefield**"
+    # (Topple). The comparison set is a whole noun phrase inside a key, so the
+    # check above cannot see it — asked of the inner phrase here, the one place
+    # every filter payload is built. "On the battlefield" is the scope the
+    # matcher scans (every seat's permanents), so it is honoured, not dropped.
+    among = filt.superlative.among if filt.superlative is not None else None
+    if among is not None:
+        inner = tuple(
+            field for field in dropped_narrowings(
+                among, payload["superlative_among"]["among"]
+            )
+            if field != "on_the_battlefield"
+        )
+        if among.zone != "battlefield" or among.is_card or inner:
+            raise LoweringError(
+                "a superlative is taken over a set on the battlefield, narrowed "
+                "only by what a payload can carry", node=filt,
+            )
     # "of their choice" says *who picks*. No matcher can test it — it is
     # deliberately outside ``TESTABLE_SUBJECT_FILTER_KEYS`` — so a payload
     # carrying it into a handler is a key nothing reads, and the phrase is then

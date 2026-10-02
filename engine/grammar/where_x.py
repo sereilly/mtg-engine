@@ -15,9 +15,8 @@ is for.
 from . import ast
 from ..oracle_types import DREW_COUNT, REVEALED_THIS_WAY
 from .amounts import accept_counters_on_source
-from .cost_records import (accept_cost_characteristic_of,
-                           accept_exiled_for_cost,
-                           accept_sacrificed_for_cost)
+from .cost_records import (accept_cost_channel_possessive,
+                           accept_cost_characteristic_of)
 from .records import accept_added_base, accept_damage_dealt_this_turn
 
 from .errors import GrammarError
@@ -383,17 +382,15 @@ def parse_where_x_definition_body(stream: TokenStream) -> "ast.Amount":
     inverted = accept_cost_characteristic_of(stream)
     if inverted is not None:
         return inverted
-    exiled = accept_exiled_for_cost(stream)
-    if exiled is not None:
-        return exiled
-    # "…where X is **the sacrificed creature's mana value**" (Burnt Offering).
-    # The exile above one zone over: what the *spell's* own additional cost ate
-    # (CR 601.2b), read through the one reader both front ends share so the
-    # where-clause and an "equal to" amount cannot come to name different
-    # channels.
-    sacrificed = accept_sacrificed_for_cost(stream)
-    if sacrificed is not None:
-        return sacrificed
+    # "…where X is **the sacrificed creature's mana value**" (Burnt Offering),
+    # "…**the exiled card's** mana value" (Necropolis), "…**the discarded
+    # card's** mana value" (Volrath the Fallen). Every payment channel's
+    # possessive, through the one reader both front ends share — this list was
+    # spelled channel by channel here and in ``amounts``, and the two lists had
+    # drifted apart.
+    possessive = accept_cost_channel_possessive(stream)
+    if possessive is not None:
+        return possessive
     # Three aggregates over one noun phrase, and the words are what tell them
     # apart: "the number of" counts the objects, "the greatest power among"
     # takes a maximum over them (Carrion Grub).

@@ -84,6 +84,9 @@ def _lord_filter(filt: ast.ObjectFilter) -> LordBuffFilter:
         # and probing field by field is how a field added later slips past a
         # check written before it existed.
         chosen_creature_type=filt.chosen_creature_type,
+        # "**Nonblack** creatures get -1/-1." (Ascendant Evincar.) Carried for
+        # the reason every field above is: the round trip decides.
+        excluded_colors=filt.excluded_colors,
     )
 
 
@@ -102,6 +105,7 @@ def _object_filter_of(lord: LordBuffFilter) -> ast.ObjectFilter:
         "without_keywords": lord.without_keywords,
         "chosen_land_type": lord.chosen_land_type,
         "chosen_creature_type": lord.chosen_creature_type,
+        "excluded_colors": lord.excluded_colors,
     }
     for qualifier in lord.qualifiers:
         field_name, value = QUALIFIER_FIELDS[qualifier]

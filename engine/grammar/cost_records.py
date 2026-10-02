@@ -127,42 +127,6 @@ def accept_cost_characteristic_of(stream: "TokenStream"):
     return node_cls(characteristic)
 
 
-def accept_sacrificed_for_cost(stream: "TokenStream") -> "ast.SacrificedForCost | None":
-    """``the sacrificed <noun>'s <characteristic>`` — or None, cursor unmoved.
-
-    "equal to **the sacrificed creature's toughness**" (Life Chisel, Diamond
-    Valley); "where X is **the sacrificed creature's mana value**" (Burnt
-    Offering). A characteristic of the permanent the spell's or ability's own
-    *cost* ate, not of anything a step of the effect touched: CR 601.2h pays the
-    cost before the object is on the stack, so by resolution the creature is a
-    memory the payment path recorded (``sacrificed_for_cost``).
-
-    The noun and the characteristic are both read as printed, so "the sacrificed
-    **artifact's** mana value" is the same production. Which of them a handler
-    can actually answer is the lowering's question.
-
-    A named function rather than an inline branch for
-    :func:`accept_exiled_for_cost`'s reason: two front ends read the phrase — an
-    "equal to" amount and a where-clause — and two copies of a phrase that names
-    a payment channel is how the two come to name different ones. The leading
-    "the" is the caller's.
-    """
-    return _accept_possessive_cost_channel(stream, "sacrificed")
-
-
-def accept_tapped_for_cost(stream: "TokenStream") -> "ast.TappedForCost | None":
-    """``the tapped <noun>'s <characteristic>`` — or None, cursor unmoved.
-
-    "This artifact deals damage equal to **the tapped creature's power** to
-    target attacking or blocking creature with flying." (Unerring Sling.) The
-    third sibling of :func:`accept_sacrificed_for_cost`, reading the permanent
-    the cost *tapped* — and a named function for that one's reason exactly: two
-    front ends read the phrase, so two copies is how they come to name two
-    channels. The leading "the" is the caller's.
-    """
-    return _accept_possessive_cost_channel(stream, "tapped")
-
-
 def accept_counters_removed_for_cost(
     stream: "TokenStream",
 ) -> "ast.CountersRemovedForCost | None":
@@ -220,11 +184,36 @@ def accept_counters_removed_for_cost(
     return None
 
 
-def accept_exiled_for_cost(stream: "TokenStream") -> "ast.ExiledForCost | None":
-    """``the exiled card's <characteristic>`` — or None with the cursor unmoved.
+def accept_cost_channel_possessive(stream: "TokenStream"):
+    """``<participle> <noun>'s <characteristic>`` over **every** payment
+    channel — or None, cursor unmoved.
 
-    The twin of :func:`accept_sacrificed_for_cost` one zone over, and a named
-    function for the same reason: two front ends read it, an "equal to" amount
-    and a where-clause. The leading "the" is the caller's.
+    "equal to **the sacrificed creature's toughness**" (Life Chisel); "where X
+    is **the exiled card's mana value**" (Necropolis); "…equal to **the tapped
+    creature's power**" (Unerring Sling); "…, where X is **the discarded
+    card's** mana value" (Volrath the Fallen). A characteristic of what the
+    spell's or ability's own *cost* ate, not of anything a step of the effect
+    touched: CR 601.2h pays the cost before the object is on the stack, so by
+    resolution it is a memory the payment path recorded. The noun and the
+    characteristic are read as printed; which of them a handler can answer is
+    the lowering's question.
+
+    This was three named readers, one per channel, and the three front ends
+    that print the phrase ("equal to …" and "half …" in ``amounts``, the
+    where-clause in ``where_x``) each asked their own list of them — and the
+    lists had drifted: the where-clause could not read the tapped channel, and
+    none of them read the discarded one in this order of words although
+    :data:`_COST_CHANNEL_NODES` has carried it since Pyromancy. One loop over
+    the table is the reading :func:`accept_cost_characteristic_of` already
+    gives the other genitive, so a channel added to the table is readable in
+    both word orders in every front end at once.
+
+    The participles open on four different words, so the order of the loop
+    cannot change which channel a sentence names. The leading "the" is the
+    caller's.
     """
-    return _accept_possessive_cost_channel(stream, "exiled")
+    for participle in _COST_CHANNEL_NODES:
+        found = _accept_possessive_cost_channel(stream, participle)
+        if found is not None:
+            return found
+    return None

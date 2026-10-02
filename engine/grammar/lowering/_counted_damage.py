@@ -42,7 +42,8 @@ from ...oracle_types import (
 )
 from .. import ast
 from ..errors import LoweringError
-from ._amounts import TARGET_OPPONENT_SCOPE, count_spec
+from ._amounts import TARGET_OPPONENT_SCOPE, count_spec, seat_scoped_count_spec
+from ._cost_records import COST_RECORD_CHANNELS
 from ._common import _describe_targets, _is_target
 from ._filters import dropped_narrowings, split_bound_card_type
 from ._events import (CHOSEN_CAST_DAMAGE, CHOSEN_PLAYER,
@@ -115,24 +116,9 @@ def _recipient_seat_count(node: ast.DealDamage, multiplier: int = 1) -> dict | N
     one. Scoping it is exactly what the per-recipient loop does.
     """
     assert isinstance(node.amount, ast.CountOf)
-    filt = node.amount.filter
-    if filt.controller != "that_player":
-        return None
-    if filt.zone_owner is not None:
-        # The phrase would then name two different players — the zone's owner
-        # and "that player" — and only one of them can be the recipient.
-        raise LoweringError(
-            "a per-recipient count cannot also name a zone owner", node=node
-        )
-    spec = count_spec(
-        dataclasses.replace(filt, controller=None), node, multiplier=multiplier
-    )
-    # `owner` is how the *single*-X evaluator picks a seat, and this spec is
-    # never read through that path — the loop hands it each recipient directly.
-    # Dropped rather than left saying "you", which is the one seat the phrase
-    # certainly does not mean.
-    spec.pop("owner", None)
-    return spec
+    # The floor's reading, shared with the life loss that prints the same
+    # phrase ("…for each creature **they** control", Stronghold Discipline).
+    return seat_scoped_count_spec(node.amount.filter, node, multiplier=multiplier)
 
 
 #: Characteristics of a cost-eaten permanent that ``count_from_payload``
@@ -142,18 +128,18 @@ def _recipient_seat_count(node: ast.DealDamage, multiplier: int = 1) -> dict | N
 #: `Permanent` object still carries after it leaves — the same read
 #: `target_gains_life` has made for Life Chisel since that card landed.
 #:
-#: Written down here because a characteristic this lowering emits and the
-#: evaluator cannot answer is a card that reports supported and deals nothing.
-_READABLE_COST_SACRIFICE_CHARACTERISTICS = frozenset(
-    {"mana_value", "power", "toughness"}
-)
+#: Written down because a characteristic this lowering emits and the evaluator
+#: cannot answer is a card that reports supported and deals nothing — and read
+#: off ``_cost_records.COST_RECORD_CHANNELS`` rather than spelled here, so a
+#: where-clause's X and a damage's amount answer one table.
+_READABLE_COST_SACRIFICE_CHARACTERISTICS = COST_RECORD_CHANNELS[ast.SacrificedForCost][1]
 
 
 #: The characteristics of a **cost-tapped** permanent ``count_from_payload``
 #: reads back. All three, and unlike the sacrifice channel beside it none of
 #: them is last-known information: the creature is still on the battlefield when
 #: the effect resolves, so the power is simply its power.
-_READABLE_COST_TAP_CHARACTERISTICS = frozenset({"mana_value", "power", "toughness"})
+_READABLE_COST_TAP_CHARACTERISTICS = COST_RECORD_CHANNELS[ast.TappedForCost][1]
 
 
 def _payment_channel_damage(
@@ -234,7 +220,7 @@ def _lower_cost_counters_removed_damage(
 #: CR 613.1 states outright: what the record holds is a *card* in a graveyard,
 #: which has no computed characteristics at all — its printed mana value is a
 #: characteristic of the card (CR 202.3) and its power is not.
-_READABLE_COST_DISCARD_CHARACTERISTICS = frozenset({"mana_value"})
+_READABLE_COST_DISCARD_CHARACTERISTICS = COST_RECORD_CHANNELS[ast.DiscardedForCost][1]
 
 
 def _lower_cost_discard_damage(

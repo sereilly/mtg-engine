@@ -435,7 +435,7 @@ def _parse_postmodifiers(
             # a superlative picks one object out of the set the rest of the
             # phrase describes, so the payload key it emits is one no matcher
             # answers (see ``ast.Superlative``). Declines without consuming.
-            superlative = accept_superlative(stream)
+            superlative = accept_superlative(stream, parse_filter=parse_filter)
             if superlative is not None:
                 d.superlative = superlative
                 continue

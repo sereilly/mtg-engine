@@ -699,6 +699,9 @@ _COVERED_ELSEWHERE = {
     # --- MMQ W1G5 ---
     "played_by":
         "test_mmq_w1g5_played_by_reads_the_cast_stamp_and_not_the_controller",
+    # --- NEM W1G4 ---
+    "superlative_among":
+        "test_nem_w1g4_superlative_among_reads_the_extreme_off_the_whole_board",
 }
 
 
@@ -2297,3 +2300,39 @@ def test_mmq_w1g5_played_by_reads_the_cast_stamp_and_not_the_controller(pool):
     assert not subject_matches(game, theirs, described), (
         "with no observer there is nobody to be an opponent of"
     )
+
+
+def test_nem_w1g4_superlative_among_reads_the_extreme_off_the_whole_board(pool):
+    """"Exile target creature **with the greatest power among creatures on the
+    battlefield**." (Topple.)
+
+    The comparison set is printed, so the extreme is a question one candidate
+    can be asked against the board — read *now*, through the layers (CR 613),
+    and across every seat ("on the battlefield" names none). Demonstrated by
+    what it keeps as much as what it drops: both tied creatures answer, on two
+    battlefields, and a pump moves the answer without touching the payload.
+    """
+    from engine.pt import add_pt_modifier
+
+    big_mine = Permanent(card=pool["Hill Giant"])       # 3/3
+    big_theirs = Permanent(card=pool["Hill Giant"])     # 3/3
+    small = Permanent(card=pool["Grizzly Bears"])       # 2/2
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[big_mine, small]),
+        PlayerState(name="P2", battlefield=[big_theirs]),
+    ])
+    described = {"superlative_among": {
+        "extreme": "greatest", "characteristic": "power",
+        "among": {"type_filter": "creature"},
+    }}
+
+    assert subject_matches(game, big_mine, described)
+    assert subject_matches(game, big_theirs, described), "a tie answers on any seat"
+    assert not subject_matches(game, small, described)
+    add_pt_modifier(small, 2, 0)
+    assert subject_matches(game, small, described), "the board is read now"
+    assert not subject_matches(game, big_theirs, described)
+    # "least" is the other end of the same reading.
+    least = {"superlative_among": {**described["superlative_among"], "extreme": "least"}}
+    assert subject_matches(game, big_mine, least)
+    assert not subject_matches(game, small, least)

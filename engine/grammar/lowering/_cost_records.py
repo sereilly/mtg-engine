@@ -89,6 +89,57 @@ _COST_PRODUCES: dict[type, str] = {
 }
 
 
+#: Each payment channel's record, as the ``x_from_count`` key the resolution
+#: evaluator (``handlers._common.count_from_payload``) reads it under and the
+#: characteristics that evaluator can actually answer off it. A sacrificed or a
+#: tapped permanent is carried as the ``Permanent``, so its computed P/T is
+#: there (CR 608.2h's last-known information for the sacrifice; a plain read for
+#: the tap); an exiled or a discarded *card* has no computed characteristics at
+#: all (CR 613.1) and keeps only its printed mana value (CR 202.3).
+#:
+#: One table, so every family that spends a cost record asks the same question
+#: of it: the damage lowering's per-channel readability sets are read off these
+#: rows (``_counted_damage``), and a where-clause's X reads them through
+#: :func:`cost_record_spec`. A characteristic emitted outside its row is a card
+#: that reports supported and computes zero.
+COST_RECORD_CHANNELS: dict[type, tuple[str, frozenset[str]]] = {
+    ast.SacrificedForCost: (
+        "cost_sacrifice_characteristic",
+        frozenset({"mana_value", "power", "toughness"}),
+    ),
+    ast.TappedForCost: (
+        "cost_tap_characteristic",
+        frozenset({"mana_value", "power", "toughness"}),
+    ),
+    ast.ExiledForCost: ("cost_exile_characteristic", frozenset({"mana_value"})),
+    ast.DiscardedForCost: ("cost_discard_characteristic", frozenset({"mana_value"})),
+}
+
+
+def cost_record_spec(definition, node) -> dict[str, object] | None:
+    """The ``x_from_count`` spec for a quantity a **cost** recorded, or None
+    when *definition* names no payment channel.
+
+    "{1}{B}, Discard a creature card: Volrath the Fallen gets +X/+X until end
+    of turn, where X is **the discarded card's mana value**." The number is
+    read off the record the activation path kept, at resolution, through the
+    same evaluator every other channel reader goes through — so a pump's X and
+    a damage's amount cannot read one record two ways. A characteristic the
+    evaluator cannot answer refuses, naming the channel.
+    """
+    row = COST_RECORD_CHANNELS.get(type(definition))
+    if row is None:
+        return None
+    key, readable = row
+    if definition.characteristic not in readable:
+        raise LoweringError(
+            f"no handler reads {definition.characteristic!r} back from a "
+            f"{type(definition).__name__} record",
+            node=node,
+        )
+    return {key: definition.characteristic}
+
+
 def optional_cost_key(symbols: str) -> str:
     """The canonical spelling a CR 601.2b optional additional cost is recorded
     and read back under.

@@ -26,7 +26,7 @@ cost the thing symmetry is for.
 """
 
 from .. import ast
-from ..amounts import parse_amount
+from ..amounts import parse_amount, parse_equal_to
 from ..errors import GrammarError
 from ..nouns import parse_object_filter
 from ..phrases import accept_a_card_at_random_from_hand
@@ -71,6 +71,16 @@ def _parse_reveal_top(stream: TokenStream) -> ast.Statement:
     # ``phrases``' because three families read it now.
     if accept_a_card_at_random_from_hand(stream):
         return ast.RevealRandomFromHand(ast.PlayerRef("you"))
+    # "Reveal **a number of cards from the top of your library equal to** the
+    # sacrificed creature's power. Put one into your hand and exile the rest."
+    # (Eye of Yawgmoth.) The counted reveal with its count printed *behind* the
+    # pile rather than in front of it — the word order "the top N cards of"
+    # cannot take a computed amount. Tried here, before the literal "the", for
+    # the reason the reveal-until reader above is: that expectation is what
+    # failed the line, and this declines without consuming.
+    counted_pick = _accept_reveal_number_from_top_pick(stream)
+    if counted_pick is not None:
+        return counted_pick
     stream.expect_word("the")
     stream.expect_word("top")
     # "Reveal the top **three cards** of your library. Target opponent chooses
@@ -553,6 +563,59 @@ def _accept_counted_reveal_top(
         stream.reset(probe)
     return ast.RevealTopOpponentChooses(
         count, chooser, fate="graveyard", then_draw=drawn,
+    )
+
+
+def _accept_reveal_number_from_top_pick(
+    stream: TokenStream,
+) -> "ast.LookTopPickToHand | None":
+    """``a number of cards from the top of your library equal to <amount>. Put
+    <N> [of them] into your hand and exile the rest.`` at the cursor, with
+    "Reveal" already read — or None with the cursor where it was. (Eye of
+    Yawgmoth.)
+
+    The look-and-pick procedure (``LookTopPickToHand``) over a **revealed**
+    pile, both sentences read here for ``_parse_reveal_top``'s reason: "one"
+    and "the rest" name the pile the first sentence turned up and nothing else.
+    The count is an "equal to" amount, read by the one reader every "equal to"
+    goes through, so the cost-paid quantity this card prints is the same node a
+    draw or a mill would get for it — which amount a pick can actually take is
+    the lowering's question.
+
+    Only the destinations Eye of Yawgmoth prints: the pick into the hand and
+    the rest exiled. Any other tail declines (the line then refuses at "the"),
+    because where the cards go is the card's own statement. The look family
+    reads its own pick tail inline (``effects/library.py``'s Browse branch);
+    the two cannot share one — the families may not import each other — and a
+    third reader is the point at which the tail belongs in ``phrases``.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase(
+        "a", "number", "of", "cards", "from", "the", "top", "of", "your", "library",
+    ):
+        return None
+    count = parse_equal_to(stream)
+    if count is None or not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("put"):
+        stream.reset(mark)
+        return None
+    try:
+        picks = parse_amount(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    stream.accept_phrase("of", "them")
+    if not stream.accept_phrase("into", "your", "hand"):
+        stream.reset(mark)
+        return None
+    stream.accept_punct(",")
+    if not stream.accept_phrase("and", "exile", "the", "rest"):
+        stream.reset(mark)
+        return None
+    return ast.LookTopPickToHand(
+        count, pick_count=picks, rest_destination="exile", revealed=True,
     )
 
 

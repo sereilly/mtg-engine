@@ -376,6 +376,15 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # accessors at the moment the question is asked (CR 613), which is what
     # makes the Aura's own -0/-1 count towards the toughness it compares.
     "characteristic_vs_source",
+    # "Exile target creature **with the greatest power among creatures on the
+    # battlefield**." (Topple.) A superlative whose comparison set is printed,
+    # which is what makes it answerable about one candidate: is this object at
+    # the extreme of that set, read off the board *now* (CR 613's computed
+    # power). The second key here about the rest of the board, after
+    # ``shares_name_with_another``, and out of the object-only set for that
+    # key's reason. The bare ``superlative`` key — no set named — stays
+    # untestable on purpose (``ast.Superlative``).
+    "superlative_among",
 })
 
 #: The keys :func:`subject_matches` answers from the object alone. The other two
@@ -394,6 +403,8 @@ OBJECT_ONLY_FILTER_KEYS = TESTABLE_SUBJECT_FILTER_KEYS - {
     # relation is to every other permanent on the table, so a caller with no
     # game has nothing to compare against.
     "shares_name_with_another",
+    # Out for the key above's reason: the extreme is taken over the board.
+    "superlative_among",
     # Out for ``controller``'s reason: "you cast this turn" is half a seat
     # test, and a caller with no observer would compare the stamp's seat
     # against nothing. Refusing the line is the direction that cannot widen
@@ -437,6 +448,11 @@ def untestable_filter_keys(
         nested = payload.get(key)
         if isinstance(nested, dict) and untestable_filter_keys(nested, allowed=allowed):
             unknown.add(key)
+    # The comparison set of "…the greatest power **among <phrase>**" (Topple),
+    # one level deeper: the phrase rides inside the superlative's own dict.
+    among = (payload.get("superlative_among") or {}).get("among")
+    if isinstance(among, dict) and untestable_filter_keys(among, allowed=allowed):
+        unknown.add("superlative_among")
     return unknown
 
 
@@ -890,6 +906,33 @@ def subject_matches(
             k: v for k, v in described.items() if k != "characteristic_vs_source"
         }
         if source is None or not _source_relative_bound_holds(obj, relative, source):
+            return False
+    # "Exile target creature **with the greatest power among creatures on the
+    # battlefield**." (Topple.) The candidate must be one of the set's members
+    # tied at the extreme, read off the board as the question is asked — so the
+    # picker (CR 601.2c) offers only the tied-greatest, and CR 608.2b's re-check
+    # finds a target a pumped rival has overtaken illegal. The set is read with
+    # this call's own observer and source, so "among creatures **you** control"
+    # would mean what it means anywhere else; the extreme is the tie-aware one
+    # the untargeted pick (``permanent_choices.superlative_extreme``) takes.
+    superlative = described.get("superlative_among")
+    if superlative:
+        from .handlers.permanent_choices import superlative_extreme
+
+        described = {k: v for k, v in described.items() if k != "superlative_among"}
+        members = [
+            perm for perm in game.all_permanents()
+            if subject_matches(
+                game, perm, superlative.get("among") or {}, observer=observer,
+                source=source, defending=defending, that_player=that_player,
+                targeted_player=targeted_player,
+            )
+        ]
+        if str(superlative.get("characteristic")) not in (
+            "power", "toughness", "mana_value"
+        ) or not any(obj is perm for perm in members):
+            return False
+        if not any(obj is perm for perm in superlative_extreme(members, superlative)):
             return False
     # "…a creature with flying **not named Escaped Shapeshifter**". The name
     # comes off the ability's *source*, which is the only place either front end

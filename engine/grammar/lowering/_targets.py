@@ -228,6 +228,7 @@ def _describe_targets(
     recipient: ast.Recipient,
     *,
     carried_separately: frozenset[str] = frozenset(),
+    announced_x_bound: bool = False,
 ) -> None:
     """Record what *recipient* refers to on *payload*, if it names a target.
 
@@ -235,9 +236,20 @@ def _describe_targets(
     lifts a narrowing out of the filter into its own key has to say so **here**
     too, or the description it builds of the same noun phrase refuses the phrase
     the instruction beside it accepts.
+
+    *announced_x_bound* is a lowering's claim that every announcement-time
+    reader of its kind resolves an X bound: the cast gate
+    (``casting._validate_cast_targets``) substitutes the announced X before any
+    arm reads the description and the picker probes without it, and the
+    handler re-asks it through the dispatcher's substitution (CR 601.2b, then
+    601.2c, then 608.2b). Only a lowering whose handler re-checks its own
+    description at resolution may make it.
     """
     described = _targets_payload(recipient, carried_separately=carried_separately)
     if described is not None:
+        if announced_x_bound:
+            payload["targets"] = described
+            return
         # "target creature with mana value **X**". The bound is resolved at the
         # dispatch point (`oracle_types.substitute_x_bounds`), which every
         # *handler* passes through — and the target picker does not: it reads
