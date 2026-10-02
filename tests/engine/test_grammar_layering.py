@@ -461,8 +461,42 @@ PARSE_LAYERS = [
     # never split — so taking either word would fork a name inside one package
     # rather than re-form one across two.
     #
-    # Below `condition_clauses`, which calls it and is never imported back.
+    # Below `record_conditions`, which calls it and is never imported back —
+    # that sentence named `condition_clauses` until the record reader these two
+    # clauses were cut out of took a module of its own, one entry down.
     "seat_records",
+    # The condition clauses answered by a **record** of something already done —
+    # "it was a creature card", "a white creature dies this way", "the discarded
+    # card was a land card", "you haven't added mana with this ability this
+    # turn". Pre-split out of `condition_clauses` at the Phase 0 before Nemesis,
+    # when that module sat **fourteen** lines under the guard below: the
+    # shared-module case SET_PLAYBOOK.md says to pre-split rather than to brief.
+    #
+    # The seam was measured, because the two sentences pointing at it disagreed:
+    # `seat_records` said `condition_clauses` "holds every condition answered by
+    # a *record*" and `conditions` said that module was cut by shape and that
+    # the record line "is **not** the line drawn here". Both described one file
+    # holding two things. Of the seventeen nodes `_accept_record_condition`
+    # builds, sixteen are defined in `ast/records.py`; the imports divided with
+    # them (`phrases`, `seat_records`, the colour table and the tokenizer on
+    # this side alone; `amounts`, the P/T token and the card-type table on the
+    # other alone); and no function in either half called one in the other.
+    # 504 of the module's 986 lines were this reader, and it is the half that
+    # grows with the pool — ten of the seventeen commits that touched the file
+    # grew it, where the counter block has stood still since Tempest.
+    #
+    # The name is the mirror's: `lowering/_record_conditions.py` took it at
+    # Exodus for the reason it is needed here, `records` being already spoken
+    # for one layer down as the reader of a record as a *quantity*. So the
+    # mirror re-forms across `ast/records.py`, this and the lowering module
+    # rather than forking a word. It is not the whole of the subject and its
+    # docstring says so — the dispatcher in `conditions` reads eleven short
+    # record clauses itself, and three counter records stay with CR 122's chain.
+    #
+    # Above `seat_records`, which it probes first, and below `conditions`, which
+    # imports from here directly: **nothing is re-exported** through
+    # `condition_clauses`, which no longer reads either name.
+    "record_conditions",
     # The printed clauses a condition is built from — one each, read to its
     # end. Split out of `conditions` at the guard below, along the boundary
     # that module already had in its own shape: `_parse_single_condition` is a
@@ -471,6 +505,12 @@ PARSE_LAYERS = [
     # reason — that module holds the clauses `parse_statement` reads *around* a
     # body, this one the clauses `_parse_condition` reads *inside* one. Below
     # `conditions`, which calls it and is never imported back.
+    #
+    # What it holds since the Phase 0 before Nemesis is two readers asked of the
+    # ability's own source — its card's position in a graveyard, and the
+    # counter-state questions (CR 122). The record reader is `record_conditions`
+    # above, and the blocker count went to `condition_counts` below, whose
+    # docstring had named it as its own subject all along.
     "condition_clauses",
     # The conditions that are a **count** — what a seat controls, how tall a
     # pile is, a life total, what the battlefield holds, the parity of a number
@@ -483,9 +523,11 @@ PARSE_LAYERS = [
     # this spell, this flip, this turn — and everything that asks "how many?" of
     # a set is here, which the two modules' imports show rather than assert.
     # No mirror name to reuse: `lowering/conditions.py` lowers both halves and
-    # has never split, so nothing over there is forked by taking one. Above
-    # `condition_clauses`, whose blocker count it reads, and below `conditions`,
-    # which calls it and is never imported back.
+    # has never split, so nothing over there is forked by taking one. Below
+    # `conditions`, which calls it and is never imported back. It sat "above
+    # `condition_clauses`, whose blocker count it reads" until that reader came
+    # across to its only caller; the two are independent now, and the order
+    # between them here asserts nothing.
     "condition_counts",
     "effects", "conditions",
     # The trailing clauses that share a sentence's printed subject — "…gets

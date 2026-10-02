@@ -18,6 +18,11 @@ that asks **how many**, of a seat's board, of a zone, of a life total, of the
 battlefield — a cut by subject. What is left is asked of one object: this
 source and the pronouns that name it, this spell, this flip, this turn.
 
+`condition_clauses` has since been cut by subject too: the longest of its
+readers, the one over conditions answered by a **record**, is
+`record_conditions`, and what it keeps is the graveyard position and the
+counter-state questions. This dispatcher calls all three.
+
 Anything the table does not model raises so the line falls back rather than
 silently losing the condition — the legacy compiler dropped intervening-ifs
 entirely, which made every conditional trigger fire unconditionally.
@@ -29,14 +34,18 @@ from .bounds import parse_comparison
 from .readers import accept_source_reference, accept_source_reference_spec
 from .references import parse_target_spec
 from .phrases import _parse_duration, _parse_keywords
-from .condition_clauses import (accept_mana_added_with_this_ability,
-                                _accept_counter_condition,
-                                _accept_record_condition,
+from .condition_clauses import (_accept_counter_condition,
                                 _parse_self_in_graveyard_above,
                                 _parse_self_only_of_type_in_graveyard)
-# The counted half, which reads `condition_clauses` itself: the filter parser,
-# the seat references, the life totals and the colour table all left with it.
+# The counted half: the filter parser, the seat references, the life totals and
+# the colour table all left with it, and so — one Phase 0 later — did the
+# blocker count it used to reach into `condition_clauses` for.
 from .condition_counts import accept_counted_condition
+# The long record reader and the one short one that had sat beside it. Imported
+# from their own module rather than through `condition_clauses`, which no longer
+# reads either.
+from .record_conditions import (_accept_record_condition,
+                                accept_mana_added_with_this_ability)
 from .stream import TokenStream
 from .vocabulary import CARD_TYPES, NUMBER_WORDS
 
@@ -362,30 +371,30 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
 
     # The long record readers — "it was a creature card", "a white creature dies
     # this way", "the discarded card was a land card", "a permanent was put into
-    # your hand this turn" — are read below, in ``condition_clauses``. It was
-    # split out when this module crossed the thousand-line guard at a wave's
-    # *integration*, on nobody's branch: four groups' additions merely summed,
-    # which is the guard surfacing a boundary that was already there.
+    # your hand this turn" — are read below, in ``record_conditions``. The
+    # reader left this module for ``condition_clauses`` when it crossed the
+    # thousand-line guard at a wave's *integration*, on nobody's branch: four
+    # groups' additions merely summed, which is the guard surfacing a boundary
+    # that was already there. It left *that* module for its own at the Phase 0
+    # before Nemesis, fourteen lines under the same guard.
     #
-    # **That boundary is a shape, not a subject**, and the sentence that used to
-    # stand here said otherwise — "the dispatcher keeps the conditions answered
-    # by looking at the game *now*". It never did. Eleven record clauses are
-    # read by this function: the additional cost, the flip, "it entered from",
-    # the turn's four ``IsState`` axes, "started the turn", "dealt damage …
-    # this turn", and both two-sided block histories. And ``condition_clauses``
-    # holds two clauses about the board as it stands (the graveyard position and
-    # the blockers of a bound creature) plus every counter-state question.
-    # What is actually true of that module is what its own docstring says: a
-    # clause reader takes a sentence, reads it to its end, and is non-consuming
-    # on refusal so the next branch keeps its say. The record/now line is real
-    # one package over, in ``ast/records.py`` and ``lowering/_record_conditions
-    # .py``, and it is **not** the line drawn here.
+    # **The boundary between this function and that reader is a shape, not a
+    # subject**, and the sentence that used to stand here said otherwise — "the
+    # dispatcher keeps the conditions answered by looking at the game *now*".
+    # It never did. Eleven record clauses are read by this function: the
+    # additional cost, the flip, "it entered from", the turn's four ``IsState``
+    # axes, "started the turn", "dealt damage … this turn", and both two-sided
+    # block histories. So ``record_conditions`` is the long reader this
+    # dispatcher hands a sentence to and not every record clause the grammar
+    # knows — the record/now line is drawn whole one package over, in
+    # ``ast/records.py`` and ``lowering/_record_conditions.py``, and only in
+    # part on this side.
     recorded = _accept_record_condition(stream)
     if recorded is not None:
         return recorded
 
     # The counter-state questions (CR 122), in `condition_clauses` for the
-    # reason the record conditions above are: this module crossed the
+    # reason the record conditions above left: this module crossed the
     # thousand-line guard at a wave's integration, on nobody's branch, and
     # the family boundary was already drawn two packages over.
     counters = _accept_counter_condition(stream)

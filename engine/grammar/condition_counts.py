@@ -34,6 +34,13 @@ name is ``condition_clauses``' prefix, which marks the same contract — a reade
 the dispatcher hands a sentence to, non-consuming on refusal so the next branch
 below it keeps its say. Below ``conditions``, which calls it and is never
 imported back.
+
+The blocker count is read here as well as dispatched here, since the Phase 0
+before Nemesis. ``_parse_blockers_of_bound_creature`` had stayed in
+``condition_clauses`` when this module was cut, as that module's one clause
+about a count and this module's one import from a sibling; it is a count by the
+first paragraph above and nothing else called it, so it came across and the
+edge went with it.
 """
 
 from __future__ import annotations
@@ -43,7 +50,6 @@ import dataclasses
 from . import ast
 from .amounts import parse_amount
 from .bounds import parse_comparison
-from .condition_clauses import _parse_blockers_of_bound_creature
 from .errors import GrammarError
 from .nouns import parse_object_filter
 from .references import parse_player_ref
@@ -75,6 +81,69 @@ def _parse_count_bound(stream: TokenStream) -> ast.Comparison:
     if stream.accept_word("no"):
         return ast.Comparison("eq", ast.Fixed(0))
     return parse_comparison(stream)
+
+
+def _parse_blockers_of_bound_creature(
+    stream: TokenStream,
+) -> ast.BlockersOfBoundCreature | None:
+    """"<quantifier> <noun phrase> is/are blocking that creature".
+
+    The quantifier is what the clause *counts*, and every spelling the pool
+    prints is read here rather than being split across productions: "no" is a
+    zero, "at least N" and "N or more" are the same minimum written two ways,
+    and a bare "a"/"an" is that minimum with the one left implicit. None of
+    them is baked into a kind — the number rides the comparison, so a card
+    printed "at least two" needs no code.
+
+    Returns None (rather than raising) when the words parse as a noun phrase
+    that is simply not followed by this relation, so the caller's reset hands
+    the sentence back to the productions after it.
+    """
+    negated = bool(stream.accept_word("no"))
+    at_least: int | None = None
+    if not negated:
+        if stream.accept_phrase("at", "least"):
+            amount = parse_amount(stream)
+            if not isinstance(amount, ast.Fixed):
+                # The evaluator compares an integer; an X or a board count
+                # would be compared against a node. Refused rather than
+                # coerced, exactly as `SubjectPowerIs` refuses one.
+                raise stream.error("the blocker count is a printed number")
+            at_least = amount.value
+        else:
+            count_mark = stream.mark()
+            try:
+                amount = parse_amount(stream)
+            except GrammarError:
+                amount = None
+            if isinstance(amount, ast.Fixed) and stream.accept_phrase("or", "more"):
+                at_least = amount.value
+            else:
+                stream.reset(count_mark)
+                # "a Wall is blocking that creature" — the minimum left
+                # implicit. Accepted with the article consumed so the noun
+                # parser below reads the same phrase either way; the article is
+                # not required, because "creatures blocking that creature" is
+                # the same clause with the plural doing the work.
+                stream.accept_word("a", "an")
+                at_least = 1
+    other = bool(stream.accept_word("other"))
+    filt = parse_object_filter(stream)
+    if other:
+        # "at least one **other** Wall creature": the asking permanent never
+        # satisfies its own condition — it is already blocking that creature,
+        # which is why the trigger fired at all.
+        filt = dataclasses.replace(filt, other_than_source=True)
+    if not (stream.accept_word("is") or stream.accept_word("are")):
+        return None
+    if not stream.accept_phrase("blocking", "that", "creature"):
+        return None
+    comparison = (
+        ast.Comparison("eq", ast.Fixed(0))
+        if negated
+        else ast.Comparison("ge", ast.Fixed(at_least or 1))
+    )
+    return ast.BlockersOfBoundCreature(filt, comparison)
 
 
 def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
