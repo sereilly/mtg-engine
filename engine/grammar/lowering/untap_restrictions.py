@@ -426,12 +426,52 @@ _LINKED_UNTAP_KINDS = {
 
 def _lower_doesnt_untap_while_source_tapped(
     node: ast.DoesntUntapWhileSourceTapped,
+    produced: frozenset[str] = frozenset(),
 ) -> tuple[OracleInstruction, ...]:
     """Phyrexian Gremlins. The subject is the permanent the sentence before it
     tapped — a back-reference, so nothing is described for the picker: the
     choice was made by that sentence and describing it again would ask for a
-    second one."""
+    second one.
+
+    *produced* is for the plural back-reference, the one spelling whose
+    referent is a *record* rather than the announced target: "Tap all other
+    artifacts. **They** don't untap …" (Kill Switch) names the set the sweep in
+    front of it acted on, and only the scratchpad holds that set."""
     subject = node.subject
+    # "Tap all other artifacts. **They** don't untap during their controllers'
+    # untap steps for as long as this artifact remains tapped." (Kill Switch.)
+    # The bound plural: every permanent the sweep's noun phrase named, read off
+    # the record the sweep wrote (CR 611.2c fixed the set when the effect
+    # began), so an artifact that arrives later is not held. The same record and
+    # the same order of preference the next-untap-step lock beside this reads
+    # for "they", and the same two refusals: no narrowing for the restatement
+    # to drop, and no lock at all without a producer in this effect — with
+    # nothing recorded the handler would hold nothing while the card compiled
+    # clean.
+    if isinstance(subject, ast.TargetSpec) and subject.quantifier == "those":
+        if _restrictions_beyond(subject.filter, frozenset({"card_types"})):
+            raise LoweringError(
+                "a bound plural carries no narrowing the lock could honour",
+                node=node,
+            )
+        recorded = next(
+            (
+                key for key in (_TAPPED_PERMANENTS, TAPPED_THIS_WAY_OBJECTS)
+                if key in produced
+            ),
+            None,
+        )
+        if recorded is None:
+            raise LoweringError(
+                "\"they\" names the permanents an earlier step tapped, and "
+                "nothing in this effect tapped any", node=node,
+            )
+        return (
+            OracleInstruction(
+                _LINKED_UNTAP_KINDS[node.while_on_battlefield], "",
+                {"permanents_from": recorded},
+            ),
+        )
     # "**For as long as this creature remains tapped, target tapped creature**
     # doesn't untap during its controller's untap step." (Giant Oyster.) The
     # other printed word order, and the other subject with it: where Phyrexian

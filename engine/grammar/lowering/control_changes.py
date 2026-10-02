@@ -26,7 +26,7 @@ from .. import ast
 from ..errors import LoweringError
 from ._common import (_describe_targets, _filter_payload, _is_enchanted,
                       _is_source, _is_target,
-                      _restrictions_beyond)
+                      _restrictions_beyond, testable_filter_payload)
 from ._events import (CHOSEN_PERMANENT, CHOSEN_PLAYER, EVENT_SUBJECT_CONTROLLER,
                       EVENT_SUBJECT_PLAYER, _EVENT_STAMPED_TARGET_OBJECTS,
                       _EVENT_SUBJECT_CONTROLLERS,
@@ -315,6 +315,28 @@ def _lower_another_seat_gains_control(
             OracleInstruction(
                 "give_control_of_source_to_player", "",
                 {"who": EVENT_SUBJECT_PLAYER},
+            ),
+        )
+    if who == "controls_the_most":
+        # "…**the player who controls the most creatures** gains control of
+        # this creature." (Wild Mammoth.) Wild Dogs' ``most_life`` over a board
+        # count: resolved by the handler off the board, through the reader the
+        # card's own intervening-if asks, so the phrase rides the payload and
+        # is held to what that reader tests — a key it dropped would be counting
+        # permanents the printed phrase excludes, and the creature would go to
+        # the wrong seat.
+        assert node.gained_by.controls is not None
+        return (
+            OracleInstruction(
+                "give_control_of_source_to_player", "",
+                {
+                    "who": "controls_the_most",
+                    "filter": testable_filter_payload(
+                        node.gained_by.controls,
+                        refusal="the most-controlling seat cannot test this phrase",
+                        node=node,
+                    ),
+                },
             ),
         )
     prompt = _CHOSEN_GAINERS.get(who)

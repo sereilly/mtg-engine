@@ -87,6 +87,29 @@ def _parse_doesnt_untap_next_step(
     # printed word decides which.
     if stream.at_word("next"):
         return _parse_next_untap_steps(stream, subject, whose="controller")
+    # "They don't untap during **their controllers' untap steps** for as long
+    # as this artifact remains tapped." (Kill Switch.) The plural of the
+    # possessive below, agreeing with a plural subject: a swept set may sit on
+    # several battlefields, so each permanent waits for its *own* controller's
+    # step — which is what the singular means per permanent already, so the two
+    # are one restriction with the noun inflected. The lexer keeps the plural
+    # possessive as one word.
+    #
+    # Only the source-linked tail follows it. The plural with no duration is
+    # the permanent restriction ``engine/untap_restrictions.py`` reads off a
+    # card's own static line ("Lands don't untap during their controllers'
+    # untap steps", Rising Waters) — a strictly larger effect, so a resolving
+    # sentence printing it alone refuses here rather than being read as that.
+    if stream.accept_word("controllers'"):
+        stream.expect_word("untap")
+        stream.expect_word("steps")
+        linked = _accept_source_linked_duration(stream, subject)
+        if linked is None:
+            raise stream.error(
+                "expected 'for as long as this <permanent> remains …' after "
+                "the plural untap steps"
+            )
+        return linked
     stream.expect_word("controller")
     stream.expect_word("'s")
     # "…untap step **for as long as this creature remains tapped**" (Phyrexian
@@ -118,29 +141,50 @@ def _parse_doesnt_untap_next_step(
         stream.expect_word("it")
         return ast.DoesntUntapWhileCounter(subject, token.text)
     stream.reset(linked)
-    if stream.accept_phrase("untap", "step", "for", "as", "long", "as", "this"):
-        # The noun is required. Accepted-but-optional, it could be deleted with
-        # no change to what was lowered — which is what the parse-coverage
-        # deletion probe reports, and the shape three productions in
-        # `paragraphs.py` were tightened out of at the same time.
-        if stream.accept_word(
-            "creature", "artifact", "enchantment", "land", "permanent"
-        ):
-            if stream.accept_phrase("remains", "tapped"):
-                return ast.DoesntUntapWhileSourceTapped(subject)
-            # "…for as long as this creature remains **on the battlefield**."
-            # (Somnophore.) The second fact about the source that can end this
-            # restriction, and every word of it is required for the reason the
-            # noun above is: "remains" alone names no condition, and a tail
-            # accepted and dropped would be a lock that never ends.
-            if stream.accept_phrase(
-                "remains", "on", "the", "battlefield"
-            ):
-                return ast.DoesntUntapWhileSourceTapped(
-                    subject, while_on_battlefield=True
-                )
+    if stream.accept_phrase("untap", "step"):
+        linked_node = _accept_source_linked_duration(stream, subject)
+        if linked_node is not None:
+            return linked_node
     stream.reset(linked)
     return _parse_next_untap_steps(stream, subject, whose="controller")
+
+
+def _accept_source_linked_duration(
+    stream: TokenStream, subject: ast.Recipient
+) -> "ast.DoesntUntapWhileSourceTapped | None":
+    """``for as long as this <permanent> remains tapped | on the battlefield``.
+
+    The tail both possessives share — "its controller's untap step" (Phyrexian
+    Gremlins, Somnophore) and "their controllers' untap steps" (Kill Switch) —
+    read once, so the two spellings cannot come to disagree about which facts
+    about the source may end the lock. Returns None without consuming anything
+    it did not recognise in full, so the caller keeps its own fall-back.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("for", "as", "long", "as", "this"):
+        return None
+    # The noun is required. Accepted-but-optional, it could be deleted with
+    # no change to what was lowered — which is what the parse-coverage
+    # deletion probe reports, and the shape three productions in
+    # `paragraphs.py` were tightened out of at the same time.
+    if stream.accept_word(
+        "creature", "artifact", "enchantment", "land", "permanent"
+    ):
+        if stream.accept_phrase("remains", "tapped"):
+            return ast.DoesntUntapWhileSourceTapped(subject)
+        # "…for as long as this creature remains **on the battlefield**."
+        # (Somnophore.) The second fact about the source that can end this
+        # restriction, and every word of it is required for the reason the
+        # noun above is: "remains" alone names no condition, and a tail
+        # accepted and dropped would be a lock that never ends.
+        if stream.accept_phrase(
+            "remains", "on", "the", "battlefield"
+        ):
+            return ast.DoesntUntapWhileSourceTapped(
+                subject, while_on_battlefield=True
+            )
+    stream.reset(mark)
+    return None
 
 
 def _parse_linked_untap_restriction(

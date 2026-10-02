@@ -4543,8 +4543,18 @@ class PendingChoicesMixin:
         Not a valuation — board order is seed-deterministic, which is what AI
         and headless play need. A card whose choice should be made cleverly
         needs a weight in ``engine/ai_valuation.py``, not a branch here.
+
+        The one ordering a *payload* may ask for is ``default_prefers``: a
+        permanent state the step behind the pick would change. "That player
+        untaps a land they control" (Rising Waters) offers every land and an
+        untapped one is a legal answer that does nothing, so the default takes
+        a tapped one first. Stable, so board order still breaks every tie, and
+        a preference rather than a filter: the interactive prompt is unchanged.
         """
         live = self.live_permanent_choices(choice)
+        prefers = (choice.data.get("_payload") or {}).get("default_prefers")
+        if prefers == "tapped":
+            live = sorted(live, key=lambda perm: not perm.tapped)
         if not live or not self._resolve_permanent_choice(
             choice, live[0].permanent_id
         ):

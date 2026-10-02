@@ -1593,6 +1593,32 @@ ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
         "only during their turn",
     ),
     ActivationRestriction(
+        # "Any player may activate this ability but only during their turn
+        # **before the end step**." (Mana Cache.) One window with two bounds —
+        # whose turn, and how far into it — printed as one phrase with no
+        # joining "and only", so `_conjuncts` rightly leaves it whole and no
+        # single row above reads it. The two predicates it is made of already
+        # exist and are composed rather than copied: the activator's own turn
+        # (`_during_your_turn`, which compares the *activating* seat — see the
+        # row above) and a point in the turn (`_before_step`, Angus Mackenzie's,
+        # whose step is payload built from the engine's own turn structure).
+        #
+        # Both pronouns, for the row above's stated reason: the predicate is the
+        # activator's seat either way, and "your" is what the template prints
+        # on an ability nobody else may activate.
+        re.compile(
+            r"^(?:activate )?only during (?:your|their) turn before the (?P<step>"
+            + "|".join(sorted(map(re.escape, _TURN_POSITIONS), key=len, reverse=True))
+            + r") step$"
+        ),
+        lambda game, controller_index, source, match: (
+            _during_your_turn(game, controller_index, source)
+            and _before_step(game, controller_index, source, match)
+        ),
+        "only during their turn before that step",
+        reads_payload=True,
+    ),
+    ActivationRestriction(
         # "Activate only if it's not your turn." (Ghost Town.) The row above
         # negated, and it is a row rather than a comment because the clause was
         # **unenforced**: the grammar admits an "Activate only …" sentence only

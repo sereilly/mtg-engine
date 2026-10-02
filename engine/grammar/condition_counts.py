@@ -275,7 +275,23 @@ def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
             return ast.ZoneHasCards(counted, "hand", comparison)
     stream.reset(have_mark)
 
-    player = parse_player_ref(stream)
+    # "if **a player controls more creatures than each other player**" (Wild
+    # Mammoth). The existential Wild Dogs opened the "has" clause with, now on
+    # the "controls" one: read here for the reason given there, and only as the
+    # subject of *this* clause — and only in front of "controls more", so no
+    # other clause this branch reads ("gained … this turn", a plain count) can
+    # be handed a seat nobody named. The lowering admits it under the
+    # superlative alone, for the life gate's reason.
+    if (
+        stream.peek_word() == "a"
+        and stream.peek_word(1) == "player"
+        and stream.peek_word(2) == "controls"
+        and stream.peek_word(3) == "more"
+    ):
+        stream.advance(2)
+        player = ast.PlayerRef("any_player")
+    else:
+        player = parse_player_ref(stream)
     if player is not None:
         # "if **you don't control** a creature named Keeper of Kookus" (Kookus).
         # The negation on the verb rather than on the noun, which is the same

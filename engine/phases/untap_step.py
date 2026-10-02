@@ -16,7 +16,7 @@ from ..handlers.board_misc import LAND_TYPE_UNTIL_UNTAP
 from ..handlers.tapping import (SKIP_NEXT_UNTAP_SEAT,
                                 UNTAP_BLOCKED_WHILE_COUNTERS_KEY,
                                 UNTAP_LOCK_WHILE_PRESENT_KEY,
-                                UNTAP_LOCK_WHILE_TAPPED_KEY)
+                                UNTAP_LOCK_WHILE_TAPPED_KEY, untap_lock_ids)
 from ..land_types import end_land_type_changes_from
 from ..control import LINKED_CONTROL_CONDITIONS
 from ..named_counters import counters_on
@@ -62,8 +62,10 @@ def _holds_a_live_untap_lock(game, permanent) -> bool:
     gone is a lock that ended with it (CR 400.7), and holding a creature back
     for it would be paying a price for nothing.
     """
-    held = permanent.metadata.get(UNTAP_LOCK_WHILE_TAPPED_KEY)
-    return held is not None and game.permanent_by_id(held) is not None
+    return any(
+        game.permanent_by_id(held) is not None
+        for held in untap_lock_ids(permanent.metadata.get(UNTAP_LOCK_WHILE_TAPPED_KEY))
+    )
 
 
 def _skip_next_untap_names_this_step(permanent, seat: int) -> bool:
@@ -533,6 +535,31 @@ class UntapStepMixin:
 
         untapped = 0
         untapped_by_type: dict[str, int] = {}
+        # The linked locks, read **once, before anything untaps** — CR 502.3:
+        # "the active player determines which permanents they control will
+        # untap. Then they untap them all simultaneously." A holder that is
+        # tapped as the step begins is holding what it holds at the
+        # determination, even if it untaps in this same step. Read live inside
+        # the loop instead, the answer depended on board order: a holder earlier
+        # in the list untapped first, `become_untapped` ended its lock, and the
+        # permanent it held — later in the list — untapped beside it. Kill
+        # Switch has no "you may choose not to untap" clause, so it untaps every
+        # time its controller's step comes round, and its controller's own
+        # artifacts would have been released or not by where they sat.
+        held_while_tapped = {
+            held
+            for holder in self.all_permanents() if holder.tapped
+            for held in untap_lock_ids(
+                holder.metadata.get(UNTAP_LOCK_WHILE_TAPPED_KEY)
+            )
+        }
+        held_while_present = {
+            held
+            for holder in self.all_permanents()
+            for held in untap_lock_ids(
+                holder.metadata.get(UNTAP_LOCK_WHILE_PRESENT_KEY)
+            )
+        }
         # A **snapshot**, because one of the replacements below takes the
         # permanent off the battlefield: Undiscovered Paradise goes to its
         # owner's hand instead of untapping, and a live list would renumber
@@ -589,15 +616,12 @@ class UntapStepMixin:
             # Somnophore that taps to attack keeps its creature down. Read in
             # one pass with its sibling because both are answered by walking
             # the same board.
-            if any(
-                (
-                    holder.tapped
-                    and holder.metadata.get(UNTAP_LOCK_WHILE_TAPPED_KEY)
-                    == permanent.permanent_id
-                )
-                or holder.metadata.get(UNTAP_LOCK_WHILE_PRESENT_KEY)
-                == permanent.permanent_id
-                for holder in self.all_permanents()
+            # A record may hold a *set* (Kill Switch's "they"), so membership
+            # rather than equality — both sets were read through the one
+            # reader both shapes go through, before this loop began.
+            if (
+                permanent.permanent_id in held_while_tapped
+                or permanent.permanent_id in held_while_present
             ):
                 continue
 

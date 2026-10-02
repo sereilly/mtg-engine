@@ -27,7 +27,8 @@ from ..stream import TokenStream
 from ..vocabulary import CARD_TYPES, COLOR_WORDS
 from ..nouns import parse_object_filter
 from ..phrases import (_expect_counter_kind, _parse_for_each,
-                       _parse_opponents_choice, accept_graveyard_position,
+                       _parse_opponents_choice, _parse_per_each_objects,
+                       accept_graveyard_position,
                        accept_zone_possessive,
                        is_pt_counter, parse_pair_ordinal_subject,
                        _parse_that_object)
@@ -442,6 +443,29 @@ def _parse_put_counter(stream: TokenStream) -> ast.Statement:
         # have to guess which record was meant.
         counted = _parse_for_each_history(stream, parse_object_filter)
     if counted is None:
+        # "…put a charge counter on this enchantment **for each untapped land
+        # that player controls**." (Mana Cache.) The third "for each" a
+        # placement can carry, and the only one over a *board*: what the board
+        # holds as the placement resolves (CR 107.3's count), read by the one
+        # reader every family's board multiplier goes through, so the sacrifice
+        # and the pump and this cannot read "for each <objects>" three ways.
+        # Last of the three because it is the widest — the noun reader takes
+        # anything — and both readers above decline without consuming.
+        per_each, beyond_first = _parse_per_each_objects(stream)
+        if per_each is not None:
+            if beyond_first:
+                raise stream.error(
+                    "no counter placement discounts the first of a counted set"
+                )
+            if up_to or not isinstance(count, ast.Fixed) or count.value != 1:
+                # "Put **two** counters … for each" is a rate this node does
+                # not carry, and "up to" a ceiling on a number the board
+                # computes; reading the clause while dropping either would
+                # place a number the card does not print.
+                raise stream.error(
+                    "a counter placed per counted object is placed one at a time"
+                )
+            return dataclasses.replace(placement, count=ast.CountOf(per_each))
         second = _parse_second_counter_placement(stream)
         if second is not None:
             return ast.Conjunction((placement, second))

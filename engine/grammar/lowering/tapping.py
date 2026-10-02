@@ -537,36 +537,62 @@ def _lower_tap(
         # `_action_is_takeable` asks about; and every remaining key must be one
         # `subject_matches` answers, or the prompt would offer permanents the
         # printed phrase excludes.
+        # "At the beginning of each player's upkeep, **that player untaps a land
+        # they control**." (Rising Waters.) The same pick-then-act pair in the
+        # other direction and on the other seat: the board drawn from is the
+        # one "they control" names, and the seat asked is the same pronoun's —
+        # the upkeep's player, frozen by the fire site (CR 603.10). Untapped
+        # without a target (CR 115.1 — "a land", not "target land"), so nothing
+        # is announced and the choice is made as the ability resolves.
+        #
+        # "They" is admitted only under an event that froze a seat. Anywhere
+        # else the pronoun names nobody, and a prompt armed on whichever seat
+        # the resolution happened to carry is the failure this family refuses.
         if (
-            isinstance(node, ast.Tap)
+            isinstance(node, (ast.Tap, ast.Untap))
             and isinstance(spec, ast.TargetSpec)
             and spec.quantifier in ("a", "an")
             and spec.count == 1
-            and spec.filter.controller == "you"
+            and spec.filter.controller in ("you", "that_player")
         ):
+            chooser = "you"
+            if spec.filter.controller == "that_player":
+                if event not in _EVENT_SUBJECT_PLAYERS:
+                    raise LoweringError(
+                        f"no event named {event!r} freezes the seat 'they' "
+                        "names", node=node,
+                    )
+                chooser = EVENT_SUBJECT_PLAYER
+            verb = "tap" if isinstance(node, ast.Tap) else "untap"
             described = testable_filter_payload(
                 dataclasses.replace(spec.filter, controller=None),
-                refusal="the tap prompt cannot test this restriction",
+                refusal=f"the {verb} prompt cannot test this restriction",
                 node=node,
                 require_narrowing=False,
             )
+            choose: dict[str, object] = {
+                "result_key": CHOSEN_PERMANENT,
+                "chooser": chooser,
+                # Off the *chooser's* own battlefield, which is what
+                # "you control" / "they control" says — named once as the seat
+                # asked and once as the board drawn from, exactly as the counter
+                # placement one family over names it.
+                "controlled_by": "chooser",
+                "filter": described,
+                "prompt": f"Choose a permanent to {verb}.",
+            }
+            if isinstance(node, ast.Untap):
+                # Which answer a seat that is not asked takes. "A land" admits
+                # an untapped one and choosing it is legal (CR 701.26b makes
+                # the untap a no-op), but it is never what the effect is for:
+                # under Rising Waters the release is the only land the player
+                # gets back that turn. A *preference* over the same candidates,
+                # never a narrowing — the prompt still offers every land.
+                choose["default_prefers"] = "tapped"
             return (
+                OracleInstruction("choose_permanent", "", choose),
                 OracleInstruction(
-                    "choose_permanent", "",
-                    {
-                        "result_key": CHOSEN_PERMANENT,
-                        "chooser": "you",
-                        # Off the *chooser's* own battlefield, which is what
-                        # "you control" says — named once as the seat asked and
-                        # once as the board drawn from, exactly as the counter
-                        # placement one family over names it.
-                        "controlled_by": "chooser",
-                        "filter": described,
-                        "prompt": "Choose a permanent to tap.",
-                    },
-                ),
-                OracleInstruction(
-                    "tap_recorded_permanents", "",
+                    f"{verb}_recorded_permanents", "",
                     {"permanents_from": CHOSEN_PERMANENT},
                 ),
             )

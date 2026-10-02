@@ -20,10 +20,13 @@ the halving over it), how big a printed P/T change is, and where an X definition
 is written onto the sentence that reads one.
 """
 
+import dataclasses
+
 from ...oracle_types import OracleInstruction, TAPPED_THIS_WAY, X_FROM_COUNT
 from .. import ast
 from ..errors import LoweringError
 from ._common import dropped_narrowings
+from ._events import _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER
 
 
 # ---------------------------------------------------------------------------
@@ -117,6 +120,41 @@ OPPONENTS_SCOPE = "opponents"
 
 #: The ``ObjectFilter.controller`` value the scope above is lifted from.
 _OPPONENT_CONTROLLER = "opponent"
+
+
+def count_filter_on_frozen_seat(
+    filt: "ast.ObjectFilter", event: str | None, node
+) -> "ast.ObjectFilter":
+    """*filt* with a "that player controls" narrowing moved onto the axis a
+    count reads — whose zone is scanned — when the firing event froze the seat.
+
+    "…where X is the number of nontoken permanents of the chosen color **they
+    control**" (Psychic Allergy) and "…put a charge counter on this enchantment
+    for each untapped land **that player controls**" (Mana Cache) are one
+    quantity: the event's player (CR 603.10), frozen by the fire site under the
+    key every "that player" reader asks. ``count_spec`` refuses a controller
+    key outright — the matcher behind a count tests no controller — so the
+    restriction rides ``zone_owner`` instead, which ``count_from_payload``
+    resolves to that seat.
+
+    Here rather than in the where-clause lowering that had it, because a counter
+    placement asks the same question from a floor that cannot import a family —
+    and two copies of the rewrite would be two answers about which events froze
+    a seat. Refuses under an event that froze none: "that player" there points
+    at nobody, and the count would fall back to the caster's board while the
+    card compiled clean.
+
+    A filter that does not name the seat comes back unchanged.
+    """
+    if filt.controller != "that_player":
+        return filt
+    if event not in _EVENT_SUBJECT_PLAYERS:
+        raise LoweringError(
+            "'that player' in a count with no player target to name", node=node
+        )
+    return dataclasses.replace(
+        filt, controller=None, zone_owner=ast.PlayerRef(EVENT_SUBJECT_PLAYER),
+    )
 
 
 def count_spec(

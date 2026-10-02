@@ -182,6 +182,27 @@ def parse_player_ref(stream: TokenStream) -> ast.PlayerRef | None:
         # each other player"): the two agree because both are strict.
         if stream.accept_phrase("with", "the", "most", "life"):
             return ast.PlayerRef("most_life")
+        # "…**the player who controls the most creatures** gains control of
+        # this creature." (Wild Mammoth.) The same description over a board
+        # count instead of a life total, and the same reading: answered by the
+        # board as the ability resolves, and a tie names nobody.
+        #
+        # The counted phrase rides ``controls`` — the field that already says
+        # "the noun phrase this seat's board is described by" — and the *kind*
+        # says how: presence for "each player who controls a white creature"
+        # (Disorder), the strict maximum here. Every lowering that reads the
+        # field reads it beside a kind it knows, and one that does not know
+        # this kind refuses it by name rather than reading the phrase as a
+        # presence test.
+        most_mark = stream.mark()
+        if stream.accept_phrase("who", "controls", "the", "most"):
+            try:
+                counted = parse_object_filter(stream)
+            except GrammarError:
+                counted = None
+            if counted is not None and counted != ast.ObjectFilter():
+                return ast.PlayerRef("controls_the_most", controls=counted)
+        stream.reset(most_mark)
         if stream.exhausted or not stream.at_word("who", "with", "whose"):
             return ast.PlayerRef("that_player")
     stream.reset(mark_the_player)

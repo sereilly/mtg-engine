@@ -367,6 +367,24 @@ def give_control_of_source_to_player(game: Game, instruction: OracleInstruction,
             game.log.append(f"{context.card.name}: no player has the most life")
             return True, "resolved"
         recipient = game.players[seat]
+    elif who == "controls_the_most":
+        # "…**the player who controls the most creatures** gains control of
+        # this creature." (Wild Mammoth.) The ``most_life`` branch above over a
+        # board count, and through the reader the card's own intervening-if
+        # asks for the same reason: the gate and the hand-over cannot disagree
+        # about whether there is a leader. A tie names nobody and the creature
+        # stays where it is.
+        from .control_flow import most_controlling_seat
+
+        seat = most_controlling_seat(
+            game, dict(instruction.payload.get("filter") or {})
+        )
+        if seat is None:
+            game.log.append(
+                f"{context.card.name}: no player controls the most of what it names"
+            )
+            return True, "resolved"
+        recipient = game.players[seat]
     elif who == "chosen":
         # "**An opponent** gains control of this land …" (Rainbow Vale.) The
         # seat the ``choose_opponent`` step in front of this one announced
