@@ -186,7 +186,6 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.PayLife: _lower_pay_life,
     ast.DelayedSelfAction: _lower_delayed_self_action,
     ast.DamageReducedByPaidMana: _lower_damage_reduced_by_paid_mana,
-    ast.SkipPhase: _lower_skip_phase,
     ast.SkipStep: _lower_skip_step,
     ast.SkipTurn: _lower_skip_turn,
     ast.TargetingBan: _lower_targeting_ban,
@@ -343,6 +342,11 @@ _BY_NODE_TYPE_WITH_EVENT: dict[type, object] = {
     # the same seat question one zone over, and the same answer.
     ast.ExileRandomFromHand: _lower_exile_random_from_hand,
     ast.Mill: _lower_mill,
+    # "…**that player** skips their next combat phase" (Blinding Angel): the
+    # seat the damage event froze, so the lowering has to know which event
+    # fired. It left the name-only table above the moment it started deciding
+    # that.
+    ast.SkipPhase: _lower_skip_phase,
     # "…a card **with the same name as that creature**" (Remembrance). The
     # name is the firing event's object's, so the lowering has to know which
     # event fired — and refuses under one that records none rather than

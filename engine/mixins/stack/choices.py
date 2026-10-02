@@ -7502,6 +7502,27 @@ class PendingChoicesMixin:
             for target in targets:
                 if target.get("kind") == "player" and target.get("seat") == standing:
                     return self._resolve_trigger_target(choice, seat=standing)
+            # **The other half of the combat pair**, when the event froze one
+            # and it is on offer. "Whenever this creature becomes blocked, you
+            # may have it deal damage equal to its power to **target
+            # creature**" (the Laccoliths) used to have its blocker stamped into
+            # the target field by the fire site, which skipped the choice
+            # CR 603.3d gives the controller; the choice is asked now, and this
+            # is the player half's argument above applied to an object: the
+            # answer a seat that is not asked gives is the one the resolution
+            # used anyway, so headless and AI play resolve where they always
+            # did and only the *asking* changed.
+            partners = set(
+                (item.trigger_context or {}).get("blocked_permanent_ids") or ()
+            )
+            for target in targets:
+                if (
+                    target.get("kind") == "permanent"
+                    and target.get("permanent_id") in partners
+                ):
+                    return self._resolve_trigger_target(
+                        choice, permanent_id=target["permanent_id"]
+                    )
         first = targets[0]
         if first.get("kind") == "player":
             return self._resolve_trigger_target(choice, seat=first["seat"])

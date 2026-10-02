@@ -1411,17 +1411,24 @@ class DeclareBlockersStepMixin:
         # blocked, this names the only thing that may — so an attacker *without*
         # the word is what fails. Asked of layer 6, so a creature granted flying
         # can be blocked by it and one that lost flying cannot.
-        only_with = next(
-            (
-                i for i in blocker_program.instructions
-                if i.kind == "can_block_only_with_keyword"
-            ),
-            None,
-        )
-        if only_with is not None and not self._has_keyword(
-            attacker, str(only_with.payload.get("required_keyword") or "")
+        #
+        # "**Enchanted creature** can block only creatures with flying." (Air
+        # Bladder.) The same sentence printed on an Aura about its host, so the
+        # attached channel is unioned in exactly as it is for
+        # ``cant_block_subject`` above — one rule, and the only difference is
+        # whose text it is printed on. Every one of them is asked: CR 509.1b
+        # makes restrictions cumulative, and two of them naming two keywords
+        # both have to be met.
+        for only_with in (
+            *blocker_program.instructions,
+            *attached_combat_restrictions(blocker),
         ):
-            return False
+            if only_with.kind != "can_block_only_with_keyword":
+                continue
+            if not self._has_keyword(
+                attacker, str(only_with.payload.get("required_keyword") or "")
+            ):
+                return False
 
         # "Creatures with flying can block only creatures with flying."
         # (Chaosphere.) The restriction above printed about the board, so it is
@@ -2309,10 +2316,6 @@ class DeclareBlockersStepMixin:
         """
         if not (0 <= self.active_player_index < len(self.players)):
             return
-        from ..auras import attached_subject_triggers
-        from ..events import trigger_subject_matches
-        from ..game_types import StackItem
-
         blockers_of: dict[int, tuple[Permanent, list[Permanent]]] = {}
         for _, blocker, blocked in self._resolved_block_pairs(
             controller_index, assignments
@@ -2320,119 +2323,217 @@ class DeclareBlockersStepMixin:
             for attacker_idx, attacker in blocked:
                 blockers_of.setdefault(attacker_idx, (attacker, []))[1].append(blocker)
         for attacker_idx, (attacker, blockers) in blockers_of.items():
-            seat = self.active_player_index
-            # CR 506.2: the seat this attacker is attacking, frozen into the
-            # announcement (CR 603.10) under the key every other combat fire
-            # site already stamps. "Whenever this creature becomes blocked,
-            # **defending player** discards a card" (Alley Grifters) is the
-            # phrase that needs it, and the attacker can leave combat before the
-            # ability resolves — after which `defending_player_index_now` would
-            # answer for a combat this trigger was never part of, or for nobody
-            # at all. Read off `combat_attackers` rather than off the blocker's
-            # controller: CR 509.1a makes those the same seat in every legal
-            # declaration, and the map is the one that says which combat.
-            defending_index = self.combat_attackers.get(attacker_idx)
-            # The attacker's own abilities, then the joined block-pair sentence
-            # printed on something attached to it (Infinite Authority, whichever
-            # side of the block its host is on). The mirror of the scan in
-            # `_fire_creature_blocks_triggers`, and one body for the same
-            # reason: only the ability's source and its controlling seat differ.
-            watchers = [
-                (attacker, seat, trig)
-                for trig in matching_triggers(
-                    attacker.effective_card,
-                    condition_kinds={
-                        "creature_becomes_blocked",
-                        # …and its *becomes blocked by* half, under
-                        # `blocker_filter`.
-                        "creature_blocks_or_blocked_by",
-                    },
+            self._announce_becomes_blocked(
+                attacker_idx, attacker, blockers, already_blocked=already_blocked
+            )
+
+    def fire_becomes_blocked_by_effect(self, attackers: list[Permanent]) -> None:
+        """Announce the becoming-blocked of *attackers* an **effect** blocked.
+
+        "Target unblocked attacking creature becomes blocked." (Dazzling Beauty,
+        Trap Runner); "Attacking creatures become blocked." (Fog Patch.) CR
+        509.1h: an effect can say a creature becomes blocked, and CR 509.3c says
+        what that is to a trigger — "Whenever [a creature] becomes blocked" "will
+        also trigger if that creature becomes blocked by an effect … but only if
+        the attacking creature was an unblocked creature at that time". So the
+        caller hands over only the creatures that *were* unblocked, and each is
+        announced once.
+
+        What it announces is the **bare** half and nothing else. CR 509.3d's
+        "becomes blocked **by a creature**" "won't trigger if the creature
+        becomes blocked by an effect rather than a creature", and there is no
+        blocker for its noun phrase to be about — which is the shape
+        :meth:`_announce_becomes_blocked` already draws, handed an empty list of
+        blockers. The three announcements beside the printed one are the same
+        three the declaration makes, minus their blocker: the delayed ability
+        bound to the attacker (Barreling Attack) and the board-wide bare reading
+        (Close Quarters' "whenever a creature you control becomes blocked").
+
+        No declare-blockers step entry point calls this: the declaration's own
+        announcements are about pairs, and this is the one way a creature
+        becomes blocked without one.
+        """
+        from ..events import emit
+
+        if not (0 <= self.active_player_index < len(self.players)):
+            return
+        for attacker in attackers:
+            attacker_idx = self.battlefield_index_of(attacker)
+            if attacker_idx is None:
+                continue
+            self._announce_becomes_blocked(attacker_idx, attacker, [])
+            fire_delayed_triggers(
+                self, "bound_permanent_becomes_blocked", subject=attacker,
+            )
+            emit(
+                self, "matching_creature_becomes_blocked",
+                subject=attacker,
+                combatant_permanent_id=attacker.permanent_id,
+                blocked_permanent_ids=[],
+                event_subject_permanent_id=attacker.permanent_id,
+                event_subject_controller=self.controller_index_of(attacker),
+                pair_announcement=False,
+            )
+
+    def _announce_becomes_blocked(
+        self, attacker_idx: int, attacker: Permanent, blockers: list[Permanent],
+        *, already_blocked: bool = False,
+    ) -> None:
+        """One attacker's own "whenever this creature becomes blocked" triggers,
+        and the same sentence printed on something attached to it.
+
+        *blockers* is empty when an **effect** blocked the creature
+        (:meth:`fire_becomes_blocked_by_effect`). The bare wording then fires
+        once with no blocker to be about, and every narrowed one finds nothing
+        to admit — CR 509.3c and CR 509.3d drawing their line through one body
+        rather than two.
+        """
+        from ..auras import attached_subject_triggers
+        from ..events import trigger_subject_matches
+        from ..game_types import StackItem
+        from ..targeting import announces_a_target
+
+        seat = self.active_player_index
+        # CR 506.2: the seat this attacker is attacking, frozen into the
+        # announcement (CR 603.10) under the key every other combat fire
+        # site already stamps. "Whenever this creature becomes blocked,
+        # **defending player** discards a card" (Alley Grifters) is the
+        # phrase that needs it, and the attacker can leave combat before the
+        # ability resolves — after which `defending_player_index_now` would
+        # answer for a combat this trigger was never part of, or for nobody
+        # at all. Read off `combat_attackers` rather than off the blocker's
+        # controller: CR 509.1a makes those the same seat in every legal
+        # declaration, and the map is the one that says which combat.
+        defending_index = self.combat_attackers.get(attacker_idx)
+        # The attacker's own abilities, then the joined block-pair sentence
+        # printed on something attached to it (Infinite Authority, whichever
+        # side of the block its host is on). The mirror of the scan in
+        # `_fire_creature_blocks_triggers`, and one body for the same
+        # reason: only the ability's source and its controlling seat differ.
+        watchers = [
+            (attacker, seat, trig)
+            for trig in matching_triggers(
+                attacker.effective_card,
+                condition_kinds={
+                    "creature_becomes_blocked",
+                    # …and its *becomes blocked by* half, under
+                    # `blocker_filter`.
+                    "creature_blocks_or_blocked_by",
+                },
+            )
+        ] + [
+            (attachment, aura_seat, trig)
+            for aura_seat, attachment, trig in attached_subject_triggers(
+                self, attacker,
+                {
+                    "creature_blocks_or_blocked_by",
+                    # "Whenever **enchanted creature** becomes blocked"
+                    # (Bestial Fury) — the attacking half on its own, where
+                    # the joined kind beside it is the pair. Both are the
+                    # attacker's event and both are printed on something
+                    # attached to it, so both are read from the attachment
+                    # scan here; the attacker's own card is scanned above
+                    # for the same two kinds. Leaving this one out is how a
+                    # trigger compiles, claims, reports supported and never
+                    # fires — the one failure `attached_subject_triggers`
+                    # exists to make impossible to repeat per card.
+                    "creature_becomes_blocked",
+                },
+                "combatant_attached",
+            )
+        ]
+        for source, source_seat, trig in watchers:
+            if not trig.condition.payload.get("blocker_filter"):
+                # CR 509.3c: once for the creature. With no blocker (an
+                # effect blocked it) the firing is about no blocker at all,
+                # which ``None`` stands for below.
+                matched: list[Permanent | None] = (
+                    [] if already_blocked else (blockers[:1] or [None])
                 )
-            ] + [
-                (attachment, aura_seat, trig)
-                for aura_seat, attachment, trig in attached_subject_triggers(
-                    self, attacker,
-                    {
-                        "creature_blocks_or_blocked_by",
-                        # "Whenever **enchanted creature** becomes blocked"
-                        # (Bestial Fury) — the attacking half on its own, where
-                        # the joined kind beside it is the pair. Both are the
-                        # attacker's event and both are printed on something
-                        # attached to it, so both are read from the attachment
-                        # scan here; the attacker's own card is scanned above
-                        # for the same two kinds. Leaving this one out is how a
-                        # trigger compiles, claims, reports supported and never
-                        # fires — the one failure `attached_subject_triggers`
-                        # exists to make impossible to repeat per card.
-                        "creature_becomes_blocked",
-                    },
-                    "combatant_attached",
-                )
-            ]
-            for source, source_seat, trig in watchers:
-                if not trig.condition.payload.get("blocker_filter"):
-                    matched = [] if already_blocked else blockers[:1]
-                else:
-                    matched = [
-                        b for b in blockers
-                        if trigger_subject_matches(
-                            self, trig, "blocker", b, observer=source_seat,
-                            source=attacker,
-                        )
-                    ]
-                    # CR 509.3e's "at least a certain number": one firing for
-                    # the whole declaration rather than one per creature, and
-                    # the blocker it is *about* is the first that answered — the
-                    # sentence printing this threshold names no creature back
-                    # (Dwarven Soldier says "this creature gets …"), so the pair
-                    # travels for the log rather than for an effect to read.
-                    # With no threshold printed the per-creature firing of
-                    # CR 509.3d stands, which is every other card here.
-                    matched = _threshold_blockers(trig, matched)
-                for blocker in matched:
-                    # **The blocker is what the trigger bound**, so it is the
-                    # stack item's target: "destroy that Wall" (Battering Ram)
-                    # names the creature that blocked, and by the time the
-                    # ability resolves nothing else could say which. Stamped by
-                    # id as well as by slot, because a removal in between
-                    # renumbers every later one (CR 400.7).
-                    blocker_seat = self.controller_index_of(blocker)
-                    blocker_slot = self.battlefield_index_of(blocker)
-                    self._stack_push(
-                        StackItem(
-                            card=source.card,
-                            caster_index=source_seat,
-                            target_player_index=(
-                                blocker_seat if blocker_seat is not None else seat
-                            ),
-                            target_permanent_index=blocker_slot,
-                            target_permanent_id=blocker.permanent_id,
-                            x_value=None,
-                            ability_instruction=trig.instruction,
-                            ability_effect_kind=trig.effect_kind,
-                            source_permanent=source,
-                            ability_text=trig.source_line,
-                            # "That creature's controller" is the blocker's, and
-                            # a blocker can leave before this resolves — so the
-                            # seat is frozen now (CR 603.10), exactly as the
-                            # death triggers freeze theirs.
-                            trigger_context={
-                                "event_subject_controller": blocker_seat,
-                                # CR 506.2's seat, so a sentence after this
-                                # event may say "defending player" and name one
-                                # (`lowering/_events._DEFENDING_PLAYER_EVENTS`).
-                                "trigger_defending_player_index": defending_index,
-                                # The pair this firing is about, by stable id
-                                # and under the key the *blocks* half already
-                                # writes. `block_pair_permanents` prefers it to
-                                # the item's target, which is the same blocker
-                                # here — but an ability whose source is an Aura
-                                # attached to the attacker has no reason to
-                                # carry the blocker as its target at all.
-                                "blocked_permanent_ids": [blocker.permanent_id],
-                            },
-                        )
+            else:
+                matched = [
+                    b for b in blockers
+                    if trigger_subject_matches(
+                        self, trig, "blocker", b, observer=source_seat,
+                        source=attacker,
                     )
+                ]
+                # CR 509.3e's "at least a certain number": one firing for
+                # the whole declaration rather than one per creature, and
+                # the blocker it is *about* is the first that answered — the
+                # sentence printing this threshold names no creature back
+                # (Dwarven Soldier says "this creature gets …"), so the pair
+                # travels for the log rather than for an effect to read.
+                # With no threshold printed the per-creature firing of
+                # CR 509.3d stands, which is every other card here.
+                matched = _threshold_blockers(trig, matched)
+            # **A printed "target" is a choice, not the blocker.** "…you may
+            # have it deal damage equal to its power to **target creature**"
+            # (the Laccoliths) names any creature the controller picks
+            # (CR 603.3d), and stamping the blocker into the target field is
+            # what `_choose_trigger_targets` reads as "the event already made
+            # the choice" — so every Laccolith shot the creature that blocked
+            # it whatever its controller wanted. The blocker still travels as
+            # ``blocked_permanent_ids`` below, which is where "that creature"
+            # reads it, so only an ability that announces a target loses the
+            # stamp.
+            chooses = announces_a_target(trig.instruction)
+            for blocker in matched:
+                # **The blocker is what the trigger bound**, so it is the
+                # stack item's target: "destroy that Wall" (Battering Ram)
+                # names the creature that blocked, and by the time the
+                # ability resolves nothing else could say which. Stamped by
+                # id as well as by slot, because a removal in between
+                # renumbers every later one (CR 400.7).
+                blocker_seat = (
+                    self.controller_index_of(blocker) if blocker is not None else None
+                )
+                stamped = blocker if not chooses else None
+                pushed = self._stack_push(
+                    StackItem(
+                        card=source.card,
+                        caster_index=source_seat,
+                        target_player_index=(
+                            blocker_seat if blocker_seat is not None else seat
+                        ),
+                        target_permanent_index=(
+                            self.battlefield_index_of(stamped)
+                            if stamped is not None else None
+                        ),
+                        target_permanent_id=(
+                            stamped.permanent_id if stamped is not None else None
+                        ),
+                        x_value=None,
+                        ability_instruction=trig.instruction,
+                        ability_effect_kind=trig.effect_kind,
+                        source_permanent=source,
+                        ability_text=trig.source_line,
+                        # "That creature's controller" is the blocker's, and
+                        # a blocker can leave before this resolves — so the
+                        # seat is frozen now (CR 603.10), exactly as the
+                        # death triggers freeze theirs.
+                        trigger_context={
+                            "event_subject_controller": blocker_seat,
+                            # CR 506.2's seat, so a sentence after this
+                            # event may say "defending player" and name one
+                            # (`lowering/_events._DEFENDING_PLAYER_EVENTS`).
+                            "trigger_defending_player_index": defending_index,
+                            # The pair this firing is about, by stable id
+                            # and under the key the *blocks* half already
+                            # writes. `block_pair_permanents` prefers it to
+                            # the item's target, which is the same blocker
+                            # here — but an ability whose source is an Aura
+                            # attached to the attacker has no reason to
+                            # carry the blocker as its target at all.
+                            "blocked_permanent_ids": (
+                                [blocker.permanent_id] if blocker is not None else []
+                            ),
+                        },
+                    )
+                )
+                # Only if it actually went on (CR 603.4 can refuse the push),
+                # for the reason the block fire site above gives.
+                if pushed is not None:
                     self.log.append(
                         f"{source.card.name} triggered on becoming blocked (added to stack)"
                     )

@@ -540,3 +540,61 @@ def rebind_alternative_pronoun_to_choice_target(node: "ast.OneOf") -> "ast.OneOf
     if all(a is b for a, b in zip(options, node.options)):
         return node
     return replace(node, options=tuple(options))
+
+
+#: The bare noun an ordinal back-reference may restate. "The first **creature**"
+#: and nothing narrower: a restated adjective would be a narrowing the bound
+#: object cannot honour, and the walk below leaves such a spec alone so its
+#: lowering refuses by name.
+_FIRST_CREATURE = ast.ObjectFilter(card_types=("creature",))
+
+
+def rebind_first_creature_to_damage_source(
+    action: ast.Statement, branch: ast.Statement
+) -> ast.Statement:
+    """"…you may have **it** deal damage equal to its power to target creature.
+    If you do, **the first creature** assigns no combat damage this turn."
+    (Laccolith Rig.)
+
+    The seventh rebinder, and its antecedent is in the *offer* the branch hangs
+    on. The offer names two creatures — the one that deals the damage and the
+    one it is dealt to — and the ordinal says which of the two it means by the
+    order they were printed in. The first is the damage's source; that is the
+    whole of the reading, and it is the same object the bare pronoun in front of
+    it named, so the branch's spec becomes that pronoun's spec. Whatever the
+    pronoun is then rebound to (the enchanted creature, under an Aura's
+    trigger — ``rebinding.rebind_pronoun_to_event_subject``) the ordinal follows
+    it for free, because by then it *is* that pronoun.
+
+    Narrow in the two ways every rebinder here is. The offer has to be a damage
+    from a single bound object (a pronoun, never a target — a chosen source is a
+    second choice the ordinal would quietly take over) to exactly one creature
+    recipient, which is the only shape where "first" and "second" are two
+    creatures at all. And only the bare "the first creature" is rewritten: a
+    narrowed ordinal stays an ordinal, which every lowering but the pair-member
+    one refuses by name. Anything else leaves *branch* untouched, so Infinite
+    Authority's "the first creature" — a *pair* member its own trigger bound —
+    keeps the reading ``lowering/_plus_one_counters`` gives it.
+    """
+    if not isinstance(action, ast.DealDamage):
+        return branch
+    source = action.source
+    if not (
+        isinstance(source, ast.TargetSpec)
+        and source.quantifier in ("it", "this")
+        and not source.targeted
+    ):
+        return branch
+    recipients = tuple(action.recipients or ())
+    if len(recipients) != 1 or not (
+        isinstance(recipients[0], ast.TargetSpec)
+        and "creature" in recipients[0].filter.card_types
+    ):
+        return branch
+
+    def _rewrite(spec: ast.TargetSpec) -> ast.TargetSpec | None:
+        if spec.quantifier == "first" and spec.filter == _FIRST_CREATURE:
+            return source
+        return None
+
+    return _walk_specs(branch, _rewrite)

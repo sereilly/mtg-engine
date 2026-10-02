@@ -1185,6 +1185,15 @@ TRIGGERED_LABELS: dict[str, str] = {
     # is for is that permanents are sacrificed. Deliberately not a `board`
     # word — the keeps are how the sacrifice is *chosen*, not a second act.
     "keep_chosen_sacrifice_rest": "triggered_sacrifice",
+    # --- Nemesis, wave 1 group 3 --------------------------------------------
+    # Blinding Angel's "that player skips their next combat phase" — the first
+    # *triggered* skip in the pool (Moment of Silence is a spell, and its kind
+    # is read by no label table at all). Its own word rather than
+    # `triggered_combat`: the phase skipped is payload, and the same kind skips
+    # a main phase as readily as a combat one, so a combat bucket would be a
+    # claim about the payload rather than about what the ability does to the
+    # turn.
+    "skip_next_phase": "triggered_turn",
 }
 
 # The one instruction kind whose label depends on what triggered it: `may` wraps

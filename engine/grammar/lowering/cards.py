@@ -498,6 +498,21 @@ def _lower_mill(
         # CR 101.4's order is the handler's, where the active player is known.
         payload["recipient"] = "each_player"
         return (OracleInstruction("mill_target_player", "", payload),)
+    if node.player.kind == "defending_player":
+        # "Whenever this creature becomes blocked, **defending player** mills
+        # three cards." (Flint Golem.) CR 506.2's seat, frozen into the
+        # trigger's context by the combat fire site — the reading the draw
+        # above, the discard and the life loss already take of the same two
+        # words, behind the same gate: under any other event nothing recorded a
+        # defender, and a mill aimed at nobody compiles clean and then lands on
+        # whichever seat the resolution happened to be carrying.
+        if event not in _DEFENDING_PLAYER_EVENTS:
+            raise LoweringError(
+                '"defending player" names a seat this event did not record',
+                node=node,
+            )
+        payload["recipient"] = "defending_player"
+        return (OracleInstruction("mill_target_player", "", payload),)
     raise LoweringError(
         f"mill_target_player cannot mill {node.player.kind!r}", node=node
     )

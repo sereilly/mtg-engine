@@ -1869,16 +1869,34 @@ _KEYWORD_GRANT_AND_RESTRICTION = _LazyPattern(lambda: re.compile(
 ))
 
 
+#: "Enchanted creature gets +1/+1 **and can't be blocked except by creatures
+#: with flying**." (Treetop Bracers.) The P/T twin of the keyword compound
+#: above: a layer-7c grant and a CR 509.1b restriction on one printed line. The
+#: grant half is already read by :func:`aura_static_pt_grant`, which searches
+#: the line for its numbers and declines only a tail that makes the grant
+#: something other than flat (a duration, a condition, a count) — a restriction
+#: is none of those. So what was missing was only the restriction half's
+#: reader, and this hands it to :func:`aura_combat_restriction` through the one
+#: splitter both compounds share.
+_PT_GRANT_AND_RESTRICTION = re.compile(
+    rf"^{_ATTACHED} (?P<noun>{_NOUN}) gets [+-]\d+/[+-]\d+ "
+    rf"and (?P<restriction>can't .+)$"
+)
+
+
 def _compound_restriction_clause(normalized: str):
-    """The ``(noun, restriction clause)`` a keyword-grant compound carries, or None.
+    """The ``(noun, restriction clause)`` a compound line carries, or None.
 
     Split out because both halves of the compound are read by different
-    functions — the keyword by :func:`aura_keyword_grants`, the tail by
-    :func:`aura_combat_restriction` — and a second copy of the pattern in each
-    is exactly the two-lists-one-rule shape this file's other comments record
-    removing.
+    functions — the keyword by :func:`aura_keyword_grants` (or the P/T by
+    :func:`aura_static_pt_grant`), the tail by :func:`aura_combat_restriction`
+    — and a second copy of the pattern in each is exactly the two-lists-one-rule
+    shape this file's other comments record removing.
     """
-    match = _KEYWORD_GRANT_AND_RESTRICTION.match(normalized)
+    match = (
+        _KEYWORD_GRANT_AND_RESTRICTION.match(normalized)
+        or _PT_GRANT_AND_RESTRICTION.match(normalized)
+    )
     if match is None:
         return None
     return match.group("noun"), match.group("restriction")
@@ -2482,6 +2500,13 @@ ENFORCED_ATTACHED_COMBAT_RESTRICTIONS = frozenset({
     # blocker's own compiled program in one loop, so the two spellings of the
     # restriction cannot come to be enforced differently.
     "cant_block_subject",
+    # "Enchanted creature can block only creatures with flying." (Air Bladder.)
+    # Shacklegeist prints the same sentence about itself, so it is the same
+    # table asked with the subject rewritten. Its reader is
+    # ``phases/declare_blockers_step._can_block_attacker``, which asks this
+    # channel and the blocker's own compiled program in one loop — the shape
+    # ``cant_block_subject`` above already has, for its reason.
+    "can_block_only_with_keyword",
     # "Enchanted creature can't be blocked unless defending player pays {3} for
     # each creature they control that's blocking it." (Awesome Presence.)
     # CR 509.1d's cost owed by the **defender**, the mirror of

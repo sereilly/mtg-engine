@@ -894,6 +894,16 @@ def skip_next_step(game: Game, instruction: OracleInstruction, context: OracleEx
     return True, "resolved"
 
 
+#: The seats a skip may name that a *firing event* froze, and the trigger-context
+#: key each is read back from — the same two records ``player_gets_poison_counters``
+#: above tells apart, spelled by the words ``lowering/_events.frozen_seat_record``
+#: puts on the payload.
+_FROZEN_SKIP_SEATS: dict[str, str] = {
+    "damaged_player": "defending_player_index",
+    "defending_player": "trigger_defending_player_index",
+}
+
+
 @effect_handler("skip_next_phase")
 def skip_next_phase(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Target player skips their next combat phase this turn."
@@ -921,6 +931,18 @@ def skip_next_phase(game: Game, instruction: OracleInstruction, context: OracleE
     who = str(instruction.payload.get("seat") or "you")
     if who == "you":
         seat = game.seat_index(context.caster)
+    elif who in _FROZEN_SKIP_SEATS:
+        # "Whenever this creature deals combat damage to a player, **that
+        # player** skips their next combat phase." (Blinding Angel.) The seat
+        # the firing event froze (CR 603.10) — the damaged player under a damage
+        # event, CR 506.2's defender under a combat one — read from the key that
+        # event stamps. No record skips nobody's phase, never the caster's: that
+        # is the one seat a card printed against an opponent must not hit.
+        recorded = (context.trigger_context or {}).get(_FROZEN_SKIP_SEATS[who])
+        if not isinstance(recorded, int) or not (0 <= recorded < len(game.players)):
+            game.log.append(f"{context.card.name}: no recorded player, no skip")
+            return True, "resolved"
+        seat = recorded
     else:
         chosen = context.target
         if chosen not in game.players:

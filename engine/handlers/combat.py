@@ -470,28 +470,54 @@ def become_blocked(game: Game, instruction: OracleInstruction, context: OracleEx
             source=context.source_permanent,
         )
 
+    sweep = instruction.payload.get("subject")
+    if sweep is not None and not described:
+        # "**Attacking creatures** become blocked." (Fog Patch.) No target: the
+        # set is every creature the printed phrase describes as the spell
+        # resolves (CR 608.2c), found through the one matcher the targeted
+        # spelling re-asks its choice through.
+        chosen = [
+            perm for perm in game.all_permanents()
+            if perm.is_creature and subject_matches(
+                game, perm, dict(sweep), observer=observer,
+                source=context.source_permanent,
+            )
+        ]
+        if not chosen:
+            game.log.append(f"{context.card.name}: no attacking creatures")
     # "**X target attacking creatures** become blocked." (Choking Vines.) The
     # several-targets description says a list was collected, and each slot is
     # resolved strictly: a creature that left or stopped attacking is dropped
     # (CR 608.2b) and the rest still become blocked. No fallback scan, because a
     # fallback per slot would mark whichever attacker the scan reached first for
     # a choice the player made once.
-    if isinstance(described.get("count"), (int, str)) and described.get("count") != 1:
+    elif isinstance(described.get("count"), (int, str)) and described.get("count") != 1:
         chosen = resolve_target_permanents(game, context, predicate=eligible)
     else:
         found = resolve_target_permanent(
             game, context, predicate=eligible, fallback_on_invalid_choice=False,
         )
         chosen = [found] if found is not None else []
-    if not chosen:
+    if not chosen and sweep is None:
         game.log.append(f"{context.card.name}: no valid creature target")
         return True, "resolved"
+    # CR 509.3c: "Whenever [a creature] becomes blocked" triggers when an
+    # effect blocks it "but only if the attacking creature was an unblocked
+    # creature at that time". Read *before* the flag is written, because after
+    # it every one of them is blocked — and a creature that already had a
+    # blocker (Fog Patch blocks the blocked attackers too) is not announced a
+    # second time.
+    newly_blocked = [
+        creature for creature in chosen
+        if not creature.blocked and not game.creatures_blocking(creature)
+    ]
     for creature in chosen:
         creature.blocked = True
         creature.metadata[BLOCKED_WITHOUT_BLOCKERS] = True
         game.log.append(
             f"{creature.card.name} becomes blocked ({context.card.name})"
         )
+    game.fire_becomes_blocked_by_effect(newly_blocked)
     # What the *next* sentence means. "Each of those creatures" names every
     # creature this instruction blocked (CR 611.2c fixes the set when the effect
     # begins), by id and never by slot: the next instruction runs after this one
