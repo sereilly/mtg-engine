@@ -316,7 +316,11 @@ POSITIONAL_BASELINE: dict[str, int] = {
     # whole ratchet is about: an index announced under CR 601.2c named whoever
     # held that slot at resolution, so Pyrotechnics dealt the departed target's
     # share to the survivor while the bounds check said everything was fine.
-    "engine/handlers/prevention.py": 2,
+    # Down one at Nemesis: the "any target" shield read its creature by slot
+    # alone, so an id-only announcement shielded the creature's controller
+    # (Defender en-Vec, Samite Healer). It reads the id first now; the one read
+    # left is the emblem path, which has no resolution context to carry an id.
+    "engine/handlers/prevention.py": 1,
     "engine/handlers/zones.py": 2,
     "engine/legality.py": 2,
     "engine/mixins/effects.py": 2,

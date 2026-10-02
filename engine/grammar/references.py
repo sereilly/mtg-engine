@@ -496,6 +496,21 @@ def parse_recipient(stream: TokenStream) -> ast.Recipient | None:
             # lowerings written for them.
             elif stream.exhausted or stream.at_punct(".", ",", ";"):
                 return ast.TargetSpec("it", ast.ObjectFilter(is_source=True))
+        # "…If you can't, sacrifice **the permanent**." (CR 702.32a, fading's
+        # own rules text.) The generic noun is the same back-reference with
+        # no card type in it, which is what a rule written for every permanent
+        # type has to print — so it is the same pronoun, under the same
+        # phrase-end gate, and rebinds the same way.
+        #
+        # Without it the phrase fell through to the bound-subject reader
+        # (Amber Prison's "That permanent doesn't untap"), whose empty filter
+        # reached the forced-sacrifice prompt as "sacrifice any permanent you
+        # control": a different card, compiling supported. No role word:
+        # "the attacking permanent" names nothing a card prints.
+        elif noun == "permanent" and role is None:
+            stream.advance()
+            if stream.exhausted or stream.at_punct(".", ",", ";"):
+                return ast.TargetSpec("it", ast.ObjectFilter(is_source=True))
     stream.reset(mark_definite)
     # "**that token**" — the token an earlier sentence of this same effect
     # created ("Exile that token when Stangg leaves the battlefield").

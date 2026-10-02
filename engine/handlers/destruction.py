@@ -11,7 +11,8 @@ from ..oracle_types import (ATTACHED_PERMANENT_CONTROLLER, LAST_TARGET_CONTROLLE
                             LAST_TARGET_OWNER,
                             OracleInstruction, PER_OBJECT_SEAT_RECORDS)
 from ..resumption import run_resumable
-from ._common import (one_recorded_permanent_id, 
+from ._common import (one_recorded_permanent_id,
+    attached_host,
     block_pair_permanents,
     frozen_that_player_seat,
     permanent_matches_filter, resolve_role_permanent,
@@ -1482,9 +1483,18 @@ def destroy_attached_permanent(game: Game, instruction: OracleInstruction, conte
     indestructible check and the graveyard move behave exactly as they do for a
     targeted destroy. An Aura that has come unattached destroys nothing, which
     is the window CR 303.4c's state-based action has not closed yet.
+
+    "When this Aura leaves the battlefield, destroy enchanted creature."
+    (Parallax Dementia.) Read through ``_common.attached_host`` rather than the
+    live ``attached_to`` slot, because by the time a leaves-the-battlefield
+    ability resolves the Aura's teardown has cleared that slot — and CR 608.2h
+    says an effect reading an object that has left uses its last known
+    information, which ``detach_aura`` records for exactly this. Reading the
+    slot directly, the creature survived every way the Aura could leave and
+    the card's whole drawback was gone. The host must still be on the
+    battlefield either way, so a creature that left first is not chased.
     """
-    source = context.source_permanent
-    attached = source.metadata.get("attached_to") if source is not None else None
+    attached = attached_host(game, context.source_permanent)
     if attached is None:
         game.log.append(f"{context.card.name}: nothing attached to destroy")
         return True, "resolved"

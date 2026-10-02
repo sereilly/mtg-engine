@@ -395,3 +395,86 @@ def test_the_bystander_is_not_a_legal_target_for_the_blocked_creature_clause():
     assert game.is_on_battlefield(bystander)
 
 # --- end W2G5 ---
+
+
+# --- W1G1 (NEM): an Aura's own host, read after the Aura has left ---
+
+from engine.auras import attach_aura as _w1g1_attach_aura
+
+from tests.helpers import resolve_stack as _w1g1_resolve_stack
+
+
+def _w1g1_aura(name: str, text: str) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Enchantment — Aura",
+        oracle_text=f"Enchant creature\n{text}", colors=("B",),
+        color_identity=("B",), keywords=("Enchant",), produced_mana=(),
+        raw={"name": name, "type_line": "Enchantment — Aura"},
+    )
+
+
+def _w1g1_land() -> CardDefinition:
+    return CardDefinition(
+        name="Forest", mana_cost="", cmc=0.0, type_line="Basic Land — Forest",
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=("G",),
+        raw={"name": "Forest", "type_line": "Basic Land — Forest"},
+    )
+
+
+@pytest.mark.cr("608.2h", "603.10a")
+def test_an_auras_leave_trigger_destroys_the_creature_it_was_attached_to():
+    """"When this Aura leaves the battlefield, destroy enchanted creature."
+    (Parallax Dementia.) By the time the ability resolves the Aura's teardown
+    has detached it, so the live attachment answers "nothing" — and the
+    creature used to survive every way the Aura could leave. CR 603.10a makes
+    the ability look back in time; CR 608.2h says what it looks back at is the
+    Aura's last known information, which names the creature."""
+    game = _duel()
+    host = Permanent(card=_creature("Host"))
+    game._put_permanent_onto_battlefield(1, host, None)
+    aura = Permanent(card=_w1g1_aura(
+        "Leaver", "When this Aura leaves the battlefield, destroy enchanted creature.",
+    ))
+    game._put_permanent_onto_battlefield(0, aura, None)
+    _w1g1_attach_aura(aura, host)
+
+    game.remove_from_battlefield(aura)
+    game._permanent_to_graveyard(game.players[0], aura)
+    _w1g1_resolve_stack(game)
+
+    assert not game.is_on_battlefield(host)
+    assert [card.name for card in game.players[1].graveyard] == ["Host"]
+    assert "Leaver destroyed Host" in game.log
+
+
+@pytest.mark.cr("608.2h")
+def test_a_triggered_destroy_still_finds_the_host_after_its_aura_left_in_response():
+    """"When enchanted land becomes tapped, destroy it." (Blight.) The same
+    reader, one shape over: once the ability has triggered it exists
+    independently of its source (CR 113.7a), and an Aura removed in response
+    leaves the ability reading its last known attachment rather than nothing.
+    """
+    game = _duel()
+    land = Permanent(card=_w1g1_land())
+    game._put_permanent_onto_battlefield(1, land, None)
+    aura = Permanent(card=CardDefinition(
+        name="Tapper Bane", mana_cost="", cmc=0.0, type_line="Enchantment — Aura",
+        oracle_text="Enchant land\nWhen enchanted land becomes tapped, destroy it.",
+        colors=("B",), color_identity=("B",), keywords=("Enchant",),
+        produced_mana=(),
+        raw={"name": "Tapper Bane", "type_line": "Enchantment — Aura"},
+    ))
+    game._put_permanent_onto_battlefield(0, aura, None)
+    _w1g1_attach_aura(aura, land)
+
+    game.become_tapped(land)
+    assert [item.card.name for item in game.stack] == ["Tapper Bane"]
+    game.remove_from_battlefield(aura)
+    game._permanent_to_graveyard(game.players[0], aura)
+    _w1g1_resolve_stack(game)
+
+    assert not game.is_on_battlefield(land)
+    assert [card.name for card in game.players[1].graveyard] == ["Forest"]
+
+# --- end W1G1 ---

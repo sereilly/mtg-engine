@@ -952,3 +952,85 @@ def test_instead_and_prevent_send_one_printed_clause_to_two_registries():
     assert (replaced.dealt, replaced.result) == (6, 6)
     assert (shielded.dealt, shielded.result) == (0, 0)
     assert shielded.consumed is False
+
+
+# --- W1G1 (NEM): "any target" shields the creature named by id ---
+
+
+def _w1g1_healer_game():
+    from engine.card_loader import load_catalog
+
+    catalog = {c.name: c for c in load_catalog()}
+    game = Game(players=[PlayerState(name="A"), PlayerState(name="B")])
+    game.enforce_mana_costs = False
+    game.begin_turn_bookkeeping(0)
+    healer = Permanent(card=catalog["Samite Healer"])
+    game._put_permanent_onto_battlefield(0, healer, None)
+    healer.metadata["summoning_sickness_turn"] = -99
+    bears = []
+    for _ in range(2):
+        bear = Permanent(card=catalog["Grizzly Bears"])
+        game._put_permanent_onto_battlefield(1, bear, None)
+        bears.append(bear)
+    return game, bears
+
+
+@pytest.mark.cr("615.7", "601.2c")
+def test_an_any_target_shield_announced_by_id_protects_that_creature():
+    """Samite Healer: "{T}: Prevent the next 1 damage that would be dealt to
+    any target this turn." The shield helper read the creature by battlefield
+    *slot* alone, so the engine's own activation API — which takes the target's
+    id — shielded the creature's controller instead and the creature took the
+    damage. Found driving Defender en-Vec (NEM), which prints the same
+    sentence."""
+    from tests.helpers import resolve_stack
+
+    game, (_first, bear) = _w1g1_healer_game()
+
+    assert game.activate_permanent_ability(
+        0, "Samite Healer", target_permanent_ids=[bear.permanent_id],
+    ).supported
+    resolve_stack(game)
+
+    assert shields_on(game.players[1]) == []
+    assert _damage_dealt(game, bear, 2) == 1
+
+
+@pytest.mark.cr("615.7", "608.2b")
+def test_an_any_target_shield_follows_its_creature_when_a_slot_ahead_of_it_empties():
+    """Announced by slot (as the web layer and the AI do), stamped with the id
+    at CR 601.2c — and read back by that id at resolution, so a creature ahead
+    of the target leaving does not move the shield onto whichever creature slid
+    into the slot."""
+    from tests.helpers import resolve_stack
+
+    game, (first, second) = _w1g1_healer_game()
+    game.activate_permanent_ability(
+        0, "Samite Healer", target_player_index=1, target_permanent_index=1,
+    )
+    game.remove_from_battlefield(first)
+
+    resolve_stack(game)
+
+    assert _damage_dealt(game, second, 2) == 1
+
+
+@pytest.mark.cr("608.2b")
+def test_an_any_target_shield_whose_creature_left_shields_nobody():
+    """The one creature it named is gone, so it is an illegal target and the
+    ability shields nothing — not that creature's controller, who was never
+    the target."""
+    from tests.helpers import resolve_stack
+
+    game, (_first, bear) = _w1g1_healer_game()
+    game.activate_permanent_ability(
+        0, "Samite Healer", target_permanent_ids=[bear.permanent_id],
+    )
+    game.remove_from_battlefield(bear)
+
+    resolve_stack(game)
+
+    assert shields_on(game.players[1]) == []
+    assert _damage_dealt(game, game.players[1], 2) == 2
+
+# --- end W1G1 ---
