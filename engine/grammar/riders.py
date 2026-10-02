@@ -11,6 +11,32 @@ Split out of ``parser.py`` when that file crossed 1,000 lines again. A family
 rather than an arbitrary cut — this is the whole of what "a sentence about the
 previous sentence" means, and the loop that drives them stays behind in
 ``parser.py`` with the line-level productions it belongs to.
+
+**Those two paragraphs describe the family, and this file is now a third of
+it.** The three verbs in the first one are three questions, and each has its
+own module:
+
+    control_flow  *branches* — which arm of the sentence before it a clause
+                  is ("If you do, …", "Otherwise, …", "If <condition>, …
+                  instead", "Each opponent who can't …")
+    pronouns      *names* — what a pronoun or a possessive points back at
+                  ("It gains …", "Its controller creates …")
+    riders        *narrows* — a flag, a bound or a width folded onto the node
+                  the sentence before it parsed to
+
+and the loop that drives all three left ``parser`` for ``sequences``, whose
+docstring quotes the sentence above and says what became of it.
+
+So what is here is the third question only, and the test is mechanical: every
+reader below either rewrites a step already in ``steps`` or contributes
+nothing, and **none appends one**. A clause that needs a step of its own is
+either an arm (``control_flow``) or a sentence with a bound subject
+(``pronouns``). The first two splits were taken at the thousand-line guard and
+each left stragglers of its own subject behind; Nemesis' Phase 0 sent them
+after it rather than cutting a fourth module — the two "<possessive>
+controller …" riders were the only readers of
+``rebinding.statement_bound_target`` left in this file, and the two that went
+to ``control_flow`` were the only ones that built an arm or read a "couldn't".
 """
 
 from __future__ import annotations
@@ -18,25 +44,19 @@ from __future__ import annotations
 import dataclasses
 from dataclasses import replace
 
-from ..oracle_types import LAST_TARGET_CONTROLLER
 from . import ast
 from .amounts import parse_amount
 from .errors import GrammarError
 from .lexer import PT
 from .nouns import parse_object_filter
-from .effects import _parse_create_token, parse_source_damage_lock
+from .effects import parse_source_damage_lock
 from .delayed import contains_flip, parse_flip_stakes_sentence
-from .rebinding import statement_bound_target as _statement_bound_target
 from .phrases import _accept_number
-from .statements import _parse_condition, parse_statement
+from .statements import parse_statement
 from .stream import TokenStream
 from .bounds import accept_superlative
 from .vocabulary import CARD_TYPES
 from .vocabulary import singular as _singular
-
-
-# Sentinel: the rider was folded into the previous step, nothing to append.
-
 
 
 def _superlative_of(step: ast.Statement):
@@ -165,220 +185,6 @@ def _parse_exile_instead_rider(
         return False
     steps[-1] = replace(last, exile_instead=True)
     return True
-
-
-def _accept_removed_permanents_controller(stream: TokenStream) -> bool:
-    """The possessive naming the controller of the permanent the sentence in
-    front of this one removed — ``that creature's controller`` or ``its
-    controller`` — consumed, or False with the cursor untouched.
-
-    **One reader, because it was two.** Transmogrify prints "that creature's
-    controller" and Polymorph prints "its controller" for the same seat, and the
-    reveal rider below reads both; the token rider above read only the second,
-    so Ovinomancer's "That creature's controller creates a 0/1 green Sheep
-    creature token" refused a phrase the module three functions down already
-    knew. A fork in a *fragment* is only ever found by whoever extends it, which
-    is what makes the extension the moment to collapse it.
-
-    Neither spelling is a difference in what the card does, so normalising at
-    one end would be the same card twice.
-    """
-    return bool(
-        stream.accept_phrase("that", "creature", "'s", "controller")
-        or stream.accept_phrase("its", "controller")
-    )
-
-
-def _parse_its_controller_creates_rider(
-    stream: TokenStream, steps: list[ast.Statement]
-) -> ast.Statement | None:
-    """``Its controller creates a <token>.`` after a sentence that chose a
-    target (Angelic Ascension, Secure the Scene — both after an exile), and
-    ``That creature's controller creates a <token>.`` after a destroy
-    (Ovinomancer).
-
-    Both possessives name the previous sentence's chosen permanent, which is
-    gone by the time the token arrives — so the token rides the controller that
-    step recorded, and the lowering demands that producer. Parsed as its own
-    sentence, either phrase would name nobody at all.
-    """
-    if not steps or _statement_bound_target(steps[-1]) is None:
-        return None
-    mark = stream.mark()
-    if not _accept_removed_permanents_controller(stream):
-        return None
-    if not stream.at_word("creates"):
-        stream.reset(mark)
-        return None
-    try:
-        token = _parse_create_token(stream)
-    except GrammarError:
-        stream.reset(mark)
-        return None
-    assert isinstance(token, ast.CreateToken)
-    return replace(token, recipient=LAST_TARGET_CONTROLLER)
-
-
-def _parse_that_controller_reveals_rider(
-    stream: TokenStream, steps: list[ast.Statement]
-) -> ast.Statement | None:
-    """``That creature's controller reveals cards from the top of their library
-    until they reveal a creature card. That player puts that card onto the
-    battlefield, then shuffles the rest into their library.`` (Transmogrify.)
-
-    ``Its controller reveals cards from the top of their library until they
-    reveal a creature card. The player puts that card onto the battlefield,
-    then shuffles all other cards revealed this way into their library.``
-    (Polymorph, behind a destroy rather than an exile.)
-
-    The same shape as the "its controller creates a token" rider beside it, and
-    for the same reason: "that creature" names the permanent the previous
-    sentence removed, which is gone by the time this runs, so the library read
-    rides the controller that step recorded. Parsed as its own sentence it names
-    nobody.
-
-    All three sentences are consumed here. They describe one procedure over one
-    revealed pile — "that card" is what the reveal stopped on and "the rest" is
-    exactly what it turned over first — so parsed apart the last two would
-    dangle referents nothing binds.
-
-    **Three phrases have two printed spellings each**, and each pair is read
-    rather than normalized at one end: the possessive that names the removed
-    permanent (``_accept_removed_permanents_controller``), the article in front
-    of the seat
-    ("that player" / "the player") and the words for the cards the reveal
-    turned over first ("the rest" / "all other cards revealed this way"). None
-    of the three is a difference in what the card does — Polymorph and
-    Transmogrify are the same procedure — so a second production for them
-    would be the same card twice.
-    """
-    if not steps or _statement_bound_target(steps[-1]) is None:
-        return None
-    mark = stream.mark()
-    if not _accept_removed_permanents_controller(stream):
-        return None
-    if not stream.accept_phrase(
-        "reveals", "cards", "from", "the", "top", "of", "their", "library",
-        "until", "they", "reveal",
-    ):
-        stream.reset(mark)
-        return None
-    try:
-        stream.accept_word("a", "an")
-        filt = parse_object_filter(stream)
-    except GrammarError:
-        stream.reset(mark)
-        return None
-    if not filt.is_card:
-        stream.reset(mark)
-        return None
-    stream.accept_punct(".")
-    # Every word of the destination and of what happens to the rest. A card
-    # that milled the pile instead of shuffling it back is a different card, and
-    # the difference does not show until this sentence.
-    if not (
-        stream.accept_phrase(
-            "that", "player", "puts", "that", "card", "onto", "the", "battlefield",
-        )
-        or stream.accept_phrase(
-            "the", "player", "puts", "that", "card", "onto", "the", "battlefield",
-        )
-    ):
-        stream.reset(mark)
-        return None
-    stream.accept_punct(",")
-    if not stream.accept_word("then"):
-        stream.reset(mark)
-        return None
-    if not stream.accept_word("shuffles"):
-        stream.reset(mark)
-        return None
-    if not (
-        stream.accept_phrase("the", "rest")
-        or stream.accept_phrase("all", "other", "cards", "revealed", "this", "way")
-    ):
-        stream.reset(mark)
-        return None
-    if not stream.accept_phrase("into", "their", "library"):
-        stream.reset(mark)
-        return None
-    return ast.RevealUntil(LAST_TARGET_CONTROLLER, filt)
-
-
-def _parse_conditional_instead_rider(
-    stream: TokenStream, steps: list[ast.Statement]
-) -> bool:
-    """``You gain 4 life. If a creature died this turn, you gain 8 life
-    instead.`` (Life Goes On.) ``{T}: Add {C}. If you control an Urza's
-    Power-Plant and an Urza's Tower, add {C}{C} instead.`` (Urza's Mine.)
-
-    The second sentence *replaces* the first when its condition holds, so the
-    pair folds into one ``Conditional`` — then the bigger gain, otherwise the
-    printed base. Parsed apart, the two sentences would gain 12 life on a
-    death; the "instead" is the whole content of the sentence, so it is
-    required, and only a same-shaped statement may replace the last step.
-    """
-    # The statement kinds this rider can replace. `AddMana` joins `GainLife`
-    # for the Antiquities land cycle — "{T}: Add {C}. If you control an Urza's
-    # Power-Plant and an Urza's Tower, add {C}{C} instead." — which is the same
-    # sentence pair with a different verb. `DealDamage` joins them for
-    # Gangrenous Zombies — "…deals 1 damage to each creature and each player.
-    # If you control a snow Swamp, this creature deals 2 damage to each
-    # creature and each player instead." — which is the same pair again. The
-    # replacement must be the *same* kind as what it replaces (checked below),
-    # so widening the set cannot let one kind silently stand in for another.
-    _REPLACEABLE = (ast.GainLife, ast.AddMana, ast.DealDamage)
-
-    last = steps[-1] if steps else None
-    if not isinstance(last, _REPLACEABLE):
-        return False
-    mark = stream.mark()
-    if not stream.accept_word("if"):
-        return False
-    try:
-        condition = _parse_condition(stream)
-    except GrammarError:
-        stream.reset(mark)
-        return False
-    stream.accept_punct(",")
-    try:
-        replacement = parse_statement(stream)
-    except GrammarError:
-        stream.reset(mark)
-        return False
-    if type(replacement) is not type(last) or not stream.accept_word("instead"):
-        stream.reset(mark)
-        return False
-    steps[-1] = ast.Conditional(condition, then=replacement, otherwise=last)
-    return True
-
-
-def _parse_who_cant_rider(
-    stream: TokenStream, steps: list[ast.Statement]
-) -> ast.Statement | None:
-    """``Each opponent who can't loses N life.`` after an each-player discard
-    (Liliana, Waker of the Dead). The loss applies only to opponents who could
-    not perform the previous sentence's action, so it is recorded as a
-    back-reference the lowering turns into a reader of that step's result."""
-    last = steps[-1] if steps else None
-    if not (isinstance(last, ast.Discard) and last.player.kind == "each_player"):
-        return None
-    mark = stream.mark()
-    if not (
-        stream.accept_word("each")
-        and stream.accept_word("opponent")
-        and stream.accept_phrase("who", "can't")
-    ):
-        stream.reset(mark)
-        return None
-    try:
-        stream.expect_word("loses", "lose")
-        amount = parse_amount(stream)
-        stream.expect_word("life")
-    except GrammarError:
-        stream.reset(mark)
-        return None
-    return ast.LoseLife(ast.PlayerRef("each_opponent"), amount, who_could_not="discard")
 
 
 def _attach_spend_only(stream: TokenStream, steps: list[ast.Statement]) -> bool:

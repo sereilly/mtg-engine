@@ -14,8 +14,9 @@ edge between them is one name — ``_walk_specs``, the AST walk both rewrite
 through. Two readers moved up with their productions for exactly that reason
 (``_announced_target`` and ``_names_a_target`` are read by the in-sentence
 rebinders and by nothing else); ``statement_bound_target`` and its neighbours
-stay here, where the condition-side rebinders and ``pronouns`` / ``riders``
-read them. ``PARSE_LAYERS`` carries the argument.
+stay here, where the condition-side rebinders and ``pronouns`` read them
+(``riders`` did too, until its two possessive readers joined ``pronouns``).
+``PARSE_LAYERS`` carries the argument.
 
 Its own module rather than more of ``triggers``: only one of the rebinders here
 is about a trigger, and the walk underneath is about the shape of the AST rather

@@ -7,11 +7,24 @@ statement already parsed, bind to what it chose, and either append a step or
 fold into it.
 
 Split out of `riders.py` at the thousand-line guard, along the boundary that
-module already drew: everything here answers "what does this pronoun name?",
-where the rest of `riders.py` answers "which branch of the sentence before it
-does this clause belong to". The two share not one helper in that direction —
-`riders` imports the binding, never the other way round, which is why this sits
-below it.
+module already drew: everything here answers "what does this pronoun name?".
+When it left, the rest of `riders.py` answered "which branch of the sentence
+before it does this clause belong to"; that half is `control_flow` now, and
+what `riders` keeps is the clause that *narrows* the step before it. None of
+the three imports another. The binding these read is
+`rebinding.statement_bound_target`, one layer down — and since Nemesis' Phase 0
+this is the only one of the three that reads it.
+
+That Phase 0 is when the **possessive** arrived: "**Its controller** creates a
+token" and "**That creature's controller** reveals cards …" (the three
+functions at the bottom). They had stayed behind in `riders` when this module
+left, and they are this module's question word for word — the possessive names
+the permanent the sentence before it removed, guarded on the same
+`statement_bound_target` as the verb, counter and grant riders above, and each
+*appends a step* rather than folding a flag, which nothing left in `riders`
+does. The grant rider here had been stepping round them the whole time: it
+claims "that creature" only when a grant verb follows, "so 'that creature's
+controller …' (a different referent) keeps its own reading".
 """
 
 from __future__ import annotations
@@ -19,11 +32,13 @@ from __future__ import annotations
 import dataclasses
 from dataclasses import replace
 
+from ..oracle_types import LAST_TARGET_CONTROLLER
 from . import ast
 from .errors import GrammarError
 from .lexer import PT, QUOTE
-from .effects import (_parse_gains, _parse_gets, _parse_loses,
-                      _parse_put_counter)
+from .nouns import parse_object_filter
+from .effects import (_parse_create_token, _parse_gains, _parse_gets,
+                      _parse_loses, _parse_put_counter)
 from .effects.characteristics import _parse_quoted_abilities
 from .phrases import _accept_self_reference
 from .rebinding import statement_bound_target as _statement_bound_target
@@ -615,3 +630,141 @@ def _parse_exile_instead_of_leaving_rider(
         return None
     steps[index] = replace(steps[index], exile_on_leave=True)
     return _RIDER_FOLDED
+
+
+def _accept_removed_permanents_controller(stream: TokenStream) -> bool:
+    """The possessive naming the controller of the permanent the sentence in
+    front of this one removed — ``that creature's controller`` or ``its
+    controller`` — consumed, or False with the cursor untouched.
+
+    **One reader, because it was two.** Transmogrify prints "that creature's
+    controller" and Polymorph prints "its controller" for the same seat, and the
+    reveal rider below reads both; the token rider above read only the second,
+    so Ovinomancer's "That creature's controller creates a 0/1 green Sheep
+    creature token" refused a phrase the module three functions down already
+    knew. A fork in a *fragment* is only ever found by whoever extends it, which
+    is what makes the extension the moment to collapse it.
+
+    Neither spelling is a difference in what the card does, so normalising at
+    one end would be the same card twice.
+    """
+    return bool(
+        stream.accept_phrase("that", "creature", "'s", "controller")
+        or stream.accept_phrase("its", "controller")
+    )
+
+
+def _parse_its_controller_creates_rider(
+    stream: TokenStream, steps: list[ast.Statement]
+) -> ast.Statement | None:
+    """``Its controller creates a <token>.`` after a sentence that chose a
+    target (Angelic Ascension, Secure the Scene — both after an exile), and
+    ``That creature's controller creates a <token>.`` after a destroy
+    (Ovinomancer).
+
+    Both possessives name the previous sentence's chosen permanent, which is
+    gone by the time the token arrives — so the token rides the controller that
+    step recorded, and the lowering demands that producer. Parsed as its own
+    sentence, either phrase would name nobody at all.
+    """
+    if not steps or _statement_bound_target(steps[-1]) is None:
+        return None
+    mark = stream.mark()
+    if not _accept_removed_permanents_controller(stream):
+        return None
+    if not stream.at_word("creates"):
+        stream.reset(mark)
+        return None
+    try:
+        token = _parse_create_token(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    assert isinstance(token, ast.CreateToken)
+    return replace(token, recipient=LAST_TARGET_CONTROLLER)
+
+
+def _parse_that_controller_reveals_rider(
+    stream: TokenStream, steps: list[ast.Statement]
+) -> ast.Statement | None:
+    """``That creature's controller reveals cards from the top of their library
+    until they reveal a creature card. That player puts that card onto the
+    battlefield, then shuffles the rest into their library.`` (Transmogrify.)
+
+    ``Its controller reveals cards from the top of their library until they
+    reveal a creature card. The player puts that card onto the battlefield,
+    then shuffles all other cards revealed this way into their library.``
+    (Polymorph, behind a destroy rather than an exile.)
+
+    The same shape as the "its controller creates a token" rider beside it, and
+    for the same reason: "that creature" names the permanent the previous
+    sentence removed, which is gone by the time this runs, so the library read
+    rides the controller that step recorded. Parsed as its own sentence it names
+    nobody.
+
+    All three sentences are consumed here. They describe one procedure over one
+    revealed pile — "that card" is what the reveal stopped on and "the rest" is
+    exactly what it turned over first — so parsed apart the last two would
+    dangle referents nothing binds.
+
+    **Three phrases have two printed spellings each**, and each pair is read
+    rather than normalized at one end: the possessive that names the removed
+    permanent (``_accept_removed_permanents_controller``), the article in front
+    of the seat
+    ("that player" / "the player") and the words for the cards the reveal
+    turned over first ("the rest" / "all other cards revealed this way"). None
+    of the three is a difference in what the card does — Polymorph and
+    Transmogrify are the same procedure — so a second production for them
+    would be the same card twice.
+    """
+    if not steps or _statement_bound_target(steps[-1]) is None:
+        return None
+    mark = stream.mark()
+    if not _accept_removed_permanents_controller(stream):
+        return None
+    if not stream.accept_phrase(
+        "reveals", "cards", "from", "the", "top", "of", "their", "library",
+        "until", "they", "reveal",
+    ):
+        stream.reset(mark)
+        return None
+    try:
+        stream.accept_word("a", "an")
+        filt = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not filt.is_card:
+        stream.reset(mark)
+        return None
+    stream.accept_punct(".")
+    # Every word of the destination and of what happens to the rest. A card
+    # that milled the pile instead of shuffling it back is a different card, and
+    # the difference does not show until this sentence.
+    if not (
+        stream.accept_phrase(
+            "that", "player", "puts", "that", "card", "onto", "the", "battlefield",
+        )
+        or stream.accept_phrase(
+            "the", "player", "puts", "that", "card", "onto", "the", "battlefield",
+        )
+    ):
+        stream.reset(mark)
+        return None
+    stream.accept_punct(",")
+    if not stream.accept_word("then"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("shuffles"):
+        stream.reset(mark)
+        return None
+    if not (
+        stream.accept_phrase("the", "rest")
+        or stream.accept_phrase("all", "other", "cards", "revealed", "this", "way")
+    ):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("into", "their", "library"):
+        stream.reset(mark)
+        return None
+    return ast.RevealUntil(LAST_TARGET_CONTROLLER, filt)

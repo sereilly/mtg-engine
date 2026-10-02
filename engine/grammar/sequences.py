@@ -44,7 +44,8 @@ import dataclasses
 
 from . import ast
 from .control_flow import (_attach_if_that_card_was_returned, _attach_if_you_cant,
-                          _attach_if_you_do, _attach_otherwise, _attach_when_you_do)
+                          _attach_if_you_do, _attach_otherwise, _attach_when_you_do,
+                          _parse_conditional_instead_rider, _parse_who_cant_rider)
 from .effects import (
     _parse_activation_restriction,
     _parse_x_spend_restriction,
@@ -59,9 +60,11 @@ from .pronouns import (_RIDER_FOLDED, _attach_returned_text_change,
                        _parse_conditional_pronoun_grant_rider,
                        _parse_conditional_quoted_grant_rider,
                        _parse_exile_instead_of_leaving_rider,
+                       _parse_its_controller_creates_rider,
                        _parse_pronoun_counter_rider,
                        _parse_plural_pronoun_pump_rider,
-                       _parse_pronoun_grant_rider, _parse_pronoun_verb_rider)
+                       _parse_pronoun_grant_rider, _parse_pronoun_verb_rider,
+                       _parse_that_controller_reveals_rider)
 from .sentence_rebinding import (
     rebind_alternative_pronoun_to_choice_target,
     rebind_delayed_pronoun_to_sentence_target,
@@ -75,7 +78,7 @@ from .repeats import (_attach_repeat_for_types,
                       _attach_repeat_while_condition)
 from .riders import (_attach_destroyed_this_way, _attach_flip_stakes_to_loop,
     _attach_no_regeneration,
-    _attach_unaffected_when_cost_paid, _attach_exchanged_this_way, _attach_tap_when_control_lost, _attach_riders, _attach_source_damage_lock, _attach_counter_cap, _attach_new_target_bound, _attach_spend_only, _attach_superlative_tie_break, _attach_unpaid_penalty, _parse_conditional_instead_rider, _parse_exile_instead_rider, _parse_its_controller_creates_rider, _parse_that_controller_reveals_rider, _parse_who_cant_rider)
+    _attach_unaffected_when_cost_paid, _attach_exchanged_this_way, _attach_tap_when_control_lost, _attach_riders, _attach_source_damage_lock, _attach_counter_cap, _attach_new_target_bound, _attach_spend_only, _attach_superlative_tie_break, _attach_unpaid_penalty, _parse_exile_instead_rider)
 from .statements import (
     _parse_condition,
     parse_statement,
