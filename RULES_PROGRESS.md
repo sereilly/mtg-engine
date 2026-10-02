@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**411 / 617 tracked rules covered (66%)** — 2487 tests, 0 unannotated.
+**411 / 617 tracked rules covered (66%)** — 2489 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -610,7 +610,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **506.4** A permanent is removed from combat if it leaves the battlefield, if its controller changes, if it... *(10 tests, subrules bc)*
 - [x] **506.5** A creature attacks alone if it’s the only creature declared as an attacker during the declare att... *(8 tests)*
 - [x] **506.6** Some abilities check to see whether or not a creature “had to attack” during a particular combat ... *(2 tests)*
-- [x] **506.7** Some spells state that they may be cast “only [before/after] [a particular point in the combat ph... *(8 tests)*
+- [x] **506.7** Some spells state that they may be cast “only [before/after] [a particular point in the combat ph... *(10 tests, subrules c)*
 
 ### 507. Beginning of Combat Step
 

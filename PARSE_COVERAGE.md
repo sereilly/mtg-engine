@@ -12,6 +12,39 @@ unclaimed text. Do not edit by hand.
 - With UNCLAIMED text (must fix or acknowledge): **0**
 - With deletion-probe findings (ignored words): **468**
 
+## Measured sets — reported, not gated
+
+Cards in a `measured` set (see `cards/manifest.json`) that the
+compiler calls **supported** while carrying a printed line nothing
+implements. They are the debt behind that set's progress number, and
+`--hollow-lines` sees only the ones that produced an *ability part* —
+a line yielding nothing at all leaves that probe nothing to find.
+
+Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
+`HOOK_RELIANCE.md`'s ceilings exclude the same sets: a ratchet over a
+set nobody has implemented fires on its composition rather than on
+anything anyone did, and every ingest would arrive red.
+
+**10 unclaimed sentence(s) across 7 supported card(s).**
+
+- **Belbe's Portal**
+  - `{3}, {t}: you may put a creature card of the chosen type from your hand onto the battlefield`
+- **Parallax Tide**
+  - `fading 5`
+  - `when this enchantment leaves the battlefield, each player returns to the battlefield all cards they own exiled with it`
+- **Parallax Wave**
+  - `fading 5`
+  - `when this enchantment leaves the battlefield, each player returns to the battlefield all cards they own exiled with it`
+- **Rejuvenation Chamber**
+  - `fading 2`
+- **Rising Waters**
+  - `at the beginning of each player's upkeep, that player untaps a land they control`
+- **Saproling Burst**
+  - `fading 7`
+  - `remove a fade counter from this enchantment: create a green saproling creature token. it has "this token's power and toughness are each equal to the number of fade counters on saproling burst."`
+- **Terrain Generator**
+  - `{2}, {t}: you may put a basic land card from your hand onto the battlefield tapped`
+
 ## Acknowledged simplifications
 
 | Card | Sentence | Why it is acceptable |

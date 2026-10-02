@@ -119,6 +119,40 @@ def test_506_7_only_during_combat_before_blockers_are_declared():
     )
 
 
+@pytest.mark.cr("506.7c")
+def test_506_7c_only_during_combat_is_the_whole_combat_phase_on_any_turn():
+    """Angelic Favor's own line, read as a bare phrase so the test does not
+    depend on which manifest role Nemesis is in: refused in a main phase, legal
+    in every step of combat for either seat, refused again once combat ends."""
+    game, _p1, _p2 = _duel()
+    text = "cast this spell only during combat."
+
+    game.current_turn_phase = "precombat_main"
+    assert check_cast_timing(game, 0, text) == "can only be cast during combat"
+
+    _to_declare_attackers(game)
+    assert check_cast_timing(game, 0, text) is None
+    assert check_cast_timing(game, 1, text) is None
+
+    game.advance_combat_phase()  # declare_blockers
+    assert check_cast_timing(game, 0, text) is None
+
+    game.current_turn_phase = "postcombat_main"
+    assert check_cast_timing(game, 0, text) == "can only be cast during combat"
+
+
+@pytest.mark.cr("506.7c")
+def test_506_7c_the_narrower_combat_windows_still_report_their_own_message():
+    """"During combat" is a strict prefix of three longer rows, and the first
+    violated row is the one reported — so the bare row sits after them."""
+    game, _p1, _p2 = _duel()
+    game.current_turn_phase = "precombat_main"
+
+    assert _denial(game, 0, "Blaze of Glory") == (
+        "can only be cast during combat before blockers are declared"
+    )
+
+
 @pytest.mark.cr("506.7")
 def test_506_7_only_during_your_declare_attackers_step_is_yours_alone():
     """Camouflage — "your declare attackers step". The step is shared, so the

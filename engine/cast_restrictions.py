@@ -115,6 +115,17 @@ def _combat_after_blockers(game: "Game", caster_index: int) -> bool:
     )
 
 
+def _during_combat(game: "Game", caster_index: int) -> bool:
+    """Angelic Favor: "only during combat" — the whole combat phase, any of its
+    five steps, on anybody's turn (CR 506.7c).
+
+    The widest of the combat windows and the one the three "during combat
+    <before/after> blockers are declared" rows each narrow, so it names no step
+    and no seat: the card prints neither.
+    """
+    return game.current_turn_phase == "combat"
+
+
 def _after_combat(game: "Game", caster_index: int) -> bool:
     # Glyph of Reincarnation: after the combat *phase* has ended, so the
     # postcombat main phase and the ending phase. The end of combat step is
@@ -288,6 +299,17 @@ CAST_RESTRICTIONS: tuple[CastRestriction, ...] = (
         _opponents_turn_after_upkeep,
         "can only be cast during an opponent's turn after their upkeep step",
         names_seat="active",
+    ),
+    # **After the three rows it is a strict prefix of**, for the reason the last
+    # row in this table gives: `check_cast_timing` reports the *first* violated
+    # restriction, so above "during combat before blockers are declared" this
+    # would answer Blaze of Glory with a window wider than the one it prints.
+    # Enforcement is unaffected either way — a card printing a longer clause
+    # violates this row only when it also violates its own.
+    CastRestriction(
+        "cast this spell only during combat",
+        _during_combat,
+        "can only be cast during combat",
     ),
     # **Last, and the order is load-bearing.** This phrase is a strict prefix of
     # the two above it, and `check_cast_timing` reports the *first* violated

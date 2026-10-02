@@ -109,6 +109,11 @@ def test_no_card_in_the_pool_loses_a_word_to_the_expansion(_r28_pool):
     activated ability says "Crovax gains flying". "Crovax" is not a word the
     game uses to describe objects, so all three occurrences are the legend
     naming itself.
+
+    Nemesis added the twelfth, the plainest instance yet: Volrath the Fallen's
+    one ability reads "Volrath gets +X/+X until end of turn". "Volrath" is not
+    a word the game uses to describe objects, so it is the legend naming itself
+    and the expansion is right to write the whole name.
     """
     changed = {
         card.name
@@ -130,4 +135,5 @@ def test_no_card_in_the_pool_loses_a_word_to_the_expansion(_r28_pool):
         "Maraxus of Keld",
         "Starke of Rath",
         "Crovax the Cursed",
+        "Volrath the Fallen",
     }
