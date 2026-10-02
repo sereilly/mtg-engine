@@ -473,8 +473,8 @@ def become_blocked(game: Game, instruction: OracleInstruction, context: OracleEx
     sweep = instruction.payload.get("subject")
     if sweep is not None and not described:
         # "**Attacking creatures** become blocked." (Fog Patch.) No target: the
-        # set is every creature the printed phrase describes as the spell
-        # resolves (CR 608.2c), found through the one matcher the targeted
+        # set is every creature the printed phrase describes as the effect is
+        # applied (CR 608.2h), found through the one matcher the targeted
         # spelling re-asks its choice through.
         chosen = [
             perm for perm in game.all_permanents()

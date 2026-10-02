@@ -53,8 +53,9 @@ _BY_A_CREATURE = "Whenever this creature becomes blocked by a creature, you gain
 
 
 def _nem_g3_combat(attackers, defenders, spell_name):
-    """Seat 0 attacks with every one of *attackers*; seat 1 holds *defenders*
-    and *spell_name* in hand. Stops at declare blockers with no block made."""
+    """Seat 0 attacks with every creature among *attackers*; seat 1 holds
+    *defenders* and *spell_name* in hand. Stops at declare blockers with no
+    block made."""
     mine = [Permanent(card=card) for card in attackers]
     theirs = [Permanent(card=card) for card in defenders]
     game = Game(players=[
@@ -69,7 +70,8 @@ def _nem_g3_combat(attackers, defenders, spell_name):
     game._close_current_priority_step()
     game.advance_combat_phase()
     game.advance_combat_phase()
-    assert game.declare_attackers(0, list(range(len(mine))))[0]
+    creatures = [slot for slot, perm in enumerate(mine) if perm.is_creature]
+    assert game.declare_attackers(0, creatures)[0]
     game.advance_combat_phase()
     return game, mine, theirs
 
@@ -86,6 +88,27 @@ def test_an_effect_that_blocks_an_unblocked_attacker_fires_becomes_blocked():
 
     assert attacker.blocked
     assert game.players[0].life == 23
+
+
+@pytest.mark.cr("509.3c")
+def test_a_board_wide_becomes_blocked_watcher_hears_an_effect_block():
+    """Close Quarters' "whenever a creature you control becomes blocked" is the
+    same bare wording printed about a set, announced through the event bus
+    rather than read off the attacker — so the effect-made block has to reach
+    that announcement too, or the enchantment sleeps through Dazzling Beauty."""
+    catalog = _nem_g3_catalog()
+    game, (attacker, _quarters), _ = _nem_g3_combat(
+        [_nem_g3_creature("Raider", 2, 2), catalog["Close Quarters"]],
+        [], "Dazzling Beauty",
+    )
+    game.declare_blockers(1, {})
+
+    game.cast_from_hand(1, "Dazzling Beauty", target_permanent_ids=[attacker.permanent_id])
+    resolve_stack(game)
+
+    assert attacker.blocked
+    assert "Close Quarters dealt 1 damage" in game.log
+    assert game.players[1].life == 19
 
 
 @pytest.mark.cr("509.3d")
