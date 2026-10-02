@@ -644,8 +644,15 @@ def _lower_controller_mana_swap(
     if node.duration.kind not in _REST_OF_TURN:
         raise LoweringError("a recorded mana swap lasts exactly this turn", node=node)
     filt = node.target.filter
-    wanted_controller = None if node.each_player else "you"
-    if node.target.quantifier not in ("a", "all", "each") or filt.controller != wanted_controller:
+    # "if you tap **a land** for mana" (Harvest Mage) beside Deep Water's "a
+    # land **you control**": the same class, because the tapper is "you" and a
+    # land's mana ability is its controller's to activate (CR 602.2) — so the
+    # seat's record only ever meets that seat's lands, and
+    # ``land_mana_swaps.swapped_production`` asks no other seat's records. The
+    # bare noun is admitted for the "you" tapper alone; "a player taps a land"
+    # names every seat already and needs no seat word to be dropped.
+    wanted_controllers = (None,) if node.each_player else ("you", None)
+    if node.target.quantifier not in ("a", "all", "each") or filt.controller not in wanted_controllers:
         raise LoweringError(
             "a recorded mana swap covers the lands the seat it names has",
             node=node,
@@ -671,6 +678,11 @@ def _lower_controller_mana_swap(
         # A swap with no symbol at either end would arm a record that makes
         # nothing, which is a land that taps for no mana at all.
         raise LoweringError("a mana swap needs a symbol to produce", node=node)
+    if node.replaces_amount:
+        # "…instead of any other type **and amount**" (Harvest Mage): the
+        # record clamps the production to one, the way Contamination's static
+        # does. Emitted only when printed, so Deep Water's payload is unchanged.
+        payload["replaces_amount"] = True
     return (OracleInstruction("swap_controller_land_mana_until_eot", "", payload),)
 
 

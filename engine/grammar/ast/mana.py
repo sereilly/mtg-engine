@@ -333,6 +333,12 @@ class ProducesManaInstead:
     #: travels as a reference and ``produced`` stays empty, the same split
     #: :class:`AddMana` already makes for "add one mana of the chosen color".
     from_chosen_color: bool = False
+    #: "…instead of any other type **and amount**." (Harvest Mage; the static
+    #: twin is Contamination's, read by ``engine/land_mana_swaps.py``.) The
+    #: sentence replaces *how much* as well as *which*, so a land that would
+    #: make two mana makes one. Defaulted False so every node built before it
+    #: — Deep Water's type-only swap — means what it always did.
+    replaces_amount: bool = False
 
 
 @dataclass(frozen=True)

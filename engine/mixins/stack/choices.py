@@ -4320,8 +4320,11 @@ class PendingChoicesMixin:
         Swamp to pay a {B} the tap will not produce, and report a cost payable
         that is not.
         """
-        swapped = land_mana_swaps.swapped_symbol(self, land)
-        return (swapped,) if swapped else tuple(land.effective_produced_mana or ())
+        # "A color of your choice" (Harvest Mage) is all five colours here,
+        # which ``payment_colors`` answers so the client's colour prompt asks
+        # the same question.
+        swapped = land_mana_swaps.payment_colors(self, land)
+        return swapped if swapped else tuple(land.effective_produced_mana or ())
 
     def _default_mana_payment(self, choice: PendingChoice) -> None:
         controller = self.players[choice.player_index]

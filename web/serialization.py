@@ -23,6 +23,8 @@ from engine.library_top import top_is_public
 from engine.oracle import LOYALTY_ANY_TIME_STATIC, compile_card_oracle
 from engine.keywords import derived_ability_lines
 from engine.hand_locks import locked_hand_indices
+from engine.land_mana_swaps import payment_colors, swapped_symbol
+from engine.oracle_types import MANA_COLOR_OF_CHOICE
 from engine.revealed_hands import hand_revealed_to
 from engine.subject_filters import filter_head_noun
 from engine.targeting import bounce_subject_filter, usable_activated_abilities
@@ -219,6 +221,23 @@ def _card_preview(card) -> dict:
     }
 
 
+def _offered_mana(game: Game, perm: Permanent) -> tuple[str, ...]:
+    """The symbols the client offers when this permanent is tapped for mana.
+
+    The permanent's own answer, except under a seat-wide swap whose colour the
+    tapper names: "Until end of turn, if you tap a land for mana, it produces
+    one mana of **a color of your choice** instead of any other type and
+    amount." (Harvest Mage.) The client prompts for a colour only when a land
+    offers two or more, so a Forest that answered "G" here would never be
+    asked — the seam would get the default request and the choice the card
+    prints would be one no human could make. A fixed swap (Deep Water) is left
+    as it was: the seam decides that symbol whatever is requested.
+    """
+    if perm.has_type("land") and swapped_symbol(game, perm) == MANA_COLOR_OF_CHOICE:
+        return payment_colors(game, perm) or ()
+    return tuple(perm.effective_produced_mana)
+
+
 def _shield_source_payload(source_name: str | None) -> dict | None:
     """A card-preview payload for the effect that granted a damage-prevention
     shield, so the UI can show its art when the shield badge is hovered. Returns
@@ -400,7 +419,7 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         "attached_to_index": attached_to_index,
         "attached_to_id": attached_to_id,
         "attached_to_seat": attached_to_seat,
-        "produced_mana": list(perm.effective_produced_mana),
+        "produced_mana": list(_offered_mana(game, perm)),
         # A color-changing effect (e.g. Lifelace: "Target ... becomes green.")
         # records the new color so the UI can label the recolored permanent.
         "color_override": perm.metadata.get("color_override"),

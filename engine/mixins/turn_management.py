@@ -555,6 +555,11 @@ class TurnManagementMixin:
             {
                 "land": land, "player": player, "produced": None,
                 "produced_amount": None,
+                # The colour the seat asked this land for. "…it produces one
+                # mana of **a color of your choice** instead…" (Harvest Mage)
+                # is chosen per tap, and this request is that choice — the
+                # same channel a dual land's "{R} or {G}" is answered through.
+                "requested": chosen_color,
             },
         )
         swapped_to = mana_event.get("produced")

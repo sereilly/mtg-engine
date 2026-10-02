@@ -55,6 +55,7 @@ import re
 from dataclasses import dataclass, field
 from functools import lru_cache
 
+from .oracle_types import MANA_COLOR_OF_CHOICE
 from .shields import END_OF_TURN  # noqa: F401  (one duration vocabulary)
 
 
@@ -88,6 +89,10 @@ class LandManaSwap:
     #: gets priority inside a resolution (CR 608.2) — so the later read is the
     #: same answer, and it is the one that cannot be a stale default.
     chosen_by: object | None = None
+    #: "…instead of any other type **and amount**." (Harvest Mage.) The record
+    #: clamps the whole production to one mana, as Contamination's static does.
+    #: False on every record armed before a card printed the words.
+    replaces_amount: bool = False
 
     def symbol(self) -> str:
         """The symbol this record makes a covered land produce."""
@@ -311,8 +316,38 @@ def static_substituted_symbol(game, land) -> str | None:
     return None if found is None else found.produced
 
 
-def swapped_production(game, land) -> "ManaSubstitution | None":
+#: The colours "a color of your choice" ranges over (CR 105.1) — never {C},
+#: which is not a colour (CR 105.2c). Ordered WUBRG so a planner that walks it
+#: is deterministic.
+_COLORS = ("W", "U", "B", "R", "G")
+
+
+def _color_of_choice(requested, land) -> str:
+    """The colour a tapper named for "one mana of a color of your choice".
+
+    The tap seam always carries the colour the tapping seat asked the land for
+    (``Game.tap_land_for_mana``'s ``chosen_color``), so that request *is* the
+    choice. A request that is not a colour — colorless, or nothing — falls back
+    to a colour the land itself makes, and only then to white: still a colour
+    of the tapper's, and never a symbol the sentence rules out.
+    """
+    wanted = str(requested or "").upper()
+    if wanted in _COLORS:
+        return wanted
+    for symbol in getattr(land, "effective_produced_mana", ()) or ():
+        if str(symbol).upper() in _COLORS:
+            return str(symbol).upper()
+    return _COLORS[0]
+
+
+def swapped_production(game, land, requested=None) -> "ManaSubstitution | None":
     """What *land* produces instead of whatever it would have, or None.
+
+    *requested* is the colour the tapper asked for, supplied by the tap seam
+    alone. It answers a record whose symbol is "a color of your choice"
+    (Harvest Mage); with no request — the payment planner asking what a land
+    *could* make — such a record answers with :data:`MANA_COLOR_OF_CHOICE`
+    itself, which a reader turns into the five colours.
 
     The recorded per-seat swaps are asked of the **controller's** records and
     nobody else's: "a land **you** control" is CR 109.5's you, the seat whose
@@ -340,13 +375,37 @@ def swapped_production(game, land) -> "ManaSubstitution | None":
         # rather than making the land produce the empty symbol — which is a
         # land that taps for no mana at all.
         symbol = record.symbol()
+        if symbol == MANA_COLOR_OF_CHOICE and requested is not None:
+            # "…one mana of a color of your choice…" (Harvest Mage): named by
+            # the tapper for this one production (CR 106.12b).
+            symbol = _color_of_choice(requested, land)
         if symbol:
-            # A recorded swap never replaces the amount: every card that arms
-            # one prints "instead of any other type" and stops there. The
-            # printed word is what sets the flag, so it is False here rather
-            # than inherited from whatever static it is overriding.
-            found = ManaSubstitution(produced=symbol, land_type=None)
+            # The amount is the *record's* printed word — "…and amount"
+            # (Harvest Mage) — and never inherited from whatever static it is
+            # overriding: Deep Water prints "instead of any other type" and
+            # stops there, so its record leaves the amount alone.
+            found = ManaSubstitution(
+                produced=symbol, land_type=None,
+                replaces_amount=record.replaces_amount,
+            )
     return found
+
+
+def payment_colors(game, land) -> "tuple[str, ...] | None":
+    """The symbols tapping *land* can put in its controller's pool under a
+    swap, or None when no swap applies.
+
+    One symbol for every fixed swap; all five colours for "a color of your
+    choice", because the tapper may name any of them. The payment planner and
+    the client's colour prompt both ask this, so the two cannot disagree about
+    what a Forest under Harvest Mage can pay for.
+    """
+    swapped = swapped_symbol(game, land)
+    if swapped is None:
+        return None
+    if swapped == MANA_COLOR_OF_CHOICE:
+        return _COLORS
+    return (swapped,)
 
 
 def swapped_symbol(game, land) -> str | None:
@@ -361,7 +420,8 @@ def swapped_symbol(game, land) -> str | None:
 
 __all__ = [
     "END_OF_TURN", "LandManaSwap", "ManaSubstitution", "add_swap",
-    "clear_swaps", "static_substituted_symbol", "static_substitution_for",
+    "clear_swaps", "payment_colors", "static_substituted_symbol",
+    "static_substitution_for",
     "substitution_line", "substitutions_on", "swapped_production",
     "swapped_symbol", "swaps_on",
 ]
