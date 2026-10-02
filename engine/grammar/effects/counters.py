@@ -215,6 +215,11 @@ def _parse_put_counter(stream: TokenStream) -> ast.Statement:
         if stream.accept_word("onto"):
             stream.expect_word("the")
             stream.expect_word("battlefield")
+            # "…onto the battlefield **tapped**" (Terrain Generator). Printed
+            # straight after the zone and before any control rider ("…tapped
+            # under your control"), and recorded rather than consumed: CR 110.5b
+            # enters a permanent untapped unless the effect says otherwise.
+            tapped = bool(stream.accept_word("tapped"))
             under = bool(stream.accept_phrase("under", "your", "control"))
             # "…**under its owner's control**" (Glyph of Reincarnation) — the
             # other seat CR 400.3 lets a card arrive under. Read only when
@@ -292,7 +297,7 @@ def _parse_put_counter(stream: TokenStream) -> ast.Statement:
                     stream.reset(trailing)
             return ast.PutOntoBattlefield(
                 moved, under_your_control=under, under_owners_control=owners,
-                attached_to_source=attached,
+                attached_to_source=attached, tapped=tapped,
             )
     stream.reset(move_mark)
     up_to = stream.accept_phrase("up", "to")

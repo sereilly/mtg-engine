@@ -5593,7 +5593,14 @@ class PendingChoicesMixin:
             return False
         card = player.hand[hand_index]
         player.hand = [c for i, c in enumerate(player.hand) if i != hand_index]
-        arrival = Permanent(card=card)
+        # "…onto the battlefield **tapped**." (Terrain Generator.) CR 110.5b:
+        # the entry state is the effect's to say, so it is set on the object
+        # before it enters rather than by a tap after — no "becomes tapped"
+        # event happens, which is what the printed word means.
+        arrival = Permanent(
+            card=card,
+            tapped=bool((choice.data.get("_payload") or {}).get("tapped")),
+        )
         self._put_permanent_onto_battlefield(
             choice.player_index, arrival, None
         )

@@ -772,10 +772,6 @@ _KIND_TO_SPEC: dict[str, dict] = {
     "return_spell_or_creature_to_hand": {
         "kind": "spell_or_permanent", "permanent_kind": "creature",
     },
-    # Epitaph Golem: any card in the activator's own graveyard.
-    "put_graveyard_card_on_library_bottom": {
-        "kind": "graveyard_creature", "own_graveyard_only": True, "any_card": True,
-    },
     "mark_text_modified": {"kind": "permanent"},
     "counter_top_stack_spell": {"kind": "stack"},
     # "Target spell's controller exiles it …" (Ertai's Meddling). The same
@@ -1465,6 +1461,23 @@ def _graveyard_return_spec(payload: dict) -> dict:
     if payload.get("exclude_source_card"):
         spec["exclude_source_card"] = True
     return spec
+
+
+def _graveyard_bottom_spec(payload: dict) -> dict:
+    """"Put target card from your graveyard on the bottom of your library."
+
+    Epitaph Golem's empty payload is any card in the activator's own pile —
+    the fixed row this kind had before a narrowed printing existed. "Target
+    **Rebel** card" (Lin Sivvi, Defiant Hero) carries the graveyard-return
+    keys, so it derives the return's picker: the same pile, narrowed by the one
+    predicate the handler re-checks the chosen card against.
+    """
+    if not payload:
+        return {
+            "kind": "graveyard_creature", "own_graveyard_only": True,
+            "any_card": True,
+        }
+    return _graveyard_return_spec(payload)
 
 
 def _graveyard_exile_spec(payload: dict) -> dict:
@@ -2195,6 +2208,9 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     # does with them differs, and that is the handler's business.
     "choose_target_cards": _graveyard_return_spec,
     "reanimate_creature": _reanimation_spec,
+    # Epitaph Golem's any card, Lin Sivvi's "target Rebel card" — see the
+    # builder for why the empty payload keeps its old fixed row.
+    "put_graveyard_card_on_library_bottom": _graveyard_bottom_spec,
     # Hakim, Loreweaver. The same graveyard picker, narrowed by the payload
     # the handler re-checks against — one predicate, so the Auras offered are
     # exactly the Auras the resolution will take.

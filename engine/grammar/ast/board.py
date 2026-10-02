@@ -586,6 +586,11 @@ class PutOntoBattlefield:
     #: "their graveyard" says which pile and this says who chooses out of it,
     #: and the lowering checks the two against each other.
     actor: "PlayerRef | None" = None
+    #: "…from your hand onto the battlefield **tapped**." (Terrain Generator.)
+    #: CR 110.5b: a permanent enters untapped unless the effect putting it there
+    #: says otherwise, so the word is part of the entry — read, never defaulted,
+    #: and refused by every lowering that cannot honour it.
+    tapped: bool = False
 
 
 @dataclass(frozen=True)

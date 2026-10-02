@@ -595,15 +595,32 @@ def object_only_filter(
     return remaining
 
 
-def card_only_filter(payload: dict) -> dict | None:
+#: The card-phrase keys a **resolver holding the ability's source** turns into
+#: ordinary ``CARD_ONLY_FILTER_KEYS`` before any matcher is asked — "a creature
+#: card **of the chosen type**" (Belbe's Portal). CR 614.1c records the word on
+#: the source as it entered, so no card in a zone can answer the key and
+#: ``_card_matches_filter`` refuses it; ``handlers/_common._resolve_chosen_subtype``
+#: is what replaces it with ``subtype_filter``. Only a caller whose handler does
+#: that may pass these as *carried_separately* below.
+SOURCE_RESOLVED_CARD_KEYS = frozenset({"chosen_creature_type", "chosen_land_type"})
+
+
+def card_only_filter(
+    payload: dict, *, carried_separately: frozenset[str] = frozenset()
+) -> dict | None:
     """*payload* as a filter ``_card_matches_filter`` can answer about a card in
     a zone, or ``None`` when it names something outside that.
 
     The card twin of :func:`object_only_filter`, and separate from it because
     the two answer about different kinds of object: a permanent's colour and
     tapped state are live questions, a card's are not questions at all.
+
+    *carried_separately* is :func:`object_only_filter`'s convention: keys the
+    caller's handler resolves itself, kept in the result rather than refused.
+    Each one is a claim that the resolver really does turn it into a key this
+    gate admits — an unnamed key is still a refusal.
     """
-    if set(payload) - CARD_ONLY_FILTER_KEYS:
+    if set(payload) - CARD_ONLY_FILTER_KEYS - carried_separately:
         return None
     return dict(payload)
 

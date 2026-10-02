@@ -1146,6 +1146,14 @@ def _card_matches_filter(card, filt: dict, *, game=None, owner=None) -> bool:
     changes, which is why this is a widening of the reader rather than a fix
     with a card behind it.
     """
+    # "…a creature card **of the chosen type**" (Belbe's Portal). The record is
+    # on the ability's *source* (CR 614.1c), which this pure half does not
+    # have; a resolver holding it turns the key into ``subtype_filter`` first
+    # (``_resolve_chosen_subtype``). Surviving to here means nobody could, and
+    # ignoring it would offer every creature card in the hand — so it refuses,
+    # exactly as ``permanent_matches_filter`` does for the same two keys.
+    if any(filt.get(key) for key in _CHOSEN_SUBTYPE_KEYS):
+        return False
     types, subtypes = printed_shape(card)
     wanted = filt.get("type_filter")
     if wanted == "artifact_or_enchantment":

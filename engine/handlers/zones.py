@@ -12,6 +12,7 @@ from ..keywords import grant_keyword
 from ..models import Permanent
 from ._common import (
     _card_matches_filter,
+    _resolve_chosen_subtype,
     return_permanent_to_owners_hand,
     _one_choice,
     evaluate_count,
@@ -528,7 +529,11 @@ def _search_restrictions(game: Game, payload: dict, context) -> dict:
     # this card charges as an additional cost has already left one.
     chosen = resolve_target_permanent(game, context)
     if chosen is not None:
-        restrictions["named"] = chosen.card.name
+        # The **effective** name (CR 707.2 puts name first among the copiable
+        # values): "the same name as target creature" aimed at a Clone copying
+        # Grizzly Bears is a search for Grizzly Bears. The printed face read
+        # here made Mask of the Mimic and Pack Hunt search for "Clone".
+        restrictions["named"] = chosen.effective_card.name
     return restrictions
 
 
@@ -5869,6 +5874,25 @@ def put_chosen_card_from_hand_onto_battlefield(game: Game, instruction: OracleIn
             return True, "resolved"
         payload = {**payload, "attach_to_permanent_id": source.permanent_id}
         instruction = dataclasses.replace(instruction, payload=payload)
+    # "…a creature card **of the chosen type**" (Belbe's Portal). The word is
+    # the CR 614.1c record on the ability's source, resolved here into an
+    # ordinary ``subtype_filter`` and frozen onto the payload for the
+    # ``attach_to`` reason above: the candidate rule, the prompt and the answer
+    # check all re-run off this payload, and none of them holds the source. The
+    # source is read even if it has left the battlefield — the chosen type is
+    # its last known information (CR 608.2h). No record leaves the key in place,
+    # and ``_card_matches_filter`` then refuses every card: nothing is offered
+    # rather than the whole hand.
+    from ..subject_filters import SOURCE_RESOLVED_CARD_KEYS
+
+    described = payload.get("card_filter") or {}
+    if any(described.get(key) for key in SOURCE_RESOLVED_CARD_KEYS):
+        payload = {
+            **payload,
+            "card_filter": _resolve_chosen_subtype(
+                dict(described), context.source_permanent
+            ),
+        }
     if not put_from_hand_candidates(game, payload, player):
         # Nothing to pick. Not an offer declined — an offer never made, which is
         # the same rule ``handlers/control_flow._offer_to_seat`` states for an
@@ -7685,6 +7709,19 @@ def put_graveyard_card_on_library_bottom(game: Game, instruction: OracleInstruct
     idx = context.target_permanent_index
     if not (isinstance(idx, int) and 0 <= idx < len(caster.graveyard)):
         idx = 0
+    # "Put target **Rebel** card …" (Lin Sivvi, Defiant Hero). A narrowed
+    # payload is re-checked against the card in the chosen slot through the one
+    # predicate the picker and the activation gate asked, so neither a stale
+    # index nor the fallback above can bottom a card the sentence never named
+    # (CR 608.2b: an illegal target is not acted on). The empty payload is
+    # Epitaph Golem's "target card", which any card answers.
+    if instruction.payload and not graveyard_card_matches(
+        instruction.payload, caster.graveyard[idx]
+    ):
+        game.log.append(
+            f"{context.card.name}: the chosen card is no longer a legal target"
+        )
+        return True, "resolved"
     card = caster.graveyard.pop(idx)
     game.put_card_into_library(caster, card)
     game.log.append(f"{context.card.name}: {card.name} put on the bottom of {caster.name}'s library")

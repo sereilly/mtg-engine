@@ -321,7 +321,10 @@ def _lower_put_revealed_card_onto_battlefield(
         and node.target.quantifier == "those"
     ):
         return ()
-    if node.under_owners_control or node.gains or node.sacrifice_when_control_lost:
+    if (
+        node.under_owners_control or node.gains
+        or node.sacrifice_when_control_lost or node.tapped
+    ):
         raise LoweringError(
             "the revealed card enters under its owner's control with no rider",
             node=node,
