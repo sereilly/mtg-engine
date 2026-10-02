@@ -18,6 +18,16 @@ productions are exactly what lowers through it.
 
 Beside ``riders`` rather than under it: neither imports the other, and both sit
 above ``statements``, which hands both of them ``parse_statement``.
+
+Two branches stayed behind in ``riders`` at that split and followed at Nemesis'
+Phase 0, when that module reached the guard again. "If <condition>, <statement>
+**instead**" (``_parse_conditional_instead_rider``) is ``_attach_otherwise``
+printed from the other end — it gives the sentence before it a second arm, and
+writes the same ``Conditional.otherwise`` to do it. "Each opponent **who
+can't** loses 3 life" (``_parse_who_cant_rider``) is ``_attach_if_you_cant``
+asked of every seat rather than of one: a step that runs only where the action
+before it could not be performed. Neither says anything *about* the step in
+front of it, which is the question ``riders`` keeps.
 """
 
 from __future__ import annotations
@@ -26,11 +36,12 @@ import dataclasses
 from dataclasses import replace
 
 from . import ast
+from .amounts import parse_amount
 from .errors import GrammarError
 from .nouns import parse_object_filter
 from .rebinding import rebind_pronoun_to_condition_target
 from .sentence_rebinding import rebind_pronoun_to_delay_target
-from .statements import parse_statement
+from .statements import _parse_condition, parse_statement
 from .stream import TokenStream
 
 
@@ -76,6 +87,56 @@ def _attach_otherwise(stream: TokenStream, steps: list[ast.Statement]) -> bool:
         otherwise=rebind_pronoun_to_condition_target(last.condition, arm),
     )
     return True
+
+
+def _parse_conditional_instead_rider(
+    stream: TokenStream, steps: list[ast.Statement]
+) -> bool:
+    """``You gain 4 life. If a creature died this turn, you gain 8 life
+    instead.`` (Life Goes On.) ``{T}: Add {C}. If you control an Urza's
+    Power-Plant and an Urza's Tower, add {C}{C} instead.`` (Urza's Mine.)
+
+    The second sentence *replaces* the first when its condition holds, so the
+    pair folds into one ``Conditional`` — then the bigger gain, otherwise the
+    printed base. Parsed apart, the two sentences would gain 12 life on a
+    death; the "instead" is the whole content of the sentence, so it is
+    required, and only a same-shaped statement may replace the last step.
+    """
+    # The statement kinds this rider can replace. `AddMana` joins `GainLife`
+    # for the Antiquities land cycle — "{T}: Add {C}. If you control an Urza's
+    # Power-Plant and an Urza's Tower, add {C}{C} instead." — which is the same
+    # sentence pair with a different verb. `DealDamage` joins them for
+    # Gangrenous Zombies — "…deals 1 damage to each creature and each player.
+    # If you control a snow Swamp, this creature deals 2 damage to each
+    # creature and each player instead." — which is the same pair again. The
+    # replacement must be the *same* kind as what it replaces (checked below),
+    # so widening the set cannot let one kind silently stand in for another.
+    _REPLACEABLE = (ast.GainLife, ast.AddMana, ast.DealDamage)
+
+    last = steps[-1] if steps else None
+    if not isinstance(last, _REPLACEABLE):
+        return False
+    mark = stream.mark()
+    if not stream.accept_word("if"):
+        return False
+    try:
+        condition = _parse_condition(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return False
+    stream.accept_punct(",")
+    try:
+        replacement = parse_statement(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return False
+    if type(replacement) is not type(last) or not stream.accept_word("instead"):
+        stream.reset(mark)
+        return False
+    steps[-1] = ast.Conditional(condition, then=replacement, otherwise=last)
+    return True
+
+
 def _choice_step_index(steps: list[ast.Statement]) -> int | None:
     """Where the choice a following "If the player does/don't" refers back to is.
 
@@ -640,6 +701,34 @@ def _attach_if_you_cant(stream: TokenStream, steps: list[ast.Statement]) -> bool
         ast.Conditional(ast.CouldNot(), _bind_that_creature_after_enchanted(branch))
     )
     return True
+
+
+def _parse_who_cant_rider(
+    stream: TokenStream, steps: list[ast.Statement]
+) -> ast.Statement | None:
+    """``Each opponent who can't loses N life.`` after an each-player discard
+    (Liliana, Waker of the Dead). The loss applies only to opponents who could
+    not perform the previous sentence's action, so it is recorded as a
+    back-reference the lowering turns into a reader of that step's result."""
+    last = steps[-1] if steps else None
+    if not (isinstance(last, ast.Discard) and last.player.kind == "each_player"):
+        return None
+    mark = stream.mark()
+    if not (
+        stream.accept_word("each")
+        and stream.accept_word("opponent")
+        and stream.accept_phrase("who", "can't")
+    ):
+        stream.reset(mark)
+        return None
+    try:
+        stream.expect_word("loses", "lose")
+        amount = parse_amount(stream)
+        stream.expect_word("life")
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    return ast.LoseLife(ast.PlayerRef("each_opponent"), amount, who_could_not="discard")
 
 
 def _attach_when_you_do(stream: TokenStream, steps: list[ast.Statement]) -> bool:

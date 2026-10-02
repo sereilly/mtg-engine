@@ -248,7 +248,7 @@ def _parse_create_token_for_recipient(
     # Anaphoric rather than descriptive: the seat is the one the sentence in
     # front named, and nothing on a board says who that is — so the token rides
     # the controller an earlier step recorded, exactly as "**its controller**
-    # creates …" does (``riders.py``). That is why it sets ``recipient`` and
+    # creates …" does (``pronouns.py``). That is why it sets ``recipient`` and
     # not ``recipient_players``: those name a *set* the phrase describes, and
     # this names one seat somebody else wrote down.
     #

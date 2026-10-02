@@ -352,7 +352,8 @@ PARSE_LAYERS = [
     # in a shared pile — `_announced_target` and `_names_a_target` are read by
     # the in-sentence rebinders and by nothing else, so they came up here,
     # while `statement_bound_target` stayed below where the condition side and
-    # `pronouns` / `riders` read it. 493 lines stay and 541 leave, from 977.
+    # `pronouns` read it (`riders` too, until its two possessive readers joined
+    # `pronouns`). 493 lines stay and 541 leave, from 977.
     #
     # The two are one *question* and two design problems, which is the honest
     # reason they are two files. An out-of-sentence antecedent is found by
@@ -617,6 +618,12 @@ PARSE_LAYERS = [
     # drew: these answer "what does this pronoun name?", the rest of `riders`
     # answers "which branch does this clause belong to". Below `riders`, which
     # imports the binding and is never imported back.
+    #
+    # That edge was two functions wide. `riders` imported the binding for "Its
+    # controller creates …" and "That creature's controller reveals …" and for
+    # nothing else, and those are this module's question — a possessive naming
+    # what the sentence before it removed. They came here at Nemesis' Phase 0,
+    # `riders` at 976, and no edge is left between the two in either direction.
     "pronouns",
     # The branches of an offer — "if you do", "if you can't", "when you do",
     # "otherwise". Split out of `riders` at the guard below, along the boundary
@@ -626,6 +633,14 @@ PARSE_LAYERS = [
     # which is what these productions lower through, so the mirror re-forms
     # rather than forking. Beside `riders` and not under it — neither imports
     # the other, and both are handed `parse_statement` by `statements`.
+    #
+    # Two branches that split left in `riders` followed at Nemesis' Phase 0:
+    # "If <condition>, … instead", which writes the same second arm "otherwise"
+    # does, and "Each opponent who can't …", which is "if you can't" asked of
+    # every seat. One sat at the head of the run this module was cut from and
+    # the other inside it. `riders` keeps the third question alone — what a
+    # clause says *about* the step before it — and nothing left there appends a
+    # step.
     "control_flow",
     # "Repeat this process …" — the sentence that says the sentences before it
     # happen again. Three cards print one and no two of them are the same
