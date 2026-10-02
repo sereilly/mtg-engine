@@ -226,10 +226,10 @@ def _bound_sacrifice_filter(
     words is reading the phrase rather than losing part of it; every other
     narrowing it carries goes into the payload and is tested.
 
-    Gated on a producer, for the reason ``counters.py``'s Bogardan Phoenix
-    branch is gated on the same set one family over: only a step that put a card
-    onto the battlefield changes what the pronoun is about, and without one "it"
-    still means the card phrase it was printed beside.
+    Gated on a producer, for the reason ``_named_counters.py``'s Bogardan
+    Phoenix branch is gated on the same set one family over: only a step that
+    put a card onto the battlefield changes what the pronoun is about, and
+    without one "it" still means the card phrase it was printed beside.
     """
     filt = subject.filter
     if filt.is_card and filt.zone == "graveyard" and (produced & _RECORDED_PERMANENTS):

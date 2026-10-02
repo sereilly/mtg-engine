@@ -211,6 +211,20 @@ def _lower_team_shield(
 # Sacred Boon and Scars of the Veteran are the cards in the docstring above and
 # the cards in both of these.
 
+#: The scratchpad key a granted CR 615 shield is recorded under
+#: (``handlers/prevention.PREVENTION_SHIELD_RESULT``), spelled here rather than
+#: imported because a lowering may not reach into the handlers. The two are held
+#: together by ``lowering/_records._PRODUCES``, which is what the ``produced``
+#: check in ``counters._lower_put_counter`` reads — a key that stopped being
+#: written would take the gate with it rather than leaving a back-reference
+#: pointing at nothing.
+#:
+#: It followed the two predicates down a Phase 0 later, out of ``counters``:
+#: :func:`counts_prevented_damage` reads it, so while it lived in the family this
+#: floor was importing *upward* from inside a function body to reach it.
+PREVENTION_SHIELD_RECORD = "prevention_shield"
+
+
 def names_the_shielded_object(subject) -> bool:
     """Whether *subject* names the object an earlier step of the effect shielded.
 
@@ -253,8 +267,6 @@ def counts_prevented_damage(node) -> bool:
     fails is silent — the source branch claims the sentence first and refuses
     it, which reads as a card the grammar cannot parse.
     """
-    from .counters import PREVENTION_SHIELD_RECORD
-
     count = getattr(node, "count", None)
     return (
         isinstance(count, ast.ThatMuch)

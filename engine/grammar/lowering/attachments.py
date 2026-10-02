@@ -49,9 +49,10 @@ def _lower_attach_to_recorded(
     printed after the word that is the only object a lone sentence could mean —
     carrying no further narrowing this reading would drop; and exactly one
     earlier step must have recorded a permanent, so "it" has one referent rather
-    than a pick between two. The same two questions ``counters.py`` asks of the
-    identical pronoun for Bogardan Phoenix, and the same answer: a step that put
-    a permanent onto the battlefield is what changes what the word means.
+    than a pick between two. The same two questions ``_named_counters.py`` asks
+    of the identical pronoun for Bogardan Phoenix, and the same answer: a step
+    that put a permanent onto the battlefield is what changes what the word
+    means.
     """
     host = node.host
     if not isinstance(host, ast.TargetSpec) or host.targeted:

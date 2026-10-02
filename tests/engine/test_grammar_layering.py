@@ -1746,7 +1746,7 @@ def test_layers_only_import_downward(layers):
         # library shares with it the printed word "Search" and no vocabulary at
         # all.
         ("effects", ("_strips",), ()),
-        ("lowering", ("_common", "_filters", "_events", "_frozen_seats", "_deaths", "_delays", "_amounts", "_counted_damage", "_counted_pumps", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_conjuncts", "_bound_returns", "_bound_exiles", "_described_returns", "_piles", "_counter_stores", "_plus_one_counters", "_blankets", "_prevented_riders", "_pump_categories", "_zone_categories", "_record_keys", "_record_conditions", "_cost_records", "_superlatives", "_recipients", "_collapses", "_declaration_costs", "categories", "conditions"), ()),
+        ("lowering", ("_common", "_filters", "_events", "_frozen_seats", "_deaths", "_delays", "_amounts", "_counted_damage", "_counted_pumps", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_conjuncts", "_bound_returns", "_bound_exiles", "_described_returns", "_piles", "_counter_stores", "_plus_one_counters", "_named_counters", "_blankets", "_prevented_riders", "_pump_categories", "_zone_categories", "_record_keys", "_record_conditions", "_cost_records", "_superlatives", "_recipients", "_collapses", "_declaration_costs", "categories", "conditions"), ()),
         # `costs` is shared beside `_core` rather than a family: a cost is
         # charged on the way to the stack and never lowered, so it has no
         # `effects/` or `lowering/` twin to be a family of — and both
@@ -2327,6 +2327,35 @@ FAMILY_SHARED = {
     # printed-specificity order still reads top to bottom across two files,
     # and nothing reads back.
     "_plus_one_counters",
+    # `_named_counters` split out of `lowering/counters.py` at Nemesis' Phase 0,
+    # with that module 22 lines under the guard and nothing in flight: fading
+    # and Mana Cache's charge counter were due to land in it from several
+    # groups at once with none of them able to cross it alone, which is the
+    # shared module the playbook says is pre-split rather than briefed. The
+    # line is the gate `_lower_put_counter` had written five times over:
+    # `not is_pt_counter(node.counter)`. A CR 122.1a pair carries its power and
+    # toughness in its name and is written through `Game.place_pt_counters`; a
+    # wind, charge or fade counter carries nothing and sits in
+    # `engine/named_counters.py`'s open store — "two different writes", in the
+    # words of the P/T block-pair branch that stayed behind — so it is
+    # `_counter_stores`' boundary (what the *payload* asks for) read a third
+    # time, and the name is the store's own rather than a new word. Every
+    # `add_named_counter_to_self` and `add_named_counter_to_target` the
+    # package builds is built there and nothing else is. The Dread Wight
+    # placement stayed although its kind carries the word, because its gate
+    # stopped asking: it takes either kind of counter as payload.
+    # **Two entry points**, for `_bound_exiles`' reason exactly: four of the
+    # five branches are read ahead of every P/T branch and the fifth after
+    # three that never ask the counter's kind, so one function would have
+    # moved a branch — a behaviour change dressed as a split. A floor for
+    # `_counter_stores`' reason: `counters` is its only reader and it reads
+    # nothing back.
+    #
+    # `PREVENTION_SHIELD_RECORD` left `counters` at the same Phase 0 for
+    # `_prevented_riders`, where the predicate that reads it already lived —
+    # that floor had been importing it *upward*, from inside a function body,
+    # which no guard in this file looks at because a shared module is skipped.
+    "_named_counters",
     # `records` split out of `ast/conditions.py` at Mirage, when three
     # intervening-if productions took that module past the guard. The line is
     # the one `lowering/conditions.py` had been drawing in prose card by card:

@@ -11,10 +11,20 @@ Two neighbours have since left along boundaries this docstring used to name,
 and the pattern in both is *what the payload asks for*: removal
 (``counter_removal.py``) asks which kind and whether the number is known yet
 where a placement asks which object and how many, and the counters whose kind
-**is** a store — loyalty and poison (``counter_stores.py``) — ask which store
+**is** a store — loyalty and poison (``_counter_stores.py``) — ask which store
 tracks that name and nothing at all about an object's characteristics. What is
 left dispatches on the shape of the subject and carries the kind as data, which
 is what makes a card printing a counter nobody has named work for free.
+
+A third left along the same boundary at the Phase 0 before Nemesis: the
+placements of a counter with **no rules meaning of its own**
+(``_named_counters.py``), which is every branch that opened on
+``not is_pt_counter``. They ask the same two things a placement asks, but of a
+different store — ``engine/named_counters.py`` where a CR 122.1a pair goes
+through ``Game.place_pt_counters`` — so no instruction kind is built on both
+sides of that line. ``_lower_put_counter`` still reads them from the two places
+it always did, which is why that module has two entry points rather than one;
+what this file builds itself is the placements a P/T pair can ride.
 """
 
 import dataclasses
@@ -25,18 +35,19 @@ from .. import ast
 from ..errors import LoweringError
 from ..phrases import is_pt_counter
 from ._common import (
-    PRIMARY_TARGET_ROLE, _amount_payload,
     _describe_targets, _filter_payload, divided_target_description,
     _is_enchanted, _is_source, _is_target, _names_several_targets,
-    _restrictions_beyond, describe_target_roles, refuse_untestable
+    _restrictions_beyond
 )
-from ._prevented_riders import (counts_prevented_damage,
+from ._prevented_riders import (PREVENTION_SHIELD_RECORD,
+                                counts_prevented_damage,
                                 names_the_shielded_object)
 from ._sweeps import lower_counter_sweep
-from ._events import trigger_quantity_key
+from ._named_counters import (lower_named_block_pair_placement,
+                              lower_named_placement)
 from ._plus_one_counters import lower_plus_one_placement
 from ._counter_stores import lower_loyalty_counters
-from ._events import (CHOSEN_PERMANENT, OTHER_CHOSEN_PERMANENT, EVENT_SUBJECT_CONTROLLER, _EVENT_SUBJECT_OBJECTS, binds_block_pair, _REANIMATED_PERMANENTS, _RECORDED_PERMANENTS)
+from ._events import (CHOSEN_PERMANENT, OTHER_CHOSEN_PERMANENT, EVENT_SUBJECT_CONTROLLER, binds_block_pair, _RECORDED_PERMANENTS)
 from ._delays import (_BOUND_OBJECT_DELAYED_EVENTS)
 from ._seats import _CHOOSER_SEATS
 
@@ -52,15 +63,6 @@ _COUNTER_CHOOSERS: dict[str, str] = {
     "you": "you",
     "that_player": EVENT_SUBJECT_CONTROLLER,
 }
-
-
-#: The scratchpad key a granted CR 615 shield is recorded under
-#: (``handlers/prevention.PREVENTION_SHIELD_RESULT``), spelled here rather than
-#: imported because a lowering may not reach into the handlers. The two are held
-#: together by ``lowering/_records._PRODUCES``, which is what the ``produced``
-#: check below reads — a key that stopped being written would take the gate with
-#: it rather than leaving a back-reference pointing at nothing.
-PREVENTION_SHIELD_RECORD = "prevention_shield"
 
 
 def _amount_value(amount) -> int:
@@ -217,198 +219,18 @@ def _lower_put_counter(
     # every branch below that treats the kind as data.
     if node.counter == "loyalty":
         return lower_loyalty_counters(node)
-    # "Whenever a permanent becomes tapped, put a wind counter on **it**."
-    # (Freyalise's Winds.) The pronoun was rebound to the *event's* subject by
-    # `rebinding.rebind_pronoun_to_event_subject`, so it is neither the source
-    # nor a target — nothing was chosen, and nothing may be: the object is the
-    # one the event was about, frozen into the announcement by
-    # `become_tapped` (CR 603.10).
-    #
-    # Gated on the event, exactly as the "that player" recipients one module
-    # over are: under any other trigger the same word names an object no fire
-    # site recorded, and the handler would put the counter on nothing while the
-    # card compiled clean.
-    if (
-        not is_pt_counter(node.counter)
-        and not node.up_to
-        and isinstance(node.subject, ast.TargetSpec)
-        and node.subject.quantifier == "it"
-        and not node.subject.filter.is_source
-    ):
-        if event not in _EVENT_SUBJECT_OBJECTS:
-            raise LoweringError(
-                "\"it\" names the object the event was about, and this event "
-                "records none",
-                node=node,
-            )
-        if not isinstance(node.count, ast.Fixed):
-            raise LoweringError(
-                "a named counter is placed a fixed number at a time", node=node
-            )
-        described = _filter_payload(node.subject.filter)
-        if object_only_filter(described) is None:
-            # The rebound filter re-states what the event's own narrowing
-            # already selected, so it is carried and re-checked rather than
-            # dropped — a word consumed and never read is a word that could be
-            # deleted with no change to what the card does.
-            raise LoweringError(
-                "the counter's subject carries a restriction the resolution "
-                "cannot test", node=node,
-            )
-        payload: dict[str, object] = {
-            "counter": node.counter,
-            "count": node.count.value,
-            "on_event_subject": True,
-        }
-        if described:
-            payload["filter"] = described
-        return (OracleInstruction("add_named_counter_to_target", "", payload),)
-    # A **named** counter on the source ("put a soul counter on this Equipment",
-    # Malefic Scythe). CR 122.1 counters with no rules meaning of their own:
-    # engine/named_counters.py holds them, and what they mean is whatever the
-    # card's other lines say about them. Only on the source, because that is the
-    # only permanent the placement can name without a picker.
-    # "When this creature dies, … **return it to the battlefield** under your
-    # control **and put a death counter on it**." (Bogardan Phoenix.) The
-    # pronoun names the permanent the step in front of it created, not the
-    # ability's own source — the source is the object that died, and CR 400.7
-    # makes what came back a different one. Placed on the source it is a counter
-    # on a permanent that is not on the battlefield, which reads as placed in
-    # the log and is gone the next time anything looks: the Phoenix returns for
-    # ever.
-    #
-    # Gated on ``_REANIMATED_PERMANENTS`` alone rather than on the whole
-    # recorded set: only a step that *put the source back* changes what the
-    # pronoun means, and "put a soul counter on this Equipment" after a tap
-    # still means the Equipment.
-    if (
-        not is_pt_counter(node.counter)
-        and not node.up_to
-        and _is_source(node.subject)
-        and isinstance(node.subject, ast.TargetSpec)
-        and node.subject.quantifier == "it"
-        and _REANIMATED_PERMANENTS in produced
-        and isinstance(node.count, ast.Fixed)
-    ):
-        payload: dict[str, object] = {
-            "counter": node.counter,
-            "count": node.count.value,
-            "permanents_from": _REANIMATED_PERMANENTS,
-        }
-        return (OracleInstruction("add_named_counter_to_target", "", payload),)
-    if not is_pt_counter(node.counter) and not node.up_to and _is_source(node.subject):
-        # "{X}{1}, {T}: Put **X** charge counters on this artifact."
-        # (Ventifact Bottle.) The count is the cast's announced X, which is
-        # the same value the P/T branch above already spends and which the
-        # handler resolves through ``context.x_value`` like every other
-        # amount. The refusal below is what a count this branch cannot read
-        # at all still gets.
-        # "Whenever you're dealt damage, put **that many** vitality counters on
-        # this Aura." (Living Artifact.) The number the firing event carried,
-        # frozen into the trigger's context by the fire site — the same third
-        # channel `_plus_one_counters` reads for Light of Promise, and here for
-        # the same reason: the sentence has no earlier step of its own to have
-        # recorded anything, so a scratchpad read would place zero while
-        # reporting itself resolved. The bare back-reference only; a named
-        # source or a printed bonus is a different number.
-        event_key = trigger_quantity_key(trigger_event)
-        extra: dict[str, object] = {}
-        if isinstance(node.count, ast.Fixed):
-            placed: int | str = node.count.value
-        elif isinstance(node.count, ast.Var):
-            placed = node.count.name
-        elif (
-            event_key is not None
-            and isinstance(node.count, ast.ThatMuch)
-            and node.count.source is None
-            and not node.count.bonus
-        ):
-            placed = "trigger_count"
-            extra["amount_from_trigger"] = event_key
-        else:
-            raise LoweringError(
-                "a named counter is placed a fixed or variable number at a "
-                "time", node=node,
-            )
-        return (
-            OracleInstruction(
-                "add_named_counter_to_self", "",
-                {"counter": node.counter, "count": placed, **extra},
-            ),
-        )
-    # The same CR 122.1 marker on a permanent the ability **chose** ("put a
-    # matrix counter on target creature", Life Matrix). The self branch above
-    # says it lands only on the source because that is the only permanent a
-    # placement can name without a picker — this is the picker, so the noun
-    # phrase is payload and the counter's word stays payload too.
-    #
-    # Gated on `TESTABLE_SUBJECT_FILTER_KEYS` for the reason CLAUDE.md records:
-    # a restriction the matcher cannot test is one the resolution would ignore,
-    # which offers the player a wider set of targets than the card prints. A
-    # phrase with no card type is refused for the same reason the loyalty picker
-    # refuses one — it would offer every permanent on the board.
-    if (
-        not is_pt_counter(node.counter)
-        and not node.up_to
-        and _is_target(node.subject)
-        and not _names_several_targets(node.subject)
-    ):
-        assert isinstance(node.subject, ast.TargetSpec)
-        # "Put X glyph counters on target creature **that target Wall blocked
-        # this turn**" (Glyph of Delusion). The noun phrase names a second
-        # target of a different kind, so the description is ordered *roles*
-        # rather than one filter — and the count may be the sentence's X,
-        # because the where-clause behind it reads a characteristic of the
-        # role this effect acts on rather than a number the caster announced.
-        #
-        # Before the fixed-count refusal below and before the testable-key
-        # gate, because both are true of a one-target description and neither
-        # is the question here: the relation has no filter form at all
-        # (``subject_matches`` answers about one permanent; this is a record on
-        # the *other* target), so falling through would drop it and offer every
-        # creature on the board.
-        roles_payload: dict[str, object] = {
-            "counter": node.counter,
-            "count": _amount_payload(node.count),
-            "subject_role": PRIMARY_TARGET_ROLE,
-        }
-        if describe_target_roles(roles_payload, node.subject):
-            for role in roles_payload["targets"]["roles"]:
-                refuse_untestable(
-                    role["filter"],
-                    refusal="a named-counter target role cannot test this "
-                            "restriction",
-                    node=node,
-                )
-                if not role["filter"].get("type_filter"):
-                    raise LoweringError(
-                        "a named-counter target role with no card type would "
-                        "offer every permanent", node=node,
-                    )
-            return (
-                OracleInstruction("add_named_counter_to_target", "", roles_payload),
-            )
-        if not isinstance(node.count, ast.Fixed):
-            raise LoweringError(
-                "a named counter is placed a fixed number at a time", node=node
-            )
-        if not node.subject.filter.card_types:
-            raise LoweringError(
-                "a named-counter target with no card type would offer every "
-                "permanent",
-                node=node,
-            )
-        payload: dict[str, object] = {
-            "counter": node.counter, "count": node.count.value,
-        }
-        _describe_targets(payload, node.subject)
-        described = (payload.get("targets") or {}).get("filter") or {}
-        refuse_untestable(
-            described,
-            refusal="the named-counter target cannot test this restriction",
-            node=node,
-        )
-        return (OracleInstruction("add_named_counter_to_target", "", payload),)
+    # A counter with **no rules meaning of its own** (CR 122.1) on the one
+    # object the sentence names: the event's subject (Freyalise's Winds), the
+    # permanent an earlier step returned (Bogardan Phoenix), the source
+    # (Malefic Scythe, Ventifact Bottle) or a chosen target (Life Matrix, Glyph
+    # of Delusion). All four open on ``not is_pt_counter`` and write through
+    # `engine/named_counters.py` rather than the P/T channel, so they are
+    # `_named_counters`' — read from here, ahead of every P/T branch below,
+    # because this is where they have always been read. None is "not one of
+    # mine" and the list carries on.
+    named = lower_named_placement(node, event, produced, trigger_event)
+    if named is not None:
+        return named
     # "Put up to X +1/+0 counters on this creature. This ability can't cause the
     # total number of +1/+0 counters on this creature to be greater than N."
     # (Clockwork Beast prints seven, Clockwork Avian four.) The cap is payload,
@@ -747,8 +569,8 @@ def _lower_put_counter(
             ),
         )
     # "Put a paralyzation counter on **each creature blocking or blocked by
-    # this creature**." (Dread Wight.) The CR 122.1 marker of the two branches
-    # above, on a set named by a combat relation to the ability's own source
+    # this creature**." (Dread Wight.) The CR 122.1 marker `_named_counters`
+    # places on one object, on a set named by a combat relation to the source
     # (CR 509) rather than by any characteristic its members carry — the same
     # subject `destroy_creatures_in_combat_with_source` (Abu Ja'far) and
     # `grant_keyword_to_creatures_in_combat_with_source` (Spitting Slug) act on,
@@ -887,32 +709,14 @@ def _lower_put_counter(
             }),
         )
     # "…put four **fungus** counters on **that creature**." (Mindbender
-    # Spores.) The other half of the block CR 509.3a-d announced, which the
-    # trigger froze — the referent `pump_block_pair` already acts on, and never
-    # a choice. `binds_block_pair` rather than the kind alone, for that
-    # helper's reason: a bare firing has several blockers and no way to say
-    # which one the words name. Named counters only — a P/T pair is
-    # `place_pt_counters`' question and wants that channel.
-    if (
-        isinstance(node.subject, ast.TargetSpec)
-        and node.subject.quantifier == "that"
-        and not node.up_to
-        and not node.then_double
-        and not is_pt_counter(node.counter)
-        and binds_block_pair(trigger_event, event_subject)
-    ):
-        if not isinstance(node.count, ast.Fixed) or node.count.value < 1:
-            raise LoweringError("a bound placement counts a fixed number", node=node)
-        described = _filter_payload(node.subject.filter)
-        if object_only_filter(described) is None:
-            raise LoweringError(
-                "the counter's subject carries a restriction the resolution "
-                "cannot test", node=node,
-            )
-        return (OracleInstruction("add_named_counter_to_target", "", {
-            "counter": node.counter, "count": node.count.value,
-            "on_block_pair": True, **({"filter": described} if described else {}),
-        }),)
+    # Spores.) The named half of the block-pair referent, which lives in
+    # `_named_counters` with the rest of that store's placements and is read
+    # from *here* — after the delayed binding above and ahead of its P/T twin
+    # below — because folding it into the call far above would move it across
+    # three branches that never ask what kind the counter is.
+    named = lower_named_block_pair_placement(node, trigger_event, event_subject)
+    if named is not None:
+        return named
     # The same referent with a **P/T pair** on it: "Whenever this creature
     # becomes blocked by a creature, put a -1/-1 counter on **that creature**."
     # (Quagmire Lamprey.) Its own branch rather than a widened gate above,
@@ -937,8 +741,8 @@ def _lower_put_counter(
         if object_only_filter(described) is None:
             # The rebound filter re-states the event's own narrowing, so it is
             # carried and re-checked rather than dropped — the reason the named
-            # placement above gives, and the reason a restriction the resolution
-            # cannot test refuses rather than being ignored.
+            # placement gives in `_named_counters`, and the reason a restriction
+            # the resolution cannot test refuses rather than being ignored.
             raise LoweringError(
                 "the counter's subject carries a restriction the resolution "
                 "cannot test", node=node,
