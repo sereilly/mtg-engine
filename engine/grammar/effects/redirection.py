@@ -208,7 +208,17 @@ def _parse_damage_redirect(stream: TokenStream) -> "ast.RedirectDamage | None":
     # the blanket shield above reads its own.
     duration = _parse_duration(stream)
     dealt_by: ast.Recipient | None = None
-    if stream.accept_word("by"):
+    # "…dealt to target creature this turn **by a source of your choice** is
+    # dealt to this creature instead." (Oracle's Attendants.) CR 615.8's
+    # phrase in the *by* position Shimian Night Stalker's targeted source
+    # occupies, which the recipient reader below cannot read — "a source" is
+    # not a recipient — so it is tried first and as the whole phrase. Kor
+    # Chant prints the same words after its recipient instead; that reading is
+    # the second one below, and the flag says only one of the two ran.
+    from_chosen_source = stream.accept_phrase(
+        "by", "a", "source", "of", "your", "choice"
+    )
+    if not from_chosen_source and stream.accept_word("by"):
         dealt_by = parse_recipient(stream) or parse_bound_subject(stream)
         if dealt_by is None:
             stream.reset(mark)
@@ -246,13 +256,10 @@ def _parse_damage_redirect(stream: TokenStream) -> "ast.RedirectDamage | None":
     # source, so a sentence reaching here having already read a targeted "by"
     # would be naming it twice; the lowering refuses that pair by name, which
     # keeps the refusal beside every other thing it says about the shape.
-    from_chosen_source = False
-    if dealt_by is None:
-        chosen_mark = stream.mark()
-        if stream.accept_phrase("by", "a", "source", "of", "your", "choice"):
-            from_chosen_source = True
-        else:
-            stream.reset(chosen_mark)
+    if dealt_by is None and not from_chosen_source:
+        from_chosen_source = stream.accept_phrase(
+            "by", "a", "source", "of", "your", "choice"
+        )
     if not stream.accept_phrase("is", "dealt", "to"):
         stream.reset(mark)
         return None

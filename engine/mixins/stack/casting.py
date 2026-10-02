@@ -2767,6 +2767,25 @@ class SpellCastingMixin:
                 f"{card.name} can't be cast: no opponent may gain life, so its "
                 f"alternative cost cannot be paid (CR 119.7)"
             )
+        # "…you may **have each other player gain 6 life**." (Reverent
+        # Silence.) The same CR 119.7 sentence asked the other way round: every
+        # other seat is "that player", so **one** that cannot gain life is an
+        # unpayable cost, where Invigorate's caster could have handed the life
+        # to someone else. Admitted, the payment below would skip the banned
+        # seat and the spell would be cast for less than it prints.
+        if cost.others_gain_life:
+            from ...life_prohibitions import life_gain_banned
+
+            banned = [
+                self.players[seat].name
+                for seat in self._other_living_seats(caster_index)
+                if life_gain_banned(self, self.players[seat])
+            ]
+            if banned:
+                return (
+                    f"{card.name} can't be cast: {', '.join(banned)} can't gain "
+                    f"life, so its alternative cost cannot be paid (CR 119.7)"
+                )
         # "You may **exile the top three black cards of your graveyard** rather
         # than pay this spell's mana cost." (Spinning Darkness.) The *count*
         # again, and the scan with it: CR 118.3 lets a cost be paid only in
@@ -2815,6 +2834,25 @@ class SpellCastingMixin:
                 and not life_gain_banned(self, self.players[seat])
             ),
             None,
+        )
+
+    def _other_living_seats(self, caster_index: int) -> list[int]:
+        """Every seat but *caster_index* still in the game, in turn order from
+        the active player (CR 101.4).
+
+        "Have **each other player** gain 6 life" (Reverent Silence) is paid to
+        all of them, so the gate and the payment walk one list -- the
+        arrangement ``_life_gain_cost_payer`` makes for the one-seat price
+        beside it, for its reason.
+        """
+        count = len(self.players)
+        active = self.active_player_index or 0
+        return sorted(
+            (
+                seat for seat in range(count)
+                if seat != caster_index and not self.players[seat].lost
+            ),
+            key=lambda seat: ((seat - active) % count, seat),
         )
 
     def _pay_alternative_cost(
@@ -2938,6 +2976,16 @@ class SpellCastingMixin:
             if opponent is not None:
                 self._gain_life(
                     self.players[opponent], cost.opponent_gains_life, card.name
+                )
+        if cost.others_gain_life:
+            # "…**have each other player gain 6 life**…" (Reverent Silence.)
+            # Every other seat, through ``_gain_life`` for the reason the
+            # one-seat price above goes through it -- a cost payment is still a
+            # life gain the replacements and prohibitions see (CR 118.11) --
+            # and over the seats the gate just cleared.
+            for seat in self._other_living_seats(caster_index):
+                self._gain_life(
+                    self.players[seat], cost.others_gain_life, card.name
                 )
         if cost.exile_graveyard_position is not None:
             from ...graveyard_order import positions_named

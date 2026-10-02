@@ -80,6 +80,7 @@ from .effects import (
     parse_choose_card_type,
     parse_claims_one_exiled_card,
     parse_exile_random_card_from_hand,
+    parse_player_exiles_cards_from_hand,
     parse_graveyard_top_opponent_chooses,
     parse_player_chooses_permanent,
     parse_player_looks_at_own_library_top,
@@ -194,6 +195,14 @@ def parse_player_subject_verb(
         from_graveyard = _parse_player_exiles_pile(stream, source_spec)
         if from_graveyard is not None:
             return from_graveyard
+        # "**Each player** exiles two cards from their hand." (Mind Swords.)
+        # A counted pick out of the subject's own hand, after the pile reader
+        # above: "exiles **all** cards from their hand face down" (Memory Jar)
+        # is a pile and keeps that reader's words — the first draft of this
+        # branch sat in front of it and took Memory Jar's sentence with it.
+        chosen = parse_player_exiles_cards_from_hand(stream, source_spec)
+        if chosen is not None:
+            return chosen
         # "**Target spell's controller** exiles it with X delay counters on
         # it." (Ertai's Meddling.) The fourth of the family and the only one
         # whose object was printed *in front of* the verb — the seat is read

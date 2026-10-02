@@ -656,6 +656,47 @@ def parse_exile_random_card_from_hand(
     return None
 
 
+def parse_player_exiles_cards_from_hand(
+    stream: TokenStream, player: ast.PlayerRef
+) -> "ast.ExileCardsFromHand | None":
+    """``<player> exiles <N> cards from their hand`` (Mind Swords: "Each player
+    exiles two cards from their hand.")
+
+    The random exile above with the player choosing, so it is tried after that
+    one — "a card **at random**" is the narrower reading and must keep its
+    words — and after the pile reader, whose "all cards from their hand"
+    (Memory Jar) is no count at all. The noun phrase goes through the shared object parser, which is what
+    makes "two **nonland** cards" the same production; the zone is required,
+    and the hand must be the subject's own ("their" under a seat subject, "your"
+    under "you"), because a pick out of somebody else's hand is a different
+    sentence with different hidden-information rules (CR 400.2).
+
+    Refuses without consuming, so "that player exiles all cards from their
+    library" and the graveyard sweep beside it keep their own readers.
+    """
+    mark = stream.mark()
+    stream.expect_word("exiles", "exile")
+    try:
+        count = parse_amount(stream)
+        filt = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    owner = filt.zone_owner
+    if not (
+        # A printed number: "**all** cards from their hand" is a pile, which
+        # ``_parse_player_exiles_pile`` reads with its own handler.
+        isinstance(count, ast.Fixed)
+        and filt.is_card
+        and filt.zone == "hand"
+        and owner is not None
+        and (owner.kind == "owner" or owner.kind == player.kind == "you")
+    ):
+        stream.reset(mark)
+        return None
+    return ast.ExileCardsFromHand(player, count, filt)
+
+
 def _parse_discard_revealed_unless_pay_life(
     stream: TokenStream, player: ast.PlayerRef
 ) -> "ast.DiscardRevealedUnlessPayLife | None":

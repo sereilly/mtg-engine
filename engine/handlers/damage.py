@@ -2162,6 +2162,15 @@ def redirect_chosen_source_damage_off_target_until_eot(
     record answers to any source, which is the fallback every card printing the
     phrase already takes (Reverse Damage, Jade Monolith): the effect is spent on
     one instance either way.
+
+    **Oracle's Attendants prints the blanket**: "{T}: All damage that would be
+    dealt to target creature this turn by a source of your choice is dealt to
+    this creature instead." No ``uses`` in the payload, so the record moves
+    every instance the chosen source deals the creature all turn — and for that
+    one the fallback above is refused, exactly as Kor Chant's handler below
+    refuses it: a blanket answering to any source would move every point dealt
+    to the creature all turn. CR 609.7a requires the source be chosen, and an
+    announcement that named none has not made the choice.
     """
     from ..subject_filters import subject_matches
 
@@ -2187,12 +2196,18 @@ def redirect_chosen_source_damage_off_target_until_eot(
         game.log.append(f"{card_name}: its target is gone, nothing is redirected")
         return True, "resolved"
     moved_source = context.choices.get("chosen_source")
+    uses = instruction.payload.get("uses")
+    if uses is None and moved_source is None:
+        game.log.append(
+            f"{card_name}: no damage source was chosen, so no damage is moved"
+        )
+        return True, "resolved"
     add_redirect(
         protected,
         DamageRedirect(
             new_recipient=taker,
             source=moved_source,
-            uses=int(instruction.payload.get("uses", 1) or 1),
+            uses=None if uses is None else int(uses),
             source_name=card_name or None,
         ),
     )
@@ -2200,8 +2215,85 @@ def redirect_chosen_source_damage_off_target_until_eot(
         getattr(moved_source, "card", moved_source), "name", "any source"
     )
     game.log.append(
-        f"{card_name}: the next damage {source_name} would deal to "
+        f"{card_name}: "
+        + ("the next damage " if uses is not None else "all damage ")
+        + f"{source_name} would deal to "
         f"{protected.card.name} this turn is dealt to {taker.card.name} instead"
+    )
+    return True, "resolved"
+
+
+@effect_handler("redirect_damage_off_target_until_eot")
+def redirect_damage_off_target_until_eot(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """Sivvi's Valor: "All damage that would be dealt to target creature this
+    turn is dealt to you instead."
+
+    The handler above with nothing chosen but the creature: the record hangs
+    off the announced target (CR 601.2c, re-checked here against the printed
+    phrase per CR 608.2b) and answers to **every** source, which is what "all
+    damage" with no "by …" means — so there is no ``chosen_source`` to read and
+    no fallback to guard against.
+
+    The taker is the payload's ``new_recipient``: "you" is the controller of
+    this spell or ability (CR 109.5), "source" the permanent whose ability it
+    is. Neither is frozen past what CR 614.9 already says about it —
+    ``damage_redirects.live_recipient`` asks, when the damage would be dealt,
+    whether the player is still in the game or the permanent still a creature
+    on the battlefield, and the redirect does nothing if not. And the damage is
+    still **dealt by the original source** to whoever takes it, so lifelink,
+    protection and "a source you control" all read the source that dealt it.
+
+    The record lives on the creature, so the creature leaving takes it along:
+    a permanent that returns is a new object (CR 400.7) with no record on it,
+    and the cleanup sweep clears it with the turn.
+    """
+    from ..subject_filters import subject_matches
+
+    card_name = getattr(context.card, "name", "")
+    payload = instruction.payload
+    caster = context.caster
+    if payload.get("new_recipient") == "source":
+        taker = context.source_permanent
+        if taker is None or not game.is_on_battlefield(taker):
+            game.log.append(f"{card_name}: nothing is there to take the damage")
+            return True, "resolved"
+        taker_name = taker.card.name
+    else:
+        taker = caster
+        taker_name = caster.name
+    described = (payload.get("targets") or {}).get("filter") or {}
+    observer = game.players.index(caster) if caster in game.players else None
+    protected = resolve_target_permanent(
+        game,
+        context,
+        predicate=lambda perm: subject_matches(
+            game, perm, described, observer=observer,
+            source=context.source_permanent,
+        ),
+        # No scan-the-board fallback: a redirect armed on a creature nobody
+        # named moves damage the player never chose to move.
+        fallback_players=(),
+    )
+    if protected is None:
+        game.log.append(f"{card_name}: its target is gone, nothing is redirected")
+        return True, "resolved"
+    add_redirect(
+        protected,
+        DamageRedirect(
+            new_recipient=taker,
+            uses=payload.get("uses"),
+            combat_only=bool(payload.get("combat_only")),
+            source_name=card_name or None,
+        ),
+    )
+    game.log.append(
+        f"{card_name}: "
+        + ("the next " if payload.get("uses") else "all ")
+        + ("combat " if payload.get("combat_only") else "")
+        + f"damage that would be dealt to {protected.card.name} this turn is "
+        f"dealt to {taker_name} instead"
     )
     return True, "resolved"
 

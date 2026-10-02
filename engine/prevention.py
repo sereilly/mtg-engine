@@ -782,7 +782,10 @@ def _live(game, event: dict, kind: str, *, chosen: bool | None = None):
     # creatures you control"), so it is not excluded from the holder's own list;
     # and a permanent is never in that list, so nothing is counted twice.
     for shield in (
-        list(shields_on(recipient))
+        # A shield that spares its holder (Sivvi's Ruse's "to creatures you
+        # control") hangs off a seat without covering it, so the seat's own
+        # list does not count it; ``_class_shields`` is how it is reached.
+        [s for s in shields_on(recipient) if not s.spares_holder]
         + _class_shields(game, recipient)
         # …and the shields on the stack object currently resolving, which watch
         # no recipient at all (Hidden Retreat). Every recipient it damages finds
@@ -1418,9 +1421,11 @@ def _circle_of_protection(game, event: dict) -> PreventionOutcome | None:
 
 
 def _log_subject_prevention(game, event: dict, used: list[Shield], prevented: int) -> None:
+    # ``recipient_label``: Sivvi's Ruse's blanket shields *creatures*, and a
+    # ``Permanent`` has no ``name`` of its own.
     game.log.append(
         f"{used[0].source_name or 'A shield'} prevented {prevented} damage to "
-        f"{event['recipient'].name}"
+        f"{recipient_label(event['recipient'])}"
     )
 
 

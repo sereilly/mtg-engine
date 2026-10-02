@@ -20,6 +20,7 @@ from ..shields import (
     make_life_gain_source,
     make_named_source_pool,
     make_numeric_pool,
+    make_recipient_class_shield,
     make_reflect_charge,
     make_reflect_source,
     make_source_subject_shield,
@@ -971,6 +972,35 @@ def grant_source_class_prevention_shield(game: Game, instruction: OracleInstruct
     game.log.append(
         f"{caster.name} is shielded this turn from damage dealt by matching "
         f"sources ({source_name})"
+    )
+    return True, "resolved"
+
+
+@effect_handler("grant_recipient_class_prevention_shield")
+def grant_recipient_class_prevention_shield(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Sivvi's Ruse: "Prevent all damage that would be dealt this turn to
+    creatures you control."
+
+    :func:`grant_source_class_prevention_shield`'s sentence with the printed
+    phrase on the *recipient* end: one blanket :class:`~engine.shields.Shield`
+    on the caster's seat that answers every source and covers whichever
+    permanents the phrase names when the damage would be dealt (CR 615.1 —
+    shields "aren't locked in ahead of time"). So a creature that enters after
+    this resolved is covered, and one an opponent has taken is not.
+
+    The seat is captured for the phrase's sake: "creatures **you** control" is
+    the controller of this spell or ability (CR 109.5), even if the board
+    changes hands afterwards. The seat itself is *not* shielded — the sentence
+    never names it — which is what ``spares_holder`` on the shield says.
+    """
+    caster = context.caster
+    described = dict(instruction.payload.get("filter") or {})
+    seat = game.players.index(caster)
+    source_name = context.card.name if context.card else None
+    add_shield(caster, make_recipient_class_shield(described, seat, source_name))
+    game.log.append(
+        f"{source_name}: all damage that would be dealt this turn to matching "
+        f"permanents is prevented"
     )
     return True, "resolved"
 
