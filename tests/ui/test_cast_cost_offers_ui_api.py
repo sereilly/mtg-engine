@@ -397,3 +397,69 @@ def test_w1g2_the_buyback_ceiling_falls_with_the_board():
     assert [
         o["max_times"] for o in _w1g2_offers(game, _POOL["Whispers of the Muse"])
     ] == [1]
+
+
+# --- W1G2 (Nemesis): an alternative cost paid with a permanent is a choice ---
+#
+# "You may sacrifice two Mountains rather than pay this spell's mana cost"
+# (Fireblast), "tap an untapped creature you control" (Orim's Cure), "return an
+# Island you control to its owner's hand" (Daze): every one of these names *a*
+# permanent, so CR 601.2b owes the caster the choice of which. The payment took
+# `default_sacrifice_pick` whatever the player wanted, because the announcement
+# had nowhere to carry the answer — on a board with a tapped and an untapped
+# Mountain, Fireblast could eat the one still able to make mana. The offer now
+# lists the candidates and the cast carries the choice back by id, on its own
+# field: CR 118.9d keeps an additional cost in force beside an alternative one,
+# and the two would otherwise share `cost_permanent_ids`.
+
+
+def _w1g2n_fireblast_session():
+    sid, _, game = _session()
+    game.players[0].hand = [_SHIPPED["Fireblast"]]
+    game.players[0].battlefield = [Permanent(card=_LEA["Mountain"]) for _ in range(3)]
+    game._settle()
+    return sid, game
+
+
+def test_w1g2n_a_permanent_paid_alternative_cost_lists_its_candidates():
+    """The offer names the verb, how many, and which permanents may pay —
+    the same candidate list the CR 601.2h gate counts."""
+    sid, game = _w1g2n_fireblast_session()
+    ids = [perm.permanent_id for perm in game.players[0].battlefield]
+
+    (offer,) = _spec(sid, "Fireblast", hand_index=0)["cost_offers"]
+
+    assert offer["kind"] == "alternative" and offer["payable"] is True
+    assert (offer["permanent_verb"], offer["permanent_count"]) == ("sacrifice", 2)
+    assert [choice["id"] for choice in offer["permanent_choices"]] == ids
+
+
+def test_w1g2n_the_cast_sacrifices_the_permanents_the_caster_named():
+    """Through the route: the two Mountains named go, the third stays. The
+    deterministic pick would have kept the *last* Mountain, so the one left
+    standing here is the one only the announcement could have spared."""
+    sid, game = _w1g2n_fireblast_session()
+    first, second, third = game.players[0].battlefield
+
+    response = client.post(
+        f"/api/sessions/{sid}/action",
+        json={
+            "seat": 0,
+            "action": "cast",
+            "card_name": "Fireblast",
+            "target_seat": 1,
+            "alternative_cost": True,
+            "alternative_cost_permanent_ids": [second.permanent_id, third.permanent_id],
+        },
+    )
+    assert response.status_code == 200, response.text
+
+    assert game.players[0].battlefield == [first]
+    assert [c.name for c in game.players[0].graveyard] == ["Mountain", "Mountain"]
+
+
+def test_w1g2n_the_client_sends_the_chosen_permanents():
+    """The prompt renders the candidates and copies the answer onto the cast,
+    beside the hand index the exile-paid costs already send."""
+    assert "offer.permanent_choices" in APP_JS
+    assert "announced.alternative_cost_permanent_ids = permanentIds.slice()" in APP_JS

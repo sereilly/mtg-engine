@@ -526,6 +526,11 @@ class GameActionRequest(BaseModel):
     # shared field could not say which price a click was answering.
     alternative_cost: bool | None = None
     alternative_cost_hand_index: int | None = None
+    # …and which permanents pay its sacrifice / return / tap half ("you may
+    # sacrifice a creature rather than pay this spell's mana cost", Mind
+    # Swords), by id. Absent is the engine's deterministic pick; the choices
+    # are `legality.cast_cost_offers`' `permanent_choices`.
+    alternative_cost_permanent_ids: list[int] | None = None
     # CR 601.2b's *optional* additional cost, and how many times each offer was
     # taken: ``{"{1}{R}": 2}``. Its own field beside the two above for their
     # reason — CR 118.9d keeps every price in force on one cast, so a shared
