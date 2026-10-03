@@ -22,6 +22,7 @@ from .ai_valuation import (
     spell_denies_its_own_target,
     spell_hand_pick_entry_filters,
     spell_target_side,
+    target_loses_life,
     TollLoss,
     toll_branch_loss,
 )
@@ -2596,6 +2597,14 @@ def _score_spell_target(
             score += life_lost * 0.15
         else:
             score -= 2.0
+
+    # "Target player **loses** 4 life and you gain 4 life" (Soul Feast): the
+    # loss is the spell's point and it lands on the target, which the "gain …
+    # life" probe above cannot see — read off the program, weighted like damage.
+    # Not where the target also draws (Peer into the Abyss): there the loss is
+    # the price of the cards, and the draw probe above already weighs it.
+    if target_loses_life(card) and "draw" not in text:
+        score += -6.0 if target_index == caster_index else 4.0
 
     damage = _extract_damage(card)
     if damage == 0:
