@@ -2066,6 +2066,53 @@ def redirect_damage_until_eot(
             "this turn is dealt to its controller instead"
         )
         return True, "resolved"
+    if targets_source and payload.get("new_recipient") == "damage_source":
+        # "The next time target attacking creature would deal combat damage to
+        # this creature this turn, that creature deals that damage to itself
+        # instead." (Shield Dancer.) The record hangs off what it protects —
+        # the ability's own permanent, or its controller — answers to the
+        # announced source by identity, and names that same source as the
+        # taker. CR 614.9's liveness rule still holds: if the attacker has left
+        # by then, ``live_recipient`` answers None and the damage lands where
+        # it was going.
+        protected = (
+            context.source_permanent if payload.get("protects") == "source"
+            else caster
+        )
+        if protected is None or (
+            protected is not caster and not game.is_on_battlefield(protected)
+        ):
+            game.log.append(f"{card_name}: nothing is there to protect")
+            return True, "resolved"
+        described = (payload.get("targets") or {}).get("filter") or {}
+        moved_source = resolve_target_permanent(
+            game,
+            context,
+            predicate=lambda perm: permanent_matches_filter(perm, described),
+            fallback_players=(),
+        )
+        if moved_source is None:
+            game.log.append(f"{card_name}: its target is gone, nothing is redirected")
+            return True, "resolved"
+        add_redirect(
+            protected,
+            DamageRedirect(
+                new_recipient=moved_source,
+                source=moved_source,
+                uses=payload.get("uses"),
+                combat_only=bool(payload.get("combat_only")),
+                source_name=card_name or None,
+            ),
+        )
+        protected_name = getattr(getattr(protected, "card", None), "name", None)
+        game.log.append(
+            f"{card_name}: the next "
+            + ("combat damage " if payload.get("combat_only") else "damage ")
+            + f"{moved_source.card.name} would deal to "
+            f"{protected_name or protected.name} this turn is dealt to "
+            f"{moved_source.card.name} instead"
+        )
+        return True, "resolved"
     if targets_source and payload.get("new_recipient") == "source_controller":
         # "All combat damage that would be dealt to you this turn by target
         # unblocked creature is dealt to **its controller** instead." (Mirror

@@ -104,6 +104,18 @@ def _finish_named_source_effect(
         return None
     duration = _parse_duration(stream)
     stream.accept_punct(",")
+    if _accept_reflexive_redirect_tail(stream, source):
+        # "…, that creature deals that damage **to itself** instead." (Shield
+        # Dancer.) The damage goes back onto the object that would have dealt
+        # it — a recipient no node names, so it is a flag on the redirect.
+        return ast.RedirectDamage(
+            to=recipient,
+            dealt_by=source,
+            duration=duration,
+            one_shot=True,
+            combat_only=combat_only,
+            to_damage_source=True,
+        )
     tail = _accept_redirect_tail(stream)
     if tail is not None:
         new_recipient, chooser = tail
@@ -119,13 +131,51 @@ def _finish_named_source_effect(
             chooser=chooser,
             combat_only=combat_only,
         )
-    if not stream.accept_phrase("prevent", "that", "damage"):
+    # The shield ending is the ability's own source only: ``PreventDamage``
+    # carries the source as a *filter*, and a targeted source reduced to its
+    # filter would be a shield against every creature the noun phrase
+    # describes rather than the one announced.
+    if not source.filter.is_source or not stream.accept_phrase(
+        "prevent", "that", "damage"
+    ):
         stream.reset(mark)
         return None
     return ast.PreventDamage(
         ast.Fixed(1), to=recipient, from_filter=source.filter, duration=duration,
         combat_only=combat_only,
     )
+
+
+def _accept_reflexive_redirect_tail(
+    stream: TokenStream, source: "ast.TargetSpec"
+) -> bool:
+    """``that <noun> deals that damage to itself instead`` — or ``it deals …``.
+
+    The active-voice tail ``_accept_redirect_tail`` reads, with the damage's
+    own source as the new recipient. Read here rather than through
+    ``parse_recipient``, which reads a bare "itself" as the *ability's* source
+    (Psionic Entity's "…and 3 damage to itself") — right there, and wrong
+    when the sentence's subject is a creature the ability targeted: "that
+    creature … itself" is the attacker, not the Shield Dancer.
+
+    "That <noun>" must name the source's own card type, or the back-reference
+    is to something this sentence did not name. Refuses without consuming.
+    """
+    mark = stream.mark()
+    if stream.accept_word("that"):
+        noun = stream.peek_word()
+        if noun is None or noun not in source.filter.card_types:
+            stream.reset(mark)
+            return False
+        stream.advance()
+    elif not stream.accept_word("it"):
+        return False
+    if stream.accept_phrase(
+        "deals", "that", "damage", "to", "itself", "instead"
+    ):
+        return True
+    stream.reset(mark)
+    return False
 
 
 def _parse_source_of_choice_effect(
@@ -162,9 +212,20 @@ def _parse_source_of_choice_effect(
         # damage to" onward is the identical clause and two productions racing
         # on "the next time" would differ only in how the second rewinds.
         named = parse_recipient(stream)
+        # "The next time **target attacking creature** would deal combat
+        # damage to this creature this turn, …" (Shield Dancer.) The source
+        # named by announcement rather than by self-reference: one target, the
+        # same clause after it. ``_finish_named_source_effect`` refuses the
+        # shield ending for it, which carries a source as a filter only.
+        announced = (
+            isinstance(named, ast.TargetSpec)
+            and named.quantifier == "target"
+            and named.targeted
+            and named.count == 1
+        )
         if (
             not isinstance(named, ast.TargetSpec)
-            or not named.filter.is_source
+            or not (named.filter.is_source or announced)
             or not stream.accept_phrase("would", "deal")
         ):
             stream.reset(mark)
