@@ -1937,9 +1937,10 @@ def _mode_choice(ctx: PromptContext, choices: list) -> dict:
     path would refuse; a permanent rides its stable ``id`` alongside the
     ``seat``/``index`` the canvas addresses it by.
 
-    ``targets`` is absent for a mode that chooses nothing, and for every mode
-    of a ``choose_one`` nested inside a running resolution, which announces no
-    targets at all.
+    ``targets`` is absent for a mode that chooses nothing, and for every
+    alternative of a ``choose_one`` asked inside a running resolution (CR
+    608.2d — a nested "or", or a whole unmodal "A or B" ability such as
+    Urborg's), which announces no targets at all.
     """
     choice = choices[0]
     data = choice.data
