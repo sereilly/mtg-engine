@@ -5620,13 +5620,18 @@ def put_target_on_library_top(game: Game, instruction: OracleInstruction, contex
             context,
         )
         return True, "resolved"
+    # "…on **the bottom** of its owner's library." (Mercenary Informer.) The
+    # same move to the library's other end; the lowering emits it on this
+    # single-target shape only.
+    end = "bottom" if instruction.payload.get("library_end") == "bottom" else "top"
     game.remove_from_battlefield(target_perm)
     game._remove_aura_effects(target_perm)
     game.put_card_into_library(
-        owner, target_perm.card, "top", from_battlefield=target_perm
+        owner, target_perm.card, end, from_battlefield=target_perm
     )
+    where = "on top of" if end == "top" else "on the bottom of"
     game.log.append(
-        f"{context.card.name}: {target_perm.card.name} put on top of {owner.name}'s library"
+        f"{context.card.name}: {target_perm.card.name} put {where} {owner.name}'s library"
     )
     return True, "resolved"
 

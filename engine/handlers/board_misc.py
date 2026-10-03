@@ -2768,6 +2768,25 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
         if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
             return False, "no seat was frozen for 'that creature's controller'"
         payers = [seat]
+    elif who == "defending_player":
+        # "Whenever this creature becomes blocked, **defending player**
+        # sacrifices a land of their choice." (Thresher Beast.) CR 506.2's
+        # seat, through the one reader of it; None is nobody asked.
+        from ._common import defending_player_seat
+
+        seat = defending_player_seat(game, context)
+        if seat is None:
+            return False, "no defending player was recorded"
+        payers = [seat]
+    elif who == "damaged_player":
+        # "…deals combat damage to a player, **that player** sacrifices a land
+        # of their choice." (Destructive Urge.) The seat the damage went to,
+        # frozen by the damage seam under the key the discard's identical
+        # ``who`` reads.
+        seat = (context.trigger_context or {}).get("defending_player_index")
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            return False, "no damaged player was recorded"
+        payers = [seat]
     else:
         return False, f"unsupported sacrifice payer {who!r}"
     # "…**each player who tapped a land for mana this turn** sacrifices a land

@@ -42,7 +42,9 @@ from ...subject_filters import untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
 from ._piles import _sweep_graveyard_actor
-from ._events import (EVENT_SUBJECT_OWNER, EVENT_SUBJECT_PLAYER,
+from ._events import (EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_OWNER,
+                      EVENT_SUBJECT_PLAYER, _DAMAGED_PLAYER_EVENTS,
+                      _EVENT_SUBJECT_CONTROLLERS,
                       _EVENT_SUBJECT_OWNERS, _EVENT_SUBJECT_PLAYERS)
 from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS,
@@ -730,14 +732,26 @@ def lower_described_return(
                     "already named, and no subject here names one",
                     node=node,
                 )
-            elif event not in _EVENT_SUBJECT_PLAYERS:
+            elif event in _EVENT_SUBJECT_PLAYERS:
+                chooser = EVENT_SUBJECT_PLAYER
+            elif (
+                event in _EVENT_SUBJECT_CONTROLLERS
+                and event not in _DAMAGED_PLAYER_EVENTS
+            ):
+                # "Whenever a player puts a nontoken creature onto the
+                # battlefield, **that player** returns a land they control …"
+                # (Overburden.) The seat the entering permanent came in
+                # under, frozen by the entry seam — the order and the key the
+                # sacrifice lowering reads for Nature's Wrath's identical
+                # condition. Not under a damage event, whose "that player" is
+                # the player dealt the damage rather than the damager's.
+                chooser = EVENT_SUBJECT_CONTROLLER
+            else:
                 raise LoweringError(
                     f"no event named {event!r} freezes the seat 'that player' "
                     "names",
                     node=node,
                 )
-            else:
-                chooser = EVENT_SUBJECT_PLAYER
         elif node.actor is not None and node.actor.kind != "you":
             # The "you control" reading is the controller's own price, so a
             # sentence naming somebody *else* as the one who returns it is a

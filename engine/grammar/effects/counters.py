@@ -213,6 +213,12 @@ def _parse_put_counter(stream: TokenStream) -> ast.Statement:
         # in every return; the destination decides the node.
         if stream.accept_phrase("on", "the", "bottom", "of", "your", "library"):
             return ast.PutOnLibraryBottom(moved)
+        # "Put target nontoken Mercenary on the bottom of **its owner's**
+        # library." (Mercenary Informer.) The other end of Teferi's tuck.
+        if stream.accept_phrase(
+            "on", "the", "bottom", "of", "its", "owner", "'s", "library"
+        ):
+            return ast.PutOnLibraryBottom(moved, to_owner="owner")
         if stream.accept_word("onto"):
             stream.expect_word("the")
             stream.expect_word("battlefield")
