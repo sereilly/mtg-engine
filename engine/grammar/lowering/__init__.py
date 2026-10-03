@@ -577,6 +577,7 @@ __all__ = [
     "_EXILED_CREATURE",
     "_lower_exile",
     "_lower_each_player_claims_exiled_card",
+    "_lower_exile_cards_from_hand",
     "_lower_exile_cost_sacrifices",
     "_lower_for_each_exiled",
     "_lower_for_each_tapped",

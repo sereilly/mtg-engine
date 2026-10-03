@@ -941,17 +941,12 @@ def _lower_exile_cards_from_hand(
 ) -> tuple[OracleInstruction, ...]:
     """"Each player exiles two cards from their hand." (Mind Swords.)
 
-    A pick out of a hidden zone, so each seat makes its own (CR 400.2) in turn
-    order (CR 101.4) and the handler arms one prompt per card. The seat and the
-    hand are honoured by construction — the actor's own hand is the only one the
-    handler reads — and every other key of the phrase must survive
-    ``card_only_filter``, because a card in hand has no computed
-    characteristics (CR 613.1) and a narrowing only a permanent could answer
-    would be dropped by the prompt.
-
-    Every refusal below is a way the sentence could otherwise mean more than it
-    says: a seat word the handler does not walk, and a count it cannot name
-    before the prompt is armed.
+    A pick out of a hidden zone (CR 400.2), made by each seat in turn order
+    (CR 101.4). The hand is honoured by construction — the actor's own is the
+    only one the handler reads — and every other key of the phrase must survive
+    ``card_only_filter`` (CR 613.1: a card in hand has no computed
+    characteristics). Refused: a seat word the handler does not walk, and a
+    count it cannot name before the prompt is armed.
     """
     actor = node.player.kind
     if actor not in ("each_player", "each_opponent"):
