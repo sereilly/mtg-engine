@@ -262,3 +262,210 @@ def test_the_declaration_cost_reader_names_the_choice_for_the_client():
     (choice,) = game.declaration_cost_choices(leviathan, "attack")
     assert choice["verb"] == "sacrifice" and choice["count"] == 2
     assert choice["candidate_ids"] == [land.permanent_id for land in islands]
+
+
+# ---------------------------------------------------------------------------
+# PCY W3G5: the last costs paid by the default — untap, counters, a second
+# sacrifice, a card put back on the library
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("602.1a", "602.2b", "601.2h")
+def test_w3g5_benthic_explorers_untaps_the_land_its_controller_names():
+    """"{T}, Untap a tapped land an opponent controls: Add one mana of any type
+    that land could produce." The picker offers the opponent's **tapped**
+    lands only — not their untapped Swamp, not the payer's own — and the land
+    named is the one untapped, so the mana is that land's: an Island named,
+    blue mana made. The default untaps the first tapped land (the Forest)."""
+    game, (_explorers,), (forest, island, swamp) = _table(
+        ["Benthic Explorers"], ["Forest", "Island", "Swamp"],
+    )
+    forest.tapped = island.tapped = True
+
+    cost = game.activation_target_spec(0, 0)
+    assert cost["untap_cost"] is True and cost["opponent_only"] is True
+    assert [(t["seat"], t["name"]) for t in cost["valid_targets"]] == [
+        (1, "Forest"), (1, "Island"),
+    ]
+
+    result = game.activate_permanent_ability(
+        0, "Benthic Explorers", cost_permanent_ids=[island.permanent_id],
+    )
+    assert result.supported, result.details
+    resolve_stack(game)
+    assert not island.tapped and forest.tapped and not swamp.tapped
+    assert game.players[0].mana_pool["U"] == 1 and game.players[0].mana_pool["G"] == 0
+
+
+@pytest.mark.cr("602.2b", "601.2h")
+def test_w3g5_wandering_mage_puts_the_counter_on_the_creature_named():
+    """"{B}, Put a -1/-1 counter on a creature you control: Prevent the next 2
+    damage that would be dealt to target player or planeswalker this turn."
+    Which creature shrinks is the payer's: the Giant named takes the counter,
+    the Bears and the Mage do not, and the shield lands on the player named."""
+    game, (mage, bears, giant), _ = _table(
+        ["Wandering Mage", "Grizzly Bears", "Hill Giant"],
+    )
+    spec = game.activation_target_spec(0, 0, ability_index=2)
+    cost = spec["cost_spec"]
+    assert cost["put_counter_cost"] is True and cost["counter"] == "-1/-1"
+    assert [t["name"] for t in cost["valid_targets"]] == [
+        "Wandering Mage", "Grizzly Bears", "Hill Giant",
+    ]
+
+    result = game.activate_permanent_ability(
+        0, "Wandering Mage", ability_index=2, target_player_index=0,
+        cost_permanent_ids=[giant.permanent_id],
+    )
+    assert result.supported, result.details
+    resolve_stack(game)
+    assert (giant.effective_power, giant.effective_toughness) == (2, 2)
+    assert bears.effective_toughness == 2 and mage.effective_toughness == 3
+    assert "A gains prevention shield for 2 damage" in game.log
+
+
+@pytest.mark.cr("602.2b", "601.2h")
+def test_w3g5_spike_rogue_offers_only_creatures_holding_the_counter():
+    """"{2}, Remove a +1/+1 counter from a creature you control: Put a +1/+1
+    counter on this creature." A creature with no +1/+1 counter cannot pay,
+    so it is not offered (the charger would replace the answer with its
+    default); the Bears named give theirs up and the Rogue gets one."""
+    from engine.named_counters import counters_on
+    from engine.pt import add_pt_counters
+
+    rogue, bears, giant = (_ready(_POOL[name]) for name in (
+        "Spike Rogue", "Grizzly Bears", "Hill Giant",
+    ))
+    add_pt_counters(rogue, "+1/+1", 2)
+    add_pt_counters(bears, "+1/+1", 1)
+    game = Game(players=[
+        PlayerState(name="A", battlefield=[rogue, bears, giant]),
+        PlayerState(name="B"),
+    ])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.current_turn_phase, game.current_step = "precombat_main", None
+
+    cost = game.activation_target_spec(0, 0, ability_index=1)
+    assert cost["remove_counter_cost"] is True and cost["counter"] == "+1/+1"
+    assert [t["name"] for t in cost["valid_targets"]] == ["Spike Rogue", "Grizzly Bears"]
+
+    result = game.activate_permanent_ability(
+        0, "Spike Rogue", ability_index=1, cost_permanent_ids=[bears.permanent_id],
+    )
+    assert result.supported, result.details
+    resolve_stack(game)
+    assert counters_on(bears, "+1/+1") == 0 and counters_on(rogue, "+1/+1") == 3
+    assert "Grizzly Bears gave up 1 +1/+1 counter(s) (Spike Rogue's cost)" in game.log
+
+
+@pytest.mark.cr("602.2b", "601.2h")
+def test_w3g5_viscerid_drone_sacrifices_the_creature_and_the_swamp_named():
+    """"{T}, Sacrifice a creature and a Swamp: Destroy target nonartifact
+    creature." Two noun phrases, two choices, one ``cost_permanent_ids`` in the
+    picker list's order: the Giant and the *second* Swamp were named, and those
+    are the two that go — the default would have taken the smallest creature
+    and the first Swamp."""
+    game, (_drone, bears, giant, s1, s2), (angel,) = _table(
+        ["Viscerid Drone", "Grizzly Bears", "Hill Giant", "Swamp", "Swamp"],
+        ["Serra Angel"],
+    )
+    cost = game.activation_target_spec(0, 0, ability_index=0)["cost_spec"]
+    (swamps,) = cost["more_costs"]
+    assert cost["sacrifice_cost"] and swamps["sacrifice_cost"]
+    assert [t["name"] for t in swamps["valid_targets"]] == ["Swamp", "Swamp"]
+
+    result = game.activate_permanent_ability(
+        0, "Viscerid Drone", ability_index=0,
+        target_player_index=1, target_permanent_index=0,
+        cost_permanent_ids=[giant.permanent_id, s2.permanent_id],
+    )
+    assert result.supported, result.details
+    resolve_stack(game)
+    assert game.is_on_battlefield(bears) and game.is_on_battlefield(s1)
+    assert not game.is_on_battlefield(giant) and not game.is_on_battlefield(s2)
+    assert not game.is_on_battlefield(angel)
+
+
+@pytest.mark.cr("602.2b", "601.2h")
+def test_w3g5_a_seat_naming_nothing_still_pays_the_default_for_both():
+    """Every AI and headless caller names nothing and must keep getting the
+    payment it always got: the smallest creature and the first Swamp."""
+    game, (drone, bears, giant, s1, s2), (_angel,) = _table(
+        ["Viscerid Drone", "Grizzly Bears", "Hill Giant", "Swamp", "Swamp"],
+        ["Serra Angel"],
+    )
+    result = game.activate_permanent_ability(
+        0, "Viscerid Drone", ability_index=0,
+        target_player_index=1, target_permanent_index=0,
+    )
+    assert result.supported, result.details
+    gone = [p for p in (drone, bears, giant, s1, s2) if not game.is_on_battlefield(p)]
+    assert len(gone) == 2 and s1 in gone and giant not in gone
+
+
+@pytest.mark.cr("602.2b", "601.2h")
+def test_w3g5_urborg_panther_sacrifices_the_feral_shadow_named():
+    """"Sacrifice a creature named Feral Shadow, a creature named
+    Breathstealer, and this creature: …". Two Feral Shadows on the board, the
+    second named: it is the one that goes. The search the ability resolves into
+    is then owed as a prompt, which is the effect working rather than the cost."""
+    game, (panther, fs1, fs2, breath), _ = _table(
+        ["Urborg Panther", "Feral Shadow", "Feral Shadow", "Breathstealer"],
+    )
+    spec = game.activation_target_spec(0, 0, ability_index=1)
+    assert [t["name"] for t in spec["valid_targets"]] == ["Feral Shadow", "Feral Shadow"]
+    assert [t["name"] for t in spec["more_costs"][0]["valid_targets"]] == ["Breathstealer"]
+
+    result = game.activate_permanent_ability(
+        0, "Urborg Panther", ability_index=1,
+        cost_permanent_ids=[fs2.permanent_id, breath.permanent_id],
+    )
+    assert result.supported, result.details
+    assert game.is_on_battlefield(fs1)
+    assert not any(game.is_on_battlefield(p) for p in (fs2, breath, panther))
+
+
+@pytest.mark.cr("602.2b", "601.2h")
+def test_w3g5_hidden_retreat_puts_back_the_card_its_controller_names():
+    """"Put a card from your hand on top of your library: Prevent all damage
+    that would be dealt by target instant or sorcery spell this turn." The
+    Island named goes on top (the default would have put back the Forest), and
+    the Bolt aimed at its controller deals nothing."""
+    game, (_retreat,), _ = _table(["Hidden Retreat"], hand=["Forest", "Island"])
+    game.players[1].hand = [_POOL["Lightning Bolt"]]
+    game.queue_from_hand(1, "Lightning Bolt", target_player_index=0)
+    game.start_priority_window(0)
+
+    cost = game.activation_target_spec(0, 0)["cost_spec"]
+    assert cost["library_top_cost"] is True
+    assert [t["name"] for t in cost["valid_targets"]] == ["Forest", "Island"]
+
+    result = game.activate_permanent_ability(
+        0, "Hidden Retreat", target_stack_index=0, cost_hand_index=1,
+    )
+    assert result.supported, result.details
+    resolve_stack(game)
+    assert [c.name for c in game.players[0].hand] == ["Forest"]
+    assert game.players[0].library[0].name == "Island"
+    assert game.players[0].life == 20
+
+
+@pytest.mark.cr("601.2c", "601.2h")
+def test_w3g5_peace_talks_leaves_an_exile_cost_its_picker():
+    """The Atog test one cost over. City of Shadows' "Exile a creature you
+    control" chooses a payment, not a target, so Peace Talks says nothing about
+    it — but the enumerator's ban check listed three cost flags and not this
+    one, so the picker offered nothing for as long as the ban was up while the
+    engine went on accepting the activation."""
+    game, (city, bears), _ = _table(["City of Shadows", "Grizzly Bears"], hand=["Peace Talks"])
+    assert game.cast_from_hand(0, "Peace Talks").supported
+    assert game.targeting_bans
+
+    offered = game.activation_target_spec(0, 0, ability_index=0)["valid_targets"]
+    assert [t["name"] for t in offered] == ["Grizzly Bears"]
+    result = game.activate_permanent_ability(
+        0, "City of Shadows", ability_index=0, cost_permanent_index=1,
+    )
+    assert result.supported, result.details
+    assert [c.name for c in game.players[0].exile] == ["Grizzly Bears"]

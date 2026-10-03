@@ -672,6 +672,11 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
             # payment is the engine's default for a seat that names nothing.
             and not spec.get("tap_cost")
             and not spec.get("return_cost")
+            # …nor an untap picker over an opponent's tapped lands (Benthic
+            # Explorers, PCY W3G5): read as a target, the AI would aim at the
+            # land it untaps and announce a target the ability does not have.
+            # The counter-cost pickers are skipped above, before this block.
+            and not spec.get("untap_cost")
         ):
             # The AI activates the first usable ability (selected above), which
             # is usable_activated_abilities()[0] — the index activation_target_spec

@@ -1015,6 +1015,11 @@ _KIND_TO_SPEC: dict[str, dict] = {
 #: 601.2c), which every gate that asks "does this ability target?" must hear.
 COST_PICKER_FLAGS = (
     "sacrifice_cost", "discard_cost", "exile_cost", "tap_cost", "return_cost",
+    # "Untap a tapped land an opponent controls" (Benthic Explorers), "Put a
+    # -1/-1 counter on a creature you control" (Wandering Mage), "Remove a
+    # +1/+1 counter from a creature you control" (Spike Rogue), "Put a card
+    # from your hand on top of your library" (Hidden Retreat, Penance).
+    "untap_cost", "put_counter_cost", "remove_counter_cost", "library_top_cost",
 )
 
 
@@ -1049,19 +1054,46 @@ def _cost_picker_spec(cost, *, announced: dict | None = None) -> dict | None:
     creature picker over a narrowed list, and the enumerator applies the
     narrowing with the same matcher the charger does, so what is offered and
     what is accepted cannot disagree.
+
+    **One picker per choice, and a cost may hand its payer several.**
+    "Sacrifice a creature **and a Swamp**" (Viscerid Drone) is two permanents
+    and two choices; this function used to return at the first branch that
+    matched, so the creature was asked about and the Swamp was the engine's
+    default for every human who ever paid it. :func:`_cost_picker_specs` builds
+    the whole list, and the first entry carries the rest as ``more_costs`` —
+    emitted only when there is a rest, so every spec written before a second
+    choice existed is byte-identical, and every reader that asks the first
+    picker's flags still gets the first picker. The answers to the whole list
+    ride one ``cost_permanent_ids``, in the list's order, and each charger
+    takes the ids its own candidates contain.
     """
-    if cost is None:
+    specs = _cost_picker_specs(cost, announced=announced)
+    if not specs:
         return None
+    first, *rest = specs
+    if rest:
+        return {**first, "more_costs": rest}
+    return first
+
+
+def _cost_picker_specs(cost, *, announced: dict | None = None) -> list[dict]:
+    """Every picker *cost* needs, in the order the client asks them; empty when
+    the cost chooses nothing. :func:`_cost_picker_spec` is the shape callers
+    read; this is the list it is made from."""
+    if cost is None:
+        return []
     offer_key = getattr(cost, "optional_key", None)
     if offer_key is not None and not (announced or {}).get(offer_key):
-        return None
-    if getattr(cost, "discard_cards", 0):
+        return []
+    specs: list[dict] = []
+    if getattr(cost, "discard_cards", 0) and not getattr(cost, "discard_at_random", False):
         # "Discard a card **at random**" (Coral Helm, Stormbind, Amok,
         # Draconian Cylix, Canyon Drake; Sonic Burst and Flowstone Flood on the
-        # cast side). The payer names **nothing**, so there is no choice for a
-        # picker to collect — and both payment paths already ignore a named
-        # card here, deliberately, because honouring one would hand the choice
-        # back and make the cost strictly better than the card prints.
+        # cast side) is the condition's second half. The payer names
+        # **nothing**, so there is no choice for a picker to collect — and both
+        # payment paths already ignore a named card here, deliberately, because
+        # honouring one would hand the choice back and make the cost strictly
+        # better than the card prints.
         #
         # So a picker was a prompt whose answer was discarded: the client asked
         # which card to bin, the player chose, and the RNG binned a different
@@ -1069,8 +1101,6 @@ def _cost_picker_spec(cost, *, announced: dict | None = None) -> dict | None:
         # the player's favour** right up to the moment the answer was thrown
         # away. It is refused here rather than in each caller for this
         # function's own stated reason: all three of them must give one answer.
-        if getattr(cost, "discard_at_random", False):
-            return None
         spec = {
             "kind": "hand_card",
             "own_only": True,
@@ -1085,7 +1115,7 @@ def _cost_picker_spec(cost, *, announced: dict | None = None) -> dict | None:
         alternatives = getattr(cost, "discard_filters", ()) or ()
         if alternatives:
             spec["filters"] = [dict(alt) for alt in alternatives]
-        return spec
+        specs.append(spec)
     described = getattr(cost, "exile_filter", None)
     if described is not None:
         # "Exile a creature you control" (City of Shadows) / "Exile a creature
@@ -1121,23 +1151,24 @@ def _cost_picker_spec(cost, *, announced: dict | None = None) -> dict | None:
             # and so cannot ride the filter.
             if getattr(cost, "exile_same_zone", False):
                 spec["same_zone"] = True
-            return spec
-        spec = {
-            "kind": filter_head_noun(described),
-            "own_only": True,
-            "exile_cost": True,
-        }
-        if described.get("exclude_self"):
-            spec["exclude_source"] = True
-        narrowing = {
-            key: value
-            for key, value in described.items()
-            if key not in ("exclude_self", "controller")
-            and not (key == "type_filter" and isinstance(value, str))
-        }
-        if narrowing:
-            spec["filter"] = narrowing
-        return spec
+            specs.append(spec)
+        else:
+            spec = {
+                "kind": filter_head_noun(described),
+                "own_only": True,
+                "exile_cost": True,
+            }
+            if described.get("exclude_self"):
+                spec["exclude_source"] = True
+            narrowing = {
+                key: value
+                for key, value in described.items()
+                if key not in ("exclude_self", "controller")
+                and not (key == "type_filter" and isinstance(value, str))
+            }
+            if narrowing:
+                spec["filter"] = narrowing
+            specs.append(spec)
     described = getattr(cost, "sacrifice_filter", None)
     if described is not None:
         spec = {
@@ -1180,7 +1211,19 @@ def _cost_picker_spec(cost, *, announced: dict | None = None) -> dict | None:
         }
         if narrowing:
             spec["filter"] = narrowing
-        return spec
+        specs.append(spec)
+    described = getattr(cost, "sacrifice_also_filter", None)
+    if described is not None:
+        # "Sacrifice a creature **and a Swamp**" (Viscerid Drone); "Sacrifice a
+        # creature named Feral Shadow, **a creature named Breathstealer**, and
+        # this creature" (Urborg Panther). The second noun phrase is a second
+        # permanent and a second choice (CR 601.2h through CR 602.2b), and
+        # until it had a picker of its own the Swamp was whichever one the
+        # default reached first. A set of one, so it is the tap cost's shape
+        # with the sacrifice's verb; the charger takes, of the named ids, the
+        # one its own candidates contain — which never includes the permanent
+        # the first phrase was paid with.
+        specs.append(_permanent_set_cost_spec(described, "sacrifice_cost", 1))
     described = getattr(cost, "return_to_hand_filter", None)
     if described is not None and getattr(cost, "return_to_hand_count", 0):
         # "**Return a Forest you control to its owner's hand**: Untap target
@@ -1188,9 +1231,9 @@ def _cost_picker_spec(cost, *, announced: dict | None = None) -> dict | None:
         # (Flooded Shoreline). The tap cost below one zone over, and the
         # charger reads the same ``cost_permanent_ids``: which Forest goes
         # home — the tapped one or the untapped one — is the payer's.
-        return _permanent_set_cost_spec(
+        specs.append(_permanent_set_cost_spec(
             described, "return_cost", int(cost.return_to_hand_count)
-        )
+        ))
     described = getattr(cost, "tap_filter", None)
     if described is not None and getattr(cost, "tap_count", 0):
         # "**Tap an untapped creature you control**: …" (Opposition, Earthcraft,
@@ -1204,23 +1247,100 @@ def _cost_picker_spec(cost, *, announced: dict | None = None) -> dict | None:
         # say "tap" and send the ids on the cost field; ``count`` is always
         # stated, because every printing of this cost is a set the payer picks,
         # one or several.
-        return _permanent_set_cost_spec(described, "tap_cost", int(cost.tap_count))
-    return None
+        specs.append(
+            _permanent_set_cost_spec(described, "tap_cost", int(cost.tap_count))
+        )
+    described = getattr(cost, "untap_filter", None)
+    if described is not None:
+        # "{T}, **Untap a tapped land an opponent controls**: …" (Benthic
+        # Explorers). The tap cost's mirror, and the first picker over a
+        # permanent the payer does **not** control (CR 602.1a: a cost is any
+        # action) — so the printed seat clause is the picker's seat, not
+        # ``own_only``. The charger has always taken the answer on
+        # ``cost_permanent_ids``; nothing asked, so a human untapped whichever
+        # land the default met first, and the mana the ability makes is "any
+        # type **that land** could produce".
+        spec = _permanent_set_cost_spec(
+            described, "untap_cost", 1, seat=described.get("controller")
+        )
+        if spec is not None:
+            specs.append(spec)
+    described = getattr(cost, "put_counter_filter", None)
+    if described is not None and getattr(cost, "put_counter", None):
+        # "{B}, **Put a -1/-1 counter on a creature you control**: …"
+        # (Wandering Mage). Which creature shrinks is the payer's, and the
+        # charger reads ``cost_permanent_ids``; ``counter`` is the printed kind,
+        # so the client can say what is being put on.
+        spec = _permanent_set_cost_spec(described, "put_counter_cost", 1)
+        spec["counter"] = cost.put_counter
+        specs.append(spec)
+    described = getattr(cost, "remove_counter_filter", None)
+    if described is not None and getattr(cost, "remove_counter", None):
+        # "{2}, **Remove a +1/+1 counter from a creature you control**: …"
+        # (Spike Rogue). The placing twin's mirror, with one more condition on
+        # who can pay: the permanent must be *holding* the counter (CR 601.2h),
+        # which the charger checks and so the picker must too — offered a
+        # creature with none, the player's answer would be silently replaced by
+        # the default. ``with_named_counter`` is the testable key that asks it
+        # (it reads +1/+1 counters through the same store the charger counts).
+        #
+        # It asks "at least one", so a printed count above one has no key to
+        # say it and gets no picker — the guard then names the card, which is
+        # the loud direction, rather than offering creatures that cannot pay.
+        if cost.remove_counter_count == 1:
+            spec = _permanent_set_cost_spec(
+                {**described, "with_named_counter": cost.remove_counter},
+                "remove_counter_cost", 1,
+            )
+            spec["counter"] = cost.remove_counter
+            specs.append(spec)
+    if getattr(cost, "hand_to_library_top", 0):
+        # "**Put a card from your hand on top of your library**: …" (Hidden
+        # Retreat, Penance). The discard picker's shape with a different
+        # destination: which card is the payer's (CR 601.2b through
+        # CR 602.2b), the charger reads ``cost_hand_index`` exactly as the
+        # discard does, and the flag tells the client to say "put on top of
+        # your library" rather than "discard".
+        specs.append({
+            "kind": "hand_card",
+            "own_only": True,
+            "library_top_cost": True,
+            "count": int(cost.hand_to_library_top),
+        })
+    return specs
 
 
-def _permanent_set_cost_spec(described: dict, flag: str, count: int) -> dict:
-    """The picker for a cost paid with *count* of the payer's own permanents
-    named by *described* — a tap or a return to hand. *flag* is the verb the
-    client says and the field the answer rides is ``cost_permanent_ids``.
+#: The seat clause a printed cost phrase carries, as the enumerator's seat flag.
+#: ``None`` — no clause — is the payer's own, which is what every tap, return
+#: and sacrifice cost in the pool means; "an opponent controls" is the one
+#: other clause a cost prints (Benthic Explorers).
+_COST_SEAT_FLAGS = {None: "own_only", "you": "own_only", "opponent": "opponent_only"}
+
+
+def _permanent_set_cost_spec(
+    described: dict, flag: str, count: int, *, seat: str | None = None
+) -> dict | None:
+    """The picker for a cost paid with *count* permanents named by *described*
+    — a tap, a return to hand, an untap, a counter put on or taken off, the
+    second half of a conjoined sacrifice. *flag* is the verb the client says
+    and the field the answer rides is ``cost_permanent_ids``.
+
+    *seat* is the printed seat clause, for the one cost that reaches past the
+    payer's own permanents ("Untap a tapped land **an opponent controls**").
+    A clause this table cannot say derives no picker at all, rather than one
+    over the payer's own board — the guard then names the card.
 
     The rest of the printed phrase — "untapped", "blue", "Spirit", "snow",
     "Forest" — rides along as ``filter`` for the reason the sacrifice's
     narrowing does: the enumerator applies it with the matcher the charger
     accepts by, so what is offered and what is accepted cannot disagree.
     """
+    seat_flag = _COST_SEAT_FLAGS.get(seat)
+    if seat_flag is None:
+        return None
     spec = {
         "kind": filter_head_noun(described),
-        "own_only": True,
+        seat_flag: True,
         flag: True,
         "count": count,
     }
