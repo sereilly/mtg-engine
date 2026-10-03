@@ -329,7 +329,11 @@ def _source_counter_count(match: re.Match) -> dict[str, object] | None:
     kind = (match.group("counter") or "").strip()
     if not kind:
         return None
-    spec: dict[str, object] = {"source_counters": kind}
+    # "…on it" is the creature's own pile; "…on the permanent that created this
+    # token" is its maker's, which ``evaluate_count`` finds through the id the
+    # token maker stamped (``tokens.CREATED_WITH_PERMANENT_ID``).
+    key = "source_counters" if match.group("whose") == "it" else "creator_counters"
+    spec: dict[str, object] = {key: kind}
     word = match.group("times")
     if word:
         spec["multiplier"] = _MULTIPLIER_WORDS[word]
@@ -639,11 +643,20 @@ _PATTERNS: tuple[tuple[re.Pattern[str], object], ...] = (
         # tail would take "age counters on it" to the noun parser — which
         # refuses it, because a counter is not an object, and would then leave
         # the whole card unsupported rather than reaching this row.
+        #
+        # "This token's power and toughness are each equal to the number of
+        # fade counters on **the permanent that created this token**."
+        # (Saproling Burst's token, after ``effects/tokens.py`` has written the
+        # Burst's own name as the relation it stands for.) The same count of the
+        # same kind of pile, sitting on the token's maker rather than on the
+        # creature itself — so it is this row with the pile's owner as data,
+        # not a second row a later edit could teach one half of.
         re.compile(
             rf"^{_SUBJECT} (?P<half>power and toughness are each|power is|"
             r"toughness is) equal to (?:(?P<plus>\d+) plus )?"
             r"(?:(?P<times>twice|three times) )?the number of "
-            r"(?P<counter>[a-z0-9+/-]+) counters on it$"
+            r"(?P<counter>[a-z0-9+/-]+) counters on "
+            r"(?P<whose>it|the permanent that created this token)$"
         ),
         _source_counter_count,
     ),
@@ -733,6 +746,27 @@ def dynamic_pt_for(normalized_line: str) -> DynamicPT | None:
             return None
         return DynamicPT("dynamic_pt_count", payload)
     return None
+
+
+def defines_whole_pt(line: str) -> bool:
+    """Whether *line*, printed as a quoted ability, defines **both** halves of
+    a creature's power and toughness.
+
+    The question a token with no printed P/T asks of its quoted abilities
+    ("Create a green Saproling creature token. It has "This token's power and
+    toughness are each equal to …"", Saproling Burst), answered by this table
+    because this table is what will recompute the token: a line it reads only
+    half of ("…power is equal to …") leaves a toughness nobody printed, so it
+    is not enough.
+
+    Takes the line as printed and normalizes it the way
+    ``oracle.normalize_creature_line`` does for the two things a quoted token
+    ability can carry — case and punctuation — so the grammar can ask without
+    importing the compiler that imports it.
+    """
+    normalized = " ".join(line.lower().replace(";", ",").split()).strip(" .,")
+    found = dynamic_pt_for(normalized)
+    return found is not None and "defines" not in found.payload
 
 
 def _names_objects(phrase: str) -> bool:

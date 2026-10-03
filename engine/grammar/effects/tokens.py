@@ -34,6 +34,39 @@ from ..vocabulary import (CARD_TYPES, COLOR_WORDS, KEYWORD_INDEX, SUBTYPE_INDEX,
                           TYPE_LINE_SUPERTYPES, match_longest)
 
 
+#: How a token's quoted ability names **the card that made it**, once that
+#: ability is the token's own text. "…equal to the number of fade counters on
+#: **Saproling Burst**." (Saproling Burst.) Printed on the Burst, the name is the
+#: Burst naming itself — the lexer collapses it to SELF — but on the token's
+#: card it is not the token's name, and read there as a bare name it would name
+#: nothing the token's compiler can find. The phrase is the relation the name
+#: stood for: the permanent the token's ``created_with_permanent_id`` stamp
+#: points back to, which ``characteristic_defining`` and the evaluator read.
+TOKEN_CREATOR_PHRASE = "the permanent that created this token"
+
+
+def _quoted_text(stream: TokenStream, opened: int, closed: int) -> str:
+    """The quoted span ``[opened, closed)`` as the card prints it — except that
+    the card's own name inside it becomes :data:`TOKEN_CREATOR_PHRASE`.
+
+    Spliced by the tokens' offsets, as ``TokenStream.text_between`` slices, so
+    every other word is the card's own. A token's text naming anything else by
+    name keeps that name, and a phrase no production reads still refuses the
+    line through ``token_line_supported``.
+    """
+    if not opened < closed:
+        return ""
+    base = stream.tokens[opened].start
+    text = stream.line[base:stream.tokens[closed - 1].end]
+    for token in reversed(stream.tokens[opened:closed]):
+        if token.kind == SELF:
+            text = (
+                text[:token.start - base] + TOKEN_CREATOR_PHRASE
+                + text[token.end - base:]
+            )
+    return text.strip(" ,.")
+
+
 def _parse_token_quoted_lines(stream: TokenStream) -> tuple[str, ...]:
     """The ``with "<line>"[ and "<line>"]`` tail — printed abilities in quotes.
 
@@ -50,7 +83,7 @@ def _parse_token_quoted_lines(stream: TokenStream) -> tuple[str, ...]:
         opened = stream.pos
         while not stream.exhausted and not stream.at_kind(QUOTE):
             stream.advance()
-        text = stream.text_between(opened, stream.pos)
+        text = _quoted_text(stream, opened, stream.pos)
         if stream.accept_kind(QUOTE) is None:
             raise stream.error("unterminated quoted ability on the token")
         lines.append(text)
@@ -72,7 +105,7 @@ def _parse_token_quoted_lines_one(stream: TokenStream) -> tuple[str, ...]:
     opened = stream.pos
     while not stream.exhausted and not stream.at_kind(QUOTE):
         stream.advance()
-    text = stream.text_between(opened, stream.pos)
+    text = _quoted_text(stream, opened, stream.pos)
     if stream.accept_kind(QUOTE) is None:
         raise stream.error("unterminated quoted ability on the token")
     return (text,)
@@ -745,6 +778,17 @@ def parse_create_token_with_stated_pt(stream: TokenStream) -> "ast.CreateToken |
     ):
         stream.reset(mark)
         return None
+    # "Create a green Saproling creature token. It has "**This token's power
+    # and toughness are each equal to** the number of fade counters on Saproling
+    # Burst."" (Saproling Burst.) The other place a P/T-less creature token's
+    # numbers can come from: its own characteristic-defining ability (CR 604.3),
+    # quoted onto it. Both halves must be defined by it — the CDA table's own
+    # reading, not a phrase test here — or the token would arrive with a half
+    # nobody printed, so anything less keeps the line's refusal.
+    from ...characteristic_defining import defines_whole_pt
+
+    if any(defines_whole_pt(line) for line in token.granted_lines):
+        return token
     if not stream.accept_punct("."):
         stream.reset(mark)
         return None

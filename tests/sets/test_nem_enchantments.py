@@ -122,4 +122,127 @@ def test_w1g1_parallax_dementias_creature_cannot_be_regenerated(set_pool):
     assert not game.is_on_battlefield(host)
     assert [c.name for c in game.players[1].graveyard] == ["Skyshroud Ridgeback"]
 
+
+def _w1g1e_burst(game, seat: int = 0, set_pool=None):
+    burst = _W1G1EPermanent(card=set_pool("NEM")["Saproling Burst"])
+    game._put_permanent_onto_battlefield(seat, burst, None)
+    return burst
+
+
+def _w1g1e_saprolings(game) -> list:
+    return [p for p in game.all_permanents() if "Saproling" in p.card.type_line]
+
+
+def test_w1g1_saproling_burst_makes_saprolings_as_big_as_its_counters(set_pool):
+    """"Remove a fade counter from this enchantment: Create a green Saproling
+    creature token. It has "This token's power and toughness are each equal to
+    the number of fade counters on Saproling Burst."" The token is defined by
+    the Burst's pile *continuously* (CR 604.3): each one made is as big as the
+    pile it leaves behind, and every one shrinks with the next counter that
+    goes — by activation or by fading."""
+    game = _w1g1e_duel()
+    burst = _w1g1e_burst(game, set_pool=set_pool)
+    assert _w1g1e_counters_on(burst, "fade") == 7
+
+    assert game.activate_permanent_ability(0, "Saproling Burst").supported
+    _w1g1e_resolve_stack(game)
+    [first] = _w1g1e_saprolings(game)
+    assert (first.effective_power, first.effective_toughness) == (6, 6)
+    assert first.card.colors == ("G",)
+
+    assert game.activate_permanent_ability(0, "Saproling Burst").supported
+    _w1g1e_resolve_stack(game)
+    assert [(s.effective_power, s.effective_toughness)
+            for s in _w1g1e_saprolings(game)] == [(5, 5), (5, 5)]
+
+    _w1g1e_upkeep(game, 1)
+    _w1g1e_upkeep(game, 0)
+    game.check_state_based_actions()
+    assert [(s.effective_power, s.effective_toughness)
+            for s in _w1g1e_saprolings(game)] == [(4, 4), (4, 4)]
+
+
+def test_w1g1_saproling_burst_cannot_make_a_token_with_no_counter_left(set_pool):
+    """The cost is charged: seven counters are seven Saprolings, and the
+    eighth activation is refused with nothing made — the last one made
+    arriving as a 0/0 that the state-based check removes."""
+    game = _w1g1e_duel()
+    burst = _w1g1e_burst(game, set_pool=set_pool)
+
+    for _ in range(7):
+        assert game.activate_permanent_ability(0, "Saproling Burst").supported
+        _w1g1e_resolve_stack(game)
+    game.check_state_based_actions()
+
+    assert _w1g1e_counters_on(burst, "fade") == 0
+    assert _w1g1e_saprolings(game) == []
+    assert not game.activate_permanent_ability(0, "Saproling Burst").supported
+
+
+def test_w1g1_each_saproling_counts_the_burst_that_made_it(set_pool):
+    """"…fade counters on **Saproling Burst**" names the token's maker, not
+    every Burst on the table: a second Burst's pile does not size the first
+    one's Saprolings. The name becomes the relation the token's id stamp
+    records, so two Bursts with different piles make different-sized tokens."""
+    game = _w1g1e_duel()
+    first = _w1g1e_burst(game, set_pool=set_pool)
+    second = _w1g1e_burst(game, set_pool=set_pool)
+    for _ in range(3):
+        game.activate_permanent_ability(
+            0, "Saproling Burst", permanent_index=game.battlefield_index_of(second),
+        )
+        _w1g1e_resolve_stack(game)
+    game.activate_permanent_ability(
+        0, "Saproling Burst", permanent_index=game.battlefield_index_of(first),
+    )
+    _w1g1e_resolve_stack(game)
+
+    assert (_w1g1e_counters_on(first, "fade"), _w1g1e_counters_on(second, "fade")) == (6, 4)
+    sizes = sorted(s.effective_power for s in _w1g1e_saprolings(game))
+    assert sizes == [4, 4, 4, 6]
+
+
+def test_w1g1_a_saproling_whose_burst_has_left_is_a_0_0(set_pool):
+    """With the Burst gone there is no pile to count, so the tokens are 0/0
+    and the state-based check removes them (CR 704.5f) — before the Burst's
+    own leave trigger has even resolved."""
+    game = _w1g1e_duel()
+    burst = _w1g1e_burst(game, set_pool=set_pool)
+    game.activate_permanent_ability(0, "Saproling Burst")
+    _w1g1e_resolve_stack(game)
+    [token] = _w1g1e_saprolings(game)
+
+    game.remove_from_battlefield(burst)
+    game._permanent_to_graveyard(game.players[0], burst)
+    game.check_state_based_actions()
+
+    assert [item.card.name for item in game.stack] == ["Saproling Burst"]
+    assert not game.is_on_battlefield(token)
+
+
+def test_w1g1_saproling_burst_destroys_its_tokens_and_they_cant_regenerate(set_pool):
+    """"When this enchantment leaves the battlefield, destroy all tokens
+    created with this enchantment. They can't be regenerated." An anthem keeps
+    the Saproling at 1/1 once its pile is gone, so it is the trigger — not the
+    0/0 check — that has to take it, and a regeneration shield does not save
+    it. A token some other card made is not one created with *this* Burst."""
+    game = _w1g1e_duel()
+    anthem = _W1G1EPermanent(card=set_pool("USG")["Glorious Anthem"])
+    game._put_permanent_onto_battlefield(0, anthem, None)
+    burst = _w1g1e_burst(game, set_pool=set_pool)
+    game.activate_permanent_ability(0, "Saproling Burst")
+    _w1g1e_resolve_stack(game)
+    [token] = _w1g1e_saprolings(game)
+    token.regeneration_shield = 1
+
+    game.remove_from_battlefield(burst)
+    game._permanent_to_graveyard(game.players[0], burst)
+    game.check_state_based_actions()
+    assert game.is_on_battlefield(token), "1/1 under the anthem with the pile gone"
+    _w1g1e_resolve_stack(game)
+
+    assert not game.is_on_battlefield(token)
+    assert token.regeneration_shield == 1, "the shield was never asked"
+    assert any("Saproling Burst destroyed Saproling" in line for line in game.log)
+
 # --- end W1G1 ---

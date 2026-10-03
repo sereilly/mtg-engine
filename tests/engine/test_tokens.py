@@ -64,3 +64,56 @@ def test_dead_token_ceases_to_exist_not_graveyard():
 
     assert all(c.name != "Wasp" for c in p1.graveyard)
     assert all(c.name != "Wasp" for c in p1.exile)
+
+
+# --- W1G1 (NEM): a token whose own quoted ability defines its P/T ---
+
+
+def _w1g1_token_maker(quoted: str):
+    from engine.models import CardDefinition
+
+    return CardDefinition(
+        name="Spore Engine", mana_cost="", cmc=0.0, type_line="Enchantment",
+        oracle_text=(
+            "This enchantment enters with three spore counters on it.\n"
+            "Remove a spore counter from this enchantment: Create a green "
+            f'Saproling creature token. It has "{quoted}"'
+        ),
+        colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": "Spore Engine", "type_line": "Enchantment"},
+    )
+
+
+def test_a_token_with_no_printed_pt_takes_it_from_its_own_whole_cda():
+    """Saproling Burst's shape on an invented card: the token states no P/T,
+    its quoted CR 604.3 ability defines both halves, and the card's own name
+    inside the quote becomes the relation it names — the token's maker."""
+    program = compile_card_oracle(_w1g1_token_maker(
+        "This token's power and toughness are each equal to the number of "
+        "spore counters on Spore Engine."
+    ))
+
+    [ability] = program.activated_abilities
+    assert ability.instruction.kind == "create_token"
+    assert (ability.instruction.payload["power"],
+            ability.instruction.payload["toughness"]) == ("*", "*")
+    assert ability.instruction.payload["oracle_text"].endswith(
+        "spore counters on the permanent that created this token"
+    )
+
+
+def test_a_token_whose_quoted_ability_defines_only_one_half_is_refused():
+    """"…power is equal to …" leaves a toughness nothing printed, so the token
+    is not admitted with one invented — the ability stays unimplemented and the
+    card says so."""
+    program = compile_card_oracle(_w1g1_token_maker(
+        "This token's power is equal to the number of spore counters on "
+        "Spore Engine."
+    ))
+
+    assert all(
+        ability.instruction is None or ability.instruction.kind != "create_token"
+        for ability in program.activated_abilities
+    )
+
+# --- end W1G1 ---
