@@ -478,7 +478,17 @@ def _parse_search_other_library(stream: TokenStream) -> ast.Statement:
         # land". The whole difference is a word, so it is a branch here and not
         # a second production.
         to = ast.Zone("exile")
-    if not stream.accept_punct("."):
+    # "…and exile it**, then the player shuffles**." (Rootwater Thief.) The
+    # shuffle clause printed inside the search's own sentence rather than as the
+    # next one — the same CR 701.23 tail, so it is read here for exactly the
+    # reason the separate-sentence spelling is. The comma spelling needs "then";
+    # only a full stop can open the clause bare ("Then that player shuffles.").
+    same_sentence = (
+        to is not None
+        and stream.accept_punct(",")
+        and stream.at_word("then")
+    )
+    if not same_sentence and not stream.accept_punct("."):
         raise stream.error("expected the sentence that ends this search")
     if to is not None:
         # "**Then that player shuffles.**"
@@ -486,6 +496,12 @@ def _parse_search_other_library(stream: TokenStream) -> ast.Statement:
         shuffler = parse_player_ref(stream)
         if shuffler is None:
             raise stream.error("expected who shuffles after this search")
+        # The shuffler is the player whose library was searched (CR 701.23a)
+        # — "that player" / "the player" back-refer to the seat this sentence
+        # opened — and a printed seat read and dropped is the rider bug this
+        # grammar refuses: a card naming some other shuffler is not this one.
+        if shuffler.kind not in ("that_player", player.kind):
+            raise stream.error("the searched player is the one who shuffles")
         stream.expect_word("shuffles")
         return ast.SearchPlayerLibrary(player, count, filt, to, under_control_of)
     # "**That player puts those cards into their hand, then shuffles.**"
@@ -744,6 +760,13 @@ def _parse_counted_search(
     battlefield.
     """
     filt = parse_object_filter(stream)
+    # "…for up to three cards **with the same name as target creature**" (Pack
+    # Hunt). The singular tutor's phrase (Mask of the Mimic), read through the
+    # same reader, because "with the same name as target …" narrows every find
+    # of a counted search exactly as it narrows the one find of a single one.
+    named_target = _accept_same_name_as_target(stream)
+    if named_target is not None:
+        filt = dataclasses.replace(filt, named_as_target=named_target.filter)
     stream.accept_punct(",")
     # "reveal those cards," / "reveal them," — the plural of the singular
     # production's "reveal it", recorded the same way: the finds are shown to

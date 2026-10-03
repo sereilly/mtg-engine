@@ -33,10 +33,11 @@ from ...subject_filters import object_only_filter, untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
 from ._amounts import halved_count_spec
+from ._described_returns import _graveyard_to_hand_payload
 from ._sacrifices import _forced_sacrifice_filter
 from ._common import (_describe_targets, _filter_payload,
                       _is_enchanted, _is_source, _is_target,
-                      player_deed_payload)
+                      _restrictions_beyond, player_deed_payload)
 from ._events import (ATTACHED_SUBJECT_EVENTS, CHOSEN_PLAYER, LOOP_BOUND_OBJECT, OTHER_CHOSEN_PERMANENT, _EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER, names_attached_permanent, CHOSEN_PERMANENT, _RECORDED_PERMANENTS, _back_reference_payload)
 from ._delays import (_BOUND_OBJECT_DELAYED_EVENTS)
 
@@ -53,10 +54,28 @@ from ._delays import (_BOUND_OBJECT_DELAYED_EVENTS)
 # "Destroy all X" shapes with a dedicated sweep handler.
 
 
+#: What a bottomed graveyard card may be narrowed by: exactly the printed
+#: characteristics ``handlers/_common.graveyard_card_matches`` reads off a card
+#: in a graveyard (CR 613.1 leaves it nothing else), which is the one predicate
+#: the picker, the activation gate and the handler all ask.
+_BOTTOMING_HONOURED_FIELDS = frozenset({
+    "is_card", "zone", "zone_owner",
+    "card_types", "subtypes", "supertypes", "colors",
+})
+
+
 def _lower_put_on_library_bottom(node: ast.PutOnLibraryBottom) -> tuple[OracleInstruction, ...]:
     """"Put target card from your graveyard on the bottom of your library."
     (Epitaph Golem.) Only that exact scope has a handler: the card comes out
-    of the caster's own graveyard and goes under their own library."""
+    of the caster's own graveyard and goes under their own library.
+
+    "Put target **Rebel** card from your graveyard …" (Lin Sivvi, Defiant
+    Hero) is the same move narrowed, and the narrowing is carried on the keys
+    ``graveyard_card_matches`` reads — the shape the graveyard-to-hand return
+    already emits for "target Griffin card" — so what the picker offers, what
+    the activation gate admits and what the resolution takes are one answer.
+    The bare phrase keeps its empty payload, which is what "any card" has
+    always meant to this kind."""
     spec = node.target
     if not isinstance(spec, ast.TargetSpec) or not _is_target(spec):
         raise LoweringError("the bottoming handler reads one chosen card", node=node)
@@ -67,9 +86,16 @@ def _lower_put_on_library_bottom(node: ast.PutOnLibraryBottom) -> tuple[OracleIn
         raise LoweringError(
             "the bottoming handler reads the caster's own graveyard", node=node
         )
-    if filt != ast.ObjectFilter(is_card=True, zone="graveyard", zone_owner=filt.zone_owner):
+    if filt == ast.ObjectFilter(is_card=True, zone="graveyard", zone_owner=filt.zone_owner):
+        return (OracleInstruction("put_graveyard_card_on_library_bottom", "", {}),)
+    if _restrictions_beyond(filt, _BOTTOMING_HONOURED_FIELDS):
         raise LoweringError("no bottoming handler honours this restriction", node=node)
-    return (OracleInstruction("put_graveyard_card_on_library_bottom", "", {}),)
+    return (
+        OracleInstruction(
+            "put_graveyard_card_on_library_bottom", "",
+            _graveyard_to_hand_payload(filt),
+        ),
+    )
 
 
 def _lower_put_graveyard_top_on_library_bottom(

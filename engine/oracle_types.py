@@ -140,6 +140,14 @@ MANA_PAID_BY_SEAT = "mana_paid_by_seat"
 # decide everybody's life gain.
 DREW_BY_SEAT = "drew_by_seat"
 
+# The hand pick's twin of the two above: ``{seat: [cards chosen]}`` for "Each
+# player chooses a card in their hand. Then each player reveals their chosen
+# card. …" (Stronghold Gambit). Per seat for the same reason — every player's
+# answer is their own, and the single ``chosen_hand_cards`` list one seat's
+# pick writes would be overwritten by the next seat to answer, leaving the
+# sentences behind it reading one player's card as everybody's.
+CHOSEN_HAND_CARDS_BY_SEAT = "chosen_hand_cards_by_seat"
+
 # "…then this enchantment deals damage to the player equal to **the number of
 # cards they drew this way**." (Malignant Growth.) The scalar twin of the
 # per-seat tally above: one draw, one seat, one number - the same shape

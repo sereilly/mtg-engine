@@ -687,6 +687,26 @@ class ChooseCardsInHand:
 
 
 @dataclass(frozen=True)
+class RevealChosenHandCards:
+    """``Each player chooses a card in their hand. Then each player reveals
+    their chosen card. The owner of each <entrants> revealed this way <with the
+    extreme> puts it onto the battlefield.`` (Stronghold Gambit.)
+
+    One node for the three sentences, for :class:`NameAndRandomReveal`'s
+    reason: "their chosen card" is what the first sentence picked and "revealed
+    this way" is exactly those cards — parsed apart, the reveal would have no
+    pick to show and the last sentence would reach into whole hands.
+
+    ``entrants`` is the printed noun phrase that competes, and its
+    ``superlative`` is the comparison *among the revealed cards*; every card
+    tied at the extreme enters, because "each … with the lowest mana value"
+    names all of them.
+    """
+    chooser: PlayerRef
+    entrants: ObjectFilter
+
+
+@dataclass(frozen=True)
 class PutIteratedCardOnLibrary:
     """"put the card on top of your library" (Sylvan Library).
 

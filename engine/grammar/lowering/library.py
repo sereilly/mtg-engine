@@ -775,13 +775,14 @@ def _lower_graveyard_pick_onto_battlefield(
         raise LoweringError(
             "no graveyard pick reads a card narrowed this way", node=node
         )
-    if not node.under_owners_control:
+    if not node.under_owners_control or node.tapped:
         # The card enters under whoever owns the graveyard it left, and that is
         # what the printed rider says. A sentence naming some *other* seat would
-        # need a second reference here rather than this one standing in for it.
+        # need a second reference here rather than this one standing in for it;
+        # one naming "tapped" an entry state the search prompt does not carry.
         raise LoweringError(
-            "this graveyard pick only puts the card back under its owner's "
-            "control", node=node,
+            "this graveyard pick only puts the card back, untapped, under its "
+            "owner's control", node=node,
         )
     return (
         OracleInstruction(

@@ -220,6 +220,12 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     # and makes what it picked public (CR 701.20a), and the sentence after it
     # is what spends the count.
     "reveal_cards_from_hand": "zones",
+    # "Then each player reveals their chosen card. The owner of each creature
+    # card revealed this way with the lowest mana value puts it onto the
+    # battlefield." (Stronghold Gambit.) The reveal of a per-seat pick, and the
+    # zone change that reads it — the two halves the hidden pick above is for.
+    "reveal_chosen_hand_cards": "zones",
+    "put_chosen_hand_cards_onto_battlefield": "zones",
     "put_iterated_card_on_library": "zones",
     "put_graveyard_card_on_library_bottom": "zones",
     "put_top_of_graveyard_on_library_bottom": "zones",

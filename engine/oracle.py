@@ -5403,6 +5403,17 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
 
     if library_top_line(normalized):
         return True
+    # "Players play with their hands revealed." (Wandering Eye.) The hand-zone
+    # twin of the line above, and the same partial-list shape: the noncreature
+    # classifier has claimed it through `_derived_static_claims` since Revelation,
+    # and `engine/revealed_hands.py` scans every permanent's effective text
+    # whatever its card type — so a *creature* printing the sentence revealed
+    # every hand perfectly while reporting "text too complex". Asked of the
+    # module that performs it, so the claim cannot outlive the reveal.
+    from .revealed_hands import revealed_hands_line
+
+    if revealed_hands_line(normalized):
+        return True
     # "You may cast Aura spells with enchant creature as though they had flash."
     # (Rootwater Shaman.) A CR 611.1 static permission over CR 702.8a's timing,
     # derived from every permanent's own text at the two timing gates

@@ -27,6 +27,8 @@ the same contract ``by_node.py`` has with its table.
 
 from __future__ import annotations
 
+import dataclasses
+
 from ..oracle_types import OracleInstruction
 from . import ast
 from .errors import LoweringError
@@ -115,6 +117,9 @@ def lower_naming_statement(
             "targets": _targets_payload(statement.chooser),
         }
         return (OracleInstruction("repeated_graveyard_pick", "", payload),)
+
+    if isinstance(statement, ast.RevealChosenHandCards):
+        return _lower_reveal_chosen_hand_cards(statement)
 
     if isinstance(statement, ast.PutExiledCardIntoZone):
         return _lower_put_exiled_card_into_zone(statement, produced)
@@ -319,3 +324,69 @@ def lower_naming_statement(
         return (OracleInstruction("game_is_draw", "", {}),)
 
     return None
+
+
+def _lower_reveal_chosen_hand_cards(
+    node: "ast.RevealChosenHandCards",
+) -> tuple[OracleInstruction, ...]:
+    """Stronghold Gambit, as the three steps its three sentences are.
+
+    1. ``choose_cards_in_hand`` offered to **each player**, one card each,
+       recorded per seat and *hidden* — CR 101.4a lets a card chosen out of a
+       hand stay face down as it is chosen, and a pick that named itself in the
+       log would tell the seats after it what the seats before it hid.
+    2. ``reveal_chosen_hand_cards``: "Then each player reveals their chosen
+       card" — every pick made public at once (CR 701.20a), off the record.
+    3. ``put_chosen_hand_cards_onto_battlefield``: the competing phrase and its
+       superlative, asked of the revealed cards only; each card at the extreme
+       enters under its owner (CR 110.2a: the owner is who puts it there).
+
+    Composed in a ``sequence`` rather than fused, so a card that reveals
+    chosen cards and does something else with them reuses the first two.
+    """
+    from ..oracle_types import CHOSEN_HAND_CARDS_BY_SEAT
+    from ..subject_filters import card_only_filter
+    from .lowering._common import (
+        _PAYLOAD_HONOURED_FILTER_FIELDS, _restrictions_beyond, dropped_narrowings,
+    )
+
+    if node.chooser.kind != "each_player":
+        raise LoweringError("the hidden hand pick is made by each player", node=node)
+    superlative = node.entrants.superlative
+    if superlative is not None and superlative.characteristic != "mana_value":
+        # A card in a hand has no computed power or toughness to compare
+        # (CR 613.1 reaches permanents only); its mana value is printed.
+        raise LoweringError(
+            "revealed cards compete only on their printed mana value", node=node
+        )
+    bare = dataclasses.replace(node.entrants, superlative=None)
+    if _restrictions_beyond(bare, _PAYLOAD_HONOURED_FILTER_FIELDS | {"is_card"}):
+        raise LoweringError("no reveal can test that card phrase", node=node)
+    payload = bare.to_payload()
+    described = card_only_filter(payload)
+    if described is None or dropped_narrowings(bare, payload):
+        raise LoweringError("no reveal can test that card phrase", node=node)
+    entry: dict[str, object] = {
+        "cards_from": CHOSEN_HAND_CARDS_BY_SEAT, "card_filter": described,
+    }
+    if superlative is not None:
+        entry["superlative"] = {
+            "extreme": superlative.extreme,
+            "characteristic": superlative.characteristic,
+        }
+    steps = (
+        OracleInstruction(
+            "choose_cards_in_hand", "",
+            {
+                "count": 1, "card_filter": {}, "drawn_this_turn": False,
+                "result_key": CHOSEN_HAND_CARDS_BY_SEAT,
+                "actor": "each_player", "hidden": True,
+            },
+        ),
+        OracleInstruction(
+            "reveal_chosen_hand_cards", "",
+            {"cards_from": CHOSEN_HAND_CARDS_BY_SEAT},
+        ),
+        OracleInstruction("put_chosen_hand_cards_onto_battlefield", "", entry),
+    )
+    return (OracleInstruction("sequence", "", {"steps": steps}),)

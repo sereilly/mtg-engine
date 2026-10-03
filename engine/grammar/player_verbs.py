@@ -39,7 +39,7 @@ import dataclasses
 from . import ast
 from .errors import GrammarError
 from .nouns import parse_object_filter
-from .paragraphs import _parse_name_then_reveal_top
+from .paragraphs import _parse_name_then_reveal_top, parse_reveal_chosen_hand_cards
 from .phrases import (
     _accept_life_alternative,
     _accept_mana_alternatives,
@@ -391,6 +391,13 @@ def parse_player_subject_verb(
         top_of_pile = parse_graveyard_top_opponent_chooses(stream, source_spec)
         if top_of_pile is not None:
             return top_of_pile
+        # "Each player **chooses a card in their hand**. Then each player
+        # reveals their chosen card. …" (Stronghold Gambit.) Same reason as
+        # every arm above: it declines without consuming, where the paragraph
+        # below expects "a card name" and would fail the line on "in".
+        revealed = parse_reveal_chosen_hand_cards(stream, source_spec)
+        if revealed is not None:
+            return revealed
         return _parse_name_then_reveal_top(stream, source_spec)
     # "Each opponent sacrifices a creature" (Goremand). The AST node has
     # carried its player since it was written; only the *bare* imperative

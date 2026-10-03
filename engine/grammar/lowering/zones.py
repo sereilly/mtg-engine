@@ -22,7 +22,7 @@ one table and one row per kind and no reader's address changed.
 from __future__ import annotations
 
 from ...oracle_types import OracleInstruction, REVEALED_TOP_CARDS_BY_SEAT
-from ...subject_filters import card_only_filter
+from ...subject_filters import SOURCE_RESOLVED_CARD_KEYS, card_only_filter
 from .. import ast
 from ..errors import LoweringError
 from ...damage_deaths import DAMAGED_BY_SOURCE_DIED
@@ -332,6 +332,17 @@ def _lower_put_onto_battlefield(
     if not isinstance(target, ast.TargetSpec):
         raise LoweringError("no handler puts that onto the battlefield", node=node)
     filt = target.filter
+    if node.tapped and not (
+        filt.zone == "hand" and target.quantifier in ("a", "an") and filt.is_card
+    ):
+        # "…onto the battlefield **tapped**." Only the from-hand pick below
+        # carries the word to its resolver (Terrain Generator); every other
+        # branch here would put the card in untapped, which is a different and
+        # better card than the one printed.
+        raise LoweringError(
+            "only the from-hand pick puts a card onto the battlefield tapped",
+            node=node,
+        )
     if target.quantifier == "that" and filt.is_card:
         # "Put **that card** onto the battlefield under your control." (Seraph,
         # Krovikan Vampire.) The bound object, not a choice: the firing event
@@ -402,7 +413,15 @@ def _lower_put_onto_battlefield(
             payload = filt.to_payload()
             payload.pop("zone", None)
             payload.pop("zone_owner", None)
-            described = card_only_filter(payload)
+            # "…a creature card **of the chosen type** from your hand" (Belbe's
+            # Portal). The type is a CR 614.1c record on the ability's source,
+            # which no card in a hand can answer — so the key rides past the
+            # card-only gate and the handler turns it into an ordinary subtype
+            # off that source before any matcher is asked. Named here, because
+            # each name is a claim that the resolver really does that.
+            described = card_only_filter(
+                payload, carried_separately=SOURCE_RESOLVED_CARD_KEYS
+            )
             if described is None or dropped_narrowings(filt, payload):
                 raise LoweringError(
                     "the from-hand pick cannot test that card phrase", node=node
@@ -414,6 +433,10 @@ def _lower_put_onto_battlefield(
                 "permanents_only": not filt.card_types,
                 "whose": "offered" if filt.zone_owner.kind == "owner" else "you",
             }
+            if node.tapped:
+                # Emitted only when printed, so every pick compiled before this
+                # keeps a byte-identical payload.
+                pick_payload["tapped"] = True
             if node.attached_to_source:
                 # "…onto the battlefield **attached to this creature**."
                 # (Academy Researchers.) CR 303.4f: the Aura arrives already

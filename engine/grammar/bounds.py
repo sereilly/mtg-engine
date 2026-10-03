@@ -369,7 +369,16 @@ def accept_cards_in_hand_bound(stream: TokenStream) -> str | None:
 #: this reader is which two words were printed: Purging Scythe prints "least
 #: toughness", Drop of Honey "least power", Tariff and Juxtapose "greatest mana
 #: value", and a card printing "greatest toughness" needs no code at all.
-_EXTREME_WORDS = ("least", "greatest")
+#:
+#: Mapped to the extreme each word names, because the printed vocabulary is
+#: wider than the two answers: "the **lowest** mana value" (Stronghold Gambit)
+#: is "the least mana value" said the way older templating said it, and a
+#: second extreme word would be a second answer every reader downstream would
+#: have to learn.
+_EXTREME_WORDS = {
+    "least": "least", "greatest": "greatest",
+    "lowest": "least", "highest": "greatest",
+}
 
 #: The characteristic word, as one or two tokens, mapped to the name
 #: ``handlers/permanent_choices`` reads it back under. "Mana value" is two words
@@ -403,9 +412,9 @@ def accept_superlative(
         stream.reset(mark)
         return None
     extreme = None
-    for word in _EXTREME_WORDS:
+    for word, meaning in _EXTREME_WORDS.items():
         if stream.accept_word(word):
-            extreme = word
+            extreme = meaning
             break
     if extreme is None:
         stream.reset(mark)
