@@ -11,7 +11,7 @@ from ..layer_bridge import GAINED_TYPES, SET_CARD_TYPES
 from ..oracle_types import _COLOR_WORD_TO_SYMBOL
 from ..models import CardDefinition, Permanent
 from ..oracle_types import (CHOSEN_TARGET_PERMANENTS, COUNTERS_REMOVED,
-                            LAST_TARGET_CONTROLLER,
+                            EVENT_SUBJECT_LAST_KNOWN, LAST_TARGET_CONTROLLER,
                             X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT,
                             OracleInstruction)
 from ..exiled_records import source_object
@@ -1594,7 +1594,24 @@ def create_copy_token(game: Game, instruction: OracleInstruction, context: Oracl
     # seat as this ability resolved, so there is no target on the stack to
     # resolve and no legality to re-check (CR 608.2b is about targets).
     recorded_key = instruction.payload.get("permanents_from")
-    if recorded_key is not None:
+    if instruction.payload.get("copied") == "event_subject":
+        # "Whenever a nontoken creature enters, its controller creates a token
+        # that's a copy of **that creature**." (Dual Nature.) The object the
+        # trigger's event was about, by the id the entry seam froze — and when
+        # it has left by resolution, CR 608.2h's last-known information: the
+        # effect uses the object as it last existed on the battlefield, which
+        # the same seam froze beside the id. Nothing is targeted (CR 603.3d), so
+        # there is no legality to re-check; the condition's own filter already
+        # admitted this object.
+        tctx = context.trigger_context or {}
+        source = game.permanent_by_id(tctx.get("event_subject_permanent_id"))
+        if source is None:
+            last_known = tctx.get(EVENT_SUBJECT_LAST_KNOWN)
+            source = last_known if isinstance(last_known, Permanent) else None
+        if source is None:
+            game.log.append(f"{context.card.name}: no creature to copy")
+            return True, "resolved"
+    elif recorded_key is not None:
         found = one_recorded_permanent_id(context, recorded_key)
         source = game.permanent_by_id(found) if found is not None else None
         if source is None or not game.is_on_battlefield(source):
@@ -1616,8 +1633,19 @@ def create_copy_token(game: Game, instruction: OracleInstruction, context: Oracl
             return True, "resolved"
 
     count = resolve_amount(instruction.payload.get("count", 1), context.x_value)
-    for _ in range(max(0, count)):
-        token = game.create_token_copy(controller_index, source)
+    # "**Its controller** creates …" (Dual Nature): CR 111.2 makes whoever
+    # creates the token its owner and controller, and that seat is the frozen
+    # one the lowering named — the same reader ``create_token`` asks. One seat
+    # per token made, so a count over several recipients is a flat list.
+    makers = [
+        seat
+        for seat in token_recipient_seats(
+            game, instruction.payload, context, controller_index,
+        )
+        for _ in range(max(0, count))
+    ]
+    for seat in makers:
+        token = game.create_token_copy(seat, source)
         # "When this enchantment leaves the battlefield, exile **the token**."
         # (Dance of Many.) Which permanent made this one, stamped for the same
         # reason `create_token` beside it stamps it: the sentences that name
@@ -1641,6 +1669,75 @@ def create_copy_token(game: Game, instruction: OracleInstruction, context: Oracl
             f"{context.card.name} created a token copy of {source.card.name}"
         )
     return True, "resolved"
+
+
+def token_recipient_seats(
+    game: Game, payload: dict, context: OracleExecutionContext, controller_index: int,
+) -> list[int]:
+    """The seats that create the tokens *payload* describes (CR 111.2: each
+    becomes the owner and controller of what it creates).
+
+    Shared by ``create_token`` and ``create_copy_token``, because who creates a
+    token is not a characteristic of it — a described token and a copied one
+    answer the same question the same way, and the lowering writes it with one
+    stamp (``lowering/tokens._stamp_token_recipient``). It was inline in
+    ``create_token`` until Dual Nature printed a recipient in front of a copy.
+
+    A seat that has left the game gets none (CR 800.4a).
+    """
+    # "**Each opponent** creates …" (Pursued Whale). Who gets the tokens, which
+    # for every earlier token card is the effect's own controller.
+    recipients = [controller_index]
+    who = payload.get("recipient_players")
+    if who == "each_opponent":
+        recipients = list(game.opponents_of(controller_index))
+    elif who in ("target_opponent", "that_player", "controller"):
+        # "**Target** opponent creates …" (Phantasmal Sphere, Phelddagrif) and
+        # "…**that player** creates …" (Mogg Infestation). One chosen seat
+        # rather than every opponent, read off the context rather than guessed:
+        # with no target chosen there is nobody the card names, and creating the
+        # token for the controller instead would be the opposite of what it
+        # says. A target that has left the game makes no token (CR 800.4a).
+        #
+        # One branch for both words because the seat is found the same way — the
+        # difference between them is which seats the *picker* offers, which is
+        # the ``targets`` description the lowering writes, not this lookup. This
+        # used to be two branches, the second of them unreachable behind the
+        # first, so the ``lost`` check it carried was never run.
+        # "…**the player** creates a 1/1 green Saproling creature token."
+        # (Greener Pastures.) Under a trigger that chose nobody the seat is the
+        # one the firing event was about, frozen by the fire site (CR 603.10) —
+        # ``context.target`` there is whatever the resolution was carrying,
+        # which for an each-player upkeep is the wrong player half the time.
+        # The key is stamped by the lowering only where an event really froze
+        # a seat, so a *spell* printing the same two words (Mogg Infestation)
+        # still reads its own target below.
+        record = payload.get("recipient_seat_record")
+        if record is not None:
+            seat = (context.trigger_context or {}).get(str(record))
+            recipients = (
+                [seat]
+                if isinstance(seat, int)
+                and 0 <= seat < len(game.players)
+                and not game.players[seat].lost
+                else []
+            )
+        elif who == "controller":
+            # "**Its controller** creates …" (Dual Nature) is only ever lowered
+            # with the frozen seat beside it; without one it names nobody, and
+            # the resolution's target is not a seat this sentence ever chose.
+            recipients = []
+        else:
+            chosen = context.target
+            recipients = (
+                [game.players.index(chosen)]
+                if chosen is not None and chosen in game.players
+                and not chosen.lost
+                else []
+            )
+    elif who == "each_player":
+        recipients = [i for i, p in enumerate(game.players) if not p.lost]
+    return recipients
 
 
 @effect_handler("create_token")
@@ -1799,54 +1896,7 @@ def create_token(game: Game, instruction: OracleInstruction, context: OracleExec
         count = 0
     else:
         count = resolve_amount(raw_count, context.x_value)
-    # "**Each opponent** creates …" (Pursued Whale). Who gets the tokens, which
-    # for every earlier token card is the effect's own controller. A seat that
-    # has left the game gets none (CR 800.4a).
-    recipients = [controller_index]
-    who = payload.get("recipient_players")
-    if who == "each_opponent":
-        recipients = list(game.opponents_of(controller_index))
-    elif who in ("target_opponent", "that_player"):
-        # "**Target** opponent creates …" (Phantasmal Sphere, Phelddagrif) and
-        # "…**that player** creates …" (Mogg Infestation). One chosen seat
-        # rather than every opponent, read off the context rather than guessed:
-        # with no target chosen there is nobody the card names, and creating the
-        # token for the controller instead would be the opposite of what it
-        # says. A target that has left the game makes no token (CR 800.4a).
-        #
-        # One branch for both words because the seat is found the same way — the
-        # difference between them is which seats the *picker* offers, which is
-        # the ``targets`` description the lowering writes, not this lookup. This
-        # used to be two branches, the second of them unreachable behind the
-        # first, so the ``lost`` check it carried was never run.
-        # "…**the player** creates a 1/1 green Saproling creature token."
-        # (Greener Pastures.) Under a trigger that chose nobody the seat is the
-        # one the firing event was about, frozen by the fire site (CR 603.10) —
-        # ``context.target`` there is whatever the resolution was carrying,
-        # which for an each-player upkeep is the wrong player half the time.
-        # The key is stamped by the lowering only where an event really froze
-        # a seat, so a *spell* printing the same two words (Mogg Infestation)
-        # still reads its own target below.
-        record = payload.get("recipient_seat_record")
-        if record is not None:
-            seat = (context.trigger_context or {}).get(str(record))
-            recipients = (
-                [seat]
-                if isinstance(seat, int)
-                and 0 <= seat < len(game.players)
-                and not game.players[seat].lost
-                else []
-            )
-        else:
-            chosen = context.target
-            recipients = (
-                [game.players.index(chosen)]
-                if chosen is not None and chosen in game.players
-                and not chosen.lost
-                else []
-            )
-    elif who == "each_player":
-        recipients = [i for i, p in enumerate(game.players) if not p.lost]
+    recipients = token_recipient_seats(game, payload, context, controller_index)
     for seat in recipients:
       # The per-recipient count, evaluated here rather than above: "for each
       # untapped Forest **they** control" is a different number for each seat,

@@ -437,6 +437,13 @@ _BY_NODE_TYPE_WITH_EVENT_AND_PRODUCED: dict[type, object] = {
     # words name nothing and the lowering refuses, rather than searching the
     # whole library.
     ast.SearchLibrary: _lower_search_library,
+    # "Create a token that's a copy of **that creature**." Echo Chamber's
+    # "that creature" is the one an earlier step of the same effect chose (the
+    # records); Dual Nature's is the one its trigger's event entered with (the
+    # event), and its "**its controller** creates" is a seat that event froze.
+    # It left the records-only table for the search's reason one row up: one
+    # node, two referents, two places to look.
+    ast.CreateCopyToken: _lower_create_copy_token,
 }
 
 
@@ -482,11 +489,6 @@ _BY_NODE_TYPE_WITH_PRODUCED: dict[type, object] = {
     # above's reason: the description is a record an earlier step of the same
     # spell wrote, and with none the words name nothing.
     ast.StripCardsWithChosenName: _lower_strip_cards_with_chosen_name,
-    # "Create a token that's a copy of **that creature**." (Echo Chamber.) It
-    # left the name-only table above for ``ast.Attach``'s reason, word for
-    # word: a pronoun is only a pronoun relative to what came before it, and
-    # with no record the same words mean something else — here, nothing at all.
-    ast.CreateCopyToken: _lower_create_copy_token,
     # "During that player's next turn, **the chosen creatures** attack if able"
     # and "destroy each of **the chosen creatures** that didn't attack this
     # turn" (Oracle en-Vec). Both name a set *and* a seat an earlier step of

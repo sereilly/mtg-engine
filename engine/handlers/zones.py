@@ -6142,8 +6142,22 @@ def exile_all_matching(game: Game, instruction: OracleInstruction, context: Orac
     # than about a named one — neither is a question the pure matcher answers.
     narrowings = {
         key: value for key, value in payload.items()
-        if key not in ("mana_value", "colored_only")
+        if key not in ("mana_value", "colored_only", "name_from_event")
     }
+    # "…exile all tokens **with the same name as that creature**." (Dual
+    # Nature.) CR 201.2's comparison against the name the firing event froze —
+    # the creature has left the battlefield by now (CR 400.7), so the id beside
+    # it resolves to nothing and the name is the one thing the sentence still
+    # has. The destroy sweep's reading of the same key, for Eye of Singularity.
+    #
+    # No name ends the resolution: a dropped narrowing on a sweep is not a card
+    # that does less, it is one that exiles every token on the table.
+    event_name: str | None = None
+    if payload.get("name_from_event"):
+        event_name = (context.trigger_context or {}).get("event_subject_name")
+        if not event_name:
+            game.log.append(f"{context.card.name}: no name for 'that name' to be")
+            return True, "resolved"
 
     # "Exile all creatures **blocked by this creature**." (Wall of Nets.) A
     # relation to the ability's own source, which the pure matcher cannot
@@ -6166,6 +6180,8 @@ def exile_all_matching(game: Game, instruction: OracleInstruction, context: Orac
         if narrowings and not subject_matches(
             game, perm, narrowings, observer=observer, source=source_permanent
         ):
+            return False
+        if event_name is not None and perm.effective_card.name != event_name:
             return False
         if payload.get("colored_only") and not perm.effective_colors:
             return False

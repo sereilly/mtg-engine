@@ -252,6 +252,17 @@ _TOKEN_RECIPIENT_PREFIXES: tuple[tuple[tuple[str, ...], str], ...] = (
     # rather than a branch, for the reason the row above it is one: what
     # differs from its neighbours is a string.
     (("the", "player"), "that_player"),
+    # "Whenever a nontoken creature enters, **its controller** creates a token
+    # that's a copy of that creature." (Dual Nature.) The possessive with no
+    # sentence in front of it — so "it" is the object the *trigger's event* was
+    # about, and the seat is the one the fire site froze. Its own value rather
+    # than `that_player`'s, because the lowering asks a different table
+    # (`_EVENT_SUBJECT_CONTROLLERS`, the subject's controller) from the one that
+    # word asks (`_EVENT_SUBJECT_PLAYERS`, a seat that *was* the subject). As a
+    # *second* sentence behind a chosen target the same words are
+    # `pronouns._parse_its_controller_creates_rider`'s, which the sentence
+    # loop tries before any statement and which this row therefore never meets.
+    (("its", "controller"), "controller"),
 )
 
 
@@ -286,7 +297,10 @@ def _parse_create_token_for_recipient(
                 token = _parse_create_token(stream, pt_optional=True)
                 if not _pt_defined_by_quoted_line(token):
                     raise
-            assert isinstance(token, ast.CreateToken)
+            # A copy takes the recipient on the same field name, so one
+            # lowering stamp serves both (Dual Nature's "its controller creates
+            # a token that's a copy of that creature").
+            assert isinstance(token, (ast.CreateToken, ast.CreateCopyToken))
             return dataclasses.replace(token, recipient_players=who)
         stream.reset(mark)
     # "**They** create a 0/2 colorless Wall artifact creature token with

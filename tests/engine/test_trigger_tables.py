@@ -233,6 +233,10 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     "matching_permanent_enters": (
         "whenever a creature you control with power 4 or greater enters"
     ),
+    # Dual Nature's second line, the first board-wide leave trigger.
+    "matching_permanent_leaves_battlefield": (
+        "whenever a nontoken creature leaves the battlefield"
+    ),
     "one_or_more_attack": "whenever one or more creatures you control attack",
     # Both printed seats, because one pattern names both and the narrowing is
     # payload: an example per spelling is what the shadowing guard needs to see

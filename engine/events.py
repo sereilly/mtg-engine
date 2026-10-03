@@ -1669,6 +1669,11 @@ def _attack_declaration_filter(
 _SUBJECT_LED_FILTER_KEYS: dict[str, str] = {
     "matching_creature_attacks": "attacker",
     "matching_permanent_enters": "enterer",
+    # "Whenever a nontoken creature leaves the battlefield" (Dual Nature). The
+    # filter is asked while the subject is still on a battlefield — the fire
+    # site collects before the rebuild (CR 603.10a) — so "nontoken creature"
+    # is answered by the same layered accessors as every other subject here.
+    "matching_permanent_leaves_battlefield": "leaver",
 }
 
 

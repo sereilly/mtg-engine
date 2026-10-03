@@ -158,6 +158,28 @@ _EVENT_SUBJECT_OBJECTS: frozenset[str] = frozenset({
 })
 
 
+#: Trigger conditions whose fire site freezes the **name** of the object the
+#: event was about (``event_subject_name``), so "with the same name as that
+#: creature" / "with that name" names a string the handler can compare against.
+#:
+#: A narrower claim than :data:`_EVENT_SUBJECT_OBJECTS` above rather than a
+#: reading of it: every kind there freezes an *id*, and only these freeze the
+#: name beside it. Gated on that set, "that name" under a tap or a damage event
+#: compiled clean and then found no name to compare against at resolution — a
+#: card reporting supported for a sentence that could never do anything.
+#:
+#: Membership is a claim about a stamp: the entry seam
+#: (`_put_permanent_onto_battlefield`) for Eye of Singularity, and the one
+#: transition off the battlefield (`remove_all_from_battlefield`) for Dual
+#: Nature, which freezes it while the creature is still there (CR 603.10a) —
+#: by resolution it is a card in another zone and CR 400.7 has made it a new
+#: object, but the sentence still names the name it had.
+EVENT_SUBJECT_NAMES: frozenset[str] = frozenset({
+    "matching_permanent_enters",
+    "matching_permanent_leaves_battlefield",
+})
+
+
 #: Trigger events whose fire site stamps the object the event was about onto the
 #: **stack item** (``target_permanent_id``), so an effect may say "that <noun>"
 #: or "the other <noun>" and mean it — and the ordinary targeted handler

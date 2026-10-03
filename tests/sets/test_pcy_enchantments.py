@@ -787,3 +787,157 @@ def test_w1g6_forgotten_harvest_with_no_land_card_offers_nothing(set_pool):
     assert not game.players[0].exile
     assert [c.name for c in game.players[0].graveyard] == ["Elk"]
     assert mine.effective_power == 2 and theirs.effective_power == 2
+
+
+# --- W2G2: dual nature ---
+from engine import Game as _W2G2Game, PlayerState as _W2G2PlayerState
+from engine.models import Permanent as _W2G2Permanent
+from engine.tokens import CREATED_WITH_PERMANENT_ID as _W2G2_MADE_BY
+from tests.helpers import _mk_creature_card as _w2g2_creature
+from tests.helpers import resolve_stack as _w2g2_resolve
+
+
+def _w2g2_table(**p1):
+    """Two seats, seat 0 active in its main phase, mana costs off."""
+    w2g2_game = _W2G2Game(players=[
+        _W2G2PlayerState(name="P0"), _W2G2PlayerState(name="P1", **p1),
+    ])
+    w2g2_game.enforce_mana_costs = False
+    w2g2_game.start_turn(0)
+    w2g2_game._close_current_priority_step()
+    return w2g2_game  # the W2G2 Dual Nature table
+
+
+def _w2g2_enter(game, seat, card):
+    """Put *card* onto the battlefield through the one entry seam, and drain."""
+    entered = _W2G2Permanent(card=card)
+    game._put_permanent_onto_battlefield(seat, entered, None)
+    _w2g2_resolve(game)
+    return entered  # entered through _put_permanent_onto_battlefield
+
+
+def _w2g2_named(game, seat, name, *, token):
+    return [
+        perm for perm in game.controlled_by(seat)
+        if perm.card.name == name and bool(perm.metadata.get("is_token")) == token
+    ]  # W2G2: permanents of one name and tokenness
+
+
+def test_w2g2_dual_nature_copies_a_cast_creature_for_its_caster(set_pool):
+    """"Whenever a nontoken creature enters, its controller creates a token
+    that's a copy of that creature." An opponent casts a Bear through the real
+    cast path: the copy is theirs (CR 111.2 — its controller creates it), is a
+    token, is a 2/2 Bear by CR 707.2, and records the Dual Nature that made it.
+    The copy is itself a token entering, so it does not trigger the line again:
+    one Bear makes exactly one copy."""
+    bear = _w2g2_creature("Bear", 2, 2)
+    game = _w2g2_table(hand=[bear])
+    nature = _w2g2_enter(game, 0, set_pool("PCY")["Dual Nature"])
+
+    game.start_turn(1)
+    game._close_current_priority_step()
+    result = game.cast_from_hand(1, "Bear")
+    assert result.supported, result.details
+    _w2g2_resolve(game)
+
+    assert len(_w2g2_named(game, 1, "Bear", token=False)) == 1
+    copies = _w2g2_named(game, 1, "Bear", token=True)
+    assert len(copies) == 1
+    (copy,) = copies
+    assert copy.is_creature
+    assert (copy.effective_power, copy.effective_toughness) == (2, 2)
+    assert copy.metadata[_W2G2_MADE_BY] == nature.permanent_id
+    assert list(game.controlled_by(0)) == [nature], "Dual Nature's controller got nothing"
+    assert "Dual Nature created a token copy of Bear" in game.log
+
+
+def test_w2g2_dual_nature_exiles_every_token_named_like_a_leaving_creature(set_pool):
+    """"Whenever a nontoken creature leaves the battlefield, exile all tokens
+    with the same name as that creature." Both seats hold a Bear and its copy;
+    one Bear dies and *both* Bear tokens go — the sentence names a name, not a
+    controller — while the other Bear and an unrelated Wolf copy stay. A token
+    leaving is not a nontoken creature leaving, so sacrificing a Wolf copy
+    takes nothing else with it."""
+    game = _w2g2_table()
+    _w2g2_enter(game, 0, set_pool("PCY")["Dual Nature"])
+    mine = _w2g2_enter(game, 0, _w2g2_creature("Bear", 2, 2))
+    theirs = _w2g2_enter(game, 1, _w2g2_creature("Bear", 2, 2))
+    _w2g2_enter(game, 1, _w2g2_creature("Wolf", 3, 3))
+    assert len(_w2g2_named(game, 0, "Bear", token=True)) == 1
+    assert len(_w2g2_named(game, 1, "Bear", token=True)) == 1
+
+    wolf_copy = _w2g2_named(game, 1, "Wolf", token=True)[0]
+    game.sacrifice_permanent(wolf_copy)
+    _w2g2_resolve(game)
+    assert len(_w2g2_named(game, 0, "Bear", token=True)) == 1
+    assert len(_w2g2_named(game, 1, "Bear", token=True)) == 1
+
+    game.sacrifice_permanent(mine)
+    _w2g2_resolve(game)
+    assert not _w2g2_named(game, 0, "Bear", token=True)
+    assert not _w2g2_named(game, 1, "Bear", token=True)
+    assert game.is_on_battlefield(theirs)
+    assert len(_w2g2_named(game, 1, "Wolf", token=False)) == 1
+    assert "Dual Nature exiled 2 permanent(s)" in game.log
+
+
+def test_w2g2_dual_nature_leaving_takes_only_the_tokens_it_made(set_pool):
+    """"When this enchantment leaves the battlefield, exile all tokens created
+    with this enchantment." Two Dual Natures double the copies; destroying the
+    first exiles the copy it made and leaves the second one's copy — CR 603.10a
+    looks back in time, so the departed enchantment's own id still names its
+    tokens."""
+    game = _w2g2_table()
+    first = _w2g2_enter(game, 0, set_pool("PCY")["Dual Nature"])
+    second = _w2g2_enter(game, 1, set_pool("PCY")["Dual Nature"])
+    bear = _w2g2_enter(game, 1, _w2g2_creature("Bear", 2, 2))
+    copies = _w2g2_named(game, 1, "Bear", token=True)
+    assert len(copies) == 2
+    assert {c.metadata[_W2G2_MADE_BY] for c in copies} == {
+        first.permanent_id, second.permanent_id,
+    }
+
+    game.sacrifice_permanent(first)
+    _w2g2_resolve(game)
+    left = _w2g2_named(game, 1, "Bear", token=True)
+    assert [c.metadata[_W2G2_MADE_BY] for c in left] == [second.permanent_id]
+    assert game.is_on_battlefield(bear) and game.is_on_battlefield(second)
+
+
+def test_w2g2_dual_nature_copies_a_creature_that_left_before_resolution(set_pool):
+    """CR 608.2h: the copy is made from the creature as it last existed when it
+    has left by the time the trigger resolves. The Elk leaves with the copy
+    trigger still on the stack; its own leave trigger resolves first (exiling
+    no Elk token yet), and then the copy arrives and stays."""
+    game = _w2g2_table()
+    _w2g2_enter(game, 0, set_pool("PCY")["Dual Nature"])
+    elk = _W2G2Permanent(card=_w2g2_creature("Elk", 3, 3))
+    game._put_permanent_onto_battlefield(1, elk, None)
+    assert game.stack, "the copy trigger is waiting"
+    game.sacrifice_permanent(elk)
+    _w2g2_resolve(game)
+
+    assert not game.is_on_battlefield(elk)
+    (copy,) = _w2g2_named(game, 1, "Elk", token=True)
+    assert (copy.effective_power, copy.effective_toughness) == (3, 3)
+
+
+def test_w2g2_tranquility_takes_dual_nature_and_every_copy_it_made(set_pool):
+    """A real sweep destroys the enchantment: its leave line exiles the copies
+    it made on *both* sides of the table — "created with this enchantment"
+    names a maker, not a controller — and the creatures they copied stay."""
+    game = _w2g2_table()
+    game.players[0].hand.append(set_pool("5ED")["Tranquility"])
+    _w2g2_enter(game, 0, set_pool("PCY")["Dual Nature"])
+    wolf = _w2g2_enter(game, 0, _w2g2_creature("Wolf", 3, 3))
+    bear = _w2g2_enter(game, 1, _w2g2_creature("Bear", 2, 2))
+    assert len(_w2g2_named(game, 0, "Wolf", token=True)) == 1
+    assert len(_w2g2_named(game, 1, "Bear", token=True)) == 1
+
+    result = game.cast_from_hand(0, "Tranquility")
+    assert result.supported, result.details
+    _w2g2_resolve(game)
+
+    assert [c.name for c in game.players[0].graveyard].count("Dual Nature") == 1
+    assert not [p for p in game.all_permanents() if p.metadata.get("is_token")]
+    assert game.is_on_battlefield(wolf) and game.is_on_battlefield(bear)

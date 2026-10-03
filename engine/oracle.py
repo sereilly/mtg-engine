@@ -1332,6 +1332,17 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # seat.
     ("matching_permanent_enters",
      r"whenever a player puts (?P<enterer_subject>an? [^,]+?) onto the battlefield"),
+    # "Whenever **a nontoken creature leaves the battlefield**, exile all tokens
+    # with the same name as that creature." (Dual Nature.) CR 603.6c's event
+    # watched across the whole board — the subject-led twin of the entry row
+    # above, with the noun phrase delimited here and read by the noun parser.
+    # Announced from the one transition off the battlefield
+    # (`remove_all_from_battlefield`), where the subject is still on a
+    # battlefield to be asked about (CR 603.10a looks back in time). The kind is
+    # its own rather than a spelling of `leaves_battlefield`, which is the
+    # *source's* departure and is dispatched off the source's own card.
+    ("matching_permanent_leaves_battlefield",
+     r"whenever (?P<leaver_subject>(?:a|an|another) [^,]+?) leaves the battlefield"),
     ("one_or_more_attack",          r"whenever one or more creatures you control attack"),
     # "Whenever one or more Cats you control deal combat damage to a player"
     # (Feline Sovereign). A **batched** trigger: however many creatures dealt
@@ -1668,7 +1679,12 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("phases_out_or_leaves_battlefield",
      r"when this (?:creature|artifact|enchantment|land|permanent) phases out "
      r"or leaves(?: the battlefield)?"),
-    ("leaves_battlefield",          r"when (?:this|.+) leaves(?: the battlefield)?"),
+    # The lookahead is `enters_battlefield`'s, three rows up, for its reason:
+    # "when **a** creature leaves the battlefield" is a quantified subject, not
+    # the source, and the `.+` would claim it as the source's own departure. It
+    # falls through to the whenever table's `matching_permanent_leaves_battlefield`.
+    ("leaves_battlefield",
+     r"when (?!(?:a|an|another) )(?:this|.+) leaves(?: the battlefield)?"),
     # "**When you lose control of this artifact**, put all cards exiled with
     # this artifact into their owner's graveyard." (Gustha's Scepter.) A CR
     # 603.10d event — it looks back in time, so the ability exists to trigger

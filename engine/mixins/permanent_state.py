@@ -1217,10 +1217,16 @@ class PermanentStateMixin:
             card=make_token_card(source.effective_card.name, None, None, "Token"),
             metadata={"is_token": True},
         )
-        self._put_permanent_onto_battlefield(controller_index, token, None)
-        # Recorded after entry: the contribution is what layer 1 reads, and the
-        # entry is what gives the token its permanent id (CR 400.7).
+        # Recorded **before** entry, because CR 707.5 says so in as many words:
+        # an object that enters "that's a copy" of another "becomes a copy as it
+        # enters the battlefield. It doesn't enter the battlefield, and then
+        # become a copy". The contribution keys on the token object, not on its
+        # id, so it needs nothing the entry gives it. Recorded after, the token
+        # was announced to every "whenever a creature enters" watcher as a
+        # typeless "Token" — a Soul Warden saw no creature, and the entry seam
+        # froze a power of 0 — and only then turned into what it copies.
         copies.become_copy(token, source)
+        self._put_permanent_onto_battlefield(controller_index, token, None)
         self._recalculate_lord_buffs()
         return token
 

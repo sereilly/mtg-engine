@@ -27,19 +27,18 @@ left for `linked_exile` at Nemesis's second wave for exactly that sentence.)
 
 from __future__ import annotations
 
-import dataclasses
 from ...oracle_types import OracleInstruction
-from ...subject_filters import OBJECT_ONLY_FILTER_KEYS, card_only_filter
+from ...subject_filters import card_only_filter
 from .. import ast
 from ..errors import LoweringError
 from ._bound_exiles import (_entering_counter_payload, lower_pronoun_exile,
                             lower_restated_noun_exile)
 from ._events import EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS
-from ._piles import _sweep_graveyard_actor
+from ._sweeps import lower_exile_sweep
 from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS, _amount_payload,
     _describe_several_targets, _describe_targets, _filter_payload,
-    _names_several_targets, _restrictions_beyond, dropped_narrowings,
+    _names_several_targets, _restrictions_beyond,
 )
 
 
@@ -392,125 +391,9 @@ def _lower_exile(
     if _is_hand_pile_exile(subject):
         return (_lower_exile_hand_pile(node, subject),)
     if isinstance(subject, ast.TargetSpec) and subject.quantifier in ("each", "all"):
-        # "Exile each permanent with mana value X or less that's one or more
-        # colors." (Ugin, the Spirit Dragon's −X.) The payload is hand-rolled:
-        # ``to_payload`` cannot carry a *variable* mana-value bound, and
-        # dropping the bound would widen the sweep to every mana value.
-        filt = subject.filter
-        # "Exile **all creature cards from your graveyard**." (Zombie Mob.) A
-        # sweep over a pile of *cards* rather than over the battlefield, so it
-        # is its own instruction: CR 613.1 gives a card in a graveyard no
-        # computed characteristics at all, and the battlefield sweep below
-        # matches with ``subject_matches``, which asks a permanent questions a
-        # card cannot answer.
-        #
-        # The payer's own pile and no other, because that is what the pool
-        # prints and because "a graveyard" would need the handler to say which.
-        # Everything the phrase narrows by is carried through
-        # ``card_only_filter``, the reader a discard cost and a graveyard
-        # target already share — a narrowing it cannot answer refuses the line
-        # rather than exiling a wider set than the card names.
-        if filt.zone == "graveyard" and filt.is_card:
-            # Who empties the pile and whose pile it is are **one claim said
-            # twice** ("each player … from *their* graveyard"), so they are
-            # checked against each other rather than either being read alone —
-            # the pairing `_described_returns`' sweep reanimation already makes
-            # of the same two words. A pairing this cannot resolve refuses
-            # instead
-            # of picking a half: "each player exiles all creature cards from
-            # your graveyard" is one graveyard and every player, and there is
-            # no such card.
-            #
-            # Asked of ``_piles._sweep_graveyard_actor``, which is where that
-            # pairing lives for both families rather than once per family. It
-            # was open-coded here, and the copy was missing a row the original
-            # had: "from **all graveyards**" — no printed subject, every pile on
-            # the table — which is the same set of piles "each player … their
-            # graveyard" names and which Planar Birth's *return* sweep has read
-            # since it was written. So "exile all creature cards from all
-            # graveyards" refused while the identical return lowered, for no
-            # reason either sentence prints.
-            graveyard_owner = _sweep_graveyard_actor(node, subject)
-            if graveyard_owner is None:
-                raise LoweringError(
-                    "the graveyard exile sweep reads your own pile, "
-                    "\"each player … their graveyard\", or \"all graveyards\"",
-                    node=node,
-                )
-            if node.counters:
-                raise LoweringError(
-                    "a graveyard exile sweep carries no counters", node=node
-                )
-            default = ast.ObjectFilter()
-            described = card_only_filter(
-                dataclasses.replace(
-                    filt, zone=default.zone, zone_owner=default.zone_owner,
-                ).to_payload()
-            )
-            if described is None:
-                raise LoweringError(
-                    "the graveyard exile sweep cannot test this restriction on "
-                    "a card in a zone",
-                    node=node,
-                )
-            return (
-                OracleInstruction(
-                    "exile_graveyard_cards", "",
-                    {"graveyard_owner": graveyard_owner, "filter": described},
-                ),
-            )
-        if filt.zone != "battlefield" or filt.is_card:
-            raise LoweringError("the exile sweep reads battlefield permanents", node=node)
-        payload: dict[str, object] = {}
-        # Two keys the ordinary filter payload has no form for, lifted off the
-        # filter before the rest of it is read the way every other sweep reads
-        # one. ``mana_value`` because the bound may be the spell's **X**, which
-        # is not a number until the ability resolves; ``colored`` because
-        # "that's one or more colors" is a question about the computed colours
-        # rather than about a named one.
-        if filt.colored:
-            payload["colored_only"] = True
-        if filt.mana_value is not None:
-            bound = filt.mana_value.value
-            payload["mana_value"] = {
-                "op": filt.mana_value.op,
-                "value": bound.value if isinstance(bound, ast.Fixed) else bound.name,
-            }
-        rest = dataclasses.replace(filt, colored=False, mana_value=None)
-        # Everything else the noun phrase printed — "exile all **Sand
-        # Warriors**" (Hazezon Tamar). The sweep used to hand-roll a
-        # ``type_filter`` and refuse every other narrowing, which cost Hazezon
-        # its second ability; the honest widening is to carry the payload the
-        # matcher already answers and refuse only what it cannot test.
-        #
-        # ``OBJECT_ONLY_FILTER_KEYS``, not the full testable set: the handler
-        # sweeps every battlefield with no observer seat and no source
-        # permanent, so "you control" and "another" have nothing to be relative
-        # to and would be dropped where they are tested.
-        narrowings = _filter_payload(rest)
-        unusable = sorted(set(narrowings) - OBJECT_ONLY_FILTER_KEYS)
-        # ``blocked_by_source`` is named here rather than in
-        # ``_PAYLOAD_HONOURED_FILTER_FIELDS``, which is the idiom
-        # ``lowering/_filters.py`` states for a relation only some lowerings can
-        # carry: ``to_payload`` emits the key and ``subject_matches`` answers
-        # it, but only with the ability's **source** in hand — so the lowering
-        # that admits it is the one whose handler has one. "Exile all creatures
-        # blocked by this creature" (Wall of Nets) is that sentence, and the
-        # sweep handler reads its narrowings through ``subject_matches`` with
-        # ``context.source_permanent`` for exactly this key's sake. Admitted
-        # into the general set instead, every lowering in the package would
-        # carry a relation most of their handlers test with the pure matcher,
-        # which drops it — and a dropped ``blocked_by_source`` on a sweep is
-        # every creature on the table.
-        leftovers = _restrictions_beyond(
-            rest, _PAYLOAD_HONOURED_FILTER_FIELDS | {"zone", "blocked_by_source"}
-        ) + dropped_narrowings(rest, narrowings) + tuple(unusable)
-        if leftovers:
-            raise LoweringError(
-                f"the exile sweep does not honour {leftovers[0]!r}", node=node
-            )
-        payload.update(narrowings)
-        return (OracleInstruction("exile_all_matching", "", payload),)
+        # CR 611.2c's described set — the battlefield sweep and the graveyard
+        # pile both — which is `_sweeps`' one question; see there.
+        return lower_exile_sweep(node, subject, event)
     if isinstance(subject, ast.TargetSpec) and subject.quantifier == "any_number":
         # "Exile **any number of** tokens created with this creature."
         # (Tetravus.) Not a sweep and not a target: the controller says how

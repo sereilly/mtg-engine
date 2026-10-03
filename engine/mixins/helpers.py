@@ -16,14 +16,14 @@ from ..delayed_triggers import (end_source_tapped_delayed_triggers,
                                 fire_delayed_triggers)
 from ..enter_effects import CAST_THIS_TURN_STAMP, ENTERED_BATTLEFIELD_TURN
 from ..exiled_records import forget_record, newest_record_for
-from ..events import emit
+from ..events import Event, collect, emit
 from ..layer_bridge import computed_controller
 from ..land_types import end_land_type_change
 from ..linked_exile import LEAVES, UNTAPPED
 from ..models import Permanent, PlayerState, next_permanent_id
 from ..game_types import GraveyardTarget
 from ..oracle import compile_card_oracle
-from ..oracle_types import EXILED_BY_SEAT
+from ..oracle_types import EVENT_SUBJECT_LAST_KNOWN, EXILED_BY_SEAT
 from ..phasing_locks import phase_out_forbidden
 from ..replacements import apply_entry_riders, apply_replacements
 from ..regeneration import regeneration_replaces_destruction
@@ -1954,6 +1954,31 @@ class GameHelpersMixin:
                 },
             ):
                 leaving.append((perm, make_trigger_event(seat, perm, trig)))
+            # "Whenever **a nontoken creature** leaves the battlefield, exile
+            # all tokens with the same name as that creature." (Dual Nature.)
+            # The same CR 603.6c event watched by a permanent that is neither
+            # the one leaving nor attached to it, so the *board* is asked — by
+            # the event bus's own collector and its subject filter, rather than
+            # a third hand-written scan beside the two around this one.
+            #
+            # Collected here, before the rebuild, for CR 603.10a: the ability
+            # looks back in time, so the noun phrase is asked of the permanent
+            # as it last existed on the battlefield, and a watcher leaving in
+            # the same sweep still sees it go (one removal taking Dual Nature
+            # and the creatures together triggers it for each creature). The id,
+            # name and seat are frozen for the reason the entry seam freezes
+            # them: by resolution the object is a card in another zone with no
+            # controller (CR 400.7), and the sentence still means what it was.
+            for announced in collect(self, Event(
+                kind="matching_permanent_leaves_battlefield",
+                payload={
+                    "event_subject_permanent_id": perm.permanent_id,
+                    "event_subject_name": perm.effective_card.name,
+                    "event_subject_controller": seat,
+                },
+                subject=perm,
+            )):
+                leaving.append((perm, announced))
             # "When enchanted creature leaves the battlefield, its controller
             # sacrifices a creature of their choice." (Funeral March.) The same
             # CR 603.6c event watched by what the departing permanent is
@@ -3434,6 +3459,15 @@ class GameHelpersMixin:
             # on every entry for `entering_power`'s reason: one integer, against
             # a fire site that would have to know which cards care.
             event_subject_permanent_id=permanent.permanent_id,
+            # "…its controller creates a token that's a copy of **that
+            # creature**." (Dual Nature.) The object itself beside its id, for
+            # CR 608.2h: an effect reading a specific object that has left uses
+            # its last-known information, and by resolution the id resolves to
+            # nothing (CR 400.7). The Permanent keeps its last battlefield state
+            # once it leaves, so it *is* that information — the `dead_card`
+            # arrangement one fire site over. One reference, on every entry,
+            # for `entering_power`'s reason.
+            **{EVENT_SUBJECT_LAST_KNOWN: permanent},
             # "…destroy all other permanents with **that name**." (Eye of
             # Singularity.) CR 201.2's name, frozen for the reason the id and
             # the power beside it are: the trigger resolves after the entry, and
