@@ -1,8 +1,9 @@
 """Guard: a cost the payer chooses is a cost the payer is *asked* about.
 
 CR 601.2b (casting) and CR 602.2b (activating) both say the announcing player
-chooses how a cost is paid. This engine charges two such costs — sacrifice a
-permanent, discard a card — and each needs a picker derived for it, because the
+chooses how a cost is paid. This engine charges three such costs here —
+sacrifice a permanent, discard a card, tap a permanent — and each needs a
+picker derived for it, because the
 picker is the only thing that carries the choice from the player to the engine.
 
 **A missing picker does not look like a missing feature.** Both payment paths
@@ -39,7 +40,7 @@ for _path in manifest_set_paths(include_measured=True):
 # they are what tells the client which field the answer rides, and a cost
 # reported under the wrong one would be collected and then paid with something
 # else.
-_COST_FLAGS = ("sacrifice_cost", "discard_cost")
+_COST_FLAGS = ("sacrifice_cost", "discard_cost", "tap_cost", "return_cost")
 
 # The gaps this guard found the day it was written are closed (round 52), so the
 # list is empty. The mechanism stays: the two tests below are what force an
@@ -105,8 +106,22 @@ def _payer_chooses(cost) -> bool:
     different card was binned. That is this file's own failure shape read
     backwards: the missing picker was a choice nobody could make, and this is a
     choice nobody has. Neither is caught by the payment working.
+
+    "Tap an untapped creature you control" (Opposition, Earthcraft, Unerring
+    Sling, Keldon Battlewagon) is the third: the charger has taken the payer's
+    answer on ``cost_permanent_ids`` since the cost existed, and nothing derived
+    a picker, so for sixteen shipped cards a human seat tapped whatever the
+    default chose. Unerring Sling's damage *is* the tapped creature's power.
     """
     if cost.sacrifice_filter is not None:
+        return True
+    if getattr(cost, "tap_filter", None) is not None and getattr(cost, "tap_count", 0):
+        return True
+    # …and its one-zone-over twin, "Return a Forest you control to its owner's
+    # hand" (Quirion Ranger, Flooded Shoreline).
+    if getattr(cost, "return_to_hand_filter", None) is not None and getattr(
+        cost, "return_to_hand_count", 0
+    ):
         return True
     return bool(cost.discard_cards) and not getattr(
         cost, "discard_at_random", False

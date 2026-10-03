@@ -460,6 +460,7 @@ def _action_activate(session, req, seat_type):
             cost_permanent_index=req.cost_permanent_index,
             cost_permanent_ids=req.cost_permanent_ids,
             cost_hand_index=req.cost_hand_index,
+            cost_other_hand_indices=req.cost_other_hand_indices,
             # Phyrexian Splicer: the ability the activation chose (CR 601.2b),
             # forwarded like every other announcement-time choice above.
             chosen_keyword=req.chosen_keyword,

@@ -1305,3 +1305,197 @@ def test_w2g1_death_charmer_blocking_drains_the_attackers_controller(set_pool):
     _w2g1_to_combat_damage(game)
 
     assert (game.players[0].life, game.players[1].life) == (18, 20)
+
+
+# --- W2G4: cost choices ---
+# CR 601.2h through CR 602.2b, and CR 508.1h / 509.1d: every choice inside a
+# cost is the payer's. Wave 1 landed these cards with the second card of
+# "Discard two cards", Hollow Warrior's tapped creature and Keldon
+# Battlewagon's picker all made by the engine's default for a human seat; the
+# shipped cards of the same shapes are in tests/rules/test_cost_choices.py.
+import pytest as _w2g4_pytest
+
+from engine import Game as _W2G4Game
+from engine import PlayerState as _W2G4PlayerState
+from engine.models import Permanent as _W2G4Permanent
+from tests.helpers import resolve_stack as _w2g4_resolve
+
+
+def _w2g4_table(mine, theirs=(), *, hand=()):
+    """Seat 0 holds *mine* and *hand*, seat 1 *theirs*; seat 0's turn, mana
+    off, nothing summoning sick. Returns the game and both permanent lists."""
+    w2g4_me = [_W2G4Permanent(card=card) for card in mine]
+    w2g4_them = [_W2G4Permanent(card=card) for card in theirs]
+    w2g4_game = _W2G4Game(players=[
+        _W2G4PlayerState(name="W2G4-A", battlefield=list(w2g4_me), hand=list(hand)),
+        _W2G4PlayerState(name="W2G4-B", battlefield=list(w2g4_them)),
+    ])
+    w2g4_game.enforce_mana_costs = False
+    for w2g4_perm in (*w2g4_me, *w2g4_them):
+        w2g4_perm.metadata["summoning_sickness_turn"] = -99
+    w2g4_game.start_turn(0)
+    w2g4_game._close_current_priority_step()
+    return w2g4_game, w2g4_me, w2g4_them
+
+
+def test_w2g4_latulla_discards_exactly_the_two_cards_named(set_pool):
+    """"Discard two cards" is two choices. The first rides ``cost_hand_index``
+    and the second ``cost_other_hand_indices``; the default would have binned
+    the first two cards in hand, and the payer named the second and fourth."""
+    lea = set_pool("LEA")
+    hand = [lea["Grizzly Bears"], lea["Forest"], lea["Hill Giant"], lea["Island"]]
+    game, (latulla,), _ = _w2g4_table(
+        [set_pool("PCY")["Latulla, Keldon Overseer"]], hand=hand,
+    )
+    result = game.queue_permanent_ability(
+        0, "Latulla, Keldon Overseer", target_player_index=1, x_value=2,
+        cost_hand_index=1, cost_other_hand_indices=[3],
+    )
+    assert result.supported, result.details
+    _w2g4_resolve(game)
+
+    p0, p1 = game.players
+    assert sorted(c.name for c in p0.graveyard) == ["Forest", "Island"]
+    assert [c.name for c in p0.hand] == ["Grizzly Bears", "Hill Giant"]
+    assert latulla.tapped and p1.life == 18
+
+
+@_w2g4_pytest.mark.parametrize(
+    "first,others,refusal",
+    [
+        (1, [1], "each named once"),
+        (0, [1, 2], "each named once"),
+        (0, [9], "no card at hand position 9"),
+    ],
+)
+def test_w2g4_latulla_refuses_a_bad_second_card_before_anything_is_paid(
+    set_pool, first, others, refusal,
+):
+    """A second card named twice, a third card for a two-card cost, a position
+    off the end of the hand: each is a payment that cannot be made as named,
+    so the activation is refused with the tap, the mana and the hand intact."""
+    lea = set_pool("LEA")
+    hand = [lea["Grizzly Bears"], lea["Forest"], lea["Hill Giant"]]
+    game, (latulla,), _ = _w2g4_table(
+        [set_pool("PCY")["Latulla, Keldon Overseer"]], hand=hand,
+    )
+    result = game.queue_permanent_ability(
+        0, "Latulla, Keldon Overseer", target_player_index=1, x_value=2,
+        cost_hand_index=first, cost_other_hand_indices=others,
+    )
+    assert not result.supported and refusal in result.details
+    assert len(game.players[0].hand) == 3 and not game.players[0].graveyard
+    assert not latulla.tapped and game.players[1].life == 20
+
+
+def test_w2g4_the_spellshapers_picker_asks_for_two_cards(set_pool):
+    """The count the client's discard prompt reads to collect two cards rather
+    than one, for every spellshaper whose cost prints "two"."""
+    from engine.oracle import compile_card_oracle
+    from engine.targeting import derive_activation_spec
+
+    pcy = set_pool("PCY")
+    for name in (
+        "Alexi, Zephyr Mage", "Greel, Mind Raker", "Jolrael, Empress of Beasts",
+        "Latulla, Keldon Overseer", "Mageta the Lion",
+    ):
+        (ability,) = compile_card_oracle(pcy[name]).activated_abilities
+        spec = derive_activation_spec(ability)
+        # Beside a target, or the whole announcement when there is none
+        # (Mageta's "Destroy all creatures except for Mageta").
+        cost = spec.get("cost_spec") or spec
+        assert cost["discard_cost"] is True and cost["count"] == 2, name
+
+
+def test_w2g4_keldon_battlewagon_offers_its_tap_cost_and_taps_the_pick(set_pool):
+    """The picker a human answers: a ``tap_cost`` over the untapped creatures
+    the controller has — the Battlewagon itself among them, since nothing
+    prints "another" — and the creature named is the one tapped, whose power
+    is what the Battlewagon gets."""
+    lea = set_pool("LEA")
+    game, (wagon, bears, giant, ogre), _ = _w2g4_table([
+        set_pool("PCY")["Keldon Battlewagon"], lea["Grizzly Bears"],
+        lea["Hill Giant"], lea["Hill Giant"],
+    ])
+    ogre.tapped = True
+    spec = game.activation_target_spec(0, 0)
+    assert spec["tap_cost"] is True and spec["count"] == 1
+    assert [t["name"] for t in spec["valid_targets"]] == [
+        "Keldon Battlewagon", "Grizzly Bears", "Hill Giant",
+    ]
+
+    result = game.queue_permanent_ability(
+        0, "Keldon Battlewagon", cost_permanent_ids=[giant.permanent_id],
+    )
+    assert result.supported, result.details
+    _w2g4_resolve(game)
+    assert giant.tapped and not bears.tapped and not wagon.tapped
+    assert wagon.effective_power == 3
+
+
+def test_w2g4_copper_leaf_angel_sacrifices_the_lands_named_for_x(set_pool):
+    """The client announces X as the number of lands it names, so the two
+    always agree: two named Forests, X = 2, and the unnamed one stays."""
+    forest = set_pool("LEA")["Forest"]
+    game, (angel, f1, f2, f3), _ = _w2g4_table(
+        [set_pool("PCY")["Copper-Leaf Angel"], forest, forest, forest],
+    )
+    result = game.queue_permanent_ability(
+        0, "Copper-Leaf Angel", x_value=2,
+        cost_permanent_ids=[f1.permanent_id, f3.permanent_id],
+    )
+    assert result.supported, result.details
+    _w2g4_resolve(game)
+    assert game.is_on_battlefield(f2)
+    assert not game.is_on_battlefield(f1) and not game.is_on_battlefield(f3)
+    assert (angel.effective_power, angel.effective_toughness) == (4, 4)
+
+
+def test_w2g4_hollow_warrior_taps_the_creature_its_controller_names(set_pool):
+    """CR 508.1h: which creature the attack taps is the attacking player's.
+    The default taps the least valuable spare (the Bears); the player named
+    the Giant, and the Giant is what taps."""
+    pcy, lea = set_pool("PCY"), set_pool("LEA")
+    game, (warrior, bears, giant), _ = _w2g4_table(
+        [pcy["Hollow Warrior"], lea["Grizzly Bears"], lea["Hill Giant"]],
+    )
+    game.current_turn_phase, game.current_step = "combat", "declare_attackers"
+    (choice,) = game.declaration_cost_choices(warrior, "attack")
+    assert choice["verb"] == "tap"
+    assert choice["candidate_ids"] == [bears.permanent_id, giant.permanent_id]
+
+    ok, why = game.declare_attackers(0, [0], cost_permanent_ids=[giant.permanent_id])
+    assert ok, why
+    assert warrior.attacking and giant.tapped and not bears.tapped
+    assert "W2G4-A tapped Hill Giant to attack" in game.log
+
+
+def test_w2g4_hollow_warrior_refuses_to_tap_a_creature_being_declared(set_pool):
+    """Naming the other attacker is naming a creature "declared as an
+    attacking creature this combat" — the printed exclusion — so the
+    declaration is refused rather than paid with somebody else."""
+    pcy, lea = set_pool("PCY"), set_pool("LEA")
+    game, (warrior, bears, giant), _ = _w2g4_table(
+        [pcy["Hollow Warrior"], lea["Grizzly Bears"], lea["Hill Giant"]],
+    )
+    game.current_turn_phase, game.current_step = "combat", "declare_attackers"
+    ok, why = game.declare_attackers(0, [0, 1], cost_permanent_ids=[bears.permanent_id])
+    assert not ok and "Grizzly Bears cannot pay" in why
+    assert not any(perm.tapped for perm in (warrior, bears, giant))
+
+
+def test_w2g4_hollow_warrior_blocks_by_tapping_the_creature_named(set_pool):
+    """CR 509.1d, the defender's half: the block taps the creature the
+    defending player named rather than the default's."""
+    pcy, lea = set_pool("PCY"), set_pool("LEA")
+    game, (attacker,), (warrior, zombies, giant) = _w2g4_table(
+        [lea["Grizzly Bears"]],
+        [pcy["Hollow Warrior"], lea["Scathe Zombies"], lea["Hill Giant"]],
+    )
+    game.current_turn_phase, game.current_step = "combat", "declare_attackers"
+    assert game.declare_attackers(0, [0])[0]
+    game.current_step = "declare_blockers"
+    ok, why = game.declare_blockers(1, {0: 0}, cost_permanent_ids=[giant.permanent_id])
+    assert ok, why
+    assert giant.tapped and not zombies.tapped and not warrior.tapped
+    assert "W2G4-B tapped Hill Giant to block" in game.log
