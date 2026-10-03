@@ -302,7 +302,8 @@ def lower_statement(
     if isinstance(statement, ast.GainLife):
         return _lower_gain_life(statement, produced, event)
     if isinstance(statement, ast.LoseLife):
-        return _lower_lose_life(statement, event, produced)
+        # …and its subject, for `_lower_damage`'s reason above (Death Charmer).
+        return _lower_lose_life(statement, event, produced, event_subject)
     if isinstance(statement, ast.Destroy):
         # The **unfiltered** event, and this is the one of the three that is not
         # a dispatch question. `_lower_delayed_destroy` reads it to ask whether

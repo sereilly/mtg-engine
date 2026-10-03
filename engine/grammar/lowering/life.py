@@ -42,9 +42,11 @@ from ._events import (
     SWEPT_CONTROLLER_SEATS,
     _EVENT_SUBJECT_PLAYERS,
     DAMAGE_RECIPIENT,
+    DAMAGED_PERMANENT_CONTROLLER,
     EVENT_SUBJECT_CONTROLLER,
     EVENT_SUBJECT_PLAYER,
     _back_reference_payload,
+    damage_trigger_names_damaged_end,
 )
 
 
@@ -607,6 +609,7 @@ def _lower_lose_life(
     node: ast.LoseLife,
     event: str | None = None,
     produced: frozenset[str] = frozenset(),
+    event_subject: object | None = None,
 ) -> tuple[OracleInstruction, ...]:
     # "Whenever you gain life, target opponent loses **that much** life."
     # (Vito, Thorn of the Dusk Rose.) The number is the life-gain event's, not
@@ -771,6 +774,19 @@ def _lower_lose_life(
     # are frozen. Which events carry a subject is a table rather than a rule,
     # for the reason `_EVENT_QUANTITIES` is: an event either had one or it did
     # not. Anywhere else "that player" is the ordinary chosen target below.
+    #
+    # "Whenever **this creature** deals combat damage to a creature, **that
+    # creature's controller** loses 2 life" (Death Charmer) names the *other*
+    # end of a `damage_dealt` event, which that table answers with the
+    # damager's seat — so the Charmer's own controller lost the life. Read
+    # first, by the one predicate the damage recipient already asks of the same
+    # phrase (`_recipients.py`, Bellowing Fiend), so the two families cannot
+    # answer it differently.
+    if node.player.kind == "that_player" and damage_trigger_names_damaged_end(
+        event, event_subject
+    ):
+        payload["recipient"] = DAMAGED_PERMANENT_CONTROLLER
+        return (OracleInstruction("target_loses_life", "", payload),)
     if node.player.kind == "that_player" and event in _EVENT_SUBJECT_CONTROLLERS:
         payload["recipient"] = "event_subject_controller"
         return (OracleInstruction("target_loses_life", "", payload),)
