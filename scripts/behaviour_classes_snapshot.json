@@ -80,6 +80,7 @@
     "Voice of Grace",
     "Voice of Law",
     "Voice of Reason",
+    "Voice of Truth",
     "Weatherseed Faeries",
     "Windreaper Falcon"
   ],
@@ -152,6 +153,31 @@
     "Wall of Wood"
   ],
   [
+    "Death Speakers",
+    "Guma",
+    "Ihsan's Shade",
+    "Karoo Meerkat",
+    "Oraxid",
+    "Repentant Blacksmith",
+    "Scalebane's Elite"
+  ],
+  [
+    "Belbe's Percher",
+    "Cloud Djinn",
+    "Cloud Elemental",
+    "Cloud Spirit",
+    "Rishadan Airship",
+    "Stronghold Zeppelin"
+  ],
+  [
+    "Benthic Behemoth",
+    "Bull Hippo",
+    "Devouring Deep",
+    "Pale Bears",
+    "Rootwater Commando",
+    "Segovian Leviathan"
+  ],
+  [
     "Clergy en-Vec",
     "Femeref Healer",
     "Master Healer",
@@ -160,12 +186,12 @@
     "Sanctum Custodian"
   ],
   [
-    "Death Speakers",
-    "Guma",
-    "Ihsan's Shade",
-    "Karoo Meerkat",
-    "Repentant Blacksmith",
-    "Scalebane's Elite"
+    "Craven Giant",
+    "Goblin Raider",
+    "Hulking Cyclops",
+    "Hulking Ogre",
+    "Ogre Taskmaster",
+    "Spineless Thug"
   ],
   [
     "Divine Transformation",
@@ -197,13 +223,6 @@
     "Zephyr Falcon"
   ],
   [
-    "Benthic Behemoth",
-    "Bull Hippo",
-    "Devouring Deep",
-    "Pale Bears",
-    "Segovian Leviathan"
-  ],
-  [
     "Black Scarab",
     "Blue Scarab",
     "Green Scarab",
@@ -230,13 +249,6 @@
     "Circle of Protection: Green",
     "Circle of Protection: Red",
     "Circle of Protection: White"
-  ],
-  [
-    "Craven Giant",
-    "Goblin Raider",
-    "Hulking Cyclops",
-    "Hulking Ogre",
-    "Ogre Taskmaster"
   ],
   [
     "Crystal Rod",
@@ -319,12 +331,6 @@
     "Shanodin Dryads"
   ],
   [
-    "Cloud Djinn",
-    "Cloud Elemental",
-    "Cloud Spirit",
-    "Rishadan Airship"
-  ],
-  [
     "Colossal Dreadmaw",
     "Rootbreaker Wurm",
     "Wildwood Patrol",
@@ -359,6 +365,12 @@
     "Granite Gargoyle",
     "Hellkite Punisher",
     "Shivan Dragon"
+  ],
+  [
+    "Laccolith Grunt",
+    "Laccolith Titan",
+    "Laccolith Warrior",
+    "Laccolith Whelp"
   ],
   [
     "Metallic Sliver",
@@ -410,6 +422,11 @@
     "Deadly Insect",
     "Elvish Lookout",
     "Pincher Beetles"
+  ],
+  [
+    "Flowstone Crusher",
+    "Flowstone Giant",
+    "Flowstone Shambler"
   ],
   [
     "Fyndhorn Elves",
@@ -543,6 +560,10 @@
     "Thrull Retainer"
   ],
   [
+    "Cateran Enforcer",
+    "Rathi Intimidator"
+  ],
+  [
     "Cemetery Gate",
     "Wall of Light"
   ],
@@ -581,6 +602,10 @@
   [
     "Defender of Chaos",
     "Defender of Law"
+  ],
+  [
+    "Defiant Falcon",
+    "Ramosian Sky Marshal"
   ],
   [
     "Dromosaur",
@@ -639,10 +664,6 @@
     "Reclamation"
   ],
   [
-    "Flowstone Giant",
-    "Flowstone Shambler"
-  ],
-  [
     "Force Spike",
     "Mana Leak"
   ],
@@ -695,6 +716,10 @@
     "Twisted Experiment"
   ],
   [
+    "Infiltrate",
+    "Trailblazer"
+  ],
+  [
     "Island",
     "Snow-Covered Island"
   ],
@@ -733,6 +758,10 @@
   [
     "Krovikan Fetish",
     "Ritual of Steel"
+  ],
+  [
+    "Lawbringer",
+    "Lightbringer"
   ],
   [
     "Lim-D\u00fbl's High Guard",
@@ -849,6 +878,10 @@
   [
     "Shatter",
     "Verdigris"
+  ],
+  [
+    "Silkenfist Fighter",
+    "Silkenfist Order"
   ],
   [
     "Sisay's Ring",

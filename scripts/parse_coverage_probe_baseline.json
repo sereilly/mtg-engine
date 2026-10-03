@@ -558,6 +558,34 @@
   ]
  },
  {
+  "card": "Death Pit Offering",
+  "clause": "sacrifice all creatures you control",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Defiant Falcon",
+  "clause": "search your library for a rebel permanent card with mana value 3 or less, put it onto the battlefield, then shuffle",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Defiant Vanguard",
+  "clause": "at end of combat, destroy it and all creatures it blocked this turn",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Defiant Vanguard",
+  "clause": "search your library for a rebel permanent card with mana value 4 or less, put it onto the battlefield, then shuffle",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
   "card": "Deranged Hermit",
   "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {3}{g}{g}",
   "ignored": [
@@ -748,6 +776,13 @@
   ]
  },
  {
+  "card": "Ensnare",
+  "clause": "tap all creatures",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Erithizon",
   "clause": "put a +1/+1 counter on target creature of defending player's choice",
   "ignored": [
@@ -896,6 +931,13 @@
   "ignored": [
    "each",
    "down"
+  ]
+ },
+ {
+  "card": "Flowstone Slide",
+  "clause": "all creatures get +x/-x until end of turn",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -1478,6 +1520,13 @@
   ]
  },
  {
+  "card": "Kill Switch",
+  "clause": "tap all other artifacts. they don't untap during their controllers' untap steps for as long as this artifact remains tapped",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Kjeldoran Frostbeast",
   "clause": "destroy all creatures blocking or blocked by this creature",
   "ignored": [
@@ -1519,6 +1568,41 @@
   "clause": "that creature doesn't untap during its controller's next untap step",
   "ignored": [
    "controller's"
+  ]
+ },
+ {
+  "card": "Laccolith Grunt",
+  "clause": "you may have it deal damage equal to its power to target creature. if you do, this creature assigns no combat damage this turn",
+  "ignored": [
+   "have"
+  ]
+ },
+ {
+  "card": "Laccolith Rig",
+  "clause": "you may have it deal damage equal to its power to target creature. if you do, the first creature assigns no combat damage this turn",
+  "ignored": [
+   "have"
+  ]
+ },
+ {
+  "card": "Laccolith Titan",
+  "clause": "you may have it deal damage equal to its power to target creature. if you do, this creature assigns no combat damage this turn",
+  "ignored": [
+   "have"
+  ]
+ },
+ {
+  "card": "Laccolith Warrior",
+  "clause": "you may have it deal damage equal to its power to target creature. if you do, this creature assigns no combat damage this turn",
+  "ignored": [
+   "have"
+  ]
+ },
+ {
+  "card": "Laccolith Whelp",
+  "clause": "you may have it deal damage equal to its power to target creature. if you do, this creature assigns no combat damage this turn",
+  "ignored": [
+   "have"
   ]
  },
  {
@@ -1575,6 +1659,13 @@
   "clause": "counter target spell unless its controller pays {x}, where x is the number of verse counters on this enchantment",
   "ignored": [
    "enchantment"
+  ]
+ },
+ {
+  "card": "Lin Sivvi, Defiant Hero",
+  "clause": "search your library for a rebel permanent card with mana value x or less, put it onto the battlefield, then shuffle",
+  "ignored": [
+   "permanent"
   ]
  },
  {
@@ -1693,6 +1784,13 @@
   ]
  },
  {
+  "card": "Massacre",
+  "clause": "all creatures get -2/-2 until end of turn",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Meltdown",
   "clause": "destroy each artifact with mana value x or less",
   "ignored": [
@@ -1784,6 +1882,13 @@
   "clause": "destroy all creatures target player controls. for each creature that died this way, that player creates two 1/1 red goblin creature tokens",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Moggcatcher",
+  "clause": "search your library for a goblin permanent card, put it onto the battlefield, then shuffle",
+  "ignored": [
+   "permanent"
   ]
  },
  {
@@ -1993,6 +2098,13 @@
   ]
  },
  {
+  "card": "Parallax Inhibitor",
+  "clause": "put a fade counter on each permanent with fading you control",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
   "card": "Paroxysm",
   "clause": "that player reveals the top card of their library. if that card is a land card, destroy that creature. otherwise, it gets +3/+3 until end of turn",
   "ignored": [
@@ -2032,6 +2144,13 @@
   "clause": "target opponent creates an x/x blue orb creature token with flying, where x is the number of +1/+1 counters on this creature",
   "ignored": [
    "creature"
+  ]
+ },
+ {
+  "card": "Phyrexian Driver",
+  "clause": "other mercenary creatures get +1/+1 until end of turn",
+  "ignored": [
+   "creatures"
   ]
  },
  {
@@ -2198,6 +2317,27 @@
   ]
  },
  {
+  "card": "Rathi Assassin",
+  "clause": "search your library for a mercenary permanent card with mana value 3 or less, put it onto the battlefield, then shuffle",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Rathi Fiend",
+  "clause": "search your library for a mercenary permanent card with mana value 3 or less, put it onto the battlefield, then shuffle",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Rathi Intimidator",
+  "clause": "search your library for a mercenary permanent card with mana value 2 or less, put it onto the battlefield, then shuffle",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
   "card": "Rats of Rath",
   "clause": "destroy target artifact, creature, or land you control",
   "ignored": [
@@ -2319,6 +2459,13 @@
  {
   "card": "Reverent Mantra",
   "clause": "choose a color. all creatures gain protection from the chosen color until end of turn",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Reverent Silence",
+  "clause": "destroy all enchantments",
   "ignored": [
    "all"
   ]
@@ -2450,6 +2597,13 @@
   ]
  },
  {
+  "card": "Saproling Burst",
+  "clause": "destroy all tokens created with this enchantment. they can't be regenerated",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Savage Twister",
   "clause": "savage twister deals x damage to each creature",
   "ignored": [
@@ -2476,6 +2630,13 @@
   "clause": "prevent the next 7 damage that would be dealt to any target this turn. if it's a creature, put a +0/+1 counter on it for each 1 damage prevented this way at the beginning of the next end step",
   "ignored": [
    "1"
+  ]
+ },
+ {
+  "card": "Seahunter",
+  "clause": "search your library for a merfolk permanent card, put it onto the battlefield, then shuffle",
+  "ignored": [
+   "permanent"
   ]
  },
  {
@@ -2599,6 +2760,13 @@
   ]
  },
  {
+  "card": "Shrieking Mogg",
+  "clause": "tap all other creatures",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Shyft",
   "clause": "you may have this creature become the color or colors of your choice",
   "ignored": [
@@ -2624,6 +2792,13 @@
   "clause": "simoon deals 1 damage to each creature target opponent controls",
   "ignored": [
    "each"
+  ]
+ },
+ {
+  "card": "Skyshroud Poacher",
+  "clause": "search your library for an elf permanent card, put it onto the battlefield, then shuffle",
+  "ignored": [
+   "permanent"
   ]
  },
  {
@@ -2810,6 +2985,14 @@
   "clause": "two target creatures each get +2/+2 until end of turn",
   "ignored": [
    "each"
+  ]
+ },
+ {
+  "card": "Tangle Wire",
+  "clause": "that player taps an untapped artifact, creature, or land they control for each fade counter on this artifact",
+  "ignored": [
+   "or",
+   "artifact"
   ]
  },
  {
@@ -3016,6 +3199,13 @@
   "clause": "tremor deals 1 damage to each creature without flying",
   "ignored": [
    "each"
+  ]
+ },
+ {
+  "card": "Trickster Mage",
+  "clause": "you may tap or untap target artifact, creature, or land",
+  "ignored": [
+   "or"
   ]
  },
  {

@@ -706,6 +706,28 @@ ACTIVATED_LABELS: dict[str, str] = {
     # right — named anyway, because a kind that is only correct by accident of
     # which grammar family it lowered in is the debt this table exists to pay.
     "earthquake_damage": "activated_damage",
+    # --- Nemesis, at its promotion ------------------------------------------
+    # Four kinds the set put in the activated position for the first time,
+    # each settled against a shipped neighbour rather than its grammar family.
+    #
+    # Netter en-Dal's "Target creature can't attack this turn." -- the attack
+    # half of `target_cant_block_until_eot` above, and the same bucket.
+    "target_cant_attack_until_eot": "activated_restriction",
+    # Parallax Inhibitor puts a fade counter on each permanent with fading you
+    # control, beside `add_counter_to_self`'s `activated_counter`: how many
+    # objects receive the counter is not what the ability does.
+    "add_counter_to_each_matching": "activated_counter",
+    # Parallax Nexus: "Target opponent exiles a card from their hand." The
+    # card leaves a hand its owner chose from -- hand disruption, which is
+    # `name_and_random_reveal`'s and `discard_x_target_cards`' bucket, not
+    # `activated_recursion`, which is for cards put aside to come back to
+    # *their* controller (the Nexus hands them back, but to the player it
+    # took them from, and the point of the ability is the taking).
+    "exile_cards_from_hand": "activated_discard",
+    # Divining Witch names a card and digs to it -- a tutor whose zone is
+    # walked in the open rather than searched, so `name_then_reveal_top`'s
+    # `activated_look` rather than `search_library`'s `activated_search`.
+    "name_then_consult": "activated_look",
 }
 
 # Instruction kind -> label, for an ability the grammar reads in the **triggered**
@@ -1116,6 +1138,10 @@ TRIGGERED_LABELS: dict[str, str] = {
     # Abduction untapping what it enchants -- `untap_enchanted_creature` is
     # `activated_untap`.
     "untap_enchanted_creature": "triggered_untap",
+    # Silkenfist Fighter and Silkenfist Order (NEM, at its promotion):
+    # "Whenever this creature becomes blocked, untap it." The self-subject twin
+    # of the row above, and `untap_self` is `activated_untap` — same rule.
+    "untap_self": "triggered_untap",
     # Ancestral Knowledge shuffling its owner's library -- `shuffle_library` is
     # `activated_library`: the library is the object.
     "shuffle_library": "triggered_library",

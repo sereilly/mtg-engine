@@ -26,9 +26,9 @@
       "parsed_pct": 95.5
     },
     "<pool>": {
-      "executed_pct": 61.1,
-      "lowered_pct": 90.2,
-      "parsed_pct": 90.8
+      "executed_pct": 61.2,
+      "lowered_pct": 89.9,
+      "parsed_pct": 90.6
     },
     "ALL": {
       "executed_pct": 70.5,
@@ -99,6 +99,11 @@
       "executed_pct": 66.2,
       "lowered_pct": 91.6,
       "parsed_pct": 91.8
+    },
+    "NEM": {
+      "executed_pct": 64.4,
+      "lowered_pct": 80.4,
+      "parsed_pct": 80.4
     },
     "STH": {
       "executed_pct": 62.8,

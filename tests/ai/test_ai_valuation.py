@@ -409,6 +409,14 @@ def test_every_divided_card_in_the_pool_is_described(catalog):
         # list could plausibly have wanted a different answer for, and it does
         # not: who to aim at is still the question, and it is still "opponent".
         "Volcanic Wind",
+        # Reviewed at Nemesis' promotion, and the set's only one. Arc Mage
+        # answers "opponent" off the `damage` category like every burn spell
+        # above it (derived: thresholded, not whole-board), and its shape is
+        # Arc Lightning's on an activated ability rather than a sorcery -- the
+        # first divided *activation* in the inventory, which is the reason to
+        # name it. The side is the question an activation could have wanted a
+        # different answer to, and it does not.
+        "Arc Mage",
         # Reviewed at Tempest's promotion, and it is the entry that adds
         # nothing -- which is the reviewable result rather than the absence of
         # one. Rolling Thunder's every derived field already matched four cards
