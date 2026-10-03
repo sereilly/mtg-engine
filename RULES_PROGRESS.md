@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**412 / 618 tracked rules covered (66%)** — 2554 tests, 0 unannotated.
+**412 / 618 tracked rules covered (66%)** — 2575 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -194,7 +194,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [ ] **108.1** Use the Oracle card reference when determining a card’s wording. A card’s Oracle text can be foun...
 - [ ] **108.2** When a rule or text on a card refers to a “card,” it means only a Magic card or an object represe...
-- [x] **108.3** The owner of a card in the game is the player who started the game with it in their deck. If a ca... *(11 tests)*
+- [x] **108.3** The owner of a card in the game is the player who started the game with it in their deck. If a ca... *(16 tests)*
 - [x] **108.4** A card doesn’t have a controller unless that card represents a permanent or spell; in those cases... *(1 tests, subrules a)*
 - [ ] **108.5** Nontraditional Magic cards can’t start the game in any zone other than the command zone (see rule...
 - [ ] **108.6** For more information about cards, see section 2, “Parts of a Card.”
@@ -210,7 +210,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 110. Permanents
 
 - [x] **110.1** A permanent is a card or token on the battlefield. A permanent remains on the battlefield indefin... *(1 tests)*
-- [x] **110.2** A permanent’s owner is the same as the owner of the card that represents it (unless it’s a token;... *(2 tests, subrules a)*
+- [x] **110.2** A permanent’s owner is the same as the owner of the card that represents it (unless it’s a token;... *(3 tests, subrules a)*
 - [x] **110.3** A nontoken permanent’s characteristics are the same as those printed on its card, as modified by ... *(1 tests)*
 - [x] **110.4** There are six permanent types: artifact, battle, creature, enchantment, land, and planeswalker. I... *(2 tests, subrules a)*
 - [x] **110.5** A permanent’s status is its physical state. There are four status categories, each of which has t... *(5 tests, subrules abd)*
@@ -246,7 +246,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **113.4** Some activated abilities and some triggered abilities are mana abilities. Mana abilities follow s...
 - [ ] **113.5** Some activated abilities are loyalty abilities. Loyalty abilities follow special rules: A player ...
 - [x] **113.6** Abilities of an instant or sorcery spell usually function only while that object is on the stack.... *(17 tests, subrules bgjkm)*
-- [x] **113.7** The source of an ability is the object that generated it. The source of an activated ability on t... *(8 tests, subrules a)*
+- [x] **113.7** The source of an ability is the object that generated it. The source of an activated ability on t... *(9 tests, subrules a)*
 - [ ] **113.8** The controller of an activated ability on the stack is the player who activated it. The controlle...
 - [ ] **113.9** Activated and triggered abilities on the stack aren’t spells, and therefore can’t be countered by...
 - [ ] **113.10** Effects can add or remove abilities of objects. An effect that adds an ability will state that th...
@@ -435,7 +435,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **303.1** A player who has priority may cast an enchantment card from their hand during a main phase of the... *(2 tests)*
 - [x] **303.2** When an enchantment spell resolves, its controller puts it onto the battlefield under their control. *(4 tests)*
 - [x] **303.3** Enchantment subtypes are always a single word and are listed after a long dash: “Enchantment — Sh... *(3 tests)*
-- [x] **303.4** Some enchantments have the subtype “Aura.” An Aura enters the battlefield attached to an object o... *(46 tests, subrules abcdefghijm)*
+- [x] **303.4** Some enchantments have the subtype “Aura.” An Aura enters the battlefield attached to an object o... *(47 tests, subrules abcdefghijm)*
 - [x] **303.5** Some enchantments have the subtype “Saga.” See rule 714 for more information about Saga cards. *(2 tests)*
 - [x] **303.6** Some enchantments have the subtype “Class.” See rule 716 for more information about Class cards. *(2 tests)*
 - [x] **303.7** Some Aura enchantments also have the subtype “Role.” *(3 tests, subrules a)*
@@ -450,7 +450,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 305. Lands
 
-- [x] **305.1** A player who has priority may play a land card from their hand during a main phase of their turn ... *(4 tests)*
+- [x] **305.1** A player who has priority may play a land card from their hand during a main phase of their turn ... *(5 tests)*
 - [x] **305.2** A player can normally play one land during their turn; however, continuous effects may increase t... *(23 tests, subrules ab)*
 - [ ] **305.3** A player can’t play a land, for any reason, if it isn’t their turn. Ignore any part of an effect ...
 - [ ] **305.4** Effects may also allow players to “put” lands onto the battlefield. This isn’t the same as “playi...
@@ -484,7 +484,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **400.1** A zone is a place where objects can be during a game. There are normally seven zones: library, ha... *(4 tests)*
 - [x] **400.2** Public zones are zones in which all players can see the cards’ faces, except for those cards that... *(5 tests)*
-- [x] **400.3** If an object would go to any library, graveyard, or hand other than its owner’s, it goes to its o... *(10 tests)*
+- [x] **400.3** If an object would go to any library, graveyard, or hand other than its owner’s, it goes to its o... *(23 tests)*
 - [ ] **400.4** Cards with certain card types can’t enter certain zones.
 - [x] **400.5** The order of objects in a library, in a graveyard, or on the stack can’t be changed except when e... *(2 tests)*
 - [ ] **400.6** If an object would move from one zone to another, determine what event is moving the object. If t...
@@ -536,7 +536,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 406. Exile
 
-- [x] **406.1** The exile zone is essentially a holding area for objects. Some spells and abilities exile an obje... *(1 tests)*
+- [x] **406.1** The exile zone is essentially a holding area for objects. Some spells and abilities exile an obje... *(2 tests)*
 - [x] **406.2** To exile an object is to put it into the exile zone from whatever zone it’s currently in. An exil... *(2 tests)*
 - [x] **406.3** Exiled cards are, by default, kept face up and may be examined by any player at any time. Cards “... *(3 tests)*
 - [ ] **406.4** Face-down cards in exile should be kept in separate piles based on when they were exiled and how ...
@@ -676,7 +676,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 602. Activating Activated Abilities
 
 - [x] **602.1** Activated abilities have a cost and an effect. They are written as “[Cost]: [Effect.] [Activation... *(14 tests, subrules ab)*
-- [x] **602.2** To activate an ability is to put it onto the stack and pay its costs, so that it will eventually ... *(42 tests, subrules ab)*
+- [x] **602.2** To activate an ability is to put it onto the stack and pay its costs, so that it will eventually ... *(43 tests, subrules ab)*
 - [x] **602.3** Some abilities specify that one of their controller’s opponents does something the controller wou... *(3 tests)*
 - [ ] **602.4** Activating an ability that alters costs won’t affect spells and abilities that are already on the...
 - [x] **602.5** A player can’t begin to activate an ability that’s prohibited from being activated. *(41 tests, subrules ace)*
@@ -685,7 +685,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **603.1** Triggered abilities have a trigger condition and an effect. They are written as “[When/Whenever/A... *(3 tests, subrules b)*
 - [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(29 tests, subrules bd)*
-- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(59 tests, subrules bcd)*
+- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(60 tests, subrules bcd)*
 - [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(19 tests)*
 - [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(10 tests)*
 - [x] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit... *(5 tests, subrules c)*
@@ -734,7 +734,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 608. Resolving Spells and Abilities
 
 - [x] **608.1** Each time all players pass in succession, the spell or ability on top of the stack resolves. (See... *(1 tests)*
-- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(107 tests, subrules bcdhmn)*
+- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(113 tests, subrules bcdhmn)*
 - [x] **608.3** If the object that’s resolving is a permanent spell, its resolution may involve several steps. Th... *(3 tests, subrules ab)*
 
 ### 609. Effects
@@ -790,7 +790,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 614. Replacement Effects
 
-- [x] **614.1** Some continuous effects are replacement effects. Like prevention effects (see rule 615), replacem... *(45 tests, subrules abcd)*
+- [x] **614.1** Some continuous effects are replacement effects. Like prevention effects (see rule 615), replacem... *(46 tests, subrules abcd)*
 - [x] **614.2** Some replacement effects apply to damage from a source. See rule 609.7. *(1 tests)*
 - [x] **614.3** There are no special restrictions on casting a spell or activating an ability that generates a re... *(2 tests)*
 - [x] **614.4** Replacement effects must exist before the appropriate event occurs—they can’t “go back in time” a... *(2 tests)*
@@ -832,7 +832,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 700. General
 
 - [ ] **700.1** Anything that happens in a game is an event. Multiple events may take place during the resolution...
-- [x] **700.2** A spell or ability is modal if it has two or more options in a bulleted list preceded by instruct... *(22 tests, subrules abde)*
+- [x] **700.2** A spell or ability is modal if it has two or more options in a bulleted list preceded by instruct... *(24 tests, subrules abde)*
 - [ ] **700.3** Some effects cause objects to be temporarily grouped into piles.
 - [x] **700.4** The term dies means “is put into a graveyard from the battlefield.” *(10 tests)*
 - [ ] **700.5** A player’s devotion to [color] is equal to the number of mana symbols of that color among the man...
@@ -852,7 +852,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **701.2** Activate *(4 tests, subrules a)*
 - [x] **701.3** Attach *(13 tests, subrules abcd)*
 - [x] **701.5** Cast *(4 tests, subrules a)*
-- [x] **701.6** Counter *(8 tests, subrules ab)*
+- [x] **701.6** Counter *(10 tests, subrules ab)*
 - [x] **701.7** Create *(3 tests, subrules a)*
 - [x] **701.8** Destroy *(7 tests, subrules abc)*
 - [x] **701.9** Discard *(5 tests, subrules ac)*
@@ -947,7 +947,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 724. Ending Turns and Phases
 
-- [x] **724.1** Some cards end the turn. When an effect ends the turn, follow these steps in order, as they diffe... *(6 tests, subrules bcde)*
+- [x] **724.1** Some cards end the turn. When an effect ends the turn, follow these steps in order, as they diffe... *(8 tests, subrules bcde)*
 - [ ] **724.2** One card (Mandate of Peace) ends the combat phase. When an effect ends the combat phase, follow t...
 
 ### 733. Handling Illegal Actions
@@ -960,7 +960,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **800.1** A multiplayer game is a game that begins with more than two players. This section contains additi...
 - [ ] **800.2** These rules consist of a series of options that can be added to a multiplayer game and a number o...
 - [ ] **800.3** Many multiplayer Magic tournaments have additional rules not included here, including rules for d...
-- [x] **800.4** Unlike two-player games, multiplayer games can continue after one or more players have left the g... *(11 tests, subrules amn)*
+- [x] **800.4** Unlike two-player games, multiplayer games can continue after one or more players have left the g... *(12 tests, subrules amn)*
 - [ ] **800.5** Unless a chosen variant or option prescribes otherwise, seating order is determined by any mutual...
 - [x] **800.6** In a multiplayer game, the first mulligan a player takes doesn’t count toward the number of cards... *(3 tests)*
 - [ ] **800.7** In a multiplayer game other than a Two-Headed Giant game, the starting player doesn’t skip the dr...
@@ -989,7 +989,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **903.6** At the start of the game, each player puts their commander from their deck face up into the comma... *(3 tests)*
 - [x] **903.7** Once the starting player has been determined, each player sets their life total to 40 and draws a... *(4 tests)*
 - [x] **903.8** A player may cast a commander they own from the command zone. A commander cast from the command z... *(9 tests)*
-- [x] **903.9** A commander may return to the command zone during a Commander game. *(20 tests, subrules ab)*
+- [x] **903.9** A commander may return to the command zone during a Commander game. *(22 tests, subrules ab)*
 - [x] **903.10** The Commander variant includes the following specification for winning and losing the game. All o... *(6 tests, subrules a)*
 - [x] **903.11** Except via rules, special actions, and effects that specifically bring cards into Commander games... *(8 tests, subrules a)*
 - [x] **903.12** Brawl Option *(26 tests, subrules abcdefgh)*
