@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**412 / 618 tracked rules covered (66%)** — 2516 tests, 0 unannotated.
+**412 / 618 tracked rules covered (66%)** — 2535 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -155,18 +155,18 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 106. Mana
 
-- [x] **106.1** Mana is the primary resource in the game. Players spend mana to pay costs, usually when casting s... *(3 tests, subrules b)*
+- [x] **106.1** Mana is the primary resource in the game. Players spend mana to pay costs, usually when casting s... *(6 tests, subrules ab)*
 - [ ] **106.2** Mana is represented by mana symbols (see rule 107.4). Mana symbols also represent mana costs (see...
 - [x] **106.3** Mana is produced by the effects of mana abilities (see rule 605). It may also be produced by the ... *(2 tests)*
 - [x] **106.4** When an effect instructs a player to add mana, that mana goes into a player’s mana pool. From the... *(6 tests)*
 - [ ] **106.5** If an ability would produce one or more mana of an undefined type, it produces no mana instead.
-- [x] **106.6** Some spells or abilities that produce mana restrict how that mana can be spent, have an additiona... *(5 tests)*
+- [x] **106.6** Some spells or abilities that produce mana restrict how that mana can be spent, have an additiona... *(14 tests, subrules a)*
 - [x] **106.7** Some abilities produce mana based on the type of mana another permanent or permanents “could prod... *(6 tests)*
 - [ ] **106.8** If an effect would add mana represented by a hybrid mana symbol to a player’s mana pool, that pla...
 - [ ] **106.9** If an effect would add mana represented by a Phyrexian mana symbol to a player’s mana pool, one m...
 - [ ] **106.10** If an effect would add mana represented by a generic mana symbol to a player’s mana pool, that mu...
 - [ ] **106.11** If an effect would add mana represented by one or more snow mana symbols to a player’s mana pool,...
-- [x] **106.12** To “tap [a permanent] for mana” is to activate a mana ability of that permanent that includes the... *(4 tests, subrules a)*
+- [x] **106.12** To “tap [a permanent] for mana” is to activate a mana ability of that permanent that includes the... *(19 tests, subrules ab)*
 - [x] **106.13** One card (Drain Power) causes one player to lose unspent mana and another to add “the mana lost t... *(1 tests)*
 
 ### 107. Numbers and Symbols
@@ -427,7 +427,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **302.3** Creature subtypes are usually a single word long and are listed after a long dash: “Creature — Hu...
 - [ ] **302.4** Power and toughness are characteristics only creatures have.
 - [ ] **302.5** Creatures can attack and block. (See rule 508, “Declare Attackers Step,” and rule 509, “Declare B...
-- [x] **302.6** A creature’s activated ability with the tap symbol or the untap symbol in its activation cost can... *(6 tests)*
+- [x] **302.6** A creature’s activated ability with the tap symbol or the untap symbol in its activation cost can... *(8 tests)*
 - [ ] **302.7** Damage dealt to a creature by a source with neither wither nor infect is marked on that creature ...
 
 ### 303. Enchantments
@@ -456,7 +456,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **305.4** Effects may also allow players to “put” lands onto the battlefield. This isn’t the same as “playi...
 - [ ] **305.5** Land subtypes are always a single word and are listed after a long dash. Land subtypes are also c...
 - [x] **305.6** The basic land types are Plains, Island, Swamp, Mountain, and Forest. If an object uses the words... *(3 tests)*
-- [x] **305.7** If an effect sets a land’s subtype to one or more of the basic land types, the land no longer has... *(23 tests)*
+- [x] **305.7** If an effect sets a land’s subtype to one or more of the basic land types, the land no longer has... *(24 tests)*
 - [ ] **305.8** Any land with the supertype “basic” is a basic land. Any land that doesn’t have this supertype is...
 - [ ] **305.9** If an object is both a land and another card type, it can be played only as a land. It can’t be c...
 
@@ -676,10 +676,10 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 602. Activating Activated Abilities
 
 - [x] **602.1** Activated abilities have a cost and an effect. They are written as “[Cost]: [Effect.] [Activation... *(14 tests, subrules ab)*
-- [x] **602.2** To activate an ability is to put it onto the stack and pay its costs, so that it will eventually ... *(41 tests, subrules ab)*
+- [x] **602.2** To activate an ability is to put it onto the stack and pay its costs, so that it will eventually ... *(42 tests, subrules ab)*
 - [x] **602.3** Some abilities specify that one of their controller’s opponents does something the controller wou... *(3 tests)*
 - [ ] **602.4** Activating an ability that alters costs won’t affect spells and abilities that are already on the...
-- [x] **602.5** A player can’t begin to activate an ability that’s prohibited from being activated. *(39 tests, subrules ace)*
+- [x] **602.5** A player can’t begin to activate an ability that’s prohibited from being activated. *(41 tests, subrules ace)*
 
 ### 603. Handling Triggered Abilities
 
@@ -708,7 +708,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 605. Mana Abilities
 
-- [x] **605.1** Some activated abilities and some triggered abilities are mana abilities, which are subject to sp... *(13 tests, subrules ab)*
+- [x] **605.1** Some activated abilities and some triggered abilities are mana abilities, which are subject to sp... *(17 tests, subrules ab)*
 - [x] **605.2** A mana ability remains a mana ability even if the game state doesn’t allow it to produce mana. *(1 tests)*
 - [x] **605.3** Activating an activated mana ability follows the rules for activating any other activated ability... *(17 tests, subrules abc)*
 - [x] **605.4** Triggered mana abilities follow all the rules for other triggered abilities (see rule 603, “Handl... *(6 tests, subrules a)*
