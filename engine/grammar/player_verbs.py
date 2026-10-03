@@ -64,6 +64,7 @@ from .effects import (
     _parse_player_exiles_target_spell,
     _parse_player_puts_hand_cards_on_library,
     _parse_player_puts_whole_hand_on_library,
+    _parse_player_returns_exiled_with_source,
     _parse_put_hand_cards_on_library,
     _parse_put_exiled_card_on_stack_as_copy,
     _parse_put_counter,
@@ -285,6 +286,14 @@ def parse_player_subject_verb(
         exiled_pile = _parse_put_exiled_this_way(stream, source_spec)
         if exiled_pile is not None:
             return exiled_pile
+        # "When this enchantment leaves the battlefield, **each player returns
+        # to the battlefield all cards they own exiled with it**." (Parallax
+        # Wave.) The CR 607.2a linked pile rather than this effect's own record
+        # — the sibling of the arm above, which it shares a verb, a fronted
+        # destination and a refusal-without-consuming with.
+        linked_pile = _parse_player_returns_exiled_with_source(stream, source_spec)
+        if linked_pile is not None:
+            return linked_pile
         return _parse_return(stream, source_spec)
     # "Target player **chooses a card name**, then reveals the top card of
     # their library…" (Petra Sphinx) — a paragraph, because the two

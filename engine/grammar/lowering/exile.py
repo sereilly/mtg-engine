@@ -21,7 +21,8 @@ that *moves an object into* the zone — and `_bound_exiles` took the half of th
 which needs no picker at all, every reading whose object was fixed by an earlier
 step or by the firing event before the sentence ran. Everything below chooses
 its object out of the game and carries a filter payload to a handler; nothing
-below reads a record.
+below reads a record. (Thieves' Auction's claim out of the exiled pile did, and
+left for `linked_exile` at Nemesis's second wave for exactly that sentence.)
 """
 
 from __future__ import annotations
@@ -886,56 +887,6 @@ def _lower_exile_graveyard_arrivals_this_turn(
     )
 
 
-def _lower_each_player_claims_exiled_card(
-    node: "ast.EachPlayerClaimsExiledCard", produced: frozenset[str],
-) -> tuple[OracleInstruction, ...]:
-    """"Exile all nontoken permanents. **Starting with you, each player chooses
-    one of the exiled cards and puts it onto the battlefield tapped under their
-    control.**" (Thieves' Auction.)
-
-    One instruction, and the repeat clause behind the sentence is a key on it
-    rather than a wrapper around it — ``_lower_repeat_process``'s argument one
-    card over: the loop ends when the pile empties, which is something only the
-    thing handing out the cards can see, and a round that emptied it part-way
-    has to stop mid-round rather than after it.
-
-    Refused without a producer, as every back-reference in this grammar is: "the
-    exiled cards" names what a step of *this same effect* exiled, and with no
-    such step the words name nothing — a spell that reports supported and hands
-    out nothing at all.
-
-    ``until_pile_empty`` is carried even when it is False, because the two
-    readings are genuinely different cards: without the clause each seat takes
-    exactly one card and the rest stay exiled.
-    """
-    if EXILED_THIS_WAY_OBJECTS not in produced:
-        raise LoweringError(
-            "'one of the exiled cards' names what an earlier step of this "
-            "effect exiled, and no step of it exiles anything", node=node,
-        )
-    if node.chooser.kind != "each_player":
-        raise LoweringError(
-            "a pick out of the exiled pile is made by every seat in turn",
-            node=node,
-        )
-    return (
-        OracleInstruction(
-            "claim_exiled_cards_in_turn", "",
-            {
-                # "Starting with you" — CR 101.4 orders a multi-seat decision
-                # from the active player and this names the seat that put the
-                # effect on the stack. The same seat for a sorcery, not the
-                # same rule, which is why the word is carried.
-                "claim_order": (
-                    node.starting_with.kind if node.starting_with else None
-                ),
-                "tapped": node.tapped,
-                "until_pile_empty": node.until_pile_empty,
-            },
-        ),
-    )
-
-
 def _lower_exile_cards_from_hand(
     node: "ast.ExileCardsFromHand", event: str | None = None
 ) -> tuple[OracleInstruction, ...]:
@@ -947,9 +898,20 @@ def _lower_exile_cards_from_hand(
     ``card_only_filter`` (CR 613.1: a card in hand has no computed
     characteristics). Refused: a seat word the handler does not walk, and a
     count it cannot name before the prompt is armed.
+
+    "**Target opponent** exiles a card from their hand." (Parallax Nexus.) The
+    one-seat spelling: the seat is announced (CR 601.2c/602.2b) and *that*
+    player picks, so it is the same prompt armed once rather than once per
+    seat. Its ``actor`` is ``target`` with the picker's description beside it,
+    the spelling ``_seats._CHOOSER_SEATS`` gives the same word — never
+    collapsed to "an opponent", which at three seats is the whole choice.
     """
     actor = node.player.kind
-    if actor not in ("each_player", "each_opponent"):
+    targets: dict[str, object] = {}
+    if actor in ("target_player", "target_opponent"):
+        _describe_targets(targets, node.player)
+        actor = "target"
+    elif actor not in ("each_player", "each_opponent"):
         raise LoweringError(
             f"no handler has {actor!r} exile cards from their hand", node=node
         )
@@ -973,6 +935,6 @@ def _lower_exile_cards_from_hand(
     return (
         OracleInstruction(
             "exile_cards_from_hand", "",
-            {"actor": actor, "amount": count, "card_filter": described},
+            {"actor": actor, "amount": count, "card_filter": described, **targets},
         ),
     )
