@@ -267,6 +267,17 @@ def _accept_destroyed_this_way_no_regen(stream: TokenStream) -> bool:
     ):
         return True
     stream.reset(mark)
+    # "**Those creatures** can't be regenerated." (Mageta the Lion.) That
+    # back-reference's plural, after a sweep: the same closed noun set, and the
+    # same required sentence end for the same reason.
+    if (
+        stream.accept_word("those")
+        and stream.accept_word(*(noun + "s" for noun in _DESTROYED_THIS_WAY_NOUNS))
+        and stream.accept_phrase("can't", "be", "regenerated")
+        and (stream.exhausted or stream.at_punct("."))
+    ):
+        return True
+    stream.reset(mark)
     # "**Artifacts** destroyed this way can't be regenerated." (Corrosion.) The
     # plural of the noun form above and the fourth printed spelling of one rule:
     # a sweep destroys a set, so its rider names a set, where War Barge's delayed

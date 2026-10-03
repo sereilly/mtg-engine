@@ -31,7 +31,7 @@ from .cast_restrictions import global_cast_ban
 from .legality import targeting_ban_refusal
 from .cast_restrictions import check_cast_timing
 from .cost_modifiers import (cost_reduction_for_cast, reduce_cost,
-                             spell_cost_tax, spell_symbol_tax)
+                             sacrifice_taxes, spell_cost_tax, spell_symbol_tax)
 from .classifier import classify_card
 from .game import Game
 from .handlers._common import permanent_matches_filter
@@ -477,6 +477,24 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
             # `sacrifice_filter`, so a second condition would be unreachable
             # and would read as a claim that it is not.
             continue
+        # …and the same trade imposed from outside: "Activated abilities of
+        # nontoken Rebels cost an additional "Sacrifice a land"" (Brutal
+        # Suppression), Drought's per-{B} Swamp. Asked of the reader the charger
+        # uses, so a tax the engine would collect is a tax this policy sees.
+        if sacrifice_taxes(
+            game, player_index, ability.cost.mana, "activate", source=permanent,
+        ):
+            continue
+        # "…+X/+0 until end of turn, where X is **the power of the creature
+        # tapped this way**" (Keldon Battlewagon). The effect is as large as the
+        # creature the cost taps, which the score below cannot see — and the
+        # payment's default is the first untapped creature, which for the
+        # Battlewagon is itself: +0/+0 and its own attack spent, every main
+        # phase. Derived from the payload, so it names no card.
+        if "cost_tap_characteristic" in (
+            ability.instruction.payload.get("x_from_count") or {}
+        ):
+            continue
 
         # "Put a -1/-1 counter on a creature you control" (Wandering Mage). The
         # same trade one resource over, and the same reason the policy cannot
@@ -569,6 +587,18 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
         # worth (or legal) to target, so the AI does not burn a turn on an
         # ability it cannot resolve.
         spec = derive_activation_spec(ability)
+        # "{X}, {T}: Untap **X target** lands." (Candelabra of Tawnos, Alexi,
+        # Orcish Settlers.) CR 601.2c sizes the target list from the X the
+        # activator announces, and this policy announces none — so the engine
+        # reads X as zero and refuses any named target. Proposing the ability
+        # anyway is a refused activation every turn; skipping it is the honest
+        # floor until the policy prices an X. Read off the cost clause the way
+        # the activation path counts its ``{X}`` symbols, so a *defined* X (the
+        # verse cycle's "where X is …") is left to the sizing that answers it.
+        if (spec or {}).get("x_targets") and "{x}" in (
+            ability.source_line or ""
+        ).lower().split(":", 1)[0]:
+            continue
         # An ability naming several targets of *different* kinds, chosen in
         # dependency order (CR 602.2b reaches CR 601.2c). Asked before the
         # single-target block below, which has no arm for it: the kind is

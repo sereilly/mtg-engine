@@ -1310,6 +1310,16 @@ def animate_matching_until_eot(game: Game, instruction: OracleInstruction, conte
     observer = (
         game.players.index(context.caster) if context.caster in game.players else None
     )
+    # "All lands **target player** controls become 3/3 creatures until end of
+    # turn." (Jolrael, Empress of Beasts.) A seat the activation announced
+    # (CR 601.2c), which no read of a land can supply — handed to the matcher
+    # the way the tap and destroy sweeps hand it, because without it the
+    # matcher refuses the word and the sweep animates nothing.
+    targeted_seat = (
+        game.players.index(context.target)
+        if context.target is not None and context.target in game.players
+        else None
+    )
     payload = instruction.payload
     power, toughness = _animation_size(game, payload, context)
     record = _animation_record(payload)
@@ -1318,6 +1328,7 @@ def animate_matching_until_eot(game: Game, instruction: OracleInstruction, conte
         if not subject_matches(
             game, permanent, described,
             observer=observer, source=context.source_permanent,
+            targeted_player=targeted_seat,
         ):
             continue
         set_base_pt(permanent, power, toughness, until_eot=True)

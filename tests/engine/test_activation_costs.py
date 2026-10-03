@@ -67,6 +67,8 @@ def _compare_sacrifice(
     wanted_count = (
         cost.count.value if isinstance(cost.count, ast.Fixed)
         else "any" if isinstance(cost.count, ast.AnyNumber)
+        # "Sacrifice **X** lands" (Copper-Leaf Angel): the announced count.
+        else "x" if isinstance(cost.count, ast.Var)
         else None
     )
     if charged_count != wanted_count:
@@ -192,6 +194,16 @@ def test_every_admitted_cost_clause_is_charged(pool):
                         continue
                     if not charged.discard_cards:
                         unpaid.append(f"{card.name}: {ability.source_line}")
+                    # "Discard **two** cards" (the Prophecy spellshapers): how
+                    # many, not only whether — one card charged for a two-card
+                    # cost is the ability at half price.
+                    elif isinstance(cost.count, ast.Fixed) and (
+                        charged.discard_cards != cost.count.value
+                    ):
+                        unpaid.append(
+                            f"{card.name}: charged {charged.discard_cards} "
+                            f"discard(s) for {cost.count.value}"
+                        )
                     # Not "is a discard charged" but "is *this* discard charged",
                     # the same tightening the sacrifice branch above makes and
                     # for the same reason: "a land card or Shrine card" collected

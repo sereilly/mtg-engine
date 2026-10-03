@@ -897,6 +897,11 @@ class AbilityActivationMixin:
             target_permanent_ids=target_permanent_ids,
             target_role_refs=target_role_refs,
             target_stack_item=target_stack_item,
+            # CR 601.2c sizes "X target …" from the X announced at CR 601.2b.
+            # An activation that announced none announced zero — this
+            # function's stated default for a headless or AI seat (see the
+            # "Remove X counters" branch below) — so it may name no target.
+            x_value=int(x_value or 0),
         )
         if target_refusal is not None:
             self.log.append(target_refusal)
@@ -1481,13 +1486,28 @@ class AbilityActivationMixin:
                 self.log.append(details)
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
             if not ability.cost.discard_at_random:
-                named = hand[cost_hand_index] if isinstance(cost_hand_index, int) else payable[0]
-                discard_cost_cards = [named]
-                for card in payable:
-                    if len(discard_cost_cards) >= ability.cost.discard_cards:
-                        break
-                    if card is not named:
-                        discard_cost_cards.append(card)
+                # Collected by **hand position**, never by identity: a deck
+                # repeats one immutable definition per copy, so two Grizzly
+                # Bears in a hand are the same object and an `is not named`
+                # test skipped the second — "Discard two cards" (the Prophecy
+                # spellshapers) out of a hand of two Bears collected one card
+                # and was activated for half its price. The named position
+                # first, then the payable positions in hand order.
+                first = (
+                    cost_hand_index if isinstance(cost_hand_index, int)
+                    else next(
+                        i for i, held in enumerate(hand)
+                        if card_matches_any(held, ability.cost.discard_filters)
+                    )
+                )
+                positions = [first] + [
+                    i for i, held in enumerate(hand)
+                    if i != first
+                    and card_matches_any(held, ability.cost.discard_filters)
+                ]
+                discard_cost_cards = [
+                    hand[i] for i in positions[:ability.cost.discard_cards]
+                ]
 
         # "Exile the top card of your library" (Royal Herbalist), "…the top four
         # cards…" (Seasoned Tactician). CR 118.3: a player cannot pay a cost
@@ -1582,6 +1602,46 @@ class AbilityActivationMixin:
         sacrifice_cost_permanent = None
         sacrifice_cost_set: list = []
         if (
+            ability.cost.sacrifice_count == "x"
+            and ability.cost.sacrifice_filter is not None
+        ):
+            # "{T}, Sacrifice **X** lands: Put X +1/+1 counters on this
+            # creature." (Copper-Leaf Angel.) CR 107.3a's announced X sizes the
+            # payment, so — as for "Remove X counters" above — an X the board
+            # cannot cover is an announcement that cannot be paid (CR 601.2h)
+            # and is refused with nothing spent, never clamped to what is
+            # there. A seat that announced nothing announced zero, which is
+            # payable and sacrifices nothing. The payer's named permanents
+            # first, then the board in order, deduplicated by identity.
+            described = ability.cost.sacrifice_filter
+            wanted = max(0, int(x_value or 0))
+            candidates = [
+                perm for perm in self.controlled_by(controller_index)
+                if subject_matches(
+                    self, perm, described,
+                    observer=controller_index, source=permanent,
+                )
+            ]
+            if len(candidates) < wanted:
+                details = (
+                    f"{permanent.card.name}: {len(candidates)} "
+                    f"{filter_head_noun(described)}(s) to sacrifice, fewer than "
+                    f"the {wanted} announced for X"
+                )
+                self.log.append(details)
+                return SimulationResult(permanent.card.name, False, "unsupported", details)
+            named = [
+                found for found in (
+                    self.permanent_by_id(pid) for pid in (cost_permanent_ids or [])
+                )
+                if found is not None and any(c is found for c in candidates)
+            ]
+            for perm in [*named, *candidates]:
+                if len(sacrifice_cost_set) >= wanted:
+                    break
+                if not any(perm is already for already in sacrifice_cost_set):
+                    sacrifice_cost_set.append(perm)
+        elif (
             ability.cost.sacrifice_count == "any"
             and ability.cost.sacrifice_filter is not None
         ):
@@ -2146,8 +2206,12 @@ class AbilityActivationMixin:
         # printed, before any of the increases and reductions below touch the
         # generic part. Refused with nothing paid when it cannot be met, which
         # is CR 602.2b routing through CR 601.2h.
+        # "Activated abilities of nontoken Rebels cost an additional
+        # "Sacrifice a land"" (Brutal Suppression) asks what the *source* is,
+        # so it is handed over.
         sacrifice_demands = sacrifice_taxes(
-            self, controller_index, ability.cost.mana, "activate"
+            self, controller_index, ability.cost.mana, "activate",
+            source=permanent,
         )
         sacrifice_tax_victims = self._sacrifice_tax_victims(
             controller_index, sacrifice_demands

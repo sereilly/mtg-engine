@@ -114,6 +114,28 @@ def _at_keyword_item(stream: TokenStream) -> bool:
     return match_longest(stream.words_from(), 0, KEYWORD_INDEX) is not None
 
 
+def _protection_quality_name(stream: TokenStream) -> str | None:
+    """The protection keyword a quality after "from" names, or None, unmoved.
+
+    A colour word, a card-type word, or one of the two printed *choices* — read
+    before the bare word, which would otherwise consume "the" and grant
+    protection from a colour called "the".
+    """
+    if stream.accept_phrase(
+        "the", "color", "of", "its", "controller", "'s", "choice"
+    ):
+        return PROTECTION_FROM_TARGETS_CONTROLLERS_CHOSEN_COLOR
+    if stream.accept_phrase("the", "color", "of", "your", "choice") or (
+        stream.accept_phrase("the", "chosen", "color")
+    ):
+        return PROTECTION_FROM_CHOSEN_COLOR
+    colour = stream.peek_word()
+    if colour is None:
+        return None
+    stream.advance()
+    return f"protection from {colour}"
+
+
 def _parse_keywords(stream: TokenStream) -> tuple[str, ...]:
     """The keyword list alone, for the readers that do not care how it was
     joined — a condition asking whether a creature *has* one, a delayed grant's
@@ -196,19 +218,21 @@ def parse_keyword_list(stream: TokenStream) -> tuple[tuple[str, ...], bool]:
             # three open on "the color of", and the lexer splits the possessive
             # into two words ("controller" + "'s"), so the phrase is seven
             # tokens rather than six.
-            if stream.accept_phrase(
-                "the", "color", "of", "its", "controller", "'s", "choice"
-            ):
-                name = PROTECTION_FROM_TARGETS_CONTROLLERS_CHOSEN_COLOR
-            elif stream.accept_phrase("the", "color", "of", "your", "choice") or (
-                stream.accept_phrase("the", "chosen", "color")
-            ):
-                name = PROTECTION_FROM_CHOSEN_COLOR
-            else:
-                colour = stream.peek_word()
-                if colour is not None:
-                    stream.advance()
-                    name = f"protection from {colour}"
+            name = _protection_quality_name(stream) or name
+            # "…protection from artifacts **or from** the color of your choice"
+            # (Jeweled Spirit). The list's own "or" with the keyword word left
+            # unprinted: two protection abilities, one of which is chosen as the
+            # effect resolves (CR 608.2d) — Nature's Blessing's disjunction, so
+            # it travels as that list and that flag.
+            either = stream.mark()
+            if stream.accept_phrase("or", "from"):
+                other = _protection_quality_name(stream)
+                if other is not None:
+                    keywords.append(name)
+                    name = other
+                    disjunctive = True
+                else:
+                    stream.reset(either)
         # "rampage 2" — CR 702.23a's "Rampage N". The number is the whole of
         # this keyword's argument, exactly as a colour word is protection's, so
         # it is read here and carried on the keyword string; which keywords take

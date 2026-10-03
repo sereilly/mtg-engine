@@ -27,6 +27,7 @@ from __future__ import annotations
 from . import ast
 from .lexer import PT
 from .stream import TokenStream
+from .vocabulary import singular as _singular
 
 
 #: The four **payment channels** a printed genitive may name, keyed by the
@@ -117,6 +118,20 @@ def accept_cost_characteristic_of(stream: "TokenStream"):
     stream.accept_word("the")
     node_cls = _COST_CHANNEL_NODES.get(stream.peek_word() or "")
     if node_cls is None:
+        # "…the power of **the creature tapped this way**" (Keldon
+        # Battlewagon): the participle behind its noun, which English allows
+        # only with "this way" after it — so those words are required, and the
+        # noun must be singular, because one payment took one object. "The
+        # total power of the creature**s** sacrificed this way" (an effect's
+        # record, not a cost's) is the plural and stays with its own reader.
+        noun = stream.peek_word()
+        if noun is not None and _singular(noun) == noun:
+            stream.advance()
+            node_cls = _COST_CHANNEL_NODES.get(stream.peek_word() or "")
+            if node_cls is not None:
+                stream.advance()
+                if stream.accept_phrase("this", "way"):
+                    return node_cls(characteristic)
         stream.reset(mark)
         return None
     stream.advance()
