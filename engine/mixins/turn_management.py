@@ -466,10 +466,15 @@ class TurnManagementMixin:
         ability, and a Mishra's Workshop still made {C}{C}{C}.
         """
         from ..land_types import lost_abilities_to_type_change
-        from ..mana_payment import is_mana_ability
+        from ..mana_payment import is_mana_ability, land_text_is_run
 
         if lost_abilities_to_type_change(land):
             return None, False
+        if not land_text_is_run(land):
+            # Rhystic Cave: no line of its text compiles, so the summary below
+            # would be its whole reading — a free WUBRG land nobody may deny.
+            # Reported as priced, which is the answer the tap seam refuses.
+            return None, True
         priced = False
         for ability in compile_card_oracle(land.effective_card).activated_abilities:
             instruction = ability.instruction
