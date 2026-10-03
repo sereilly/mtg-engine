@@ -42,7 +42,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | UDS | 143 | 204 | 91.7% | 91.2% | 65.7% | 121 |
 | MMQ | 335 | 465 | 91.8% | 91.6% | 66.2% | 278 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| NEM *(measured)* | 143 | 219 | 72.6% | 68.5% | 53.0% | 104 |
+| NEM *(measured)* | 143 | 219 | 74.0% | 70.3% | 54.8% | 108 |
 | **All (shipped)** | **6164** | **9025** | **90.8%** | **90.2%** | **61.1%** | **4680** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -55,8 +55,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 474 | 212 | expected a subject |  |
-| 144 | 75 | unrecognized effect verb |  |
+| 473 | 211 | expected a subject |  |
+| 142 | 73 | unrecognized effect verb |  |
 | 123 | 58 | unconsumed text |  |
 | 44 | 27 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
@@ -79,7 +79,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 2 | 1 | expected 'the number of' in a where-clause |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
 | 2 | 1 | expected 'top' |  |
-| 2 | 2 | no handler prevents all damage of every kind |  |
+| 2 | 2 | negative variable pump is not supported |  |
 
 ## Cards executing through the grammar
 
@@ -4942,6 +4942,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Mind Stone**
   - `{T}: Add {C}.`
   - `{1}, {T}, Sacrifice this artifact: Draw a card.`
+- **Mind Swords**
+  - `Each player exiles two cards from their hand.`
 - **Mind Twist**
   - `Target player discards X cards at random.`
   - `Target player discards X cards at random.`
@@ -5388,6 +5390,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Draw a card.`
 - **Oracle en-Vec**
   - `{T}: Target opponent chooses any number of creatures they control. During that player's next turn, the chosen creatures attack if able, and other creatures can't attack. At the beginning of that turn's end step, destroy each of the chosen creatures that didn't attack this turn. Activate only during your turn.`
+- **Oracle's Attendants**
+  - `{T}: All damage that would be dealt to target creature this turn by a source of your choice is dealt to this creature instead.`
 - **Orc General**
   - `{T}, Sacrifice another Orc or Goblin: Other Orc creatures get +1/+1 until end of turn.`
 - **Orcish Artillery**
@@ -7125,6 +7129,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Sisters of the Flame**
   - `{T}: Add {R}.`
   - `{T}: Add {R}.`
+- **Sivvi's Ruse**
+  - `Prevent all damage that would be dealt this turn to creatures you control.`
+- **Sivvi's Valor**
+  - `All damage that would be dealt to target creature this turn is dealt to you instead.`
 - **Sizzle**
   - `Sizzle deals 3 damage to each opponent.`
 - **Skeleton Archer**
