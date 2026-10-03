@@ -430,3 +430,29 @@ def test_royal_assassin_still_kills_the_creature_it_named():
 
 
 # --- end LeadB ---
+
+
+# --- W3G3: copies enter ---
+
+
+def test_w3g3_clone_copies_the_creature_it_chose_after_a_renumbering():
+    """Clone's copy choice is announced at cast and spent at resolution, and it
+    was spent by slot: a Grizzly Bears dying in response slid the Hill Giant
+    into the Craw Wurm's slot, and the Clone came out a Hill Giant. The stack
+    had stamped the Wurm's id beside the slot all along; the copy reads it."""
+    game = _game(PlayerState(name="A"), PlayerState(name="B"))
+    doomed = _put(game, 1, "Grizzly Bears")
+    intended = _put(game, 1, "Craw Wurm")
+    bystander = _put(game, 1, "Hill Giant")
+    game.players[0].hand.append(CARDS["Clone"])
+    game.queue_from_hand(0, "Clone", target_player_index=1, target_permanent_index=1)
+
+    _kill(game, doomed)
+    assert game.battlefield_index_of(bystander) == 1
+    game.resolve_stack()
+
+    clone = next(p for p in game.controlled_by(0) if p.card.name == "Clone")
+    assert clone.effective_card.name == "Craw Wurm", (
+        f"the Clone copied {clone.effective_card.name} — the creature that slid "
+        "into the chosen slot, not the one chosen"
+    )

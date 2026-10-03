@@ -333,7 +333,22 @@ class PermanentStateMixin:
         caster_index: int,
         target_player_index: int | None,
     ) -> None:
-        if permanent.card.primary_type in ("creature", "land", "artifact"):
+        # **The copy first** (CR 614.12, CR 707.5). Every entry replacement below
+        # — enters tapped, enters with counters, "as this enters, choose" — is
+        # asked of the permanent "as it would exist on the battlefield, taking
+        # into account replacement effects that have already modified how it
+        # enters", and a copy-as-enter choice is exactly such a replacement:
+        # its result decides which of the others apply at all. So it is made
+        # before any of them, and everything after reads ``effective_card``.
+        #
+        # Reading the printed card instead, a Clone copying Spike Feeder entered
+        # as a 0/0 with no counters and died, and a token copy (whose own card
+        # carries nothing but a name, ``create_token_copy``) of Leviathan
+        # entered untapped and — with no type to stamp below — was never
+        # summoning sick at all: every Dance of Many, Dual Nature and Sublime
+        # Epiphany token could attack the turn it was made.
+        self._enter_as_a_copy(permanent)
+        if permanent.effective_card.primary_type in ("creature", "land", "artifact"):
             # Lands are stamped too: if a land later becomes a creature (Kormus Bell,
             # Living Lands) it must respect summoning sickness based on when it came
             # under control (CR 302.6). The marker is ignored for non-creature lands.
@@ -346,7 +361,7 @@ class PermanentStateMixin:
         # entered this turn" asks. Written once here and never again; anything
         # that leaves and returns is a new object with a new stamp (CR 400.7).
         permanent.metadata[ENTERED_BATTLEFIELD_TURN] = self.turn
-        program = compile_card_oracle(permanent.card)
+        program = compile_card_oracle(permanent.effective_card)
         text = program.normalized_text
 
         # CR 306.5b: a planeswalker enters with loyalty counters equal to its
@@ -634,7 +649,7 @@ class PermanentStateMixin:
             (
                 found
                 for line in expand_card_lines(permanent.effective_card)
-                for found in (choose_one_of_two_on_enter(line, permanent.card.name),)
+                for found in (choose_one_of_two_on_enter(line, permanent.effective_card.name),)
                 if found is not None
             ),
             None,
@@ -1083,44 +1098,9 @@ class PermanentStateMixin:
                 permanent.toughness_bonus += amount
                 permanent.metadata["plus_0_1_counters"] = amount
 
-        # copy-as-enter creature
-        if any(COPY_CREATURE_ON_ENTER == line for line in program.static_lines) or COPY_CREATURE_ON_ENTER in text:
-            source = self._resolve_copy_target(permanent, "creature")
-            if source is None:
-                source = next(
-                    (
-                        perm
-                        for perm in self.all_permanents()
-                        if perm is not permanent and perm.card.primary_type == "creature"
-                    ),
-                    None,
-                )
-            if source is not None:
-                self._apply_copy(permanent, source)
-
-        # copy-as-enter enchantment
-        if COPY_ARTIFACT_ON_ENTER in text:
-            # Honor the artifact the player chose when casting (Copy Artifact);
-            # fall back to the first artifact for AI/untargeted casts.
-            source = self._resolve_copy_target(permanent, "artifact")
-            if source is None:
-                source = next(
-                    (
-                        perm
-                        for perm in self.all_permanents()
-                        if perm is not permanent and perm.card.primary_type == "artifact"
-                    ),
-                    None,
-                )
-            if source is not None:
-                # CR 707.2 with CR 707.9b's exception ("it's an enchantment in
-                # addition to its other types"), recorded as a layer-1
-                # contribution. ``permanent.card`` stays Copy Artifact, so the
-                # copy evaporates when the permanent changes zones; what it
-                # copies is the artifact's *copiable* values, which is why this
-                # no longer reads ``source.effective_card`` — a text change on
-                # the artifact is not copied (CR 707.2's last sentence).
-                self._apply_copy(permanent, source)
+        # The copy-as-enter choice (Clone, Copy Artifact) used to be made here,
+        # *after* every other entry replacement above had read the printed
+        # card. It is `_enter_as_a_copy` now, called first — see there.
 
         # "You have no maximum hand size." used to be stamped here too, onto
         # `PlayerState.has_no_max_hand_size`, and nothing ever cleared it — so a
@@ -1145,6 +1125,63 @@ class PermanentStateMixin:
             life_loss = controller.life
             controller.life -= life_loss
             self.log.append(f"{permanent.card.name}: {controller.name} lost {life_loss} life on entry")
+
+    def _enter_as_a_copy(self, permanent: Permanent) -> None:
+        """"You may have this <type> enter as a copy of any <type> on the
+        battlefield" (Clone, Vesuvan Doppelganger, Copy Artifact) — CR 707.5's
+        "as a copy", a CR 614.1c replacement, performed as the first part of
+        :meth:`_perform_entry_state` (CR 614.12).
+
+        Read off ``effective_card``, so a token copy of a Clone that copies
+        nothing offers the same choice the Clone would (CR 707.5: the token *is*
+        that Clone as it enters).
+
+        The chosen permanent is asked through the layer accessors
+        (``has_type``) rather than its printed primary type, which answers
+        "creature" for an artifact creature: Copy Artifact aimed at an
+        Ornithopter refused the choice and then found no "artifact" to fall
+        back to, and entered as a plain blue enchantment.
+        """
+        program = compile_card_oracle(permanent.effective_card)
+        text = program.normalized_text
+        # copy-as-enter creature
+        if any(COPY_CREATURE_ON_ENTER == line for line in program.static_lines) or COPY_CREATURE_ON_ENTER in text:
+            source = self._resolve_copy_target(permanent, "creature")
+            if source is None:
+                source = next(
+                    (
+                        perm
+                        for perm in self.all_permanents()
+                        if perm is not permanent and perm.has_type("creature")
+                    ),
+                    None,
+                )
+            if source is not None:
+                self._apply_copy(permanent, source)
+
+        # copy-as-enter enchantment
+        if COPY_ARTIFACT_ON_ENTER in text:
+            # Honor the artifact the player chose when casting (Copy Artifact);
+            # fall back to the first artifact for AI/untargeted casts.
+            source = self._resolve_copy_target(permanent, "artifact")
+            if source is None:
+                source = next(
+                    (
+                        perm
+                        for perm in self.all_permanents()
+                        if perm is not permanent and perm.has_type("artifact")
+                    ),
+                    None,
+                )
+            if source is not None:
+                # CR 707.2 with CR 707.9b's exception ("it's an enchantment in
+                # addition to its other types"), recorded as a layer-1
+                # contribution. ``permanent.card`` stays Copy Artifact, so the
+                # copy evaporates when the permanent changes zones; what it
+                # copies is the artifact's *copiable* values, which is why this
+                # no longer reads ``source.effective_card`` — a text change on
+                # the artifact is not copied (CR 707.2's last sentence).
+                self._apply_copy(permanent, source)
 
     def _apply_copy(
         self,
@@ -1233,23 +1270,37 @@ class PermanentStateMixin:
     def _resolve_copy_target(self, permanent: Permanent, primary_type: str) -> Permanent | None:
         """Return the player-chosen permanent for a "copy as it enters" effect.
 
-        The chosen target is recorded as ``copy_target = (player_index, perm_index)``
-        when the spell is cast. Returns None if no legal choice was recorded so the
-        caller can fall back to an arbitrary legal permanent.
+        The chosen target is recorded as ``copy_target = (player_index,
+        perm_index, permanent_id)`` when the spell is cast. Returns None if no
+        legal choice was recorded so the caller can fall back to an arbitrary
+        legal permanent.
+
+        **By id when there is one.** The choice is made at cast and spent at
+        resolution, and anything leaving the battlefield in between renumbers
+        every later slot — so the index alone made a Clone aimed at a Craw Wurm
+        copy whatever creature slid into the Wurm's slot after a Grizzly Bears
+        died in response. The id is CR 400.7's identity; a chosen creature that
+        has left resolves to nothing rather than to its neighbour. A two-entry
+        record (no id announced) keeps the index it always had.
         """
         copy_target = permanent.metadata.pop("copy_target", None)
         if copy_target is None:
             return None
-        player_index, perm_index = copy_target
-        if not isinstance(player_index, int) or not isinstance(perm_index, int):
-            return None
-        if not (0 <= player_index < len(self.players)):
-            return None
-        battlefield = self.players[player_index].battlefield
-        if not (0 <= perm_index < len(battlefield)):
-            return None
-        candidate = battlefield[perm_index]
-        if candidate is permanent or candidate.card.primary_type != primary_type:
+        player_index, perm_index = copy_target[0], copy_target[1]
+        chosen_id = copy_target[2] if len(copy_target) > 2 else None
+        if isinstance(chosen_id, int):
+            candidate = self.permanent_by_id(chosen_id)
+            if candidate is None:
+                return None
+        else:
+            if not isinstance(player_index, int) or not isinstance(perm_index, int):
+                return None
+            if not (0 <= player_index < len(self.players)):
+                return None
+            candidate = self.permanent_at(player_index, perm_index)
+            if candidate is None:
+                return None
+        if candidate is permanent or not candidate.has_type(primary_type):
             return None
         return candidate
 

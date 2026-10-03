@@ -3518,7 +3518,12 @@ class GameHelpersMixin:
         # no equivalent of. ``was_cast`` is what keeps the two from both firing,
         # and it is the same flag CR 701.5a needed for Containment Priest — one
         # fact about an entry, asked by two rules.
+        #
+        # ``targets_announced=False`` is that "no equivalent" said out loud: a
+        # trigger with a target to choose goes on the stack and chooses it there
+        # (CR 603.3d) instead of resolving against the fallback scan.
         if not was_cast:
             self._apply_self_enters_battlefield_triggers(
                 controller_index, permanent, target_player_index, None, None,
+                targets_announced=False,
             )

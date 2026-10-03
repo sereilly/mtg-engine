@@ -7566,15 +7566,18 @@ class PendingChoicesMixin:
         Two policies, and the split is the difference between a choice and a
         consequence.
 
-        For an **object** it is the first candidate: the stated policy every
-        other picker in this engine takes when nothing distinguishes them, and
-        stated rather than valued — ``_default_trigger_mode_target`` next door
-        is the one that reads an effect family, and it can do so because a mode
-        carries its own instruction. (So does a trigger:
-        ``item.ability_instruction`` is right there, and that docstring's stated
-        reason is wrong. Valuing this one is play quality rather than
-        correctness, and it moves every seeded AI regression, so it stays a
-        separate decision.)
+        For an **object** it is the first candidate *on the side the effect
+        wants* (:meth:`_default_trigger_target_side`), and the first candidate
+        when the effect does not say — the reading
+        ``_default_trigger_mode_target`` next door has always taken for a mode,
+        applied to the trigger's own ``item.ability_instruction``. It used to be
+        the first candidate outright, on the stated ground that valuing it would
+        move every seeded AI regression; when entry triggers with nothing
+        announced began choosing here (PCY W3G3: a copy's, a reanimation's), it
+        was measured instead and no test in the suite moved — while the
+        unvalued answer had a seat-0 Clone of Nekrataal destroying its
+        controller's own creature whenever that creature came first in seat
+        order.
 
         For a **player** it is not a policy at all. Before the announcement
         existed the resolution read ``_default_opposing_seat`` — the first
@@ -7626,10 +7629,40 @@ class PendingChoicesMixin:
                     return self._resolve_trigger_target(
                         choice, permanent_id=target["permanent_id"]
                     )
+            wanted = self._default_trigger_target_side(item, choice.player_index)
+            for target in targets:
+                if target.get("kind") == "permanent" and target.get("seat") in wanted:
+                    return self._resolve_trigger_target(
+                        choice, permanent_id=target["permanent_id"]
+                    )
         first = targets[0]
         if first.get("kind") == "player":
             return self._resolve_trigger_target(choice, seat=first["seat"])
         return self._resolve_trigger_target(choice, permanent_id=first["permanent_id"])
+
+    def _default_trigger_target_side(self, item, chooser: int) -> set:
+        """The seats whose permanent a non-interactive *chooser* aims *item*
+        at, or the empty set when the effect does not say.
+
+        ``ai_valuation.ability_target_side`` reads the ability step by step with
+        its wrappers opened ("you may return target land" is still a bounce),
+        and ``activation_target_side`` answers from the top-level kind's family
+        where no step carries a ``targets`` description (Man-o'-War's bounce) —
+        the readings ``_default_trigger_mode_target`` (the second) and the
+        foreign-activation chooser (the first) already take, so a trigger is
+        aimed the way a mode and an activated ability of the same effect are.
+        """
+        from ...ai_valuation import ability_target_side, activation_target_side
+
+        instruction = getattr(item, "ability_instruction", None)
+        if instruction is None:
+            return set()
+        side = ability_target_side(instruction) or activation_target_side(instruction)
+        if side == "opponent":
+            return set(self.opponents_of(chooser))
+        if side == "you":
+            return {chooser}
+        return set()
 
     def _select_trigger_mode_target(self, option: dict, target: dict) -> dict | None:
         """The offered candidate *target* names, or None if it names none.

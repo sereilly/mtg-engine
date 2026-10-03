@@ -941,3 +941,89 @@ def test_w2g2_tranquility_takes_dual_nature_and_every_copy_it_made(set_pool):
     assert [c.name for c in game.players[0].graveyard].count("Dual Nature") == 1
     assert not [p for p in game.all_permanents() if p.metadata.get("is_token")]
     assert game.is_on_battlefield(wolf) and game.is_on_battlefield(bear)
+
+
+# --- W3G3: copies enter ---
+from engine import Game as _W3G3Game, PlayerState as _W3G3PlayerState
+from engine.models import Permanent as _W3G3Permanent
+from tests.helpers import resolve_stack as _w3g3_resolve
+
+
+def _w3g3_dual_nature_table(set_pool, *, hand1=(), board0=(), board1=()):
+    """Dual Nature on seat 0, seat 1 active in its main phase with *hand1*;
+    *board0* / *board1* are placed on the battlefields, not entered."""
+    island = set_pool("LEA")["Island"]
+    w3g3_game = _W3G3Game(players=[
+        _W3G3PlayerState(
+            name="P0", library=[island] * 5,
+            battlefield=[_W3G3Permanent(card=card) for card in board0],
+        ),
+        _W3G3PlayerState(
+            name="P1", hand=list(hand1), library=[island] * 5,
+            battlefield=[_W3G3Permanent(card=card) for card in board1],
+        ),
+    ])
+    w3g3_game.enforce_mana_costs = False
+    w3g3_game.start_turn(0)
+    w3g3_game._close_current_priority_step()
+    w3g3_game._put_permanent_onto_battlefield(
+        0, _W3G3Permanent(card=set_pool("PCY")["Dual Nature"]), None,
+    )
+    _w3g3_resolve(w3g3_game)
+    w3g3_game.start_turn(1)
+    w3g3_game._close_current_priority_step()
+    return w3g3_game  # W3G3: Dual Nature in play, seat 1 to act
+
+
+def test_w3g3_dual_natures_copy_fires_the_copied_entry_trigger_for_its_controller(set_pool):
+    """CR 707.5: "any enters-the-battlefield triggered abilities of the copy
+    will have a chance to trigger." P1 casts Wall of Blossoms ("When this
+    creature enters, draw a card"); Dual Nature makes P1 a token copy, and the
+    token's own trigger draws P1 a second card — the token's controller's, not
+    Dual Nature's. The token is summoning sick (CR 302.6) like any creature
+    that has just arrived."""
+    game = _w3g3_dual_nature_table(
+        set_pool, hand1=[set_pool("STH")["Wall of Blossoms"]],
+    )
+    libraries = [len(p.library) for p in game.players]
+
+    result = game.cast_from_hand(1, "Wall of Blossoms")
+    assert result.supported, result.details
+    _w3g3_resolve(game)
+
+    (token,) = [p for p in game.controlled_by(1) if p.metadata.get("is_token")]
+    assert token.effective_card.name == "Wall of Blossoms"
+    assert [len(p.library) for p in game.players] == [libraries[0], libraries[1] - 2]
+    assert game.log.count("Wall of Blossoms drew 1 card") == 2
+    assert game._is_summoning_sick(token)
+
+
+def test_w3g3_dual_natures_copy_of_nekrataal_chooses_its_own_victim(set_pool):
+    """The cast Nekrataal kills the creature its caster named; its Dual Nature
+    copy's trigger was announced by nobody, so it chooses as it goes on the
+    stack (CR 603.3d). P1 is not asked, and the stated default aims a destroy
+    at an opponent's creature: the second of P0's creatures dies too, and
+    neither trigger touches P1's own green Wall."""
+    game = _w3g3_dual_nature_table(
+        set_pool,
+        hand1=[set_pool("VIS")["Nekrataal"]],
+        board0=[set_pool("LEA")["Savannah Lions"], set_pool("LEA")["Grizzly Bears"]],
+        board1=[set_pool("STH")["Wall of Blossoms"]],
+    )
+    wall = next(p for p in game.controlled_by(1) if p.card.name == "Wall of Blossoms")
+    lions, bears = (
+        next(p for p in game.controlled_by(0) if p.card.name == name)
+        for name in ("Savannah Lions", "Grizzly Bears")
+    )
+
+    result = game.cast_from_hand(
+        1, "Nekrataal", target_player_index=0,
+        target_permanent_index=game.battlefield_index_of(lions),
+    )
+    assert result.supported, result.details
+    _w3g3_resolve(game)
+
+    assert len([p for p in game.controlled_by(1) if p.card.name == "Nekrataal"]) == 2
+    assert not game.is_on_battlefield(lions)
+    assert not game.is_on_battlefield(bears)
+    assert game.is_on_battlefield(wall)
