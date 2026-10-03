@@ -28,13 +28,43 @@ the guard too.
 
 from __future__ import annotations
 
-from ..oracle_types import EXILED_THIS_WAY, REVEALED_THIS_WAY
+from ..oracle_types import EXILED_THIS_WAY, MILLED_THIS_WAY, REVEALED_THIS_WAY
 from .errors import GrammarError
 from . import ast
 from .lexer import MANA, NUMBER, SELF, WORD
 from .readers import accept_source_reference
 from .stream import TokenStream
 from .vocabulary import CARD_TYPES, NUMBER_WORDS
+
+
+#: "the **milled** card's mana value" — the participle a card prints for a card
+#: an earlier step of the same effect moved, and the scratchpad key that step
+#: records the cards under. A row per participle, as ``_THIS_WAY_COUNTS`` is.
+_RECORDED_CARD_PARTICIPLES: dict[str, str] = {"milled": MILLED_THIS_WAY}
+
+
+def accept_recorded_card_mana_value(
+    stream: TokenStream,
+) -> "ast.RecordedCardManaValue | None":
+    """``<participle> card's mana value`` — or None, cursor unmoved.
+
+    "…where X is the milled card's mana value." (Infernal Genesis.) The
+    instruction-record twin of ``cost_records.accept_cost_channel_possessive``:
+    the leading "the" is the caller's, and the lowering checks a step of the
+    same effect writes the record.
+    """
+    mark = stream.mark()
+    key = _RECORDED_CARD_PARTICIPLES.get(stream.peek_word() or "")
+    if key is not None:
+        stream.advance()
+        if (
+            stream.accept_word("card")
+            and stream.accept_word("'s")
+            and stream.accept_phrase("mana", "value")
+        ):
+            return ast.RecordedCardManaValue(key)
+    stream.reset(mark)
+    return None
 
 
 def accept_damage_dealt_this_turn(

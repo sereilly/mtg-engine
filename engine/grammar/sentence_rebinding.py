@@ -42,6 +42,7 @@ from __future__ import annotations
 import dataclasses
 from dataclasses import replace
 
+from ..oracle_types import LAST_TARGET_CONTROLLER
 from . import ast
 # The one name this module takes from the half below it: the walk both
 # rewrite through. Measured rather than assumed — the two readers that
@@ -540,6 +541,41 @@ def rebind_alternative_pronoun_to_choice_target(node: "ast.OneOf") -> "ast.OneOf
     if all(a is b for a, b in zip(options, node.options)):
         return node
     return replace(node, options=tuple(options))
+
+
+def rebind_token_maker_to_previous_player(node: "ast.Statement") -> "ast.Statement":
+    """"…, **that player** mills a card. Then **they** create X 1/1 black
+    Minion creature tokens, …" (Infernal Genesis.)
+
+    "They create" is read as the controller an earlier step *recorded*
+    (Basalt Golem), which no step here records. When the sentence directly in
+    front named "that player" as its subject, the pronoun is that player —
+    nothing else is in between — so the token maker takes the same
+    ``recipient_players`` spelling "that player creates …" has. Only the
+    adjacent pair: a "they" further on could name somebody else.
+    """
+    if not isinstance(node, ast.Sequence):
+        return node
+    steps = list(node.steps)
+    changed = False
+    for index in range(1, len(steps)):
+        step, previous = steps[index], steps[index - 1]
+        player = getattr(previous, "player", None)
+        # "…create X … tokens, where X is …" wraps the token maker.
+        token = step.statement if isinstance(step, ast.WhereX) else step
+        if (
+            isinstance(token, ast.CreateToken)
+            and token.recipient == LAST_TARGET_CONTROLLER
+            and isinstance(player, ast.PlayerRef)
+            and player.kind == "that_player"
+        ):
+            token = replace(token, recipient=None, recipient_players="that_player")
+            steps[index] = (
+                replace(step, statement=token)
+                if isinstance(step, ast.WhereX) else token
+            )
+            changed = True
+    return replace(node, steps=tuple(steps)) if changed else node
 
 
 #: The bare noun an ordinal back-reference may restate. "The first **creature**"

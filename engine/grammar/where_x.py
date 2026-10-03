@@ -17,7 +17,8 @@ from ..oracle_types import DREW_COUNT, REVEALED_THIS_WAY
 from .amounts import accept_counters_on_source
 from .cost_records import (accept_cost_channel_possessive,
                            accept_cost_characteristic_of)
-from .records import accept_added_base, accept_damage_dealt_this_turn
+from .records import (accept_added_base, accept_damage_dealt_this_turn,
+                      accept_recorded_card_mana_value)
 
 from .errors import GrammarError
 from .lexer import NUMBER
@@ -391,6 +392,11 @@ def parse_where_x_definition_body(stream: TokenStream) -> "ast.Amount":
     possessive = accept_cost_channel_possessive(stream)
     if possessive is not None:
         return possessive
+    # "…where X is **the milled card's mana value**" (Infernal Genesis): the
+    # same possessive over what an earlier *instruction* recorded.
+    recorded = accept_recorded_card_mana_value(stream)
+    if recorded is not None:
+        return recorded
     # Three aggregates over one noun phrase, and the words are what tell them
     # apart: "the number of" counts the objects, "the greatest power among"
     # takes a maximum over them (Carrion Grub).

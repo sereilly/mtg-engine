@@ -4346,6 +4346,16 @@ def exile_cards_from_graveyard(game: Game, instruction: OracleInstruction, conte
     #
     # A count of zero is a legal outcome, not a reason to guess: X may be 0, and
     # CR 608.2b says an announcement naming nothing exiles nothing.
+    #
+    # "…you may exile **a land card from your graveyard**" (Forgotten Harvest)
+    # prints no "target", so nothing was announced: the lowering emits no
+    # ``targets`` description and the controller picks as it resolves, through
+    # the same prompt the other two piles use.
+    if owner == "you" and not instruction.payload.get("targets"):
+        game.arm_graveyard_exile_pick(
+            caster_index, caster_index, dict(instruction.payload), context
+        )
+        return True, "resolved"
     if owner == "you":
         count = instruction.payload.get("count")
         wanted = int(context.x_value or 0) if count == "x" else int(count or 1)

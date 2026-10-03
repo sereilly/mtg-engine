@@ -649,6 +649,36 @@ def _lower_exile(
                 "count": "x" if subject.count_from_x else int(subject.count),
             }
         return (OracleInstruction("exile_cards_from_graveyard", "", pile),)
+    # "…you may exile **a land card from your graveyard**. If you do, …"
+    # (Forgotten Harvest.) The same pile with no "target": the card is picked
+    # as the effect resolves, so the payload carries no ``targets`` description
+    # and the handler prompts rather than reading announced slots.
+    if (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier in ("a", "an")
+        and not subject.targeted
+        and subject.count == 1
+        and subject.filter.zone == "graveyard"
+        and subject.filter.is_card
+        and subject.filter.zone_owner is not None
+        and subject.filter.zone_owner.kind == "you"
+    ):
+        filt = subject.filter
+        leftover = _restrictions_beyond(
+            filt, frozenset({"card_types", "zone", "zone_owner", "is_card"})
+        )
+        if leftover or len(filt.card_types) > 1 or node.counters:
+            raise LoweringError(
+                "the chosen graveyard exile reads one card type", node=node
+            )
+        chosen: dict[str, object] = {
+            "count": 1, "graveyard_owner": "you", "up_to": False,
+        }
+        if filt.card_types:
+            chosen["card_type"] = filt.card_types[0]
+        else:
+            chosen["any_card"] = True
+        return (OracleInstruction("exile_cards_from_graveyard", "", chosen),)
     # "…**with two delay counters on it**." (Ertai's Meddling.) CR 121.1's
     # counters put on the card as it arrives in exile, which only ``exile_self``
     # performs — it is the one exile that keeps a record for them to sit on

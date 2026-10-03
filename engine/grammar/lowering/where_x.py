@@ -128,6 +128,19 @@ def lower_where_x(
     # what is left to check is that a step of this effect writes it.
     if isinstance(node.definition, ast.ThatMuch):
         return _lower_where_x_recorded(node, inner, produced)
+    # "…where X is **the milled card's mana value**." (Infernal Genesis.) A
+    # characteristic of the cards a step of this effect recorded; the same
+    # producer gate as the count above.
+    if isinstance(node.definition, ast.RecordedCardManaValue):
+        key = node.definition.record
+        if key not in (produced | _records_within(inner)):
+            raise LoweringError(
+                f"back-reference to {key!r} with no producer in this effect",
+                node=node,
+            )
+        if not _mentions_x(inner):
+            raise LoweringError("a where-clause defined an X nothing reads", node=node)
+        return _stamp_x_from_count(inner, {"recorded_card_mana_value": key})
     # "…where X is **1 plus** the exiled creature's mana value" (Food Chain) /
     # "…1 plus the sacrificed creature's mana value" (Metamorphosis). The
     # constant is unwrapped here rather than in the `Plus`/`Minus` arm further

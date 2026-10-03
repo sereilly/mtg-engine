@@ -218,6 +218,15 @@ def count_from_payload(
             (tallies.values() if isinstance(tallies, dict) else ())
         ]
         return max(0, _scaled(max(values) if values else 0, spec))
+    # "…where X is **the milled card's mana value**" (Infernal Genesis). The
+    # printed mana value (CR 202.3; a card in a zone has no computed one) of
+    # what the earlier step recorded — nothing milled is zero.
+    recorded_mana_value = spec.get("recorded_card_mana_value")
+    if recorded_mana_value is not None:
+        return max(0, _scaled(sum(
+            int(getattr(card, "cmc", 0) or 0)
+            for card in (context.results.get(str(recorded_mana_value)) or ())
+        ), spec))
     recorded_cards = spec.get("recorded_cards")
     if recorded_cards is not None:
         described = spec.get("filter") or {}
