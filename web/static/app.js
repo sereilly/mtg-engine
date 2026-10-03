@@ -10120,7 +10120,8 @@ function renderActivationPrompt() {
     okBtn.classList.add("hidden");
     customRow.classList.add("hidden");
     title.textContent = `Cost — ${pending.cardName}`;
-    const verb = pending.verb === "tap" ? "Tap" : "Sacrifice";
+    const verb = pending.verb === "tap" ? "Tap"
+      : pending.verb === "return" ? "Return" : "Sacrifice";
     const picked = pending.picked || [];
     // "Sacrifice X lands" announces X by the lands named (CR 601.2b), so any
     // number is an answer and the count is what X becomes.
@@ -12056,7 +12057,7 @@ function startActivationDiscardCostPrompt(card, cardName, targetSeat, permanentI
 function activationPermanentCostSpec(card) {
   const costSpec = castCostSpec(card);
   if (!costSpec) return null;
-  if (costSpec.tap_cost) return costSpec;
+  if (costSpec.tap_cost || costSpec.return_cost) return costSpec;
   if (costSpec.sacrifice_cost && (costSpec.announces_x || Number(costSpec.count || 1) > 1)) {
     return costSpec;
   }
@@ -12066,7 +12067,7 @@ function activationPermanentCostSpec(card) {
 function startActivationPermanentCostPrompt(card, cardName, targetSeat, permanentIndex, abilityIndex) {
   const costSpec = activationPermanentCostSpec(card);
   if (!costSpec) return false;
-  const verb = costSpec.tap_cost ? "tap" : "sacrifice";
+  const verb = costSpec.tap_cost ? "tap" : costSpec.return_cost ? "return" : "sacrifice";
   // By id, never by slot: the set is chosen before anything taps or leaves,
   // and the charger reads `cost_permanent_ids`.
   const options = (costSpec.valid_targets || [])
@@ -12174,7 +12175,9 @@ function resumeActivationAfterCost(card, activation, fields) {
 // The flags `engine/targeting._cost_picker_spec` sets (its
 // `COST_PICKER_FLAGS`): a spec carrying one at its top level is a payment
 // picker and nothing else.
-const ACTIVATION_COST_FLAGS = ["sacrifice_cost", "discard_cost", "exile_cost", "tap_cost"];
+const ACTIVATION_COST_FLAGS = [
+  "sacrifice_cost", "discard_cost", "exile_cost", "tap_cost", "return_cost",
+];
 
 // ---------------------------------------------------------------------------
 // A declaration's costs paid in permanents the player picks (CR 508.1h / 509.1d)

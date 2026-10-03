@@ -40,7 +40,7 @@ for _path in manifest_set_paths(include_measured=True):
 # they are what tells the client which field the answer rides, and a cost
 # reported under the wrong one would be collected and then paid with something
 # else.
-_COST_FLAGS = ("sacrifice_cost", "discard_cost", "tap_cost")
+_COST_FLAGS = ("sacrifice_cost", "discard_cost", "tap_cost", "return_cost")
 
 # The gaps this guard found the day it was written are closed (round 52), so the
 # list is empty. The mechanism stays: the two tests below are what force an
@@ -116,6 +116,12 @@ def _payer_chooses(cost) -> bool:
     if cost.sacrifice_filter is not None:
         return True
     if getattr(cost, "tap_filter", None) is not None and getattr(cost, "tap_count", 0):
+        return True
+    # …and its one-zone-over twin, "Return a Forest you control to its owner's
+    # hand" (Quirion Ranger, Flooded Shoreline).
+    if getattr(cost, "return_to_hand_filter", None) is not None and getattr(
+        cost, "return_to_hand_count", 0
+    ):
         return True
     return bool(cost.discard_cards) and not getattr(
         cost, "discard_at_random", False

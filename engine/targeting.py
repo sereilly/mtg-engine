@@ -1013,7 +1013,9 @@ _KIND_TO_SPEC: dict[str, dict] = {
 #: to say. A spec carrying one *at its top level* is a payment picker and
 #: nothing else: the ability it describes targets nothing (CR 601.2b vs
 #: 601.2c), which every gate that asks "does this ability target?" must hear.
-COST_PICKER_FLAGS = ("sacrifice_cost", "discard_cost", "exile_cost", "tap_cost")
+COST_PICKER_FLAGS = (
+    "sacrifice_cost", "discard_cost", "exile_cost", "tap_cost", "return_cost",
+)
 
 
 def spec_is_a_cost(spec: dict | None) -> bool:
@@ -1179,6 +1181,16 @@ def _cost_picker_spec(cost, *, announced: dict | None = None) -> dict | None:
         if narrowing:
             spec["filter"] = narrowing
         return spec
+    described = getattr(cost, "return_to_hand_filter", None)
+    if described is not None and getattr(cost, "return_to_hand_count", 0):
+        # "**Return a Forest you control to its owner's hand**: Untap target
+        # creature" (Quirion Ranger), "Return two Islands you control …"
+        # (Flooded Shoreline). The tap cost below one zone over, and the
+        # charger reads the same ``cost_permanent_ids``: which Forest goes
+        # home — the tapped one or the untapped one — is the payer's.
+        return _permanent_set_cost_spec(
+            described, "return_cost", int(cost.return_to_hand_count)
+        )
     described = getattr(cost, "tap_filter", None)
     if described is not None and getattr(cost, "tap_count", 0):
         # "**Tap an untapped creature you control**: …" (Opposition, Earthcraft,
@@ -1192,27 +1204,37 @@ def _cost_picker_spec(cost, *, announced: dict | None = None) -> dict | None:
         # say "tap" and send the ids on the cost field; ``count`` is always
         # stated, because every printing of this cost is a set the payer picks,
         # one or several.
-        spec = {
-            "kind": filter_head_noun(described),
-            "own_only": True,
-            "tap_cost": True,
-            "count": int(cost.tap_count),
-        }
-        if described.get("exclude_self"):
-            spec["exclude_source"] = True
-        # The rest of the printed phrase — "untapped", "blue", "Spirit",
-        # "snow" — rides along for the reason the sacrifice's narrowing does:
-        # the enumerator applies it with the matcher the charger accepts by.
-        narrowing = {
-            key: value
-            for key, value in described.items()
-            if key not in ("exclude_self", "controller")
-            and not (key == "type_filter" and isinstance(value, str))
-        }
-        if narrowing:
-            spec["filter"] = narrowing
-        return spec
+        return _permanent_set_cost_spec(described, "tap_cost", int(cost.tap_count))
     return None
+
+
+def _permanent_set_cost_spec(described: dict, flag: str, count: int) -> dict:
+    """The picker for a cost paid with *count* of the payer's own permanents
+    named by *described* — a tap or a return to hand. *flag* is the verb the
+    client says and the field the answer rides is ``cost_permanent_ids``.
+
+    The rest of the printed phrase — "untapped", "blue", "Spirit", "snow",
+    "Forest" — rides along as ``filter`` for the reason the sacrifice's
+    narrowing does: the enumerator applies it with the matcher the charger
+    accepts by, so what is offered and what is accepted cannot disagree.
+    """
+    spec = {
+        "kind": filter_head_noun(described),
+        "own_only": True,
+        flag: True,
+        "count": count,
+    }
+    if described.get("exclude_self"):
+        spec["exclude_source"] = True
+    narrowing = {
+        key: value
+        for key, value in described.items()
+        if key not in ("exclude_self", "controller")
+        and not (key == "type_filter" and isinstance(value, str))
+    }
+    if narrowing:
+        spec["filter"] = narrowing
+    return spec
 
 
 def _life_gain_spec(payload: dict) -> dict | None:

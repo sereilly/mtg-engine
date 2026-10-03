@@ -122,6 +122,32 @@ def test_peace_talks_does_not_refuse_an_ability_whose_only_choice_is_its_cost():
     assert atog.effective_power == 3
 
 
+@pytest.mark.cr("602.2b", "601.2h")
+def test_quirion_ranger_returns_the_forest_its_controller_names():
+    """"Return a Forest you control to its owner's hand: Untap target
+    creature." Which Forest is the payer's — the tapped one, so the mana it
+    made is not lost — and the picker offers both; the default would have
+    returned the first."""
+    game, (ranger, untapped, tapped, bears), _ = _table(
+        ["Quirion Ranger", "Forest", "Forest", "Grizzly Bears"],
+    )
+    tapped.tapped = True
+    bears.tapped = True
+    spec = game.activation_target_spec(0, 0)
+    cost = spec["cost_spec"]
+    assert cost["return_cost"] is True and cost["count"] == 1
+    assert [t["index"] for t in cost["valid_targets"]] == [1, 2]
+
+    result = game.activate_permanent_ability(
+        0, "Quirion Ranger", target_player_index=0, target_permanent_index=3,
+        cost_permanent_ids=[tapped.permanent_id],
+    )
+    assert result.supported, result.details
+    assert game.is_on_battlefield(untapped) and not game.is_on_battlefield(tapped)
+    assert [c.name for c in game.players[0].hand] == ["Forest"]
+    assert not bears.tapped
+
+
 # ---------------------------------------------------------------------------
 # A counted discard: "Buyback—Discard two cards"
 # ---------------------------------------------------------------------------
