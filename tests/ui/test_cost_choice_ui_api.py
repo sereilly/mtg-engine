@@ -423,3 +423,25 @@ def test_w3g5_the_client_walks_every_cost_choice():
     assert '"player_or_planeswalker"' in app_js_function_body(
         "activatedAbilityRequiresTargetAny"
     )
+
+
+def test_w3g5_an_exile_cost_answers_on_the_cost_field():
+    """City of Shadows' "Exile a creature you control": the prompt said
+    "exile", the player clicked a creature, and the pick went out as a target
+    while the engine's default exiled the first creature — observed in the
+    app. The cost-only canvas branch now takes a battlefield exile, and a hand
+    exile (Cadaverous Bloom) takes the hand-card prompt on ``cost_hand_index``."""
+    prompt = app_js_function_body("startActivationPrompt")
+    assert "spec.sacrifice_cost || battlefieldExile" in prompt
+    assert 'spec?.exile_cost && spec?.kind === "hand_card"' in app_js_function_body(
+        "cardRequiresHandCost"
+    )
+
+    sid, game = _session(["City of Shadows", "Grizzly Bears", "Hill Giant"])
+    _city, bears, giant = game.players[0].battlefield
+    resp = _act(
+        sid, action="activate", permanent_name="City of Shadows", permanent_index=0,
+        ability_index=0, cost_permanent_id=giant.permanent_id,
+    )
+    assert resp.status_code == 200, resp.text
+    assert game.is_on_battlefield(bears) and not game.is_on_battlefield(giant)

@@ -10102,6 +10102,8 @@ function renderActivationPrompt() {
     const noun = discardCount === 1 ? "a card" : `${discardCount} cards`;
     body.textContent = pendingDiscardCost.libraryTop
       ? `Put ${noun} from your hand on top of your library to activate this ability. Choose which.`
+      : pendingDiscardCost.exileFromHand
+      ? `Exile ${noun} from your hand to activate this ability. Choose which.`
       : pendingDiscardCost.activation
         ? `Discard ${noun} to activate this ability. Choose which.`
         : `Discard ${noun} to cast it. Choose which.`;
@@ -10156,9 +10158,12 @@ function renderActivationPrompt() {
       })
       .join("");
     const ready = pending.announcesX ? true : picked.length === pending.count;
+    // A counter cost's verb is a phrase ("Put a -1/-1 counter on"), which
+    // reads as nonsense before a tally; the confirm says what it does instead.
+    const tallyVerb = /counter/.test(pending.verb || "") ? "Confirm" : verb;
     const confirmLabel = pending.announcesX
-      ? `${verb} ${picked.length} (X = ${picked.length})`
-      : `${verb} ${picked.length} of ${pending.count}`;
+      ? `${tallyVerb} ${picked.length} (X = ${picked.length})`
+      : `${tallyVerb} ${picked.length} of ${pending.count}`;
     steps.innerHTML = `<div class="prompt-choice-column">${permanentButtons}`
       + `<button type="button" class="prompt-choice-btn" id="permanentCostConfirmBtn"${ready ? "" : " disabled"}>`
       + `${escapeHtml(confirmLabel)}</button></div>`;
@@ -11444,13 +11449,25 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
   // with the answer on the cost field. Without this the player was never asked
   // and the deterministic default paid — with Atog on a board holding a Black
   // Lotus and a Mox, it took the Lotus.
+  //
+  // "Exile a creature you control" (City of Shadows, Food Chain) is the same
+  // pick with the exile's verb — the prompt already said "exile" — and it was
+  // not routed here, so the cascade below read the cost's noun as a target:
+  // the creature clicked went out as a target the ability does not have and
+  // the engine's default exiled whichever creature came first. Only a
+  // battlefield exile: a card from a graveyard or a hand has its own prompt.
   {
     const spec = targetSpecOf(card);
-    if (spec.sacrifice_cost && !costAnswered) {
+    const battlefieldExile = !!spec.exile_cost
+      && !["graveyard_creature", "hand_card"].includes(spec.kind);
+    if ((spec.sacrifice_cost || battlefieldExile) && !costAnswered) {
       const fields = pendingTargetFields(card);
       if (fields.validKeys.size === 0) {
         SFX.onError();
-        updateActionHint(`${cardName} has nothing it can sacrifice for its cost.`, true);
+        updateActionHint(
+          `${cardName} has nothing it can ${battlefieldExile ? "exile" : "sacrifice"} for its cost.`,
+          true,
+        );
         return;
       }
       pendingCastTarget = {
@@ -11978,7 +11995,11 @@ function cardRequiresDiscardCost(card) {
 // field (`cost_hand_index`) — only the verb it says differs.
 function cardRequiresHandCost(card) {
   const spec = castCostSpec(card);
-  return !!(spec?.discard_cost || spec?.library_top_cost);
+  return !!(
+    spec?.discard_cost || spec?.library_top_cost
+    // "Exile a card from your hand" (Cadaverous Bloom).
+    || (spec?.exile_cost && spec?.kind === "hand_card")
+  );
 }
 
 function discardCostOptions(card) {
@@ -12103,8 +12124,10 @@ function startActivationDiscardCostPrompt(card, cardName, targetSeat, permanentI
     picked: [],
     activation: { targetSeat, permanentIndex, abilityIndex },
     // "Put a card from your hand on top of your library" (Hidden Retreat,
-    // Penance): the same pick on the same field, said with its own verb.
+    // Penance) and "Exile a card from your hand" (Cadaverous Bloom): the same
+    // pick on the same field, said with its own verb.
     libraryTop: !!castCostSpec(card)?.library_top_cost,
+    exileFromHand: !!castCostSpec(card)?.exile_cost,
   };
   renderActivationPrompt();
   return true;
@@ -12175,10 +12198,16 @@ function permanentCostStep(costSpec, alreadyChosen = []) {
       name: option.name,
     }))
     .filter((option) => Number.isInteger(option.id) && !alreadyChosen.includes(option.id));
+  // The printed subtype when the noun phrase has one ("a **Swamp**", Viscerid
+  // Drone): its spec's kind is only "permanent", which tells the player
+  // nothing about what the list offers.
+  const subtype = costSpec.filter?.subtype_filter;
   return {
     verb: permanentCostVerb(costSpec),
     counter: costSpec.counter || null,
-    noun: costSpec.kind || "permanent",
+    noun: typeof subtype === "string"
+      ? subtype.charAt(0).toUpperCase() + subtype.slice(1)
+      : (costSpec.kind || "permanent"),
     count: Math.max(1, Number(costSpec.count || 1)),
     announcesX: !!costSpec.announces_x,
     options,

@@ -469,3 +469,22 @@ def test_w3g5_peace_talks_leaves_an_exile_cost_its_picker():
     )
     assert result.supported, result.details
     assert [c.name for c in game.players[0].exile] == ["Grizzly Bears"]
+
+
+@pytest.mark.cr("602.2b", "601.2h")
+def test_w3g5_cadaverous_bloom_exiles_the_card_its_controller_names():
+    """"Exile a card from your hand: Add {B}{B} or {G}{G}." The picker is a
+    hand-card list (it was a list of the payer's *permanents*), the answer
+    rides ``cost_hand_index`` like every other hand-card cost, and the card
+    named is the one exiled — the default takes the first."""
+    game, (_bloom,), _ = _table(["Cadaverous Bloom"], hand=["Forest", "Island"])
+    cost = game.activation_target_spec(0, 0)
+    assert cost["kind"] == "hand_card" and cost["exile_cost"] is True
+    assert [t["name"] for t in cost["valid_targets"]] == ["Forest", "Island"]
+
+    result = game.activate_permanent_ability(
+        0, "Cadaverous Bloom", cost_hand_index=1, mana_color="B",
+    )
+    assert result.supported, result.details
+    assert [c.name for c in game.players[0].exile] == ["Island"]
+    assert [c.name for c in game.players[0].hand] == ["Forest"]

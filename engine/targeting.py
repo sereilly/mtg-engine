@@ -1152,6 +1152,27 @@ def _cost_picker_specs(cost, *, announced: dict | None = None) -> list[dict]:
             if getattr(cost, "exile_same_zone", False):
                 spec["same_zone"] = True
             specs.append(spec)
+        elif getattr(cost, "exile_zone", "battlefield") == "hand":
+            # "Exile a card **from your hand**" (Cadaverous Bloom). The discard
+            # picker's list with the exile's verb. This fell through to the
+            # battlefield branch below and described a *permanent* picker for a
+            # cost paid out of a hand — so the list offered was the payer's
+            # board and the answer, had anything sent it, would have been read
+            # as a hand position. The charger reads ``cost_hand_index`` for it,
+            # the field every other hand-card cost answers on.
+            spec = {
+                "kind": "hand_card",
+                "own_only": True,
+                "exile_cost": True,
+            }
+            count = int(getattr(cost, "exile_count", 1) or 1)
+            if count > 1:
+                spec["count"] = count
+            # A printed narrowing ("a **blue** card") as the alternatives list
+            # the hand enumerator already reads; "a card" carries none.
+            if described:
+                spec["filters"] = [dict(described)]
+            specs.append(spec)
         else:
             spec = {
                 "kind": filter_head_noun(described),

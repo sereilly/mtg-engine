@@ -512,3 +512,28 @@ def test_the_recorded_pickerless_cast_costs_are_still_open(card_name):
             f"{card_name} now describes every cost choice — drop it from "
             "_PICKERLESS_CAST_COSTS"
         )
+
+
+def test_an_exile_cost_is_picked_from_the_zone_it_names():
+    """A picker over the wrong zone is a picker whose every answer is wrong.
+    Cadaverous Bloom's "Exile a card **from your hand**" fell through to the
+    battlefield branch and described a picker over the payer's permanents —
+    the list offered was the board, and an answer would have been read as a
+    hand position. Validated backwards: on the tree before PCY W3G5 this names
+    Cadaverous Bloom and nothing else."""
+    wrong = []
+    for name, card in sorted(_POOL.items()):
+        for index, ability in enumerate(compile_card_oracle(card).activated_abilities):
+            cost = ability.cost
+            if cost.exile_filter is None:
+                continue
+            head = _cost_head(derive_activation_spec(ability))
+            wanted = {"hand": "hand_card", "graveyard": "graveyard_creature"}.get(
+                cost.exile_zone
+            )
+            kind = (head or {}).get("kind")
+            if wanted is not None and kind != wanted:
+                wrong.append((name, index, cost.exile_zone, kind))
+            if wanted is None and kind in ("hand_card", "graveyard_creature"):
+                wrong.append((name, index, cost.exile_zone, kind))
+    assert not wrong, wrong
