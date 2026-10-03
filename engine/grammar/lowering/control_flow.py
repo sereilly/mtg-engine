@@ -741,6 +741,34 @@ WRAPPER_KINDS: dict[str, tuple[str, ...]] = {
 }
 
 
+#: Where an **offer** keeps the instructions behind its answers — the two kinds
+#: ``WRAPPER_KINDS`` deliberately leaves out, for the reason its comment gives:
+#: an offer is a switch of its own, so ``categories_of`` must not descend into
+#: one. A reader asking what an effect *could do* has the opposite need. CR
+#: 605.1a's "could add mana to a player's mana pool when it resolves" is true
+#: of "{T}: Choose a color. Add one mana of that color unless any player pays
+#: {1}" (Rhystic Cave), whose only mana sits behind the toll.
+OFFER_BRANCH_KEYS: dict[str, tuple[str, ...]] = {
+    "may": ("action", "then", "otherwise"),
+    "unless_player_pays": ("unpaid", "paid"),
+}
+
+
+def offer_branches(instruction: OracleInstruction) -> tuple[OracleInstruction, ...] | None:
+    """The instructions behind an offer's answers, or None if it is not one.
+
+    :func:`nested_instructions`' sibling for the kinds it must not open — see
+    :data:`OFFER_BRANCH_KEYS`. Separate rather than a flag on that function so
+    no caller of the category walk can open an offer by accident.
+    """
+    keys = OFFER_BRANCH_KEYS.get(instruction.kind)
+    if keys is None:
+        return None
+    return tuple(
+        step for key in keys for step in (instruction.payload.get(key) or ())
+    )
+
+
 def nested_instructions(instruction: OracleInstruction) -> tuple[OracleInstruction, ...] | None:
     """The instructions a wrapper carries, or None if it is not one.
 

@@ -8,6 +8,7 @@ from ..delayed_triggers import matching_delayed_triggers
 from ..cast_permissions import expire_at_turn_start as expire_turn_permissions
 from ..hand_locks import expire_hand_locks
 from ..land_mana_swaps import production_snapshot, substitute_production
+from ..mana_payment import answer_color_choices
 from ..land_play_allowance import clear_turn_land_play_effects
 from ..spell_prohibitions import clear_turn_spell_prohibitions
 from ..game_types import OracleExecutionContext, SimulationResult
@@ -95,7 +96,8 @@ def is_tap_alone_mana_ability(ability) -> bool:
     while the seam asked CR 605.1a, and a land's coloured second ability went
     down the path that skips every swap and trigger the seam announces.
     """
-    from ..mana_payment import is_mana_ability
+    from ..activation_restrictions import prints_activation_restriction
+    from ..mana_payment import carries_an_offer, is_mana_ability
 
     instruction = getattr(ability, "instruction", None)
     if instruction is None or not getattr(ability, "supported", False):
@@ -103,7 +105,22 @@ def is_tap_alone_mana_ability(ability) -> bool:
     if not (is_mana_ability(ability) or instruction.kind == "if_then"):
         return False
     cost = ability.cost
-    return bool(cost.requires_tap) and _is_free_beyond_tapping(cost)
+    if not (bool(cost.requires_tap) and _is_free_beyond_tapping(cost)):
+        return False
+    # **And nothing the seam cannot honour from inside a payment.** The seam is
+    # reached part-way through paying a cost (CR 601.2g), with nobody holding
+    # priority, and it asks no CR 602.5 gate — so a printed "Activate only …"
+    # clause would go unenforced there; "only as an instant" is CR 304.5's
+    # "the player must have priority". And an ability that asks another player
+    # something has no mana to give until they answer. "{T}: Choose a color.
+    # Add one mana of that color unless any player pays {1}. Activate only as
+    # an instant." (Rhystic Cave) is both. Such an ability is the activation
+    # path's, which gates it and runs it inline all the same (CR 605.3b); the
+    # seam reports it priced, which is the answer it already refuses.
+    return not (
+        prints_activation_restriction(getattr(ability, "source_line", "") or "")
+        or carries_an_offer(instruction)
+    )
 
 
 class TurnManagementMixin:
@@ -471,9 +488,10 @@ class TurnManagementMixin:
         if lost_abilities_to_type_change(land):
             return None, False
         if not land_text_is_run(land):
-            # Rhystic Cave: no line of its text compiles, so the summary below
-            # would be its whole reading — a free WUBRG land nobody may deny.
-            # Reported as priced, which is the answer the tap seam refuses.
+            # A land none of whose text compiles (Rhystic Cave, until PCY
+            # W3G1): the summary below would be its whole reading — free mana
+            # with every cost and condition taken out. Reported as priced,
+            # which is the answer the tap seam refuses.
             return None, True
         priced = False
         for ability in compile_card_oracle(land.effective_card).activated_abilities:
@@ -710,6 +728,13 @@ class TurnManagementMixin:
                     instruction,
                     payload={**instruction.payload, "color": chosen_color},
                 )
+            # …and to the "Choose a color" step of a two-sentence spelling
+            # ("Choose a color. Add one mana of that color."), which the
+            # outer injection cannot reach — CR 605.3b, one helper for both
+            # inline sites (``mana_payment.answer_color_choices``).
+            instruction = answer_color_choices(
+                instruction, self._chosen_mana_color(chosen_color)
+            )
             self._execute_oracle_instruction(
                 instruction,
                 OracleExecutionContext(

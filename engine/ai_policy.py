@@ -47,6 +47,7 @@ from .mixins.stack import (aura_enchant_noun, enchant_noun_seat,
 from .target_restrictions import forbidden_target
 from .auras import aura_restriction_active
 from .combat_permissions import MUST_BLOCK_ATTACKERS_UNTIL_EOT
+from .mana_payment import taps_for_payment
 from .models import CardDefinition, Permanent, PlayerState
 from .oracle import OracleInstruction, compile_card_oracle
 from .oracle_types import cost_target_count, x_spend_colors_from_text
@@ -3494,10 +3495,19 @@ def _plan_land_taps(
     anything costing three.
     """
     pool = {symbol: player.mana_pool.get(symbol, 0) for symbol in _MANA_SYMBOLS}
+    # Only a land the tap seam will actually tap for mana
+    # (``mana_payment.taps_for_payment``) — the executor sends every planned
+    # slot to that seam, and one it refuses is a cast the plan promised and the
+    # engine then declines. Rhystic Cave is the land that must never be here
+    # (its mana needs priority and can be denied); the storage and depletion
+    # lands, whose mana ability costs more than {T}, and a land that makes no
+    # mana at all (Bazaar of Baghdad, read as {C} by ``_land_symbols``) were
+    # here already and were refused the same way.
     untapped_lands = [
         (index, _land_symbols(game, permanent), _land_mana_amount(game, permanent))
         for index, permanent in enumerate(game.controlled_by(player))
         if permanent.card.primary_type == "land" and not permanent.tapped
+        and taps_for_payment(permanent)
     ]
 
     if _can_pay_cost(pool, required, player):

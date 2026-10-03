@@ -475,6 +475,16 @@ def _parse_add_mana(stream: TokenStream) -> ast.Statement:
         if not (isinstance(count, ast.Fixed) and count.value == 1):
             raise stream.error("only one mana of the chosen color can be added")
         return ast.AddMana((), from_chosen_color=True, source_text=_clause())
+    # "Choose a color. Add one mana of **that color** unless any player pays
+    # {1}." (Rhystic Cave.) The back-reference beside the branch above, to a
+    # choice made by the sentence in front of this one rather than as the
+    # source entered — so a separate field, and the lowering decides whether
+    # anything in the effect made that choice. Only "one", for the same reason
+    # as above: the record holds a colour, not a quantity.
+    if stream.accept_phrase("that", "color"):
+        if not (isinstance(count, ast.Fixed) and count.value == 1):
+            raise stream.error("only one mana of that color can be added")
+        return ast.AddMana((), color_chosen_this_way=True, source_text=_clause())
     stream.accept_word("any")
     stream.accept_word("one")
     # "Add one mana of any **type that land could produce**." (Benthic
