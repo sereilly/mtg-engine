@@ -403,6 +403,26 @@ def is_mana_ability(ability) -> bool:
     )
 
 
+def carries_an_offer(instruction) -> bool:
+    """Whether any step of *instruction* asks a player something — an offer
+    (``may``) or a toll (``unless_player_pays``).
+
+    A mana ability may (CR 605.1a is silent on it): "Add one mana of that color
+    **unless any player pays {1}**" (Rhystic Cave). What such an ability cannot
+    be is run by a path that has to finish before it returns — the tap seam,
+    part-way through a payment — because the mana does not exist until every
+    seat it asks has answered.
+    """
+    from .grammar.lowering.control_flow import OFFER_BRANCH_KEYS
+
+    if instruction is None or not hasattr(instruction, "kind"):
+        return False
+    return any(
+        step.kind in OFFER_BRANCH_KEYS
+        for step in (instruction, *_every_nested_step(instruction))
+    )
+
+
 #: How a lowering spells "this names a target" as a payload **value**, at any
 #: depth. Collected off the pool rather than invented: these three are the only
 #: ``target``-prefixed strings any compiled payload in either manifest role
@@ -449,9 +469,18 @@ def _every_nested_step(instruction) -> tuple:
     # against the latter's re-export, and the wave-1 split that moved
     # `categories_of` out took the re-export with it. The name has one home
     # and this is it.
-    from .grammar.lowering.control_flow import nested_instructions
+    from .grammar.lowering.control_flow import nested_instructions, offer_branches
 
     inner = nested_instructions(instruction)
+    # **And an offer's branches**, which the category walk must not open and
+    # this one must. "Add one mana of that color **unless any player pays
+    # {1}**" (Rhystic Cave) puts the whole of its mana behind a toll, and CR
+    # 605.1a asks whether the ability *could* add mana — it could, and
+    # "regardless of … timing restrictions (such as 'Activate only as an
+    # instant')" (CR 605.1) it is a mana ability. Opening the two offer kinds
+    # moved no compiled ability's answer in either manifest role but the Cave's.
+    if inner is None:
+        inner = offer_branches(instruction)
     if not inner:
         return ()
     found: list = []
@@ -541,8 +570,94 @@ def untapped_mana_lands(permanents: Iterable["Permanent"]) -> list["Permanent"]:
         if perm.card.primary_type == "land"
         and not perm.tapped
         and perm.effective_produced_mana
-        and land_text_is_run(perm)
+        and taps_for_payment(perm)
     ]
+
+
+def taps_for_payment(land) -> bool:
+    """Whether tapping *land* for mana part-way through a payment makes mana.
+
+    The tap seam's own answer (``Game.tap_land_for_mana``), asked by every
+    reader that counts a land as mana it can spend — the payment planner's land
+    list above and the AI's tap plan — so a land the seam refuses is never
+    counted as one it would tap. The seam runs a land's tap-alone mana ability
+    (``_land_mana_abilities``' first answer), refuses one whose only mana
+    ability costs more than the tap or cannot be run inside a payment (its
+    second), and otherwise falls back to the printed summary.
+
+    **Rhystic Cave is why the question has to be the seam's.** "{T}: Choose a
+    color. Add one mana of that color unless any player pays {1}. Activate only
+    as an instant." is a mana ability (CR 605.1a), but "only as an instant"
+    means its controller must have priority (CR 304.5), which nobody has while
+    a cost is being paid — and any player may deny the mana. Read off its
+    summary, the planner counted it as a free WUBRG land.
+
+    The same question was answered wrong for sixteen more, measured over both
+    manifest roles: every land whose mana ability costs more than {T} — the
+    storage lands' "{T}, Remove any number of storage counters", the depletion
+    lands' "{T}, Remove a depletion counter", Gemstone Mine, Fountain of Cho and
+    the rest. The seam refused them (CR 602.2b) while the planner tapped them
+    for one free mana of their summary's colour and spent no counter at all.
+    """
+    from .mixins.turn_management import TurnManagementMixin
+
+    free, priced = TurnManagementMixin._land_mana_abilities(land)
+    if free is not None:
+        return True
+    if priced:
+        return False
+    return bool(land.effective_produced_mana or land.basic_land_types)
+
+
+def answer_color_choices(instruction, color: str | None):
+    """*instruction* with every "Choose a color" its controller makes answered
+    by *color* — the colour named with a **mana ability's** activation.
+
+    CR 605.3b: a mana ability does not use the stack and resolves the moment it
+    is activated, so the colour its activator names with the activation is the
+    answer to the choice it makes as it resolves (CR 608.2d). "{T}: Choose a
+    color. Add one mana of that color unless any player pays {1}" (Rhystic
+    Cave). Called only by the two sites that run a mana ability inline — the
+    activation path's CR 605.3b branch and the tap seam — so an ability that
+    goes on the stack keeps asking at resolution.
+
+    A choice somebody *else* makes (a ``chooser`` on the payload) is left to
+    ask, and so is any step this walk cannot see into: unanswered is the
+    prompt, which is the safe direction. Rebuilt rather than mutated, because a
+    compiled instruction is shared by every copy of the card.
+    """
+    from .grammar.lowering.control_flow import OFFER_BRANCH_KEYS, WRAPPER_KINDS
+    from .oracle_types import OracleInstruction
+
+    if not color or instruction is None:
+        return instruction
+    if instruction.kind == "choose_color":
+        if (instruction.payload or {}).get("chooser"):
+            return instruction
+        return OracleInstruction(
+            instruction.kind, instruction.value,
+            {**instruction.payload, "color": color},
+        )
+    keys = WRAPPER_KINDS.get(instruction.kind) or OFFER_BRANCH_KEYS.get(instruction.kind)
+    if not keys:
+        return instruction
+    changed = {
+        key: tuple(
+            answer_color_choices(step, color)
+            for step in instruction.payload.get(key) or ()
+        )
+        for key in keys
+        if instruction.payload.get(key)
+    }
+    if all(
+        new is old
+        for key, steps in changed.items()
+        for new, old in zip(steps, instruction.payload.get(key) or ())
+    ):
+        return instruction
+    return OracleInstruction(
+        instruction.kind, instruction.value, {**instruction.payload, **changed}
+    )
 
 
 def land_text_is_run(land) -> bool:
@@ -552,11 +667,13 @@ def land_text_is_run(land) -> bool:
     can make, and for a basic or a dual (whose only text is CR 305.6 reminder
     text) it is exactly the land. For a land whose printed mana ability the
     engine cannot compile it is a guess at the land with every cost and every
-    condition taken out. Rhystic Cave is the case: "{T}: Choose a color. Add one
-    mana of that color unless any player pays {1}. Activate only as an instant"
-    summarises to WUBRG, so both mana seams read it as a free five-colour land
-    no player could deny and no timing restricted — on a card reported
-    unsupported. 1 of the 156 producing lands in both manifest roles.
+    condition taken out. Rhystic Cave was the case until PCY W3G1: "{T}: Choose
+    a color. Add one mana of that color unless any player pays {1}. Activate
+    only as an instant" summarised to WUBRG, so both mana seams read the
+    unsupported card as a free five-colour land no player could deny and no
+    timing restricted. It compiles now, and :func:`taps_for_payment` is what
+    keeps it out of a payment; this stays the guard for the next land whose
+    text nothing runs.
 
     A land whose types an effect has replaced is answered by its new types
     (CR 305.7: it loses its printed abilities and gains the basic one), so it
@@ -571,10 +688,11 @@ def land_text_is_run(land) -> bool:
 
 
 __all__ = [
-    "COLOR_SYMBOLS", "ManaPayment", "fungible_colors_headroom",
+    "COLOR_SYMBOLS", "ManaPayment", "answer_color_choices",
+    "fungible_colors_headroom",
     "fungible_types_headroom", "generic_cost", "land_text_is_run",
     "mana_cost_from_symbols",
     "mana_cost_label", "plan_payment",
-    "total_pips",
+    "taps_for_payment", "total_pips",
     "untapped_mana_lands",
 ]

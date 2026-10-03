@@ -2203,6 +2203,12 @@ function computeAutoTapPlan(manaCost, currentManaPool, battlefield) {
     const perm = battlefield[i];
     if (!(perm.type || "").toLowerCase().includes("land")) continue;
     if (perm.tapped) continue;
+    // A land the server's tap seam refuses (Rhystic Cave: its mana needs
+    // priority and can be denied; a depletion land: its mana costs a counter)
+    // is activated, never auto-tapped — a "tap" sent for it is a 400 that
+    // aborts the whole payment. `=== false` so a payload without the field
+    // plans as it always did.
+    if (perm.taps_for_mana === false) continue;
     const produces = inferLandProducedMana(perm);
     if (produces.length > 0) untapped.push({ index: i, produces, used: false });
   }

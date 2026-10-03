@@ -8,8 +8,9 @@ ability on a land being tapped (CR 605.1b) is resolved inline by
 never uses the stack.
 """
 
-from ...oracle_types import (COUNTERS_REMOVED, MANA_LOST_COUNT,
-                            MANA_LOST_THIS_WAY, OracleInstruction)
+from ...oracle_types import (CHOSEN_COLOR_THIS_WAY, COUNTERS_REMOVED,
+                            MANA_LOST_COUNT, MANA_LOST_THIS_WAY,
+                            OracleInstruction)
 from ...subject_filters import (card_only_filter, object_only_filter,
                                 untestable_filter_keys)
 from .. import ast
@@ -171,6 +172,31 @@ def _lower_add_mana(
                 {"color": node.from_sacrificed_cost, "bonus": 0, "spend_only": None},
             ),
         )
+    if node.color_chosen_this_way or (
+        node.from_chosen_color and CHOSEN_COLOR_THIS_WAY in produced
+    ):
+        # "Choose a color. Add one mana of **that color** unless any player
+        # pays {1}." (Rhystic Cave.) The colour the choosing step in front of
+        # this one wrote to the resolution's scratchpad (CR 608.2d) — the slot
+        # Persecute's "cards of that color" reads one family over. Refused where
+        # no step of the effect chose one: the handler would find no colour and
+        # add nothing while the card reported itself supported.
+        #
+        # **And "the chosen color" means the same thing once an earlier step of
+        # this effect chose one.** Read off the source's entry record instead
+        # (the branch below), "{T}: Choose a color. Add one mana of the chosen
+        # color" made whatever that record held — on a spell, which has no
+        # source, nothing at all. One record per question: the colour this
+        # resolution chose is the scratchpad's.
+        if CHOSEN_COLOR_THIS_WAY not in produced:
+            raise LoweringError(
+                '"that color" names a colour nothing in this effect chose',
+                node=node,
+            )
+        payload = {"color_from": CHOSEN_COLOR_THIS_WAY}
+        if node.spend_only is not None:
+            payload["spend_only"] = node.spend_only
+        return (OracleInstruction("add_mana_from_text", "", payload),)
     if node.from_chosen_color:
         # "Add one mana of **the chosen color**." (Sol Grail.) No symbol here
         # either, and for `from_noted`'s reason one branch down: what is added

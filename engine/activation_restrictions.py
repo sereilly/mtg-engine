@@ -2144,6 +2144,22 @@ def unreadable_activation_clauses(
     ]
 
 
+@lru_cache(maxsize=None)
+def prints_activation_restriction(ability_text: str) -> bool:
+    """Whether *ability_text* prints any "Activate only …" clause at all.
+
+    The question a path asks that runs an ability **without** this module's
+    gate: the tap-for-mana seam runs a land's {T} mana ability in the middle of
+    a payment (CR 601.2g), when nobody has priority and nothing calls
+    :func:`activation_denial`. "Activate only as an instant" means the player
+    must have priority (CR 304.5) — Rhystic Cave — so an ability printing any
+    clause here belongs to the activation path, which enforces it. Collected
+    by the same reader the gate uses; *whether* the clause holds right now is
+    that gate's question, not this one's.
+    """
+    return bool(_clauses(ability_text))
+
+
 def activation_denial(game, controller_index: int, source, ability_text: str) -> str | None:
     """Why this activation is illegal, or None when it is not.
 

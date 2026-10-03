@@ -39,7 +39,8 @@ from ...cast_restrictions import combat_play_ban, global_play_timing
 from ...activation_zones import GRAVEYARD, HAND, ability_functions_from
 from ...targeting import (derive_activation_spec, spec_is_a_cost,
                           usable_activated_abilities)
-from ...mana_payment import is_mana_ability, mana_cost_from_symbols
+from ...mana_payment import (answer_color_choices, is_mana_ability,
+                             mana_cost_from_symbols)
 from ...events import emit
 from ...game_types import (OracleExecutionContext, OracleStateMachine,
                            SimulationResult, StackItem, chosen_damage_source)
@@ -2865,6 +2866,15 @@ class AbilityActivationMixin:
         # The reverse direction was measured too, and is empty: nothing the kind
         # set admitted is outside CR 605.1a. This is a widening, not a swap.
         if is_mana_ability(ability):
+            # "Choose a color. Add one mana of that color unless any player
+            # pays {1}." (Rhystic Cave.) The choice is made as the ability
+            # resolves (CR 608.2d), which for a mana ability is now (CR
+            # 605.3b), so the colour named with this activation answers it —
+            # delivered onto the choosing step, which the outer injection above
+            # cannot reach. The tap seam does the same through the same helper.
+            instruction = answer_color_choices(
+                instruction, self._chosen_mana_color(mana_color)
+            )
             # A second `card.name == "Basalt Monolith"` branch stood here,
             # refusing add_mana_from_text while the permanent was untapped. It
             # was unreachable: the {T} cost above has already run

@@ -18,6 +18,7 @@ from fastapi import HTTPException
 from engine.activation_permissions import card_widens_activation
 from engine.cast_permissions import permission_for
 from engine.cast_timing import casts_at_instant_speed
+from engine.mana_payment import taps_for_payment
 from engine.mixins.turn_management import is_tap_alone_mana_ability
 from engine.oracle import compile_card_oracle
 from engine.targeting import usable_activated_abilities
@@ -374,7 +375,17 @@ def _action_activate(session, req, seat_type):
         if req.ability_index is not None and 0 <= req.ability_index < len(usable):
             chosen_ability = usable[req.ability_index]
             seam_ability_index = req.ability_index
-        elif usable and not permanent.effective_produced_mana:
+        elif usable and (
+            not permanent.effective_produced_mana
+            # …or on a land the tap seam refuses (``taps_for_payment``): its
+            # mana ability costs more than {T} (a depletion land's counter), or
+            # needs priority and asks the table (Rhystic Cave). The seam has
+            # nothing to run for either, so a click sent to it failed with
+            # "failed to tap land for mana" however the client asked; the
+            # activation path pays the cost, gates the timing and offers the
+            # toll.
+            or not taps_for_payment(permanent)
+        ):
             # No explicit choice on a land that makes no mana: its only
             # meaningful activation is its first ability.
             chosen_ability = usable[0]

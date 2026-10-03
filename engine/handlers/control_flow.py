@@ -2073,6 +2073,31 @@ def choose_color(game: Game, instruction: OracleInstruction, context: OracleExec
         )
         return True, "resolved"
     seat = game.controller_index_of(permanent)
+    # **A mana ability's choice is answered by its activation** (CR 605.3b).
+    # "{T}: Choose a color. Add one mana of that color unless any player pays
+    # {1}." (Rhystic Cave.) The ability resolves the moment it is activated, so
+    # the colour its activator named with the activation *is* the choice CR
+    # 608.2d asks for — the same channel every other colour a mana ability
+    # makes already arrives on (``choices["new_color"]``, read by the "any
+    # color", "{B} or {R}" and combination branches of ``add_mana_from_text``).
+    # Stamped as ``color`` by the two sites that run a mana ability inline
+    # (``mana_payment.answer_color_choices``), and only onto a choice the
+    # controller makes, so nothing on the stack path is ever pre-answered.
+    #
+    # Without it the activator's named colour was ignored and the prompt's
+    # deterministic default — the colour the *opponents* hold most of — was the
+    # mana: an invented "{T}: Choose a color. Add one mana of the chosen
+    # color." land asked for {R} made {W}.
+    announced = instruction.payload.get("color")
+    if announced and not instruction.payload.get("chooser"):
+        named = game._normalize_mana_color(str(announced))
+        permanent.metadata["chosen_color"] = named
+        context.results[CHOSEN_COLOR_THIS_WAY] = named
+        game.log.append(
+            f"{card_name}: {game.players[seat].name} chose {named}"
+            if seat is not None else f"{card_name}: {named} chosen"
+        )
+        return True, "resolved"
     if instruction.payload.get("chooser") == "event_subject_player":
         # "At the beginning of each player's upkeep, **that player** chooses a
         # color." (Hall of Gemstone.) The seat the fire site froze (CR 603.10),

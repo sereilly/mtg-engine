@@ -564,6 +564,30 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
         )
         return True, "resolved"
 
+    # "Choose a color. Add one mana of **that color** unless any player pays
+    # {1}." (Rhystic Cave.) The colour an earlier step of *this* resolution
+    # chose, read out of the scratchpad slot the payload names — the one
+    # ``choose_color`` writes in both of its branches. Nothing recorded means
+    # nothing chosen, and the clause adds nothing rather than a colour nobody
+    # named, exactly as the source-record branch below does.
+    color_from = instruction.payload.get("color_from")
+    if color_from:
+        color = game._normalize_mana_color(
+            (context.results or {}).get(str(color_from))
+        )
+        spend_only = _resolved_spend_only(
+            context, instruction.payload.get("spend_only")
+        )
+        if not color:
+            game.log.append(f"{card.name}: no color was chosen, so no mana was produced")
+            return True, "resolved"
+        bucket = _mana_bucket(caster, spend_only)
+        bucket[color] = bucket.get(color, 0) + 1
+        game.log.append(
+            f"{card.name} produced {{{color}}} (the color chosen)"
+            f"{_restriction_suffix(spend_only)}"
+        )
+        return True, "resolved"
     # "Add one mana of **the chosen color**." (Sol Grail.) The colour the
     # source recorded as it entered (CR 614.1c), read off that permanent — the
     # same `metadata["chosen_color"]` record `_resolve_chosen_color` reads for

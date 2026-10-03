@@ -140,3 +140,56 @@ def test_a_tap_only_land_is_untouched():
         game, _land = _board(cards[name])
         assert game.tap_land_for_mana(0, name, symbol) is True
         assert game.players[0].mana_pool[symbol] >= 1
+
+
+def test_every_reader_that_counts_land_mana_counts_what_the_tap_seam_taps():
+    """The payment planner's land list (``untapped_mana_lands``) and the AI's
+    tap plan count a land as mana exactly when the tap seam would tap it.
+
+    The guard above holds the seam; this holds the two readers that *plan*
+    around it, which the seam's fix did not reach. Measured at PCY W3G1 over
+    both manifest roles, the planner still counted the sixteen lands above as
+    one free mana of their summary's colour — an optional "pay {1}" or an
+    upkeep cost tapped a Peat Bog and spent no counter — and the AI's plan
+    counted every land that makes no mana at all (Bazaar of Baghdad, the
+    fetchlands, Maze of Ith: 23 in both roles) as a {C} the seam then refused, which
+    is a cast proposed and declined every turn. Rhystic Cave is the land that
+    made it a rule: its mana needs priority (CR 304.5) and any player may deny
+    it, so nothing that pays mid-payment may count it.
+
+    One predicate answers all three (``mana_payment.taps_for_payment``); this
+    sweep checks the predicate against the seam's own behaviour, land by land,
+    rather than against a second list. The floor is on how many lands it
+    examined, for the reason the sweep above gives.
+    """
+    from engine.ai_policy import _plan_land_taps
+    from engine.mana_payment import taps_for_payment, untapped_mana_lands
+
+    lands = [card for card in _pool() if card.primary_type == "land"]
+    assert len(lands) >= 150
+
+    disagree = []
+    refused = examined = 0
+    for card in lands:
+        game, land = _board(card)
+        if not game.is_on_battlefield(land):
+            # "If this land would enter, sacrifice an untapped Mountain
+            # instead" (Dormant Volcano, Lotus Vale, the Ice Age outposts): on
+            # an empty board it never stays, so there is nothing to tap.
+            continue
+        examined += 1
+        counted = taps_for_payment(land)
+        in_planner = bool(untapped_mana_lands([land]))
+        planned = _plan_land_taps(game, game.players[0], {"generic": 1}) is not None
+        symbol = (card.produced_mana or ("G",))[0]
+        tapped = game.tap_land_for_mana(0, card.name, symbol)
+        refused += not tapped
+        if counted != tapped or (in_planner and not tapped) or planned != tapped:
+            disagree.append((card.name, counted, in_planner, planned, tapped))
+
+    assert disagree == []
+    assert examined >= 150
+    # The seam refuses 39 of the 166 examined today (the sixteen priced lands,
+    # Rhystic Cave, and the lands that make no mana); a sweep that refused none
+    # would be a sweep that stopped asking.
+    assert refused >= 30

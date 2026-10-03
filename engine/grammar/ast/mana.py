@@ -154,6 +154,15 @@ class AddMana:
     #: ``any_color`` the activating player picks — read as the latter, a Sol
     #: Grail told to be white would still make green on demand.
     from_chosen_color: bool = False
+    #: "Choose a color. Add one mana of **that color** unless any player pays
+    #: {1}." (Rhystic Cave.) The colour an earlier sentence of the *same*
+    #: effect chose (CR 608.2d), where ``from_chosen_color`` above is the one
+    #: the source recorded as it entered (CR 614.1c) — the split
+    #: ``ObjectFilter.color_chosen_this_way`` draws from ``chosen_color`` one
+    #: family over, and named after it for that reason. A flag because the
+    #: sentence prints no colour: the lowering turns it into the scratchpad slot
+    #: the choosing step writes, and refuses it where no step wrote one.
+    color_chosen_this_way: bool = False
     #: "Add one mana of any **type that land** could produce." (Benthic
     #: Explorers.) Its own field beside ``any_color_from`` rather than another
     #: of that field's values, and the two printed words are both reasons.
