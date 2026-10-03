@@ -24,12 +24,14 @@ still tried before the first verb.
 import dataclasses
 from . import ast
 from .ownership import _parse_ownership_exchange_unless_paid
-from .paragraphs import (
-    _parse_exile_graveyard_until_leaves,
-    _parse_exile_until_leaves_or_untaps,
+from .naming import (
     _parse_name_and_strip,
     _parse_name_then_consult,
     _parse_name_then_random_reveal,
+)
+from .paragraphs import (
+    _parse_exile_graveyard_until_leaves,
+    _parse_exile_until_leaves_or_untaps,
     _parse_transmute_by_sacrifice,
 )
 from .back_references import _parse_that_object

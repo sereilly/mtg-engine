@@ -25,8 +25,7 @@ import dataclasses
 
 from . import ast
 from .errors import GrammarError
-from .paragraphs import (_parse_reassign_blockers_between_attackers,
-                         _parse_cast_from_exiled_with)
+from .paragraphs import _parse_reassign_blockers_between_attackers
 from .choices import (_parse_choose_target, _parse_choose_then_gain,
                       _parse_choose_then_swap)
 from .delay_openers import parse_trailing_delay
@@ -61,6 +60,7 @@ from .effects import (_parse_damage_becomes_counter_removal,
                       _parse_targeting_ban)
 from .sacrifices import _parse_counted_sacrifice
 from .effects.game import parse_extra_land_plays, parse_extra_phases
+from .effects.permissions import _parse_cast_from_exiled_with
 
 
 from .sentence_clauses import (

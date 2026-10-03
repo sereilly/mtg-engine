@@ -384,7 +384,7 @@ _COMPUTED_ATTRIBUTE_WRITES: dict[str, str] = {
     ),
     "engine/mixins/stack/choices.py::_resolve_name_and_random_reveal": (
         "the zone Nebuchadnezzar's paragraph names, and the production accepts "
-        "only 'hand' or 'library' (paragraphs._RANDOM_REVEAL_ZONES) — exile "
+        "only 'hand' or 'library' (naming._RANDOM_REVEAL_ZONES) — exile "
         "cannot reach it."
     ),
     "engine/exiled_records.py::forget_record": (

@@ -74,7 +74,7 @@ def parse_excess_choice_paragraph(stream: TokenStream) -> "ast.Statement | None"
     second names nothing on its own: "the chosen permanents" is whatever the
     first chose, and a reader that took the sentences apart would have to admit
     those words everywhere and then find no record behind them. The same reason
-    ``paragraphs`` reads Demonic Consultation's three sentences together.
+    ``naming`` reads Demonic Consultation's three sentences together.
 
     What it produces is two ordinary nodes, not one fused one: a plural
     :class:`ast.ChoosePermanent` whose count is the head clause, and an
