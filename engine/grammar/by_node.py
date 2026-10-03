@@ -196,7 +196,6 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.CantActivateNonManaAbilities: _lower_cant_activate_nonmana_abilities,
     ast.UpkeepCounterToll: _lower_upkeep_counter_toll,
     ast.UpkeepDamageUnlessCost: _lower_upkeep_damage_unless_cost,
-    ast.DoesntUntapWhileSourceTapped: _lower_doesnt_untap_while_source_tapped,
     ast.TapOrUntap: _lower_tap_or_untap,
     ast.SimultaneousUntapAndTap: _lower_simultaneous_untap_and_tap,
     ast.CountObjects: _lower_count_objects,
@@ -492,4 +491,11 @@ _BY_NODE_TYPE_WITH_PRODUCED: dict[type, object] = {
     # record they name nobody.
     ast.AttacksThisTurnIfAble: _lower_attacks_this_turn_if_able,
     ast.DestroyChosenThatDidntAttack: _lower_destroy_chosen_that_didnt_attack,
+    # "Tap all other artifacts. **They** don't untap … for as long as this
+    # artifact remains tapped." (Kill Switch.) It left the name-only table
+    # above for ``ast.Attach``'s reason: the plural pronoun names the set a
+    # sweep in front of it recorded, and with no record it names nothing. The
+    # singular spellings (Phyrexian Gremlins' "it", Giant Oyster's target) read
+    # no record and lower exactly as they did.
+    ast.DoesntUntapWhileSourceTapped: _lower_doesnt_untap_while_source_tapped,
 }

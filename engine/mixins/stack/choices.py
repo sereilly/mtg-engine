@@ -4331,8 +4331,26 @@ class PendingChoicesMixin:
         Swamp to pay a {B} the tap will not produce, and report a cost payable
         that is not.
         """
-        swapped = land_mana_swaps.swapped_symbol(self, land)
-        return (swapped,) if swapped else tuple(land.effective_produced_mana or ())
+        # "A color of your choice" (Harvest Mage) is all five colours here,
+        # which ``payment_colors`` answers so the client's colour prompt asks
+        # the same question.
+        swapped = land_mana_swaps.payment_colors(self, land)
+        if swapped:
+            return swapped
+        own = tuple(land.effective_produced_mana or ())
+        # "Lands you control have "{T}: Add two mana of any one color.""
+        # (Overlaid Terrain.) A *granted* mana ability, which the printed
+        # ``produced_mana`` summary knows nothing about — so a Forest carrying
+        # it would read as green-only and neither the planner nor the client
+        # would ever ask for another colour. Asked of the ability the tap seam
+        # will actually run (``_land_mana_abilities``), and only where the
+        # summary does not already name all five, so a City of Brass keeps the
+        # answer and the order it has always had.
+        if not set(land_mana_swaps.COLORS) <= set(own):
+            free, _priced = self._land_mana_abilities(land)
+            if free is not None and (free.payload or {}).get("any_color"):
+                return land_mana_swaps.COLORS
+        return own
 
     def _default_mana_payment(self, choice: PendingChoice) -> None:
         controller = self.players[choice.player_index]
@@ -4554,8 +4572,18 @@ class PendingChoicesMixin:
         Not a valuation — board order is seed-deterministic, which is what AI
         and headless play need. A card whose choice should be made cleverly
         needs a weight in ``engine/ai_valuation.py``, not a branch here.
+
+        The one ordering a *payload* may ask for is ``default_prefers``: a
+        permanent state the step behind the pick would change. "That player
+        untaps a land they control" (Rising Waters) offers every land and an
+        untapped one is a legal answer that does nothing, so the default takes
+        a tapped one first. Stable, so board order still breaks every tie, and
+        a preference rather than a filter: the interactive prompt is unchanged.
         """
         live = self.live_permanent_choices(choice)
+        prefers = (choice.data.get("_payload") or {}).get("default_prefers")
+        if prefers == "tapped":
+            live = sorted(live, key=lambda perm: not perm.tapped)
         if not live or not self._resolve_permanent_choice(
             choice, live[0].permanent_id
         ):

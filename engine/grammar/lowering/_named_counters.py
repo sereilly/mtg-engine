@@ -52,11 +52,12 @@ both of this kind, so this is the half that grows.
 
 from __future__ import annotations
 
-from ...oracle_types import OracleInstruction
+from ...oracle_types import OracleInstruction, X_FROM_COUNT
 from ...subject_filters import object_only_filter
 from .. import ast
 from ..errors import LoweringError
 from ..phrases import is_pt_counter
+from ._amounts import count_filter_on_frozen_seat, count_spec
 from ._common import (
     PRIMARY_TARGET_ROLE, _amount_payload, _describe_targets, _filter_payload,
     _is_source, _is_target, _names_several_targets, describe_target_roles,
@@ -195,6 +196,20 @@ def lower_named_placement(
         ):
             placed = "trigger_count"
             extra["amount_from_trigger"] = event_key
+        elif isinstance(node.count, ast.CountOf):
+            # "…put a charge counter on this enchantment **for each untapped
+            # land that player controls**." (Mana Cache.) A board count taken as
+            # the placement resolves (CR 107.3), through the one spec every
+            # counted quantity uses: the handler reads "x" and the dispatch
+            # point fills it from ``x_from_count``, exactly as a where-clause's
+            # X is filled. "That player" is the seat the firing event froze —
+            # *trigger_event*, the unfiltered kind, because the count is part
+            # of this clause wherever in the sentence it sits.
+            placed = "x"
+            extra[X_FROM_COUNT] = count_spec(
+                count_filter_on_frozen_seat(node.count.filter, trigger_event, node),
+                node,
+            )
         else:
             raise LoweringError(
                 "a named counter is placed a fixed or variable number at a "

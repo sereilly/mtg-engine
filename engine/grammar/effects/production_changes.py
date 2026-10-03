@@ -46,6 +46,7 @@ many ways its sentence spells the tapper — so a near-empty
 thing symmetry is for.
 """
 
+from ...oracle_types import MANA_COLOR_OF_CHOICE
 from .. import ast
 from ..errors import GrammarError
 from ..lexer import MANA
@@ -217,6 +218,17 @@ def _parse_tapper_produces_instead(
     # mana", Chaos Moon). The word form is read first and non-consuming, so a
     # line printing neither still falls out on the mana check below.
     produced = _parse_produced_mana_word(stream)
+    # "…it produces **one mana of a color of your choice** instead of any other
+    # type and amount." (Harvest Mage.) No symbol at all: the tapper names a
+    # colour each time a land is tapped, so the node carries the sentinel the
+    # tap seam resolves. Every word is required — "one" is the amount the
+    # "and amount" tail below replaces *to*, and "your" is the tapper's own
+    # choice, which is why the any-player spelling ("a player taps", where
+    # "your" would be somebody else's) refuses it.
+    if produced is None and not each_player and stream.accept_phrase(
+        "one", "mana", "of", "a", "color", "of", "your", "choice"
+    ):
+        produced = MANA_COLOR_OF_CHOICE
     if produced is None:
         token = stream.peek()
         produced = (
@@ -233,12 +245,24 @@ def _parse_tapper_produces_instead(
     if not stream.accept_phrase("instead", "of", "any", "other", "type"):
         stream.reset(mark)
         return None
+    # "…instead of any other type **and amount**." (Harvest Mage.) Read, not
+    # skipped, for the static twin's reason (Contamination): without the words
+    # a land that makes two mana makes two of the new colour, a strictly
+    # better card than the printed one.
+    replaces_amount = bool(stream.accept_phrase("and", "amount"))
+    if produced == MANA_COLOR_OF_CHOICE and not replaces_amount:
+        # "one mana of a color of your choice" with no "and amount" behind it
+        # would say one mana and then keep the land's amount — a sentence no
+        # card prints, and the two halves would contradict each other.
+        stream.reset(mark)
+        return None
     return ast.ProducesManaInstead(
         subject,
         replaced=ast.ANY_OTHER_TYPE,
         produced=produced,
         by_controller=True,
         each_player=each_player,
+        replaces_amount=replaces_amount,
     )
 
 

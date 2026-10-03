@@ -249,6 +249,33 @@ def most_permanents_seat(game: Game) -> "int | None":
     )
 
 
+def most_controlling_seat(game: Game, filters: dict) -> "int | None":
+    """The seat controlling strictly more of a printed phrase than each other.
+
+    "At the beginning of your upkeep, **if a player controls more creatures
+    than each other player, the player who controls the most creatures** gains
+    control of this creature." (Wild Mammoth.) :func:`most_permanents_seat`
+    with the noun phrase as data — the intervening-if and the hand-over behind
+    it both ask this one reader, so the gate cannot open on a board where the
+    hand-over then names nobody, which is the pairing :func:`most_life_seat`
+    already keeps for Wild Dogs.
+
+    Counted through the control seam, and each seat's phrase is answered by
+    ``subject_matches`` with that seat as the observer: "creatures" is a layer
+    question (an animated land counts, CR 613 layer 4), and the one reader of a
+    printed noun phrase is what the lowering held the phrase to.
+    """
+    from ..subject_filters import subject_matches
+
+    return _strict_leader(
+        game,
+        lambda index: sum(
+            1 for permanent in game.controlled_by(index)
+            if subject_matches(game, permanent, filters, observer=index)
+        ),
+    )
+
+
 def _condition_player(game: Game, context: OracleExecutionContext, whose):
     """The single seat a condition's ``player`` word names, or None.
 
@@ -519,6 +546,20 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
 
     if kind == "controls":
         who = payload.get("who", "you")
+        if who == "any_player":
+            # "if **a player** controls more creatures than each other player"
+            # (Wild Mammoth). An existential over a superlative: is *anybody*
+            # strictly ahead of everybody else? Answered before the per-seat
+            # reads below, which would read "any player" as every seat at once
+            # and then refuse the superlative for naming more than one — and
+            # through the reader the hand-over asks, so the two cannot disagree
+            # about a tie. The lowering admits the word under the superlative
+            # and nothing else; any other op here is a payload nobody built.
+            if payload.get("op") != "more_than_each_other_player":
+                return False
+            return most_controlling_seat(
+                game, dict(payload.get("filter") or {})
+            ) is not None
         players = [context.caster] if who == "you" else list(game.players)
         if who in ("each_opponent", "target_opponent", "opponent"):
             players = [p for p in game.players if p is not context.caster]

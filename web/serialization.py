@@ -219,6 +219,31 @@ def _card_preview(card) -> dict:
     }
 
 
+def _offered_mana(game: Game, perm: Permanent) -> tuple[str, ...]:
+    """The symbols the client offers when this permanent is tapped for mana.
+
+    The permanent's own answer, except where tapping a land lets the tapper
+    name a colour the printed summary does not list: a seat-wide swap ("…it
+    produces one mana of **a color of your choice** instead of any other type
+    and amount", Harvest Mage) or a granted ability ("Lands you control have
+    "{T}: Add two mana of **any one color**."", Overlaid Terrain). The client
+    prompts for a colour only when a land offers two or more, so a Forest that
+    answered "G" here would never be asked — the seam would get the default
+    request and the choice the card prints would be one no human could make.
+
+    Read off the planner's hook (``Game._land_payment_colors``), so the client
+    and the payment planner cannot disagree. Only a *choice* is taken from it:
+    a fixed swap (Deep Water) answers one symbol, which the seam decides
+    whatever is requested, and is left showing what it always showed.
+    """
+    own = tuple(perm.effective_produced_mana)
+    if perm.has_type("land"):
+        payable = tuple(game._land_payment_colors(perm))
+        if len(payable) > 1 and set(payable) != set(own):
+            return payable
+    return own
+
+
 def _shield_source_payload(source_name: str | None) -> dict | None:
     """A card-preview payload for the effect that granted a damage-prevention
     shield, so the UI can show its art when the shield badge is hovered. Returns
@@ -400,7 +425,7 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         "attached_to_index": attached_to_index,
         "attached_to_id": attached_to_id,
         "attached_to_seat": attached_to_seat,
-        "produced_mana": list(perm.effective_produced_mana),
+        "produced_mana": list(_offered_mana(game, perm)),
         # A color-changing effect (e.g. Lifelace: "Target ... becomes green.")
         # records the new color so the UI can label the recolored permanent.
         "color_override": perm.metadata.get("color_override"),

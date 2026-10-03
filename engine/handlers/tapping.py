@@ -1202,8 +1202,27 @@ UNTAP_LOCK_WHILE_TAPPED_KEY = "untap_lock_while_tapped"
 UNTAP_LOCK_WHILE_PRESENT_KEY = "untap_lock_while_present"
 
 
-def end_untap_lock(permanent) -> int | None:
-    """End the lock *permanent* is holding, if any; returns what it held.
+def untap_lock_ids(record) -> tuple[int, ...]:
+    """The permanent ids a linked-lock record holds, whatever its shape.
+
+    One id for the single-object spellings (Phyrexian Gremlins' "it", Giant
+    Oyster's target, Somnophore's "that creature"), which is what every record
+    written before Kill Switch holds and keeps holding; a tuple for the swept
+    one — "Tap all other artifacts. **They** don't untap …" — whose set the
+    sweep fixed as it resolved (CR 611.2c). The untap step and the AI's
+    keep-tapped default both ask through here, so neither can read one shape
+    and miss the other.
+    """
+    if record is None:
+        return ()
+    if isinstance(record, int):
+        return (record,)
+    return tuple(int(held) for held in record)
+
+
+def end_untap_lock(permanent) -> "int | tuple[int, ...] | None":
+    """End the lock *permanent* is holding, if any; returns what it held (one
+    id, or the set a swept lock recorded — see :func:`untap_lock_ids`).
 
     CR 611.2a: the effect lasts exactly as long as the card states, and "for as
     long as this creature remains tapped" has ended the moment the permanent
@@ -1267,6 +1286,30 @@ def _restrict_untap_while_source(
     source = context.source_permanent
     if source is None:
         return False, "ability not implemented"
+    recorded_key = instruction.payload.get("permanents_from")
+    if recorded_key is not None:
+        # "Tap all other artifacts. **They** don't untap …" (Kill Switch.) The
+        # set the sweep in front of this step recorded, by id — so an artifact
+        # that enters afterwards is not held, and one that left in between is
+        # simply not there to hold (CR 400.7). Recorded as a tuple on the same
+        # key the single-object spellings write one id to, which
+        # :func:`untap_lock_ids` reads either way.
+        held = tuple(
+            permanent_id
+            for permanent_id in recorded_permanent_ids(context, recorded_key)
+            if game.permanent_by_id(permanent_id) is not None
+        )
+        if not held:
+            game.log.append(f"{context.card.name}: nothing to hold tapped")
+            return True, "resolved"
+        source.metadata[key] = held
+        names = ", ".join(
+            game.permanent_by_id(permanent_id).card.name for permanent_id in held
+        )
+        game.log.append(
+            f"{names} won't untap while {context.card.name} {condition}"
+        )
+        return True, "resolved"
     target = game.permanent_by_id(context.target_permanent_id) if context.target_permanent_id else None
     if target is None and isinstance(context.target_permanent_index, int):
         target = game.chosen_permanent(

@@ -1975,8 +1975,13 @@ def add_named_counter_to_self(game: Game, instruction: OracleInstruction, contex
         # X may be announced as zero, which CR 122.1 places no counters for.
         return True, "resolved"
     total = add_counters(source, counter, count)
+    # The number actually placed, which a counted placement makes more than one
+    # ("…for each untapped land that player controls", Mana Cache) — a log that
+    # always said "a" would read three counters as one.
+    placed = "a" if count == 1 else str(count)
+    plural = "" if count == 1 else "s"
     game.log.append(
-        f"{source.card.name} gets a {counter} counter ({total} total)"
+        f"{source.card.name} gets {placed} {counter} counter{plural} ({total} total)"
     )
     return True, "resolved"
 

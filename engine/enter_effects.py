@@ -694,6 +694,52 @@ def sacrifice_any_number_on_enter(line: str, card_name: str | None = None) -> di
     return object_only_filter(payload)
 
 
+#: "As this enchantment enters, **sacrifice all lands you control**." (Overlaid
+#: Terrain.) :data:`SACRIFICE_ANY_NUMBER_ON_ENTER`'s sentence with the choice
+#: taken away: "all" names the whole set, so nobody is asked anything and the
+#: entry state performs it outright (CR 614.1c, the same moment Wood Elemental's
+#: is made). The noun phrase is a capture read by the one noun parser, so "all
+#: creatures you control" or "all artifacts you control" is this row with a word
+#: changed.
+SACRIFICE_ALL_ON_ENTER = re.compile(
+    r"^as this [a-z]+ enters, sacrifice all (?P<phrase>.+?)$"
+)
+
+
+def sacrifice_all_on_enter(line: str, card_name: str | None = None) -> dict | None:
+    """The filter payload naming everything sacrificed as the permanent enters.
+
+    Read by the entry state that performs it *and* by the support gate, for
+    :func:`sacrifice_any_number_on_enter`'s reason: what is sacrificed and what
+    is claimed cannot drift.
+
+    The phrase must say "**you control**", and that is not a narrowing this
+    drops: CR 701.21a lets a player sacrifice only permanents they control, so
+    the seat is where the set is drawn from and the key leaves the payload. A
+    phrase naming any other seat — or none — refuses, because "sacrifice all
+    lands" read as the controller's would be a sentence about somebody else's
+    board performed on the wrong one. Anything left that the object-only matcher
+    cannot test refuses too, for the any-number row's reason.
+    """
+    from .grammar.lowering._common import dropped_narrowings
+    from .grammar.phrases import parse_subject_filter
+    from .subject_filters import object_only_filter
+
+    match = SACRIFICE_ALL_ON_ENTER.match(_self_normalized(line, card_name))
+    if match is None:
+        return None
+    filt = parse_subject_filter(match.group("phrase"), plural=True)
+    if filt is None or filt.zone != "battlefield" or filt.is_card:
+        return None
+    if filt.controller != "you":
+        return None
+    payload = filt.to_payload()
+    if dropped_narrowings(filt, payload):
+        return None
+    payload.pop("controller", None)
+    return object_only_filter(payload)
+
+
 #: "As this creature enters, pay any amount of life. The amount you pay can't be
 #: more than the total number of <objects> your opponents control plus the total
 #: number of <cards> in their graveyards." (Nameless Race.)
@@ -1440,6 +1486,8 @@ def enter_effect_line(line: str, card_name: str | None = None) -> str | None:
         return "chooses a number as it enters"
     if sacrifice_any_number_on_enter(normalized) is not None:
         return "sacrifices any number as it enters"
+    if sacrifice_all_on_enter(normalized) is not None:
+        return "sacrifices all of a kind as it enters"
     if pay_any_life_on_enter(normalized) is not None:
         return "pays any amount of life as it enters"
     # The three-sentence entry cost (Frankenstein's Monster). Claimed here
@@ -1509,6 +1557,8 @@ __all__ = [
     "pay_any_life_on_enter",
     "SACRIFICE_ANY_NUMBER_ON_ENTER",
     "sacrifice_any_number_on_enter",
+    "SACRIFICE_ALL_ON_ENTER",
+    "sacrifice_all_on_enter",
     "SPEND_ANY_COLOR",
     "SPEND_WHITE_AS_RED",
     "copy_on_enter_type",

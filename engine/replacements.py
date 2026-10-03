@@ -3723,7 +3723,12 @@ def _substitute_land_mana(game, payload: dict) -> ReplacementOutcome | None:
     """
     from .land_mana_swaps import swapped_production
 
-    substitution = swapped_production(game, payload["land"])
+    # "…one mana of **a color of your choice**…" (Harvest Mage) is named by the
+    # tapper for this one event, so the colour the seam was asked for travels
+    # with the event and answers it. Every fixed swap ignores it.
+    substitution = swapped_production(
+        game, payload["land"], requested=payload.get("requested")
+    )
     if substitution is None:
         return None
     payload["produced"] = substitution.produced

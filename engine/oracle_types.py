@@ -1077,6 +1077,18 @@ MILLED_THIS_WAY = "milled_this_way"
 TAPPED_THIS_WAY = "tapped_this_way"
 TAPPED_THIS_WAY_OBJECTS = "tapped_this_way_objects"
 
+#: The symbol a land-mana swap produces when the sentence prints no symbol at
+#: all: "…it produces one mana of **a color of your choice** instead of any
+#: other type and amount." (Harvest Mage.) Not a symbol a pool can hold — the
+#: colour is named by the tapper *each time a land is tapped* (CR 106.12b's
+#: replacement applies to that one production event), so the record carries
+#: this and the tap seam resolves it against the colour the tapper asked for.
+#:
+#: Here rather than beside either end for ``X_FROM_COUNT``'s reason: the
+#: grammar writes it into a payload and ``engine/land_mana_swaps.py`` reads it
+#: back, and this module is the one both may import.
+MANA_COLOR_OF_CHOICE = "color_of_choice"
+
 #: "You and that opponent each gain control of all creatures the other controls
 #: until end of turn. **Those creatures** gain haste until end of turn."
 #: (Reins of Power.) Every permanent the mutual control change moved, both

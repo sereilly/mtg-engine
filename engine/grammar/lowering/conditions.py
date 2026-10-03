@@ -28,7 +28,7 @@ from __future__ import annotations
 
 from .. import ast
 from ..errors import LoweringError
-from ._common import _is_enchanted
+from ._common import _is_enchanted, testable_filter_payload
 from ._events import (ATTACHED_PERMANENT_CONTROLLER, _EVENT_SUBJECT_OBJECTS,
                       _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER,
                       names_attached_permanent)
@@ -344,6 +344,31 @@ def _lower_condition(
             "op": condition.comparison.op,
         }
     if isinstance(condition, ast.Controls):
+        # "if **a player** controls more creatures than each other player"
+        # (Wild Mammoth). The board-count twin of the existential life gate
+        # below, refused off the superlative for that gate's reason: "a player
+        # controls a Swamp" would be a different card, and nothing prints it.
+        # The phrase is held to what ``subject_matches`` tests, because the
+        # evaluator counts every seat's board through it and the hand-over
+        # behind the gate asks the same reader (`most_controlling_seat`).
+        if condition.who.kind == "any_player":
+            comparison = condition.comparison
+            if comparison is None or comparison.op != "more_than_each_other_player":
+                raise LoweringError(
+                    "an existential board count is only read as a superlative",
+                    node=condition,
+                )
+            return {
+                "kind": "controls",
+                "who": "any_player",
+                "filter": testable_filter_payload(
+                    condition.filter,
+                    refusal="the superlative board count cannot test this phrase",
+                    node=condition,
+                ),
+                "op": comparison.op,
+                "count": 0,
+            }
         who = _condition_seat(condition, condition.who, event, "board count")
         payload = {
             "kind": "controls",

@@ -668,7 +668,17 @@ def _parse_subject(words: list[str]) -> LordBuffFilter | None:
             index += 1
     # The head noun. Optional only when a subtype already supplied one
     # ("Other Goblins"); "Other Zombie creatures" spells it out.
+    card_types: tuple[str, ...] = ("creature",)
     if index < len(words) and words[index] in ("creature", "creatures"):
+        index += 1
+    # "**Lands** you control have "{T}: Add two mana of any one color.""
+    # (Overlaid Terrain.) CR 613 layer 6 is not about creatures — Spectral
+    # Guardian's "noncreature artifacts" reached the filter's ``card_types``
+    # through the grammar — and this table is the one home of a *quoted*
+    # grant, so the land noun is read here too. Never after a creature
+    # subtype: "Goblin lands" names nothing.
+    elif not subtypes and index < len(words) and words[index] in ("land", "lands"):
+        card_types = ("land",)
         index += 1
     elif not subtypes:
         return None
@@ -725,6 +735,7 @@ def _parse_subject(words: list[str]) -> LordBuffFilter | None:
         with_plus1_counter=with_plus1_counter,
         with_keywords=with_keywords,
         without_keywords=without_keywords,
+        card_types=card_types,
     )
 
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ..oracle_types import MANA_COLOR_OF_CHOICE
 from .registry import effect_handler
 from ._common import count_from_payload, resolve_amount
 
@@ -953,15 +954,23 @@ def swap_controller_land_mana_until_eot(game: Game, instruction: OracleInstructi
                 lands=dict(instruction.payload.get("lands") or {}),
                 source_name=getattr(context.card, "name", None),
                 chosen_by=chosen_by,
+                # "…instead of any other type **and amount**." (Harvest Mage.)
+                replaces_amount=bool(instruction.payload.get("replaces_amount")),
             ),
         )
     whose = "every player's" if len(seats) > 1 else f"{caster.name}'s"
     shown = produced or str(
         (chosen_by.metadata.get("chosen_color") if chosen_by is not None else "") or "?"
     )
+    # "…one mana of a color of your choice…" (Harvest Mage) has no symbol to
+    # show: the colour is named at each tap.
+    what = (
+        "one mana of a color of their choice"
+        if produced == MANA_COLOR_OF_CHOICE else f"{{{shown}}}"
+    )
     game.log.append(
         f"{getattr(context.card, 'name', 'an effect')}: {whose} lands "
-        f"produce {{{shown}}} this turn"
+        f"produce {what} this turn"
     )
     return True, "resolved"
 

@@ -10,6 +10,7 @@ from ..enter_effects import (
     entry_exile_requirement,
     entry_sacrifice_requirement,
     sacrifice_any_number_on_enter,
+    sacrifice_all_on_enter,
     CHOOSE_COLOR_AND_OPPONENT_ON_ENTER,
     chooses_color_on_enter,
     chooses_color_and_creature_type_on_enter,
@@ -831,6 +832,32 @@ class PermanentStateMixin:
                     reason=f"{permanent.card.name} enters",
                     up_to=True, count_onto=permanent,
                 )
+            break
+
+        # "As this enchantment enters, sacrifice **all** lands you control."
+        # (Overlaid Terrain.) The row above with nothing to choose: CR 614.1c
+        # puts it at the same moment, and "all" is the whole set, so it is
+        # performed here rather than offered. Drawn from the entering seat's own
+        # board through the control seam (CR 701.21a — a player sacrifices only
+        # what they control), and never the entering permanent itself, which is
+        # not yet on the battlefield as the replacement applies. Each one goes
+        # through the one sacrifice transition, so every die / leaves trigger a
+        # sacrificed land has is announced.
+        for raw_line in entry_lines:
+            swept = sacrifice_all_on_enter(raw_line, permanent.effective_card.name)
+            if swept is None:
+                continue
+            doomed = [
+                perm for perm in self.controlled_by(caster_index)
+                if perm is not permanent
+                and subject_matches(self, perm, swept, observer=caster_index)
+            ]
+            for perm in doomed:
+                if self.sacrifice_permanent(perm) is not None:
+                    self.log.append(
+                        f"{self.players[caster_index].name} sacrificed "
+                        f"{perm.card.name} as {permanent.card.name} entered"
+                    )
             break
 
         # "As this creature enters, exile X creature cards from your graveyard.

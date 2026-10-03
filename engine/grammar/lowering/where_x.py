@@ -25,12 +25,12 @@ import dataclasses
 from ...oracle_types import OracleInstruction, X_FROM_COUNT
 from .. import ast
 from ..errors import LoweringError
-from ._amounts import TARGET_OPPONENT_SCOPE, count_spec, tapped_this_way_record
+from ._amounts import (TARGET_OPPONENT_SCOPE, count_filter_on_frozen_seat,
+                       count_spec, tapped_this_way_record)
 from ._amounts import _mentions_x, _stamp_x_from_count
 from ._counted_damage import _READABLE_COST_SACRIFICE_CHARACTERISTICS
 from ._records import produced_keys
 from ._common import _restrictions_beyond
-from ._events import _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER
 
 def _round_every_x_spec(
     instructions: tuple[OracleInstruction, ...], rounding: str, divisor: int
@@ -523,14 +523,10 @@ def _count_filter_for(filt, inner: tuple[OracleInstruction, ...], node, event=No
     # recipient beside it reads, so the count and the damage cannot end up on
     # two different players.
     if not _names_a_player_target(inner):
-        if event in _EVENT_SUBJECT_PLAYERS:
-            return dataclasses.replace(
-                filt, controller=None,
-                zone_owner=ast.PlayerRef(EVENT_SUBJECT_PLAYER),
-            )
-        raise LoweringError(
-            "'that player' in a count with no player target to name", node=node
-        )
+        # The frozen-seat half lives in the counting floor, which a counter
+        # placement reads too ("…for each untapped land that player controls",
+        # Mana Cache) — one rewrite, one table of which events froze a seat.
+        return count_filter_on_frozen_seat(filt, event, node)
     return dataclasses.replace(
         filt, controller=None, zone_owner=ast.PlayerRef("target_player")
     )
