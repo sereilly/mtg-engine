@@ -3,7 +3,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..oracle_types import TAPPED_THIS_WAY_OBJECTS, X_FROM_COUNT
-from ._common import (recorded_permanent_ids, 
+from ._common import (recorded_permanent_ids,
+    attached_host,
     block_pair_permanents,
     defending_player_seat,
     frozen_that_player_seat,
@@ -224,11 +225,18 @@ def untap_recorded_permanents(game: Game, instruction: OracleInstruction, contex
 
 @effect_handler("untap_enchanted_creature")
 def untap_enchanted_creature(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Untap enchanted creature." (Instill Energy, Nature's Chosen, Apathy,
+    Dance of the Dead, Wellspring, Abduction.)
+
+    Through ``attached_host``: the Aura's teardown clears its live record, and
+    an ability or trigger of the Aura that resolves after it left still names
+    the creature it was on (CR 113.7a, CR 608.2h last-known information).
+    """
     card = context.card
     source_permanent = context.source_permanent
     if source_permanent is None:
         return False, "ability not implemented"
-    attached_to = source_permanent.metadata.get("attached_to")
+    attached_to = attached_host(game, source_permanent)
     if attached_to is not None:
         game.become_untapped(attached_to)
         game.log.append(f"Untapped {attached_to.card.name} via {card.name}")
@@ -261,8 +269,11 @@ def tap_enchanted_creature(game: Game, instruction: OracleInstruction, context: 
     source_permanent = context.source_permanent
     if source_permanent is None:
         return False, "ability not implemented"
-    attached_to = source_permanent.metadata.get("attached_to")
-    if attached_to is not None and game.is_on_battlefield(attached_to):
+    # Last-known information, for ``untap_enchanted_creature``'s reason: a
+    # Paralyze bounced in response to its own enters trigger still taps the
+    # creature it was put on (CR 608.2h).
+    attached_to = attached_host(game, source_permanent)
+    if attached_to is not None:
         game.become_tapped(attached_to)
         game._turn_face_up(attached_to)
         # What this step affected, under the key every other tap writes —

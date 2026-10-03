@@ -443,6 +443,48 @@ _UNCHECKED_CAST_TARGET_KINDS = frozenset({
 })
 
 
+def _resolution_rechecks_description(spec: dict) -> bool:
+    """Whether ``illegal_targets_refusal`` re-asks *spec*'s printed
+    description of each surviving permanent target (CR 608.2b).
+
+    Yes for every spec whose targets are battlefield permanents named by id —
+    the ones ``Game._described_cast_target_slots`` enumerates. **Wider than**
+    ``_UNCHECKED_CAST_TARGET_KINDS`` **by one kind**, ``spell_or_permanent``
+    (the Laces, Unsubstantiate): the announcement gate leaves it out because a
+    named *index* there may be a stack position, but at resolution the target
+    is an id, which names a permanent and nothing else, so the permanent half
+    of the description is answerable exactly as for a "permanent" spec.
+
+    No for the shapes the question is not about:
+
+    * a **cost** picker (``sacrifice_cost`` / ``discard_cost`` / ``exile_cost``
+      on the spec itself) — a payment is not a target (CR 601.2b vs 601.2c),
+      and a sacrificed creature has, by design, left the description;
+    * a **stack** target — its own branch below, and a spell's type does not
+      change on the stack in this pool;
+    * a **graveyard** target — a card in a zone has no computed
+      characteristics to change (CR 613.1), and the stamp branch below already
+      answers its "is it still there?";
+    * a **roles** spec — every role carries its own description and relation,
+      which ``handlers/_common.roles_still_legal`` re-asks at resolution
+      through the same ``ROLE_RELATION_TESTS`` the picker narrowed with. A flat
+      enumeration here would compare the second role's target against the
+      first role's list.
+
+    A **modal** spell is the caller's exclusion rather than this function's:
+    its derived spec is the first mode's whatever mode was chosen, which is a
+    fact about the program and not about the spec.
+    """
+    kind = spec.get("kind")
+    if kind in (_UNCHECKED_CAST_TARGET_KINDS - {"spell_or_permanent"}):
+        return False
+    if kind in (GRAVEYARD_TARGET_KIND, ROLES_TARGET_KIND):
+        return False
+    if spec.get("sacrifice_cost") or spec.get("discard_cost") or spec.get("exile_cost"):
+        return False
+    return True
+
+
 def _ability_target_quantifiers(instruction) -> list[str]:
     """Every *mandatory-context* ``targets`` quantifier this ability carries.
 
@@ -2024,6 +2066,29 @@ class LegalityMixin:
             return None
         return f"{card.name} can't name the same target twice"
 
+    def _described_cast_target_slots(
+        self, caster_index: int, card: CardDefinition, spec: dict
+    ) -> set[tuple[int, int]]:
+        """Every battlefield slot *card*'s printed target description admits
+        **now**, as ``(seat, index)``.
+
+        The one answer to "does this permanent still match what the spell
+        printed?", asked by both ends of a spell's life: CR 601.2c as it is
+        announced (:meth:`cast_target_refusal`) and CR 608.2b as it resolves
+        (:meth:`illegal_targets_refusal`). It is the picker's own enumeration —
+        every narrowing a spec carries (``filter``, ``own_only``,
+        ``attacking_only``, ``defending_player_only`` …) and every per-kind arm
+        ``_validate_cast_targets`` re-checks a single slot with — so the
+        announcement and the resolution cannot come to disagree about what a
+        printed word means. Two copies of that list is how "nonblack" came to
+        be enforced at announcement and forgotten at resolution.
+        """
+        valid = self._enumerate_targets(caster_index, card, spec, for_cast=True)
+        return {
+            (t["seat"], t["index"]) for t in valid
+            if t.get("kind") == "permanent" and t.get("index") is not None
+        }
+
     def cast_target_refusal(
         self, caster_index: int, card: CardDefinition, *,
         target_player_index=None, target_permanent_index=None,
@@ -2196,11 +2261,7 @@ class LegalityMixin:
                                                  target_player_index)
         if repeated is not None:
             return repeated
-        valid = self._enumerate_targets(caster_index, card, spec, for_cast=True)
-        legal = {
-            (t["seat"], t["index"]) for t in valid
-            if t.get("kind") == "permanent" and t.get("index") is not None
-        }
+        legal = self._described_cast_target_slots(caster_index, card, spec)
         refused = f"no valid target for {card.name}"
         chosen: list = []
         for permanent_id in named_ids:
@@ -2270,6 +2331,20 @@ class LegalityMixin:
         index that has come to mean a different permanent would answer this
         question about the wrong one.
 
+        **"Legal" is the announcement's question, asked again.** A permanent
+        target is legal when it is still on the battlefield, still targetable,
+        *and still among what CR 601.2c would let the caster name now* —
+        :meth:`_described_cast_target_slots`, the same enumeration
+        :meth:`cast_target_refusal` checked it against. "Nonblack", "tapped",
+        "you control", "attacking", "with flying", "with the greatest power"
+        (Topple): every narrowing the picker enforced is re-enforced here
+        without being re-read. The shapes that question does not cover are
+        named in :func:`_resolution_rechecks_description`. A spell with several
+        targets still resolves while **any** one is legal; the illegal ones are
+        each left alone by their handler's own resolver (608.2b's last
+        sentence), which is what the census over the pool's multi-target spells
+        found every one of them already doing.
+
         One deliberate exclusion, because the engine cannot answer
         "all targets" for it rather than because the rule stops:
 
@@ -2333,7 +2408,8 @@ class LegalityMixin:
             # later — the same destination by a different rule, so moving it is
             # a decision for the round that can verify it.
             return None
-        spec = derive_cast_spec(card, compile_card_oracle(card))
+        program = compile_card_oracle(card)
+        spec = derive_cast_spec(card, program)
         if spec is None or spec.get("kind") in _UNFIZZLABLE_TARGET_KINDS:
             # Either the spell does not target at all — a creature spell whose
             # caller passed a stray index still gets an id stamped, and
@@ -2357,12 +2433,36 @@ class LegalityMixin:
             return None
 
         legality: list[bool] = []
+        # **The printed description is re-asked too** (CR 608.2b: "Other
+        # changes to the game state may cause a target to no longer be legal;
+        # for example, its characteristics may have changed"). This loop
+        # asked only "still there, still targetable", so a spell whose
+        # target stopped answering its description resolved anyway: Sever Soul
+        # whose target was made black in response gained its life, Vendetta and
+        # Reckless Spite cost theirs, Spinning Darkness dealt its damage to the
+        # now-black creature — and where the handler's own resolver refused the
+        # id, its fall-through scan acted on a permanent nobody named (Ritual of
+        # the Machine stole the creature *beside* its recoloured target).
+        #
+        # The question is the announcement's, asked again through
+        # ``_described_cast_target_slots`` — not a second reading of the words.
+        # Computed lazily, once per resolution, only for a target that survived
+        # the two cheaper tests.
+        #
+        # **Not for a modal spell**, for ``cast_target_refusal``'s reason: the
+        # derived spec is the *first* mode's, and the caster chose another —
+        # Active Volcano's "return target Island" re-asked as "target blue
+        # permanent" countered every Island bounce. The chosen mode's target
+        # was checked by its own arm at announcement; re-asking it here needs
+        # the chosen mode's spec, which is a change of its own.
+        described = _resolution_rechecks_description(spec) and not program.modes
+        offered: set[tuple[int, int]] | None = None
         ids = item.target_permanent_id
         for permanent_id in (ids if isinstance(ids, (list, tuple)) else [ids]):
             if not isinstance(permanent_id, int):
                 continue
             target = self.permanent_by_id(permanent_id)
-            legality.append(
+            legal = (
                 target is not None
                 and self.is_on_battlefield(target)
                 # CR 608.2b's "other changes to the game state": protection or
@@ -2372,6 +2472,16 @@ class LegalityMixin:
                     target, card, caster_index=item.caster_index,
                 )
             )
+            if legal and described:
+                if offered is None:
+                    offered = self._described_cast_target_slots(
+                        item.caster_index, card, spec
+                    )
+                legal = (
+                    self.controller_index_of(target),
+                    self.battlefield_index_of(target),
+                ) in offered
+            legality.append(legal)
         stamps = item.target_graveyard_card
         for stamp in (stamps if isinstance(stamps, list) else [stamps]):
             if stamp is None:
@@ -3067,10 +3177,15 @@ class LegalityMixin:
         return True
 
     def _permanent_matches_target_kind(self, perm: Permanent, kind: str, spec: dict, casting_aura: bool) -> bool:
-        # Effective type line so copies match by their copied types — a Copy
-        # Artifact copying a Mox is an "Artifact Enchantment" and must be a
-        # legal target both as an artifact and as an enchantment.
-        type_line = perm.effective_card.type_line.lower()
+        # **Every head noun is a layer-4 question** (CR 613.1d), asked through
+        # ``has_type``. It was the effective card's *printed* line here, and
+        # ``card.primary_type`` for lands: right for a copy (layer 1 is folded
+        # in either way — a Copy Artifact copying a Mox is an "Artifact
+        # Enchantment" and is offered as both), wrong for every type an effect
+        # adds or takes away. A creature made an artifact (Xenic Poltergeist,
+        # Ashnod's Transmogrant) was never offered to Shatter, and a Sol Ring
+        # that had stopped being an artifact still was — so CR 608.2b, which
+        # re-asks this enumeration at resolution, called that target legal.
         # "…**that isn't enchanted**" (Time Elemental). Asked before the kind
         # switch because the restriction is not about the head noun: the card
         # prints it on "permanent", and a card printing it on "creature" would
@@ -3139,7 +3254,7 @@ class LegalityMixin:
             # Volcanic Eruption: a divided spell that targets Mountains, not creatures.
             land_filter = spec.get("land_filter")
             if land_filter:
-                if perm.card.primary_type != "land":
+                if not perm.has_type("land"):
                     return False
                 # CR 305.7: setting a land's subtype replaces its old ones, so
                 # a Mountain turned into an Island is NOT a legal "target
@@ -3208,14 +3323,14 @@ class LegalityMixin:
                 return False
             return True
         if kind == "artifact":
-            if "artifact" not in type_line:
+            if not perm.has_type("artifact"):
                 return False
             # Guardian Beast: noncreature artifacts it protects can't be enchanted.
             if casting_aura and self._untapped_artifact_protector_active(perm):
                 return False
             return True
         if kind == "land":
-            if perm.card.primary_type != "land":
+            if not perm.has_type("land"):
                 return False
             if casting_aura and _cant_be_enchanted_by_auras(perm):
                 return False
@@ -3239,7 +3354,7 @@ class LegalityMixin:
             # Colour is settled above the switch; what is left here is the one
             # narrowing only this branch has.
             if spec.get("enchant_enchantment"):
-                return "enchantment" in type_line
+                return perm.has_type("enchantment")
             return True
         return False
 

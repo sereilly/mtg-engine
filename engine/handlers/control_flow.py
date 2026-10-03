@@ -2139,9 +2139,10 @@ def _action_is_takeable(
             # is the Aura's host, not the Aura — and this gate has to leave out
             # exactly what the charge will, or the offer is made for a price
             # the handler then refuses to take: accepted, nothing sacrificed,
-            # and the printed penalty skipped.
-            from ._common import attached_host
-
+            # and the printed penalty skipped. (``attached_host`` is the module
+            # import: a function-local one here made the name local to the
+            # whole function, and the Curse Artifact branch below raised
+            # UnboundLocalError reading it.)
             exclude = attached_host(game, source)
         # The printed count, not merely "at least one": "unless you sacrifice
         # **two** Swamps" (Mold Demon) is an offer a player with one Swamp
@@ -2354,10 +2355,12 @@ def _action_is_takeable(
     # come unattached has nothing to give up, so the offer is not made and the
     # penalty applies — the alternative being an offer the player could accept
     # and then keep their life total *and* their artifact, because the handler
-    # underneath treats "nothing attached" as a no-op. Read off the source's own
-    # attachment, the same field the handler reads.
+    # underneath treats "nothing attached" as a no-op. Read through the same
+    # helper the handler reads, ``attached_host``: an Aura that left with its
+    # trigger on the stack still names the permanent it was on (CR 608.2h), so
+    # the offer stands while that permanent does.
     if instruction.kind == "sacrifice_attached_permanent":
-        return source is not None and source.metadata.get("attached_to") is not None
+        return attached_host(game, source) is not None
     # "**Pay 4 life** or put the card on top of your library." (Sylvan
     # Library.) CR 119.4: a player may pay life only with a life total at least
     # the amount, so at 3 life the payment is not one of the two things this

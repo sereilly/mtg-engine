@@ -162,8 +162,13 @@ def _block_pair_own_creature_id(game: Game, context: OracleExecutionContext) -> 
     source = context.source_permanent
     if source is None:
         return None
-    host = source.metadata.get("attached_to")
-    if host is not None and game.is_on_battlefield(host):
+    # Through ``attached_host`` so an Aura that left before its block trigger
+    # resolved still names the creature it was on (CR 608.2h last-known
+    # information). Reading the live record answered "the Aura itself" —
+    # Infinite Authority's "put a +1/+1 counter on enchanted creature" then
+    # looked for the counter's recipient among permanents that had left.
+    host = attached_host(game, source)
+    if host is not None:
         return host.permanent_id
     return source.permanent_id
 

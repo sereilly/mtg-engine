@@ -753,7 +753,11 @@ def recolor_enchanted_chosen_color(game: Game, instruction: OracleInstruction, c
     source_permanent = context.source_permanent
     if source_permanent is None:
         return False, "ability not implemented"
-    enchanted = source_permanent.metadata.get("attached_to")
+    # Last-known information (CR 608.2h): the ability exists independently of
+    # the Aura (CR 113.7a), so a Dream Coat destroyed in response still
+    # recolours the creature it was on. The live record is cleared by the
+    # Aura's teardown before this runs; ``attached_host`` reads both.
+    enchanted = attached_host(game, source_permanent)
     if enchanted is None:
         return False, "aura not attached to a permanent"
     answer = (context.choices or {}).get("new_color")
