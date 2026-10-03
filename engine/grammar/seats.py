@@ -138,7 +138,7 @@ def parse_player_ref(stream: TokenStream) -> ast.PlayerRef | None:
     # your hand" (Cultivate). Claiming it here took Waylay's tokens for a seat
     # and cost the card its support. So the word is read where the *consumer*
     # needs a player and nothing else could be meant — `effects/damage.py` for
-    # Rivalry's recipient, `paragraphs.py` for Vexing Arcanix's — which is the
+    # Rivalry's recipient, `naming.py` for Vexing Arcanix's — which is the
     # same arrangement damage's "or planeswalker" union already has.
     if stream.accept_word("they"):
         return ast.PlayerRef("that_player")

@@ -312,7 +312,7 @@ def _accept_counted_reveal_sorting_by_filter(
 
 
 #: What the cards a reveal-until turned over *before* the match may be printed
-#: to do. A closed list, for ``effects/library._REVEAL_DESTINATIONS``'
+#: to do. A closed list, for ``naming._REVEAL_DESTINATIONS``'
 #: reason: each of these is something ``reveal_until_match`` actually performs,
 #: and a word outside it refuses the line rather than lowering onto a fate
 #: nobody carries out.

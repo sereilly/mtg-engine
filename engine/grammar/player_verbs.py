@@ -39,7 +39,7 @@ import dataclasses
 from . import ast
 from .errors import GrammarError
 from .nouns import parse_object_filter
-from .paragraphs import _parse_name_then_reveal_top, parse_reveal_chosen_hand_cards
+from .naming import _parse_name_then_reveal_top, parse_reveal_chosen_hand_cards
 from .phrases import (
     _accept_life_alternative,
     _accept_mana_alternatives,

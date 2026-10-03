@@ -527,7 +527,7 @@ def _parse_player_returns_exiled_with_source(
 
 
 #: Where a linked pile may be printed to go back on a library. A closed list
-#: for `_REVEAL_DESTINATIONS`' reason one family over: each of these is a
+#: for `naming._REVEAL_DESTINATIONS`' reason: each of these is a
 #: position the handler actually reaches, and a word outside it refuses the
 #: line rather than lowering onto one nothing places.
 _EXILED_PILE_POSITIONS: tuple[str, ...] = ("top", "bottom")

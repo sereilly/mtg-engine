@@ -271,8 +271,8 @@ PARSE_LAYERS = [
     # question — which object a bare "it" names, answered by an AST walk.
     "back_references",
     "references",
-    # Whole printed *paragraphs* that are one effect (Necromentia, Idol of
-    # Endurance, Tawnos's Coffin, Transmute Artifact). Below `statements`
+    # Whole printed *paragraphs* that are one effect (Tawnos's Coffin,
+    # Transmute Artifact, Mana Clash, Natural Balance). Below `statements`
     # because none of them calls back into the sentence parser — each reads its
     # own words to the end — and split out of it when Antiquities' four-sentence
     # cards pushed that file past the guard below.
@@ -292,6 +292,25 @@ PARSE_LAYERS = [
     # else (which zone an object is *already* in). Reusing it would fork a name
     # rather than re-form one.
     "ownership",
+    # The paragraphs that turn on a **choice the board cannot show** — a card
+    # name (Necromentia, Demonic Consultation, Nebuchadnezzar, Petra Sphinx,
+    # Vexing Arcanix) or a card picked face down from a hand (Stronghold
+    # Gambit). Pre-split out of `paragraphs` at Prophecy's Phase 0, when that
+    # module sat 37 lines under the guard below with the set's multi-sentence
+    # effects about to reach it from more than one group. Half of what the
+    # module gained since Antiquities was this run (Petra Sphinx,
+    # Nebuchadnezzar, Vexing Arcanix, Demonic Consultation and, at Nemesis,
+    # Stronghold Gambit), and it was the one contiguous run that shared a
+    # subject the rest did not: what the first sentence chooses, which every
+    # later sentence checks.
+    #
+    # The name is the mirror's: `statement_dispatch_naming` lowers all five
+    # nodes these return. Not `names` — that module, under `nouns` far below,
+    # reads the literal string a card prints after "named", and no player
+    # chooses it — and not `choices`, which probes the sentence after a "Choose …"
+    # through `parse_statement`. Everything here reads its own words to the
+    # end, so it sits beside `paragraphs` and for its reason.
+    "naming",
     # Reading a keyword-ability list off a printed line. Split out of `phrases`
     # at the guard below, reusing the name `lowering/keywords.py` has carried
     # since it left the same family one package over. Below `phrases`, which

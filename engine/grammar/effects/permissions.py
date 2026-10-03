@@ -36,7 +36,18 @@ one word on two subjects in mirror positions — the duplicate-idea hazard, whic
 no textual guard can see. A permission granted and a permission withheld are
 one family, so they get one home.
 
-Both definitions moved byte-identically, so no card's compiled program moves —
+**Idol of Endurance's grant came home at Prophecy's Phase 0**, from
+``paragraphs``, where it had sat beside the Idol's exile since Antiquities.
+"You may cast a creature spell from among cards exiled with this artifact" is
+one sentence and a CR 601.3 permission — ``ast.CastFromExiledWith`` says so,
+``lowering/permissions.py`` had always lowered it, and ``statements`` tries it
+immediately in front of :func:`_parse_cast_permission`, as the narrower
+spelling of the same grant. ``paragraphs``' docstring opened "every production
+here reads *several sentences*"; this read one, and its subject was this
+module's. It is imported from here by name rather than through the package's
+front door, so its one caller says where it lives.
+
+Every arrival moved byte-identically, so no card's compiled program moves —
 which is the only thing a parse-side split can get wrong, and it can get it
 wrong only by renaming a lowering **category**. Nothing here has one: a
 category names the migration family a *kind* belongs to, and no kind changed
@@ -45,6 +56,9 @@ hands.
 
 from ...library_top import REVEALED_TEXT
 from .. import ast
+from ..errors import GrammarError
+from ..lexer import SELF
+from ..nouns import parse_object_filter
 from ..phrases import _parse_duration, _parse_zone
 from ..references import parse_player_ref, parse_target_spec
 from ..stream import TokenStream
@@ -388,6 +402,48 @@ def _parse_play_with_top_revealed(
         stream.reset(mark)
         return None
     return ast.PlayWithTopRevealed(ast.PlayerRef("you"))
+
+
+def _parse_cast_from_exiled_with(stream: TokenStream) -> ast.Statement | None:
+    """``Until end of turn, you may cast a <filter> spell from among cards
+    exiled with this <permanent> without paying its mana cost.``
+    (Idol of Endurance.)
+
+    The cost waiver is required: without it the permission is a different one
+    and strictly weaker, and a card that dropped the words would be cheaper to
+    misread than to notice.
+    """
+    if not stream.accept_phrase("until", "end", "of", "turn"):
+        return None
+    stream.accept_punct(",")
+    if not stream.accept_phrase("you", "may", "cast", "a"):
+        return None
+    try:
+        filt = parse_object_filter(stream)
+    except GrammarError:
+        return None
+    # ``parse_object_filter`` reads "creature spell" whole, marking the zone as
+    # the stack. Requiring the word back would be asking it twice; requiring the
+    # *zone* is what actually distinguishes "cast a creature spell" from a card
+    # filter that would name some other zone.
+    if filt.zone != "stack":
+        return None
+    if not stream.accept_phrase("from", "among", "cards", "exiled", "with", "this"):
+        return None
+    if stream.accept_kind(SELF) is None:
+        # The noun is **required**, not merely accepted: without it the sentence
+        # still matched and the word could be deleted with no change to what was
+        # lowered, which is exactly what the parse-coverage deletion probe is
+        # for. A card naming itself gets the SELF token instead.
+        if not stream.accept_word(
+            "artifact", "creature", "enchantment", "permanent", "land"
+        ):
+            return None
+    if not stream.accept_phrase(
+        "without", "paying", "its", "mana", "cost",
+    ):
+        return None
+    return ast.CastFromExiledWith(filt)
 
 
 def parse_cant_play_lands(
