@@ -7,6 +7,7 @@ from ..auras import AURA_ANY_COLOR_MANA, aura_additional_mana_on_tap
 from ..delayed_triggers import matching_delayed_triggers
 from ..cast_permissions import expire_at_turn_start as expire_turn_permissions
 from ..hand_locks import expire_hand_locks
+from ..land_mana_swaps import production_snapshot, substitute_production
 from ..land_play_allowance import clear_turn_land_play_effects
 from ..spell_prohibitions import clear_turn_spell_prohibitions
 from ..game_types import OracleExecutionContext, SimulationResult
@@ -568,7 +569,11 @@ class TurnManagementMixin:
         # count alone — an Ancient Tomb under Infernal Darkness makes {B}{B}
         # and under Contamination makes {B}.
         swapped_amount = mana_event.get("produced_amount")
-        pool_before = dict(player.mana_pool) if swapped_to else {}
+        # Every bucket, not only the open pool: mana a "spend this mana only…"
+        # clause narrowed is written into its own bucket (CR 106.6), and a
+        # snapshot of the pool alone let it escape every swap — Mishra's
+        # Workshop under Contamination made {C}{C}{C}, not one {B}.
+        pool_before = production_snapshot(player) if swapped_to else {}
         # **The land's own compiled mana ability, when it has one.** This used
         # to add exactly one symbol chosen from `produced_mana`, which is right
         # for every land in the 1993-94 base sets and for the dual cycles — all
@@ -626,34 +631,28 @@ class TurnManagementMixin:
             player.mana_pool[mana_symbol] = player.mana_pool.get(mana_symbol, 0) + 1
 
         if swapped_to:
-            moved = 0
-            for symbol, amount in list(player.mana_pool.items()):
-                gained = int(amount) - int(pool_before.get(symbol, 0))
-                if gained > 0 and symbol != swapped_to:
-                    player.mana_pool[symbol] = int(amount) - gained
-                    moved += gained
-            # Whatever the land already put into the pool under the swapped
-            # symbol itself counts toward the replaced amount: a Swamp under
-            # Contamination made its own {B}, and the sentence says the whole
-            # production is one {B} rather than one more.
-            moved += max(
-                0,
-                int(player.mana_pool.get(swapped_to, 0))
-                - int(pool_before.get(swapped_to, 0)),
+            # Whatever the land already put in under the swapped symbol itself
+            # counts toward the replaced amount: a Swamp under Contamination
+            # made its own {B}, and the sentence says the whole production is
+            # one {B} rather than one more. Each bucket keeps its own mana, so a
+            # restricted production stays restricted (CR 106.6).
+            colors_only = bool(mana_event.get("colors_only"))
+            moved = substitute_production(
+                player, pool_before, swapped_to,
+                None if swapped_amount is None else int(swapped_amount),
+                colors_only=colors_only,
             )
-            if swapped_amount is not None:
-                moved = min(moved, int(swapped_amount)) if moved else moved
             if moved:
-                player.mana_pool[swapped_to] = (
-                    int(pool_before.get(swapped_to, 0)) + moved
-                )
                 self.log.append(
                     f"{land_name} produced {{{swapped_to}}} instead"
                 )
             # "One mana of any type **that land produced**" is what came out,
             # not what would have: a Mana Flare over a Ritual of Subdual board
-            # matches the colourless the land really made.
-            mana_symbol = swapped_to
+            # matches the colourless the land really made. Except where a
+            # colours-only swap moved nothing — Hall of Gemstone over a land
+            # that made {C} changed nothing, and the {C} is what it made.
+            if moved or not colors_only:
+                mana_symbol = swapped_to
 
         self.log.append(f"{player.name} tapped {land_name} for mana")
 

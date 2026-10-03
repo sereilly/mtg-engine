@@ -3739,6 +3739,9 @@ def _substitute_land_mana(game, payload: dict) -> ReplacementOutcome | None:
     # spends it on and a flag would have to be turned back into a number
     # somewhere.
     payload["produced_amount"] = 1 if substitution.replaces_amount else None
+    # "…instead of any other **color**." (Hall of Gemstone.) The {C} a land
+    # makes is not of any colour (CR 106.1a), so the seam leaves it alone.
+    payload["colors_only"] = bool(substitution.colors_only)
     return ReplacementOutcome()
 
 

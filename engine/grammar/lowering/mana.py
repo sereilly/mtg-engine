@@ -575,7 +575,7 @@ def _lower_produces_mana_instead(
         # record dies with the permanent (CR 400.7). A printed window would need
         # a sweep to end it, and there is none for this record.
         raise LoweringError("a targeted produced-mana swap has no window", node=node)
-    if node.replaced == ast.ANY_OTHER_TYPE:
+    if node.replaced in (ast.ANY_OTHER_TYPE, ast.ANY_OTHER_COLOR):
         raise LoweringError(
             "a targeted produced-mana swap names the symbol it replaces",
             node=node,
@@ -636,7 +636,7 @@ def _lower_controller_mana_swap(
     key, emitted only for the wider spelling so Deep Water's payload is
     unchanged.
     """
-    if node.replaced != ast.ANY_OTHER_TYPE:
+    if node.replaced not in (ast.ANY_OTHER_TYPE, ast.ANY_OTHER_COLOR):
         raise LoweringError(
             "a controller-wide mana swap replaces every type the land makes",
             node=node,
@@ -683,6 +683,11 @@ def _lower_controller_mana_swap(
         # record clamps the production to one, the way Contamination's static
         # does. Emitted only when printed, so Deep Water's payload is unchanged.
         payload["replaces_amount"] = True
+    if node.replaced == ast.ANY_OTHER_COLOR:
+        # "…instead of any other **color**" (Hall of Gemstone): only the
+        # coloured mana is replaced, and {C} comes out as {C} (CR 106.1a).
+        # Emitted only when printed, so every "type" swap's payload is unchanged.
+        payload["colors_only"] = True
     return (OracleInstruction("swap_controller_land_mana_until_eot", "", payload),)
 
 

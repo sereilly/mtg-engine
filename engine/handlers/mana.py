@@ -956,6 +956,8 @@ def swap_controller_land_mana_until_eot(game: Game, instruction: OracleInstructi
                 chosen_by=chosen_by,
                 # "…instead of any other type **and amount**." (Harvest Mage.)
                 replaces_amount=bool(instruction.payload.get("replaces_amount")),
+                # "…instead of any other **color**." (Hall of Gemstone.)
+                colors_only=bool(instruction.payload.get("colors_only")),
             ),
         )
     whose = "every player's" if len(seats) > 1 else f"{caster.name}'s"
