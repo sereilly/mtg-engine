@@ -191,6 +191,21 @@ def test_every_single_target_denial_in_the_pool_is_aimed_at_the_opponent(catalog
     assert len(examined) >= 100, len(examined)
 
 
+def test_every_kind_the_side_tables_name_is_one_something_dispatches():
+    """The tables are keyed by instruction kind, so a rename empties them in
+    silence and every card printing that template goes back to the tie — the
+    way ``MANA_ABILITY_KINDS`` once named two kinds that no longer existed."""
+    import engine.ai_valuation as valuation
+    from engine.handlers import EFFECT_HANDLERS
+
+    named = (
+        valuation._OWN_KINDS | valuation._OPPONENT_KINDS
+        | valuation._NO_SIDE_KINDS | valuation._PT_DELTA_KINDS
+    )
+    missing = sorted(named - set(EFFECT_HANDLERS))
+    assert not missing, missing
+
+
 # --- Item 2: a spell whose resolution would do nothing ------------------------
 
 
