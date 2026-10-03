@@ -5841,14 +5841,36 @@ def exile_cards_from_hand(game: Game, instruction: OracleInstruction, context: O
 
     CR 608.2's "as much as possible": a seat holding fewer eligible cards than
     the printed number exiles every one it has, and a seat with none is
-    logged and skipped. Nothing is linked to a permanent — the sentence names
-    no "exiled with" pile — and the cards leave through the hand seam in the
-    prompt's resolver, never by an identity filter over the hand.
+    logged and skipped. The cards leave through the hand seam in the prompt's
+    resolver, never by an identity filter over the hand.
+
+    "**Target opponent** exiles a card from their hand." (Parallax Nexus.) The
+    announced seat alone (``actor: target``), read off the resolution's chosen
+    player — the same prompt, armed once. A target that is no player at all by
+    now is CR 608.2b's "does nothing" rather than a fall back to every seat.
+
+    **Linked when the source is a permanent** (CR 607.2a), exactly as
+    ``exile_target_permanent`` records its exile and for its reason: the entry
+    carries no ``ends_on``, so it is inert for every card that never asks, and
+    it is the whole of Parallax Nexus's leave trigger — "each player returns to
+    their hand all cards they own exiled with it" drains an empty pile without
+    it, and the cards a Nexus took would stay in exile for ever. A spell (Mind
+    Swords) has no permanent to link to, and its exile stays unlinked.
     """
     payload = instruction.payload
     amount = int(payload.get("amount", 1) or 0)
     caster_index = game.players.index(context.caster)
-    if payload.get("actor") == "each_opponent":
+    if payload.get("actor") == "target":
+        chosen = context.target
+        if not any(chosen is seated for seated in game.players):
+            game.log.append(
+                f"{getattr(context.card, 'name', '')}: no player to exile a card"
+            )
+            return True, "resolved"
+        candidates = {
+            next(i for i, seated in enumerate(game.players) if seated is chosen)
+        }
+    elif payload.get("actor") == "each_opponent":
         candidates = set(game.opponents_of(caster_index))
     else:
         candidates = set(range(len(game.players)))
@@ -5878,7 +5900,7 @@ def exile_cards_from_hand(game: Game, instruction: OracleInstruction, context: O
                 card_name=card_name,
                 _payload=pick,
                 _context=context,
-                _source_permanent=None,
+                _source_permanent=context.source_permanent,
             )
     return True, "resolved"
 

@@ -457,6 +457,75 @@ def _parse_put_exiled_with_source(stream: TokenStream) -> ast.Statement | None:
     )
 
 
+def _parse_player_returns_exiled_with_source(
+    stream: TokenStream, player: "ast.PlayerRef"
+) -> "ast.PutExiledWithSource | None":
+    """``returns to the battlefield all cards they own exiled with it`` /
+    ``returns to their hand all cards they own exiled with it`` — the verb and
+    everything after it, with ``Each player`` already read by the caller.
+    (Parallax Wave and Parallax Tide; Parallax Nexus prints the hand.)
+
+    The same CR 607.2a linked pile :func:`_parse_put_exiled_with_source` reads,
+    spelled from the other end: the imperative names the pile and says where
+    each card goes ("…under **their owners'** control", Wall of Nets), where
+    this names every player and has each one return **their own** cards. One
+    claim either way — every card in the pile has exactly one owner, so "each
+    player … all cards they own" is the whole pile, each card to its own owner —
+    which is why it builds the same node with the owner possessive the
+    imperative's clause records, and lowers through the same sweep.
+
+    That equivalence holds for **this subject alone**, and the gate is the
+    safety. "You return to your hand all cards you own exiled with it" would be
+    one seat's share of the pile and the rest left in exile; "target player
+    returns …" the same for a chosen seat. Neither is printed, and both decline
+    here rather than being read as the sweep.
+
+    The destination is printed in front of the object, the word order
+    ``_parse_put_exiled_this_way`` reads for Memory Jar one production down, and
+    its possessive must agree with the subject: "their hand" is the returning
+    player's, which "they own" makes the card's owner (CR 400.3). A battlefield
+    prints none and is nobody's zone (CR 400.1); the card enters under the
+    control of the player who put it there (CR 110.2a), who is again its owner.
+
+    Returns None with the cursor unmoved for anything else, so "each player
+    returns all creature cards from their graveyard …" (All Hallow's Eve) and
+    Memory Jar's "… each card they exiled this way" keep their own readings.
+    """
+    if player.kind != "each_player":
+        return None
+    mark = stream.mark()
+    if not stream.accept_word("returns", "return"):
+        return None
+    if not stream.accept_word("to"):
+        stream.reset(mark)
+        return None
+    # The printed possessive, read before ``_parse_zone`` normalises it: that
+    # reader folds "your" *and* the subject's own pronoun into one ``you``
+    # owner, and for this subject only the second is the returning player's
+    # hand — "each player returns to **your** hand …" is every seat handing one
+    # player the table's cards.
+    possessive = stream.peek_word()
+    try:
+        zone = _parse_zone(stream, self_possessive=_matching_possessive(player))
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if zone.name == "battlefield":
+        if zone.owner is not None:
+            stream.reset(mark)
+            return None
+    elif possessive != _matching_possessive(player):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("all", "cards", "they", "own", "exiled", "with"):
+        stream.reset(mark)
+        return None
+    if not (stream.accept_word("it") or _accept_self_reference(stream)):
+        stream.reset(mark)
+        return None
+    return ast.PutExiledWithSource(ast.Zone(zone.name, ast.PlayerRef("owner")))
+
+
 #: Where a linked pile may be printed to go back on a library. A closed list
 #: for `_REVEAL_DESTINATIONS`' reason one family over: each of these is a
 #: position the handler actually reaches, and a word outside it refuses the

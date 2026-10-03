@@ -152,6 +152,7 @@ from .exile import (
     _parse_put_exiled_with_source,
     _parse_player_exiles_pile,
     _parse_player_exiles_target_spell,
+    _parse_player_returns_exiled_with_source,
     _parse_put_exiled_this_way,
     parse_put_exiled_pile_on_library,
 )
@@ -387,6 +388,7 @@ __all__ = [
     "_parse_put_exiled_with_source",
     "_parse_player_exiles_pile",
     "_parse_player_exiles_target_spell",
+    "_parse_player_returns_exiled_with_source",
     "_parse_put_exiled_card_on_stack_as_copy",
     "_parse_put_exiled_this_way",
     "parse_put_exiled_pile_on_library",

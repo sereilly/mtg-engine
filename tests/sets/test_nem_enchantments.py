@@ -743,3 +743,391 @@ def test_w1g1_saproling_burst_destroys_its_tokens_and_they_cant_regenerate(set_p
     assert any("Saproling Burst destroyed Saproling" in line for line in game.log)
 
 # --- end W1G1 ---
+
+
+# --- W2G1: the Parallax cycle ---
+# Parallax Wave, Parallax Tide and Parallax Nexus: a fading enchantment whose
+# counters buy a *linked* exile (CR 607.2a), and a leave trigger that gives the
+# pile back — to the battlefield (Wave, Tide) or to hands (Nexus), each card to
+# its own owner. The pile is the one record `engine/linked_exile.py` keeps on the
+# exiling permanent, so it survives the enchantment's own departure.
+from engine import Game as _W2G1Game
+from engine.grammar import compile_line as _w2g1_compile_line
+from engine.models import Permanent as _W2G1Permanent
+from engine.models import PlayerState as _W2G1PlayerState
+from engine.named_counters import counters_on as _w2g1_counters_on
+from engine.named_counters import remove_counters as _w2g1_remove_counters
+from engine.oracle import compile_card_oracle as _w2g1_compile
+from engine.targeting import derive_activation_spec as _w2g1_activation_spec
+from engine.targeting import usable_activated_abilities as _w2g1_usable
+
+from tests.helpers import resolve_stack as _w2g1_resolve_stack
+
+
+def _w2g1_duel() -> "_W2G1Game":
+    """Two seats in P1's precombat main phase, mana unenforced."""
+    game = _W2G1Game(players=[
+        _W2G1PlayerState(name="P1", life=20), _W2G1PlayerState(name="P2", life=20),
+    ])
+    game.enforce_mana_costs = False
+    game.begin_turn_bookkeeping(0)
+    return game
+
+
+def _w2g1_put(game, seat: int, card) -> "_W2G1Permanent":
+    """*card* entering under *seat* through the one entry path (so fading
+    counters arrive and enters triggers fire), ready to attack."""
+    perm = _W2G1Permanent(card=card)
+    game._put_permanent_onto_battlefield(seat, perm, None)
+    _w2g1_resolve_stack(game)
+    perm.metadata["summoning_sickness_turn"] = -99
+    return perm
+
+
+def _w2g1_exile_with(game, name: str, target) -> None:
+    """Spend one fade counter of P1's *name* on *target*, and resolve it."""
+    seat = game.controller_index_of(target)
+    result = game.activate_permanent_ability(
+        0, name, target_player_index=seat,
+        target_permanent_ids=[target.permanent_id],
+    )
+    assert result.supported, result.reason
+    _w2g1_resolve_stack(game)
+
+
+def _w2g1_named_on(game, seat: int, name: str) -> list:
+    """Every permanent called *name* that *seat* controls, through the seam."""
+    return [p for p in game.controlled_by(seat) if p.card.name == name]
+
+
+def test_w2g1_parallax_wave_gives_each_card_back_to_its_owner_as_a_new_object(set_pool):
+    """"Remove a fade counter from this enchantment: Exile target creature." /
+    "When this enchantment leaves the battlefield, each player returns to the
+    battlefield all cards they own exiled with it."
+
+    The leave line compiled to **no instruction** — the Wave exiled for ever.
+    Now the opponent's creature comes back under the opponent's control and
+    P1's under P1's (CR 110.2a: under the player who returns it, whom "they
+    own" makes its owner), each as a new object (CR 400.7): a new id,
+    untapped, summoning sick."""
+    lea = set_pool("LEA")
+    game = _w2g1_duel()
+    wave = _w2g1_put(game, 0, set_pool("NEM")["Parallax Wave"])
+    giant = _w2g1_put(game, 0, lea["Hill Giant"])
+    bears = _w2g1_put(game, 1, lea["Grizzly Bears"])
+    bears.tapped = True
+    old_id = bears.permanent_id
+    assert _w2g1_counters_on(wave, "fade") == 5
+
+    _w2g1_exile_with(game, "Parallax Wave", bears)
+    _w2g1_exile_with(game, "Parallax Wave", giant)
+    assert _w2g1_counters_on(wave, "fade") == 3
+    assert [c.name for c in game.players[1].exile] == ["Grizzly Bears"]
+    assert [c.name for c in game.players[0].exile] == ["Hill Giant"]
+
+    game.players[1].hand = [lea["Disenchant"]]
+    assert game.cast_from_hand(
+        1, "Disenchant", target_player_index=0,
+        target_permanent_ids=[wave.permanent_id],
+    ).supported
+    _w2g1_resolve_stack(game)
+
+    assert not game.is_on_battlefield(wave)
+    assert game.players[0].exile == [] and game.players[1].exile == []
+    [back] = _w2g1_named_on(game, 1, "Grizzly Bears")
+    assert _w2g1_named_on(game, 0, "Hill Giant")
+    assert back.permanent_id != old_id
+    assert not back.tapped
+    assert back.metadata.get("summoning_sickness_turn") == game.turn
+    assert "Grizzly Bears, Hill Giant go to their owner's battlefield" in game.log
+
+
+def test_w2g1_parallax_wave_blinks_its_controllers_own_creature(set_pool):
+    """The loop the card is famous for: exile your own creature, and when the
+    Wave leaves it re-enters — so its enters-the-battlefield ability triggers
+    again. Venerable Monk gains its 2 life a second time."""
+    game = _w2g1_duel()
+    wave = _w2g1_put(game, 0, set_pool("NEM")["Parallax Wave"])
+    monk = _w2g1_put(game, 0, set_pool("STH")["Venerable Monk"])
+    assert game.players[0].life == 22
+
+    _w2g1_exile_with(game, "Parallax Wave", monk)
+    game.sacrifice_permanent(wave)
+    _w2g1_resolve_stack(game)
+
+    assert _w2g1_named_on(game, 0, "Venerable Monk")
+    assert game.players[0].life == 24, game.log
+
+
+def test_w2g1_an_exile_resolving_after_the_wave_left_is_for_ever(set_pool):
+    """CR 607.2a links the leave trigger to the cards *this object's* ability
+    exiled, and CR 400.7 makes the Wave's departure the end of this object.
+    With an exile activation still on the stack, a Disenchant in response
+    destroys the Wave: the leave trigger goes on the stack *above* the
+    activation and resolves first, returning only what was exiled so far — and
+    the activation then exiles its creature with nothing left to return it."""
+    lea = set_pool("LEA")
+    game = _w2g1_duel()
+    wave = _w2g1_put(game, 0, set_pool("NEM")["Parallax Wave"])
+    bears = _w2g1_put(game, 1, lea["Grizzly Bears"])
+    giant = _w2g1_put(game, 1, lea["Hill Giant"])
+    _w2g1_exile_with(game, "Parallax Wave", bears)
+
+    assert game.queue_permanent_ability(
+        0, "Parallax Wave", target_player_index=1,
+        target_permanent_ids=[giant.permanent_id],
+    ).supported
+    game.players[1].hand = [lea["Disenchant"]]
+    assert game.queue_from_hand(
+        1, "Disenchant", target_player_index=0,
+        target_permanent_ids=[wave.permanent_id],
+    ).supported
+    _w2g1_resolve_stack(game)
+
+    assert _w2g1_named_on(game, 1, "Grizzly Bears"), "exiled before: returned"
+    assert not _w2g1_named_on(game, 1, "Hill Giant")
+    assert [c.name for c in game.players[1].exile] == ["Hill Giant"]
+    returned = game.log.index("Grizzly Bears go to their owner's battlefield")
+    assert returned < game.log.index("Parallax Wave exiled Hill Giant")
+
+
+def test_w2g1_spending_the_last_counter_in_response_to_fading(set_pool):
+    """Fading's upkeep trigger finds no counter and sacrifices the Wave
+    (CR 702.32a). In response, the last counter exiles P1's own creature; the
+    activation resolves first, then the sacrifice, and the leave trigger brings
+    the creature straight back — enters ability and all."""
+    game = _w2g1_duel()
+    wave = _w2g1_put(game, 0, set_pool("NEM")["Parallax Wave"])
+    monk = _w2g1_put(game, 0, set_pool("STH")["Venerable Monk"])
+    _w2g1_remove_counters(wave, "fade", 4)
+    game.turn += 1
+    game.begin_turn_bookkeeping(0)
+    game.resolve_upkeep(0, defer_priority=True)
+    assert [item.card.name for item in game.stack] == ["Parallax Wave"]
+
+    assert game.queue_permanent_ability(
+        0, "Parallax Wave", target_player_index=0,
+        target_permanent_ids=[monk.permanent_id],
+    ).supported
+    _w2g1_resolve_stack(game)
+
+    assert not game.is_on_battlefield(wave)
+    assert [c.name for c in game.players[0].graveyard] == ["Parallax Wave"]
+    assert _w2g1_named_on(game, 0, "Venerable Monk")
+    assert game.players[0].life == 24, game.log
+
+
+def test_w2g1_an_exiled_token_does_not_come_back(set_pool):
+    """CR 111.7: a token in exile ceases to exist, so there is nothing for the
+    leave trigger to return — the entry is still on the pile and finds no card."""
+    from engine.tokens import make_token_card
+
+    game = _w2g1_duel()
+    wave = _w2g1_put(game, 0, set_pool("NEM")["Parallax Wave"])
+    token = _W2G1Permanent(
+        card=make_token_card("Soldier", 1, 1, "Token Creature — Soldier", colors=("W",)),
+    )
+    token.metadata["is_token"] = True
+    game._put_permanent_onto_battlefield(1, token, None)
+
+    _w2g1_exile_with(game, "Parallax Wave", token)
+    game.sacrifice_permanent(wave)
+    _w2g1_resolve_stack(game)
+
+    assert list(game.controlled_by(1)) == []
+    assert game.players[1].exile == []
+
+
+def test_w2g1_a_stolen_creature_comes_back_to_its_owner(set_pool):
+    """"Each player returns … all cards **they own**." P1 controls P2's Bears
+    through Control Magic; the Wave exiles them into their *owner's* exile
+    (CR 400.3) and they come back under P2's control, not P1's."""
+    lea = set_pool("LEA")
+    game = _w2g1_duel()
+    wave = _w2g1_put(game, 0, set_pool("NEM")["Parallax Wave"])
+    bears = _w2g1_put(game, 1, lea["Grizzly Bears"])
+    game.players[0].hand = [lea["Control Magic"]]
+    assert game.cast_from_hand(
+        0, "Control Magic", target_player_index=1,
+        target_permanent_index=game.battlefield_index_of(bears),
+    ).supported
+    _w2g1_resolve_stack(game)
+    assert game.controller_index_of(bears) == 0
+
+    _w2g1_exile_with(game, "Parallax Wave", bears)
+    assert [c.name for c in game.players[1].exile] == ["Grizzly Bears"]
+    game.sacrifice_permanent(wave)
+    _w2g1_resolve_stack(game)
+
+    assert _w2g1_named_on(game, 1, "Grizzly Bears")
+    assert not _w2g1_named_on(game, 0, "Grizzly Bears")
+
+
+def test_w2g1_parallax_wave_leaving_by_exile_still_returns_the_pile(set_pool):
+    """The trigger watches the Wave leaving the battlefield by any route
+    (CR 603.6c): exiled by Erase rather than sacrificed or destroyed."""
+    game = _w2g1_duel()
+    wave = _w2g1_put(game, 0, set_pool("NEM")["Parallax Wave"])
+    bears = _w2g1_put(game, 1, set_pool("LEA")["Grizzly Bears"])
+    _w2g1_exile_with(game, "Parallax Wave", bears)
+
+    game.players[1].hand = [set_pool("ULG")["Erase"]]
+    assert game.cast_from_hand(
+        1, "Erase", target_player_index=0,
+        target_permanent_ids=[wave.permanent_id],
+    ).supported
+    _w2g1_resolve_stack(game)
+
+    assert [c.name for c in game.players[0].exile] == ["Parallax Wave"]
+    assert _w2g1_named_on(game, 1, "Grizzly Bears")
+
+
+def test_w2g1_two_waves_keep_their_own_piles(set_pool):
+    """The pile is the exiling *object's* (CR 607.2a): sacrificing one Wave
+    returns what it exiled and leaves the other Wave's card in exile."""
+    lea = set_pool("LEA")
+    game = _w2g1_duel()
+    nem = set_pool("NEM")
+    first = _w2g1_put(game, 0, nem["Parallax Wave"])
+    second = _w2g1_put(game, 0, nem["Parallax Wave"])
+    bears = _w2g1_put(game, 1, lea["Grizzly Bears"])
+    giant = _w2g1_put(game, 1, lea["Hill Giant"])
+    for wave, victim in ((first, bears), (second, giant)):
+        assert game.activate_permanent_ability(
+            0, "Parallax Wave", permanent_index=game.battlefield_index_of(wave),
+            target_player_index=1, target_permanent_ids=[victim.permanent_id],
+        ).supported
+        _w2g1_resolve_stack(game)
+
+    game.sacrifice_permanent(first)
+    _w2g1_resolve_stack(game)
+
+    assert _w2g1_named_on(game, 1, "Grizzly Bears")
+    assert [c.name for c in game.players[1].exile] == ["Hill Giant"]
+    assert game.is_on_battlefield(second)
+
+
+def test_w2g1_parallax_tide_exiles_lands_and_gives_them_back_untapped(set_pool):
+    """"Exile target land." A creature is no legal target (refused with the
+    counter unspent, CR 602.2b), and a tapped land exiled by the Tide comes back
+    untapped when the Tide is bounced (CR 400.7)."""
+    lea = set_pool("LEA")
+    game = _w2g1_duel()
+    tide = _w2g1_put(game, 0, set_pool("NEM")["Parallax Tide"])
+    forest = _w2g1_put(game, 1, lea["Forest"])
+    forest.tapped = True
+    bears = _w2g1_put(game, 1, lea["Grizzly Bears"])
+
+    refused = game.queue_permanent_ability(
+        0, "Parallax Tide", target_player_index=1,
+        target_permanent_ids=[bears.permanent_id],
+    )
+    assert not refused.supported
+    assert _w2g1_counters_on(tide, "fade") == 5
+
+    _w2g1_exile_with(game, "Parallax Tide", forest)
+    assert [c.name for c in game.players[1].exile] == ["Forest"]
+    game.players[1].hand = [set_pool("LEG")["Boomerang"]]
+    assert game.cast_from_hand(
+        1, "Boomerang", target_player_index=0,
+        target_permanent_ids=[tide.permanent_id],
+    ).supported
+    _w2g1_resolve_stack(game)
+
+    assert [c.name for c in game.players[0].hand] == ["Parallax Tide"]
+    [land] = _w2g1_named_on(game, 1, "Forest")
+    assert not land.tapped
+
+
+def test_w2g1_parallax_nexus_the_opponent_picks_and_gets_it_back(set_pool):
+    """"Remove a fade counter from this enchantment: Target opponent exiles a
+    card from their hand." The *opponent* chooses (the prompt is theirs, the
+    activator cannot answer it, and it has no Decline), the card is exiled
+    *with the Nexus*, and "each player returns to their hand all cards they own
+    exiled with it" hands it back when the Nexus leaves.
+
+    This activated line compiled to no instruction at all, and the leave line
+    to none either."""
+    lea = set_pool("LEA")
+    game = _w2g1_duel()
+    nexus = _w2g1_put(game, 0, set_pool("NEM")["Parallax Nexus"])
+    game.players[1].hand = [lea["Grizzly Bears"], lea["Lightning Bolt"]]
+    game.interactive_seats = {0, 1}
+
+    assert game.queue_permanent_ability(0, "Parallax Nexus", target_player_index=1).supported
+    game.resolve_top_of_stack(pause_for_choices=True)
+    [pick] = game.pending_choices
+    assert (pick.kind, pick.player_index) == ("exile_from_hand_choice", 1)
+    assert not game.confirm_exile_from_hand_choice(0, 1), "not the activator's pick"
+    assert not game.confirm_exile_from_hand_choice(1, None), "no Decline"
+    assert game.confirm_exile_from_hand_choice(1, 1)
+    _w2g1_resolve_stack(game)
+
+    assert _w2g1_counters_on(nexus, "fade") == 4
+    assert [c.name for c in game.players[1].hand] == ["Grizzly Bears"]
+    assert [c.name for c in game.players[1].exile] == ["Lightning Bolt"]
+
+    game.sacrifice_permanent(nexus)
+    _w2g1_resolve_stack(game)
+
+    assert game.players[1].exile == []
+    assert sorted(c.name for c in game.players[1].hand) == [
+        "Grizzly Bears", "Lightning Bolt",
+    ]
+
+
+def test_w2g1_parallax_nexus_is_sorcery_speed_and_aims_at_an_opponent(set_pool):
+    """"Activate only as a sorcery" (CR 602.5d, CR 307.1) — refused on the
+    opponent's turn and with anything on the stack — and "target **opponent**"
+    refuses the activator's own seat. Every refusal costs nothing."""
+    game = _w2g1_duel()
+    nexus = _w2g1_put(game, 0, set_pool("NEM")["Parallax Nexus"])
+    game.players[1].hand = [set_pool("LEA")["Lightning Bolt"]]
+
+    assert not game.queue_permanent_ability(
+        0, "Parallax Nexus", target_player_index=0,
+    ).supported
+    game.active_player_index = 1
+    assert not game.queue_permanent_ability(
+        0, "Parallax Nexus", target_player_index=1,
+    ).supported
+    game.active_player_index = 0
+    assert game.queue_permanent_ability(0, "Parallax Nexus", target_player_index=1).supported
+    assert not game.queue_permanent_ability(
+        0, "Parallax Nexus", target_player_index=1,
+    ).supported, "the first activation is still on the stack"
+    assert _w2g1_counters_on(nexus, "fade") == 4
+    _w2g1_resolve_stack(game)
+    assert [c.name for c in game.players[1].exile] == ["Lightning Bolt"]
+
+
+def test_w2g1_the_parallax_pickers_offer_what_the_lines_print(set_pool):
+    """The client sends what ``derive_activation_spec`` asks for: a creature,
+    a land, and an opponent — never the activator."""
+    nem = set_pool("NEM")
+    specs = {}
+    for name in ("Parallax Wave", "Parallax Tide", "Parallax Nexus"):
+        [ability] = _w2g1_usable(_w2g1_compile(nem[name]))
+        specs[name] = _w2g1_activation_spec(ability)
+
+    assert specs["Parallax Wave"]["kind"] == "creature"
+    assert specs["Parallax Tide"]["kind"] == "land"
+    assert specs["Parallax Nexus"] == {"kind": "player", "opponents_only": True}
+
+
+def test_w2g1_only_each_player_reads_as_the_whole_linked_pile(set_pool):
+    """"Each player returns … all cards **they own**" is the whole pile only
+    because every card has one owner. A subject naming one seat, or a hand
+    that is not the returning player's, would be a share of the pile or the
+    table's cards in one hand — neither is printed, and neither is read as the
+    sweep the Parallax enchantments compile to."""
+    lead = "When this enchantment leaves the battlefield, "
+    for sentence in (
+        "target player returns to their hand all cards they own exiled with it.",
+        "each player returns to your hand all cards they own exiled with it.",
+        "each player returns to their hand all cards they exiled with it.",
+    ):
+        compiled = _w2g1_compile_line(lead + sentence)
+        assert not compiled.instructions, sentence
+
+# --- end W2G1 ---

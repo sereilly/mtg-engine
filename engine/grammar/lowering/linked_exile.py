@@ -49,8 +49,8 @@ from ._common import (
     _amount_payload, _filter_payload, _restrictions_beyond,
     chargeable_card_filter,
 )
-from ._events import (EVENT_SUBJECT_PLAYER, _EVENT_SUBJECT_OBJECTS,
-                      _EVENT_SUBJECT_PLAYERS)
+from ._events import (EVENT_SUBJECT_PLAYER, EXILED_THIS_WAY_OBJECTS,
+                      _EVENT_SUBJECT_OBJECTS, _EVENT_SUBJECT_PLAYERS)
 from ._piles import _SEARCH_EXILE_HONOURED, _linked_exile_filter
 
 
@@ -465,6 +465,66 @@ def _lower_put_exiled_this_way(
     if described:
         payload["filter"] = described
     return (OracleInstruction("put_exiled_this_way", "", payload),)
+
+
+def _lower_each_player_claims_exiled_card(
+    node: "ast.EachPlayerClaimsExiledCard", produced: frozenset[str],
+) -> tuple[OracleInstruction, ...]:
+    """"Exile all nontoken permanents. **Starting with you, each player chooses
+    one of the exiled cards and puts it onto the battlefield tapped under their
+    control.**" (Thieves' Auction.)
+
+    Moved here from ``lowering/exile.py`` at Nemesis's second wave, when that
+    module reached the guard a third time — and the move is a correction rather
+    than a cut. ``exile``'s docstring says everything left in it "chooses its
+    object out of the game … nothing below reads a record", and this read one:
+    it starts from a pile an earlier step already put in exile and asks who
+    takes which card out of it, which is the opening sentence of this module.
+    It is :func:`_lower_put_exiled_this_way`'s neighbour by subject — Living
+    Death hands each seat back its own pile, this hands the table one pile in
+    turns.
+
+    One instruction, and the repeat clause behind the sentence is a key on it
+    rather than a wrapper around it — ``_lower_repeat_process``'s argument one
+    card over: the loop ends when the pile empties, which is something only the
+    thing handing out the cards can see, and a round that emptied it part-way
+    has to stop mid-round rather than after it.
+
+    Refused without a producer, as every back-reference in this grammar is: "the
+    exiled cards" names what a step of *this same effect* exiled, and with no
+    such step the words name nothing — a spell that reports supported and hands
+    out nothing at all.
+
+    ``until_pile_empty`` is carried even when it is False, because the two
+    readings are genuinely different cards: without the clause each seat takes
+    exactly one card and the rest stay exiled.
+    """
+    if EXILED_THIS_WAY_OBJECTS not in produced:
+        raise LoweringError(
+            "'one of the exiled cards' names what an earlier step of this "
+            "effect exiled, and no step of it exiles anything", node=node,
+        )
+    if node.chooser.kind != "each_player":
+        raise LoweringError(
+            "a pick out of the exiled pile is made by every seat in turn",
+            node=node,
+        )
+    return (
+        OracleInstruction(
+            "claim_exiled_cards_in_turn", "",
+            {
+                # "Starting with you" — CR 101.4 orders a multi-seat decision
+                # from the active player and this names the seat that put the
+                # effect on the stack. The same seat for a sorcery, not the
+                # same rule, which is why the word is carried.
+                "claim_order": (
+                    node.starting_with.kind if node.starting_with else None
+                ),
+                "tapped": node.tapped,
+                "until_pile_empty": node.until_pile_empty,
+            },
+        ),
+    )
 
 
 def _fused_exile_event_subject_until_source_leaves(
