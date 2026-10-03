@@ -24,3 +24,121 @@ Cards come from `set_pool("PCY")` / `set_cards("PCY")` — never a new
 never a bare `while game.stack:` loop — that spins forever once a seat is owed
 a prompt.
 """
+
+
+# --- W1G4: untapped lands and untap steps ---
+from engine import Game as _W1G4Game
+from engine import PlayerState as _W1G4PlayerState
+from engine.grammar.vocabulary import singular as _w1g4_singular
+from engine.models import Permanent as _W1G4Permanent
+from tests.helpers import _mk_creature_card as _w1g4_creature
+from tests.helpers import resolve_stack as _w1g4_resolve
+
+
+def _w1g4_enchantment_duel():
+    """Two seats, seat 0 active, mana costs off — ends on its own game name."""
+    w1g4_table = _W1G4Game(
+        players=[_W1G4PlayerState(name="W1G4-A"), _W1G4PlayerState(name="W1G4-B")]
+    )
+    w1g4_table.enforce_mana_costs = False
+    w1g4_table.active_player_index = 0
+    return w1g4_table
+
+
+def _w1g4_place(game, seat, card, *, tapped=False):
+    """*card* onto *seat*'s battlefield through the real entry, tapped as asked."""
+    w1g4_placed = _W1G4Permanent(card=card)
+    game._put_permanent_onto_battlefield(seat, w1g4_placed, None)
+    w1g4_placed.tapped = tapped
+    return w1g4_placed
+
+
+def test_w1g4_mercenaries_is_read_as_the_mercenary_type():
+    """English's consonant-y plural, undone only into a word the vocabulary
+    knows — so "abilities" is left alone rather than becoming "ability"."""
+    assert _w1g4_singular("mercenaries") == "mercenary"
+    assert _w1g4_singular("allies") == "ally"
+    assert _w1g4_singular("abilities") == "abilities"
+
+
+def test_w1g4_root_cage_holds_every_mercenary_down_on_both_sides(set_pool):
+    """"Mercenaries don't untap during their controllers' untap steps." Each
+    untap step is its own controller's, so the opponent's Mercenary stays down
+    on their turn and the caster's own on theirs; a non-Mercenary untaps."""
+    pcy, ice = set_pool("PCY"), set_pool("ICE")
+    game = _w1g4_enchantment_duel()
+    _w1g4_place(game, 0, pcy["Root Cage"])
+    # Ice Age's Mercenaries is a Human Mercenary; Prophecy prints none.
+    mine = _w1g4_place(game, 0, ice["Mercenaries"], tapped=True)
+    theirs = _w1g4_place(game, 1, ice["Mercenaries"], tapped=True)
+    bystander = _w1g4_place(game, 1, _w1g4_creature("W1G4 Bear", 2, 2), tapped=True)
+
+    game.active_player_index = 1
+    game.resolve_untap_step(1)
+    assert theirs.tapped and not bystander.tapped
+
+    game.active_player_index = 0
+    game.resolve_untap_step(0)
+    assert mine.tapped
+
+
+def test_w1g4_sheltering_prayers_asks_each_land_about_its_own_controller(set_pool):
+    """"Basic lands each player controls have shroud as long as **that player**
+    controls three or fewer lands." The pronoun is each land's controller, so
+    the condition is asked per land: the caster's three Plains are shrouded and
+    the opponent's four Swamps are not — and a fourth land switches the
+    caster's off while the board on the other side stays as it was."""
+    pcy, lea = set_pool("PCY"), set_pool("LEA")
+    game = _w1g4_enchantment_duel()
+    _w1g4_place(game, 0, pcy["Sheltering Prayers"])
+    plains = [_w1g4_place(game, 0, lea["Plains"]) for _ in range(3)]
+    swamps = [_w1g4_place(game, 1, lea["Swamp"]) for _ in range(4)]
+    game.check_state_based_actions()
+    assert all(game._has_keyword(land, "shroud") for land in plains)
+    assert not any(game._has_keyword(land, "shroud") for land in swamps)
+
+    _w1g4_place(game, 0, lea["Plains"])
+    game.check_state_based_actions()
+    assert not any(game._has_keyword(land, "shroud") for land in plains)
+
+    # …and a small board on the *other* side is covered too: the enchantment
+    # is about every player, not only its controller.
+    other = _w1g4_enchantment_duel()
+    _w1g4_place(other, 0, pcy["Sheltering Prayers"])
+    crowded = [_w1g4_place(other, 0, lea["Plains"]) for _ in range(4)]
+    lone = _w1g4_place(other, 1, lea["Swamp"])
+    other.check_state_based_actions()
+    assert other._has_keyword(lone, "shroud")
+    assert not any(other._has_keyword(land, "shroud") for land in crowded)
+
+
+def test_w1g4_sheltering_prayers_turns_away_a_land_destruction_spell(set_pool):
+    """The shroud is enforced where it matters (CR 702.18a): Stone Rain at a
+    shrouded Plains is refused at announcement; at an unshrouded Swamp it
+    resolves. A nonbasic land is never covered — "basic" is read."""
+    pcy, lea = set_pool("PCY"), set_pool("LEA")
+    game = _w1g4_enchantment_duel()
+    _w1g4_place(game, 0, pcy["Sheltering Prayers"])
+    plains = _w1g4_place(game, 0, lea["Plains"])
+    tundra = _w1g4_place(game, 0, lea["Tundra"])
+    swamps = [_w1g4_place(game, 1, lea["Swamp"]) for _ in range(4)]
+    game.check_state_based_actions()
+    assert not game._has_keyword(tundra, "shroud")
+
+    game.active_player_index = 1
+    game.players[1].hand.append(lea["Stone Rain"])
+    assert not game.cast_from_hand(
+        1, "Stone Rain", target_player_index=0,
+        target_permanent_ids=[plains.permanent_id],
+    ).supported
+    assert game.is_on_battlefield(plains)
+    assert "Plains is an illegal target for Stone Rain" in game.log
+
+    game.active_player_index = 0
+    game.players[0].hand.append(lea["Stone Rain"])
+    assert game.cast_from_hand(
+        0, "Stone Rain", target_player_index=1,
+        target_permanent_ids=[swamps[0].permanent_id],
+    ).supported
+    _w1g4_resolve(game)
+    assert not game.is_on_battlefield(swamps[0])

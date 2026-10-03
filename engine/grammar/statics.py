@@ -21,6 +21,7 @@ from ..lord_buffs import (LORD_BUFF_KIND, LordBuff, LordBuffFilter,
                           grantable_protection_quality, lord_buff_payload)
 from ..oracle_types import OracleInstruction
 from ..search_filters import SEARCH_COMPARISONS
+from ..static_bonuses import RECIPIENT_SUBJECT
 from ..subject_filters import OBJECT_ONLY_FILTER_KEYS
 from . import ast
 from .errors import LoweringError
@@ -87,6 +88,11 @@ def _lord_filter(filt: ast.ObjectFilter) -> LordBuffFilter:
         # "**Nonblack** creatures get -1/-1." (Ascendant Evincar.) Carried for
         # the reason every field above is: the round trip decides.
         excluded_colors=filt.excluded_colors,
+        # "**Basic** lands each player controls have shroud…" (Sheltering
+        # Prayers.) ``LordBuffFilter`` has carried a supertype since Legends'
+        # banding lands — through the text table — and this round trip did not,
+        # so the grammar's reading of any supertyped anthem refused.
+        supertypes=filt.supertypes,
     )
 
 
@@ -106,6 +112,7 @@ def _object_filter_of(lord: LordBuffFilter) -> ast.ObjectFilter:
         "chosen_land_type": lord.chosen_land_type,
         "chosen_creature_type": lord.chosen_creature_type,
         "excluded_colors": lord.excluded_colors,
+        "supertypes": lord.supertypes,
     }
     for qualifier in lord.qualifiers:
         field_name, value = QUALIFIER_FIELDS[qualifier]
@@ -351,6 +358,41 @@ def _lower_anthem_condition(condition: ast.Condition, node: ast.StaticAbilityNod
     different board than the card prints, silently.
     """
     return _lower_anthem_condition_payload(_lower_condition(condition), node)
+
+
+def _recipient_seat_condition(
+    condition: ast.Condition, subject: ast.TargetSpec, node: ast.StaticAbilityNode
+) -> dict | None:
+    """"Basic lands **each player controls** have shroud as long as **that
+    player** controls three or fewer lands." (Sheltering Prayers.)
+
+    An anthem whose condition is asked **once per buffed permanent**: "that
+    player" points back at the seat-quantifier inside the subject, so it is each
+    land's own controller, and two lands on two sides of the table can answer
+    differently. That is "**its** controller" with the set's member as the "it"
+    — the seat word Favorable Destiny's Aura already carries — so the clause is
+    lowered as exactly that, plus ``subject: "recipient"``, which is what tells
+    the recompute to ask it of each permanent the buff reaches rather than once
+    of the source (``static_bonuses.RECIPIENT_SUBJECT``).
+
+    None for every other sentence, which leaves it to
+    :func:`_lower_anthem_condition` and its refusals — including "that player"
+    with no seat-quantifier in the subject to bind it, which still has no
+    referent at all.
+    """
+    if not (
+        isinstance(condition, ast.Controls)
+        and condition.who.kind == "that_player"
+        and subject.filter.controller == "any_player"
+    ):
+        return None
+    bound = dataclasses.replace(
+        condition, who=dataclasses.replace(condition.who, kind="controller")
+    )
+    return {
+        **_lower_anthem_condition(bound, node),
+        "subject": RECIPIENT_SUBJECT,
+    }
 
 
 def _conditional_static_effect(
@@ -721,7 +763,9 @@ def _lower_static_ability(node: ast.StaticAbilityNode) -> tuple[OracleInstructio
                 node=node,
             )
         buff = _lower_lord_effects(node, effects)
-        condition = _lower_anthem_condition(node.condition, node)
+        condition = _recipient_seat_condition(node.condition, subject, node)
+        if condition is None:
+            condition = _lower_anthem_condition(node.condition, node)
         if condition.get("kind") == "all_share_a_color":
             # "**They**" is the very set this anthem buffs, so the filter is
             # copied from the buff rather than parsed a second time — and it is
@@ -738,7 +782,10 @@ def _lower_static_ability(node: ast.StaticAbilityNode) -> tuple[OracleInstructio
         # to fall through to the pivot's default, which is the lord itself:
         # that would silently read the clause as "you control", the seat the
         # word exists to distinguish itself from.
-        if condition.get("who") == "controller":
+        if (
+            condition.get("who") == "controller"
+            and condition.get("subject") != RECIPIENT_SUBJECT
+        ):
             raise LoweringError(
                 "an anthem names a set of permanents, so 'its controller' has "
                 "no referent",

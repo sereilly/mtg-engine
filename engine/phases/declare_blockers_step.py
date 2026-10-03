@@ -23,6 +23,7 @@ from ..combat_permissions import (ADDITIONAL_BLOCKS_UNTIL_EOT,
                                   printed_block_ceiling)
 from ..combat_restrictions import (declaration_company_required,
                                   declaration_greater_power_required,
+                                  declaration_tap_costs,
                                   participation_cap,
                                   restriction_condition_holds)
 from ..evasion_negation import negated_evasion_abilities
@@ -334,7 +335,7 @@ class DeclareBlockersStepMixin:
                 # cost reader rather than of `_can_block_attacker`, which
                 # answers the restriction question (may it?) and must keep
                 # saying yes to a block the defender chooses to pay for.
-                if self._block_mana_costs_of(blocker, attacker):
+                if self._owes_a_cost_to_block(blocker, attacker):
                     continue
                 # The **attacker's** controller is the observer, because the
                 # sentence is printed on the attacker: CR 109.5's "you" is the
@@ -378,7 +379,7 @@ class DeclareBlockersStepMixin:
                 # CR 509.1c: a creature that owes a cost to block is never
                 # compelled by a requirement, whether or not its controller
                 # could pay.
-                and not self._block_mana_costs_of(blocker, attacker)
+                and not self._owes_a_cost_to_block(blocker, attacker)
                 and not self._left_right_block_illegal(attacker_idx, blocker_idx, blocker)
                 for blocker_idx, blocker in enumerate(self.controlled_by(defender))
             )
@@ -405,7 +406,7 @@ class DeclareBlockersStepMixin:
                     continue
                 # CR 509.1c again: a cost to block lifts every requirement,
                 # this one included.
-                if self._block_mana_costs_of(blocker, attacker):
+                if self._owes_a_cost_to_block(blocker, attacker):
                     continue
                 if self._left_right_block_illegal(attacker_idx, blocker_idx, blocker):
                     continue
@@ -444,7 +445,7 @@ class DeclareBlockersStepMixin:
                     continue
                 # CR 509.1c, last clause: a cost to block lifts every
                 # requirement, this one included.
-                if self._block_mana_costs_of(blocker, attacker):
+                if self._owes_a_cost_to_block(blocker, attacker):
                     continue
                 if self._left_right_block_illegal(
                     attacker_idx, blocker_idx, blocker
@@ -501,7 +502,7 @@ class DeclareBlockersStepMixin:
                 # CR 509.1c, last clause: a creature that can't block unless a
                 # cost is paid is never *compelled* to, whether or not its
                 # controller could pay.
-                if self._block_mana_costs_of(blocker, attacker):
+                if self._owes_a_cost_to_block(blocker, attacker):
                     continue
                 if self._left_right_block_illegal(
                     attacker_idx, blocker_idx, blocker
@@ -571,7 +572,19 @@ class DeclareBlockersStepMixin:
                 return False, (
                     f"can't pay {mana_cost_label(block_total)} to declare those blockers"
                 )
+            # The tap half (Hollow Warrior), drawing on what the mana plan
+            # leaves: an animated land tapped for mana is not also the creature
+            # tapped here.
+            block_taps = self.declaration_tap_plan(
+                controller_index,
+                [resolved_blockers[idx] for idx in assignments],
+                "block",
+                unavailable=list(block_plan.tapped) if block_plan else (),
+            )
+            if block_taps is None:
+                return False, "can't tap a creature to pay those blockers' cost"
             self._pay_block_declaration_mana(controller_index, block_total, block_plan)
+            self.pay_declaration_taps(controller_index, block_taps, "block")
             if life_owed:
                 defender_paying = self.players[controller_index]
                 defender_paying.life -= life_owed
@@ -704,6 +717,20 @@ class DeclareBlockersStepMixin:
                 return blocker, (
                     f"{blocker.card.name} needs a blocking creature with "
                     "greater power beside it"
+                )
+        # "…unless you tap an untapped creature you control not declared as a
+        # blocking creature this combat." (Hollow Warrior.) The attack side's
+        # plan, asked of this defender's set (CR 802.4b scopes it to their own
+        # blockers, which is all the list holds).
+        owing = [b for b in declared_blockers if declaration_tap_costs(b, "block")]
+        if owing:
+            seat = self.controller_index_of(owing[0])
+            if seat is None or self.declaration_tap_plan(
+                seat, declared_blockers, "block"
+            ) is None:
+                return owing[-1], (
+                    f"{owing[-1].card.name} has no untapped creature left to tap "
+                    "for its block"
                 )
         return None
 
@@ -1405,6 +1432,14 @@ class DeclareBlockersStepMixin:
                     cost,
                 ) is None:
                     return False
+            # "…unless you tap an untapped creature you control not declared as
+            # a blocking creature this combat." (Hollow Warrior.) The tap cost,
+            # gated for this creature alone like the mana above; several at
+            # once are `block_declaration_refusal`'s question.
+            if declaration_tap_costs(blocker, "block") and self.declaration_tap_plan(
+                blocker_seat, [blocker], "block"
+            ) is None:
+                return False
 
         # "This creature can block only creatures with flying." (Shacklegeist.)
         # The mirror of the restriction above: that one names what may not be
@@ -1549,6 +1584,25 @@ class DeclareBlockersStepMixin:
             if cost:
                 costs.append(cost)
         return costs
+
+    def _owes_a_cost_to_block(self, blocker: Permanent, attacker: Permanent) -> bool:
+        """Whether *blocker* owes **any** cost to block *attacker* (CR 509.1d).
+
+        The one question CR 509.1c's last clause asks — "if a creature can't
+        block unless a player pays a cost, that player is not required to pay
+        that cost" — and so the one reader the five requirement checks in
+        ``declare_blockers`` ask. They asked ``_block_mana_costs_of`` alone,
+        which is every cost this step charges *in mana per pair* and none of
+        the others: a Heat-Waved creature (life), one under War Cadence (a
+        per-blocker toll) and Hollow Warrior (a tap) were each compelled by
+        Lure to block and pay. Every currency the step charges is here.
+        """
+        return bool(
+            self._block_mana_costs_of(blocker, attacker)
+            or self._block_toll_of(blocker)
+            or self._block_life_cost_of(blocker, attacker)
+            or declaration_tap_costs(blocker, "block")
+        )
 
     def _block_toll_of(self, blocker: Permanent) -> dict[str, int]:
         """The mana *blocker*'s controller owes **once** for blocking with it.

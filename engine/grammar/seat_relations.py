@@ -82,6 +82,17 @@ def accept_seat_relation(stream: TokenStream, d) -> bool:
     if stream.accept_phrase("a", "player", "controls"):
         d.controller = "any_player"
         return True
+    # "Basic lands **each player controls** have shroud as long as **that
+    # player** controls three or fewer lands." (Sheltering Prayers.) The
+    # distributive spelling of the row above, in the relation "each opponent
+    # controls" bears to "your opponents control" below: a quantifier over the
+    # seats narrows none of the objects, so it is the same key — and the same
+    # binding site, which is the half that matters here. "That player" behind
+    # it is each land's own controller, and the lowering that reads the
+    # condition finds its referent by this key.
+    if stream.accept_phrase("each", "player", "controls"):
+        d.controller = "any_player"
+        return True
     if stream.accept_phrase("an", "opponent", "controls"):
         d.controller = "opponent"
         return True

@@ -87,6 +87,7 @@ from ..oracle import _COLOR_WORD_TO_SYMBOL, compile_card_oracle, expand_card_lin
 from ..pt import add_pt_counters, clear_base_pt, pt_counter_deltas, set_base_pt
 from ..static_bonuses import (
     BASIC_LAND_WORDS,
+    condition_is_per_recipient,
     conditional_static_holds,
     singular_land_type,
 )
@@ -2828,6 +2829,19 @@ class PermanentStateMixin:
             word = getattr(source_perm, "metadata", {}).get("chosen_creature_type")
             if not word or not target_perm.has_type(str(word)):
                 return False
+        # "…as long as **that player** controls three or fewer lands." (Sheltering
+        # Prayers.) A condition whose pronoun is the permanent being reached, so
+        # it is part of "does this lord reach this permanent?" — asked here, once,
+        # for every reader of that question, while the source-level gates
+        # (``_lord_buff_condition`` with no recipient) let it through. The seat
+        # handed in is the source's (CR 109.5), and is not what the clause reads:
+        # "that player" is the *recipient's* controller.
+        if condition_is_per_recipient(buff.condition):
+            source_seat = self.controller_index_of(source_perm)
+            if source_seat is None or not self._lord_buff_condition(
+                source_seat, source_perm, buff.condition, recipient=target_perm
+            ):
+                return False
         return True
 
     def _protection_qualities(self, permanent: Permanent) -> set[tuple[str, str]]:
@@ -3609,7 +3623,11 @@ class PermanentStateMixin:
         return total
 
     def _lord_buff_condition(
-        self, seat: int, source_perm: Permanent, condition: str | dict
+        self,
+        seat: int,
+        source_perm: Permanent,
+        condition: str | dict,
+        recipient: Permanent | None = None,
     ) -> bool:
         # A dict is a lowered condition payload from the grammar's statics
         # production ("as long as an opponent controls a nontoken red
@@ -3617,8 +3635,19 @@ class PermanentStateMixin:
         # ``conditional_static`` payload gets — the lowering refused anything
         # that evaluator does not test. A string is a key into the legacy
         # table above (Jihad, whose stored choices no payload can express).
+        #
+        # A **per-recipient** condition ("…as long as that player controls
+        # three or fewer lands", Sheltering Prayers) is not answered here at
+        # source level: it is the buffed permanent's question, asked by
+        # ``_lord_buff_matches`` with *recipient* named. Asked here without one
+        # it holds, so the source-level gate does not drop the buff before the
+        # per-permanent question is ever put.
         if isinstance(condition, dict):
-            return conditional_static_holds(self, seat, source_perm, condition)
+            if condition_is_per_recipient(condition) and recipient is None:
+                return True
+            return conditional_static_holds(
+                self, seat, source_perm, condition, recipient=recipient
+            )
         return getattr(self, self._LORD_BUFF_CONDITIONS[condition])(source_perm)
 
     def _nameless_race_cap(self, seat: int, described: dict) -> int:

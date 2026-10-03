@@ -287,12 +287,25 @@ def _controls_noun_condition(text: str) -> dict[str, object] | None:
 
     # The article is the quantifier, and it is what the printed clause means:
     # "you control **a** snow land" is a presence test, which is the default the
-    # consumer applies when no count rides the payload. Anything else — "two or
-    # more", "no" — is a threshold this branch does not read and must not
-    # silently answer as presence, so only the articles are stripped.
+    # consumer applies when no count rides the payload. "Two or more" is a
+    # threshold this branch does not read and must not silently answer as
+    # presence, so it still refuses.
+    #
+    # "…as long as you control **no** untapped lands" (Prophecy's Scoria Cat,
+    # Spur Grappler, Fen Stalker, Vintara Snapper) is the one other quantifier
+    # read here, as the absence it says: ``count 0, op eq`` — the payload the
+    # grammar's condition lowering already builds for Angelic Voices' "you
+    # control no nonartifact, nonwhite creatures", and the one
+    # ``conditional_static_holds`` already compares. Read as presence it would
+    # be its own negation, which is why it refused until it carried a count.
     phrase = match.group("phrase")
     article, _, rest = phrase.partition(" ")
-    if article not in ("a", "an") or not rest:
+    if not rest:
+        return None
+    counted: dict[str, object] = {}
+    if article == "no":
+        counted = {"count": 0, "op": "eq"}
+    elif article not in ("a", "an"):
         return None
     stream = TokenStream(tokenize(rest).tokens)
     try:
@@ -304,7 +317,7 @@ def _controls_noun_condition(text: str) -> dict[str, object] | None:
     payload = described.to_payload()
     if not payload or untestable_filter_keys(payload):
         return None
-    return {"kind": "controls", "who": who, "filter": payload}
+    return {"kind": "controls", "who": who, "filter": payload, **counted}
 
 
 def _parse_effect_text(text: str) -> dict[str, object] | None:
@@ -427,12 +440,32 @@ def conditional_static_for(normalized_line: str) -> StaticBonus | None:
     return StaticBonus("conditional_static", {**effect, "condition": condition})
 
 
-def conditional_static_holds(game, seat: int, source, condition: dict) -> bool:
+#: The ``subject`` a ``controls`` condition carries when its pronoun is **each
+#: permanent an anthem reaches** rather than the anthem's source: "Basic lands
+#: each player controls have shroud as long as **that player** controls three
+#: or fewer lands" (Sheltering Prayers). Such a condition has no answer until a
+#: recipient is named, so :func:`conditional_static_holds` answers it only when
+#: handed one, and the lord-buff recompute asks it per permanent
+#: (``_lord_buff_matches``) instead of once per source.
+RECIPIENT_SUBJECT = "recipient"
+
+
+def condition_is_per_recipient(condition) -> bool:
+    """Whether *condition* is asked of each buffed permanent, not of the source."""
+    return isinstance(condition, dict) and condition.get("subject") == RECIPIENT_SUBJECT
+
+
+def conditional_static_holds(
+    game, seat: int, source, condition: dict, *, recipient=None
+) -> bool:
     """Whether a ``conditional_static`` payload's condition holds right now.
 
     Beside the table that produces the payloads so the vocabulary has one
     definition; *game* and *source* are duck-typed (the control seam and the
     permanent's own state are all it reads).
+
+    *recipient* is the permanent a per-recipient condition is being asked
+    about (:data:`RECIPIENT_SUBJECT`); every other condition ignores it.
     """
     kind = condition.get("kind")
     # "…as long as **it's blocking and you control a snow land**" (Snow Devil).
@@ -441,7 +474,7 @@ def conditional_static_holds(game, seat: int, source, condition: dict) -> bool:
     # rather than one nobody read.
     if kind == "all_of":
         return all(
-            conditional_static_holds(game, seat, source, part)
+            conditional_static_holds(game, seat, source, part, recipient=recipient)
             for part in condition.get("conditions") or ()
         )
     # "…as long as **it's** blocking / attacking / untapped". A state read off
@@ -589,6 +622,16 @@ def conditional_static_holds(game, seat: int, source, condition: dict) -> bool:
             from .handlers._common import attached_host
 
             pivot = attached_host(game, source, last_known=False)
+            if pivot is None:
+                return False
+        # "…as long as **that player** controls three or fewer lands"
+        # (Sheltering Prayers): the pronoun is each land the anthem reaches, so
+        # the pivot is the permanent being asked about. Asked with no recipient
+        # — of the source alone — the clause has no referent, and answering it
+        # off the source would read "that player" as the anthem's own
+        # controller, which is the one seat the card does not mean.
+        if condition.get("subject") == RECIPIENT_SUBJECT:
+            pivot = recipient
             if pivot is None:
                 return False
         # "…as long as you control **no** nonartifact, nonwhite creatures"

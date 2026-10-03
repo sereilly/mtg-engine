@@ -279,4 +279,13 @@ def singular(word: str) -> str:
             stem2 = word[:-2]
             if stem2 in CARD_TYPES or stem2 in ALL_SUBTYPES:
                 return stem2
+        # "Mercenar**ies** don't untap …" (Root Cage). English's consonant-y
+        # plural, which neither trim above can undo: "mercenarie" and
+        # "mercenari" are not words. Held to the same rule as both — the
+        # rebuilt stem must itself be a known type — so "abilities" and
+        # "copies" are left alone.
+        if word.endswith("ies"):
+            stem3 = word[:-3] + "y"
+            if stem3 in CARD_TYPES or stem3 in ALL_SUBTYPES:
+                return stem3
     return word

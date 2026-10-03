@@ -201,9 +201,17 @@ def _most_untappable_type(game, seat: int, options) -> str:
 
 
 class UntapStepMixin:
-    def _untap_constraints(self) -> dict[str, object]:
+    def _untap_constraints(self, player_index: int | None = None) -> dict[str, object]:
         """Aggregate every active untap restriction on any battlefield into
-        effective limits for the current untap step."""
+        effective limits for *player_index*'s untap step.
+
+        The seat is asked only by a restriction scoped to its source's
+        controller ("**You** can't untap more than one land during **your**
+        untap step", Mungha Wurm): every other row binds every player, so a
+        caller with no seat to name still gets those. A seat-scoped row with no
+        seat named is left out rather than applied to everyone — the widening
+        direction for a cap is the one that taxes players the card spares.
+        """
         skip_all_source: str | None = None
         # "Players can't untap more than one <type> during their untap steps."
         # One entry per printed type rather than a counter per type in the
@@ -242,6 +250,11 @@ class UntapStepMixin:
             if restriction is None:
                 continue
             if restriction.only_while_source_untapped and perm.tapped:
+                continue
+            if restriction.controllers_step_only and (
+                player_index is None
+                or self.controller_index_of(perm) != player_index
+            ):
                 continue
             if restriction.scope == "all":
                 if restriction.limit == 0:
@@ -295,7 +308,7 @@ class UntapStepMixin:
         permanent that is already on the battlefield.
         """
         asked = False
-        for source, options in self._untap_constraints()["type_choices"]:
+        for source, options in self._untap_constraints(player_index)["type_choices"]:
             stamp = (self.turn, player_index)
             if source.metadata.get(UNTAP_TYPE_CHOICE_STAMP) == stamp:
                 continue
@@ -368,7 +381,7 @@ class UntapStepMixin:
             return None
 
         player = self.players[player_index]
-        constraints = self._untap_constraints()
+        constraints = self._untap_constraints(player_index)
 
         if constraints["skip_all_source"] is not None:
             return None
@@ -460,7 +473,7 @@ class UntapStepMixin:
         # is where the default is stamped, which is why a headless run and the
         # AI simulator need no untap-step code of their own.
         self.arm_untap_type_choices(player_index)
-        constraints = self._untap_constraints()
+        constraints = self._untap_constraints(player_index)
         # CR 702.26a's phasing event: before the active player untaps anything,
         # this player's phased-in permanents *with phasing* phase out and their
         # phased-out ones phase in, simultaneously.

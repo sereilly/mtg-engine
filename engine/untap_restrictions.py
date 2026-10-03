@@ -15,7 +15,7 @@ wording is genuinely new adds one pattern to the table below.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import lru_cache
 from typing import Callable
 
@@ -66,6 +66,13 @@ class UntapRestriction:
                   step.
     only_while_source_untapped -- the restriction is active only while the
                   source permanent itself is untapped (Winter Orb)
+    controllers_step_only -- the restriction binds only the untap step of
+                  the source's controller. "**You** can't untap more than one
+                  land during **your** untap step" (Mungha Wurm) is Winter
+                  Orb's count limit with the seats narrowed to one: CR 109.5
+                  makes "you" the Wurm's controller, so an opponent's untap
+                  step under it is unconstrained — and a row that dropped the
+                  pronoun would be a creature that taxes the whole table.
     """
 
     scope: str
@@ -73,6 +80,7 @@ class UntapRestriction:
     blocked: dict | None = None
     chosen_type_options: tuple[str, ...] | None = None
     only_while_source_untapped: bool = False
+    controllers_step_only: bool = False
 
 
 # "As long as this artifact is untapped, ..." (Winter Orb) — a self-state
@@ -151,6 +159,10 @@ def _limit_per_type(match: re.Match) -> UntapRestriction:
     return UntapRestriction(
         scope=match.group("type"), limit=_NUMBER_WORDS[match.group("count")]
     )
+
+
+def _limit_per_type_for_you(match: re.Match) -> UntapRestriction:
+    return replace(_limit_per_type(match), controllers_step_only=True)
 
 
 @lru_cache(maxsize=None)
@@ -280,6 +292,19 @@ UNTAP_RESTRICTION_PATTERNS: tuple[tuple[re.Pattern, Callable[[re.Match], UntapRe
         _limit_per_type,
     ),
     (
+        # "You can't untap more than one land during your untap step." (Mungha
+        # Wurm.) The row above with both seat words narrowed to the source's
+        # controller — its own row rather than an alternation inside that one,
+        # because the pronouns are what the restriction is *about*: the step
+        # asks ``controllers_step_only`` and leaves every other seat's untap
+        # step alone.
+        re.compile(
+            rf"^you can't untap more than (?P<count>{_COUNT_WORD}) "
+            rf"(?P<type>{'|'.join(LIMITED_SCOPES)})s? during your untap step$"
+        ),
+        _limit_per_type_for_you,
+    ),
+    (
         # "Creatures with power 3 or greater" (Meekstone), "red creatures"
         # (Magnetic Mountain), "legendary creatures" (Arena of the Ancients),
         # "creatures with flying" (Energy Storm, Blizzard), "creatures without
@@ -325,13 +350,9 @@ def _restriction_from_line(line: str) -> UntapRestriction | None:
         if restriction is None:
             continue
         if only_while_untapped:
-            return UntapRestriction(
-                scope=restriction.scope,
-                limit=restriction.limit,
-                blocked=restriction.blocked,
-                chosen_type_options=restriction.chosen_type_options,
-                only_while_source_untapped=True,
-            )
+            # ``replace`` rather than a field-by-field rebuild, so a field the
+            # row set (``controllers_step_only``) survives the qualifier.
+            return replace(restriction, only_while_source_untapped=True)
         return restriction
     return None
 
