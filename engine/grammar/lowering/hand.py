@@ -3,13 +3,21 @@
 The mirror of ``effects/hand.py``, split off ``lowering/cards.py`` at the
 thousand-line guard and along the seam that module's docstring drew: what stays
 in ``cards`` lowers a card **arriving** — a draw, a mill, a scry — and what is
-here names cards **in a hand** and moves them. Sylvan Library's pick, the loop
-over what it picked, the three printings that put a hand back onto a library,
-and the whole discard family.
+here names cards **in a hand** and moves them. Sylvan Library's pick and its
+"put the card on top", Elkin Lair's random exile, the three printings that put
+a hand back onto a library, and the whole discard family.
 
-``CHOSEN_HAND_CARDS_RESULT`` came with the first group, which is the argument
-for the boundary rather than a consequence of it: one half of this module writes
-that key and the other reads it, and nothing outside does either.
+**Two loops came with the first group and left at Prophecy's Phase 0**, for
+``loops.py``, because neither names a card in a hand. "For each of those
+cards" was read as the other half of Sylvan Library's pick, and the key the two
+share was this module's argument for its own boundary — but the same function
+reads "those creatures" (Winter's Chill) and "those artifacts" (Seeds of
+Innocence) off two records no hand step writes, lowers onto ``for_each`` like
+every loop there, and called ``_lower_for_each_destroyed`` its sibling while it
+sat a module away from it. Truce's "for each card less than two a player draws
+this way" read no hand at all; it is the twin of ``loops``' life-lost loop, as
+its own docstring always said. The key went to ``_record_keys``, so the pick
+here and the loop there spell it once.
 
 **The discard came second**, when ``cards`` crossed the guard again, and the
 boundary moved rather than being redrawn: the first split's docstring put a
@@ -24,29 +32,28 @@ The parse side keeps its discard productions in ``effects/cards.py``, which is
 the ordinary asymmetry this package already documents — the lowering half of a
 family outgrows its parse half, and the mirror re-forms on the name rather than
 on the contents.
+
+``_lower_discard`` is the half of this module that grows: every line added here
+since the discard arrived landed in it. So when the guard comes near again, cut
+*inside* it, along its per-seat branches, rather than moving the family out of
+the zone CR 701.9a names.
 """
 
 from __future__ import annotations
 
 import dataclasses
 
-from ...oracle_types import (CHOSEN_COLOR_THIS_WAY, CHOSEN_TARGET_PERMANENTS,
-                             X_FROM_COUNT_PER_RECIPIENT, OracleInstruction)
+from ...oracle_types import (CHOSEN_COLOR_THIS_WAY, X_FROM_COUNT_PER_RECIPIENT,
+                             OracleInstruction)
 from .. import ast
 from ..errors import LoweringError
 from ._amounts import halved_count_spec
-from ._common import (_amount_payload, _describe_targets, _filter_payload,
-                      _is_you, chargeable_card_filter)
+from ._common import (_amount_payload, _describe_targets, _is_you,
+                      chargeable_card_filter)
 from ._events import (_DAMAGED_PLAYER_EVENTS, _DEFENDING_PLAYER_EVENTS,
                       _EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_PLAYERS,
                       EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER)
-
-
-#: The scratchpad key "choose N cards in your hand" writes and "for each of
-#: those cards" reads. One name, declared once, so the two halves of the
-#: sentence cannot be wired to different keys — the same discipline
-#: ``destroyed_this_way_objects`` follows in ``lowering/board.py``.
-CHOSEN_HAND_CARDS_RESULT = "chosen_hand_cards"
+from ._record_keys import CHOSEN_HAND_CARDS_RESULT
 
 
 def _lower_choose_cards_in_hand(
@@ -166,144 +173,6 @@ def _lower_put_iterated_card_on_library(
     )
 
 
-def _lower_for_each_short_of_this_way(
-    node: ast.ForEach,
-    inner: tuple[OracleInstruction, ...],
-    produced: frozenset[str],
-) -> tuple[OracleInstruction, ...]:
-    """"**For each card less than two a player draws this way,** that player
-    gains 2 life." (Truce.)
-
-    :func:`_lower_for_each_life_lost`'s twin, and a *nested* loop where that one
-    is flat. The sentence names two things at once — "a player" and, inside it,
-    a count — so it lowers to a loop over seats (CR 101.4's turn order) with a
-    counted repetition inside it. The seat loop is what binds "that player", and
-    the inner count is one number per seat, read out of the record the sentence
-    in front of it wrote.
-
-    Two refusals, each a way the words could otherwise mean more than they
-    say:
-
-    * a step of this same effect must record the count. "This way" is a
-      back-reference, and one with no producer names nothing — here it would
-      compute the printed base and hand every player the *maximum* life, which
-      is the card upside down (idiom 7).
-    * the body must lower to something, for :func:`_lower_for_each_chosen`'s
-      reason: an empty loop reports supported and does not run.
-    """
-    record = node.iterator.record
-    if record not in produced:
-        raise LoweringError(
-            f"nothing in this effect records the {record!r} count this loop is "
-            "short of",
-            node=node,
-        )
-    if not inner:
-        raise LoweringError("a per-shortfall loop with no effect in it", node=node)
-    return (
-        OracleInstruction(
-            "for_each", "",
-            {
-                # The seats, in turn order, so "that player" names one of them
-                # per iteration — the same binding every multi-seat offer makes.
-                "iterator": {"players": "each_player"},
-                "effect": (
-                    OracleInstruction(
-                        "for_each", "",
-                        {
-                            "iterator": {
-                                "repeat_from_record": {
-                                    "record": record, "base": node.iterator.base,
-                                }
-                            },
-                            "effect": inner,
-                        },
-                    ),
-                ),
-            },
-        ),
-    )
-
-
-def _lower_for_each_chosen(
-    node: ast.ForEach,
-    inner: tuple[OracleInstruction, ...],
-    produced: frozenset[str],
-) -> tuple[OracleInstruction, ...]:
-    """"**For each of those cards,** <effect>." (Sylvan Library.)
-    "**For each of those creatures,** <effect>." (Winter's Chill.)
-
-    The sibling of ``_lower_for_each_destroyed``, and refused the same way: a
-    back-reference with no earlier step that made a choice names nothing, and
-    an empty loop is a sentence that reports supported and does not run.
-
-    Two records, one clause. Which of them answers is the printed noun: a hand
-    spelling reads the cards a "choose two cards in your hand" step recorded,
-    and a permanent spelling reads the permanents a "choose X target …"
-    sentence did. Reading either as the other walks an empty list, which is a
-    sentence that reports supported and does nothing — so the noun decides and
-    the missing producer refuses.
-    """
-    named = node.iterator.subject
-    if named is not None:
-        # Which record "those" names is decided by what an earlier step of this
-        # same effect actually wrote, in the order the phrase can mean them: a
-        # step that *chose* permanents is the closer referent (Winter's Chill
-        # names its own targets), and a sweep that destroyed some is the other
-        # ("Destroy all artifacts. … **each of those artifacts** …", Seeds of
-        # Innocence).
-        #
-        # Read off *produced* rather than fixed by the parse, for the reason
-        # every back-reference here is: the printed word is the same either way
-        # and only the effect around it can say which set exists. Neither
-        # recorded refuses, exactly as before — an empty loop is a sentence that
-        # reports supported and does not run.
-        record = None
-        if CHOSEN_TARGET_PERMANENTS in produced:
-            record = CHOSEN_TARGET_PERMANENTS
-        elif "destroyed_this_way" in produced:
-            record = "destroyed_this_way_objects"
-        if record is None:
-            raise LoweringError(
-                "'those <permanents>' with no earlier step in this effect that "
-                "chose or destroyed any",
-                node=node,
-            )
-        if not inner:
-            raise LoweringError("a per-permanent loop with no effect in it", node=node)
-        # The printed noun rides beside the record's name, exactly as it does
-        # for a destruction sweep's loop: "for each of those **creatures**"
-        # after a sentence that targeted attacking creatures is a restatement,
-        # and a restatement checked is a restatement. ``for_each`` applies it
-        # with ``permanent_matches_filter``, so a target that stopped answering
-        # the phrase drops out of the loop rather than being acted on.
-        return (
-            OracleInstruction(
-                "for_each", "",
-                {
-                    "iterator": {
-                        "produced_by": record,
-                        **_filter_payload(named),
-                    },
-                    "effect": inner,
-                },
-            ),
-        )
-    if CHOSEN_HAND_CARDS_RESULT not in produced:
-        raise LoweringError(
-            "'those cards' with no earlier step in this effect that chose any",
-            node=node,
-        )
-    if not inner:
-        raise LoweringError("a per-card loop with no effect in it", node=node)
-    return (
-        OracleInstruction(
-            "for_each", "",
-            {"iterator": {"produced_by": CHOSEN_HAND_CARDS_RESULT}, "effect": inner},
-        ),
-    )
-
-
 def _lower_put_hand_cards_on_library(
     node: ast.PutHandCardsOnLibrary, event: str | None = None,
 ) -> tuple[OracleInstruction, ...]:
@@ -322,8 +191,8 @@ def _lower_put_hand_cards_on_library(
     one the resolution already targeted, and under "at the beginning of each
     player's draw step" (Teferi's Puzzle Box) it is the seat the fire site
     froze. Both are printed "that player", so nothing but the event can say
-    which — the same fork ``_lower_mill`` and ``_lower_discard`` read one
-    module over.
+    which — the same fork ``_lower_mill`` reads one module over and
+    ``_lower_discard`` reads below.
     """
     payload: dict[str, object] = {"amount": _amount_payload(node.count)}
     # "…**both on top of your library or both on the bottom**" (Dream Cache).
@@ -828,7 +697,7 @@ def _lower_discard(node: ast.Discard, event: str | None = None) -> tuple[OracleI
             # "At the beginning of each player's upkeep, **that player discards
             # a card at random**." (Bottomless Pit.) The seat the firing event
             # froze (CR 603.10), under the one ``who``/``EVENT_SUBJECT_PLAYER``
-            # convention `_lower_exile_random_from_hand` uses one family over —
+            # convention `_lower_exile_random_from_hand` uses above —
             # and gated on the same table, because an event that froze nobody
             # leaves this handler emptying whichever hand the resolution happens
             # to be carrying. On this card that is its own controller's, on
@@ -902,8 +771,13 @@ def _fused_draw_then_discard(
     about it is per-card: the legacy rule it replaces reads the two numbers out
     of the sentence the same way.
 
+    That reason is history: ``discard_controller_cards`` arrived later (Recall,
+    in :func:`_lower_discard`), so the plain spelling could now be two steps.
+    Krovikan Sorcerer's "one **of them**" below still could not.
+
     Returning None rather than raising leaves a near-miss ("…then discard three
-    cards at random") to the ordinary step lowering, which refuses it by name.
+    cards at random") to the ordinary step lowering, which now reads it as two
+    steps — the random discard is Ring of Renewal's branch of ``_lower_discard``.
     """
     if len(steps) != 2:
         return None

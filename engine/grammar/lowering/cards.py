@@ -1,9 +1,10 @@
-"""Lowering cards moving between hand and library: draw, discard, mill, scry.
+"""Lowering cards off the top of a library: draw, mill, scry.
 
-Includes the two fused draw/discard shapes that genuinely are one effect
-rather than a sequence. The other flows this module used to hold have
-families of their own: mana production in `mana.py`, the hidden-zone
-search/reveal/exile-linkage flows in `library.py`.
+The other flows this module used to hold have families of their own: mana
+production in `mana.py`, the hidden-zone search/reveal/exile-linkage flows in
+`library.py`, and everything that names cards already in a hand — the discard
+family with its two fused draw/discard shapes, and a hand put back onto a
+library — in `hand.py`.
 """
 
 from ...oracle_types import (DISCARDED_BY_SEAT, MILLED_THIS_WAY,
