@@ -135,9 +135,10 @@ def test_w1g5_glittering_lion_shield_comes_off_when_anyone_pays(set_pool):
     end of turn, this creature loses "Prevent all damage that would be dealt to
     this creature." Any player may activate this ability."
 
-    The opponent's first Bolt is prevented whole. The opponent then pays the
-    {3} from **their own** pool (CR 602.1a's permission: any player may
-    activate), the Lion loses the line (CR 613.1f) and the second Bolt kills it.
+    The opponent's first Bolt is prevented whole. The opponent then activates
+    it (CR 602.1b: the text says which players may) and pays the {3} from
+    **their own** pool (CR 602.1a), the Lion loses the line (CR 613.1f) and the
+    second Bolt kills it.
     """
     game, me, them, lion = _w1g5_glitter_table(set_pool, "Glittering Lion", 2)
     _w1g5_bolt(game, lion)
