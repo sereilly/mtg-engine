@@ -1782,6 +1782,12 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     # answers it.
     if payload.get("attacked_you_this_turn"):
         return False
+    # "…with the greatest power **among creatures on the battlefield**"
+    # (Topple). The answer is about the rest of the board, which this pure half
+    # cannot see; ignored, it would offer every creature for a spell that names
+    # the biggest. ``subject_matches`` holds the game and answers it.
+    if payload.get("superlative_among"):
+        return False
     # "creatures that didn't attack this turn" / "…except for creatures that
     # couldn't attack" (Season of the Witch). Both are per-turn records stamped
     # on the permanent itself — the first by the declaration, the second by the
