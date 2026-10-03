@@ -18,12 +18,13 @@ then every cost. ``_activate_onto_stack`` kept to that for every cost but two.
   Drudge Spell and Night Soil with an empty pool each ate their graveyard cards
   and were refused.
 
-The browser does not hide all of it: ``app.js`` pre-checks sickness and
-tappedness off the **first** ability's cost, so a {T} ability at a later index
-(Cateran Overlord, Hakim, Subira) reached the server sick or tapped — and its
-insufficient-mana auto-tap flow tapped the lands, resent, and lost the mana to
-the refusal behind it. The AI skips tapped and sick permanents wholesale, so the
-engine API, a test or a script was the other way in.
+The browser does not hide all of it: ``app.js`` pre-checks tappedness on the
+click off the **first** ability's cost only (sickness it re-checks after the
+ability menu, on the chosen line), so a tapped permanent's {T} ability at a
+later index (Cateran Overlord, Hakim, Subira) reached the server — and the
+insufficient-mana auto-tap flow then tapped the lands, resent, and lost the
+mana to the refusal behind it. The AI skips tapped and sick permanents
+wholesale, so the engine API, a test or a script was the other way in.
 
 The sweep at the bottom asks the question of every shipped activated ability
 rather than of the cards that surfaced it, and carries floors on how many
