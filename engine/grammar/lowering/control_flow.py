@@ -113,6 +113,11 @@ OFFERABLE_ACTORS: frozenset[str] = frozenset(
      # phrase chooses nobody: the branch checks the recorded seat is a real
      # opponent and offers to nobody when it is not.
      "target_opponent",
+     # "**Unless target player pays {3}**, that player loses 5 life …"
+     # (Rhystic Syphon.) ``target_opponent``'s branch with the table widened
+     # to every seat, the caster included — CR 115.1 lets a spell target its
+     # own controller, so nothing is checked but that a seat was chosen.
+     "target_player",
      # "… unless **its controller** pays life equal to its toughness."
      # (Essence Vortex.) The seat is not one the resolution already carries —
      # it is read off the permanent the sentence targeted — so ``_offered_seats``
@@ -177,50 +182,57 @@ def _lower_unless_player_pays(
     * the branch must lower to something. A clause bought off with nothing
       behind it is a payment charged for no reason.
     """
-    if node.payer.kind == "you":
-        # "…**unless you pay {R}**, …" (Goblin Flotilla). An offer to the
-        # ability's own controller is a ``May`` — one seat, the resolution's
-        # own, with the clause on the declined branch — which is what the
-        # refusal below has said since Scarwood Bandits. Built as that node and
-        # handed to the offer lowering rather than given a payer of its own:
-        # ``unless_player_pays`` is a *chain* over other seats, and a chain of
-        # one asked in the resolution's own seat is the offer with extra steps.
+    payer = _ENUMERATED_PAYERS.get(node.payer.kind)
+    if payer is None:
+        # "…**unless you pay {R}**, …" (Goblin Flotilla); "**Unless target
+        # player pays {3}**, that player loses 5 life …" (Rhystic Syphon). An
+        # offer to **one** seat is a ``May`` — the clause on its declined
+        # branch, and "if they do" on its accepted one — so it is built as that
+        # node and handed to the offer lowering rather than given a payer of
+        # its own: ``unless_player_pays`` is a *chain* over a set of seats, and
+        # a chain of one is the offer with extra steps. Whether the offer can
+        # name the seat at all is ``OFFERABLE_ACTORS``' question, asked there.
         return _lower_may(
             ast.May(
                 actor=node.payer, cost=node.cost,
-                action=None, otherwise=node.otherwise,
+                action=None, otherwise=node.otherwise, then=node.paid,
             ),
             produced, event, event_subject, lower_statement=lower_statement,
         )
-    payer = _ENUMERATED_PAYERS.get(node.payer.kind)
-    if payer is None:
-        raise LoweringError(
-            "this clause enumerates an opponent or any player, not "
-            f"{node.payer.kind!r}",
-            node=node,
+
+    def branch(statement) -> tuple[OracleInstruction, ...]:
+        if statement is None:
+            return ()
+        return lower_statement(
+            statement, produced, event=event, event_subject=event_subject,
+            whole_effect=False,
         )
-    unpaid = lower_statement(
-        node.otherwise, produced, event=event, event_subject=event_subject,
-        whole_effect=False,
-    )
-    if not unpaid:
+
+    unpaid = branch(node.otherwise)
+    # "Draw three cards. Then **if any player pays {2}**, discard three cards."
+    # (Rhystic Scrying.) The same chain with the polarity reversed: the
+    # payment is what *causes* the effect, so it rides the accepted branch and
+    # a table that declines leaves nothing behind.
+    paid = branch(node.paid)
+    if not (unpaid or paid):
         raise LoweringError("an unpaid clause with no consequence", node=node)
-    return (
-        OracleInstruction(
-            "unless_player_pays", "",
-            {
-                "payer": payer,
-                "cost": {symbol: count for symbol, count in node.cost.pips},
-                # ``unpaid``, never ``otherwise`` and never ``steps``: the first
-                # is the offer's *declined* branch, which every reader that
-                # walks a program deliberately skips (a declined branch chooses
-                # no targets), and this branch is the one carrying the ability's
-                # target. The second name is reserved for a composed effect's
-                # nested instructions.
-                "unpaid": unpaid,
-            },
-        ),
-    )
+    payload: dict[str, object] = {
+        "payer": payer,
+        # ``{X}`` stays variable ("…unless any player pays {X}", Soul Strings):
+        # the same conversion the single-seat offer uses, so the two cannot
+        # disagree about what a printed X costs.
+        "cost": variable_mana_payload(node.cost, what="a toll", node=node),
+    }
+    if unpaid:
+        # ``unpaid``, never ``otherwise`` and never ``steps``: the first is the
+        # offer's *declined* branch, which every reader that walks a program
+        # deliberately skips (a declined branch chooses no targets), and this
+        # branch is the one carrying the ability's target. The second name is
+        # reserved for a composed effect's nested instructions.
+        payload["unpaid"] = unpaid
+    if paid:
+        payload["paid"] = paid
+    return (OracleInstruction("unless_player_pays", "", payload),)
 
 
 #: The actors whose offered seat is **not** the one the resolution already
@@ -520,6 +532,9 @@ def _lower_may(
         payload["targets"] = {
             "quantifier": "target", "kind": "player", "opponents_only": True,
         }
+    elif node.actor.kind == "target_player":
+        # The same announcement with no "opponent" in it (Rhystic Syphon).
+        payload["targets"] = {"quantifier": "target", "kind": "player"}
     if node.cost is not None:
         if not isinstance(node.cost, ast.ManaCost):
             raise LoweringError("only mana costs can be offered optionally", node=node)

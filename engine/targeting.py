@@ -2561,6 +2561,7 @@ def _from_instructions(instructions) -> dict | None:
             # an offer's declined branch deliberately is not.
             nested = _from_instructions(
                 tuple(instruction.payload.get("unpaid") or ())
+                + tuple(instruction.payload.get("paid") or ())
             )
             if nested is not None:
                 return nested

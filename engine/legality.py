@@ -3752,7 +3752,7 @@ def _single_target_is(game, chosen: dict, wanted: str, source=None) -> bool:
 _COMPOSED_STEP_KEYS: dict[str, tuple[str, ...]] = {
     "sequence": ("steps",),
     "if_then": ("then", "else"),
-    "unless_player_pays": ("unpaid",),
+    "unless_player_pays": ("unpaid", "paid"),
     # An offer's *declined* branch is read last and is read at all for
     # CR 601.2c's reason: Arcum's Whistle chooses its creature as the ability is
     # activated, before anybody is offered the payment.

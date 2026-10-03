@@ -22,6 +22,7 @@ from .ai_valuation import (
     spell_denies_its_own_target,
     spell_hand_pick_entry_filters,
     spell_target_side,
+    TollLoss,
     toll_branch_loss,
 )
 from .activation_permissions import activation_permission_denial
@@ -2847,6 +2848,43 @@ def toll_decline_is_smaller_loss(
     return _toll_loss_price(game, player_index, declining) < _toll_loss_price(
         game, player_index, paying
     )
+
+
+def chained_toll_declined(game: Game, player_index: int, entry: dict) -> bool:
+    """Whether a seat nobody asked declines one link of an "unless **any
+    player** pays" chain (`handlers/control_flow.unless_player_pays`).
+
+    The chain asks every seat in turn, the effect's own controller included —
+    and for that seat the standing policy, *pay tolls*, is backwards: Rhystic
+    Tutor's caster paid {2} to stop its own search, and every rhystic spell
+    the AI cast was countered by its own mana. Who a link's answer helps is
+    whose effect it is, read off the compiled program:
+
+    * the **unpaid** branch is what the controller cast the effect for, unless
+      ``toll_branch_loss`` prices it as the controller's own loss (Icy
+      Prison's "sacrifice this enchantment") — so the controller pays only to
+      stop a loss, and every other seat pays only to stop a gain;
+    * the **paid** branch (Rhystic Scrying's "if any player pays {2}, discard
+      three cards") is the drawback the card prints, so its controller never
+      buys it and every other seat does when it can afford to.
+
+    False — the standing policy — for anything that is not a chain link.
+    """
+    links = tuple(entry.get("_on_decline") or ())
+    if len(links) != 1 or getattr(links[0], "kind", None) != "unless_player_pays":
+        return False
+    caster = getattr(entry.get("_context"), "caster", None)
+    if caster is None or caster not in game.players:
+        return False
+    controller = game.players.index(caster)
+    unpaid = tuple(links[0].payload.get("unpaid") or ())
+    if not unpaid:
+        return player_index == controller
+    loss = toll_branch_loss(
+        game, controller, unpaid, {"caster"}, entry.get("_source_permanent")
+    )
+    unpaid_is_a_loss = loss is not None and loss != TollLoss()
+    return (player_index == controller) != unpaid_is_a_loss
 
 
 def optional_pay_may_tap_lands(game: Game, player_index: int, entry: dict) -> bool:
