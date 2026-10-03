@@ -54,6 +54,14 @@ class SimulationReport:
     #: *silent* one (even the empty declaration refused) is an issue rather than
     #: a count, because that seat blocks with nobody for the rest of the game.
     refused_blocks: Counter[str] = field(default_factory=Counter)
+    #: The activation-side twin of ``refused_casts``, and the one this report
+    #: never had: an activation the engine declines spends nothing and breaks
+    #: no rule, and the AI proposes it again next turn. NEM's wave 2 found 80 of
+    #: them across one ten-game run each of USG, TMP and MMQ by reading the
+    #: log by hand — Serra's Hymn announced with no division, Rootwater Diver
+    #: and Groundskeeper aimed at an empty graveyard — while every number this
+    #: report printed read clean.
+    refused_activations: Counter[str] = field(default_factory=Counter)
     #: How much combat actually happened. Reported for the reason
     #: `interaction_count` is: "no illegal interactions" over a run where nobody
     #: ever attacked is a true statement about nothing, and that was every run
@@ -727,6 +735,10 @@ def run_ai_simulation(
                         f"G{game_index} T{turn} {active_player.name} "
                         f"activate {activation_action.permanent_name} -> {result.details}"
                     )
+                    if not result.supported:
+                        report.refused_activations[
+                            f"{activation_action.permanent_name}: {result.details}"
+                        ] += 1
 
                 # An ability activated from the seat's **hand** (CR 113.6j) —
                 # cycling. A separate pass rather than a branch above, because
@@ -764,6 +776,10 @@ def run_ai_simulation(
                         f"activate {hand_activation.card_name} from hand "
                         f"-> {result.details}"
                     )
+                    if not result.supported:
+                        report.refused_activations[
+                            f"{hand_activation.card_name} (from hand): {result.details}"
+                        ] += 1
 
                 # CR 506-511, the half of a turn this loop did not have. It went
                 # main phase -> cast -> activate -> next seat, so no simulated

@@ -302,6 +302,35 @@ def test_a_denial_its_own_words_aim_at_the_activator_is_not_activated():
     assert choose_activation_action(game, 0) is None
 
 
+def test_the_simulator_counts_a_refused_activation(monkeypatch):
+    """``SimulationReport.refused_activations``: the activation-side twin of
+    ``refused_casts``, wired by having every proposed activation refused.
+    Before it existed the 80 refusals NEM's wave 2 found were visible only by
+    reading the log."""
+    import engine.ai_simulator as simulator
+    from engine.ai_policy import ActivationAction
+    from engine.card_loader import manifest_set_path
+    from engine.game_types import SimulationResult
+
+    def propose(game, seat):
+        return ActivationAction(
+            permanent_name="Probe Engine", permanent_index=0,
+            target_player_index=seat, land_tap_indices=(), score=1.0,
+        )
+
+    def refuse(self, *args, **kwargs):
+        return SimulationResult("Probe Engine", False, "unsupported", "refused for the test")
+
+    monkeypatch.setattr(simulator, "choose_activation_action", propose)
+    monkeypatch.setattr(simulator.Game, "activate_permanent_ability", refuse)
+    report = simulator.run_ai_simulation(
+        manifest_set_path("LEA"), games=1, seed=7, max_turns=2,
+    )
+    assert report.refused_activations == {
+        "Probe Engine: refused for the test": 4
+    }, report.refused_activations
+
+
 def test_an_activation_with_no_legal_graveyard_target_is_not_proposed(set_pool):
     """"{1}{G}: Return target basic land card from your graveyard to your hand"
     (Groundskeeper) with an empty graveyard: refused by the engine with nothing

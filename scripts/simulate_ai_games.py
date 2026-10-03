@@ -81,6 +81,14 @@ def main() -> int:
         for reason, count in report.refused_casts.most_common(5):
             print(f"  {count}x {reason}")
 
+    # The activation-side twin, which this report had no line for: a refused
+    # activation spends nothing and the AI proposes it again next turn.
+    if report.refused_activations:
+        total = sum(report.refused_activations.values())
+        print(f"Activations the engine declined: {total} (the AI proposed one it cannot make)")
+        for reason, count in report.refused_activations.most_common(5):
+            print(f"  {count}x {reason}")
+
     # The guard the fixed decklist used to give for free. Building the deck out
     # of the set means no pool can fail to supply it, so nothing stops a run
     # over a set whose cards the AI can never pay for — and "no illegal
