@@ -105,4 +105,76 @@ def test_w1g5_shield_dancer_moves_one_instance_from_that_creature_only(set_pool)
     _w1g5_finish_the_combat(game)
     assert me.life == 18, "the unblocked Bears still connect"
     assert [c.name for c in them.graveyard] == ["Hill Giant"]
+
+
+def _w1g5_glitter_table(set_pool, name, bolts):
+    """*name* (PCY) on seat 0; seat 1 to act in its main phase holding *bolts*
+    Lightning Bolts. W1G5's own."""
+    lea = set_pool("LEA")
+    cat = _W1G5Permanent(card=set_pool("PCY")[name])
+    me = _W1G5PlayerState(name="W1G5-A", battlefield=[cat])
+    them = _W1G5PlayerState(name="W1G5-B", hand=[lea["Lightning Bolt"]] * bolts)
+    game = _W1G5Game(players=[me, them])
+    game.enforce_mana_costs = False
+    game._settle()
+    game.active_player_index = 1
+    game.current_turn_phase = "precombat_main"
+    return game, me, them, cat
+
+
+def _w1g5_bolt(game, cat):
+    assert game.cast_from_hand(
+        1, "Lightning Bolt", target_player_index=0,
+        target_permanent_ids=[cat.permanent_id],
+    ).supported
+    _w1g5_resolve_stack(game)
+
+
+def test_w1g5_glittering_lion_shield_comes_off_when_anyone_pays(set_pool):
+    """"Prevent all damage that would be dealt to this creature. / {3}: Until
+    end of turn, this creature loses "Prevent all damage that would be dealt to
+    this creature." Any player may activate this ability."
+
+    The opponent's first Bolt is prevented whole. The opponent then pays the
+    {3} from **their own** pool (CR 602.1a's permission: any player may
+    activate), the Lion loses the line (CR 613.1f) and the second Bolt kills it.
+    """
+    game, me, them, lion = _w1g5_glitter_table(set_pool, "Glittering Lion", 2)
+    _w1g5_bolt(game, lion)
+    assert game.is_on_battlefield(lion) and lion.damage_marked == 0
+
+    game.enforce_mana_costs = True
+    them.mana_pool["R"] = 3
+    assert game.activate_permanent_ability(
+        1, "Glittering Lion", ability_index=0, source_controller_index=0,
+    ).supported
+    assert them.mana_pool["R"] == 0, "the activator pays"
+    _w1g5_resolve_stack(game)
+    game.enforce_mana_costs = False
+
+    _w1g5_bolt(game, lion)
+    assert not game.is_on_battlefield(lion)
+    assert [c.name for c in me.graveyard] == ["Glittering Lion"]
+
+
+def test_w1g5_glittering_lynx_gets_its_shield_back_at_cleanup(set_pool):
+    """"Until end of turn" is the removal's whole lifetime: after the cleanup
+    step (CR 514.2) the Lynx says the line again and the next Bolt is
+    prevented. The activated ability itself is never what is lost."""
+    game, _me, _them, lynx = _w1g5_glitter_table(set_pool, "Glittering Lynx", 1)
+    assert game.activate_permanent_ability(
+        1, "Glittering Lynx", ability_index=0, source_controller_index=0,
+    ).supported
+    _w1g5_resolve_stack(game)
+    shield = "prevent all damage that would be dealt to this creature."
+    assert shield not in lynx.effective_card.oracle_text.lower().splitlines()
+
+    game.resolve_cleanup_step(1)
+    assert shield in lynx.effective_card.oracle_text.lower().splitlines()
+    game.start_turn(1)
+    game._close_current_priority_step()
+    game.active_player_index = 1
+    game.current_turn_phase = "precombat_main"
+    _w1g5_bolt(game, lynx)
+    assert game.is_on_battlefield(lynx) and lynx.damage_marked == 0
 # end of the W1G5 creatures block

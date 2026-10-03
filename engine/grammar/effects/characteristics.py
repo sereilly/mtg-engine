@@ -583,6 +583,15 @@ def _parse_loses(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
         player = subject if isinstance(subject, ast.PlayerRef) else ast.PlayerRef("you")
         return ast.LoseGame(player)
     stream.reset(mark)
+    # "…this creature loses "Prevent all damage that would be dealt to this
+    # creature."" (Glittering Lion.) The gain branch's quoted reading with the
+    # verb turned round, through the same reader of the quoted text — CR
+    # 613.1f's removal of a whole printed ability rather than of a word.
+    if stream.at_kind(QUOTE):
+        abilities, self_name = _parse_quoted_abilities(stream)
+        return ast.LoseAbilityText(
+            subject, abilities, _parse_duration(stream), self_name=self_name
+        )
     # "loses **half their life**" (Peer into the Abyss). Read here rather than in
     # `parse_amount`, because the trailing "life" is the *production's* word
     # everywhere else ("loses 3 life") and here it belongs to the quantity —

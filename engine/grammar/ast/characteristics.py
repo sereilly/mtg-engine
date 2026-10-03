@@ -187,6 +187,25 @@ class GainAbilityText:
 
 
 @dataclass(frozen=True)
+class LoseAbilityText:
+    """``<subject> loses "<ability>" [duration].`` (Glittering Lion, Glittering
+    Lynx.)
+
+    :class:`GainAbilityText`'s mirror, for the half of CR 613.1f a keyword word
+    cannot carry: what is taken away is a whole printed ability, so the text
+    rides as printed and the removal is matched against the lines the permanent
+    says (``keywords.REMOVED_ABILITY_LINES``, the channel Takklemaggot's "loses
+    "enchant creature"" already writes). ``self_name`` is the SELF token the
+    lexer made of a self-reference inside the quotes, for the grant's reason.
+    """
+
+    subject: Recipient
+    abilities: tuple[str, ...]
+    duration: Duration = field(default_factory=Duration)
+    self_name: str | None = None
+
+
+@dataclass(frozen=True)
 class LoseKeyword:
     subject: Recipient
     keywords: tuple[str, ...]

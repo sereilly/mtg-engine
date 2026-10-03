@@ -33,6 +33,54 @@ from ._common import (_describe_targets, _filter_payload, _is_landwalk,
                       _restrictions_beyond)
 
 
+#: Which sweep ends a removed ability line, by the printed duration. The same
+#: words ``lowering/keywords._GRANT_DURATIONS`` reads on the granting side —
+#: spelled here rather than imported because the two families do not import each
+#: other — and only the two this removal's handler records: ``None`` (no printed
+#: duration) is CR 611.2a's indefinite removal, the channel's original reading.
+_LINE_REMOVAL_DURATIONS: dict[str | None, str | None] = {
+    None: None,
+    "until_end_of_turn": "end_of_turn",
+    "this_turn": "end_of_turn",
+    "until_end_of_combat": "end_of_combat",
+}
+
+
+def _lower_lose_ability_text(
+    node: ast.LoseAbilityText,
+) -> tuple[OracleInstruction, ...]:
+    """"{3}: Until end of turn, this creature loses "Prevent all damage that
+    would be dealt to this creature."" (Glittering Lion, Glittering Lynx.)
+
+    CR 613.1f's removal of a whole printed ability: the sentence is recorded
+    on ``keywords.REMOVED_ABILITY_LINES`` and ``Permanent.effective_card`` drops
+    it, so every reader of "what does it say?" — here the static shield
+    ``prevention._attached_damage_shields`` derives from the text on each damage
+    event — stops seeing it until the sweep the duration names gives it back.
+
+    Two refusals, each a way the sentence could otherwise mean more than it
+    says: the subject is the ability's own permanent (no handler strips a line
+    from anything it would have to choose or track), and the duration is one a
+    sweep ends — anything else would be a removal that never comes back.
+    """
+    if not node.abilities:
+        raise LoweringError("a quoted removal needs an ability", node=node)
+    if not _is_source(node.subject):
+        raise LoweringError(
+            "a quoted ability is taken from the ability's own source only",
+            node=node,
+        )
+    if node.duration.kind not in _LINE_REMOVAL_DURATIONS:
+        raise LoweringError(
+            f"no removed-ability channel expires {node.duration.kind!r}", node=node
+        )
+    payload: dict[str, object] = {"abilities": tuple(node.abilities)}
+    duration = _LINE_REMOVAL_DURATIONS[node.duration.kind]
+    if duration is not None:
+        payload["duration"] = duration
+    return (OracleInstruction("remove_self_ability_text", "", payload),)
+
+
 def _team_removal_payload(node: ast.LoseKeyword) -> dict[str, object] | None:
     """The payload for a board-wide keyword removal, or None when the subject
     is not one.

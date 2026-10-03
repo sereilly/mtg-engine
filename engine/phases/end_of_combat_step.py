@@ -13,6 +13,7 @@ from ..delayed_triggers import (expire_combat_delayed_triggers,
                                 fire_delayed_triggers)
 from ..keywords import (clear_granted_ability_lines, clear_granted_keywords,
                         clear_removed_ability_keywords,
+                        clear_removed_ability_lines,
                         clear_all_abilities_removals)
 from ..models import Permanent
 from ..pt import remove_temporary_pt
@@ -48,6 +49,7 @@ class EndOfCombatStepMixin:
             # ending and a second sweep site is a second place to forget one.
             clear_granted_ability_lines(permanent, "end_of_combat")
             clear_removed_ability_keywords(permanent, "end_of_combat")
+            clear_removed_ability_lines(permanent, "end_of_combat")
             clear_all_abilities_removals(permanent, "end_of_combat")
             clear_granted_keywords(permanent, "end_of_combat")
             if permanent.metadata.get("animate_until_end_of_combat"):

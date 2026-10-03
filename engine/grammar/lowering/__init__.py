@@ -133,7 +133,7 @@ from .types import (
     _lower_become_aura,
     _lower_gain_type,
 )
-from .keyword_removal import _lower_lose_keyword
+from .keyword_removal import _lower_lose_ability_text, _lower_lose_keyword
 from .keywords import (
     _KEYWORD_GRANTS,
     _lower_gain_ability_text,
@@ -498,6 +498,7 @@ __all__ = [
     "_KEYWORD_GRANTS",
     "_lower_gain_ability_text",
     "_lower_gain_keyword",
+    "_lower_lose_ability_text",
     "_lower_lose_keyword",
     "_lower_player_gets_counters",
     "_fused_tap_enchanted_then_counters",

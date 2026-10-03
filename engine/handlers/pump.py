@@ -1942,6 +1942,39 @@ def grant_self_ability_text(game: Game, instruction: OracleInstruction, context:
     return True, "resolved"
 
 
+@effect_handler("remove_self_ability_text")
+def remove_self_ability_text(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Until end of turn, this creature loses "Prevent all damage that would be
+    dealt to this creature."" (Glittering Lion, Glittering Lynx.)
+
+    ``grant_self_ability_text``'s mirror: the removal is recorded on
+    ``keywords.REMOVED_ABILITY_LINES`` with the printed duration, and
+    ``Permanent.effective_card`` drops the sentence until the sweep that
+    duration names gives it back (CR 613.1f). Nothing here knows what the line
+    did — the static shield the Lion's text describes is re-derived from that
+    text on every damage event, so taking the text away is the whole effect.
+    """
+    from ..keywords import remove_ability_line
+
+    source_permanent = context.source_permanent
+    if source_permanent is None or not game.is_on_battlefield(source_permanent):
+        game.log.append(f"{context.card.name}: it is no longer on the battlefield")
+        return True, "resolved"
+    lifetime = grant_lifetime(game, instruction, context)
+    texts = tuple(instruction.payload.get("abilities") or ())
+    for text in texts:
+        remove_ability_line(source_permanent, text, **lifetime)
+    game._recompute_continuous_effects()
+    if texts:
+        game.log.append(
+            f"{source_permanent.card.name} loses "
+            + " and ".join(f'"{text}"' for text in texts)
+            + DURATION_WORDS.get(lifetime["duration"], "")
+            + f" ({context.card.name})"
+        )
+    return True, "resolved"
+
+
 @effect_handler("grant_target_ability_text")
 def grant_target_ability_text(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"…that creature gains "<ability>"." (Life Matrix.)

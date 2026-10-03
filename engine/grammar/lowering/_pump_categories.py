@@ -91,6 +91,9 @@ PUMP_INSTRUCTION_CATEGORIES: dict[str, str] = {
     # whole printed ability instead of a word.
     "grant_target_ability_text": "pump",
     "grant_self_ability_text": "pump",
+    # Its negative twin ("…this creature loses "Prevent all damage …"",
+    # Glittering Lion): the same layer-6 family, one printed ability removed.
+    "remove_self_ability_text": "pump",
     # The negative twin ("It loses indestructible until end of turn", Soul Sear).
     "remove_target_keyword_until_eot": "pump",
     # "Until end of turn, target creature loses **all abilities** …" (Humble.)

@@ -57,7 +57,8 @@ from typing import TYPE_CHECKING
 
 from .keywords import (clear_all_abilities_removals,
                        clear_granted_ability_lines, clear_granted_keywords,
-                       clear_removed_ability_keywords)
+                       clear_removed_ability_keywords,
+                       clear_removed_ability_lines)
 from .layer_bridge import SET_CARD_TYPES, printed_shape
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -165,6 +166,15 @@ def holds_window(perm: "Permanent", duration: str) -> bool:
         for entry in perm.metadata.get(key) or ():
             if entry.get("duration") == duration:
                 return True
+    # The *lines* channel now carries durations too (Glittering Lion's "until
+    # end of turn, this creature loses "…""), as a dict beside the bare string
+    # an indefinite removal still is — so it is asked here, and only of the
+    # dict entries, which is the crash above not coming back.
+    from .keywords import REMOVED_ABILITY_LINES
+
+    for entry in perm.metadata.get(REMOVED_ABILITY_LINES) or ():
+        if isinstance(entry, dict) and entry.get("duration") == duration:
+            return True
     record = perm.metadata.get(SET_CARD_TYPES)
     return bool(record) and record.get("duration") == duration
 
@@ -200,6 +210,7 @@ def end_event_durations(game, announcement: str, *, card) -> list[str]:
             clear_granted_keywords(perm, kind)
             clear_granted_ability_lines(perm, kind)
             clear_removed_ability_keywords(perm, kind)
+            clear_removed_ability_lines(perm, kind)
             clear_all_abilities_removals(perm, kind)
             clear_set_card_types(perm, kind)
             if kind not in ended:
