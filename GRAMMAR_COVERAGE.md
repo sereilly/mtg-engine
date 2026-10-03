@@ -42,7 +42,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | UDS | 143 | 204 | 91.7% | 91.2% | 65.7% | 121 |
 | MMQ | 335 | 465 | 91.8% | 91.6% | 66.2% | 278 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| NEM *(measured)* | 143 | 219 | 68.9% | 62.1% | 47.5% | 96 |
+| NEM *(measured)* | 143 | 219 | 70.8% | 65.8% | 50.2% | 101 |
 | **All (shipped)** | **6164** | **9025** | **90.8%** | **90.2%** | **61.1%** | **4680** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -55,13 +55,13 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 476 | 214 | expected a subject |  |
-| 145 | 76 | unrecognized effect verb |  |
-| 125 | 60 | unconsumed text |  |
+| 475 | 213 | expected a subject |  |
+| 144 | 75 | unrecognized effect verb |  |
+| 124 | 59 | unconsumed text |  |
 | 44 | 27 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
-| 18 | 16 | expected 'unless defending player controls' |  |
 | 18 | 6 | expected what this creature can't block, or a duration |  |
+| 17 | 15 | expected 'unless defending player controls' |  |
 | 14 | 9 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
 | 7 | 1 | no lowering for RawEffect |  |
 | 6 | 1 | no handler for this battlefield entry |  |
@@ -771,6 +771,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Sacrifice a creature: Target creature gets +2/+2 until end of turn.`
 - **Blind Fury**
   - `All creatures lose trample until end of turn. If a creature would deal combat damage to a creature this turn, it deals double that damage to that creature instead.`
+- **Blinding Angel**
+  - `Whenever this creature deals combat damage to a player, that player skips their next combat phase.`
 - **Blinding Light**
   - `Tap all nonwhite creatures.`
 - **Blinking Spirit**
@@ -1834,6 +1836,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Target creature gets +1/+0 until end of turn.`
   - `Draw a card.`
 - **Defiant Vanguard**
+  - `When this creature blocks, at end of combat, destroy it and all creatures it blocked this turn.`
   - `{5}, {T}: Search your library for a Rebel permanent card with mana value 4 or less, put it onto the battlefield, then shuffle.`
 - **Deflection**
   - `Change the target of target spell with a single target.`
@@ -2740,6 +2743,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{W}: Return this Aura to its owner's hand.`
 - **Fling**
   - `Fling deals damage equal to the sacrificed creature's power to any target.`
+- **Flint Golem**
+  - `Whenever this creature becomes blocked, defending player mills three cards.`
 - **Flood**
   - `{U}{U}: Tap target creature without flying.`
   - `{U}{U}: Tap target creature without flying.`
@@ -2812,6 +2817,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Fog Elemental**
   - `When this creature attacks or blocks, sacrifice it at end of combat.`
   - `When this creature attacks or blocks, sacrifice it at end of combat.`
+- **Fog Patch**
+  - `Attacking creatures become blocked. (This spell works on creatures that can't be blocked.)`
 - **Fog of Gnats**
   - `{B}: Regenerate this creature.`
 - **Folk of An-Havva**
@@ -4302,6 +4309,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature blocks a creature, that creature doesn't untap during its controller's next untap step.`
 - **Laccolith Grunt**
   - `Whenever this creature becomes blocked, you may have it deal damage equal to its power to target creature. If you do, this creature assigns no combat damage this turn.`
+- **Laccolith Rig**
+  - `Whenever enchanted creature becomes blocked, you may have it deal damage equal to its power to target creature. If you do, the first creature assigns no combat damage this turn.`
 - **Laccolith Titan**
   - `Whenever this creature becomes blocked, you may have it deal damage equal to its power to target creature. If you do, this creature assigns no combat damage this turn.`
 - **Laccolith Warrior**
@@ -5329,6 +5338,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{2}{U}{B}, {T}, Sacrifice this creature: Return target creature card from your graveyard to the battlefield.`
 - **Odylic Wraith**
   - `Whenever this creature deals damage to a player, that player discards a card.`
+- **Off Balance**
+  - `Target creature can't attack or block this turn.`
 - **Ogre Shaman**
   - `{2}, Discard a card at random: This creature deals 2 damage to any target.`
 - **Okk**
