@@ -542,6 +542,36 @@ def rebind_alternative_pronoun_to_choice_target(node: "ast.OneOf") -> "ast.OneOf
     return replace(node, options=tuple(options))
 
 
+def rebind_permanent_or_player_to_offer_target(
+    offer: "ast.May", branch: ast.Statement
+) -> ast.Statement:
+    """"Rhystic Lightning deals 4 damage to **any target** unless that
+    permanent's controller or that player pays {2}. If they do, Rhystic
+    Lightning deals 2 damage to **the permanent or player**."
+
+    The antecedent is the toll's own penalty — the damage the payment bought
+    off — and "the permanent or player" names exactly what its "any target"
+    chose, whichever kind that was. The marker ``parse_recipient`` reads
+    becomes a copy of that spec, the convention every back-reference here
+    follows: one announcement (CR 601.2c), two steps describing it the same
+    way. With any other antecedent the marker is left, and refuses.
+    """
+    penalty = offer.otherwise
+    if not isinstance(penalty, ast.DealDamage):
+        return branch
+    chosen = [
+        r for r in (penalty.recipients or ())
+        if isinstance(r, ast.TargetSpec) and r.quantifier == "any_target"
+    ]
+    if len(chosen) != 1:
+        return branch
+
+    def _rewrite(spec: ast.TargetSpec) -> ast.TargetSpec | None:
+        return chosen[0] if spec.quantifier == "permanent_or_player" else None
+
+    return _walk_specs(branch, _rewrite)
+
+
 #: The bare noun an ordinal back-reference may restate. "The first **creature**"
 #: and nothing narrower: a restated adjective would be a narrowing the bound
 #: object cannot honour, and the walk below leaves such a spec alone so its

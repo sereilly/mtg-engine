@@ -689,7 +689,14 @@ def _parse_damage_unless_pay(
     # keep the fused node the upkeep dispatcher and the optional-pay prompt
     # implement whole.
     alternatives = _accept_mana_alternatives(stream)
-    if alternatives:
+    # "…deals 4 damage to **any target** unless that permanent's controller or
+    # that player pays {2}." (Rhystic Lightning.) Neither fused flow damages a
+    # *chosen* target — they hurt the controller or the event's player — so a
+    # targeted recipient is the plain ``May`` too, and "If they do" folds on.
+    targeted = any(
+        isinstance(r, ast.TargetSpec) and r.targeted for r in damage.recipients
+    )
+    if alternatives or (targeted and payer.kind != "you"):
         return ast.May(
             actor=payer, cost=cost, cost_alternatives=alternatives,
             otherwise=damage,

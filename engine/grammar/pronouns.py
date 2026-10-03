@@ -44,8 +44,9 @@ from .phrases import _accept_self_reference
 from .rebinding import statement_bound_target as _statement_bound_target
 from .rebinding import (statement_bound_several_targets
                         as _statement_bound_several_targets)
-from .statements import _parse_condition
+from .statements import _parse_condition, _parse_statement_body
 from .stream import TokenStream
+from .tolls import _accept_trailing_toll
 from .vocabulary import CARD_TYPES
 
 
@@ -115,6 +116,9 @@ def _parse_plural_pronoun_pump_rider(
     this pool prints; admitting a spelling nobody prints is how a production
     comes to claim a sentence it has not been checked against.
     """
+    second_pump = _parse_pronoun_pump_rider(stream, steps)
+    if second_pump is not None:
+        return second_pump
     target = _statement_bound_several_targets(steps[-1]) if steps else None
     if target is None:
         return None
@@ -136,6 +140,54 @@ def _parse_plural_pronoun_pump_rider(
         stream.reset(mark)
         return None
     return statement
+
+
+def _parse_pronoun_pump_rider(
+    stream: TokenStream, steps: list[ast.Statement]
+) -> ast.Statement | None:
+    """A **second pump** on what the pump before it named, read off that pump.
+
+    "Target creature gets +1/+1 until end of turn. **That creature gets an
+    additional +4/+4** until end of turn unless any player pays {2}." (Wild
+    Might.) "Creatures you control get +0/+1 until end of turn. **They get an
+    additional +0/+2** until end of turn unless any player pays {2}." (Rhystic
+    Shield.) The pronoun names the previous pump's subject — one chosen target
+    ("that creature", "it") or the set a sweep named ("they", "those
+    creatures") — and the new pump is given that subject, a copy of it: the
+    same ``targets`` payload, so CR 601.2c's one choice is asked once, and for
+    a sweep the same noun phrase, which is the same set (CR 611.2c fixes both
+    when the effects begin, in the same resolution).
+
+    Read here, beside the plural rider whose method it shares (the ordinary
+    ``_parse_gets`` with the bound subject handed in), and only after a
+    ``Pump``: "an additional" is what that antecedent licenses, and without it
+    "they" is a player word. The trailing toll is read too, because a rider is
+    parsed outside ``parse_statement`` and the toll is the whole point of these
+    two cards.
+    """
+    last = steps[-1] if steps else None
+    if not isinstance(last, ast.Pump) or not isinstance(last.subject, ast.TargetSpec):
+        return None
+    bound = last.subject
+    mark = stream.mark()
+    if bound.quantifier == "target" and bound.targeted:
+        named = stream.accept_word("it") or stream.accept_phrase("that", "creature")
+    elif bound.quantifier in ("all", "each"):
+        named = stream.accept_word("they") or stream.accept_phrase("those", "creatures")
+    else:
+        return None
+    if not named or not stream.at_word("gets", "get"):
+        stream.reset(mark)
+        return None
+    try:
+        pump = _parse_gets(stream, bound, additional=True)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not isinstance(pump, ast.Pump):
+        stream.reset(mark)
+        return None
+    return _accept_trailing_toll(_parse_statement_body, stream, pump) or pump
 
 
 def _parse_pronoun_counter_rider(

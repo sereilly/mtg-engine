@@ -425,7 +425,10 @@ class UnlessPlayerPays:
     """
     payer: PlayerRef
     cost: "ManaCost"
-    otherwise: "Statement"
+    otherwise: "Statement | None"
+    #: What paying *buys* — "Then **if any player pays {2}**, discard three
+    #: cards" (Rhystic Scrying) — the same chain with the polarity reversed.
+    paid: "Statement | None" = None
 
 
 @dataclass(frozen=True)

@@ -120,6 +120,30 @@ def cards_drawn_by_target(card: CardDefinition, x_value: int | None = None) -> i
     return None
 
 
+def target_loses_life(card: CardDefinition) -> bool:
+    """Whether resolving *card* makes its **target player** lose life.
+
+    "Target player loses 4 life and you gain 4 life." (Soul Feast.) The spell
+    scorer's text probes saw "gain … life" and nothing that read "loses", so the
+    caster's own seat won the score and the AI drained itself — a wash on its
+    own life total and a card spent. Read off the compiled program, wrappers
+    opened (Rhystic Syphon's loss sits on a toll's declined branch), and only
+    where the loss lands on the target rather than on a named seat.
+    """
+    def walk(instructions) -> bool:
+        for instruction in instructions:
+            payload = getattr(instruction, "payload", None) or {}
+            if instruction.kind == "target_loses_life" and payload.get("recipient") is None:
+                return True
+            for key in ("steps", "then", "else", "action", "otherwise", "unpaid"):
+                nested = payload.get(key)
+                if isinstance(nested, (list, tuple)) and walk(nested):
+                    return True
+        return False
+
+    return walk(_spell_instructions(card))
+
+
 def cards_drawn_by_controller(instruction: OracleInstruction) -> int | None:
     """How many cards *instruction* makes its controller draw, or None.
 

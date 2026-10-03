@@ -459,6 +459,17 @@ def parse_recipient(stream: TokenStream) -> ast.Recipient | None:
     # Mask) — and each of those names a set the sentence is choosing from, not
     # an object it already holds. Claiming those two words there would take the
     # phrase away from the noun parser that reads the rest of them.
+    # "…deals 2 damage to **the permanent or player**." (Rhystic Lightning.) A
+    # back-reference to whatever an "any target" chose, which is either kind of
+    # thing. Read as a marker quantifier no lowering knows, so it refuses unless
+    # ``sentence_rebinding.rebind_permanent_or_player_to_offer_target`` has
+    # replaced it with that target's own spec.
+    mark_either = stream.mark()
+    if stream.accept_word("the", "that") and stream.accept_phrase(
+        "permanent", "or", "player"
+    ):
+        return ast.TargetSpec("permanent_or_player")
+    stream.reset(mark_either)
     mark_definite = stream.mark()
     if stream.accept_word("the"):
         # "…**the attacking creature** assigns no combat damage this turn"

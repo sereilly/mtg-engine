@@ -2770,6 +2770,14 @@ def _offered_seats(
         if chosen is None or chosen is context.caster or chosen.lost:
             return []
         return [game.players.index(chosen)]
+    if actor == "target_player":
+        # "**Unless target player pays {3}**, …" (Rhystic Syphon.) The branch
+        # above without its opponent check: any seat may be the target,
+        # the caster included. Nobody chosen, or gone, is nobody offered.
+        chosen = context.target
+        if chosen is None or chosen not in game.players or chosen.lost:
+            return []
+        return [game.players.index(chosen)]
     if actor == "defending_player":
         # CR 506.2, frozen by the fire site (CR 603.10): which seat is being
         # attacked is a fact about the combat, and by the time this trigger
@@ -3056,10 +3064,17 @@ def unless_player_pays(game: Game, instruction: OracleInstruction, context: Orac
     The chain is a prompt armed by *answering* an earlier one, which is how a
     sequence of decisions stays one resolution — the stack object is held until
     the last of them is answered (CR 608.2, CR 117.3b).
+
+    ``paid`` is the chain with its polarity reversed — "Then **if any player
+    pays {2}**, discard three cards" (Rhystic Scrying) — run by the payment
+    that ends the chain, against the resolution's own context: the bare
+    imperative is still the controller's, whoever paid.
     """
     payload = dict(instruction.payload)
     unpaid = tuple(payload.get("unpaid") or ())
-    cost = dict(payload.get("cost") or {})
+    paid = tuple(payload.get("paid") or ())
+    # "…unless any player pays {X}" (Soul Strings): the announced X, read now.
+    cost = _resolved_cost(payload.get("cost"), context, game)
     caster = context.caster
     if caster is None or caster not in game.players:
         return True, "resolved"
@@ -3098,8 +3113,13 @@ def unless_player_pays(game: Game, instruction: OracleInstruction, context: Orac
         cost=cost,
         life=0,
         _source_permanent=context.source_permanent,
-        # Paying ends the chain: nothing runs, and no later opponent is asked.
+        # Paying ends the chain: no later seat is asked, and only what the
+        # payment itself buys runs (nothing, for every toll but the reversed
+        # one). ``_on_paid`` rather than ``_on_accept``, because the latter is
+        # the *payer's* action and is gated on what the payer can do — and
+        # Rhystic Scrying's discard is its controller's, whoever paid.
         _on_accept=(),
+        _on_paid=paid,
         _on_decline=(
             OracleInstruction(
                 "unless_player_pays", "", {**payload, "asked_seats": asked + 1}

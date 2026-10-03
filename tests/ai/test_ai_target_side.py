@@ -353,3 +353,28 @@ def test_an_activation_with_no_legal_graveyard_target_is_not_proposed(set_pool):
     keeper = set_pool("MMQ")["Groundskeeper"]
     game = _duel(mine=[keeper])
     assert choose_activation_action(game, 0) is None
+
+
+def test_a_drain_is_aimed_at_the_opponent_not_the_caster(set_pool):
+    """"Target player loses 4 life and you gain 4 life." (Soul Feast.) The
+    score's "gain … life" probe preferred the caster and nothing read the
+    *loss*, so the AI drained itself: a wash on its own life total and a card
+    spent. The loss is read off the compiled program, wrappers opened — Rhystic
+    Syphon's sits on a toll's declined branch — and an invented card printing
+    the template answers the same way."""
+    invented = _mk_card(
+        "Invented Drain", "{3}{B}", "Sorcery",
+        "Target player loses 3 life and you gain 3 life.",
+    )
+    for card in (
+        set_pool("UDS")["Soul Feast"], set_pool("PCY")["Rhystic Syphon"], invented,
+    ):
+        game = Game(players=[PlayerState(name="AI", life=12), PlayerState(name="Opp")])
+        assert _choose_target_for_spell(card, 0, game) == 1, card.name
+
+
+def test_a_loss_that_pays_for_a_draw_keeps_the_draw_probes_answer(set_pool):
+    """Peer into the Abyss: the target also *draws*, so the life loss is the
+    price of the cards and the draw probe still decides — the caster."""
+    game = Game(players=[PlayerState(name="AI", life=12), PlayerState(name="Opp")])
+    assert _choose_target_for_spell(set_pool("M21")["Peer into the Abyss"], 0, game) == 0

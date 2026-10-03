@@ -33,9 +33,19 @@ from ..phrases import (_expect_counter_kind, _parse_can_attack_as_though,
 from ..where_x import parse_where_x_definition
 
 
-def _parse_gets(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
-    """``<subject> gets +N/+N [duration][, where X is the number of …]``."""
+def _parse_gets(
+    stream: TokenStream, subject: ast.Recipient, *, additional: bool = False
+) -> ast.Statement:
+    """``<subject> gets +N/+N [duration][, where X is the number of …]``.
+
+    *additional* admits "gets **an additional** +4/+4" (Wild Might), and only
+    the caller that has checked a pump of the same subject came first may pass
+    it: the word says this is a second, separate pump, which is exactly what a
+    second ``Pump`` already is (``pronouns._parse_pronoun_pump_rider``).
+    """
     stream.expect_word("gets", "get")
+    if additional and not isinstance(subject, ast.PlayerRef):
+        stream.accept_phrase("an", "additional")
     # "That player gets a poison counter." (Pit Scorpion.) A counter on a
     # *player* (CR 122.1) shares its verb with the P/T pump, and the subject
     # settles which sentence this is: a player has no power or toughness for a

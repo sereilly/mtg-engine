@@ -41,6 +41,7 @@ from .errors import GrammarError
 from .nouns import parse_object_filter
 from .rebinding import rebind_pronoun_to_condition_target
 from .sentence_rebinding import (rebind_first_creature_to_damage_source,
+                                 rebind_permanent_or_player_to_offer_target,
                                  rebind_pronoun_to_delay_target)
 from .statements import _parse_condition, parse_statement
 from .stream import TokenStream
@@ -236,6 +237,45 @@ def _mandatory_named_actor(statement) -> "ast.PlayerRef | None":
     return None
 
 
+#: The offers "If no one does" can follow: a set of seats, each asked in turn.
+_NO_ONE_PAYERS = frozenset({"each_player", "each_opponent"})
+
+
+def _attach_if_no_one_does(stream: TokenStream, steps: list[ast.Statement]) -> bool:
+    """``Any player may pay {1}. If no one does, <statement>.`` (Rhystic Circle.)
+
+    CR 118.12a says "[do something] unless [a player does something else]"
+    means "[a player may do something else]. If [that player doesn't], [do
+    something]" — so this is the toll printed the long way round, and it folds
+    into the same :class:`ast.UnlessPlayerPays` chain "…unless any player pays
+    {1}" builds: one offer the whole table is asked in turn, the first payment
+    ending it, the effect on the branch nobody bought off.
+
+    Only over a bare mana offer made to a set of seats — anything carrying a
+    branch, an action or a second price is a sentence this does not describe.
+    """
+    last = steps[-1] if steps else None
+    if not (
+        isinstance(last, ast.May)
+        and last.actor.kind in _NO_ONE_PAYERS
+        and isinstance(last.cost, ast.ManaCost)
+        and last == ast.May(last.actor, cost=last.cost)
+    ):
+        return False
+    mark = stream.mark()
+    if not stream.accept_phrase("if", "no", "one", "does"):
+        stream.reset(mark)
+        return False
+    stream.accept_punct(",")
+    try:
+        branch = parse_statement(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return False
+    steps[-1] = ast.UnlessPlayerPays(last.actor, last.cost, branch)
+    return True
+
+
 def _attach_if_you_do(stream: TokenStream, steps: list[ast.Statement]) -> bool:
     """Fold "If you do, …" / "If you don't, …" into the preceding ``May``.
 
@@ -243,7 +283,12 @@ def _attach_if_you_do(stream: TokenStream, steps: list[ast.Statement]) -> bool:
     pay {1}. If you do, you gain 1 life." is one decision with a consequence.
     Parsing them as separate sentences would make the life gain unconditional —
     the same class of mistake as treating "you may pay {2}" as a plain cost.
+
+    "If **no one** does" is the decline branch of an offer to the whole table,
+    which is a toll rather than an offer (:func:`_attach_if_no_one_does`).
     """
+    if _attach_if_no_one_does(stream, steps):
+        return True
     # "You may draw X cards, where X is …. If you do, discard a card."
     # (Sanctum of Calm Waters.) The where-clause wraps the whole sentence, so
     # the May is one level down — lifted off here and put back on outside the
@@ -427,6 +472,9 @@ def _attach_if_you_do(stream: TokenStream, steps: list[ast.Statement]) -> bool:
         # The ordinal names one of the two creatures the offer printed, which
         # only the offer can say.
         branch = rebind_first_creature_to_damage_source(target.action, branch)
+        # "…unless that permanent's controller or that player pays {2}. If they
+        # do, … 2 damage to **the permanent or player**." (Rhystic Lightning.)
+        branch = rebind_permanent_or_player_to_offer_target(target, branch)
 
     if chooser_person and (choice_at := _choice_step_index(steps)) is not None:
         # "…chooses a creature …. **If the player does**, <A>. **If they

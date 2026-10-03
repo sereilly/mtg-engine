@@ -7070,6 +7070,11 @@ class PendingChoicesMixin:
         # than as one of the three fixed fields above, so any effect can sit
         # behind an optional cost.
         ran = self._run_optional_branch(entry, "_on_accept")
+        # What the payment buys when it is not the payer's own action: "Then if
+        # any player pays {2}, discard three cards" (Rhystic Scrying) — the
+        # controller discards, whoever paid (`handlers/control_flow
+        # .unless_player_pays`).
+        ran = self._run_optional_branch(entry, "_on_paid") or ran
         # What *this* option bought (Winter's Chill's {1}). Beside the accept
         # branch rather than instead of it: a card could print both, and the
         # accept branch is what every option has in common.
@@ -7963,11 +7968,23 @@ class PendingChoicesMixin:
         alternative = int(entry.get("life_alternative", 0) or 0)
         if floating is None and alternative and player.life > alternative:
             floating = True
+        # One link of an "unless any player pays" chain asks the effect's own
+        # controller too, and paying is only right for the seat the unpaid
+        # branch hurts (`ai_policy.chained_toll_declined`).
+        from ...ai_policy import chained_toll_declined
+
+        if floating is not None and chained_toll_declined(
+            self, choice.player_index, entry
+        ):
+            floating = None
+            self.log.append(
+                f"{player.name} declined to pay for {entry['card_name']}"
+            )
         # Take gifts, pay tolls, make no trades: an offer whose price is a deed
         # rather than a payment, and whose refusal the card prices at nothing,
         # is refused. A *toll* — an offer with a printed "if you don't" — is
         # still paid by default, because refusing it is not free either.
-        if floating is not None and self._offer_is_an_unpriced_trade(choice):
+        elif floating is not None and self._offer_is_an_unpriced_trade(choice):
             floating = None
             self.log.append(
                 f"{player.name} declined {entry['card_name']} "

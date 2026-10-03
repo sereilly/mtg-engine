@@ -180,3 +180,58 @@ def test_toll_branch_loss_reads_damage_only_when_it_lands_on_the_offered_seat(se
 
     assert toll_branch_loss(game, 0, steps, frozenset({"caster"})) == TollLoss(life=2)
     assert toll_branch_loss(game, 0, steps, frozenset()) is None
+
+
+# --- one link of an "unless any player pays" chain -----------------------------
+
+
+def _w1g1_islands(set_pool, count: int) -> list:
+    return [Permanent(card=set_pool("LEA")["Island"]) for _ in range(count)]
+
+
+def test_the_caster_never_pays_to_stop_its_own_rhystic_spell(set_pool):
+    """Rhystic Tutor: "Unless any player pays {2}, search your library …". The
+    chain asks the active player first — the caster — and "pay tolls" was
+    backwards for that seat: it paid {2} to stop its own search. Now the caster
+    declines and the opponent, for whom the search is the loss, pays."""
+    lea = set_pool("LEA")
+    caster = PlayerState(
+        name="AI", battlefield=_w1g1_islands(set_pool, 4),
+        hand=[set_pool("PCY")["Rhystic Tutor"]], library=[lea["Island"]],
+    )
+    opponent = PlayerState(name="B", battlefield=_w1g1_islands(set_pool, 2))
+    game = Game(players=[caster, opponent])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+
+    assert game.cast_from_hand(0, "Rhystic Tutor").supported
+    game.auto_resolve_pending_optional_pays()
+
+    assert "AI declined to pay for Rhystic Tutor" in game.log
+    assert not any(land.tapped for land in caster.battlefield)
+    assert sum(land.tapped for land in opponent.battlefield) == 2
+    assert caster.hand == [], "the opponent bought the search off"
+
+
+def test_only_the_seat_the_unpaid_branch_hurts_pays_for_icy_prison(set_pool):
+    """Icy Prison: "…sacrifice this enchantment unless any player pays {3}."
+    The unpaid branch is its controller's loss (``toll_branch_loss`` prices the
+    sacrifice), so the controller still pays — and an opponent, whose creature
+    the prison is holding, no longer pays to keep it there."""
+    prison = Permanent(card=set_pool("ICE")["Icy Prison"])
+    controller = PlayerState(name="AI", battlefield=[prison, *_w1g1_islands(set_pool, 3)])
+    game = Game(players=[controller, PlayerState(name="B")])
+    game._sync_control()
+    _run_upkeep(game, 0)
+    game.auto_resolve_pending_optional_pays()
+    assert game.is_on_battlefield(prison), "its controller paid {3}"
+
+    prison = Permanent(card=set_pool("ICE")["Icy Prison"])
+    controller = PlayerState(name="AI", battlefield=[prison])
+    opponent = PlayerState(name="B", battlefield=_w1g1_islands(set_pool, 3))
+    game = Game(players=[controller, opponent])
+    game._sync_control()
+    _run_upkeep(game, 0)
+    game.auto_resolve_pending_optional_pays()
+    assert not game.is_on_battlefield(prison), "the opponent let it go"
+    assert not any(land.tapped for land in opponent.battlefield)

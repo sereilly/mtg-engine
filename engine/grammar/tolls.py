@@ -52,20 +52,31 @@ def _parse_unless_player_pays(stream: TokenStream, parse_body) -> "ast.UnlessPla
     effect happening unconditionally, which is the card without its clause.
     """
     mark = stream.mark()
-    if not stream.accept_word("unless"):
+    # "Then **if any player pays {2}**, discard three cards." (Rhystic
+    # Scrying.) The same chain with the polarity reversed — paying is what
+    # causes the effect — so it is the same node with the body on its ``paid``
+    # branch. Only over a payer that names a *set* of seats: "if you pay …" is
+    # the ordinary offer's "if you do", which has its own reader.
+    paying_buys = stream.accept_word("if")
+    if not paying_buys and not stream.accept_word("unless"):
         return None
     payer = parse_player_ref(stream)
     if payer is None or not stream.accept_word("pays", "pay"):
         stream.reset(mark)
         return None
+    if paying_buys and payer.kind not in _ENUMERATED_PAYERS:
+        stream.reset(mark)
+        return None
     try:
-        cost = _parse_mana_payment(stream)
+        cost = _parse_mana_payment(stream, allow_variable=True)
     except GrammarError:
         stream.reset(mark)
         return None
     if cost is None or not stream.accept_punct(","):
         stream.reset(mark)
         return None
+    if paying_buys:
+        return ast.UnlessPlayerPays(payer, cost, None, paid=parse_body(stream))
     return ast.UnlessPlayerPays(payer, cost, parse_body(stream))
 
 
@@ -504,7 +515,11 @@ def _accept_trailing_toll(
         stream.reset(mark)
         return None
     try:
-        cost = _parse_mana_payment(stream)
+        # "…unless any player pays **{X}**." (Soul Strings, Excise.) The
+        # spell's own announced X, read at resolution off ``context.x_value``
+        # by the one conversion every offered cost goes through
+        # (``_common.variable_mana_payload``), so it is a cost, not a guess.
+        cost = _parse_mana_payment(stream, allow_variable=True)
     except GrammarError:
         stream.reset(mark)
         return None
