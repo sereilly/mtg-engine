@@ -553,6 +553,33 @@ def _lower_become_blocked(
     a creature that is not in combat at all.
     """
     subject = node.subject
+    # "**Attacking creatures** become blocked." (Fog Patch.) The untargeted
+    # plural of the same sentence: every creature the noun phrase describes,
+    # chosen by nobody, so the description travels as the ordinary filter
+    # payload ``subject_matches`` tests and no ``targets`` description is built
+    # — which is what keeps the picker from asking for one.
+    #
+    # Two gates, each a way the sentence could otherwise mean more than it says.
+    # The phrase must be testable (a narrowing the matcher drops is a sweep over
+    # strictly more creatures than printed), and it must say *attacking*:
+    # CR 509.1h is about attacking creatures, and a sweep without the word would
+    # mark every creature on the table as a blocked attacker.
+    if (
+        isinstance(subject, ast.TargetSpec)
+        and not subject.targeted
+        and subject.quantifier in ("all", "each")
+    ):
+        described = refuse_untestable(
+            _filter_payload(subject.filter),
+            refusal="a becomes-blocked sweep cannot narrow by",
+            node=node,
+        )
+        if not described.get("attacking_only"):
+            raise LoweringError(
+                "only an attacking creature can become blocked (CR 509.1h)",
+                node=node,
+            )
+        return (OracleInstruction("become_blocked", "", {"subject": described}),)
     if not isinstance(subject, ast.TargetSpec) or not subject.targeted:
         raise LoweringError(
             "becoming blocked is a change to a creature the spell targets",

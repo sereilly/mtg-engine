@@ -81,6 +81,30 @@ def _parse_cant_attack_or_block(
             return ast.CombatRestriction(
                 subject, "cant_attack_during_controllers_next_turn", ()
             )
+        # "Target creature can't attack **or block** this turn." (Off Balance.)
+        # One sentence, two prohibitions, one subject — the durationed spelling
+        # of Pacifism's pair, and the two halves are exactly the two one-shot
+        # restrictions this production already reads on their own ("can't
+        # attack this turn", Change of Heart; "can't block this turn", Panic).
+        # So it is their conjunction rather than a kind of its own: each half
+        # is answered at a different step (CR 508.1c, CR 509.1b) by the gate
+        # that already reads it, and one subject read once is what keeps the
+        # two from naming different creatures.
+        #
+        # The duration is **required**. Without one the sentence is a static
+        # ability ("Black creatures can't attack or block", Light of Day) that
+        # ``engine/combat_restrictions.py`` derives, and claiming it here would
+        # take that line away from the table.
+        both_mark = stream.mark()
+        if stream.accept_phrase("or", "block"):
+            duration = _parse_duration(stream)
+            if duration.kind is not None:
+                window = (("duration", duration.kind),)
+                return ast.Conjunction((
+                    ast.CombatRestriction(subject, "cant_attack_until_eot", window),
+                    ast.CombatRestriction(subject, "cant_block_until_eot", window),
+                ))
+            stream.reset(both_mark)
         # "Creatures can't attack this turn." (Festival.) The attack twin of
         # the blanket can't-block below: no "unless", just a duration — the
         # restriction is a blanket over the *subject* for the rest of the turn

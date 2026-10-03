@@ -139,7 +139,7 @@ class CombatDamageStepMixin:
                 return False, "assigned combat damage exceeds attacker power"
             # CR 702.22j: the defender divides ALL the attacker's combat damage
             # among its blockers. Only a trampler may hold some back (the
-            # remainder tramples through to the defending player, CR 702.19e).
+            # remainder tramples through to the defending player, CR 702.19b).
             if total < power and not self._has_keyword(attacker, "trample"):
                 return False, "all of the attacker's combat damage must be assigned"
         self.combat_banding_damage = {
@@ -550,7 +550,7 @@ class CombatDamageStepMixin:
                     return False, "combat damage assignment cannot be negative", [], []
                 if requested_damage > power_left:
                     return False, "assigned combat damage exceeds attacker power", [], []
-                # CR 702.19e: a trampler may assign excess to the defending player
+                # CR 702.19b: a trampler may assign excess to the defending player
                 # only once each blocker has been assigned at least lethal damage.
                 if has_trample and requested_damage < lethal:
                     trample_underlethal = True
@@ -566,7 +566,7 @@ class CombatDamageStepMixin:
             if has_trample and power_left > 0:
                 # CR 702.19b: the excess goes to the player *or planeswalker*
                 # the creature is attacking. Without trample over planeswalkers
-                # none of it may go to the defending player instead (702.19f) —
+                # none of it may go to the defending player instead (702.19c) —
                 # carrying the walker id through is what enforces that.
                 to_players.append((defending_index, power_left, attacker, attacked_walker_id))
         return True, "", to_blockers, to_players

@@ -4601,6 +4601,20 @@ def mill_target_player(game: Game, instruction: OracleInstruction, context: Orac
             game.log.append(f"{context.card.name}: no recorded player, no mill")
             return True, "resolved"
         victims = [game.players[seat]]
+    elif recipient == "defending_player":
+        # "Whenever this creature becomes blocked, **defending player** mills
+        # three cards." (Flint Golem.) CR 506.2's seat, read from the key the
+        # combat fire sites stamp — the same one the life loss and the poison
+        # counter read — rather than from the board: the attacker can have left
+        # combat by the time this resolves. No record mills nobody, never the
+        # ability's controller, for the two branches above' reason.
+        seat = (context.trigger_context or {}).get("trigger_defending_player_index")
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            game.log.append(
+                f"{context.card.name}: no recorded defending player, no mill"
+            )
+            return True, "resolved"
+        victims = [game.players[seat]]
     else:
         victims = [context.target]
     # "…**If a card with the chosen name was milled this way**, you draw a

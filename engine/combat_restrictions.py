@@ -110,6 +110,9 @@ class CombatRestriction:
 #   cant_be_blocked_by              phases/declare_blockers_step
 #   cant_be_blocked_except_by       phases/declare_blockers_step
 #   cant_block_subject              phases/declare_blockers_step
+#                                   (also the first half of "can't block or be
+#                                   blocked by", whose second half is
+#                                   cant_be_blocked_by above)
 #   cant_block_power_n_or_greater_unless_pay  phases/declare_blockers_step
 #                                   + declare_blockers (the charge)
 #   creatures_that_attacked_last_turn_cant_attack
@@ -1052,6 +1055,24 @@ _PATTERNS: tuple[tuple[re.Pattern[str], "str | tuple[str, ...]"], ...] = (
         "cant_block_power_n_or_greater_unless_pay",
     ),
     (
+        # "This creature can't block **or be blocked by** creatures with power 2
+        # or greater." (Sneaky Homunculus.) Two prohibitions over one printed
+        # noun phrase, and they are the two rows on either side of this one read
+        # at once: what this creature may not block (``cant_block_subject``,
+        # Ironclaw Orcs) and what may not block it (``cant_be_blocked_by``,
+        # Juggernaut). ``CombatRestriction.also_kinds`` is exactly that shape —
+        # one sentence, one subject read once — and the phrase is parsed once
+        # by `_blocker_union` and handed to **both** payload keys, so the two
+        # enforcement sites cannot come to disagree about which creatures it
+        # names.
+        #
+        # Above the ``cant_block_subject`` row, whose `.+` would otherwise take
+        # "or be blocked by …" as its noun phrase — which `_blocker_union`
+        # refuses, the safe direction but not the reading.
+        re.compile(r"^this creature can't block or be blocked by (?P<block_either>.+)$"),
+        ("cant_block_subject", "cant_be_blocked_by"),
+    ),
+    (
         # "…can't block **creatures with power 2 or greater**" (Ironclaw Orcs),
         # "…**white creatures with power 2 or greater**" (Orcish Veteran).
         #
@@ -1544,6 +1565,18 @@ def combat_restriction_for(
             if filters is None:
                 return None
             payload["blockee_filters"] = filters
+        # "…can't block **or be blocked by** <union>." (Sneaky Homunculus.)
+        # One phrase, both directions: the same union read once by the same
+        # reader, written under the key each of the row's two kinds is
+        # enforced through. Refused whole when the phrase is unreadable, for
+        # both clauses' own reasons above.
+        either = payload.pop("block_either", None)
+        if either is not None:
+            filters = _blocker_union(either, card_name)
+            if filters is None:
+                return None
+            payload["blockee_filters"] = filters
+            payload["blocker_filters"] = [dict(described) for described in filters]
         allowed = payload.pop("allowed", None)
         if allowed is not None:
             filters = _blocker_union(allowed)

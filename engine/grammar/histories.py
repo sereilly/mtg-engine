@@ -112,6 +112,23 @@ def accept_history_relation(stream: TokenStream, d) -> bool:
     ):
         d.blocked_or_was_blocked_this_turn = True
         return True
+    # "…destroy it and all creatures **it blocked this turn**." (Defiant
+    # Vanguard.) Glyph of Doom's "that were blocked by that creature this
+    # turn" in the active voice with the relative pronoun left out, and the
+    # same record answers it: the pair the declare-blockers step wrote on the
+    # *candidate* (``blocked_by_blocker_ids_this_turn``), which survives the
+    # blocker leaving — the ordinary way this card is played, since combat
+    # damage usually kills it before the end of combat it names.
+    #
+    # It sets Glyph of Doom's field rather than a field of its own because
+    # "it" here is the object the delayed ability is *about*: the field's
+    # name is what tells ``delayed.delay_binds_an_object`` to bind one, and
+    # its lowering refuses outside a delayed event that bound one. Every word
+    # is required — "this turn" for the clause beside it's reason, and "it"
+    # because a clause naming some other blocker is a different set.
+    if stream.accept_phrase("it", "blocked", "this", "turn"):
+        d.blocked_by_bound_object = True
+        return True
     # "target creature **you cast this turn**" (Cycle of Life). A narrowing
     # of the noun phrase like the combat records above it, off a different
     # record: CR 701.5a's cast, stamped as the permanent entered. Not "you

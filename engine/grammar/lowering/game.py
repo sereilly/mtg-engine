@@ -13,7 +13,7 @@ from .. import ast
 from ..errors import LoweringError
 from ._common import (RESTRICTION_TURNS, _REST_OF_TURN, _amount_payload,
                       _describe_targets, _filter_payload)
-from ._events import COUNTED_NUMBER
+from ._events import COUNTED_NUMBER, frozen_seat_record
 from ._seats import _player_recipient
 
 
@@ -303,7 +303,9 @@ def _lower_skip_step(node: "ast.SkipStep") -> tuple[OracleInstruction, ...]:
     )
 
 
-def _lower_skip_phase(node: "ast.SkipPhase") -> tuple[OracleInstruction, ...]:
+def _lower_skip_phase(
+    node: "ast.SkipPhase", event: str | None = None
+) -> tuple[OracleInstruction, ...]:
     """"Target player skips their next combat phase this turn."
     (Moment of Silence.)
 
@@ -316,8 +318,31 @@ def _lower_skip_phase(node: "ast.SkipPhase") -> tuple[OracleInstruction, ...]:
     are different facts — how many phases and until when — and a skip that lost
     its window would take the target's combat phase on a later turn, which is a
     card nobody printed.
+
+    "Whenever this creature deals combat damage to a player, **that player**
+    skips their next combat phase." (Blinding Angel.) The one other seat a skip
+    can name, and the only one fixed by the *firing event* rather than by the
+    ability: ``_events.frozen_seat_record`` says which record the event froze
+    for the word, and an event that froze none refuses here — read as the
+    caster's seat it would skip the Angel's own controller's combat.
     """
     who = getattr(node.subject, "kind", None)
+    frozen = (
+        frozen_seat_record(who, event)
+        if who in ("that_player", "defending_player") else None
+    )
+    if frozen is not None:
+        return (
+            OracleInstruction(
+                "skip_next_phase", "",
+                {
+                    "phase": node.phase,
+                    "seat": frozen,
+                    "count": int(node.count),
+                    "this_turn": bool(node.this_turn),
+                },
+            ),
+        )
     if who not in _SKIPPABLE_SEATS:
         raise LoweringError(
             f"no handler skips a phase for {who!r}", node=node
