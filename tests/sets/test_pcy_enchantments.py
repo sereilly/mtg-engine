@@ -24,3 +24,83 @@ Cards come from `set_pool("PCY")` / `set_cards("PCY")` — never a new
 never a bare `while game.stack:` loop — that spins forever once a seat is owed
 a prompt.
 """
+
+
+# --- W1G3: activation costs ---
+# Brutal Suppression: "Activated abilities of nontoken Rebels cost an additional
+# "Sacrifice a land" to activate." Drought's imposed sacrifice
+# (``cost_modifiers.sacrifice_taxes``) with its subject read off the ability's
+# source — so it is charged, it refuses with nothing paid when no land can pay
+# it, and a token Rebel or a non-Rebel is untouched.
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+
+from tests.helpers import resolve_stack
+
+
+def _w1g3_suppressed(set_pool, mine, *, token_rebel=False):
+    """Seat 1 controls Brutal Suppression; seat 0 holds *mine*, turn 0 begun.
+    *token_rebel* marks seat 0's first permanent as a token."""
+    me = [Permanent(card=card) for card in mine]
+    if token_rebel:
+        me[0].metadata["is_token"] = True
+    suppression = Permanent(card=set_pool("PCY")["Brutal Suppression"])
+    game = Game(players=[
+        PlayerState(name="P0", battlefield=list(me)),
+        PlayerState(name="P1", battlefield=[suppression]),
+    ])
+    game.enforce_mana_costs = False
+    for permanent in me:
+        permanent.metadata["summoning_sickness_turn"] = -99
+    game.start_turn(0)
+    game._close_current_priority_step()
+    return game, me
+
+
+def test_w1g3_brutal_suppression_charges_a_rebel_a_land(set_pool):
+    """Rappelling Scouts (a Human Rebel Scout) pays a land on top of its {2}{W},
+    and its ability still resolves."""
+    lea = set_pool("LEA")
+    game, (scouts, forest) = _w1g3_suppressed(
+        set_pool, [set_pool("MMQ")["Rappelling Scouts"], lea["Forest"]],
+    )
+    result = game.queue_permanent_ability(0, "Rappelling Scouts", mana_color="B")
+    assert result.supported, result.details
+    resolve_stack(game)
+
+    assert not game.is_on_battlefield(forest)
+    assert [c.name for c in game.players[0].graveyard] == ["Forest"]
+    assert ("color", "B") in game._protection_qualities(scouts)
+
+
+def test_w1g3_brutal_suppression_with_no_land_refuses_before_paying(set_pool):
+    """CR 601.2h via 602.2b: an additional cost that cannot be paid makes the
+    ability unactivatable — refused with nothing on the stack and nothing paid."""
+    game, (scouts,) = _w1g3_suppressed(set_pool, [set_pool("MMQ")["Rappelling Scouts"]])
+    result = game.queue_permanent_ability(0, "Rappelling Scouts", mana_color="B")
+
+    assert not result.supported
+    assert "Land" in result.details and "Brutal Suppression" in result.details
+    assert game.stack == [] and game._protection_qualities(scouts) == set()
+
+
+def test_w1g3_brutal_suppression_spares_tokens_and_non_rebels(set_pool):
+    """"Nontoken Rebels": a token Rebel's ability and a Drudge Skeletons'
+    regeneration are activated with every land left where it was."""
+    lea = set_pool("LEA")
+    game, (scouts, forest) = _w1g3_suppressed(
+        set_pool, [set_pool("MMQ")["Rappelling Scouts"], lea["Forest"]],
+        token_rebel=True,
+    )
+    result = game.queue_permanent_ability(0, "Rappelling Scouts", mana_color="B")
+    assert result.supported, result.details
+    resolve_stack(game)
+    assert game.is_on_battlefield(forest)
+
+    game, (_skeletons, forest) = _w1g3_suppressed(
+        set_pool, [lea["Drudge Skeletons"], lea["Forest"]],
+    )
+    result = game.queue_permanent_ability(0, "Drudge Skeletons")
+    assert result.supported, result.details
+    assert game.is_on_battlefield(forest)

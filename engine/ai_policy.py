@@ -569,6 +569,18 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
         # worth (or legal) to target, so the AI does not burn a turn on an
         # ability it cannot resolve.
         spec = derive_activation_spec(ability)
+        # "{X}, {T}: Untap **X target** lands." (Candelabra of Tawnos, Alexi,
+        # Orcish Settlers.) CR 601.2c sizes the target list from the X the
+        # activator announces, and this policy announces none — so the engine
+        # reads X as zero and refuses any named target. Proposing the ability
+        # anyway is a refused activation every turn; skipping it is the honest
+        # floor until the policy prices an X. Read off the cost clause the way
+        # the activation path counts its ``{X}`` symbols, so a *defined* X (the
+        # verse cycle's "where X is …") is left to the sizing that answers it.
+        if (spec or {}).get("x_targets") and "{x}" in (
+            ability.source_line or ""
+        ).lower().split(":", 1)[0]:
+            continue
         # An ability naming several targets of *different* kinds, chosen in
         # dependency order (CR 602.2b reaches CR 601.2c). Asked before the
         # single-target block below, which has no arm for it: the kind is

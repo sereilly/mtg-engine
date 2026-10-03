@@ -2201,6 +2201,11 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     # the same reader — what is being *chosen* is a seat, whatever the sweep
     # then does to that seat's permanents.
     "add_counter_to_each_matching": _sweep_controller_spec,
+    # "All lands **target player** controls become 3/3 creatures until end of
+    # turn." (Jolrael, Empress of Beasts.) The animation sweep's turn at the
+    # same two-halves payload; without the row the ability announced no seat
+    # and its picker offered only the discard cost.
+    "animate_matching_until_eot": _sweep_controller_spec,
     # "Draw a card for each tapped creature **target opponent** controls."
     # (Theft of Dreams.) The seat is inside the counted amount rather than
     # inside a noun phrase, which is the only thing that separates this row

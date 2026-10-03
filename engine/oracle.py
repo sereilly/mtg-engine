@@ -57,7 +57,8 @@ from .alternative_costs import (
     unread_alternative_cost_sentence,
     unread_granted_alternative_cost_sentence,
 )
-from .cast_costs import cast_cost_claims_line, unread_cost_sentence
+from .cast_costs import (cast_cost_claims_line, read_discard_clause,
+                         unread_cost_sentence)
 from .special_actions import special_action_line
 from .combat_restrictions import combat_restriction_for
 from .enter_effects import enter_effect_line
@@ -3081,13 +3082,17 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         if counted is not None:
             word = counted.group(1)
             number = int(word) if word.isdigit() else _NUMBER_WORDS.get(word, 0)
-            if number >= 2:
+            # "Sacrifice **X** lands" (Copper-Leaf Angel): the announced count,
+            # carried as ``"x"`` the way ``remove_counter_count`` carries Kyren
+            # Toy's — "x" is not in ``_NUMBER_WORDS``, so it read as 0 and the
+            # cost as none at all.
+            if number >= 2 or word == "x":
                 narrowed = _chargeable_sacrifice_filter(
                     counted.group(2), plural=True
                 )
                 if narrowed is not None:
                     sacrifice_filter = narrowed
-                    sacrifice_count = number
+                    sacrifice_count = "x" if word == "x" else number
     any_number_sacrifice = re.search(
         r"\bsacrifice [^,:]*?\band any number of ([^,:]+?)\s*(?=,|$)", cost_lower
     )
@@ -3129,23 +3134,34 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     # `_chargeable_discard_filters`. The count comes off that reader rather than
     # off a second regex, so a phrase it refuses charges no discard at all
     # instead of charging the unnarrowed one.
+    #
+    # "Discard **two** cards" (Prophecy's spellshapers) is the same clause with
+    # a printed count, and the regex admits a leading number word beside the
+    # article. What the whole phrase means — the count off the front, "at
+    # random" off the back, the noun phrase through
+    # `_chargeable_discard_filters` — is `cast_costs.read_discard_clause`, the
+    # reader Forbid's identically printed buyback is charged through, so the
+    # count is one answer on both sides of CR 602.2b's "as 601.2b–h".
     discarded = (
         None if discard_last_drawn
-        else re.search(r"\bdiscard (an? [^,:]+?)\s*(?=,|$)", cost_lower)
+        else re.search(r"\bdiscard ((?:an?|\w+) [^,:]+?)\s*(?=,|$)", cost_lower)
     )
-    # "Discard a card **at random**" (Coral Helm). Stripped from the phrase
-    # before the noun parser sees it — it is not part of what the card must
-    # *be*, it is how the card is chosen — and recorded so the payment path
-    # draws rather than lets the payer name one. Left in, the noun parser would
-    # refuse "a card at random" and the cost would silently become none at all.
     discard_phrase = discarded.group(1) if discarded else None
-    discard_at_random = False
-    if discard_phrase and discard_phrase.endswith(" at random"):
-        discard_phrase = discard_phrase[: -len(" at random")]
-        discard_at_random = True
-    discard_filters = (
-        _chargeable_discard_filters(discard_phrase) if discard_phrase else None
-    )
+    if discard_phrase is not None:
+        # Only an article or a count of two or more opens a chosen discard:
+        # "discard your hand" and "discard this card" are their own fields
+        # below, and a phrase opening on any other word is not this cost.
+        head = discard_phrase.split(" ", 1)[0]
+        if head not in ("a", "an") and not (
+            int(head) if head.isdigit() else _NUMBER_WORDS.get(head, 0)
+        ) >= 2:
+            discard_phrase = None
+    discard_read = read_discard_clause(discard_phrase) if discard_phrase else None
+    discard_filters = None if discard_read is None else discard_read[0]
+    discard_count = 0 if discard_read is None else discard_read[1]
+    # "Discard a card **at random**" (Coral Helm). Recorded so the payment path
+    # draws rather than lets the payer name one.
+    discard_at_random = bool(discard_read and discard_read[2])
     # "Tap two untapped Spirits you control" (Shacklegeist). The {T} symbol was
     # already consumed above as mana; this is the spelled-out form, which taps
     # *other* permanents.
@@ -3318,9 +3334,9 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         tap_count=tap_cost[0] if tap_cost else 0,
         return_to_hand_filter=return_cost[1] if return_cost else None,
         return_to_hand_count=return_cost[0] if return_cost else 0,
-        discard_cards=0 if discard_filters is None else 1,
+        discard_cards=discard_count,
         discard_filters=discard_filters or (),
-        discard_at_random=discard_at_random and discard_filters is not None,
+        discard_at_random=discard_at_random,
         discard_whole_hand=discard_whole_hand,
         discard_self=discard_self,
         put_counter=put_counter,
@@ -4361,7 +4377,12 @@ def _parse_activated_ability(line: str, card_name: str | None = None) -> ParsedA
     # read as excluding the host: the referent would be a permanent this
     # ability's cost never touched, and the card would target a set it does not
     # print.
-    if COST_TAPPED_REFERENT in effect_text and not cost.tap_attached:
+    #
+    # Only the *exclusion* reads the phrase that way. "…+X/+0, where X is **the
+    # power of the creature tapped this way**" (Keldon Battlewagon) names the
+    # same object through the cost-tap record at resolution, after CR 601.2h
+    # has filled it, so any tap cost answers it and this gate is not its gate.
+    if f"other than {COST_TAPPED_REFERENT}" in effect_text and not cost.tap_attached:
         instruction, effect_kind = None, "unsupported"
     instruction = _with_stated_zone(instruction, line, card_name)
     supported = instruction is not None

@@ -178,6 +178,14 @@ class CostModifier:
     #: spell in the game cost {2} less, which is the direction a cost must never
     #: drift in.
     chosen_creature_type: bool = False
+    #: "Activated abilities of **nontoken Rebels** cost an additional
+    #: \"Sacrifice a land\" to activate." (Brutal Suppression.) What the taxed
+    #: ability's *source* must be, as the payload ``subject_matches`` tests —
+    #: the noun phrase read by the grammar's noun parser, so "nontoken" is a
+    #: key and not a word dropped. Set only on a sacrifice tax charged once per
+    #: activation (``per_symbol`` None); Drought's taxes every ability and
+    #: leaves it None.
+    source_filter: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -360,6 +368,16 @@ _SACRIFICE_TAX_HALVES = {
     ("activated abilities", "activate", "activation"): "activate",
 }
 
+# "Activated abilities of nontoken Rebels cost an additional "Sacrifice a land"
+# to activate." (Brutal Suppression.) Drought's imposed sacrifice with the
+# subject narrowed by what the ability's **source** is, and sized once per
+# activation rather than per symbol. CR 605.1a makes a mana ability an
+# activated ability, and the sentence names no exception, so none is made.
+_SACRIFICE_SOURCE_TAX = re.compile(
+    r"activated abilities of (?P<subject>[a-z][a-z ]*?) cost an additional "
+    r'"sacrifice (?P<noun>(?:a|an) [a-z ]+)" to activate'
+)
+
 
 # "activated abilities of <colour>? <type>s cost {N} more to activate"
 _ABILITY_TAX = re.compile(
@@ -521,6 +539,10 @@ def cost_modifiers_for(oracle_text: str) -> tuple[CostModifier, ...]:
         modifier = _sacrifice_symbol_modifier(match)
         if modifier is not None:
             modifiers.append(modifier)
+    for match in _SACRIFICE_SOURCE_TAX.finditer(text):
+        modifier = _sacrifice_source_modifier(match)
+        if modifier is not None:
+            modifiers.append(modifier)
     return tuple(modifiers)
 
 
@@ -661,6 +683,27 @@ def _sacrifice_symbol_modifier(match: "re.Match[str]") -> CostModifier | None:
     )
 
 
+def _sacrifice_source_modifier(match: "re.Match[str]") -> CostModifier | None:
+    """Brutal Suppression's clause as a modifier, or None when either noun
+    phrase is one ``subject_matches`` cannot test — the subject (whose
+    abilities are taxed) or the payment (what may be sacrificed). Both go
+    through the grammar's noun parser, so a word it does not read refuses the
+    line rather than widening the tax or the payment.
+    """
+    from .grammar import subject_filter_payload
+
+    subject = subject_filter_payload(match.group("subject"), plural=True)
+    payment = subject_filter_payload(match.group("noun"))
+    if not subject or not payment:
+        return None
+    return CostModifier(
+        amount=0,
+        applies_to="activate",
+        sacrifice_filter=payment,
+        source_filter=subject,
+    )
+
+
 def cost_modifier_claims_line(line: str) -> bool:
     """Whether *line* is, in its entirety, one of the templates above.
 
@@ -718,6 +761,15 @@ def cost_modifier_claims_line(line: str) -> bool:
         sacrifice is not None
         and sacrifice.end() == len(text)
         and _sacrifice_symbol_modifier(sacrifice) is not None
+    ):
+        return True
+    # …and Brutal Suppression's, on the same condition: claimed only when both
+    # noun phrases read, because otherwise no modifier is produced.
+    scoped = _SACRIFICE_SOURCE_TAX.match(text)
+    if (
+        scoped is not None
+        and scoped.end() == len(text)
+        and _sacrifice_source_modifier(scoped) is not None
     ):
         return True
     if self_per_target_tax_claims_line(line):
@@ -1250,7 +1302,7 @@ class SacrificeDemand:
 
 
 def sacrifice_taxes(
-    game, payer_index: int, cost, applies_to: str
+    game, payer_index: int, cost, applies_to: str, *, source=None,
 ) -> tuple[SacrificeDemand, ...]:
     """Every "cost an additional \"Sacrifice a …\"" demand on an object whose
     cost is *cost*.
@@ -1260,20 +1312,42 @@ def sacrifice_taxes(
     reason ``_tax`` gives: a cost modifier is not scoped to its controller's
     side unless the card says so.
 
+    *source* is the permanent whose ability is being activated, for a tax whose
+    subject is what that permanent *is* (Brutal Suppression's "nontoken
+    Rebels"). None — a caller with no permanent in hand — is never taxed by
+    such a modifier, because its subject names a permanent (CR 109.2).
+
     Returned as demands rather than performed here, because the two payers ask
     at different moments in their own announcement (CR 601.2h against
     CR 602.2b) and both need the *gate* before anything is spent.
     """
+    from .subject_filters import subject_matches
+
     demands: list[SacrificeDemand] = []
-    for _seat, permanent in game.permanents_with_controller():
+    for seat, permanent in game.permanents_with_controller():
         for modifier in cost_modifiers_for(permanent.effective_card.oracle_text):
-            if modifier.sacrifice_filter is None or modifier.per_symbol is None:
+            if modifier.sacrifice_filter is None:
+                continue
+            if modifier.per_symbol is None and modifier.source_filter is None:
                 continue
             if modifier.applies_to != applies_to:
                 continue
             if not _timing_holds(game, modifier, payer_index):
                 continue
-            count = _symbols_in(cost, modifier.per_symbol)
+            if modifier.source_filter is not None:
+                # Asked through the one matcher, observed from the taxing
+                # permanent's seat (CR 109.5) — "nontoken" and the creature
+                # type are both layer-computed, so a token Rebel or a Rebel
+                # that stopped being one is not taxed.
+                count = int(
+                    source is not None
+                    and subject_matches(
+                        game, source, dict(modifier.source_filter),
+                        observer=seat, source=permanent,
+                    )
+                )
+            else:
+                count = _symbols_in(cost, modifier.per_symbol)
             if count:
                 demands.append(
                     SacrificeDemand(

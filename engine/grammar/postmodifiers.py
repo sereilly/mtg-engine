@@ -119,6 +119,12 @@ def _parse_postmodifiers(
         if stream.accept_phrase("except", "for", "basic", "lands"):
             d.excluded_basic_lands = True
             continue
+        # "Destroy all creatures **except for Mageta**" (Mageta the Lion): the
+        # exemption names the ability's own source, which is "all other
+        # creatures" in another word order — the same field.
+        if stream.accept_phrase("except", "for") and accept_source_reference(stream):
+            d.other_than_source = True
+            continue
         stream.reset(except_mark)
         # "…creatures **that player** controls" and "…the number of creatures
         # **that opponent or that planeswalker's controller** controls" (Goblin

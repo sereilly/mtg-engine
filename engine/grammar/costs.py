@@ -76,8 +76,14 @@ def _parse_cost_object(
     return replace(spec.filter, other_than_source=True) if another else spec.filter
 
 
-def _accept_cost_count(stream: TokenStream) -> "ast.Fixed | None":
+def _accept_cost_count(
+    stream: TokenStream, *, announced: bool = False
+) -> "ast.Fixed | ast.Var | None":
     """A printed count of **two or more** in front of a cost's noun phrase.
+
+    *announced* also admits an **X** the activator announces (CR 107.3a,
+    CR 601.2b) — "Sacrifice **X** lands" (Copper-Leaf Angel). Only a caller
+    whose charger reads an announced count may ask for it.
 
     "Sacrifice **two** Goblins" (Goblin Warrens), "Exile **two** creature cards"
     (Night Soil). The article is deliberately not read here: "a creature" is
@@ -97,6 +103,8 @@ def _accept_cost_count(stream: TokenStream) -> "ast.Fixed | None":
         stream.reset(mark)
         return None
     if isinstance(amount, ast.Fixed) and amount.value >= 2:
+        return amount
+    if announced and isinstance(amount, ast.Var) and amount.name == "x":
         return amount
     stream.reset(mark)
     return None
@@ -502,8 +510,10 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
             # in front of the phrase, which leaves the phrase itself the bare
             # plural the noun parser calls "all" — the same shape Sword of the
             # Ages' "any number of" tail already reads, and admitted the same
-            # way.
-            counted = _accept_cost_count(stream)
+            # way. "Sacrifice **X** lands" (Copper-Leaf Angel) is the count the
+            # activator announces, charged off ``activate_permanent_ability``'s
+            # ``x_value`` — the channel "Remove X counters" already reads.
+            counted = _accept_cost_count(stream, announced=True)
             sacrificed = _parse_cost_object(
                 stream, "sacrifice", bare_plural=counted is not None
             )
@@ -882,9 +892,14 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
             else:
                 # "Discard a card" (Seasoned Hallowblade) — the payer picks, and
                 # ``ActivatedAbilityCost.discard_cards`` is what collects it.
-                # Only the singular is admitted: a counted "discard two cards"
-                # is a shape nothing charges, and admitting it would describe a
-                # payment that never happens.
+                # "Discard **two** cards" (Prophecy's five spellshapers) is the
+                # same cost counted: the charger has always taken a number, and
+                # its reader in ``engine/oracle.py`` goes through
+                # ``cast_costs.read_discard_clause`` — the reader Forbid's
+                # counted buyback already uses — so the two halves read one
+                # count. Only a printed number of two or more; an X here would
+                # be a quantity nothing announces.
+                counted = _accept_cost_count(stream)
                 narrowed = _parse_card_alternatives(stream)
                 if narrowed is None:
                     raise stream.error("unrecognized discard cost")
@@ -894,7 +909,10 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
                 # says how the cost is paid, not what happens afterwards.
                 at_random = bool(stream.accept_phrase("at", "random"))
                 costs.append(
-                    ast.DiscardCost(ast.Fixed(1), filters=narrowed, at_random=at_random)
+                    ast.DiscardCost(
+                        counted or ast.Fixed(1), filters=narrowed,
+                        at_random=at_random,
+                    )
                 )
             stream.accept_punct(",")
             continue

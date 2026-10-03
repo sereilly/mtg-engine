@@ -1738,7 +1738,7 @@ class LegalityMixin:
         self, controller_index: int, source_permanent, ability, *,
         target_player_index=None, target_permanent_index=None,
         target_permanent_ids=None, target_stack_item=None,
-        target_role_refs=None,
+        target_role_refs=None, x_value=None,
     ) -> str | None:
         """CR 602.2b/601.2c enforced once, before any cost is paid: an ability
         that targets cannot be activated unless a legal target exists, and a
@@ -1831,6 +1831,18 @@ class LegalityMixin:
         self._size_activation_x_targets(
             controller_index, spec, ability, source
         )
+        # …and the *announced* X, the half that method leaves alone because
+        # only the activation knows it. "{X}{U}, {T}, Discard two cards: Return
+        # **X target creatures** to their owners' hands." (Alexi, Zephyr Mage.)
+        # CR 601.2c fixes the number of targets from the X announced at
+        # CR 601.2b, and the handler returns every slot it is handed — so an X
+        # of one naming three creatures bounced all three until this was
+        # asked, an ability activated for a third of its printed price. The
+        # cast side sizes the same flag from ``announced_cast_x``; this is the
+        # activation's twin.
+        if spec.get("x_targets") and x_value is not None:
+            spec.pop("x_targets", None)
+            spec["max_targets"] = max(0, int(x_value))
         maximum = spec.get("max_targets")
         if (
             isinstance(maximum, int)
