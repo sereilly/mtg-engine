@@ -229,6 +229,35 @@ def test_every_activate_body_carries_the_announced_cost():
     assert "activationCostAnswered(" in prompt
 
 
+def test_an_x_ability_that_targets_asks_x_before_the_target():
+    """CR 601.2b before 601.2c. The cascade's target branches each send the
+    ability, and the ``{X}`` prompt sat below all of them — so Ballista Squad,
+    Crimson Hellkite, Cinder Elemental and twelve more shipped abilities went
+    out with no X and resolved for zero. X is asked first now and rides the
+    stash into whichever target prompt sends."""
+    prompt = app_js_function_body("startActivationPrompt")
+    x_first = prompt.index("thenTargets: true")
+    first_target_branch = prompt.index("cardRequiresTargetGraveyardCreature(card)")
+    assert x_first < first_target_branch
+    resolve = app_js_function_body("resolvePendingCastX")
+    assert "pending.thenTargets" in resolve
+    assert "{ x_value: selectedX }" in resolve
+
+
+def test_crimson_hellkite_deals_the_announced_x_to_the_named_target():
+    """The body that X-first produces: x_value and the target together."""
+    sid, game = _session(["Crimson Hellkite"], ["Hill Giant"])
+    (giant,) = game.players[1].battlefield
+
+    resp = _act(
+        sid, action="activate", permanent_name="Crimson Hellkite", permanent_index=0,
+        target_permanent_id=giant.permanent_id, x_value=3,
+    )
+    assert resp.status_code == 200, resp.text
+    game._settle()
+    assert not game.is_on_battlefield(giant)
+
+
 def test_the_tap_and_counted_sacrifice_costs_open_the_set_picker():
     picker = app_js_function_body("activationPermanentCostSpec")
     assert "tap_cost" in picker and "announces_x" in picker

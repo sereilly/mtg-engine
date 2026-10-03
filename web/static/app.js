@@ -11452,6 +11452,33 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     }
   }
 
+  // "{X}{W}, {T}: This creature deals X damage to target attacking or blocking
+  // creature." (Ballista Squad, Crimson Hellkite, Cinder Elemental, Belbe's
+  // Armor, Gorilla Shaman …; Latulla among the measured.) CR 601.2b announces X
+  // before CR 601.2c announces the target, and this cascade had them the other
+  // way round with nothing after: every target branch below sends the ability,
+  // and the `{X}` check further down was reached only by an ability that
+  // targets nothing — so these were sent with no X at all and resolved for
+  // zero. X is asked here first, recorded on `pendingActivationCost`, and the
+  // activation comes back through for its target. "X target …" (Candelabra)
+  // keeps its own path, which already asks X first and sizes the targets by it.
+  {
+    const spec = targetSpecOf(card);
+    const announcesTarget = !!spec?.kind && !["none", "modal", "hand_card"].includes(spec.kind)
+      && !(ACTIVATION_COST_FLAGS.some((flag) => spec[flag]) && !spec.cost_spec);
+    const xAnswered = activationCostAnswered(permanentIndex, abilityIndex)
+      && pendingActivationCost.fields.x_value != null;
+    if (
+      announcesTarget && !xAnswered && !cardRequiresSeveralTargets(card)
+      && /\{x\}/i.test(getActivatedAbilityCost(card, abilityIndex))
+    ) {
+      startActivationXPrompt(
+        card, cardName, targetSeat, permanentIndex, abilityIndex, null, { thenTargets: true },
+      );
+      return;
+    }
+  }
+
   // "{G}: Exile target card from a graveyard." (Scavenging Ooze; also Epitaph
   // Golem, Obsessive Stitcher, Liliana Death Mage, Chandra Flame's Catalyst.)
   // The clickable surface is the zone-reveal panel rather than the canvas, so
@@ -13803,6 +13830,7 @@ function counterRemovalXKind(activationCost) {
 
 function startActivationXPrompt(
   card, cardName, targetSeat, permanentIndex, abilityIndex, maxXOverride = null,
+  options = {},
 ) {
   const activationCost = getActivatedAbilityCost(card, abilityIndex);
   pendingCastX = {
@@ -13815,6 +13843,10 @@ function startActivationXPrompt(
     castAction: "activate",
     activatePermanentIndex: permanentIndex,
     activateAbilityIndex: abilityIndex,
+    // X is announced (CR 601.2b) and the ability's target is still owed
+    // (CR 601.2c): the answer is recorded and the activation resumed, rather
+    // than sent with no target.
+    thenTargets: !!options.thenTargets,
     manaRequirement: parseManaCostSymbols(activationCost),
     costString: activationCost,
     costCard: null,
@@ -14331,6 +14363,23 @@ function resolvePendingCastX(xValue) {
         sourcePermanentIndex: pending.activatePermanentIndex,
         abilityIndex: pending.activateAbilityIndex,
       },
+    );
+    return;
+  }
+
+  // "{X}{W}, {T}: This creature deals X damage to target attacking or blocking
+  // creature." (Ballista Squad.) X first, then the target — the order CR 601.2b
+  // and 601.2c announce them in — so the X rides `pendingActivationCost` and the
+  // target prompt that runs next sends the body.
+  if (pending.castAction === "activate" && pending.thenTargets) {
+    resumeActivationAfterCost(
+      pending.card,
+      {
+        targetSeat: pending.targetSeat,
+        permanentIndex: pending.activatePermanentIndex,
+        abilityIndex: pending.activateAbilityIndex,
+      },
+      { x_value: selectedX },
     );
     return;
   }
