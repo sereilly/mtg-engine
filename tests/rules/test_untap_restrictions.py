@@ -371,6 +371,42 @@ def test_611_2_a_lock_ends_when_its_holder_untaps_and_does_not_resume():
     assert not held.tapped, "an ended duration started again"
 
 
+@pytest.mark.cr("502.3")
+def test_502_3_a_holder_untapping_in_the_same_step_still_holds_for_that_step():
+    """"The active player determines which permanents they control will untap.
+    **Then** they untap them all simultaneously." A holder and the permanent it
+    holds on one seat: at the determination the holder is tapped, so the held
+    permanent is not among those that untap — even though the holder itself
+    untaps in that same step and ends the lock.
+
+    The step used to read the lock live as it walked the board, so the answer
+    was board order: a holder earlier in the list untapped first, ended its
+    lock, and released what it held beside it. Kill Switch (no "you may choose
+    not to untap") meets it every time; the Gremlins family whenever a human
+    untaps the holder. Built with the holder **first** in board order, the
+    order that used to release.
+    """
+    from engine import Game, PlayerState
+    from engine.handlers.tapping import UNTAP_LOCK_WHILE_TAPPED_KEY
+
+    _game, holder, held = _lock_board()
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[holder, held]),
+        PlayerState(name="P2"),
+    ])
+    game._settle()
+    holder.tapped = True
+    held.tapped = True
+    holder.metadata[UNTAP_LOCK_WHILE_TAPPED_KEY] = held.permanent_id
+
+    game.resolve_untap_step(0)
+    assert not holder.tapped, "the holder prints no choice to stay tapped"
+    assert held.tapped, "held at the determination, so not untapped with it"
+
+    game.resolve_untap_step(0)
+    assert not held.tapped, "the lock ended with the holder's untap"
+
+
 @pytest.mark.cr("611.2a")
 def test_611_2_a_lock_ends_when_its_holder_leaves_the_battlefield():
     """The other way the condition stops holding. What comes back is a new

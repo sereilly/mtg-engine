@@ -583,8 +583,9 @@ def _lower_tap(
             }
             if isinstance(node, ast.Untap):
                 # Which answer a seat that is not asked takes. "A land" admits
-                # an untapped one and choosing it is legal (CR 701.26b makes
-                # the untap a no-op), but it is never what the effect is for:
+                # an untapped one and choosing it is legal, but CR 701.26b says
+                # only tapped permanents can be untapped, so nothing happens —
+                # and that is never what the effect is for:
                 # under Rising Waters the release is the only land the player
                 # gets back that turn. A *preference* over the same candidates,
                 # never a narrowing — the prompt still offers every land.
