@@ -531,18 +531,34 @@ def _lower_return_to_zone(
     source, destination = node.from_zone, node.to
 
     if source is not None and source.name == "graveyard":
-        # Both graveyard handlers search the caster's own graveyard and nowhere
-        # else, so "from a graveyard" is a different card, not a wording of this
-        # one.
-        if source.owner is None or source.owner.kind != "you":
+        # "Return target creature card **from a graveyard to its owner's
+        # hand**." (Endbringer's Revel.) The one pairing that lets the pile be
+        # anybody's: a card in a graveyard is in its owner's (CR 404.1, 400.3),
+        # so "its owner's hand" is the hand beside the pile the card was chosen
+        # from and the handler needs only the announced seat. Every other
+        # destination keeps the refusal — "from a graveyard to **your** hand" is
+        # a theft this handler does not perform, and the reanimation's own
+        # any-graveyard reading lives with the "put onto the battlefield"
+        # sentence in ``lowering/zones.py``.
+        any_graveyard = (
+            source.owner is None
+            and destination.name == "hand"
+            and destination.owner is not None
+            and destination.owner.kind == "owner"
+        )
+        if not any_graveyard and (source.owner is None or source.owner.kind != "you"):
             raise LoweringError("no handler searches a graveyard but your own", node=node)
         if not filt.is_card:
             raise LoweringError("a graveyard holds cards, not permanents", node=node)
 
         if destination.name == "hand":
-            if destination.owner is None or destination.owner.kind != "you":
+            if not any_graveyard and (
+                destination.owner is None or destination.owner.kind != "you"
+            ):
                 raise LoweringError("this handler returns cards to your own hand", node=node)
             to_hand = _graveyard_to_hand_payload(filt)
+            if any_graveyard:
+                to_hand["any_graveyard"] = True
             if subject_names_another(subject):
                 # The printed "another", on the key the picker
                 # (``targeting._graveyard_return_spec``), the announcement gate

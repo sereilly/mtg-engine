@@ -323,7 +323,13 @@ def set_life_total(game: Game, instruction: OracleInstruction, context: OracleEx
     elif recipient == "each_player":
         players = [p for p in game.players if not p.lost]
     else:
-        players = [context.target]
+        # "that_player" (the seat an offer was accepted by) and "target"
+        # (Blessed Wind's announced seat) both arrive here. A seat that has
+        # left the game is nobody (CR 800.4a), and no seat at all is an effect
+        # aimed at nothing rather than one landing on the caster.
+        players = [
+            p for p in (context.target,) if p in game.players and not p.lost
+        ]
     for player in players:
         before = player.life
         if total > before:

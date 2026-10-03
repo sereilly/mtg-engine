@@ -1768,8 +1768,67 @@ def put_graveyard_cards_on_library_top(
     return True, "resolved"
 
 
+def _return_graveyard_card_to_owners_hand(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """"Return target creature card **from a graveyard to its owner's hand**."
+    (Endbringer's Revel.)
+
+    The pile is the announced seat's (``_run_stack_item_resolution`` writes the
+    stamped card's seat back onto the item before any handler runs), and the
+    hand is the same player's: a card in a graveyard is in its owner's
+    (CR 404.1, 400.3), so "its owner's hand" needs no second lookup. The
+    activator's own hand is reached only when the card was theirs.
+
+    A slot that was named and no longer answers the printed noun is CR 608.2b's
+    illegal target and returns nothing. An announcement naming **no** slot (an
+    AI seat that announced the ability bare) takes the first matching card,
+    searched the way Hymn of Rebirth's any-graveyard reanimation searches: the
+    named seat, then the activator, then everyone else.
+    """
+    caster = context.caster
+
+    def _eligible(card) -> bool:
+        return graveyard_card_matches(instruction.payload, card)
+
+    named = context.target if context.target in game.players else None
+    index = context.target_permanent_index
+    found = None
+    if isinstance(index, int):
+        if (
+            named is not None
+            and 0 <= index < len(named.graveyard)
+            and _eligible(named.graveyard[index])
+        ):
+            found = (named, index)
+    else:
+        found = next(
+            (
+                (player, slot)
+                for player in (named, caster, *game.players)
+                if player is not None
+                for slot, card in enumerate(player.graveyard)
+                if _eligible(card)
+            ),
+            None,
+        )
+    if found is None:
+        game.log.append(f"{context.card.name}: no card was returned from a graveyard")
+        return True, "resolved"
+    owner, slot = found
+    chosen = owner.graveyard.pop(slot)
+    game.put_card_into_hand(owner, chosen)
+    game.log.append(
+        f"{context.card.name}: returned {chosen.name} from {owner.name}'s "
+        f"graveyard to {owner.name}'s hand"
+    )
+    return True, "resolved"
+
+
 @effect_handler("return_creature_from_graveyard_to_hand")
 def return_creature_from_graveyard_to_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    if instruction.payload.get("any_graveyard"):
+        return _return_graveyard_card_to_owners_hand(game, instruction, context)
     caster = context.caster
     any_card = bool(instruction.payload.get("any_card"))
     card_type = instruction.payload.get("card_type")
