@@ -43,7 +43,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | MMQ | 335 | 465 | 91.8% | 91.6% | 66.2% | 278 |
 | NEM | 143 | 219 | 80.4% | 80.4% | 64.4% | 123 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| PCY *(measured)* | 143 | 207 | 75.4% | 68.6% | 42.5% | 83 |
+| PCY *(measured)* | 143 | 207 | 79.2% | 72.9% | 46.9% | 92 |
 | **All (shipped)** | **6307** | **9244** | **90.6%** | **89.9%** | **61.2%** | **4803** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -56,9 +56,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 482 | 220 | expected a subject |  |
+| 480 | 218 | expected a subject |  |
 | 145 | 75 | unrecognized effect verb |  |
-| 131 | 67 | unconsumed text |  |
+| 128 | 64 | unconsumed text |  |
 | 51 | 33 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 21 | 7 | expected what this creature can't block, or a duration |  |
@@ -74,13 +74,13 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 4 | 1 | expected 'that' |  |
 | 4 | 1 | attach needs one chosen permanent to attach to |  |
 | 4 | 1 | expected a destination zone after 'return' |  |
-| 4 | 4 | expected a quantity |  |
 | 3 | 1 | expected 'of' |  |
 | 3 | 2 | expected 'the number of' in a where-clause |  |
 | 3 | 3 | unrecognized "can't be" restriction |  |
+| 3 | 3 | expected a quantity |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
-| 2 | 2 | expected 'counter or counters' |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
+| 2 | 1 | expected 'top' |  |
 
 ## Cards executing through the grammar
 
@@ -2519,6 +2519,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}, Sacrifice a land: Draw a card. Any player may activate this ability.`
 - **Excavator**
   - `{T}, Sacrifice a basic land: Target creature gains landwalk of each of the land types of the sacrificed land until end of turn. (It can't be blocked as long as defending player controls a land of any of those types.)`
+- **Excise**
+  - `Exile target attacking creature unless its controller pays {X}.`
 - **Exhaustion**
   - `Creatures and lands target opponent controls don't untap during their next untap step.`
 - **Exhume**
@@ -2790,6 +2792,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Destroy all Plains.`
   - `Destroy all Plains.`
   - `Destroy all Plains.`
+- **Flay**
+  - `Target player discards a card at random. Then that player discards another card at random unless they pay {1}.`
 - **Fledgling Djinn**
   - `At the beginning of your upkeep, this creature deals 1 damage to you.`
 - **Fleeting Image**
@@ -6493,10 +6497,20 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Rhox**
   - `You may have this creature assign its combat damage as though it weren't blocked.`
   - `{2}{G}: Regenerate this creature. (The next time this creature would be destroyed this turn, instead tap it, remove it from combat, and heal all damage on it.)`
+- **Rhystic Circle**
+  - `{1}: Any player may pay {1}. If no one does, the next time a source of your choice would deal damage to you this turn, prevent that damage.`
 - **Rhystic Deluge**
   - `{U}: Tap target creature unless its controller pays {1}.`
+- **Rhystic Lightning**
+  - `Rhystic Lightning deals 4 damage to any target unless that permanent's controller or that player pays {2}. If they do, Rhystic Lightning deals 2 damage to the permanent or player.`
+- **Rhystic Scrying**
+  - `Draw three cards. Then if any player pays {2}, discard three cards.`
+- **Rhystic Shield**
+  - `Creatures you control get +0/+1 until end of turn. They get an additional +0/+2 until end of turn unless any player pays {2}.`
 - **Rhystic Study**
   - `Whenever an opponent casts a spell, you may draw a card unless that player pays {1}.`
+- **Rhystic Syphon**
+  - `Unless target player pays {3}, that player loses 5 life and you gain 5 life.`
 - **Rhystic Tutor**
   - `Unless any player pays {2}, search your library for a card, put that card into your hand, then shuffle.`
 - **Ribbon Snake**
@@ -7510,6 +7524,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Soul Sear deals 5 damage to target creature or planeswalker. That permanent loses indestructible until end of turn.`
 - **Soul Shepherd**
   - `{W}, Exile a creature card from your graveyard: You gain 1 life.`
+- **Soul Strings**
+  - `Return two target creature cards from your graveyard to your hand unless any player pays {X}.`
 - **Soul Warden**
   - `Whenever another creature enters, you gain 1 life.`
 - **Souldrinker**
@@ -9081,6 +9097,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, if a player has more life than each other player, the player with the most life gains control of this creature.`
 - **Wild Mammoth**
   - `At the beginning of your upkeep, if a player controls more creatures than each other player, the player who controls the most creatures gains control of this creature.`
+- **Wild Might**
+  - `Target creature gets +1/+1 until end of turn. That creature gets an additional +4/+4 until end of turn unless any player pays {2}.`
 - **Wild Wurm**
   - `When this creature enters, flip a coin. If you lose the flip, return this creature to its owner's hand.`
 - **Wildfire**
