@@ -22,8 +22,9 @@ from ...oracle_types import OracleInstruction
 from ...tokens import default_token_name
 from .. import ast
 from ..errors import LoweringError
-from ._events import (EVENT_SUBJECT_PLAYER, _EVENT_SUBJECT_PLAYERS,
-                      _back_reference_payload)
+from ._events import (EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER,
+                      _EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_OBJECTS,
+                      _EVENT_SUBJECT_PLAYERS, _back_reference_payload)
 from ._record_keys import _RECORDED_PERMANENTS
 from ._amounts import count_spec
 from ._common import (
@@ -37,8 +38,76 @@ def _title(words: str) -> str:
     return " ".join(part.capitalize() for part in words.split())
 
 
+def _stamp_token_recipient(
+    payload: dict[str, object],
+    node: "ast.CreateToken | ast.CreateCopyToken",
+    event: str | None,
+) -> None:
+    """Who creates the token, as payload — shared by both token makers.
+
+    One stamp for the two nodes because the recipient is not a characteristic
+    of the token: CR 111.2 makes whoever creates it its owner and controller,
+    and that is the same question whether the token was described or copied.
+    It was inline in ``_lower_create_token`` until Dual Nature printed a
+    recipient in front of a *copy*, and a second copy of it is how the two
+    would come to disagree about which seat a word names.
+    """
+    who = node.recipient_players
+    if not who:
+        return
+    payload["recipient_players"] = who
+    if who == "target_opponent":
+        # "**Target opponent** creates a 1/1 green Hippo creature token."
+        # (Phelddagrif; Phantasmal Sphere prints the same shape.) The seat
+        # is chosen, so the ability targets (CR 115.4) and the picker has to
+        # be told — a ``recipient_players`` key with no description beside
+        # it would name a seat nothing ever asks for, and the token would go
+        # to whichever seat the handler reached for. The same description
+        # every other opponent-targeted effect carries, so one vocabulary
+        # answers every player picker.
+        payload["targets"] = {
+            "quantifier": "target", "kind": "player", "opponents_only": True,
+        }
+    elif who == "that_player":
+        # "At the beginning of each player's upkeep, …**the player**
+        # creates a 1/1 green Saproling creature token." (Greener
+        # Pastures.) Nobody chose this seat — it is the one the firing
+        # event was about, frozen into the trigger's context (CR 603.10) by
+        # the upkeep step — so the handler is told to read the record
+        # rather than ``context.target``, which under a trigger that chose
+        # nothing is whatever the resolution happened to be carrying.
+        #
+        # The same key the mill, the draw and the damage already read for
+        # the identical two words, and gated on the event for their stated
+        # reason: with nothing frozen, "that player" names a seat the card
+        # never did.
+        #
+        # Mogg Infestation prints the same words on a *spell*, where the
+        # seat really is the resolution's own target — so the record is
+        # stamped only under an event that froze one, and that card's
+        # payload is unchanged.
+        if event in _EVENT_SUBJECT_PLAYERS:
+            payload["recipient_seat_record"] = EVENT_SUBJECT_PLAYER
+    elif who == "controller":
+        # "Whenever a nontoken creature enters, **its controller** creates a
+        # token …" (Dual Nature.) The controller of the object the trigger's
+        # event was about, frozen by the fire site (CR 603.10) — the same key
+        # Bereavement's "its controller discards" and Thelon's Chant's "that
+        # player" read. Under an event that froze no controller the words name
+        # nobody, and the token would otherwise go to the ability's controller:
+        # refused rather than defaulted.
+        if event not in _EVENT_SUBJECT_CONTROLLERS:
+            raise LoweringError(
+                f"no event named {event!r} freezes the seat 'its controller' "
+                "names", node=node,
+            )
+        payload["recipient_seat_record"] = EVENT_SUBJECT_CONTROLLER
+
+
 def _lower_create_copy_token(
-    node: ast.CreateCopyToken, produced: frozenset[str] = frozenset(),
+    node: ast.CreateCopyToken,
+    event: str | None = None,
+    produced: frozenset[str] = frozenset(),
 ) -> tuple[OracleInstruction, ...]:
     """"Create a token that's a copy of target creature you control."
     (Sublime Epiphany.)
@@ -56,13 +125,46 @@ def _lower_create_copy_token(
     mean, because the seat that picked was an opponent and the pick is made at
     resolution.
 
-    ``produced`` is the whole gate, exactly as it is for "exile that token" one
+    ``produced`` is the nearer gate, exactly as it is for "exile that token" one
     family over: with no step in front of it that recorded a permanent the
     words name nothing, and a copy of whatever creature happened to answer is
     not a smaller version of this effect.
+
+    "Whenever a nontoken creature enters, its controller creates a token that's
+    a copy of **that creature**." (Dual Nature.) The farther one: no step of
+    this effect chose anything, and the creature is the object the *trigger's
+    event* was about, frozen by id at the fire site (``_EVENT_SUBJECT_OBJECTS``)
+    — so the handler is told to read it there, ``copied: "event_subject"``, the
+    role-key spelling ``recipient`` and ``biter`` already use for the same
+    referent. A record of this effect is asked first because it is the closer
+    binder; under neither, the words still refuse.
     """
+    if node.recipient_players == "target_opponent":
+        # Two announced slots in one sentence — the seat and the creature —
+        # and ``_describe_targets`` writes one. A card printing it would need
+        # the several-target description; refused rather than half-described.
+        raise LoweringError(
+            "a targeted recipient beside a targeted copy is two slots this "
+            "lowering describes as one", node=node,
+        )
     if node.subject.quantifier == "that":
         recorded = tuple(sorted(produced & _RECORDED_PERMANENTS))
+        if not recorded and event in _EVENT_SUBJECT_OBJECTS:
+            # A bound object carries no narrowing to honour, for the reason
+            # the recorded branch below gives: the noun restates the event's
+            # own subject, which its condition's filter already admitted.
+            if _restrictions_beyond(
+                node.subject.filter, frozenset({"card_types", "subtypes"})
+            ):
+                raise LoweringError(
+                    "a copy of the event's object copies that object and "
+                    "nothing narrower", node=node,
+                )
+            bound: dict[str, object] = {
+                "count": _amount_payload(node.count), "copied": "event_subject",
+            }
+            _stamp_token_recipient(bound, node, event)
+            return (OracleInstruction("create_copy_token", "", bound),)
         if not recorded:
             raise LoweringError(
                 "\"that creature\" with nothing in this effect that chose one",
@@ -85,15 +187,12 @@ def _lower_create_copy_token(
                 "a bound copy token copies the permanent an earlier step "
                 "recorded and nothing narrower", node=node,
             )
-        return (
-            OracleInstruction(
-                "create_copy_token", "",
-                {
-                    "count": _amount_payload(node.count),
-                    "permanents_from": recorded[0],
-                },
-            ),
-        )
+        recorded_payload: dict[str, object] = {
+            "count": _amount_payload(node.count),
+            "permanents_from": recorded[0],
+        }
+        _stamp_token_recipient(recorded_payload, node, event)
+        return (OracleInstruction("create_copy_token", "", recorded_payload),)
     if node.subject.quantifier != "target":
         raise LoweringError("the copy token copies a chosen permanent", node=node)
     payload: dict[str, object] = {"count": _amount_payload(node.count)}
@@ -106,6 +205,7 @@ def _lower_create_copy_token(
     if described:
         payload["filter"] = described
     _describe_targets(payload, node.subject)
+    _stamp_token_recipient(payload, node, event)
     return (OracleInstruction("create_copy_token", "", payload),)
 
 
@@ -275,40 +375,7 @@ def _lower_create_token(
                     f"nothing implements the token's ability {line!r}", node=node
                 )
         payload["oracle_text"] = chr(10).join(node.granted_lines)
-    if node.recipient_players:
-        payload["recipient_players"] = node.recipient_players
-        if node.recipient_players == "target_opponent":
-            # "**Target opponent** creates a 1/1 green Hippo creature token."
-            # (Phelddagrif; Phantasmal Sphere prints the same shape.) The seat
-            # is chosen, so the ability targets (CR 115.4) and the picker has to
-            # be told — a ``recipient_players`` key with no description beside
-            # it would name a seat nothing ever asks for, and the token would go
-            # to whichever seat the handler reached for. The same description
-            # every other opponent-targeted effect carries, so one vocabulary
-            # answers every player picker.
-            payload["targets"] = {
-                "quantifier": "target", "kind": "player", "opponents_only": True,
-            }
-        elif node.recipient_players == "that_player":
-            # "At the beginning of each player's upkeep, …**the player**
-            # creates a 1/1 green Saproling creature token." (Greener
-            # Pastures.) Nobody chose this seat — it is the one the firing
-            # event was about, frozen into the trigger's context (CR 603.10) by
-            # the upkeep step — so the handler is told to read the record
-            # rather than ``context.target``, which under a trigger that chose
-            # nothing is whatever the resolution happened to be carrying.
-            #
-            # The same key the mill, the draw and the damage already read for
-            # the identical two words, and gated on the event for their stated
-            # reason: with nothing frozen, "that player" names a seat the card
-            # never did.
-            #
-            # Mogg Infestation prints the same words on a *spell*, where the
-            # seat really is the resolution's own target — so the record is
-            # stamped only under an event that froze one, and that card's
-            # payload is unchanged.
-            if event in _EVENT_SUBJECT_PLAYERS:
-                payload["recipient_seat_record"] = EVENT_SUBJECT_PLAYER
+    _stamp_token_recipient(payload, node, event)
     count = _stamp_token_count(payload, node, produced)
     # "…that are tapped and attacking" (Basri Ket): entry state the handler
     # stamps as the tokens arrive.

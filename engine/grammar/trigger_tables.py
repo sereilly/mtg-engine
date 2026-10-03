@@ -419,6 +419,11 @@ _SUBJECT_LED_EVENTS: tuple[tuple[tuple[str, ...], str], ...] = (
     (("attacks",), "matching_creature_attacks"),
     (("enters", "the", "battlefield"), "matching_permanent_enters"),
     (("enters",), "matching_permanent_enters"),
+    # "Whenever **a nontoken creature** leaves the battlefield, …" (Dual
+    # Nature). CR 603.6c's event about a permanent the source is neither nor
+    # attached to, so the subject leads and the phrase is the narrowing — the
+    # entry rows' shape, read in `engine/oracle.py`'s table under the same kind.
+    (("leaves", "the", "battlefield"), "matching_permanent_leaves_battlefield"),
     # "Whenever **a creature** is dealt damage, destroy it." (Death Pits of
     # Rath.) The same event Fungusaur's "whenever **this** creature is dealt
     # damage" names and Binding Agony's "whenever **enchanted** creature is

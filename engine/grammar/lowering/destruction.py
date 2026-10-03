@@ -27,7 +27,7 @@ from ._common import (
     _restrictions_beyond, is_mana_value_x, SEVERAL_DESTROY_NARROWINGS,
     split_creature_type_choice, testable_filter_payload
 )
-from ._events import (ATTACHED_PERMANENT_CONTROLLER, LAST_TARGET_NAME, _EVENT_STAMPED_TARGET_OBJECTS, _EVENT_SUBJECT_OBJECTS, _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER, ROLE_NAMES_BLOCK_PARTNER, names_attached_permanent, CHOSEN_PERMANENT)
+from ._events import (ATTACHED_PERMANENT_CONTROLLER, LAST_TARGET_NAME, _EVENT_STAMPED_TARGET_OBJECTS, _EVENT_SUBJECT_OBJECTS, _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_NAMES, EVENT_SUBJECT_PLAYER, ROLE_NAMES_BLOCK_PARTNER, names_attached_permanent, CHOSEN_PERMANENT)
 from ._delays import (_DELAYED_AGENT_EVENTS, _BOUND_OBJECT_DELAYED_EVENTS)
 from ._superlatives import superlative_pick
 
@@ -300,7 +300,11 @@ def _lower_destroy(
                 return (
                     OracleInstruction("destroy_all_matching", "", recorded),
                 )
-            if event not in _EVENT_SUBJECT_OBJECTS:
+            # The events that freeze a *name* (``EVENT_SUBJECT_NAMES``), not
+            # every event that freezes an object: the handler reads
+            # ``event_subject_name``, and under a kind that stamps only the id
+            # the sentence compiled clean and found nothing to compare against.
+            if event not in EVENT_SUBJECT_NAMES:
                 raise LoweringError(
                     "\"that name\" is the name of the object this "
                     "trigger's event was about, and this event records none",

@@ -258,6 +258,16 @@ SUBJECT_FROM_TRIGGER = "subject_from_trigger"
 # Its one value so far: the other half of the blocking pair the trigger fired on.
 BLOCK_PAIR_SUBJECT = "block_pair"
 
+# The trigger-context key under which the entry seam freezes the entering
+# **object itself**, beside its id — CR 608.2h's last-known information. "…its
+# controller creates a token that's a copy of that creature" (Dual Nature) still
+# makes the token when the creature has left by resolution, copying it as it
+# last existed on the battlefield; the id alone resolves to nothing then
+# (CR 400.7). The ``dead_card`` precedent one fire site over: a key the
+# announcement writes and one handler reads, so it is a constant here rather
+# than a string spelled twice.
+EVENT_SUBJECT_LAST_KNOWN = "event_subject_last_known"
+
 # ``targets["count"]`` for an announcement whose **size** a CR 601.2b optional
 # additional cost fixes: ``{"base": 1, "per_cost": {"{1}{R}": 1, "{1}{G}": 1}}``
 # is Primitive Justice's "Destroy target artifact. For each additional {1}{R}

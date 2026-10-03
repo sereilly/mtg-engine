@@ -57,6 +57,7 @@ from ._common import (
     _restrictions_beyond,
     _filter_payload, refuse_untestable,
                       testable_filter_payload)
+from ._events import EVENT_SUBJECT_NAMES
 from ._piles import _sweep_graveyard_actor
 
 
@@ -502,7 +503,28 @@ def lower_exile_sweep(
             "op": filt.mana_value.op,
             "value": bound.value if isinstance(bound, ast.Fixed) else bound.name,
         }
-    rest = dataclasses.replace(filt, colored=False, mana_value=None)
+    # "…exile all tokens **with the same name as that creature**." (Dual
+    # Nature.) CR 201.2's comparison against the object the trigger's event was
+    # about — which has left the battlefield by the time this resolves, so the
+    # name is the one the fire site froze, and the handler compares against it
+    # rather than handing ``subject_matches`` a key it never sees. Lifted off
+    # the filter for ``mana_value``'s reason above and put back as its own key.
+    #
+    # Gated on the events that freeze a *name*, not merely an object: under any
+    # other event the words name a string nobody wrote down, and the honest
+    # answer is a refusal rather than a sweep with its narrowing missing — the
+    # same gate the destroy sweep reads for Eye of Singularity's "that name".
+    if filt.name_from_event:
+        if event not in EVENT_SUBJECT_NAMES:
+            raise LoweringError(
+                "\"that creature's name\" is the name of the object this "
+                "trigger's event was about, and this event freezes none",
+                node=node,
+            )
+        payload["name_from_event"] = True
+    rest = dataclasses.replace(
+        filt, colored=False, mana_value=None, name_from_event=False,
+    )
     # Everything else the noun phrase printed — "exile all **Sand
     # Warriors**" (Hazezon Tamar). The sweep used to hand-roll a
     # ``type_filter`` and refuse every other narrowing, which cost Hazezon
@@ -528,8 +550,20 @@ def lower_exile_sweep(
     # carry a relation most of their handlers test with the pure matcher,
     # which drops it — and a dropped ``blocked_by_source`` on a sweep is
     # every creature on the table.
+    #
+    # ``created_with_source`` beside it, for its reason exactly: "When this
+    # enchantment leaves the battlefield, exile all tokens **created with this
+    # enchantment**." (Dual Nature.) The record is the maker's id stamped on
+    # each token, and the handler hands ``subject_matches`` the ability's
+    # source — which under a leaves-the-battlefield trigger is the departed
+    # permanent, still carrying the id its tokens were stamped with (CR 603.10a
+    # looks back in time; CR 400.7 is why it is an id and not an identity). A
+    # spell has no source, and the key then matches nothing rather than every
+    # token on the table.
     leftovers = _restrictions_beyond(
-        rest, _PAYLOAD_HONOURED_FILTER_FIELDS | {"zone", "blocked_by_source"}
+        rest,
+        _PAYLOAD_HONOURED_FILTER_FIELDS
+        | {"zone", "blocked_by_source", "created_with_source"},
     ) + dropped_narrowings(rest, narrowings) + tuple(unusable)
     if leftovers:
         raise LoweringError(

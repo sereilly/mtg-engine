@@ -282,6 +282,13 @@ class CreateCopyToken:
     """
     count: Amount
     subject: TargetSpec
+    #: Who creates the token — :class:`CreateToken`'s ``recipient_players``,
+    #: read by the same prefix table (``effects/tokens._TOKEN_RECIPIENT_PREFIXES``)
+    #: and lowered by the same stamp. "**Its controller** creates a token that's
+    #: a copy of that creature." (Dual Nature.) None is the effect's controller.
+    #: Not a characteristic of the token, which is why the paragraph above does
+    #: not exclude it: CR 111.2 makes the creator the owner, whatever is copied.
+    recipient_players: str | None = None
 
 
 @dataclass(frozen=True)
