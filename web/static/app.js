@@ -10126,7 +10126,8 @@ function renderActivationPrompt() {
     // "Sacrifice X lands" announces X by the lands named (CR 601.2b), so any
     // number is an answer and the count is what X becomes.
     const purpose = pending.purpose === "attack" ? "attack"
-      : pending.purpose === "block" ? "block" : "activate this ability";
+      : pending.purpose === "block" ? "block"
+        : pending.purpose === "cast" ? "cast it" : "activate this ability";
     body.textContent = pending.announcesX
       ? `${verb} X ${pending.noun}(s) to ${purpose}. Choose which; X is how many you choose.`
       : `${verb} ${pending.count} ${pending.noun}${pending.count === 1 ? "" : "s"} to ${purpose}. Choose which.`;
@@ -12157,6 +12158,23 @@ function confirmPermanentCost() {
     continueDeclarationCost(pending.declaration, picked);
     return;
   }
+  if (pending.cast) {
+    // CR 601.2b: announced before the target, so it rides `pendingCastCost`
+    // into whichever body the rest of the cast sends — merged, never replacing
+    // an offer already taken.
+    pendingCastCost = { ...(pendingCastCost || {}), cost_permanent_ids: picked };
+    const castAction = pending.cast.castAction || "cast";
+    if (pending.cast.thenTarget) {
+      continueCastAfterCost(pending.card, castAction);
+      return;
+    }
+    updateActionHint(`Casting ${pending.cardName}...`);
+    sendAction({ seat, action: castAction, card_name: pending.cardName })
+      .then(() => updateActionHint(`Cast ${pending.cardName}.`))
+      .catch((e) => updateActionHint(e.message, true))
+      .finally(() => clearPendingHandCast());
+    return;
+  }
   const fields = { cost_permanent_ids: picked };
   // "Sacrifice X lands": the number named is the X announced (CR 601.2b), so
   // the two cannot disagree — and an X the engine is never told is zero.
@@ -12803,11 +12821,49 @@ function startCastCostPrompt(card, castAction = "cast") {
   const costSpec = castCostSpec(card);
   if (!costSpec) return false;
   if (costSpec.discard_cost) return startCastDiscardCostPrompt(card, castAction);
+  // "As an additional cost to cast this spell, sacrifice **two** creatures"
+  // (Phyrexian Tribute): a set, which the one-click canvas picker below cannot
+  // collect — it answered the first creature and the default ate the second.
+  // The set picker the activation side uses, its answer on `pendingCastCost`.
+  if (costSpec.sacrifice_cost && Number(costSpec.count || 1) > 1) {
+    if ((pendingCastCost || {}).cost_permanent_ids) return false;
+    return startCastPermanentSetCostPrompt(card, castAction, costSpec);
+  }
   // A lone permanent cost *is* the card's spec, so the cascade's own permanent
   // picker already asks for it and sends the answer on the cost field. Only a
   // cost riding beside a target needs a prompt of its own.
   if (!castCostIsSeparate(card)) return false;
   return startCastCostPermanentPrompt(card, castAction, costSpec);
+}
+
+function startCastPermanentSetCostPrompt(card, castAction, costSpec) {
+  const cardName = normalizeCardName(card);
+  if (!cardName) return false;
+  const options = (costSpec.valid_targets || [])
+    .filter((option) => option?.kind === "permanent")
+    .map((option) => ({ id: permanentIdAt(option.seat, option.index), name: option.name }))
+    .filter((option) => Number.isInteger(option.id));
+  const count = Math.max(1, Number(costSpec.count || 1));
+  if (options.length < count) {
+    // CR 601.2h: the engine refuses it and says why; asking first would be a
+    // second opinion about payability.
+    return false;
+  }
+  pendingPermanentCost = {
+    card,
+    cardName,
+    verb: "sacrifice",
+    noun: costSpec.kind || "permanent",
+    count,
+    announcesX: false,
+    options,
+    picked: [],
+    purpose: "cast",
+    cast: { castAction, thenTarget: castCostIsSeparate(card) },
+  };
+  renderActivationPrompt();
+  updateActionHint(`Choose what ${cardName} will sacrifice to pay its cost.`);
+  return true;
 }
 
 // The battlefield picker for a "sacrifice a Goblin" / "exile a creature you

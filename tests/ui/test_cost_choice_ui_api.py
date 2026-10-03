@@ -258,6 +258,36 @@ def test_crimson_hellkite_deals_the_announced_x_to_the_named_target():
     assert not game.is_on_battlefield(giant)
 
 
+def test_phyrexian_tribute_sacrifices_the_two_creatures_named():
+    """"As an additional cost to cast this spell, sacrifice two creatures."
+    The cast side's counted sacrifice: the payload says two, the client's set
+    picker names both on ``cost_permanent_ids``, and those are the two that go
+    — the default would have taken the two smallest."""
+    sid, game = _session(
+        ["Grizzly Bears", "Hill Giant", "Serra Angel"], ["Black Lotus"],
+        hand=["Phyrexian Tribute"],
+    )
+    bears, giant, angel = game.players[0].battlefield
+    (lotus,) = game.players[1].battlefield
+
+    spec = _state(sid)["players"][0]["hand"][0]["target_spec"]
+    assert spec["cost_spec"]["sacrifice_cost"] is True and spec["cost_spec"]["count"] == 2
+    assert app_js_function_body("startCastCostPrompt").count(
+        "startCastPermanentSetCostPrompt("
+    ) == 1
+
+    resp = _act(
+        sid, action="cast", card_name="Phyrexian Tribute",
+        target_permanent_id=lotus.permanent_id,
+        cost_permanent_ids=[giant.permanent_id, angel.permanent_id],
+    )
+    assert resp.status_code == 200, resp.text
+    game._settle()
+    assert game.is_on_battlefield(bears)
+    assert not game.is_on_battlefield(giant) and not game.is_on_battlefield(angel)
+    assert not game.is_on_battlefield(lotus)
+
+
 def test_the_tap_and_counted_sacrifice_costs_open_the_set_picker():
     picker = app_js_function_body("activationPermanentCostSpec")
     assert "tap_cost" in picker and "announces_x" in picker
