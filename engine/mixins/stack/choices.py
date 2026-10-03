@@ -7668,8 +7668,16 @@ class PendingChoicesMixin:
         All-priced alternatives keep printed order: "sacrifice a creature or
         discard a creature card" (Crypt Lurker) is a choice between two prices
         and picking the smaller is valuation, exactly as it is for a toll.
+
+        Among the free ones, a choice asked **at resolution** (CR 608.2d — a
+        prompt carrying the resolution's ``_context``) skips an alternative that
+        would change nothing on the board as it now stands
+        (``ai_valuation.offered_alternative_changes_nothing``): Urborg aimed at
+        a swampwalker takes swampwalk, not the first strike it does not have.
+        Printed order is still the answer whenever no alternative is a no-op.
         """
-        from ...ai_valuation import offered_action_is_a_payment
+        from ...ai_valuation import (offered_action_is_a_payment,
+                                     offered_alternative_changes_nothing)
 
         seat = self.players[choice.player_index]
         context = choice.data.get("_context")
@@ -7682,12 +7690,19 @@ class PendingChoicesMixin:
                 self_recipients.discard("caster")
             if getattr(context, "target", None) is seat:
                 self_recipients.update(("target", "target_player"))
-        for index, instruction in enumerate(self._offered_mode_instructions(choice)):
-            if instruction is None:
-                continue
-            if not offered_action_is_a_payment((instruction,), self_recipients):
-                return index
-        return 0
+        offered = self._offered_mode_instructions(choice)
+        unpriced = [
+            index for index, instruction in enumerate(offered)
+            if instruction is not None
+            and not offered_action_is_a_payment((instruction,), self_recipients)
+        ]
+        if context is not None:
+            for index in unpriced:
+                if not offered_alternative_changes_nothing(
+                    self, offered[index], context
+                ):
+                    return index
+        return unpriced[0] if unpriced else 0
 
     def _default_mode_choice(self, choice: PendingChoice) -> bool:
         """What a non-interactive seat answers a "Choose one —" prompt with:
