@@ -500,3 +500,88 @@ def test_combat_damage_in_the_simulator_actually_moves_a_life_total():
         "no combat damage was dealt across eight games"
     )
     assert not report.issues, report.issues
+
+
+# --- W3G4: the simulator pays for what it casts, and plays its land first ---
+#
+# The fifth omission of the "it plays a whole turn" class: `run_ai_simulation`
+# built `Game(players=[p1, p2])`, and `enforce_mana_costs` defaults to False, so
+# no simulated spell had ever been paid for — and a land was the turn's one
+# cast, so a seat that played one cast nothing else. Both tests below read one
+# instrumented run, recorded at the engine's own cast seam.
+
+
+@pytest.fixture(scope="module")
+def _w3g4_paid_run():
+    """Three LEA games with every `cast_from_hand` recorded: what the cast
+    owed (`ai_policy._cost_for`, the three functions the cast path prices with)
+    against the mana floating in the caster's pool as the cast began — which,
+    now that the executor taps the planned lands first, is exactly what pays."""
+    from engine.ai_policy import _cost_for
+    from engine.search_filters import card_has_type
+
+    seen = {"casts": [], "lands": [], "refused_lands": []}
+    original = Game.cast_from_hand
+
+    def cast(self, seat, name, *args, **kwargs):
+        player = self.players[seat]
+        card = next((c for c in player.hand if c.name == name), None)
+        is_land = card is not None and card_has_type(card, "land")
+        allowed = self._may_play_another_land(seat) if is_land else None
+        owed = None
+        if card is not None and not is_land and not kwargs.get("alternative_cost"):
+            owed = sum(_cost_for(self, player, card, kwargs.get("x_value")).values())
+        floating = sum(int(v or 0) for v in player.mana_pool.values())
+        result = original(self, seat, name, *args, **kwargs)
+        if result.supported and is_land:
+            seen["lands"].append((id(self), self.turn, seat, allowed))
+        elif result.supported and owed:
+            seen["casts"].append((id(self), self.turn, seat, name, owed, floating))
+        return result
+
+    Game.cast_from_hand = cast
+    try:
+        report = run_ai_simulation(LEA_PATH, games=3, seed=1337, max_turns=12)
+    finally:
+        Game.cast_from_hand = original
+    return report, seen
+
+
+def test_no_simulated_spell_resolves_without_its_cost_paid(_w3g4_paid_run):
+    """CR 601.2f-h: every nonland spell a simulated seat casts is paid for out
+    of its pool, and the pool was filled by tapping its lands. Validated
+    backwards: on the tree before this change the same run cast 48 nonland
+    spells that owed mana and every one of them began with an empty pool —
+    the free-mana census W2G3 measured as "32 of LEA's 82 nonland casts cost
+    more than the caster's lands", seen at the payment instead of the board."""
+    report, seen = _w3g4_paid_run
+    unpaid = [
+        f"{name} on turn {turn}: owed {owed}, pool held {floating}"
+        for _game, turn, _seat, name, owed, floating in seen["casts"]
+        if floating < owed
+    ]
+    assert len(seen["casts"]) >= 25, f"examined only {len(seen['casts'])} paid casts"
+    assert unpaid == [], unpaid[:10]
+    assert not report.issues, [issue.message for issue in report.issues]
+    assert not report.refused_casts, dict(report.refused_casts)
+
+
+def test_the_land_drop_is_its_own_pass_and_the_turn_still_casts(_w3g4_paid_run):
+    """CR 305.1/305.2: the land drop is a special action beside the turn's
+    casts, not the turn's one cast. Every land played was one the engine's own
+    land-drop question allowed; seats play a land *and* cast a spell in the
+    same turn; and the report counts the plays apart from the interactions.
+    Validated backwards: before this change no seat-turn in the run held both,
+    because the land was chosen *as* the cast."""
+    report, seen = _w3g4_paid_run
+    assert seen["lands"], "no land was played in three games"
+    land_turns = {(game, turn, seat) for game, turn, seat, _allowed in seen["lands"]}
+    cast_turns = {(game, turn, seat) for game, turn, seat, *_rest in seen["casts"]}
+    both = land_turns & cast_turns
+    assert len(both) >= 10, f"only {len(both)} seat-turns played a land and cast a spell"
+
+    assert all(allowed for *_where, allowed in seen["lands"]), seen["lands"]
+    assert report.lands_played == len(seen["lands"])
+    # More than one spell in a turn: each one paid out of what the last left.
+    per_turn = Counter((game, turn, seat) for game, turn, seat, *_rest in seen["casts"])
+    assert max(per_turn.values()) >= 2, per_turn

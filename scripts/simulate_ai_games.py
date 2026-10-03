@@ -46,6 +46,11 @@ def main() -> int:
     print(f"Pool: {selection.label}")
     print(f"Games simulated: {report.games_completed}/{report.games_requested}")
     print(f"Interactions logged: {report.interaction_count}")
+    # Land drops are a special action, not an interaction (CR 116.2a), so they
+    # are counted apart — and they are what every cast above was paid from.
+    # Until PCY's wave 3 nothing was: the simulator's games ignored mana costs
+    # and a land was the turn's one cast. Zero here is that coming back.
+    print(f"Lands played: {report.lands_played}")
     print(f"Log file: {log_path}")
 
     # What combat did. Reported beside the interaction count and for the same

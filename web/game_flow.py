@@ -21,7 +21,7 @@ from engine.ai_policy import (
     choose_hand_activation_action,
     choose_cast_action,
     choose_combat_instant_cast_action,
-    planned_tap_color,
+    tap_planned_lands,
 )
 
 from .prompts import auto_resolve_ai_prompts
@@ -140,15 +140,10 @@ def _ai_step(session: Session) -> bool:
             else game.players[seat].hand
         )
         card_to_cast = cast_zone[cast_action.hand_index]
-        # Each land asked for the colour the plan counted on — see
-        # `engine.ai_policy.planned_tap_color`.
-        for position, permanent_index in enumerate(cast_action.land_tap_indices):
-            permanent = game.players[seat].battlefield[permanent_index]
-            game.tap_land_for_mana(
-                seat, permanent.card.name,
-                chosen_color=planned_tap_color(cast_action, position),
-                permanent_index=permanent_index,
-            )
+        # The payment, through the executor the AI simulator shares
+        # (`engine.ai_policy.tap_planned_lands`): each planned land tapped for
+        # the colour the plan counted on, by the mana ability that makes it.
+        tap_planned_lands(game, seat, cast_action)
 
         if has_human_opponent:
             result = game.queue_from_hand(
@@ -199,13 +194,7 @@ def _ai_step(session: Session) -> bool:
 
     activation_action = choose_activation_action(game, seat)
     if activation_action is not None:
-        for position, permanent_index in enumerate(activation_action.land_tap_indices):
-            permanent = game.players[seat].battlefield[permanent_index]
-            game.tap_land_for_mana(
-                seat, permanent.card.name,
-                chosen_color=planned_tap_color(activation_action, position),
-                permanent_index=permanent_index,
-            )
+        tap_planned_lands(game, seat, activation_action)
         game.activate_permanent_ability(
             seat,
             activation_action.permanent_name,
@@ -222,19 +211,7 @@ def _ai_step(session: Session) -> bool:
     # against are the ones the cast and the battlefield activation left alone.
     hand_activation = choose_hand_activation_action(game, seat)
     if hand_activation is not None:
-        for position, permanent_index in enumerate(hand_activation.land_tap_indices):
-            # Through the seam, for the reason the ratchet in
-            # `tests/engine/test_control_reads.py` exists: the loops around this
-            # one are grandfathered slot reads, and a new one would raise their
-            # baseline rather than being migrated with them.
-            permanent = game.permanent_at(seat, permanent_index)
-            if permanent is None:
-                continue
-            game.tap_land_for_mana(
-                seat, permanent.card.name,
-                chosen_color=planned_tap_color(hand_activation, position),
-                permanent_index=permanent_index,
-            )
+        tap_planned_lands(game, seat, hand_activation)
         game.activate_from_hand(
             seat,
             hand_activation.card_name,
@@ -251,15 +228,7 @@ def _ai_step(session: Session) -> bool:
     # activator's.
     foreign_activation = choose_foreign_activation_action(game, seat)
     if foreign_activation is not None:
-        for position, permanent_index in enumerate(foreign_activation.land_tap_indices):
-            land = game.permanent_at(seat, permanent_index)
-            if land is None:
-                continue
-            game.tap_land_for_mana(
-                seat, land.card.name,
-                chosen_color=planned_tap_color(foreign_activation, position),
-                permanent_index=permanent_index,
-            )
+        tap_planned_lands(game, seat, foreign_activation)
         game.activate_permanent_ability(
             seat,
             foreign_activation.permanent_name,
@@ -282,13 +251,7 @@ def _ai_respond_to_priority(session: Session, seat: int) -> str | None:
     instant_action = choose_combat_instant_cast_action(game, seat)
     if instant_action is not None:
         card_to_cast = game.players[seat].hand[instant_action.hand_index]
-        for position, permanent_index in enumerate(instant_action.land_tap_indices):
-            permanent = game.players[seat].battlefield[permanent_index]
-            game.tap_land_for_mana(
-                seat, permanent.card.name,
-                chosen_color=planned_tap_color(instant_action, position),
-                permanent_index=permanent_index,
-            )
+        tap_planned_lands(game, seat, instant_action)
         result = game.queue_from_hand(
             seat,
             card_to_cast.name,
@@ -541,13 +504,7 @@ def _advance_phase(session: Session) -> None:
                     )
                     if instant_action is not None:
                         card_to_cast = game.players[defender_index].hand[instant_action.hand_index]
-                        for position, permanent_index in enumerate(instant_action.land_tap_indices):
-                            permanent = game.players[defender_index].battlefield[permanent_index]
-                            game.tap_land_for_mana(
-                                defender_index, permanent.card.name,
-                                chosen_color=planned_tap_color(instant_action, position),
-                                permanent_index=permanent_index,
-                            )
+                        tap_planned_lands(game, defender_index, instant_action)
                         game.cast_from_hand(
                             defender_index,
                             card_to_cast.name,
