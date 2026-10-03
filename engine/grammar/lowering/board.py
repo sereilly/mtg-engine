@@ -527,6 +527,11 @@ def _lower_sacrifice(
             # this would sacrifice nothing whatever X was announced at, which is
             # the same silent direction the flag exists to avoid.
             payload["count"] = "x"
+        elif node.subject.quantifier in ("all", "each"):
+            # "…then sacrifices **all** creatures they control" (Living Death,
+            # Death Pit Offering). No choice and no count: every permanent the
+            # phrase names goes. With no key here it sacrificed exactly one.
+            payload["all"] = True
         elif node.subject.count != 1:
             # "Sacrifice **two** Swamps" (Mold Demon). How many is payload on
             # the one prompt, never a second kind: the forced-sacrifice queue

@@ -2871,6 +2871,24 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
     # word says — and it is why an "any number" sacrifice never fails to be
     # paid, so ``could_pay`` below is untouched by it.
     any_number = bool(instruction.payload.get("any_number"))
+    if instruction.payload.get("all"):
+        # "…sacrifices **all** creatures they control" (Living Death). Nothing
+        # is chosen (CR 701.21a): every match each payer controls is taken,
+        # gathered before any leaves.
+        described = dict(instruction.payload.get("filter") or {})
+        for seat in payers:
+            payer = game.players[seat]
+            doomed = [
+                game.permanent_at(payer, index)
+                for index in game._sacrifice_candidate_indices(payer, described, exclude)
+            ]
+            gone = [p.card.name for p in doomed if game.sacrifice_permanent(p) is not None]
+            game.log.append(
+                f"{payer.name} sacrificed {', '.join(gone) or 'nothing'} "
+                f"({context.card.name})"
+            )
+        context.results["sacrificed_this_way"] = True
+        return True, "resolved"
     could_pay = True
     for seat in payers:
         described = dict(instruction.payload.get("filter") or {})

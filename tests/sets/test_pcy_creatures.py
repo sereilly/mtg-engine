@@ -130,3 +130,31 @@ def test_w1g6_thresher_beast_makes_the_defending_player_sacrifice_a_land(set_poo
     assert game.players[1].graveyard[0].name in ("Mountain", "Island")
     assert game.is_on_battlefield(my_land)
     assert not game.players[0].graveyard
+
+
+def test_w1g6_keldon_firebombers_leaves_each_player_three_lands(set_pool):
+    """"When this creature enters, each player sacrifices all lands they
+    control except for three." Five lands become three for one seat; a seat
+    with two keeps both; nonland permanents are untouched."""
+    firebombers = set_pool("PCY")["Keldon Firebombers"]
+    game = _W1G6Game(players=[
+        _W1G6PlayerState(name="P0", hand=[firebombers]), _W1G6PlayerState(name="P1"),
+    ])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    game._close_current_priority_step()
+    names = ("Plains", "Island", "Swamp", "Mountain", "Forest")
+    mine = [_w1g6_permanent(game, 0, _w1g6_mk_card(n, f"Basic Land — {n}")) for n in names]
+    theirs = [_w1g6_permanent(game, 1, _w1g6_mk_card(n, f"Basic Land — {n}")) for n in names[:2]]
+    bear = _w1g6_permanent(game, 1, _w1g6_mk_card("Bear", "Creature — Bear"))
+
+    assert game.cast_from_hand(0, "Keldon Firebombers").supported
+    _w1g6_resolve(game)
+    game.auto_resolve_pending_choices()
+    _w1g6_resolve(game)
+
+    assert sum(game.is_on_battlefield(p) for p in mine) == 3
+    assert len(game.players[0].graveyard) == 2
+    assert all(game.is_on_battlefield(p) for p in theirs)
+    assert game.is_on_battlefield(bear)
+    assert any(p.card.name == "Keldon Firebombers" for p in game.controlled_by(0))
