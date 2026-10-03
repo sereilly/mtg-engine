@@ -2939,7 +2939,7 @@ def deal_damage_each_matching(
     caster = context.caster
     observer = game.players.index(caster) if caster in game.players else None
     # "…each creature **target opponent** controls" (Simoon). A seat this
-    # resolution chose (CR 115.4), which no read of a permanent can supply — so
+    # resolution chose (CR 601.2c), which no read of a permanent can supply — so
     # it is handed to the matcher, which refuses the word without one. Before
     # it did, "target opponent" fell through to the matcher's "not you" test and
     # the spell burned **every** opponent's creatures: right in a duel by

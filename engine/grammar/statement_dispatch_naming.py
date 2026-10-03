@@ -57,7 +57,7 @@ def lower_naming_statement(
         # description is emitted here the way its sibling below emits
         # Nebuchadnezzar's — and for the same reason: the kind table answers a
         # bare ``{"kind": "player"}`` for `name_and_strip`, which offered the
-        # caster their own graveyard, hand and library (CR 115.4). The picker
+        # caster their own graveyard, hand and library (CR 102.2/102.3). The picker
         # offers exactly what this describes.
         return (
             OracleInstruction(

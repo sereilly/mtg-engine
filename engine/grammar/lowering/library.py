@@ -345,7 +345,7 @@ def _lower_look_at_hand(
     only the targeted form has a contract to lower onto.
 
     **"Look at target opponent's hand." (Telepathic Spies.)** The same effect
-    with CR 115.4's seat narrowing, and it is admitted because the narrowing is
+    with the opponent narrowing (CR 102.2/102.3), admitted because the narrowing is
     *carried* rather than dropped: ``_targets_only`` reads ``target_opponent``
     into the same ``opponents_only`` flag ``discard_target_cards`` and
     ``target_loses_life`` already emit, and ``targeting.py``'s player picker
@@ -556,7 +556,7 @@ def _lower_look_at_library_top(
             ),
         )
     # "…of **target opponent's** library" (Precognition). The same targeted
-    # look, narrowed to which seats the picker may offer (CR 115.4) — that
+    # look, narrowed to which seats the picker may offer (CR 102.2/102.3) — that
     # narrowing rides on the targets description ``_targets_only`` builds, and
     # the handler reads ``context.target`` either way. It was refused because
     # the one card printing a targeted look happened to say "player"; reading it

@@ -364,7 +364,7 @@ def _tap_or_untap_all_matching(
         observer = frozen
         described["controller"] = "you"
     # "Tap all lands **target player** controls …" (Mana Short.) A seat this
-    # resolution chose (CR 115.4), which no read of a permanent can supply — so
+    # resolution chose (CR 601.2c), which no read of a permanent can supply — so
     # it goes to the matcher, which refuses the word without one. The same hand
     # the damage sweep and the destroy sweep already make; absent it the phrase
     # fell through the matcher's seat comparisons and the sweep took every land
@@ -854,7 +854,7 @@ def skip_next_untap(game: Game, instruction: OracleInstruction, context: OracleE
         )
         # "Creatures and lands **target opponent** controls don't untap during
         # their next untap step." (Exhaustion.) A seat the *spell* chose
-        # (CR 115.4), which no read of a permanent can supply — so it goes to
+        # (CR 601.2c), which no read of a permanent can supply — so it goes to
         # the matcher, which refuses the word without one. The same hand
         # ``_tap_or_untap_all_matching`` and the damage and destroy sweeps
         # already make; absent it this sweep matched **nothing** and the spell
@@ -903,7 +903,7 @@ def skip_next_untap(game: Game, instruction: OracleInstruction, context: OracleE
     # CR 701.43a's seat, read once for the whole batch: the ability's own
     # controller, which is who "your" names (CR 109.5) — or, where the card
     # printed "**that player's** next untap step" (Misstep), the seat its own
-    # subject targeted (CR 115.4). Two words naming two seats, so the payload
+    # subject targeted (CR 115.1). Two words naming two seats, so the payload
     # says which rather than the handler assuming; an absent key is still the
     # unseated per-creature marker and every payload written before this word
     # existed reads exactly as it did.

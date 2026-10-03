@@ -114,7 +114,7 @@ def accept_zone_possessive(stream: TokenStream) -> "ast.PlayerRef | None":
     elif stream.accept_phrase("target", "player", "'s"):
         return ast.PlayerRef("target_player")
     # "in **target opponent's** graveyard" (Spoils of Evil). The same
-    # chosen seat with CR 115.4's own-seat exclusion, and its own kind
+    # chosen seat with CR 102.2/102.3's own-seat exclusion, and its own kind
     # rather than `target_player`, because that exclusion is the whole
     # difference: read as "target player" the card would let its caster
     # count their own graveyard.

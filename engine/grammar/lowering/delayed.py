@@ -102,7 +102,7 @@ def _lower_choose_target(node: ast.ChooseTarget) -> tuple[OracleInstruction, ...
                 )
             if payload["targets"].get("opponents_only"):
                 # "Target **opponent**" is a narrowing the enumerator applies
-                # against the seat that *announces* (CR 115.4), and a printed
+                # against the seat that *announces* (CR 601.2c, CR 102.2), and a printed
                 # chooser is precisely a card saying that seat is somebody
                 # else. Enforced as it stands, the word would exclude the
                 # ability's controller while the card excludes the chooser —

@@ -40,8 +40,8 @@ from ..turn_state import started_the_turn
 from ..repeated_offers import OFFER_TAKEN_RESULTS
 from ..resumption import run_resumable
 from ._common import (CHOSEN_CARD_TYPE, _card_matches_filter, attached_host,
-                      flip_coin, permanent_matches_filter,
-                      permanent_state_holds)
+                      defending_player_seat, flip_coin,
+                      permanent_matches_filter, permanent_state_holds)
 from .registry import effect_handler
 from ..mana_payment import mana_cost_label
 
@@ -578,8 +578,41 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
                 game, dict(payload.get("filter") or {})
             ) is not None
         players = [context.caster] if who == "you" else list(game.players)
-        if who in ("each_opponent", "target_opponent", "opponent"):
+        if who in ("each_opponent", "opponent"):
             players = [p for p in game.players if p is not context.caster]
+        # **The pooled tally below is a trap for "each opponent" with a
+        # number**, and it is held shut at the lowering rather than answered
+        # here. "if **your opponents** control no creatures" (Kezzerdrix) and
+        # "if **each opponent** controls …" both parse to ``each_opponent``
+        # (`grammar/seats.py` aliases them on purpose), but with a count they
+        # are two questions: the plural is one total across every opponent's
+        # board, the "each" is a test every opponent must pass on their own.
+        # The payload cannot say which was printed, so
+        # `lowering/conditions.py` admits the seat only under "no" / zero —
+        # the one comparison where the sum and every-one-of-them agree — and
+        # refuses any other count rather than guessing. That is the only shape
+        # the pool prints; the day a card prints the other, the refusal names
+        # it.
+        if who in ("target_opponent", "target_player"):
+            # "If **target opponent** controls …": the seat the announcement
+            # chose (CR 601.2c), not every opponent at the table — the same
+            # narrowing ``more_than_you`` below already applies for Tithe.
+            # Pooled, a three-seat game would have counted the boards of
+            # players the spell never named. No shipped card prints a counted
+            # one; this keeps the seat honest for the first that does.
+            players = [context.target] if context.target in game.players else []
+        if who == "defending_player":
+            # "…if **defending player** controls no black nontoken permanents"
+            # (Spectral Bears). The seat combat named (CR 506.2), through the
+            # one reader every handler asks, which prefers what the attack
+            # trigger froze (CR 603.10). This word used to fall through to the
+            # every-player list above, so the attacker's *own* black permanent
+            # counted: Spectral Bears with a Black Knight beside it never
+            # triggered, and untapped every turn the card says it should not.
+            seat = defending_player_seat(game, context)
+            if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+                return False
+            players = [game.players[seat]]
         if who == "event_subject_player":
             # The seat the firing event named, frozen by the fire site — "if
             # **that player** controls a Plains" under "at the beginning of each

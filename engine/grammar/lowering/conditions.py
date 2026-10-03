@@ -379,6 +379,24 @@ def _lower_condition(
         if condition.comparison is not None and isinstance(condition.comparison.value, ast.Fixed):
             payload["count"] = condition.comparison.value.value
             payload["op"] = condition.comparison.op
+        if who == "each_opponent" and (
+            payload.get("op", "eq"), payload.get("count")
+        ) not in (("eq", 0), ("le", 0)):
+            # "if **your opponents** control no creatures" (Kezzerdrix) and "if
+            # **each opponent** controls …" reach here as one seat word
+            # (`grammar/seats.py` aliases the spellings), and with a number
+            # they are two questions: the plural is one total over every
+            # opponent's board, "each" is a test every opponent passes alone
+            # (CR 102.2/102.3 make both the same set of seats, not the same
+            # count). Only "no" — zero — is the same answer either way, and the
+            # evaluator's pooled tally is right for exactly that. Any other
+            # count, or a bare presence test, would be answered by a sum the
+            # card may not mean, so it is refused rather than guessed.
+            raise LoweringError(
+                "'each opponent' / 'your opponents' with a count is a total or "
+                "an every-opponent test, and the seat word cannot say which",
+                node=condition,
+            )
         if condition.shared_name:
             # The threshold is what the relation is *for*: "permanents with the
             # same name as one another" with no number would be read as

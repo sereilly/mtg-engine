@@ -377,7 +377,7 @@ def _lower_add_mana(
                 "zone": zone, "owner": owner, "filter": carried,
             }
             if owner == "target_opponent":
-                # The seat is chosen when the spell is cast (CR 115.4 excludes
+                # The seat is chosen when the spell is cast (CR 601.2c; CR 102.2 excludes
                 # the caster's own), so the *card* targets a player and the
                 # picker has to say so. Carried on this instruction because
                 # `derive_cast_spec` reads the first one that describes a
