@@ -470,6 +470,10 @@ def _resolution_rechecks_description(spec: dict) -> bool:
       through the same ``ROLE_RELATION_TESTS`` the picker narrowed with. A flat
       enumeration here would compare the second role's target against the
       first role's list.
+
+    A **modal** spell is the caller's exclusion rather than this function's:
+    its derived spec is the first mode's whatever mode was chosen, which is a
+    fact about the program and not about the spec.
     """
     kind = spec.get("kind")
     if kind in (_UNCHECKED_CAST_TARGET_KINDS - {"spell_or_permanent"}):
@@ -2404,7 +2408,8 @@ class LegalityMixin:
             # later — the same destination by a different rule, so moving it is
             # a decision for the round that can verify it.
             return None
-        spec = derive_cast_spec(card, compile_card_oracle(card))
+        program = compile_card_oracle(card)
+        spec = derive_cast_spec(card, program)
         if spec is None or spec.get("kind") in _UNFIZZLABLE_TARGET_KINDS:
             # Either the spell does not target at all — a creature spell whose
             # caller passed a stray index still gets an id stamped, and
@@ -2443,7 +2448,14 @@ class LegalityMixin:
         # ``_described_cast_target_slots`` — not a second reading of the words.
         # Computed lazily, once per resolution, only for a target that survived
         # the two cheaper tests.
-        described = _resolution_rechecks_description(spec)
+        #
+        # **Not for a modal spell**, for ``cast_target_refusal``'s reason: the
+        # derived spec is the *first* mode's, and the caster chose another —
+        # Active Volcano's "return target Island" re-asked as "target blue
+        # permanent" countered every Island bounce. The chosen mode's target
+        # was checked by its own arm at announcement; re-asking it here needs
+        # the chosen mode's spec, which is a change of its own.
+        described = _resolution_rechecks_description(spec) and not program.modes
         offered: set[tuple[int, int]] | None = None
         ids = item.target_permanent_id
         for permanent_id in (ids if isinstance(ids, (list, tuple)) else [ids]):

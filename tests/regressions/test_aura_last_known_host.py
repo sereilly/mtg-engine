@@ -215,9 +215,12 @@ def test_infinite_authority_gone_before_its_block_trigger_still_rewards_the_crea
 
     game.sacrifice_permanent(aura)
     resolve_stack(game)
-    while game.current_turn_phase == "combat":
+    for _ in range(10):  # bounded: a combat that never ends is a failure, not a hang
+        if game.current_turn_phase != "combat":
+            break
         game.advance_combat_phase()
         resolve_stack(game)
+    assert game.current_turn_phase != "combat", game.log
     assert not game.is_on_battlefield(wall), game.log
     game.resolve_end_step(0)
     resolve_stack(game)

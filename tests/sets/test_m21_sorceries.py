@@ -382,9 +382,16 @@ def test_the_preparation_happens_even_when_the_second_slot_names_nobody(set_pool
 
 
 def test_the_second_slot_refuses_a_creature_its_own_filter_excludes(set_pool):
-    """Per-slot filters are enforced at resolution, not only in the picker:
-    "target creature you **don't** control" cannot be answered with one of the
-    caster's own."""
+    """Per-slot filters are enforced at both ends: "target creature you
+    **don't** control" cannot be answered with one of the caster's own.
+
+    At the announcement since W2G2 — the role's spec now carries the seat test
+    (``opponent_only``), so CR 601.2c refuses the cast outright, with the card
+    still in hand. And at resolution, for a creature that came under the
+    caster's control *after* it was named: that slot is illegal (CR 608.2b),
+    the other is not, so the counter lands and nothing is bitten."""
+    from engine.control import change_control
+
     pool = set_pool("M21")
     mine = Permanent(card=pool["Alpine Watchdog"])
     also_mine = Permanent(card=pool["Concordia Pegasus"])
@@ -395,14 +402,26 @@ def test_the_second_slot_refuses_a_creature_its_own_filter_excludes(set_pool):
     game = Game(players=[p1, PlayerState(name="P2")])
     game.enforce_mana_costs = False
 
-    game.queue_from_hand(
+    refused = game.queue_from_hand(
         0, "Hunter's Edge", target_player_index=0, target_permanent_index=[0, 1],
         target_permanent_ids=[mine.permanent_id, also_mine.permanent_id],
     )
+    assert not refused.supported and not game.stack, refused.details
+    assert [card.name for card in p1.hand] == ["Hunter's Edge"]
+
+    theirs = Permanent(card=pool["Concordia Pegasus"])
+    game.players[1].battlefield.append(theirs)
+    game._sync_control()
+    queued = game.queue_from_hand(
+        0, "Hunter's Edge", target_permanent_ids=[mine.permanent_id, theirs.permanent_id],
+    )
+    assert queued.supported, queued.details
+    change_control(theirs, 0, source="test")
+    game._sync_control()
     game._settle()
 
     assert mine.metadata["plus_counters"] == 1, "the counter still lands"
-    assert also_mine.damage_marked == 0, "but nothing is bitten"
+    assert theirs.damage_marked == 0, "but nothing is bitten"
 
 
 # --- The several-cards round: "up to two target" cards in a graveyard --------
