@@ -212,4 +212,69 @@ def test_w1g5_heightened_awareness_discards_hand_then_draws_extra(set_pool):
     _w1g5_whole_turn(game, 1)
     _w1g5_whole_turn(game, 0)
     assert [c.name for c in me.hand] == ["Plains", "Plains"]
+
+
+def _w1g5_terrain_on_a_forest(set_pool):
+    """A Forest seat 0 has controlled since the turn began, enchanted by Living
+    Terrain cast through the real cast path. W1G5's own."""
+    lea = set_pool("LEA")
+    forest = _W1G5Permanent(card=lea["Forest"])
+    me = _W1G5PlayerState(
+        name="W1G5-A", battlefield=[forest],
+        hand=[set_pool("PCY")["Living Terrain"], lea["Disenchant"]],
+    )
+    them = _W1G5PlayerState(name="W1G5-B")
+    game = _W1G5Game(players=[me, them])
+    game.enforce_mana_costs = False
+    forest.metadata["summoning_sickness_turn"] = -99
+    game.start_turn(0)
+    game._close_current_priority_step()
+    spec = game.cast_target_spec(0, set_pool("PCY")["Living Terrain"])
+    assert [t["name"] for t in spec["valid_targets"]] == ["Forest"]
+    assert game.cast_from_hand(
+        0, "Living Terrain", target_player_index=0, target_permanent_index=0
+    ).supported
+    _w1g5_resolve_stack(game)
+    return game, me, them, forest
+
+
+def test_w1g5_living_terrain_makes_a_five_six_green_treefolk_land(set_pool):
+    """"Enchanted land is a 5/6 green Treefolk creature that's still a land."
+
+    CR 613 layers 4, 5 and 7b off the Aura's own text: the Forest is a land, a
+    Forest, a creature and a Treefolk, green, 5/6 — and it attacks for 5 (it has
+    been under its controller's control since the turn began, CR 302.6).
+    """
+    game, _me, them, forest = _w1g5_terrain_on_a_forest(set_pool)
+    assert forest.is_creature and forest.has_type("land")
+    assert forest.has_type("forest") and forest.has_type("treefolk")
+    assert forest.effective_colors == {"G"}
+    assert (forest.effective_power, forest.effective_toughness) == (5, 6)
+
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [0])[0]
+    for _ in range(6):
+        if game.current_step == "postcombat_main":
+            break
+        game.advance_combat_phase()
+        _w1g5_resolve_stack(game)
+    assert them.life == 15
+
+
+def test_w1g5_living_terrain_ends_with_the_aura(set_pool):
+    """Removal is the Aura ceasing to be attached: Disenchant on Living Terrain
+    leaves a plain colourless Forest, with no remembered body to undo."""
+    game, me, _them, forest = _w1g5_terrain_on_a_forest(set_pool)
+    (terrain,) = [p for p in game.controlled_by(0) if p.card.name == "Living Terrain"]
+    assert game.cast_from_hand(
+        0, "Disenchant", target_player_index=0,
+        target_permanent_ids=[terrain.permanent_id],
+    ).supported
+    _w1g5_resolve_stack(game)
+
+    assert "Living Terrain" in [c.name for c in me.graveyard]
+    assert not forest.is_creature and forest.has_type("land")
+    assert not forest.has_type("treefolk")
+    assert forest.effective_colors == set()
 # end of the W1G5 enchantments block

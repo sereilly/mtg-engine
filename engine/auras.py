@@ -2712,6 +2712,60 @@ def aura_animates_artifact(oracle_text: str) -> bool:
     )
 
 
+#: "Enchanted land is a 5/6 green Treefolk creature that's still a land."
+#: (Living Terrain.) Animate Artifact's shape with the body printed rather than
+#: computed: layer 4 adds the creature type and the printed creature types
+#: (CR 205.1b's "still a land" is the *addition* — nothing is replaced), layer 5
+#: sets the printed colours (CR 105.3) and layer 7b sets the printed P/T. All
+#: three are derived from the Aura's text on every recompute, so the land is a
+#: land again the moment the Aura leaves.
+#:
+#: The colour run and the creature types are captured loosely and *checked* by
+#: :func:`aura_land_animation` against the vocabulary, so a word that is neither
+#: a colour nor a creature type refuses the line instead of being dropped.
+_ATTACHED_LAND_ANIMATION = re.compile(
+    r"^enchanted land is an? (?P<power>\d+)/(?P<toughness>\d+)"
+    r"(?P<words>(?: [a-z][a-z'-]*)*?) creature that's still a land$"
+)
+
+
+def aura_land_animation(oracle_text: str) -> dict | None:
+    """The body an Aura makes its land, or None.
+
+    ``{"power", "toughness", "colors", "subtypes"}`` — colours as symbols, the
+    creature types as the vocabulary spells them. One reader for the support
+    gate (through :func:`aura_continuous_claim`) and for the three layers in
+    ``layer_bridge`` that apply it, which is this file's standing rule.
+
+    Colours come first and creature types after them, which is the order the
+    templating prints a body in (the same order ``effects/types.py`` reads
+    Quirion Druid's "2/2 green creature" in); a word out of place, or a word
+    that is neither, answers None.
+    """
+    from .grammar.vocabulary import COLOR_WORDS, CREATURE_TYPES
+
+    for raw_line in (oracle_text or "").splitlines():
+        match = _ATTACHED_LAND_ANIMATION.match(_line_text(raw_line))
+        if match is None:
+            continue
+        colors: list[str] = []
+        subtypes: list[str] = []
+        for word in match.group("words").split():
+            if word in COLOR_WORDS and not subtypes:
+                colors.append(COLOR_WORDS[word])
+            elif word in CREATURE_TYPES:
+                subtypes.append(word)
+            else:
+                return None
+        return {
+            "power": int(match.group("power")),
+            "toughness": int(match.group("toughness")),
+            "colors": tuple(colors),
+            "subtypes": tuple(subtypes),
+        }
+    return None
+
+
 #: "**You control** enchanted creature." (Control Magic, Dominating Licid;
 #: Steal Artifact prints the same sentence one noun over.) CR 613 layer 2,
 #: derived from the attachment on every state-based pass rather than performed
@@ -2932,6 +2986,8 @@ def aura_continuous_claim(line: str) -> str | None:
         return "control change (layer 2) — auras.aura_grants_control"
     if aura_animates_artifact(normalized):
         return "artifact animation (layers 4 and 7b) — auras.animating_auras"
+    if aura_land_animation(normalized) is not None:
+        return "land animation (layers 4, 5 and 7b) — auras.aura_land_animation"
     if aura_ability_cost_reduction(normalized):
         return "activation cost reduction — auras.attached_ability_cost_reduction"
     if aura_redirects_all_damage(normalized):

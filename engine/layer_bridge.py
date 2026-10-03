@@ -27,6 +27,7 @@ from .auras import (
     aura_conditional_keyword_grants,
     aura_keyword_grants,
     aura_keyword_removals,
+    aura_land_animation,
     aura_pt_grant_per_counter,
     aura_static_pt_grant,
     aura_card_type_grants,
@@ -446,6 +447,18 @@ def collect_pt_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
                 label=f"animated:{aura.card.name}",
             )
         )
+    # 7b — "Enchanted land is a **5/6** green Treefolk creature that's still a
+    # land." (Living Terrain.) The printed body's size, beside Animate
+    # Artifact's computed one and stamped the same way; the type and colour
+    # halves are layers 4 and 5 below.
+    for aura in auras_attached_to(perm):
+        body = aura_land_animation(aura.effective_card.oracle_text)
+        if body is not None:
+            effects.append(set_pt(
+                only, body["power"], body["toughness"],
+                timestamp=int(aura.metadata.get("aura_timestamp", _DERIVED_TIMESTAMP)),
+                label=f"animated:{aura.card.name}",
+            ))
 
     # The P/T half of a gained-type record that says so ("…with power and
     # toughness each equal to its mana value", Xenic Poltergeist). Layer 7b,
@@ -903,6 +916,23 @@ def collect_type_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
                 label=f"aura:{aura.card.name}",
             )
         )
+    # "Enchanted land is a 5/6 green **Treefolk creature** that's still a land."
+    # (Living Terrain.) CR 205.1b: "still a land" is the addition — the creature
+    # type and the printed creature types join the land's own, nothing is
+    # replaced, and the Aura leaving simply stops contributing them.
+    for aura in auras_attached_to(perm):
+        body = aura_land_animation(aura.effective_card.oracle_text)
+        if body is None:
+            continue
+        effects.append(
+            add_types(
+                only,
+                card_types=["creature"],
+                subtypes=list(body["subtypes"]),
+                timestamp=int(aura.metadata.get("aura_timestamp", 0)),
+                label=f"animated:{aura.card.name}",
+            )
+        )
 
     # CR 305.7: setting a land's subtype *replaces* its old ones, so two of
     # these on one land do not commute — the newer contribution is what the land
@@ -1073,6 +1103,11 @@ def collect_color_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
             for word in aura_color_grants(aura.effective_card.oracle_text)
             if word in COLOR_WORDS
         ]
+        # "…a 5/6 **green** Treefolk creature…" (Living Terrain.) The body's
+        # colour, already a symbol, on the same stamp as the rest of the Aura.
+        body = aura_land_animation(aura.effective_card.oracle_text)
+        if body is not None:
+            granted.extend(body["colors"])
         if not granted:
             continue
         effects.append(
