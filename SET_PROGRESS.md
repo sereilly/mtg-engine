@@ -38,7 +38,7 @@ Do not edit by hand — re-run the script instead.
 | 24 | Urza's Destiny | UDS | 1999-06-07 | 143 | 142 | Complete (143/143 supported) |
 | 25 | Mercadian Masques | MMQ | 1999-10-04 | 335 | 309 | Complete (335/335 supported) |
 | 26 | Nemesis | NEM | 2000-02-14 | 143 | 143 | Complete (143/143 supported) |
-| 27 | Prophecy | PCY | 2000-06-05 | 143 | 143 | Measured (142/143 supported, not shipped) |
+| 27 | Prophecy | PCY | 2000-06-05 | 143 | 143 | Measured (143/143 supported, not shipped) |
 | 28 | Invasion | INV | 2000-10-02 | 335 | 310 | Not Implemented |
 | 29 | Planeshift | PLS | 2001-02-05 | 143 | 143 | Not Implemented |
 | 30 | Seventh Edition | 7ED | 2001-04-11 | 335 | 0 | Not Implemented |

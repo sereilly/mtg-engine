@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**412 / 618 tracked rules covered (66%)** — 2586 tests, 0 unannotated.
+**412 / 618 tracked rules covered (66%)** — 2591 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -118,7 +118,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **101.1** Whenever a card’s text directly contradicts these rules, the card takes precedence. The card over... *(1 tests)*
 - [x] **101.2** When a rule or effect allows or directs something to happen, and another effect states that it ca... *(2 tests)*
 - [x] **101.3** Any part of an instruction that’s impossible to perform is ignored. (In many cases the card will ... *(1 tests)*
-- [x] **101.4** If multiple players would make choices and/or take actions at the same time, the active player (t... *(2 tests)*
+- [x] **101.4** If multiple players would make choices and/or take actions at the same time, the active player (t... *(3 tests)*
 
 ### 102. Players
 
@@ -446,7 +446,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **304.2** When an instant spell resolves, the actions stated in its rules text are followed. Then it’s put ...
 - [ ] **304.3** Instant subtypes are always a single word and are listed after a long dash: “Instant — Arcane.” E...
 - [ ] **304.4** Instants can’t enter the battlefield. If an instant would enter the battlefield, it remains in it...
-- [x] **304.5** If text states that a player may do something “any time they could cast an instant” or “only as a... *(1 tests)*
+- [x] **304.5** If text states that a player may do something “any time they could cast an instant” or “only as a... *(2 tests)*
 
 ### 305. Lands
 
@@ -666,7 +666,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(266 tests, subrules abcdefghi)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(267 tests, subrules abcdefghi)*
 - [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(26 tests, subrules a)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [x] **601.5** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*
@@ -679,7 +679,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **602.2** To activate an ability is to put it onto the stack and pay its costs, so that it will eventually ... *(47 tests, subrules ab)*
 - [x] **602.3** Some abilities specify that one of their controller’s opponents does something the controller wou... *(3 tests)*
 - [ ] **602.4** Activating an ability that alters costs won’t affect spells and abilities that are already on the...
-- [x] **602.5** A player can’t begin to activate an ability that’s prohibited from being activated. *(41 tests, subrules ace)*
+- [x] **602.5** A player can’t begin to activate an ability that’s prohibited from being activated. *(42 tests, subrules ace)*
 
 ### 603. Handling Triggered Abilities
 
@@ -708,9 +708,9 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 605. Mana Abilities
 
-- [x] **605.1** Some activated abilities and some triggered abilities are mana abilities, which are subject to sp... *(17 tests, subrules ab)*
+- [x] **605.1** Some activated abilities and some triggered abilities are mana abilities, which are subject to sp... *(18 tests, subrules ab)*
 - [x] **605.2** A mana ability remains a mana ability even if the game state doesn’t allow it to produce mana. *(1 tests)*
-- [x] **605.3** Activating an activated mana ability follows the rules for activating any other activated ability... *(17 tests, subrules abc)*
+- [x] **605.3** Activating an activated mana ability follows the rules for activating any other activated ability... *(20 tests, subrules abc)*
 - [x] **605.4** Triggered mana abilities follow all the rules for other triggered abilities (see rule 603, “Handl... *(6 tests, subrules a)*
 - [x] **605.5** Abilities that don’t meet the criteria specified in rules 605.1a–b and spells aren’t mana abilities. *(4 tests, subrules ab)*
 
@@ -734,7 +734,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 608. Resolving Spells and Abilities
 
 - [x] **608.1** Each time all players pass in succession, the spell or ability on top of the stack resolves. (See... *(1 tests)*
-- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(113 tests, subrules bcdhmn)*
+- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(115 tests, subrules bcdhmn)*
 - [x] **608.3** If the object that’s resolving is a permanent spell, its resolution may involve several steps. Th... *(3 tests, subrules ab)*
 
 ### 609. Effects
