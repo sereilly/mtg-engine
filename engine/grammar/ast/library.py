@@ -65,6 +65,10 @@ class SearchPlayerLibrary:
     filter: ObjectFilter
     to: Zone
     under_control_of: PlayerRef | None = None
+    #: "…for **up to** seven cards" (Denying Wind): a ceiling the searcher may
+    #: stop short of, where a bare count must be met as far as possible
+    #: (CR 701.23d).
+    up_to: bool = False
 
 @dataclass(frozen=True)
 class SeparateLibraryTopIntoPiles:

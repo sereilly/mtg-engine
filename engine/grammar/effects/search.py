@@ -428,6 +428,9 @@ def _parse_search_other_library(stream: TokenStream) -> ast.Statement:
         return stripped
     stream.expect_word("library")
     stream.expect_word("for")
+    # "…for **up to seven** cards" (Denying Wind): a ceiling, not CR 701.23d's
+    # find-that-many floor.
+    up_to = bool(stream.accept_phrase("up", "to"))
     count = parse_amount(stream)
     if isinstance(count, ast.Fixed) and count.value < 1:
         raise stream.error("expected how many cards the search may find")
@@ -503,7 +506,11 @@ def _parse_search_other_library(stream: TokenStream) -> ast.Statement:
         if shuffler.kind not in ("that_player", player.kind):
             raise stream.error("the searched player is the one who shuffles")
         stream.expect_word("shuffles")
-        return ast.SearchPlayerLibrary(player, count, filt, to, under_control_of)
+        return ast.SearchPlayerLibrary(
+            player, count, filt, to, under_control_of, up_to=up_to
+        )
+    if up_to:
+        raise stream.error("only an exiling search reads 'up to' here")
     # "**That player puts those cards into their hand, then shuffles.**"
     holder = parse_player_ref(stream)
     if holder is None:

@@ -75,3 +75,42 @@ def test_w1g6_elephant_resurgence_sizes_each_token_by_its_controllers_graveyard(
     game._refresh_dynamic_creatures()
     assert (theirs.effective_power, theirs.effective_toughness) == (2, 2)
     assert mine.effective_power == 2
+
+
+def _w1g6_denying_wind_table(set_pool):
+    library = [_w1g6_mk_card(f"Card {n}", "Sorcery") for n in range(10)]
+    game = _W1G6Game(players=[
+        _W1G6PlayerState(name="P0", hand=[set_pool("PCY")["Denying Wind"]]),
+        _W1G6PlayerState(name="P1", library=list(library)),
+    ])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    game._close_current_priority_step()
+    assert game.cast_from_hand(0, "Denying Wind", target_player_index=1).supported
+    return game  # _w1g6_denying_wind_table
+
+
+def test_w1g6_denying_wind_exiles_up_to_seven_from_the_targets_library(set_pool):
+    """"Search target player's library for up to seven cards and exile them.
+    Then that player shuffles." The caster searches the *target's* library and
+    may stop short of seven: three picks are a legal answer."""
+    game = _w1g6_denying_wind_table(set_pool)
+    game.interactive_seats = {0}
+    _w1g6_resolve(game)
+    assert [c.kind for c in game.pending_choices] == ["search_library"]
+    assert game.pending_choices[0].data.get("count") == 7
+    assert game.confirm_search_library_picks(
+        0, [{"zone": "library", "index": i} for i in (0, 4, 9)]
+    )
+    _w1g6_resolve(game)
+    assert sorted(c.name for c in game.players[1].exile) == ["Card 0", "Card 4", "Card 9"]
+    assert len(game.players[1].library) == 7
+    assert not game.players[0].exile and not game.players[0].library
+
+
+def test_w1g6_denying_wind_default_takes_at_most_seven(set_pool):
+    game = _w1g6_denying_wind_table(set_pool)
+    _w1g6_resolve(game)
+    exiled = len(game.players[1].exile)
+    assert 0 <= exiled <= 7
+    assert exiled + len(game.players[1].library) == 10
