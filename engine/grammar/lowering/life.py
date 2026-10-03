@@ -905,7 +905,20 @@ def _lower_set_life_total(node: ast.SetLifeTotal) -> tuple[OracleInstruction, ..
     CR 119.5 makes this a gain or a loss of the difference, so the handler works
     out the direction; the payload carries the printed *result*, which is all
     the card says.
+
+    "**Target player's** life total becomes 20." (Blessed Wind.) A seat chosen
+    as the spell is cast (CR 601.2c), on the ``"target"`` recipient key and the
+    description every other player picker in this module reads, so "target
+    opponent" would narrow the way Mirror Universe's exchange does. Not a row in
+    ``_seats``' ante table: that table is the ante handler's vocabulary too, and
+    no ante sentence names a chosen seat.
     """
+    if node.player.kind in ("target_player", "target_opponent"):
+        payload: dict[str, object] = {
+            "recipient": "target", "amount": _amount_payload(node.amount),
+        }
+        _describe_targets(payload, node.player)
+        return (OracleInstruction("set_life_total", "", payload),)
     return (
         OracleInstruction(
             "set_life_total", "",

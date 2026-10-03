@@ -582,6 +582,16 @@ def _token_shape(tokens) -> tuple[str, ...]:
     return tuple(token.text.lower() for token in kept)
 
 
+def _quotes_bands_with_other(stream: TokenStream) -> bool:
+    """Whether the quote at the cursor opens CR 702.22b's quoted keyword.
+    Consumes nothing."""
+    mark = stream.mark()
+    stream.advance()
+    found = stream.accept_phrase("bands", "with", "other")
+    stream.reset(mark)
+    return found
+
+
 def _parse_loses(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
     """``<subject> loses <the game|keywords|life>``."""
     stream.expect_word("loses", "lose")
@@ -593,6 +603,21 @@ def _parse_loses(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
         player = subject if isinstance(subject, ast.PlayerRef) else ast.PlayerRef("you")
         return ast.LoseGame(player)
     stream.reset(mark)
+    # "…this creature loses "Prevent all damage that would be dealt to this
+    # creature."" (Glittering Lion.) The gain branch's quoted reading with the
+    # verb turned round, through the same reader of the quoted text — CR
+    # 613.1f's removal of a whole printed ability rather than of a word.
+    #
+    # Not for CR 702.22b's "bands with other", the one *keyword* Magic prints
+    # in quotes (Shelkin Brownie's "loses all "bands with other" abilities"):
+    # that is the keyword list's to read, and taking it here as a printed line
+    # would strip a sentence no permanent says. The deletion probe found the
+    # overlap — without "all" the quote opened right after the verb.
+    if stream.at_kind(QUOTE) and not _quotes_bands_with_other(stream):
+        abilities, self_name = _parse_quoted_abilities(stream)
+        return ast.LoseAbilityText(
+            subject, abilities, _parse_duration(stream), self_name=self_name
+        )
     # "loses **half their life**" (Peer into the Abyss). Read here rather than in
     # `parse_amount`, because the trailing "life" is the *production's* word
     # everywhere else ("loses 3 life") and here it belongs to the quantity —

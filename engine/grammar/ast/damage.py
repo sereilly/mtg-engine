@@ -334,6 +334,12 @@ class RedirectDamage:
     #: next **time**" is one whole instance whatever its size, and this is a
     #: number of points however many instances it takes.
     amount: Amount | None = None
+    #: "…that creature deals that damage **to itself** instead." (Shield
+    #: Dancer.) The new recipient is the moved damage's own source, which no
+    #: recipient node can name: the reflexive is bound to the sentence's
+    #: subject, and ``parse_recipient`` reads a bare "itself" as the ability's
+    #: own permanent (Psionic Entity). ``new_recipient`` is None beside it.
+    to_damage_source: bool = False
 
 
 @dataclass(frozen=True)

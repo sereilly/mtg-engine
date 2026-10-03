@@ -468,6 +468,9 @@ ACTIVATED_LABELS: dict[str, str] = {
     "change_land_type_until": "activated_characteristic",
     "animate_target_until_eot": "activated_characteristic",
     "grant_self_ability_text": "activated_pump",
+    # Its negative twin (Glittering Lion's "…loses "Prevent all damage …""),
+    # in the bucket `remove_self_keyword` already shares with the grant.
+    "remove_self_ability_text": "activated_pump",
     "return_self_from_graveyard": "activated_return",
     "return_source_card_to_owners_hand": "activated_return",
     # "{W}: Return enchanted creature to its owner's hand" (Sun Clasp). The

@@ -31,6 +31,12 @@ verb. The seam is the parse side's own: one production reads both quantities,
 and ``_lower_redirect_damage`` already handed a counted node down before any
 branch here could read it. The blanket redirects off an announced target
 (Sivvi's Valor, Oracle's Attendants) arrived in the same round and stayed.
+
+**The named-source redirects left at Prophecy's first wave**, for
+``_instance_redirects`` — CR 615.8's "the next time <this creature / target
+attacking creature> would deal damage …", the shapes the parse side reads in
+``effects/damage_instances._finish_named_source_effect``. Soltari Guerrillas'
+lowering moved byte-identically and Shield Dancer's arrived there.
 """
 
 from ...oracle_types import OracleInstruction
@@ -45,6 +51,11 @@ from ._common import (_REST_OF_TURN, _describe_targets,
 # counted half of the one production, a floor this module hands the sentence
 # down to the moment the printed quantity is a number.
 from ._counted_redirects import _lower_next_damage_redirect
+# "The next time **this creature** / **target attacking creature** would deal
+# damage …" (Soltari Guerrillas, Shield Dancer): CR 615.8's instance named by
+# the sentence, a floor this module hands those two shapes down to.
+from ._instance_redirects import (_lower_named_source_redirect,
+                                  _lower_redirect_onto_dealer)
 
 
 #: The key a Nova Pentacle-shaped redirect writes its opponent's pick under, and
@@ -93,6 +104,12 @@ def _lower_redirect_damage(node: ast.RedirectDamage) -> tuple[OracleInstruction,
         return _lower_next_damage_redirect(node)
     if node.optional:
         return _lower_optional_class_redirect(node)
+    if node.to_damage_source:
+        # "…that creature deals that damage **to itself** instead." (Shield
+        # Dancer.) The taker is the moved damage's own source, which no branch
+        # below can name — read first, because every one of them reads
+        # ``new_recipient`` and this sentence has none.
+        return _lower_redirect_onto_dealer(node)
     if node.to is None:
         # "All damage that would be dealt this turn **by target sorcery spell**
         # is dealt to that spell's controller instead." (Reverberation.) The one
@@ -199,6 +216,20 @@ def _lower_redirect_damage(node: ast.RedirectDamage) -> tuple[OracleInstruction,
                 "a redirect cannot test " + ", ".join(sorted(untestable)),
                 node=node,
             )
+    elif (
+        isinstance(recipient, ast.PlayerRef)
+        and recipient.kind == "controller"
+        and not node.from_chosen_source
+        and isinstance(node.dealt_by, ast.TargetSpec)
+        and node.dealt_by.quantifier == "target"
+    ):
+        # "…by target unblocked creature is dealt to **its controller**
+        # instead." (Mirror Strike.) "Its" is the announced source's, and its
+        # controller is CR 109.5's live answer when the damage would be dealt —
+        # Reflect Damage's ``to_source_controller`` derivation, read off the
+        # damage's own source rather than frozen at resolution, so a creature
+        # that changes hands sends the damage to whoever controls it then.
+        payload["new_recipient"] = "source_controller"
     else:
         raise LoweringError(
             "no handler resolves this redirect's new recipient", node=node
@@ -217,13 +248,22 @@ def _lower_redirect_damage(node: ast.RedirectDamage) -> tuple[OracleInstruction,
     ):
         return _lower_source_class_redirect(node, spec)
     if node.combat_only:
-        # The printed word is honoured by exactly one lowering. Every record
-        # below moves damage of any kind, so a "combat" that reached one would
-        # be dropped — and a redirect wider than the card prints is the silent
-        # direction.
-        raise LoweringError(
-            "only the source-class redirect is scoped to combat damage", node=node
-        )
+        # The printed word is honoured by the record's own ``combat_only`` flag
+        # (``damage_redirects.applicable_redirect`` reads it off the event), and
+        # the one arm below that carries it onto the record is the targeted
+        # source's: "All **combat** damage that would be dealt to you this turn
+        # by target unblocked creature…" (Mirror Strike). The chosen-source arm
+        # does not hand it on, so it still refuses there — a redirect wider
+        # than the card prints is the silent direction.
+        if node.from_chosen_source or not (
+            isinstance(spec, ast.TargetSpec) and spec.quantifier == "target"
+        ):
+            raise LoweringError(
+                "only a source-class or a targeted-source redirect is scoped to "
+                "combat damage",
+                node=node,
+            )
+        payload["combat_only"] = True
     if node.from_chosen_source:
         if node.dealt_by is not None:
             raise LoweringError(
@@ -263,19 +303,6 @@ def _lower_redirect_damage(node: ast.RedirectDamage) -> tuple[OracleInstruction,
             ),
         ) + instructions
     return instructions
-
-
-#: Which seats a named-source redirect watches, by the printed seat word.
-#: "an opponent" and "each opponent" are one record — the sentence describes the
-#: damage event rather than choosing a seat (nothing is targeted), so the record
-#: has to exist on every seat the event could land on before it happens. A word
-#: outside this table refuses: a redirect armed on the wrong seats is a card
-#: that either does nothing or covers damage it never mentioned.
-_REDIRECT_PROTECTED_SEATS: dict[str, str] = {
-    "you": "you",
-    "opponent": "opponents",
-    "each_opponent": "opponents",
-}
 
 
 def _lower_redirect_off_target(
@@ -556,100 +583,6 @@ def _lower_chosen_source_redirect_between_targets(
         OracleInstruction(
             "redirect_chosen_source_damage_between_targets_until_eot", "", payload
         ),
-    )
-
-
-def _lower_named_source_redirect(
-    node: ast.RedirectDamage,
-) -> tuple[OracleInstruction, ...]:
-    """Soltari Guerrillas: "{0}: The next time this creature would deal combat
-    damage to an opponent this turn, it deals that damage to target creature
-    instead."
-
-    The third way a redirect can name the source whose damage moves, beside the
-    targeted one (Shimian Night Stalker) and the chosen one (Nova Pentacle): it
-    is the ability's **own permanent**, so nothing is picked for it and the
-    handler already holds it. Its own kind for that reason and not as payload,
-    exactly as those two are two kinds — ``engine/targeting.py`` keys the picker
-    on the kind, and this one raises a picker for the *new recipient* where
-    theirs raise one for the source or none at all.
-
-    What is new underneath is the **protected** seat. Every other recorded
-    redirect is armed on its controller (``to_self``); this one watches the
-    seats the sentence describes, which are the caster's opponents, and the
-    record is one object shared between them — CR 615.8's "the next **time**" is
-    one instance of one replacement effect, so a per-seat copy would fire once
-    per opponent.
-
-    Six refusals, each a way the sentence could otherwise mean more than it
-    says:
-
-    * the source must carry no narrowing beyond naming itself. A restated
-      adjective has nothing left to narrow and would be dropped.
-    * the protected seats must be a word this table reads. A record armed on
-      the wrong seats covers damage the card never mentioned — or none.
-    * the duration must be this turn, because that is what the sweeps give it.
-    * the new recipient must be one target the **activating** player picks.
-      Nova Pentacle's "of an opponent's choice" is a different prompt on a
-      different kind, and several targets would be collected and dropped.
-    * every key of that noun phrase must be one ``subject_matches`` can test,
-      because the picker and the handler both ask it.
-    * a chosen source alongside a named one names the source twice.
-    """
-    if node.from_chosen_source:
-        raise LoweringError(
-            "a redirect names its source once: either a chosen source or the "
-            "ability's own permanent",
-            node=node,
-        )
-    if _restrictions_beyond(
-        node.dealt_by.filter, frozenset({"card_types", "is_source"})
-    ):
-        raise LoweringError(
-            "the ability's own source carries no narrowing the record could "
-            "honour",
-            node=node,
-        )
-    protects = _REDIRECT_PROTECTED_SEATS.get(getattr(node.to, "kind", ""))
-    if protects is None:
-        raise LoweringError(
-            "a named-source redirect watches its controller or their opponents",
-            node=node,
-        )
-    if node.duration.kind not in _REST_OF_TURN:
-        raise LoweringError("a recorded redirect lasts exactly this turn", node=node)
-    if node.chooser is not None:
-        raise LoweringError(
-            "the activating player picks a named-source redirect's new "
-            "recipient",
-            node=node,
-        )
-    recipient = node.new_recipient
-    if (
-        not isinstance(recipient, ast.TargetSpec)
-        or recipient.quantifier != "target"
-        or _names_several_targets(recipient)
-    ):
-        raise LoweringError(
-            "no handler resolves this redirect's new recipient", node=node
-        )
-    described = _filter_payload(recipient.filter)
-    untestable = untestable_filter_keys(described)
-    if untestable:
-        raise LoweringError(
-            "a redirect cannot test " + ", ".join(sorted(untestable)), node=node
-        )
-    payload: dict[str, object] = {
-        "protects": protects,
-        "combat_only": bool(node.combat_only),
-    }
-    if node.one_shot:
-        # "**The next time** …" — one instance. Absent is every instance for
-        # the duration, which is what ``uses=None`` already means on the record.
-        payload["uses"] = 1
-    _describe_targets(payload, recipient)
-    return (
-        OracleInstruction("redirect_source_damage_to_target_until_eot", "", payload),
     )
 
 

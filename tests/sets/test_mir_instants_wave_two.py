@@ -484,3 +484,51 @@ def test_w4g1_the_opponent_cast_window_reads_its_noun_phrase(set_pool):
     assert cast_opponent_cast_line(
         "cast this spell only if an opponent cast two creature spells this turn"
     ) is None
+
+
+# --- PCY W1G5: an unblocked target's cast picker ---
+
+from engine import Game as _PcyW1G5Game, PlayerState as _PcyW1G5PlayerState  # noqa: E402
+from engine.models import Permanent as _PcyW1G5Permanent  # noqa: E402
+
+
+def test_pcy_w1g5_dazzling_beauty_cannot_be_cast_at_a_blocked_attacker(set_pool):
+    """"Target unblocked attacking creature becomes blocked."
+
+    "Unblocked" lowered onto the target filter all along, and an *activation*
+    honoured it because the enumerator also asks the instruction's own filter —
+    but a cast asks only the spec's narrowing flags, and the flag was not
+    there. So the picker offered the blocked Hill Giant and the announcement
+    gate admitted it (found by Prophecy's Mirror Strike, which prints the same
+    word). CR 509.1h: a creature a blocker was declared for is blocked.
+    """
+    lea = set_pool("LEA")
+    wall, bears, giant = (
+        _PcyW1G5Permanent(card=lea[n])
+        for n in ("Wall of Stone", "Grizzly Bears", "Hill Giant")
+    )
+    beauty = set_pool("MIR")["Dazzling Beauty"]
+    me = _PcyW1G5PlayerState(name="A", battlefield=[wall], hand=[beauty])
+    game = _PcyW1G5Game(
+        players=[me, _PcyW1G5PlayerState(name="B", battlefield=[bears, giant])]
+    )
+    game.enforce_mana_costs = False
+    for perm in (wall, bears, giant):
+        perm.metadata["summoning_sickness_turn"] = -99
+    game.start_turn(1)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(1, [0, 1])[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(0, {0: 1})[0]
+
+    spec = game.cast_target_spec(0, beauty)
+    assert [t["name"] for t in spec["valid_targets"]] == ["Grizzly Bears"]
+    refused = game.cast_from_hand(
+        0, "Dazzling Beauty", target_player_index=1,
+        target_permanent_ids=[giant.permanent_id],
+    )
+    assert not refused.supported
+    assert [c.name for c in me.hand] == ["Dazzling Beauty"]
+# end of the PCY W1G5 block

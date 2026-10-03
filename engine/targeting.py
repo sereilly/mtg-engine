@@ -530,6 +530,14 @@ def _narrowing_flags(source: dict) -> dict:
     ):
         if source.get(key):
             flags[key] = True
+    # "…by **target unblocked creature**" (Mirror Strike, Gossamer Chains). The
+    # filter's ``unblocked_only`` is the picker's ``unblocked_attacker`` —
+    # Forcefield's flag, which the enumerator already applies. An activation
+    # also asks the instruction's own filter, so Gossamer Chains was already
+    # honoured; a *cast* asks only these flags, and without this one Mirror
+    # Strike offered (and its announcement gate admitted) a blocked creature.
+    if source.get("unblocked_only"):
+        flags["unblocked_attacker"] = True
     # Carried by value, not flattened to a flag: "attacking or blocking" and
     # "tapped or blocking" are the same key with different words in it, and a
     # bare True would tell the picker a union applies without saying which one.
@@ -1428,6 +1436,12 @@ def _graveyard_return_spec(payload: dict) -> dict:
     it.
     """
     spec: dict = {"kind": "graveyard_creature", "own_graveyard_only": True}
+    # "…**from a graveyard** to its owner's hand" (Endbringer's Revel). The
+    # handler reads the announced seat's pile when the payload says so, so the
+    # scope is the payload's answer — :func:`_reanimation_spec`'s reading of
+    # the same key one destination over.
+    if payload.get("any_graveyard"):
+        del spec["own_graveyard_only"]
     # "Up to two target creature cards" (Sanguine Indulgence). This kind settles
     # its own spec, so the generic `targets` reading in `_from_instruction` never
     # runs for it - the maximum has to be lifted here, or the picker collects one
@@ -2222,6 +2236,10 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     "target_gains_life": _life_gain_spec,
     "target_loses_life": _player_recipient_spec,
     "mill_target_player": _player_recipient_spec,
+    # "**Target player's** life total becomes 20." (Blessed Wind.) Rebirth's
+    # "that player" spells a fixed seat and so chooses nobody; only the
+    # ``"target"`` recipient raises a picker.
+    "set_life_total": _player_recipient_spec,
     "grant_extra_turn": _extra_turn_spec,
     "skip_next_step": _skipped_seat_spec,
     # Moment of Silence names a seat the same way Fatigue does, so it derives

@@ -19,6 +19,7 @@ from ..cast_restrictions import clear_ignored_play_bans
 from ..keywords import (clear_granted_ability_lines,
                         clear_granted_keywords,
                         clear_removed_ability_keywords,
+                        clear_removed_ability_lines,
                         clear_all_abilities_removals)
 from ..control import end_until_eot_control_changes
 from ..handlers.board_misc import LAND_TYPE_UNTIL_EOT
@@ -265,6 +266,10 @@ class CleanupStepMixin:
                 # Beside its two siblings, because a grant and a removal that
                 # share a printed duration have to end at one moment.
                 clear_removed_ability_keywords(permanent, "end_of_turn")
+                # "**Until end of turn**, this creature loses "<ability>"."
+                # (Glittering Lion.) The printed-line removal, swept with its
+                # keyword twin for the same reason.
+                clear_removed_ability_lines(permanent, "end_of_turn")
                 # "**Until end of turn**, target creature loses all
                 # abilities …" (Humble.) The fourth removal channel, swept
                 # beside the third and at the same moment: a blanket that

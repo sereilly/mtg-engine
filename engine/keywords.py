@@ -562,7 +562,10 @@ def derived_ability_lines(perm: Permanent) -> tuple[str, ...]:
     return tuple(perm.metadata.get(DERIVED_ABILITY_LINES) or ())
 
 
-def remove_ability_line(perm: Permanent, line: str) -> None:
+def remove_ability_line(
+    perm: Permanent, line: str, *,
+    duration: str | None = None, seat: int | None = None,
+) -> None:
     """Layer 6: *perm* no longer has the printed ability *line*.
 
     Matched on the normalized sentence rather than the printed one, because the
@@ -571,13 +574,55 @@ def remove_ability_line(perm: Permanent, line: str) -> None:
     normalization, shared with :func:`removed_ability_lines`, so what is
     recorded and what is dropped cannot disagree.
 
-    No duration: nothing in this pool takes an ability away for a while, and a
-    duration nothing sweeps would be a promise the engine does not keep.
+    Two shapes of entry. With no *duration* the removal is indefinite
+    (Takklemaggot, the Licids) and the entry is the bare normalized sentence,
+    exactly as it always was. "**Until end of turn**, this creature loses
+    "<line>"" (Glittering Lion) carries a duration, so its entry is a dict in
+    the durationed shape the grant channel uses, and
+    :func:`clear_removed_ability_lines` is the sweep that gives it back.
     """
     removed = perm.metadata.setdefault(REMOVED_ABILITY_LINES, [])
     normalized = normalized_ability_line(line)
-    if normalized and normalized not in removed:
-        removed.append(normalized)
+    if not normalized:
+        return
+    if duration is None:
+        if normalized not in removed:
+            removed.append(normalized)
+        return
+    _check_duration(duration, seat, GRANTED_ABILITY_DURATIONS)
+    entry: dict = {"line": normalized, "duration": duration}
+    if seat is not None:
+        entry["seat"] = seat
+    removed.append(entry)
+
+
+def _removed_line_text(entry) -> str:
+    """The normalized sentence one removal entry names, whichever shape it is."""
+    return entry["line"] if isinstance(entry, dict) else entry
+
+
+def clear_removed_ability_lines(
+    perm: Permanent, duration: str, *, seat: int | None = None
+) -> None:
+    """Give back the removed ability lines whose duration is *duration*.
+
+    The line twin of :func:`clear_removed_ability_keywords`, called beside it at
+    every duration boundary. An indefinite removal (a bare string entry) is
+    never taken by a sweep.
+    """
+    entries = perm.metadata.get(REMOVED_ABILITY_LINES)
+    if not entries:
+        return
+    remaining = [
+        entry for entry in entries
+        if not (isinstance(entry, dict) and _expires_at(entry, duration, seat))
+    ]
+    if len(remaining) == len(entries):
+        return
+    if remaining:
+        perm.metadata[REMOVED_ABILITY_LINES] = remaining
+    else:
+        perm.metadata.pop(REMOVED_ABILITY_LINES, None)
 
 
 def restore_ability_line(perm: Permanent, line: str) -> bool:
@@ -597,7 +642,9 @@ def restore_ability_line(perm: Permanent, line: str) -> bool:
     if not removed:
         return False
     normalized = normalized_ability_line(line)
-    remaining = [entry for entry in removed if entry != normalized]
+    remaining = [
+        entry for entry in removed if _removed_line_text(entry) != normalized
+    ]
     if len(remaining) == len(removed):
         return False
     if remaining:
@@ -614,7 +661,10 @@ def normalized_ability_line(line: str) -> str:
 
 def removed_ability_lines(perm: Permanent) -> tuple[str, ...]:
     """The printed ability lines an effect has taken away from *perm*."""
-    return tuple(perm.metadata.get(REMOVED_ABILITY_LINES) or ())
+    return tuple(
+        _removed_line_text(entry)
+        for entry in perm.metadata.get(REMOVED_ABILITY_LINES) or ()
+    )
 
 
 def remove_all_abilities(
@@ -733,6 +783,7 @@ __all__ = [
     "GRANTED_ABILITY_LINES", "REMOVED_ABILITY_LINES",
     "REMOVED_ABILITY_KEYWORDS",
     "remove_ability_line", "removed_ability_lines", "normalized_ability_line",
+    "clear_removed_ability_lines",
     "remove_ability_keyword", "removed_ability_keywords",
     "clear_removed_ability_keywords",
     "LINE_DERIVED_KEYWORDS", "ability_effects", "add_derived_ability_line",

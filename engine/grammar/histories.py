@@ -96,6 +96,15 @@ def accept_history_relation(stream: TokenStream, d) -> bool:
     if stream.accept_phrase("that", "attacked", "this", "turn"):
         d.attacked_this_turn = True
         return True
+    # "…deals 2 damage to each creature **dealt damage this turn**." (Inflame.)
+    # Fatal Blow's "that was dealt damage this turn" with the relative pronoun
+    # and the auxiliary left out — a reduced relative clause, one printed fact
+    # in a third spelling, so it sets Giant Shark's field and every reader of
+    # that field answers it. "This turn" is required for that field's reason:
+    # the record is kept per turn.
+    if stream.accept_phrase("dealt", "damage", "this", "turn"):
+        d.was_dealt_damage_this_turn = True
+        return True
     # "destroy each creature **that blocked or was blocked this turn**"
     # (Heat Stroke). CR 509.1a's relation with *neither* end named — the
     # sentence asks whether the creature was on either side of a block,

@@ -11,6 +11,7 @@ from ..enter_effects import (
     entry_sacrifice_requirement,
     sacrifice_any_number_on_enter,
     sacrifice_all_on_enter,
+    discards_hand_on_enter,
     CHOOSE_COLOR_AND_OPPONENT_ON_ENTER,
     chooses_color_on_enter,
     chooses_color_and_creature_type_on_enter,
@@ -863,6 +864,25 @@ class PermanentStateMixin:
                         f"{self.players[caster_index].name} sacrificed "
                         f"{perm.card.name} as {permanent.card.name} entered"
                     )
+            break
+
+        # "As this enchantment enters, **discard your hand**." (Heightened
+        # Awareness.) The row above one zone over: the whole hand, nobody
+        # chooses, performed at the entry (CR 614.1c). Each card goes through
+        # ``_discard_card`` — the seam the "discard your hand" effect uses — so a
+        # discard replacement still applies and every discard watcher sees it.
+        for raw_line in entry_lines:
+            if not discards_hand_on_enter(raw_line, permanent.effective_card.name):
+                continue
+            player = self.players[caster_index]
+            gone = list(player.hand)
+            player.hand = []
+            for card in gone:
+                self._discard_card(player, card)
+            self.log.append(
+                f"{player.name} discarded their hand ({len(gone)} card(s)) as "
+                f"{permanent.card.name} entered"
+            )
             break
 
         # "As this creature enters, exile X creature cards from your graveyard.
