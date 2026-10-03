@@ -115,7 +115,7 @@ def test_stronghold_gambit_reveals_the_cheapest_creature_card(set_pool):
 def test_stronghold_gambit_is_not_cast_holding_no_creature_card(set_pool):
     """With no creature card of its own to pick, the caster's Gambit can only
     put the *opponent's* pick onto the battlefield."""
-    from engine.ai_policy import choose_cast_action
+    from engine.ai_policy import _cast_candidate, choose_cast_action
 
     gambit = set_pool("NEM")["Stronghold Gambit"]
     rock = _mk_card(name="Plain Rock", mana_cost="{1}", type_line="Artifact")
@@ -123,10 +123,11 @@ def test_stronghold_gambit_is_not_cast_holding_no_creature_card(set_pool):
     game.enforce_mana_costs = False
     action = choose_cast_action(game, 0)
     assert action is None or action.card_name != "Stronghold Gambit"
+    assert _cast_candidate(game, 0, gambit, 0) is None
 
     game.players[0].hand.append(_creature("Small Goblin", "Goblin"))
-    action = choose_cast_action(game, 0)
-    assert action is not None
+    candidate = _cast_candidate(game, 0, gambit, 0)
+    assert candidate is not None and candidate.card_name == "Stronghold Gambit"
 
 
 def test_belbes_portal_is_not_activated_with_no_card_of_the_type_in_hand(set_pool):
