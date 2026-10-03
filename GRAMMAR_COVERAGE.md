@@ -43,7 +43,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | MMQ | 335 | 465 | 91.8% | 91.6% | 66.2% | 278 |
 | NEM | 143 | 219 | 80.4% | 80.4% | 64.4% | 123 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| PCY *(measured)* | 143 | 207 | 79.2% | 72.9% | 46.9% | 92 |
+| PCY *(measured)* | 143 | 207 | 82.6% | 76.8% | 47.8% | 94 |
 | **All (shipped)** | **6307** | **9244** | **90.6%** | **89.9%** | **61.2%** | **4803** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -56,8 +56,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 480 | 218 | expected a subject |  |
-| 145 | 75 | unrecognized effect verb |  |
+| 475 | 213 | expected a subject |  |
+| 144 | 74 | unrecognized effect verb |  |
 | 128 | 64 | unconsumed text |  |
 | 51 | 33 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
@@ -65,10 +65,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 18 | 13 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
 | 18 | 16 | expected 'unless defending player controls' |  |
 | 7 | 1 | no lowering for RawEffect |  |
-| 6 | 2 | expected 'card' |  |
 | 6 | 1 | no handler for this battlefield entry |  |
 | 6 | 1 | a counted redirect off the source moves the damage onto one chosen target |  |
 | 6 | 1 | unsupported life-loss target 'owner' |  |
+| 5 | 1 | expected 'card' |  |
 | 5 | 5 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
 | 4 | 1 | the sacrifice prompt cannot test this restriction |  |
 | 4 | 1 | expected 'that' |  |
@@ -5585,6 +5585,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Remove two carrion counters from this creature: This creature gets +1/+1 until end of turn.`
 - **Ostracize**
   - `Target opponent reveals their hand. You choose a creature card from it. That player discards that card.`
+- **Outbreak**
+  - `Choose a creature type. All creatures of that type get -1/-1 until end of turn.`
 - **Outmaneuver**
   - `X target blocked creatures assign their combat damage this turn as though they weren't blocked.`
 - **Overlaid Terrain**
@@ -7388,6 +7390,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of each player's upkeep, that player sacrifices a permanent of their choice for each soot counter on this artifact.`
 - **Smoldering Crater**
   - `{T}: Add {R}.`
+- **Snag**
+  - `Prevent all combat damage that would be dealt by unblocked creatures this turn.`
 - **Snake Basket**
   - `{X}, Sacrifice this artifact: Create X 1/1 green Snake creature tokens. Activate only as a sorcery.`
   - `{X}, Sacrifice this artifact: Create X 1/1 green Snake creature tokens. Activate only as a sorcery.`
