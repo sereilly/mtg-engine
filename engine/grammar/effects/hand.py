@@ -9,9 +9,11 @@ Jester's Mask, Teferi's Puzzle Box. CR 402 is the zone they all name and
 ``hand`` is what the rules call it.
 
 Asymmetric, like ``types``, ``exile`` and ``destruction`` before it: the nodes
-stay in ``ast/cards.py`` and the lowerings in ``lowering/cards.py``, because the
-guard fired on the *productions* and one node in a family of its own with both
-of its readers elsewhere is worse than the asymmetry.
+stay in ``ast/cards.py``, because the guard fired on the *productions* and one
+node in a family of its own with both of its readers elsewhere is worse than the
+asymmetry. (The lowerings left ``lowering/cards.py`` for ``lowering/hand.py`` in
+the same round; the discard's lowering followed them later, and its productions
+stayed in ``cards``.)
 
 The two destination readers are the reason the family is worth naming. Every
 production here ends by asking one of them where the cards land, so the top, the

@@ -17,7 +17,8 @@ template has one home on each side — prowess parses in
     untap_restrictions
                      CR 502.3, what keeps a permanent from untapping
     board            destruction, bouncing, tapping, control, exile
-    cards            draw, discard, mill, scry
+    cards            draw, mill, scry
+    hand             discard, and the other moves that start in a hand
     library          search, reveal, look-at, exile linkage — the hidden zones
     mana             "Add {G}", the tapped-land mana trigger, and a standing
                      change to what a land produces
@@ -153,7 +154,9 @@ from .loops import (
     _PER_DEATH_SUBJECT,
     _ANY_CREATURE_DIED,
     _lower_for_each,
+    _lower_for_each_chosen,
     _lower_for_each_destroyed,
+    _lower_for_each_short_of_this_way,
 )
 from .ownership import (
     _lower_ownership_exchange_unless_paid,
@@ -284,13 +287,10 @@ from .cards import (
 # parse mirror was. Every name keeps its address: this package re-exports flat,
 # so no caller learns where the split fell.
 from .hand import (
-    CHOSEN_HAND_CARDS_RESULT,
     HAND_CARDS_TO_LIBRARY_RESULT,
     _lower_choose_cards_in_hand,
     _lower_discard,
     _lower_exile_random_from_hand,
-    _lower_for_each_chosen,
-    _lower_for_each_short_of_this_way,
     _lower_put_iterated_card_on_library,
     _lower_put_hand_cards_on_library,
     _fused_discard_then_draw,
@@ -583,7 +583,6 @@ __all__ = [
     "_lower_for_each_tapped",
     "_fused_exile_then_controller_life",
     "_DAMAGED_PLAYER_EVENTS",
-    "CHOSEN_HAND_CARDS_RESULT",
     "HAND_CARDS_TO_LIBRARY_RESULT",
     "_lower_choose_cards_in_hand",
     "_lower_for_each_chosen",

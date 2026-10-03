@@ -9,10 +9,10 @@ holds when the ability resolves (CR 611.2c), or a number an earlier step
 recorded.
 
 That is one question with one answer — "what is the set?" — and every function
-here is a different reading of it, which is why the three lower onto one
-`for_each` instruction with different iterator payloads. Nothing here reads an
-offer and nothing in `control_flow` reads a set, so the split is along a real
-boundary rather than a size.
+here is a different reading of it, which is why they lower onto one `for_each`
+instruction with different iterator payloads. Nothing here reads an offer and
+nothing in `control_flow` reads a set, so the split is along a real boundary
+rather than a size.
 
 Each takes its body **already lowered**: `lower.py` reads the sentence inside
 the loop, exactly as it does for the composers next door, so this module needs
@@ -28,17 +28,25 @@ so "which set does this sentence repeat over?" is answered in one module again.
 What it repeats *is* a counter placement, which is exactly why it could sit in
 either — and `lower.py` dispatching `ForEach` is what decides, since a family
 named for the loop is the one that owns every reading of the loop.
+
+Two more came home from `lowering/hand.py` at Prophecy's Phase 0, by the same
+rule: the per-shortfall loop (Truce), which is the life-lost loop's twin and
+reads no hand, and "for each of those cards / creatures", whose three records
+are a hand pick, a targeting choice and a sweep's destroyed set — two of them no
+hand step writes. The hand pick's key is in `_record_keys`, so the step that
+writes it and the loop here that reads it still spell it once.
 """
 
 from __future__ import annotations
 
-from ...oracle_types import OracleInstruction
+from ...oracle_types import CHOSEN_TARGET_PERMANENTS, OracleInstruction
 from ...subject_filters import OBJECT_ONLY_FILTER_KEYS, untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
 from ._common import _filter_payload
 from ._events import _COUNTERS_PLACED_THIS_WAY
 from ._cost_records import optional_cost_key
+from ._record_keys import CHOSEN_HAND_CARDS_RESULT
 
 
 def _lower_for_each_player(
@@ -151,6 +159,65 @@ def _lower_for_each_life_lost(
         OracleInstruction(
             "for_each", "",
             {"iterator": {"repeat_from_trigger": "life_lost"}, "effect": inner},
+        ),
+    )
+
+
+def _lower_for_each_short_of_this_way(
+    node: ast.ForEach,
+    inner: tuple[OracleInstruction, ...],
+    produced: frozenset[str],
+) -> tuple[OracleInstruction, ...]:
+    """"**For each card less than two a player draws this way,** that player
+    gains 2 life." (Truce.)
+
+    :func:`_lower_for_each_life_lost`'s twin, and a *nested* loop where that one
+    is flat. The sentence names two things at once — "a player" and, inside it,
+    a count — so it lowers to a loop over seats (CR 101.4's turn order) with a
+    counted repetition inside it. The seat loop is what binds "that player", and
+    the inner count is one number per seat, read out of the record the sentence
+    in front of it wrote.
+
+    Two refusals, each a way the words could otherwise mean more than they
+    say:
+
+    * a step of this same effect must record the count. "This way" is a
+      back-reference, and one with no producer names nothing — here it would
+      compute the printed base and hand every player the *maximum* life, which
+      is the card upside down (idiom 7).
+    * the body must lower to something, for :func:`_lower_for_each_chosen`'s
+      reason: an empty loop reports supported and does not run.
+    """
+    record = node.iterator.record
+    if record not in produced:
+        raise LoweringError(
+            f"nothing in this effect records the {record!r} count this loop is "
+            "short of",
+            node=node,
+        )
+    if not inner:
+        raise LoweringError("a per-shortfall loop with no effect in it", node=node)
+    return (
+        OracleInstruction(
+            "for_each", "",
+            {
+                # The seats, in turn order, so "that player" names one of them
+                # per iteration — the same binding every multi-seat offer makes.
+                "iterator": {"players": "each_player"},
+                "effect": (
+                    OracleInstruction(
+                        "for_each", "",
+                        {
+                            "iterator": {
+                                "repeat_from_record": {
+                                    "record": record, "base": node.iterator.base,
+                                }
+                            },
+                            "effect": inner,
+                        },
+                    ),
+                ),
+            },
         ),
     )
 
@@ -364,5 +431,84 @@ def _lower_for_each_destroyed(
                 },
                 "effect": inner,
             },
+        ),
+    )
+
+
+def _lower_for_each_chosen(
+    node: ast.ForEach,
+    inner: tuple[OracleInstruction, ...],
+    produced: frozenset[str],
+) -> tuple[OracleInstruction, ...]:
+    """"**For each of those cards,** <effect>." (Sylvan Library.)
+    "**For each of those creatures,** <effect>." (Winter's Chill.)
+
+    The sibling of ``_lower_for_each_destroyed``, and refused the same way: a
+    back-reference with no earlier step that made a choice names nothing, and
+    an empty loop is a sentence that reports supported and does not run.
+
+    Two records, one clause. Which of them answers is the printed noun: a hand
+    spelling reads the cards a "choose two cards in your hand" step recorded,
+    and a permanent spelling reads the permanents a "choose X target …"
+    sentence did. Reading either as the other walks an empty list, which is a
+    sentence that reports supported and does nothing — so the noun decides and
+    the missing producer refuses.
+    """
+    named = node.iterator.subject
+    if named is not None:
+        # Which record "those" names is decided by what an earlier step of this
+        # same effect actually wrote, in the order the phrase can mean them: a
+        # step that *chose* permanents is the closer referent (Winter's Chill
+        # names its own targets), and a sweep that destroyed some is the other
+        # ("Destroy all artifacts. … **each of those artifacts** …", Seeds of
+        # Innocence).
+        #
+        # Read off *produced* rather than fixed by the parse, for the reason
+        # every back-reference here is: the printed word is the same either way
+        # and only the effect around it can say which set exists. Neither
+        # recorded refuses, exactly as before — an empty loop is a sentence that
+        # reports supported and does not run.
+        record = None
+        if CHOSEN_TARGET_PERMANENTS in produced:
+            record = CHOSEN_TARGET_PERMANENTS
+        elif "destroyed_this_way" in produced:
+            record = "destroyed_this_way_objects"
+        if record is None:
+            raise LoweringError(
+                "'those <permanents>' with no earlier step in this effect that "
+                "chose or destroyed any",
+                node=node,
+            )
+        if not inner:
+            raise LoweringError("a per-permanent loop with no effect in it", node=node)
+        # The printed noun rides beside the record's name, exactly as it does
+        # for a destruction sweep's loop: "for each of those **creatures**"
+        # after a sentence that targeted attacking creatures is a restatement,
+        # and a restatement checked is a restatement. ``for_each`` applies it
+        # with ``permanent_matches_filter``, so a target that stopped answering
+        # the phrase drops out of the loop rather than being acted on.
+        return (
+            OracleInstruction(
+                "for_each", "",
+                {
+                    "iterator": {
+                        "produced_by": record,
+                        **_filter_payload(named),
+                    },
+                    "effect": inner,
+                },
+            ),
+        )
+    if CHOSEN_HAND_CARDS_RESULT not in produced:
+        raise LoweringError(
+            "'those cards' with no earlier step in this effect that chose any",
+            node=node,
+        )
+    if not inner:
+        raise LoweringError("a per-card loop with no effect in it", node=node)
+    return (
+        OracleInstruction(
+            "for_each", "",
+            {"iterator": {"produced_by": CHOSEN_HAND_CARDS_RESULT}, "effect": inner},
         ),
     )

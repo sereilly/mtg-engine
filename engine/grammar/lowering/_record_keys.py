@@ -156,6 +156,14 @@ CHOSEN_PLAYER = "chosen_player"
 #: to something else in between.
 OTHER_CHOSEN_PERMANENT = "other_chosen_permanent"
 
+#: The scratchpad key "choose N cards in your hand" writes and "for each of
+#: those cards" reads (Sylvan Library). Named here for the reason every other
+#: key on this page is: the pick is the ``hand`` lowering family's and the loop
+#: is ``loops``', two families that may not import each other, and
+#: ``_records._PRODUCES`` declares the same string — a second spelling is a
+#: loop walking a record the pick never wrote.
+CHOSEN_HAND_CARDS_RESULT = "chosen_hand_cards"
+
 # The scratchpad key a "<player> chooses <permanent>" step writes and the
 # sentences behind it read — "attach it to **that** permanent" (Enchantment
 # Alteration), "return this card … **attached to that creature**"
