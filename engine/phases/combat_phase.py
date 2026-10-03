@@ -133,6 +133,86 @@ class CombatPhaseMixin:
             for instr in compile_card_oracle(perm.effective_card).instructions
         )
 
+    def declaration_tap_plan(
+        self,
+        seat: int,
+        declared: list[Permanent],
+        kind: str,
+        *,
+        unavailable: "list[Permanent] | tuple[()]" = (),
+    ) -> "list[Permanent] | None":
+        """Which of *seat*'s creatures pay the declaration's tap costs, or None.
+
+        "…unless you tap an untapped creature you control **not declared as an
+        attacking or blocking creature this combat**." (Hollow Warrior.) The
+        tap-cost twin of the attack side's sacrifice plan, shared by both steps
+        because the sentence names both: *kind* is ``"attack"`` or ``"block"``,
+        and the creatures being declared are never candidates — that is the
+        printed exclusion, and it is also why one Warrior cannot pay for itself.
+
+        A whole-declaration plan for the sacrifice plan's reason: two Warriors
+        beside one spare creature are each payable alone and not together, and
+        a per-creature gate cannot say "and another for the next". A matching,
+        so a narrower filter is not starved by a wider one taking its only
+        candidate. *unavailable* is what another cost of the same declaration
+        has already spent (the mana plan's lands).
+
+        No summoning-sickness test: CR 302.6 forbids only a creature's own
+        {T} costs, and this taps *another* creature as part of a cost.
+        Candidates are offered in ``sacrifice_preference_key`` order, the
+        policy every forced choice of a permanent follows, so the least
+        valuable creature is the one tapped.
+        """
+        from ..combat_restrictions import declaration_tap_costs
+        from ..subject_filters import subject_matches
+
+        units = [
+            (described, perm)
+            for perm in declared
+            for described in declaration_tap_costs(perm, kind)
+        ]
+        if not units:
+            return []
+        excluded = {id(perm) for perm in (*declared, *unavailable)}
+        candidates = sorted(
+            (
+                perm for perm in self.controlled_by(seat)
+                if id(perm) not in excluded and not perm.tapped
+            ),
+            key=self.sacrifice_preference_key,
+        )
+        paid_by: dict[int, int] = {}
+
+        def _assign(unit: int, seen: set[int]) -> bool:
+            described, owed_for = units[unit]
+            for slot, candidate in enumerate(candidates):
+                if slot in seen or not subject_matches(
+                    self, candidate, described, observer=seat, source=owed_for
+                ):
+                    continue
+                seen.add(slot)
+                if slot not in paid_by or _assign(paid_by[slot], seen):
+                    paid_by[slot] = unit
+                    return True
+            return False
+
+        for unit in range(len(units)):
+            if not _assign(unit, set()):
+                return None
+        return [candidates[slot] for slot in sorted(paid_by)]
+
+    def pay_declaration_taps(self, seat: int, plan: list[Permanent], kind: str) -> None:
+        """Tap what :meth:`declaration_tap_plan` chose (CR 508.1j / 509.1f)."""
+        if not plan:
+            return
+        for perm in plan:
+            if self.is_on_battlefield(perm) and not perm.tapped:
+                self.become_tapped(perm)
+        self.log.append(
+            f"{self.players[seat].name} tapped "
+            f"{', '.join(perm.card.name for perm in plan)} to {kind}"
+        )
+
     def _has_any_legal_attacker(self, attacker_index: int, defender_index: int) -> bool:
         if attacker_index < 0 or attacker_index >= len(self.players):
             return False

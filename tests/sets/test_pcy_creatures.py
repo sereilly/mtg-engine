@@ -201,3 +201,96 @@ def test_w1g4_mungha_wurm_caps_only_its_controllers_untap_step(set_pool):
     game.active_player_index = 1
     game.resolve_untap_step(1)
     assert [land.tapped for land in theirs] == [False, False, False]
+
+
+def _w1g4_combat(game, step):
+    """Put *game* in the named combat step; returns the step for the reader."""
+    game.current_turn_phase, game.current_step = "combat", step
+    return game.current_step
+
+
+def test_w1g4_hollow_warrior_attacks_only_by_tapping_a_spare_creature(set_pool):
+    """CR 508.1h: "tapping permanents" is a cost to attack. Alone, the Warrior
+    cannot pay it and cannot attack; beside a creature that stays home, the
+    declaration taps that creature — and a creature that is itself declared
+    is "declared as an attacking creature" and cannot pay."""
+    pcy, lea = set_pool("PCY"), set_pool("LEA")
+    game = _w1g4_duel()
+    warrior = _w1g4_put(game, 0, pcy["Hollow Warrior"])
+    _w1g4_combat(game, "declare_attackers")
+    assert not game.can_attack(warrior, 1)
+    assert not game.declare_attackers(0, [0])[0]
+
+    bear = _w1g4_put(game, 0, lea["Grizzly Bears"])
+    assert game.can_attack(warrior, 1)
+    ok, why = game.declare_attackers(0, [0, 1])
+    assert not ok and "no untapped creature left to tap" in why
+    assert not bear.tapped, "a refused declaration spends nothing"
+
+    assert game.declare_attackers(0, [0])[0]
+    assert warrior.tapped and bear.tapped
+    assert game.combat_attackers == {0: 1}
+    assert "W1G4-A tapped Grizzly Bears to attack" in game.log
+
+
+def test_w1g4_two_hollow_warriors_need_two_spare_creatures(set_pool):
+    """The cost is per Warrior and paid out of one board, so two Warriors
+    beside one spare creature can each attack alone but not together — and a
+    Warrior that stays home may be the creature the other one taps."""
+    pcy, lea = set_pool("PCY"), set_pool("LEA")
+    game = _w1g4_duel()
+    first = _w1g4_put(game, 0, pcy["Hollow Warrior"])
+    second = _w1g4_put(game, 0, pcy["Hollow Warrior"])
+    spare = _w1g4_put(game, 0, lea["Grizzly Bears"])
+    _w1g4_combat(game, "declare_attackers")
+    assert game.attack_declaration_refusal([first, second]) is not None
+    assert game.attack_declaration_refusal([first]) is None
+
+    assert game.declare_attackers(0, [0])[0]
+    assert first.tapped and (second.tapped or spare.tapped)
+    assert not (second.tapped and spare.tapped), "one creature pays one cost"
+
+
+def test_w1g4_hollow_warrior_blocks_only_by_tapping_a_creature_that_is_not(set_pool):
+    """CR 509.1d's side of the same sentence: the defender taps a creature that
+    is not blocking. Alone it cannot block; with a spare it blocks and the spare
+    is tapped; declaring the spare as a blocker too leaves nothing to pay."""
+    pcy, lea = set_pool("PCY"), set_pool("LEA")
+    game = _w1g4_duel()
+    attacker = _w1g4_put(game, 0, lea["Grizzly Bears"])
+    warrior = _w1g4_put(game, 1, pcy["Hollow Warrior"])
+    _w1g4_combat(game, "declare_attackers")
+    assert game.declare_attackers(0, [0])[0]
+    _w1g4_combat(game, "declare_blockers")
+    assert not game._can_block_attacker(warrior, attacker)
+    assert not game.declare_blockers(1, {0: 0})[0]
+
+    spare = _w1g4_put(game, 1, lea["Scathe Zombies"])
+    assert game._can_block_attacker(warrior, attacker)
+    ok, why = game.declare_blockers(1, {0: 0, 1: 0})
+    assert not ok and "no untapped creature left to tap" in why
+    assert game.declare_blockers(1, {0: 0})[0]
+    assert spare.tapped and not warrior.tapped
+    assert "W1G4-B tapped Scathe Zombies to block" in game.log
+
+
+def test_w1g4_lure_does_not_compel_a_hollow_warrior_to_pay(set_pool):
+    """CR 509.1c's last clause: a player is not required to pay a cost to
+    block, even to obey a requirement. Under Lure the defender may keep the
+    Warrior home rather than tap a creature for it."""
+    from engine.auras import attach_aura
+
+    pcy, lea = set_pool("PCY"), set_pool("LEA")
+    game = _w1g4_duel()
+    lured = _w1g4_put(game, 0, lea["Grizzly Bears"])
+    attach_aura(_w1g4_put(game, 0, lea["Lure"]), lured)
+    warrior = _w1g4_put(game, 1, pcy["Hollow Warrior"])
+    # Ironclaw Orcs can't block a 2-power attacker, so Lure does not reach it —
+    # and it is untapped, so the Warrior *could* pay. CR 509.1c still excuses it.
+    orcs = _w1g4_put(game, 1, lea["Ironclaw Orcs"])
+    _w1g4_combat(game, "declare_attackers")
+    assert game.declare_attackers(0, [0])[0]
+    _w1g4_combat(game, "declare_blockers")
+    assert game._can_block_attacker(warrior, lured)
+    assert game.declare_blockers(1, {})[0]
+    assert not orcs.tapped

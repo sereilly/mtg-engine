@@ -15,6 +15,7 @@ from ..combat_permissions import (ATTACK_AS_THOUGH_NO_DEFENDER,
                                   CANT_ATTACK_UNTIL_EOT)
 from ..combat_restrictions import (declaration_company_required,
                                    declaration_greater_power_required,
+                                   declaration_tap_costs,
                                    defender_attack_cap,
                                    participation_cap,
                                    restriction_condition_holds)
@@ -193,6 +194,11 @@ class DeclareAttackersStepMixin:
                 or self._must_attack_beside(attacker, declared_now)
             ):
                 continue
+            # CR 508.1d: "If a creature can't attack unless a player pays a cost,
+            # that player is not required to pay that cost." A creature whose
+            # attack costs a tap (Hollow Warrior) is therefore never compelled.
+            if declaration_tap_costs(attacker, "attack"):
+                continue
             # …and the seat must have room under its own cap (Crawlspace). CR
             # 508.1d obeys requirements *subject to* the restrictions, so a
             # creature whose only legal defenders are already at their cap is
@@ -277,6 +283,15 @@ class DeclareAttackersStepMixin:
         )
         if sacrifice_plan is None:
             return False, "cannot pay the sacrifice cost to declare these attackers"
+        # …and the tap half (Hollow Warrior), planned last so it draws on what
+        # the other two halves leave: a creature already sacrificed or a land
+        # creature already tapped for mana cannot also be the one tapped here.
+        tap_plan = self.declaration_tap_plan(
+            controller_index, declared_attackers, "attack",
+            unavailable=[*sacrifice_plan, *(mana_plan.tapped if mana_plan else ())],
+        )
+        if tap_plan is None:
+            return False, "cannot tap a creature to pay these attackers' cost"
 
         self.combat_attackers = dict(per_attacker_defender)
         self.combat_attacked_planeswalkers = dict(per_attacker_walker)
@@ -357,6 +372,7 @@ class DeclareAttackersStepMixin:
         # second `plan_payment`, which would read a board the attackers have
         # since been tapped on.
         self._pay_declaration_mana(controller_index, declaration_mana, mana_plan)
+        self.pay_declaration_taps(controller_index, tap_plan, "attack")
 
         self._prune_combat_state()
         self.log.append(f"{controller.name} declared {len(unique_indices)} attacker(s)")
@@ -822,6 +838,17 @@ class DeclareAttackersStepMixin:
             )
             if held is not bool(defender_board.payload.get("required", True)):
                 return False
+
+        # "…can't attack or block unless you tap an untapped creature you
+        # control not declared as an attacking … creature this combat." (Hollow
+        # Warrior.) CR 508.1h's cost, asked here of this creature alone: with
+        # no other untapped creature to tap, it cannot attack at all. Whether
+        # several such creatures can be paid for *together* is the declaration's
+        # question (`attack_declaration_refusal`), as the sacrifice plan's is.
+        if declaration_tap_costs(attacker, "attack") and self.declaration_tap_plan(
+            self.controller_index_of(attacker), [attacker], "attack"
+        ) is None:
+            return False
 
         # "…unless you control four or more artifacts" (Gadrak). The attacker's
         # *own* controller is counted, which is the difference from the land
@@ -1468,6 +1495,21 @@ class DeclareAttackersStepMixin:
                 return attacker, (
                     f"{attacker.card.name} needs an attacking creature with "
                     "greater power beside it"
+                )
+        # "…unless you tap an untapped creature you control not declared as an
+        # attacking creature this combat." (Hollow Warrior.) A cost every one of
+        # them pays out of the same board, so the plan is asked of the whole
+        # set; the creature it names is the last one owing, which is the one the
+        # AI's prune drops.
+        owing = [a for a in declared_attackers if declaration_tap_costs(a, "attack")]
+        if owing:
+            seat = self.controller_index_of(owing[0])
+            if seat is None or self.declaration_tap_plan(
+                seat, declared_attackers, "attack"
+            ) is None:
+                return owing[-1], (
+                    f"{owing[-1].card.name} has no untapped creature left to tap "
+                    "for its attack"
                 )
         return None
 

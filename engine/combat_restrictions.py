@@ -347,6 +347,29 @@ _PATTERNS: tuple[tuple[re.Pattern[str], "str | tuple[str, ...]"], ...] = (
     ),
     (re.compile(r"^this creature can't attack$"), "cant_attack"),
     (
+        # "This creature can't attack or block unless you tap an untapped
+        # creature you control not declared as an attacking or blocking
+        # creature this combat." (Hollow Warrior.) CR 508.1h / CR 509.1d: a
+        # *cost* to attack and a cost to block, paid as the declaration is
+        # made — Leviathan's sacrifice and Brainwash's mana with a third
+        # currency, a tap. One sentence, two kinds (``also_kinds``), because
+        # the two costs are charged at two different steps.
+        #
+        # The noun phrase is payload — "an untapped Golem you control" would be
+        # the same cost over a narrower set — and "you control" is written into
+        # the pattern rather than read: the plan draws only on the declaring
+        # seat's own board, which is what the words say. "Not declared as an
+        # attacking or blocking creature" is not payload either: it is the
+        # exclusion every declaration-cost plan in this engine already makes
+        # of the creatures being declared, read once there.
+        re.compile(
+            r"^this creature can't attack or block unless you tap "
+            r"(?P<tap_cost>an? .+?) you control not declared as an attacking "
+            r"or blocking creature this combat$"
+        ),
+        ("cant_attack_unless_tap", "cant_block_unless_tap"),
+    ),
+    (
         # "This creature can't attack or block **if an enchantment is on the
         # battlefield**." (Wirecat.) One sentence, two prohibitions, one
         # subject — ``CombatRestriction.also_kinds`` again, and here on the
@@ -1639,6 +1662,18 @@ def combat_restriction_for(
             if described is None:
                 return None
             payload["subject"] = described
+        # "…unless you tap **an untapped creature** you control…" (Hollow
+        # Warrior.) What the declaration cost taps, read here for the reason
+        # every other noun on this page is: a phrase admitted unread would be a
+        # cost any permanent pays — a land tapped for an attack — and the
+        # article is stripped because the count is the sentence's "an", one.
+        tap_cost = payload.pop("tap_cost", None)
+        if tap_cost is not None:
+            described = _printed_noun(tap_cost.split(" ", 1)[1])
+            if described is None:
+                return None
+            payload["tap_filter"] = described
+            payload["count"] = 1
         attack_partner = payload.pop("attack_partner", None)
         if attack_partner is not None:
             described = _printed_noun(attack_partner)
@@ -2051,3 +2086,31 @@ def declaration_company_required(permanent, kind: str) -> int | None:
     # ceiling does: each clause is a restriction in its own right, and
     # satisfying only the loosest would disobey the tighter one.
     return max(needed) if needed else None
+
+
+def declaration_tap_costs(permanent, kind: str) -> list[dict]:
+    """What *permanent* must have tapped to *kind* (``"attack"`` / ``"block"``),
+    one filter per creature owed.
+
+    "…can't attack or block unless you tap an untapped creature you control not
+    declared as an attacking or blocking creature this combat." (Hollow
+    Warrior.) CR 508.1h / CR 509.1d's cost — "tapping permanents" is in both
+    rules' own list — in its third currency here, beside the sacrifice
+    (Leviathan) and the mana (Brainwash). A list rather than a number because
+    each clause is a cost of its own and every one is paid (CR 508.1j).
+
+    Read off ``effective_card`` like every other combat restriction here, so a
+    copy or a text change is answered without a second reader; the *plan* —
+    which creatures pay — needs the board and lives with the steps
+    (``CombatPhaseMixin.declaration_tap_plan``).
+    """
+    from .oracle import compile_card_oracle
+
+    wanted = f"cant_{kind}_unless_tap"
+    owed: list[dict] = []
+    for instruction in compile_card_oracle(permanent.effective_card).instructions:
+        if instruction.kind != wanted:
+            continue
+        described = dict(instruction.payload.get("tap_filter") or {})
+        owed.extend([described] * max(0, int(instruction.payload.get("count", 1))))
+    return owed

@@ -1136,3 +1136,64 @@ def test_509_1b_the_gate_still_refuses_what_the_predicate_names():
 
 
 # --- end W1G1 ---
+
+
+# --- PCY W1G4: a cost to block in any currency lifts a requirement (CR 509.1c) ---
+from engine.card_loader import load_cards as _w1g4_load_cards  # noqa: E402
+from engine.card_loader import manifest_set_paths as _w1g4_paths  # noqa: E402
+
+
+def _w1g4_heat_wave_and_lure():
+    """Seat 0 attacks with a Lured 2/2 under its own Heat Wave; seat 1 holds a
+    nonblue Grizzly Bears. Returns ``(game, bear)``."""
+    w1g4_cards = {}
+    for w1g4_card in _w1g4_load_cards(_w1g4_paths()):
+        w1g4_cards.setdefault(w1g4_card.name, w1g4_card)
+    w1g4_game = Game(players=[PlayerState(name="A"), PlayerState(name="B")])
+    w1g4_game.enforce_mana_costs = False
+    w1g4_game.active_player_index = 0
+
+    def _w1g4_onto(seat, card):
+        w1g4_perm = Permanent(card=card)
+        w1g4_game._put_permanent_onto_battlefield(seat, w1g4_perm, None)
+        w1g4_perm.metadata["summoning_sickness_turn"] = -99
+        return w1g4_perm
+
+    _w1g4_onto(0, w1g4_cards["Heat Wave"])
+    w1g4_lured = _w1g4_onto(0, _mk_creature("W1G4 Lured", 2, 2))
+    attach_aura(_w1g4_onto(0, w1g4_cards["Lure"]), w1g4_lured)
+    w1g4_bear = _w1g4_onto(1, w1g4_cards["Grizzly Bears"])
+    w1g4_game.current_turn_phase = "combat"
+    w1g4_game.current_step = "declare_attackers"
+    assert w1g4_game.declare_attackers(0, [1])[0]
+    w1g4_game.current_step = "declare_blockers"
+    return w1g4_game, w1g4_bear
+
+
+@pytest.mark.cr("509.1c")
+def test_509_1c_a_life_toll_to_block_excuses_the_creature_from_lure():
+    """"If a creature can't block unless a player pays a cost, that player is
+    not required to pay that cost, even if blocking with that creature would
+    increase the number of requirements being obeyed." Heat Wave's toll is paid
+    in life, and the requirement checks asked only about *mana*: the Bears were
+    compelled by Lure to block and pay. Shipped since Visions."""
+    game, bear = _w1g4_heat_wave_and_lure()
+    assert game._block_life_cost_of(bear, game.players[0].battlefield[1]) == 1
+
+    ok, why = game.declare_blockers(1, {})
+    assert ok, why
+    assert game.players[1].life == 20
+
+
+@pytest.mark.cr("509.1c", "509.1d")
+def test_509_1c_the_excused_creature_may_still_choose_to_pay():
+    """Excused is not forbidden: the defender may still block and pay."""
+    game, _bear = _w1g4_heat_wave_and_lure()
+
+    # The Lured attacker sits in slot 1, behind the Heat Wave.
+    ok, why = game.declare_blockers(1, {0: 1})
+    assert ok, why
+    assert game.players[1].life == 19
+
+
+# --- end PCY W1G4 ---
