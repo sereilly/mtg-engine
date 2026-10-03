@@ -20,6 +20,7 @@ from engine.legality import cast_target_kind, targeting_instruction
 from engine.models import Permanent, PlayerState
 from engine.layer_bridge import displayed_type_line
 from engine.library_top import top_is_public
+from engine.mana_payment import taps_for_payment
 from engine.oracle import LOYALTY_ANY_TIME_STATIC, compile_card_oracle
 from engine.keywords import derived_ability_lines
 from engine.hand_locks import locked_hand_indices
@@ -426,6 +427,14 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         "attached_to_id": attached_to_id,
         "attached_to_seat": attached_to_seat,
         "produced_mana": list(_offered_mana(game, perm)),
+        # Whether tapping this land part-way through a payment makes mana —
+        # the tap seam's own answer (``mana_payment.taps_for_payment``), which
+        # the engine's planner and the AI's already ask. The client's auto-tap
+        # plans from ``produced_mana`` above, which is what to *offer* when the
+        # land is activated and says nothing about whether a "tap" may be sent
+        # for it: Rhystic Cave offers all five colours and needs priority and
+        # the table's consent, and a depletion land's mana costs a counter.
+        "taps_for_mana": bool(perm.has_type("land") and taps_for_payment(perm)),
         # A color-changing effect (e.g. Lifelace: "Target ... becomes green.")
         # records the new color so the UI can label the recolored permanent.
         "color_override": perm.metadata.get("color_override"),

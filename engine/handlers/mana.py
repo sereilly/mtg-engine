@@ -564,16 +564,6 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
         )
         return True, "resolved"
 
-    # "Add one mana of **the chosen color**." (Sol Grail.) The colour the
-    # source recorded as it entered (CR 614.1c), read off that permanent — the
-    # same `metadata["chosen_color"]` record `_resolve_chosen_color` reads for
-    # a noun phrase, so an artifact cannot be one colour to a filter and
-    # another to its own mana ability.
-    #
-    # A source with nothing chosen adds nothing rather than guessing a colour:
-    # the choice is made as the permanent enters, so an empty record means the
-    # ability is being asked of something that never entered, and inventing a
-    # symbol there would put mana in a pool the card never produced.
     # "Choose a color. Add one mana of **that color** unless any player pays
     # {1}." (Rhystic Cave.) The colour an earlier step of *this* resolution
     # chose, read out of the scratchpad slot the payload names — the one
@@ -598,6 +588,16 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
             f"{_restriction_suffix(spend_only)}"
         )
         return True, "resolved"
+    # "Add one mana of **the chosen color**." (Sol Grail.) The colour the
+    # source recorded as it entered (CR 614.1c), read off that permanent — the
+    # same `metadata["chosen_color"]` record `_resolve_chosen_color` reads for
+    # a noun phrase, so an artifact cannot be one colour to a filter and
+    # another to its own mana ability.
+    #
+    # A source with nothing chosen adds nothing rather than guessing a colour:
+    # the choice is made as the permanent enters, so an empty record means the
+    # ability is being asked of something that never entered, and inventing a
+    # symbol there would put mana in a pool the card never produced.
     if instruction.payload.get("from_chosen_color"):
         color = (
             getattr(context.source_permanent, "metadata", {}) or {}
