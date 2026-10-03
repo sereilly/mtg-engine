@@ -304,13 +304,15 @@ def _parse_tapped_lands_produce_chosen(
         return None
     # "instead of any other **color**" where the active-voice spellings print
     # "type". Both ends are read for that production's reason: a reader that
-    # stopped at "instead of" would compile a swap of one unnamed symbol.
+    # stopped at "instead of" would compile a swap of one unnamed symbol. And
+    # the word is *kept*: "color" replaces only the coloured mana a land makes
+    # (CR 106.1a/106.1b — five colors, six types), where "type" replaces all.
     if not stream.accept_phrase("instead", "of", "any", "other", "color"):
         stream.reset(mark)
         return None
     return ast.ProducesManaInstead(
         subject,
-        replaced=ast.ANY_OTHER_TYPE,
+        replaced=ast.ANY_OTHER_COLOR,
         produced="",
         from_chosen_color=True,
         by_controller=True,

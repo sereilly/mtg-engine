@@ -18,6 +18,7 @@ from fastapi import HTTPException
 from engine.activation_permissions import card_widens_activation
 from engine.cast_permissions import permission_for
 from engine.cast_timing import casts_at_instant_speed
+from engine.mixins.turn_management import is_tap_alone_mana_ability
 from engine.oracle import compile_card_oracle
 from engine.targeting import usable_activated_abilities
 
@@ -341,48 +342,44 @@ def _action_activate(session, req, seat_type):
     permanent_index, permanent = resolved
 
     # A land activation is a mana tap ONLY when the chosen ability is a mana
-    # ability. Non-mana land abilities (Island of Wak-Wak's power-set,
-    # Library of Alexandria's draw) go through the normal ability path —
-    # previously every land activation fell into tap_land_for_mana, which
-    # invented a green mana for mana-less lands and made Library's draw
-    # unreachable.
+    # ability whose whole cost is {T} (CR 106.12's "tap for mana"). Non-mana
+    # land abilities (Island of Wak-Wak's power-set, Library of Alexandria's
+    # draw) and priced mana abilities (Gemstone Mine, the depletion lands) go
+    # through the normal ability path, which pays what they cost.
     #
-    # **This set is the third copy of a question CR 605.1a answers, and it is
-    # the one still standing.** ``engine/mana_payment.is_mana_ability`` reads
-    # the rule off the whole ability; the activation seam used to key on these
-    # same three kinds and no longer does (CR 605.3b). Here the two are not
-    # interchangeable, because the destinations are: ``tap_land_for_mana``
-    # takes no ability index and runs the land's **first** tap-alone mana
-    # ability, so rerouting Adarkar Wastes' second one ("Add {W} or {U}. This
-    # land deals 1 damage to you") would quietly produce {C} and no damage.
+    # **And the chosen ability travels with the tap.** This used to test a
+    # three-kind set — a third copy of CR 605.1a — because the seam took no
+    # ability index and ran the land's *first* tap-alone mana ability, so
+    # routing a second one there would have produced the first one's mana.
+    # The consequence was measured: 26 lands whose tap-alone mana ability
+    # lowers to a ``sequence`` or an ``if_then`` (the ten painlands, the Urza
+    # tri-lands, Ancient Tomb, Rainbow Vale, the Ice Age depletion lands …)
+    # never reached the seam — no Desolation record, no Deep Water / Infernal
+    # Darkness / Contamination swap, no Mana Flare — and a land's *granted*
+    # mana ability (Overlaid Terrain on a Karplusan Forest) could not be
+    # reached at all, because the seam always ran the land's own. The seam
+    # takes the index now (``tap_land_for_mana(ability_index=…)``), and
+    # ``is_tap_alone_mana_ability`` is the one predicate the seam and this
+    # route ask.
     #
-    # The consequence of leaving it is measured and named: **32 lands** whose
-    # mana ability lowers to a ``sequence`` or an ``if_then`` never reach the
-    # tap-for-mana seam at all — 26 with a tap-alone cost (the ten painlands,
-    # the Urza tri-lands, Ancient Tomb, Rainbow Vale, Undiscovered Paradise,
-    # the five Ice Age depletion lands …) and 6 priced (Gemstone Mine and the
-    # five Mercadian Masques depletion lands). So clicking one sets no
-    # ``tapped_land_for_mana_this_turn`` (Desolation), applies no
-    # ``land_mana_produced`` replacement (Deep Water, Infernal Darkness,
-    # Contamination) and announces no ``land_tapped_for_mana`` (Mana Flare
-    # doubles a Forest and not a Karplusan Forest, driven through this route).
-    #
-    # Closing it is one round of its own: the tap-for-mana announcement belongs
-    # in the mana ability's resolution rather than in one of two seams the wire
-    # chooses between, which is what would cover the six priced lands as well —
-    # ``tap_land_for_mana`` refuses those by design (CR 602.2b) and always will.
+    # Still open, and the note's remaining half: a *priced* mana ability (the
+    # six above) is paid by the activation path, which announces no
+    # tap-for-mana event. The seam refuses those by design (CR 602.2b); closing
+    # it means moving the announcement into the mana ability's resolution.
     land_as_mana_tap = permanent.has_type("land")
+    seam_ability_index = None
     if land_as_mana_tap:
         usable = usable_activated_abilities(compile_card_oracle(permanent.effective_card))
-        mana_kinds = {"add_mana_from_text", "sacrifice_self_for_mana", "sacrifice_creature_for_mana"}
         chosen_ability = None
         if req.ability_index is not None and 0 <= req.ability_index < len(usable):
             chosen_ability = usable[req.ability_index]
+            seam_ability_index = req.ability_index
         elif usable and not permanent.effective_produced_mana:
             # No explicit choice on a land that makes no mana: its only
-            # meaningful activation is the non-mana ability.
+            # meaningful activation is its first ability.
             chosen_ability = usable[0]
-        if chosen_ability is not None and chosen_ability.instruction.kind not in mana_kinds:
+            seam_ability_index = 0
+        if chosen_ability is not None and not is_tap_alone_mana_ability(chosen_ability):
             land_as_mana_tap = False
 
     if land_as_mana_tap:
@@ -391,6 +388,7 @@ def _action_activate(session, req, seat_type):
             permanent.card.name,
             chosen_color=req.mana_color or "G",
             permanent_index=permanent_index,
+            ability_index=seam_ability_index,
         )
         if not tapped:
             raise HTTPException(status_code=400, detail="failed to tap land for mana")

@@ -23,6 +23,15 @@ from ._core import Amount, Duration, PlayerRef, TargetSpec
 #: it, and a second spelling of the string is how those two come apart.
 ANY_OTHER_TYPE = "any_other"
 
+#: ``ProducesManaInstead.replaced`` for "instead of any other **color**" (Hall
+#: of Gemstone) — the coloured part of what the land produced, and nothing
+#: else. Colorless is a type of mana and not a color (CR 106.1a, 106.1b), so
+#: {C} the land makes is left
+#: alone; read as :data:`ANY_OTHER_TYPE` it turned a Mishra's Workshop or an
+#: Ancient Tomb into a coloured land, which is the swap drifting in the
+#: player's favour.
+ANY_OTHER_COLOR = "any_other_color"
+
 
 @dataclass(frozen=True)
 class AddMana:

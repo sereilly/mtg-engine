@@ -289,6 +289,7 @@ from .control_changes import (
     MutualControlOfSets,
 )
 from .mana import (
+    ANY_OTHER_COLOR,
     ANY_OTHER_TYPE,
     ActivateEachLandsManaAbility,
     AddMana,
@@ -722,6 +723,7 @@ __all__ = [
     "AddManaForTappedLand",
     "LoseUnspentMana",
     "NoteManaSpent",
+    "ANY_OTHER_COLOR",
     "ANY_OTHER_TYPE",
     "ProducesManaInstead",
     "SpendManaAsThough",

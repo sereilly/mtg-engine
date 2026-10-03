@@ -1368,6 +1368,33 @@ class AbilityActivationMixin:
             self.log.append(details)
             return SimulationResult(permanent.card.name, False, "unsupported", details)
 
+        # The {T} symbol's two refusals, asked **here, before a single cost is
+        # collected** — CR 602.5a (a creature's {T} ability can't be activated
+        # unless it has been controlled since its controller's most recent turn
+        # began) and CR 107.5 (a tapped permanent can't be tapped again to pay
+        # the cost). Both are questions about the board as the activation is
+        # proposed, and neither depends on anything a cost below decides.
+        #
+        # They sat underneath the mana payment, so an activation they refused
+        # had already spent its mana: Time Elemental, summoning sick, went
+        # 30 → 26 in the pool and stayed un-activated. CR 733.1 (reached through
+        # CR 601.2e and CR 602.2b) reverses an illegal activation outright —
+        # "any payments already made are canceled" — and this engine's whole
+        # arrangement is the cheaper equivalent: every check first, then every
+        # payment, so a refusal has nothing to give back. Measured over the
+        # pool before the move: 174 abilities paid mana into a summoning-sick
+        # refusal and 361 into an already-tapped one (one of them, City of
+        # Shadows, exiled a creature as well).
+        if ability.cost.requires_tap:
+            if self._is_summoning_sick(permanent):
+                details = f"{permanent.card.name} has summoning sickness"
+                self.log.append(details)
+                return SimulationResult(permanent.card.name, False, "unsupported", details)
+            if permanent.tapped:
+                details = f"{permanent.card.name} is already tapped"
+                self.log.append(details)
+                return SimulationResult(permanent.card.name, False, "unsupported", details)
+
         # Northern Paladin: "{W}{W}, {T}: Destroy target black permanent." /
         # Dwarven Demolition Team / Tunnel: "Destroy target Wall." / King
         # Suleiman: "Destroy target Djinn or Efreet." The chosen target must
@@ -1979,19 +2006,28 @@ class AbilityActivationMixin:
         # nothing here consults shroud or protection; what it consults is the
         # printed noun phrase, through the same reader the picker uses.
         #
-        # Charged with the rest of the costs and **before the tap**, so an
-        # ability with nothing to pay it is not activated at all (CR 602.2b)
-        # rather than refused with the source already tapped for nothing. It
-        # also runs ahead of the source's own exile further down, so a card
+        # **Chosen here, paid below the mana payment** — the shape every other
+        # chosen cost in this function has, and the one this block did not.
+        # It used to exile at this point, above five refusals (the attached
+        # host's mana cost, a card-defined X, Drought's sacrifice tax, the mana
+        # payment, and the {T} checks then beneath it), so Soul Shepherd
+        # activated with an empty pool was refused with the creature card
+        # already out of its graveyard, and an already-tapped City of Shadows
+        # exiled a creature for an activation that never happened (CR 601.2h
+        # via 602.2b; CR 733.1 reverses an illegal activation). The choice is
+        # resolved to objects now, while the zone still reads the way the
+        # payer saw it, and nothing between here and the payment moves a card.
+        # It still runs ahead of the source's own exile further down, so a card
         # printing both eats the chosen object while the source is still there.
         exiled_for_cost = None
         exiled_set_for_cost: list = []
+        exile_cost_choice = None
         if ability.cost.exile_filter is not None:
-            exiled_set_for_cost = self._pay_exile_cost(
+            exile_cost_choice = self._choose_exile_cost(
                 ability.cost, controller, controller_index, permanent,
                 cost_permanent_index,
             )
-            if not exiled_set_for_cost:
+            if exile_cost_choice is None:
                 details = (
                     f"{permanent.card.name}: nothing available to exile as a cost"
                 )
@@ -1999,11 +2035,6 @@ class AbilityActivationMixin:
                 return SimulationResult(
                     permanent.card.name, False, "unsupported", details
                 )
-            # The single-object channel every reader of an exile cost already
-            # asks (Necropolis' "the exiled card's mana value"), kept as the
-            # first of them, so a counted cost adds a record rather than moving
-            # one.
-            exiled_for_cost = exiled_set_for_cost[0]
 
         required_cost = dict(ability.cost.mana)
         # "Pay {1} **for each +1/+1 counter on this creature**" (Skeleton
@@ -2216,15 +2247,24 @@ class AbilityActivationMixin:
                 - controller.mana_pool.get(symbol, 0)) > 0
         }
 
-        if requires_tap:
-            if self._is_summoning_sick(permanent):
-                details = f"{permanent.card.name} has summoning sickness"
-                self.log.append(details)
-                return SimulationResult(permanent.card.name, False, "unsupported", details)
-            if permanent.tapped:
-                details = f"{permanent.card.name} is already tapped"
-                self.log.append(details)
-                return SimulationResult(permanent.card.name, False, "unsupported", details)
+        # **Nothing below this line refuses.** The mana payment above is the
+        # last gate and is all-or-nothing (``_pay_mana_cost`` leaves the pool
+        # untouched when it cannot pay), so from here on every cost collected
+        # above is paid and the activation happens. A new refusal belongs above
+        # the payment, with the others; a new cost belongs below it.
+
+        # The chosen exile (City of Shadows, Soul Shepherd, Cadaverous Bloom),
+        # paid first among the rest so a card printing it beside the source's
+        # own exile eats the chosen object while the source is still there.
+        if exile_cost_choice is not None:
+            exiled_set_for_cost = self._pay_exile_cost(
+                exile_cost_choice, controller, controller_index, permanent
+            )
+            # The single-object channel every reader of an exile cost already
+            # asks (Necropolis' "the exiled card's mana value"), kept as the
+            # first of them, so a counted cost adds a record rather than moving
+            # one.
+            exiled_for_cost = exiled_set_for_cost[0]
 
         # The counter-removal cost, charged here rather than where it was
         # counted: every gate between the two can still refuse the activation,
@@ -2236,9 +2276,8 @@ class AbilityActivationMixin:
         # above the mana payment and the {T} checks, so Ancient Hydra's "{1},
         # Remove a fade counter" activated with no mana was refused with the
         # counter already gone — one upkeep of the creature's life paid for
-        # nothing. Nothing after this point refuses. (The mana above is still
-        # paid ahead of the two {T} checks; that ordering is the pool's, not
-        # this cost's, and is reported rather than moved in this round.)
+        # nothing. Nothing after this point refuses; the two {T} checks that
+        # once sat between the mana and here now sit above every cost.
         # Reading the counters *before* this is also CR 601.2f's order: a cost
         # sized off the counters is determined before any cost is paid.
         if counters_removed_for_cost:
@@ -2965,14 +3004,20 @@ class AbilityActivationMixin:
             return None
         return self._normalize_mana_color(mana_color)
 
-    def _pay_exile_cost(
+    def _choose_exile_cost(
         self, cost, controller, controller_index: int, permanent,
         cost_permanent_index,
-    ) -> list:
-        """Charge an "Exile <noun phrase>" activation cost, returning the cards
-        it ate — or an **empty list** when nothing in the named zone could pay,
-        which makes the ability unactivatable (CR 602.2b) with nothing else
-        spent.
+    ) -> "tuple | None":
+        """What an "Exile <noun phrase>" activation cost will eat, chosen and
+        **not yet paid** — or None when nothing in the named zone could pay,
+        which makes the ability unactivatable (CR 602.2b) with nothing spent.
+
+        ``(zone, pile, slots, objects)``: the zone, the seat whose hand or
+        graveyard pays (None on the battlefield), the chosen slots in that pile
+        and the objects in them. :meth:`_pay_exile_cost` moves them. Two steps
+        because a choice is a check and a payment is not: this used to exile
+        as it chose, above every refusal still to come, so a refused
+        activation had already eaten the card (CR 601.2h; CR 733.1).
 
         Three zones, one rule. The battlefield enumerates the *permanents the
         payer controls* through the control seam and asks ``subject_matches``,
@@ -3011,7 +3056,7 @@ class AbilityActivationMixin:
                 if _card_matches_filter(card, described)
             ]
             if len(slots) < wanted:
-                return []
+                return None
             named = (
                 [cost_permanent_index]
                 if isinstance(cost_permanent_index, int)
@@ -3024,16 +3069,10 @@ class AbilityActivationMixin:
                     break
                 if slot not in chosen_slots:
                     chosen_slots.append(slot)
-            taken = [controller.hand[slot] for slot in chosen_slots]
-            for card in taken:
-                self.take_card_from_hand(controller, card)
-                controller.exile.append(card)
-            self.log.append(
-                f"{controller.name} exiled "
-                + ", ".join(card.name for card in taken)
-                + f" from their hand to activate {permanent.card.name}"
+            return (
+                "hand", controller, tuple(chosen_slots),
+                tuple(controller.hand[slot] for slot in chosen_slots),
             )
-            return taken
         if cost.exile_zone == "graveyard":
             # Whose pile. "your graveyard" (Necropolis) is one seat;
             # ``exile_zone_owner`` of None is "a graveyard" — anybody's — and
@@ -3072,23 +3111,14 @@ class AbilityActivationMixin:
                         break
                     if slot not in chosen_slots:
                         chosen_slots.append(slot)
-                # Resolved to *cards* before anything leaves, then removed
-                # highest slot first: every pop renumbers the slots behind it,
-                # and a graveyard holds several copies of a popular card under
-                # one name, so a scan by value would take the wrong one
-                # (idiom 11).
-                taken = [pile.graveyard[slot] for slot in chosen_slots]
-                for slot in sorted(chosen_slots, reverse=True):
-                    pile.graveyard.pop(slot)
-                controller.exile.extend(taken)
-                self.log.append(
-                    f"{controller.name} exiled "
-                    + ", ".join(card.name for card in taken)
-                    + f" from the graveyard of {pile.name} to activate "
-                    f"{permanent.card.name}"
+                # Resolved to *cards* before anything leaves (idiom 11): a
+                # graveyard holds several copies of a popular card under one
+                # name, so a scan by value at payment would take the wrong one.
+                return (
+                    "graveyard", pile, tuple(chosen_slots),
+                    tuple(pile.graveyard[slot] for slot in chosen_slots),
                 )
-                return taken
-            return []
+            return None
         candidates = [
             perm for perm in self.controlled_by(controller_index)
             if subject_matches(
@@ -3096,7 +3126,7 @@ class AbilityActivationMixin:
             )
         ]
         if len(candidates) < wanted:
-            return []
+            return None
         named = (
             self.permanent_at(controller, cost_permanent_index)
             if isinstance(cost_permanent_index, int) else None
@@ -3113,8 +3143,58 @@ class AbilityActivationMixin:
                 break
             if not any(option is already for already in picked):
                 picked.append(option)
+        return ("battlefield", None, (), tuple(picked))
+
+    def _pay_exile_cost(
+        self, choice, controller, controller_index: int, permanent
+    ) -> list:
+        """Move what :meth:`_choose_exile_cost` chose into exile, returning the
+        cards it ate.
+
+        Called below the activation's last refusal, so a payment here is always
+        for an activation that happens. The pile is read back by slot **and**
+        checked by identity: nothing between the choice and this call moves a
+        card, and if that ever stops being true the slot that no longer holds
+        the chosen object is found again rather than trusted, because a slot is
+        not an address.
+        """
+        zone, pile, slots, objects = choice
+        if zone == "hand":
+            # Through ``take_card_from_hand``, not a filter over the list: a
+            # deck repeats one immutable ``CardDefinition`` per copy, so every
+            # copy of a card in a hand is the same Python object and an identity
+            # filter removes all of them where this cost eats exactly one.
+            for card in objects:
+                self.take_card_from_hand(controller, card)
+                controller.exile.append(card)
+            self.log.append(
+                f"{controller.name} exiled "
+                + ", ".join(card.name for card in objects)
+                + f" from their hand to activate {permanent.card.name}"
+            )
+            return list(objects)
+        if zone == "graveyard":
+            # Highest slot first: every pop renumbers the slots behind it.
+            located = []
+            for slot, card in zip(slots, objects):
+                if not (0 <= slot < len(pile.graveyard)) or pile.graveyard[slot] is not card:
+                    slot = next(
+                        index for index, held in enumerate(pile.graveyard)
+                        if held is card and index not in located
+                    )
+                located.append(slot)
+            for slot in sorted(located, reverse=True):
+                pile.graveyard.pop(slot)
+            controller.exile.extend(objects)
+            self.log.append(
+                f"{controller.name} exiled "
+                + ", ".join(card.name for card in objects)
+                + f" from the graveyard of {pile.name} to activate "
+                f"{permanent.card.name}"
+            )
+            return list(objects)
         taken = []
-        for chosen in picked:
+        for chosen in objects:
             owner_index = self.owner_index_of(chosen)
             card = chosen.card
             self.remove_from_battlefield(chosen)

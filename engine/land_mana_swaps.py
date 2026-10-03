@@ -93,6 +93,11 @@ class LandManaSwap:
     #: clamps the whole production to one mana, as Contamination's static does.
     #: False on every record armed before a card printed the words.
     replaces_amount: bool = False
+    #: "…instead of any other **color**." (Hall of Gemstone.) Only the coloured
+    #: mana a covered land makes is replaced; its {C} stays {C}, because
+    #: colorless is a type of mana but not a color (CR 106.1a, 106.1b). False
+    #: is "any other type".
+    colors_only: bool = False
 
     def symbol(self) -> str:
         """The symbol this record makes a covered land produce."""
@@ -160,6 +165,11 @@ class ManaSubstitution:
     #: card on any land that makes more than one mana — which is the direction
     #: a substitution must never drift in.
     replaces_amount: bool = False
+    #: "…instead of any other **color**" (Hall of Gemstone's record): the
+    #: colourless part of the production passes through unchanged. Every
+    #: printed static in the pool says "type", so this is only ever set from a
+    #: :class:`LandManaSwap` that carries it.
+    colors_only: bool = False
 
 
 #: "If a land is tapped for mana, it produces <mana> instead of any other
@@ -388,8 +398,74 @@ def swapped_production(game, land, requested=None) -> "ManaSubstitution | None":
             found = ManaSubstitution(
                 produced=symbol, land_type=None,
                 replaces_amount=record.replaces_amount,
+                colors_only=record.colors_only,
             )
     return found
+
+
+def production_snapshot(player) -> dict:
+    """Every bucket a mana production can write into, copied before it runs.
+
+    The unrestricted pool under ``None`` and each CR 106.6 "spend this mana
+    only to…" bucket under its own key (``restricted_mana.mana_bucket``). A
+    swap is a replacement over the **production event** (CR 106.12b), and where
+    the mana lands is a fact about the ability that made it, not about the
+    event — so the seam has to see every bucket, not only the pool.
+
+    It used to see the pool alone. Mishra's Workshop's {C}{C}{C} goes to the
+    ``artifact`` bucket, so it escaped Deep Water, Infernal Darkness,
+    Contamination and Harvest Mage alike: under Contamination it made three
+    colourless where the card says one {B}.
+    """
+    snapshot = {None: dict(player.mana_pool)}
+    for key, bucket in (getattr(player, "restricted_mana", None) or {}).items():
+        snapshot[key] = dict(bucket)
+    return snapshot
+
+
+def substitute_production(
+    player, before: dict, produced: str, amount: "int | None" = None,
+    *, colors_only: bool = False,
+) -> int:
+    """Turn everything produced since *before* into *produced*, and return how
+    much that is.
+
+    **Bucket by bucket**, so mana keeps the restriction it was made with: the
+    restriction is created by the ability that produced the mana (CR 106.6),
+    the swap changes only the type — and, for "and amount", how much — of what
+    that ability produced. CR 106.6a says the same of a replacement that adds
+    mana: "any restrictions … created by the spell or ability will apply to all
+    mana produced." A Workshop under Deep Water makes {U}{U}{U} that still pays
+    only for artifact spells; dropped into the open pool it would be a strictly
+    better land than the one printed.
+
+    *amount* is "…and amount" (Contamination, Harvest Mage): the whole
+    production is clamped to that many, counted across every bucket in the
+    order they were written — the pool first, then each restricted bucket.
+
+    *colors_only* is "…instead of any other **color**" (Hall of Gemstone):
+    colourless mana is a type but not a colour (CR 106.1a), so {C} the land made is
+    left exactly where it is and only the coloured mana is replaced.
+    """
+    buckets = [(None, player.mana_pool)]
+    buckets.extend((getattr(player, "restricted_mana", None) or {}).items())
+    total = 0
+    for key, bucket in buckets:
+        prior = before.get(key, {})
+        gained = 0
+        for symbol in list(bucket):
+            if colors_only and symbol not in COLORS:
+                continue
+            delta = int(bucket.get(symbol, 0)) - int(prior.get(symbol, 0))
+            if delta > 0:
+                bucket[symbol] = int(bucket[symbol]) - delta
+                gained += delta
+        if amount is not None:
+            gained = min(gained, max(0, int(amount) - total))
+        if gained:
+            bucket[produced] = int(bucket.get(produced, 0)) + gained
+            total += gained
+    return total
 
 
 def payment_colors(game, land) -> "tuple[str, ...] | None":
@@ -400,13 +476,22 @@ def payment_colors(game, land) -> "tuple[str, ...] | None":
     choice", because the tapper may name any of them. The payment planner and
     the client's colour prompt both ask this, so the two cannot disagree about
     what a Forest under Harvest Mage can pay for.
+
+    A swap of colours only (Hall of Gemstone) leaves a land's {C} alone, so a
+    land that makes only colourless is answered by no swap at all, and one
+    that makes both keeps its {C} beside the swapped colour.
     """
-    swapped = swapped_symbol(game, land)
+    found = swapped_production(game, land)
+    swapped = None if found is None else found.produced
     if swapped is None:
         return None
-    if swapped == MANA_COLOR_OF_CHOICE:
-        return COLORS
-    return (swapped,)
+    offered = COLORS if swapped == MANA_COLOR_OF_CHOICE else (swapped,)
+    if not found.colors_only:
+        return offered
+    own = {str(s).upper() for s in (getattr(land, "effective_produced_mana", ()) or ())}
+    if not own & set(COLORS):
+        return None
+    return offered + (("C",) if "C" in own else ())
 
 
 def swapped_symbol(game, land) -> str | None:
@@ -421,8 +506,8 @@ def swapped_symbol(game, land) -> str | None:
 
 __all__ = [
     "COLORS", "END_OF_TURN", "LandManaSwap", "ManaSubstitution", "add_swap",
-    "clear_swaps", "payment_colors", "static_substituted_symbol",
-    "static_substitution_for",
-    "substitution_line", "substitutions_on", "swapped_production",
-    "swapped_symbol", "swaps_on",
+    "clear_swaps", "payment_colors", "production_snapshot",
+    "static_substituted_symbol", "static_substitution_for",
+    "substitute_production", "substitution_line", "substitutions_on",
+    "swapped_production", "swapped_symbol", "swaps_on",
 ]
