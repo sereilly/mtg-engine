@@ -72,6 +72,19 @@ class SimulationReport:
     #: See `ai_combat.CombatOutcome`: the multi-blocked / banding splits, not
     #: every combat that dealt damage.
     manual_damage_splits: int = 0
+    #: How many ending phases actually ran (CR 512-514), for the reason the
+    #: combat counts above exist. Until PCY's wave 2 this loop went main ->
+    #: combat -> next seat, so no simulated turn had ever ended: every "until
+    #: end of turn" pump and shield lasted the whole game, marked damage was
+    #: never removed (CR 514.2), no "at the beginning of the end step" trigger
+    #: fired (CR 513.1a) and no hand was ever discarded down to its maximum
+    #: (CR 514.1). Zero here is the fourth omission of the "it plays a whole
+    #: turn" class coming back.
+    end_steps: int = 0
+    cleanup_steps: int = 0
+    #: Cards the active player discarded to maximum hand size in cleanup
+    #: (CR 514.1) — a number that could only ever have read zero before.
+    cleanup_discards: int = 0
 
     @property
     def ok(self) -> bool:
@@ -441,12 +454,27 @@ def _assert_expected(
     before_target = before[target_index]
     after_target = after[target_index]
 
+    # **Both life checks read the per-turn records, not the life total**, and
+    # that is the second time this oracle has lied rather than the engine: the
+    # cast is a window other permanents act in too. "Whenever a player casts a
+    # red spell, you may pay {1}. If you do, you gain 1 life" (Iron Star) gained
+    # the Bolt's target a life in the same window, so the total fell by 2 and
+    # the check said the Bolt dealt 2 — LEB's and 2ED's default seeded runs
+    # exited 1 on it, and Ivory Cup did the same to Healing Salve in 6ED's.
+    # Damage dealt and life gained are counted separately by the engine
+    # (`damage_taken_this_turn`, `life_gained_this_turn`), so each check reads
+    # the one its card prints. The damage is still compared exactly — nothing
+    # else in these pools deals damage to the Bolt's target as it is cast — and
+    # the gain as a floor, because a cast trigger adding life on top is the
+    # very thing that fooled it.
     if card.name == "Lightning Bolt":
         base_damage = 3
         if before_target.combat_damage_cap_one_charges > 0 and base_damage > 1:
             base_damage = 1
         expected_damage = max(0, base_damage - before_target.damage_prevention_pool)
-        actual_damage = before_target.life - after_target.life
+        actual_damage = (
+            after_target.damage_taken_this_turn - before_target.damage_taken_this_turn
+        )
         if actual_damage != expected_damage:
             return "Lightning Bolt damage did not match prevention/cap effects"
 
@@ -458,9 +486,9 @@ def _assert_expected(
             return "Ancestral Recall did not draw expected cards"
 
     if card.name == "Healing Salve":
-        life_gain = after_target.life - before_target.life
+        life_gain = after_target.life_gained_this_turn - before_target.life_gained_this_turn
         prevention_gain = after_target.damage_prevention_pool - before_target.damage_prevention_pool
-        if life_gain != 3 and prevention_gain != 3:
+        if life_gain < 3 and prevention_gain != 3:
             return "Healing Salve did not apply expected life-gain or prevention mode"
     # CR 205.2b: a card has **every** type its line names, so Ornithopter is an
     # artifact card *and* a creature card. Both checks below used
@@ -527,11 +555,154 @@ def _clone_player(game: Game, player: PlayerState) -> PlayerState:
         combat_damage_cap_one_charges=player.combat_damage_cap_one_charges,
         has_no_max_hand_size=player.has_no_max_hand_size,
         can_spend_white_as_red=player.can_spend_white_as_red,
+        # What `_assert_expected` reads instead of the life total — see there.
+        damage_taken_this_turn=player.damage_taken_this_turn,
+        life_gained_this_turn=player.life_gained_this_turn,
     )
 
 
 def _snap(game: Game) -> tuple[PlayerState, PlayerState]:
     return (_clone_player(game, game.players[0]), _clone_player(game, game.players[1]))
+
+
+def _play_combat_phase(
+    game: Game, active: int, report: SimulationReport, game_index: int, turn: int
+) -> None:
+    """One combat phase through `ai_combat.run_ai_combat_phase`, recorded.
+
+    A function rather than the inline block it was, because a turn can now
+    reach a combat phase from two places: the turn's own, and one CR 500.8 adds
+    after the postcombat main phase (Relentless Assault), which the ending-phase
+    walk below enters through the turn's plan.
+    """
+    combat = run_ai_combat_phase(game, active)
+    report.attacks_declared += combat.attacks_declared
+    report.attackers_declared += combat.attackers
+    report.blockers_declared += combat.blockers
+    report.manual_damage_splits += combat.manual_damage_splits
+    for seat_name, why in combat.refused_attacks:
+        report.refused_attacks[f"{seat_name}: {why}"] += 1
+    for seat_name, why in combat.silent_attacks:
+        report.issues.append(InteractionIssue(
+            game_index, turn,
+            f"{seat_name} attacked with nobody: even the "
+            f"every-legal-attacker fallback was refused ({why})",
+        ))
+    for seat_name, why in combat.refused_blocks:
+        report.refused_blocks[f"{seat_name}: {why}"] += 1
+    for seat_name, why in combat.silent_blocks:
+        report.issues.append(InteractionIssue(
+            game_index, turn,
+            f"{seat_name} blocked with nobody: even the empty "
+            f"declaration was refused ({why})",
+        ))
+    _resolve_pending_choices(game)
+
+
+#: Bounds on the two loops below. Generous: a turn has five phases plus
+#: whatever CR 500.8 adds, and a step's stack is drained in one pass unless a
+#: drained choice put something new on it.
+_MAX_REMAINING_PHASES = 12
+_MAX_DRAIN_PASSES = 8
+
+
+def _drain_step(game: Game) -> None:
+    """Resolve a step's stack and the prompts it armed, until neither moves.
+
+    `_resolve_priority_window` stops at an object whose resolution is held for
+    an answer (CR 608.2) and the simulator answers afterwards, so one pass can
+    leave the rest of the step's triggers waiting behind the one that asked.
+    In a main phase the cast that follows drains them; nothing follows an end
+    step but cleanup, so they would otherwise resolve a turn late, in the next
+    turn's upkeep.
+    """
+    for _ in range(_MAX_DRAIN_PASSES):
+        game._resolve_priority_window()
+        _resolve_pending_choices(game)
+        if not game.stack:
+            return
+
+
+def _play_rest_of_turn(
+    game: Game, active: int, report: SimulationReport, game_index: int, turn: int
+) -> None:
+    """Everything after the turn's first combat phase: the postcombat main
+    phase, any phase CR 500.8 added, and the ending phase (CR 512-514).
+
+    The **fourth** omission of the "it plays a whole turn" class, after
+    `begin_turn_bookkeeping`, the precombat main phase and combat, and it
+    failed the way all three did: the run completed, the interaction count was
+    non-zero and the issue list was empty. What was missing was every end of
+    every turn. W1G1 counted ``resolve_end_step`` = 0 and
+    ``resolve_cleanup_step`` = 0 over three LEA games; W1G2 watched a Snag cast
+    on turn 4 still preventing damage on turn 18. Every "until end of turn"
+    effect in every simulated game was permanent, marked damage accumulated
+    across turns, no end-step trigger ever fired and no hand was ever
+    discarded down to its maximum.
+
+    **The walk is the engine's, not this function's.** Which phase comes next
+    is `Game.enter_next_turn_phase`, the seam the web layer's phase rail goes
+    through — so an extra combat phase (Relentless Assault) is entered and
+    fought rather than skipped, and the ending phase is entered by the same
+    call that would enter anything else. What this function supplies is only
+    what the engine waits for a *player* to do: close a main phase nobody is
+    casting in, fight a combat phase, and walk the end step's priority window
+    to cleanup, which is the web layer's ``step == "end"`` branch
+    (``close_end_step`` then ``resolve_cleanup_step``) for a seat nobody asks.
+
+    Cleanup's discard is the engine's own non-interactive default, the same
+    one an AI seat gets in the web app (``defer_discard_selection`` is only
+    ever set for a human), so a simulated game and an unattended web game
+    discard the same cards.
+    """
+    for _ in range(_MAX_REMAINING_PHASES):
+        if game.is_game_over():
+            return
+        phase = game.current_turn_phase
+        if phase == "ending":
+            break
+        if phase == "combat":
+            # Still inside a combat phase the driver could not finish: a prompt
+            # it does not answer is outstanding, or a resolution is suspended.
+            # `run_ai_combat_phase` left the phase where it stood rather than
+            # forcing it, and so does this — the turn ends unfinished, as every
+            # turn did before this function existed, rather than re-entering a
+            # combat that has already declared.
+            return
+        # A main phase. The simulator casts in the precombat one only, so this
+        # is the postcombat one or an extra one: nothing is done in it, its
+        # priority window (and any "each of your main phases" trigger the entry
+        # announced) is drained, and the turn's plan says what follows.
+        game._close_current_priority_step()
+        _resolve_pending_choices(game)
+        entered = game.enter_next_turn_phase(phase)
+        if entered is None:
+            return
+        if entered == "combat":
+            # CR 500.8's "additional combat phase" (Relentless Assault),
+            # entered by the plan and fought like the turn's own.
+            _play_combat_phase(game, active, report, game_index, turn)
+    else:
+        return
+
+    if game.is_game_over():
+        return
+    # CR 513: `enter_turn_phase("ending")` ran `resolve_end_step`, which put the
+    # "at the beginning of the end step" triggers on the stack and opened the
+    # active player's priority window. Both players pass (the simulator holds
+    # no instant-speed play), so the window is the stack draining.
+    _drain_step(game)
+    report.end_steps += 1
+    if game.is_game_over():
+        return
+    game.close_end_step()
+    # CR 514: discard to hand size, then CR 514.2's "until end of turn" ends
+    # and damage is removed.
+    hand_before = len(game.players[active].hand)
+    game.resolve_cleanup_step(active)
+    _drain_step(game)
+    report.cleanup_steps += 1
+    report.cleanup_discards += max(0, hand_before - len(game.players[active].hand))
 
 
 def run_ai_simulation(
@@ -799,28 +970,13 @@ def run_ai_simulation(
                 # silent, and a second copy of that fallback chain would be a
                 # second place for the silence to live.
                 if not game.is_game_over():
-                    combat = run_ai_combat_phase(game, active)
-                    report.attacks_declared += combat.attacks_declared
-                    report.attackers_declared += combat.attackers
-                    report.blockers_declared += combat.blockers
-                    report.manual_damage_splits += combat.manual_damage_splits
-                    for seat_name, why in combat.refused_attacks:
-                        report.refused_attacks[f"{seat_name}: {why}"] += 1
-                    for seat_name, why in combat.silent_attacks:
-                        report.issues.append(InteractionIssue(
-                            game_index, turn,
-                            f"{seat_name} attacked with nobody: even the "
-                            f"every-legal-attacker fallback was refused ({why})",
-                        ))
-                    for seat_name, why in combat.refused_blocks:
-                        report.refused_blocks[f"{seat_name}: {why}"] += 1
-                    for seat_name, why in combat.silent_blocks:
-                        report.issues.append(InteractionIssue(
-                            game_index, turn,
-                            f"{seat_name} blocked with nobody: even the empty "
-                            f"declaration was refused ({why})",
-                        ))
-                    _resolve_pending_choices(game)
+                    _play_combat_phase(game, active, report, game_index, turn)
+
+                # CR 512-514, the half of a turn this loop still did not have
+                # after combat arrived: the postcombat main phase, anything
+                # CR 500.8 added, and the ending phase. See `_play_rest_of_turn`.
+                if not game.is_game_over():
+                    _play_rest_of_turn(game, active, report, game_index, turn)
 
                 new_logs = game.log[log_cursor:]
                 report.log_lines.extend(f"  {line}" for line in new_logs)

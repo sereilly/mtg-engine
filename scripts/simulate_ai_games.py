@@ -60,6 +60,16 @@ def main() -> int:
         f"{report.manual_damage_splits} manual damage split(s)"
     )
 
+    # And how many turns actually *ended*, for the same reason. The loop had
+    # no ending phase until PCY's wave 2, so every "until end of turn" effect
+    # in every run this script ever printed lasted the whole game — and the
+    # output read exactly as it does now. A zero here is that coming back.
+    print(
+        f"Ending phase: {report.end_steps} end step(s), "
+        f"{report.cleanup_steps} cleanup step(s), "
+        f"{report.cleanup_discards} card(s) discarded to hand size"
+    )
+
     if report.refused_attacks:
         total = sum(report.refused_attacks.values())
         print(f"Attack declarations the engine declined: {total} (the AI proposed an illegal set)")

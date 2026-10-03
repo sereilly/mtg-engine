@@ -1,6 +1,7 @@
 import ast
 import pathlib
 from collections import Counter
+from dataclasses import replace
 
 import pytest
 
@@ -343,6 +344,146 @@ def test_the_simulator_actually_plays_a_combat_phase():
     # nearly did (a counter that could only ever have read zero).
     assert isinstance(report.refused_attacks, Counter)
     assert sum(report.refused_attacks.values()) == 0, dict(report.refused_attacks)
+
+
+@pytest.mark.parametrize("code, seed", [("M21", 1), ("ATQ", 7)])
+def test_the_simulator_plays_an_ending_phase_and_until_end_of_turn_ends(
+    code, seed, monkeypatch
+):
+    """Every simulated turn ends (CR 512-514), and what "until end of turn"
+    bought is gone by the next one.
+
+    The **fourth** omission of the "it plays a whole turn" class in
+    ``run_ai_simulation``. The loop went main phase -> combat -> next seat, so
+    ``resolve_end_step`` and ``resolve_cleanup_step`` ran zero times in every
+    simulated game (W1G1, W1G2): a Giant Growth or a Healing Salve shield lasted
+    the whole game, marked damage piled up across turns, no end-step trigger
+    fired and no hand was discarded down to seven. And — the property this
+    class always has — the run still completed with a non-zero interaction
+    count and an empty issue list.
+
+    Read off the engine's own step methods rather than the report's counters,
+    so the assertion is about what ran, not about what this file says ran. The
+    two seeds are ones where, on the tree this test was written against, the
+    stale state was real at turn starts (M21: damage and end-of-turn pumps;
+    ATQ: damage and prevention shields) — and the *exercised* floor below is
+    what keeps a later seed from passing by never creating any.
+    """
+    from engine.card_loader import manifest_set_path
+    from engine.hand_size import maximum_hand_size
+    from engine.pt import TEMPORARY_PT_CHANNELS
+    from engine.shields import shields_on
+
+    eot_keys = TEMPORARY_PT_CHANNELS["end_of_turn"]
+    seen = Counter()
+    stale: list[str] = []
+
+    def _w2g3_until_eot_state(game) -> list[str]:
+        found = []
+        for permanent in game.all_permanents():
+            if permanent.damage_marked:
+                found.append(f"{permanent.card.name} has {permanent.damage_marked} damage marked")
+            if any(key in permanent.metadata for key in eot_keys):
+                found.append(f"{permanent.card.name} carries an end-of-turn P/T change")
+            if shields_on(permanent):
+                found.append(f"{permanent.card.name} holds a prevention shield")
+        for player in game.players:
+            if shields_on(player):
+                found.append(f"{player.name} holds a prevention shield")
+        return found
+
+    original_begin = Game.begin_turn_bookkeeping
+    original_end = Game.resolve_end_step
+    original_cleanup = Game.resolve_cleanup_step
+
+    def begin(self, player_index):
+        seen["turn_starts"] += 1
+        stale.extend(f"turn {self.turn}: {what}" for what in _w2g3_until_eot_state(self))
+        # CR 514.1: the seat whose cleanup just ran is at or under its maximum.
+        if seen["cleanups"]:
+            previous = self.active_player_index
+            limit = maximum_hand_size(self, previous)
+            if limit is not None and len(self.players[previous].hand) > limit:
+                stale.append(
+                    f"turn {self.turn}: {self.players[previous].name} kept "
+                    f"{len(self.players[previous].hand)} cards over a maximum of {limit}"
+                )
+        return original_begin(self, player_index)
+
+    def end(self, *args, **kwargs):
+        seen["end_steps"] += 1
+        return original_end(self, *args, **kwargs)
+
+    def cleanup(self, *args, **kwargs):
+        seen["cleanups"] += 1
+        if _w2g3_until_eot_state(self):
+            seen["cleanups_with_something_to_end"] += 1
+        return original_cleanup(self, *args, **kwargs)
+
+    monkeypatch.setattr(Game, "begin_turn_bookkeeping", begin)
+    monkeypatch.setattr(Game, "resolve_end_step", end)
+    monkeypatch.setattr(Game, "resolve_cleanup_step", cleanup)
+
+    report = run_ai_simulation(
+        manifest_set_path(code), games=2, seed=seed, max_turns=10
+    )
+
+    assert seen["turn_starts"] >= 30, f"examined only {seen['turn_starts']} turns"
+    # A turn the game ended part-way through has no ending phase; nothing else
+    # may lack one.
+    assert seen["end_steps"] >= seen["turn_starts"] - report.games_completed, dict(seen)
+    assert seen["cleanups"] == seen["end_steps"], dict(seen)
+    assert report.end_steps == seen["end_steps"]
+    assert report.cleanup_steps == seen["cleanups"]
+    assert seen["cleanups_with_something_to_end"] >= 3, (
+        "the run never reached a cleanup step holding until-end-of-turn state, "
+        f"so the expiry below was not exercised: {dict(seen)}"
+    )
+    assert stale == [], stale[:10]
+    assert not report.issues, [issue.message for issue in report.issues]
+
+
+def test_the_simulators_oracle_is_not_fooled_by_a_cast_trigger_gaining_life(
+    all_cards,
+):
+    """A real Lightning Bolt into a player whose Iron Star gains them a life in
+    the same window, judged by ``_assert_expected`` from the same snapshots the
+    simulator takes.
+
+    The oracle read the life *total*, so the Bolt looked like 2 damage and
+    LEB's and 2ED's default seeded runs (``simulate_ai_games.py --set LEB``,
+    seed 1337) exited 1 on a game where the engine had done exactly the right
+    thing — and Ivory Cup did the same to Healing Salve in 6ED's. The
+    expectation is still the human-read 3; what changed is which record it is
+    compared against.
+    """
+    from engine.ai_simulator import _assert_expected, _snap
+    from tests.helpers import _game, _nosick, resolve_stack
+
+    cards = {card.name: card for card in all_cards}
+    caster = PlayerState(name="Caster", hand=[cards["Lightning Bolt"]])
+    target = PlayerState(name="Target", life=10)
+    game = _game(caster, target)
+    for name in ("Iron Star", "Mountain"):
+        permanent = _nosick(Permanent(card=cards[name]))
+        game._put_permanent_onto_battlefield(1, permanent, None)
+
+    before = _snap(game)
+    result = game.cast_from_hand(0, "Lightning Bolt", target_player_index=1)
+    resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    after = _snap(game)
+
+    assert result.supported, result.details
+    # The window really did hold both: 3 damage dealt, 1 life gained.
+    assert target.life == 8, game.log[-12:]
+    assert after[1].damage_taken_this_turn - before[1].damage_taken_this_turn == 3
+    assert after[1].life_gained_this_turn - before[1].life_gained_this_turn == 1
+    assert _assert_expected(cards["Lightning Bolt"], before, after, 0, 1) is None
+
+    # …and the check still fires on a Bolt that dealt less than it prints.
+    short = (after[0], replace(after[1], damage_taken_this_turn=before[1].damage_taken_this_turn + 1))
+    assert _assert_expected(cards["Lightning Bolt"], before, short, 0, 1) is not None
 
 
 def test_combat_damage_in_the_simulator_actually_moves_a_life_total():
