@@ -41,6 +41,7 @@ from .errors import GrammarError
 from .nouns import parse_object_filter
 from .rebinding import rebind_pronoun_to_condition_target
 from .sentence_rebinding import (rebind_first_creature_to_damage_source,
+                                 rebind_permanent_or_player_to_offer_target,
                                  rebind_pronoun_to_delay_target)
 from .statements import _parse_condition, parse_statement
 from .stream import TokenStream
@@ -471,6 +472,9 @@ def _attach_if_you_do(stream: TokenStream, steps: list[ast.Statement]) -> bool:
         # The ordinal names one of the two creatures the offer printed, which
         # only the offer can say.
         branch = rebind_first_creature_to_damage_source(target.action, branch)
+        # "…unless that permanent's controller or that player pays {2}. If they
+        # do, … 2 damage to **the permanent or player**." (Rhystic Lightning.)
+        branch = rebind_permanent_or_player_to_offer_target(target, branch)
 
     if chooser_person and (choice_at := _choice_step_index(steps)) is not None:
         # "…chooses a creature …. **If the player does**, <A>. **If they

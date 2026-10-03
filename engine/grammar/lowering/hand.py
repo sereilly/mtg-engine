@@ -702,6 +702,19 @@ def _lower_discard(node: ast.Discard, event: str | None = None) -> tuple[OracleI
             # leaves this handler emptying whichever hand the resolution happens
             # to be carrying. On this card that is its own controller's, on
             # three upkeeps in four, silently.
+            if event is None and isinstance(amount, int) and node.filter is None:
+                # "Target player discards a card at random. **Then that player
+                # discards another card at random** …" (Flay.) No trigger froze
+                # a seat, so the words point back at the player this effect
+                # itself targeted — ``context.target``, the handler's default
+                # and the same reading the chosen discard below already gives
+                # "that player". No second ``targets`` description: the
+                # announcement chose once (CR 601.2c).
+                return (
+                    OracleInstruction(
+                        "discard_x_target_cards", "", {"amount": amount}
+                    ),
+                )
             if event not in _EVENT_SUBJECT_PLAYERS:
                 raise LoweringError(
                     "no event named {!r} freezes the seat 'that player' names"

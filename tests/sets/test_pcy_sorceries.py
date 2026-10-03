@@ -194,3 +194,40 @@ def test_rhystic_syphon_is_paid_off_by_the_target_alone(set_pool):
 
     assert (game.players[0].life, game.players[1].life) == (20, 20)
     assert (_w1g1_tapped(game, 0), _w1g1_tapped(game, 1)) == (0, 3)
+
+
+def test_flay_takes_a_second_random_card_from_a_target_who_cannot_pay(set_pool):
+    """"Target player discards a card at random. Then **that player** discards
+    **another** card at random unless they pay {1}." Both discards come from
+    the one player the spell targeted — never the caster's hand — and with no
+    mana the second is not bought off."""
+    lea = set_pool("LEA")
+    flay = set_pool("PCY")["Flay"]
+    game = _w1g1_sorcery_table(set_pool, lands=(3, 0))
+    caster, victim = game.players
+    caster.hand.extend([flay, lea["Forest"]])
+    victim.hand.extend([lea["Island"], lea["Swamp"], lea["Mountain"]])
+
+    assert derive_cast_spec(flay, compile_card_oracle(flay)) == {"kind": "player"}
+    assert game.cast_from_hand(0, "Flay", target_player_index=1).supported
+    game.auto_resolve_pending_choices()
+
+    assert len(victim.hand) == 1 and len(victim.graveyard) == 2
+    assert [c.name for c in caster.hand] == ["Forest"], "the caster discards nothing"
+
+
+def test_flay_second_discard_is_bought_off_by_the_target_alone(set_pool):
+    """The offer is the target's: one Island pays {1}, so only the first card
+    goes. The caster is never asked."""
+    lea = set_pool("LEA")
+    game = _w1g1_sorcery_table(set_pool, lands=(3, 1))
+    caster, victim = game.players
+    caster.hand.append(set_pool("PCY")["Flay"])
+    victim.hand.extend([lea["Island"], lea["Swamp"], lea["Mountain"]])
+
+    assert game.cast_from_hand(0, "Flay", target_player_index=1).supported
+    assert _w1g1_owed(game) == [1]
+    game.auto_resolve_pending_choices()
+
+    assert len(victim.hand) == 2 and len(victim.graveyard) == 1
+    assert (_w1g1_tapped(game, 0), _w1g1_tapped(game, 1)) == (0, 1)

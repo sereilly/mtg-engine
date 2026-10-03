@@ -215,7 +215,15 @@ def _parse_discard(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
     # that forces its controller to pitch two cards they were offered the choice
     # of keeping.
     up_to = bool(stream.accept_phrase("up", "to"))
-    count = parse_amount(stream)
+    # "Then that player discards **another** card at random …" (Flay.) One
+    # more card, written as a comparison with the discard the sentence in front
+    # already made — the reading `_parse_gets` gives Sabertooth Cobra's
+    # "another poison counter". Not a narrowing: the first card has left the
+    # hand, so every card still in it is "another" one.
+    count = (
+        ast.Fixed(1) if not up_to and stream.accept_word("another")
+        else parse_amount(stream)
+    )
     # "Discard a **creature** card" (Crypt Lurker). The noun parser reads the
     # whole phrase including its "card", so it is tried before the bare
     # template and reset when the phrase is just "card(s)". What the narrowing

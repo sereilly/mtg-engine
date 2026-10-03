@@ -307,6 +307,13 @@ def parse_player_ref(stream: TokenStream) -> ast.PlayerRef | None:
                 break
             if saw_possessive:
                 if stream.accept_word("controller"):
+                    # "…unless **that permanent's controller or that player**
+                    # pays {2}" (Rhystic Lightning): Chain Lightning's
+                    # disjunction printed the other way round, one referent
+                    # for the same reason (the "that player" branch above).
+                    either = stream.mark()
+                    if not stream.accept_phrase("or", "that", "player"):
+                        stream.reset(either)
                     return ast.PlayerRef("that_player")
                 # "…under the control of **that creature's owner**"
                 # (Reincarnation). Ownership is CR 108.3 and never changes;

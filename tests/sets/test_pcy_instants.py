@@ -179,3 +179,67 @@ def test_rhystic_shield_additional_toughness_is_bought_off_for_two(set_pool):
 
     assert bears.effective_toughness == 3
     assert _w1g1_lands_tapped(game, 1) == 2
+
+
+def _w1g1_lightning_life(game, seat: int) -> int:
+    return game.players[seat].life
+
+
+def test_rhystic_lightning_deals_four_to_a_player_who_cannot_pay(set_pool):
+    """"…deals 4 damage to any target unless that permanent's controller or
+    that player pays {2}. If they do, … deals 2 damage to the permanent or
+    player." Aimed at a player with no mana: the full 4."""
+    game = _w1g1_instant_duel(set_pool, lands=(4, 0))
+    game.players[0].hand.append(set_pool("PCY")["Rhystic Lightning"])
+
+    assert game.cast_from_hand(0, "Rhystic Lightning", target_player_index=1).supported
+    assert game.pending_choices == [], "an offer nobody can afford is not made"
+
+    assert (_w1g1_lightning_life(game, 0), _w1g1_lightning_life(game, 1)) == (20, 16)
+
+
+def test_rhystic_lightning_paid_by_the_targeted_player_deals_two(set_pool):
+    """The targeted player pays {2} and takes the 2 the payment buys instead —
+    "if they do" is a second, smaller hit, not nothing."""
+    game = _w1g1_instant_duel(set_pool, lands=(0, 2))
+    game.players[0].hand.append(set_pool("PCY")["Rhystic Lightning"])
+
+    assert game.cast_from_hand(0, "Rhystic Lightning", target_player_index=1).supported
+    assert game.confirm_optional_pay(1, accept=True)
+
+    assert game.players[1].life == 18
+    assert _w1g1_lands_tapped(game, 1) == 2
+
+
+def test_rhystic_lightning_asks_the_targeted_creatures_controller(set_pool):
+    """Aimed at a creature, the offer goes to *that permanent's controller* —
+    the opponent, not the caster — and paying leaves a Hill Giant (3/3) alive
+    with 2 damage instead of dead to 4."""
+    game = _w1g1_instant_duel(set_pool, lands=(4, 2))
+    giant = _w1g1_creature(game, set_pool, 1, "Hill Giant")
+    game.players[0].hand.append(set_pool("PCY")["Rhystic Lightning"])
+
+    assert game.cast_from_hand(
+        0, "Rhystic Lightning", target_permanent_ids=[giant.permanent_id],
+    ).supported
+    assert [c.player_index for c in game.pending_choices] == [1]
+    game.auto_resolve_pending_choices()
+    game._settle()
+
+    assert game.is_on_battlefield(giant) and giant.damage_marked == 2
+    assert game.players[1].life == 20, "the creature took the damage, not its controller"
+
+
+def test_rhystic_lightning_kills_the_creature_when_its_controller_declines(set_pool):
+    game = _w1g1_instant_duel(set_pool, lands=(0, 2))
+    giant = _w1g1_creature(game, set_pool, 1, "Hill Giant")
+    game.players[0].hand.append(set_pool("PCY")["Rhystic Lightning"])
+
+    assert game.cast_from_hand(
+        0, "Rhystic Lightning", target_permanent_ids=[giant.permanent_id],
+    ).supported
+    assert game.confirm_optional_pay(1, accept=False)
+    game._settle()
+
+    assert not game.is_on_battlefield(giant)
+    assert _w1g1_lands_tapped(game, 1) == 0
