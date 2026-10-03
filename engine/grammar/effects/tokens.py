@@ -272,7 +272,20 @@ def _parse_create_token_for_recipient(
     mark = stream.mark()
     for words, who in _TOKEN_RECIPIENT_PREFIXES:
         if stream.accept_phrase(*words) and stream.at_word("creates"):
-            token = _parse_create_token(stream)
+            verb = stream.mark()
+            try:
+                token = _parse_create_token(stream)
+            except GrammarError:
+                # "Each player creates a green Elephant creature token. Those
+                # creatures have "This token's power and toughness are each
+                # equal to …"" (Elephant Resurgence.) Saproling Burst's P/T-less
+                # token behind a recipient: admitted only when a quoted line
+                # defines the whole P/T — the reading `parse_create_token_with_
+                # stated_pt` gives the bare "Create" spelling.
+                stream.reset(verb)
+                token = _parse_create_token(stream, pt_optional=True)
+                if not _pt_defined_by_quoted_line(token):
+                    raise
             assert isinstance(token, ast.CreateToken)
             return dataclasses.replace(token, recipient_players=who)
         stream.reset(mark)
@@ -294,6 +307,19 @@ def _parse_create_token_for_recipient(
         return dataclasses.replace(token, recipient=LAST_TARGET_CONTROLLER)
     stream.reset(mark)
     return None
+
+
+def _pt_defined_by_quoted_line(token: "ast.Statement") -> bool:
+    """Whether a P/T-less creature *token* gets both halves from a quoted
+    characteristic-defining line (CR 604.3) — the CDA table's own answer."""
+    from ...characteristic_defining import defines_whole_pt
+
+    return (
+        isinstance(token, ast.CreateToken)
+        and token.power is None and token.toughness is None
+        and token.counted_pt is None and "creature" in token.types
+        and any(defines_whole_pt(line) for line in token.granted_lines)
+    )
 
 
 def _parse_create_token(
@@ -624,6 +650,9 @@ def _finish_create_token(
     if stream.accept_punct(".") and (
         stream.accept_phrase("they", "each", "have")
         or stream.accept_phrase("it", "has")
+        # "Each player creates a … token. **Those creatures have** "…""
+        # (Elephant Resurgence) — the same tail with a demonstrative.
+        or stream.accept_phrase("those", "creatures", "have")
     ):
         while True:
             if stream.at_kind(QUOTE):

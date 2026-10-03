@@ -553,6 +553,11 @@ def _parse_reveal_hand_and_choose(stream: TokenStream) -> ast.Statement | None:
         return ast.RevealHandAndChoose(
             player, chosen.filter, fate="exile_until_source_leaves"
         )
+    # "You choose an instant or sorcery card from it **and exile that card**."
+    # (Psychic Theft.) A plain exile; what becomes of the card is the next
+    # sentences' business, which read the `exiled_cards` record it leaves.
+    if stream.accept_phrase("and", "exile", "that", "card"):
+        return ast.RevealHandAndChoose(player, chosen.filter, fate="exile")
     # **No ending at all** (Lobotomy): the sentence stops at "from it" and what
     # the pick was *for* is the next printed sentence, which reads the name this
     # one recorded. So the production stops too, and the sequence parser reads

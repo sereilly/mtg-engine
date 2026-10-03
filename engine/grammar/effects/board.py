@@ -98,8 +98,27 @@ def _parse_sacrifice(stream: TokenStream, player: ast.PlayerRef) -> ast.Statemen
         # "unless you sacrifice" tail below reads.
         return _parse_sacrificed_subject(stream, player)
     if another and isinstance(subject, ast.TargetSpec):
+        # "another" is the article: the bare noun behind it reads as a sweep
+        # ("all"), and the lowering now sacrifices every match of a sweep.
         subject = dataclasses.replace(
-            subject, filter=dataclasses.replace(subject.filter, other_than_source=True)
+            subject,
+            quantifier="a" if subject.quantifier == "all" else subject.quantifier,
+            filter=dataclasses.replace(subject.filter, other_than_source=True),
+        )
+    # "…sacrifices all lands they control **except for three**." (Keldon
+    # Firebombers.) Limited Resources' keep with its count printed as the
+    # exception: the player keeps that many of their choice and sacrifices the
+    # rest, so it is that sentence's node.
+    if (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "all"
+        and stream.accept_phrase("except", "for")
+    ):
+        kept = parse_amount(stream)
+        if not isinstance(kept, ast.Fixed):
+            raise stream.error("expected a printed number after 'except for'")
+        return ast.KeepChosenSacrificeRest(
+            player, subject.filter, (ast.KeepSlot(kept.value, subject.filter),)
         )
     # "…sacrifices a Plains or a white permanent of their choice **for each
     # white permanent they control**." (Omen of Fire.) How many, counted off

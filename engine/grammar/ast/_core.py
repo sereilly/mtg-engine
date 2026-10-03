@@ -357,6 +357,18 @@ class DiscardedForCost:
 
 
 @dataclass(frozen=True)
+class RecordedCardManaValue:
+    """"…where X is **the milled card's mana value**" (Infernal Genesis).
+
+    :class:`DiscardedForCost`'s shape over an **instruction** record rather
+    than a cost channel: the card an earlier step of this same effect moved,
+    read back by the scratchpad key that step writes (*record*). A card in a
+    zone has only its printed mana value (CR 613.1), so that is all it carries.
+    """
+    record: str
+
+
+@dataclass(frozen=True)
 class CountersRemovedForCost:
     """How many counters the ability's **own cost** took off — "You gain 2 life
     **for each elixir counter removed this way**" (Essence Bottle), "…equal to

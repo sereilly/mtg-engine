@@ -142,13 +142,22 @@ def _parse_bin_unplayed_exiled_card(
         if not stream.accept_word("haven't", "hasn't"):
             stream.reset(mark)
             return None
+        # "…if you haven't **cast** the card" (Psychic Theft) is the same test
+        # for a card only castable: it is still in exile exactly when unplayed.
         if not (
             stream.accept_phrase("played", "it")
             or stream.accept_phrase("played", "the", "card")
+            or stream.accept_phrase("cast", "it")
+            or stream.accept_phrase("cast", "the", "card")
         ):
             stream.reset(mark)
             return None
         stream.accept_punct(",")
+        # "…, **return it to its owner's hand**." (Psychic Theft.)
+        if stream.accept_phrase("return", "it", "to"):
+            return ast.PutExiledCardIntoZone(
+                _parse_zone(stream), only_if_unplayed=True
+            )
         # "**they** put it into their graveyard" — the same seat again, named a
         # second time because the clause is a sentence of its own. Consumed and
         # dropped: which player performs the move decides nothing (CR 400.3

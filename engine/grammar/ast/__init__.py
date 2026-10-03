@@ -85,6 +85,7 @@ from ._core import (
     ThatMuch,
     DiscardedForCost,
     ExiledForCost,
+    RecordedCardManaValue,
     SacrificedForCost,
     TappedForCost,
     CountersRemovedForCost,
@@ -328,6 +329,7 @@ from .library import (
 from .cards import (
     Draw,
     EachPlayerClaimsExiledCard,
+    RandomGraveyardCardFate,
     Discard,
     Mill,
     MillUntil,
@@ -495,6 +497,7 @@ __all__ = [
     "ThatMuch",
     "DiscardedForCost",
     "ExiledForCost",
+    "RecordedCardManaValue",
     "SacrificedForCost",
     "TappedForCost",
     "CountersRemovedForCost",
@@ -715,6 +718,7 @@ __all__ = [
     # cards
     "Draw",
     "EachPlayerClaimsExiledCard",
+    "RandomGraveyardCardFate",
     "Discard",
     "LookTopCycleForLife",
     "SeparateLibraryTopIntoPiles",

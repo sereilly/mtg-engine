@@ -517,6 +517,9 @@ class PutOnLibraryBottom:
     (Epitaph Golem.) The zone the card leaves rides the target's filter, as
     every return does; the bottom is what tells it from :class:`PutOnLibraryTop`."""
     target: Recipient
+    #: Whose library, as printed: "your" (Epitaph Golem) or "its owner's"
+    #: (Mercenary Informer's battlefield tuck) — :class:`PutOnLibraryTop`'s field.
+    to_owner: str = "you"
 
 
 @dataclass(frozen=True)

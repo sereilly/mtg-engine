@@ -359,6 +359,8 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     # picks are made through a prompt.
     "exile_cards_from_graveyard": "zones",
     "exile_graveyard_cards": "zones",
+    # Search for Survivors: a random graveyard card to the battlefield or exile.
+    "move_random_graveyard_card": "zones",
     # "When that creature dies this turn, exile **it**" (Whippoorwill) — the
     # card the delayed ability was bound to, out of the graveyard the death put
     # it in.

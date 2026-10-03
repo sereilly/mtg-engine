@@ -2355,6 +2355,23 @@ def _action_is_takeable(
             graveyard_card_matches(instruction.payload, card)
             for card in player.graveyard
         )
+    # "You may exile a land card from your graveyard. **If you do**, …"
+    # (Forgotten Harvest.) The exile twin of Harvest Wurm's price above, and
+    # the same failure without it: a pile with no land card exiles nothing and
+    # the rider runs anyway. Only the unannounced pick from the offered seat's
+    # own pile; every other spelling keeps its offer.
+    if instruction.kind == "exile_cards_from_graveyard":
+        from ._common import graveyard_card_matches
+
+        if (
+            instruction.payload.get("graveyard_owner") != "you"
+            or instruction.payload.get("targets")
+        ):
+            return True
+        return any(
+            graveyard_card_matches(instruction.payload, card)
+            for card in player.graveyard
+        )
     # "Target player discards a card unless they **put a card from their hand on
     # top of their library**." (Tainted Specter.) An empty hand is a real and
     # checkable "nothing to give": the handler underneath moves as many cards as

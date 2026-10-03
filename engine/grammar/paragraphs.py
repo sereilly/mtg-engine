@@ -606,3 +606,41 @@ def _parse_rebalance_lands(stream: TokenStream) -> ast.Statement | None:
     if (over, under, counted_to) != (keep + 1, keep - 1, keep):
         raise stream.error("this rebalancing's four numbers do not agree")
     return ast.RebalanceLands(keep)
+
+
+def _parse_random_graveyard_card_fate(stream: TokenStream) -> ast.Statement | None:
+    """``Reorder your graveyard at random. An opponent chooses a card at random
+    in your graveyard. If it's a <type> card, put it onto the battlefield.
+    Otherwise, exile it.`` (Search for Survivors.)
+
+    Read whole: "it" is the card the random pick named and nothing else holds
+    it, and the type test chooses between two moves of that one card. Every
+    word is expected once the opener matches; refuses without consuming before.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("reorder", "your", "graveyard", "at", "random"):
+        return None
+    stream.accept_punct(".")
+    if not stream.accept_phrase(
+        "an", "opponent", "chooses", "a", "card", "at", "random", "in", "your",
+        "graveyard",
+    ):
+        stream.reset(mark)
+        return None
+    stream.accept_punct(".")
+    if not stream.accept_phrase("if", "it", "'s", "a"):
+        raise stream.error("expected the type test on the randomly chosen card")
+    card_type = _singular_type(stream.peek_word() or "")
+    if card_type not in CARD_TYPES:
+        raise stream.error("expected a card type in the random pick's test")
+    stream.advance()
+    stream.expect_word("card")
+    stream.accept_punct(",")
+    for word in ("put", "it", "onto", "the", "battlefield"):
+        stream.expect_word(word)
+    stream.accept_punct(".")
+    stream.expect_word("otherwise")
+    stream.accept_punct(",")
+    stream.expect_word("exile")
+    stream.expect_word("it")
+    return ast.RandomGraveyardCardFate(card_type)

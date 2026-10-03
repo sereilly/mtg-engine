@@ -1580,7 +1580,9 @@ def _graveyard_exile_pile_spec(payload: dict) -> dict | None:
     that same predicate and a spec described in this module's own spelling
     would be a second answer to which cards may be named.
     """
-    if payload.get("graveyard_owner") != "you":
+    if payload.get("graveyard_owner") != "you" or not payload.get("targets"):
+        # No ``targets``: "exile a land card from your graveyard" (Forgotten
+        # Harvest) names nothing at announcement and is picked at resolution.
         return None
     spec: dict = {"kind": GRAVEYARD_TARGET_KIND, "own_graveyard_only": True}
     card_type = payload.get("card_type")

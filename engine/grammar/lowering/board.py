@@ -37,8 +37,9 @@ from ._described_returns import _graveyard_to_hand_payload
 from ._sacrifices import _forced_sacrifice_filter
 from ._common import (_describe_targets, _filter_payload,
                       _is_enchanted, _is_source, _is_target,
-                      _restrictions_beyond, player_deed_payload)
-from ._events import (ATTACHED_SUBJECT_EVENTS, CHOSEN_PLAYER, LOOP_BOUND_OBJECT, OTHER_CHOSEN_PERMANENT, _EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER, names_attached_permanent, CHOSEN_PERMANENT, _RECORDED_PERMANENTS, _back_reference_payload)
+                      _restrictions_beyond, player_deed_payload,
+                      refuse_untestable)
+from ._events import (ATTACHED_SUBJECT_EVENTS, CHOSEN_PLAYER, LOOP_BOUND_OBJECT, _DAMAGED_PLAYER_EVENTS, _DEFENDING_PLAYER_EVENTS, OTHER_CHOSEN_PERMANENT, _EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER, names_attached_permanent, CHOSEN_PERMANENT, _RECORDED_PERMANENTS, _back_reference_payload)
 from ._delays import (_BOUND_OBJECT_DELAYED_EVENTS)
 
 
@@ -77,6 +78,8 @@ def _lower_put_on_library_bottom(node: ast.PutOnLibraryBottom) -> tuple[OracleIn
     The bare phrase keeps its empty payload, which is what "any card" has
     always meant to this kind."""
     spec = node.target
+    if node.to_owner == "owner":
+        return _lower_permanent_on_library_bottom(node)
     if not isinstance(spec, ast.TargetSpec) or not _is_target(spec):
         raise LoweringError("the bottoming handler reads one chosen card", node=node)
     filt = spec.filter
@@ -96,6 +99,35 @@ def _lower_put_on_library_bottom(node: ast.PutOnLibraryBottom) -> tuple[OracleIn
             _graveyard_to_hand_payload(filt),
         ),
     )
+
+
+def _lower_permanent_on_library_bottom(
+    node: ast.PutOnLibraryBottom,
+) -> tuple[OracleInstruction, ...]:
+    """"Put target nontoken Mercenary on the bottom of its owner's library."
+    (Mercenary Informer, Rebel Informer.)
+
+    Teferi's tuck (``put_target_on_library_top``) at the library's other end:
+    one chosen permanent, sent to CR 400.3's owner by the handler. The end is
+    payload (``library_end``) rather than a second kind, because every table
+    keyed by the kind — the AI's aim, the effect label, the category — answers
+    a tuck the same way whichever end it lands on.
+    """
+    spec = node.target
+    if not isinstance(spec, ast.TargetSpec) or not _is_target(spec):
+        raise LoweringError("the bottom tuck resolves one chosen permanent", node=node)
+    if spec.filter.zone != "battlefield" or spec.filter.is_card:
+        raise LoweringError(
+            "the bottom tuck moves a permanent, not a card in a zone", node=node
+        )
+    payload: dict[str, object] = {}
+    _describe_targets(payload, spec)
+    refuse_untestable(
+        (payload.get("targets") or {}).get("filter") or {},
+        refusal="the tuck cannot narrow by", node=node,
+    )
+    payload["library_end"] = "bottom"
+    return (OracleInstruction("put_target_on_library_top", "", payload),)
 
 
 def _lower_put_graveyard_top_on_library_bottom(
@@ -175,7 +207,7 @@ def _lower_regenerate(node: ast.Regenerate) -> tuple[OracleInstruction, ...]:
 _SACRIFICE_PAYERS: frozenset[str] = frozenset(
     {
         "you", "each_player", "each_opponent", "target_opponent",
-        "target_player", "that_player", "controller",
+        "target_player", "that_player", "controller", "defending_player",
     }
 )
 
@@ -495,6 +527,11 @@ def _lower_sacrifice(
             # this would sacrifice nothing whatever X was announced at, which is
             # the same silent direction the flag exists to avoid.
             payload["count"] = "x"
+        elif node.subject.quantifier in ("all", "each"):
+            # "…then sacrifices **all** creatures they control" (Living Death,
+            # Death Pit Offering). No choice and no count: every permanent the
+            # phrase names goes. With no key here it sacrificed exactly one.
+            payload["all"] = True
         elif node.subject.count != 1:
             # "Sacrifice **two** Swamps" (Mold Demon). How many is payload on
             # the one prompt, never a second kind: the forced-sacrifice queue
@@ -540,7 +577,14 @@ def _lower_sacrifice(
             # freezes the seat the event was *about*, the other the seat that
             # *controlled* what it was about, and they name disjoint events —
             # so the order is documentation rather than precedence.
-            if event in _EVENT_SUBJECT_PLAYERS:
+            if event in _DAMAGED_PLAYER_EVENTS:
+                # "Whenever enchanted creature deals combat damage to a player,
+                # **that player** sacrifices a land of their choice."
+                # (Destructive Urge.) The *damaged* seat, which the controller
+                # table below would have read as the damager's — so the Aura's
+                # own controller sacrificed. Ahead of it for that reason.
+                payload["who"] = "damaged_player"
+            elif event in _EVENT_SUBJECT_PLAYERS:
                 payload["who"] = EVENT_SUBJECT_PLAYER
             elif event in _EVENT_SUBJECT_CONTROLLERS:
                 payload["who"] = EVENT_SUBJECT_CONTROLLER
@@ -595,6 +639,18 @@ def _lower_sacrifice(
                     node=node,
                 )
             payload["who"] = EVENT_SUBJECT_CONTROLLER
+        elif node.player.kind == "defending_player":
+            # "Whenever this creature becomes blocked, **defending player**
+            # sacrifices a land of their choice." (Thresher Beast.) CR 506.2's
+            # seat, frozen by the combat fire site and read back through
+            # ``defending_player_seat`` — gated like the discard's identical
+            # phrase, since under any other event it names nobody.
+            if event not in _DEFENDING_PLAYER_EVENTS:
+                raise LoweringError(
+                    '"defending player" names a seat this event did not record',
+                    node=node,
+                )
+            payload["who"] = "defending_player"
         elif node.player.kind != "you":
             payload["who"] = node.player.kind
         return (OracleInstruction("sacrifice_matching_permanent", "", payload),)

@@ -804,6 +804,8 @@ _PRODUCES_FOR_PAYLOAD: dict[str, tuple[str, object, str]] = {
     # been told about a record refuses the sentence rather than admitting one
     # that reads nothing.
     "choose_permanents": ("chooser", "target", CHOSEN_PLAYER),
+    # Psychic Theft: the "and exile that card" ending only.
+    "reveal_hand_and_choose": ("fate", "exile", "exiled_cards"),
 }
 
 

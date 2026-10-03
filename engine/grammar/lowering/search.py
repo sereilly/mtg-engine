@@ -517,6 +517,8 @@ def _lower_search_player_library(
                 "this search takes a fixed count or a recorded one", node=node
             )
         payload["count"] = amount
+    if node.up_to:
+        payload["up_to"] = True
     if node.player.kind != "that_player":
         # "target player's library" is a cast-time choice the picker must offer;
         # "that player's" names one an earlier sentence of the same effect

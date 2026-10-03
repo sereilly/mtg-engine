@@ -2779,6 +2779,25 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
         if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
             return False, "no seat was frozen for 'that creature's controller'"
         payers = [seat]
+    elif who == "defending_player":
+        # "Whenever this creature becomes blocked, **defending player**
+        # sacrifices a land of their choice." (Thresher Beast.) CR 506.2's
+        # seat, through the one reader of it; None is nobody asked.
+        from ._common import defending_player_seat
+
+        seat = defending_player_seat(game, context)
+        if seat is None:
+            return False, "no defending player was recorded"
+        payers = [seat]
+    elif who == "damaged_player":
+        # "…deals combat damage to a player, **that player** sacrifices a land
+        # of their choice." (Destructive Urge.) The seat the damage went to,
+        # frozen by the damage seam under the key the discard's identical
+        # ``who`` reads.
+        seat = (context.trigger_context or {}).get("defending_player_index")
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            return False, "no damaged player was recorded"
+        payers = [seat]
     else:
         return False, f"unsupported sacrifice payer {who!r}"
     # "…**each player who tapped a land for mana this turn** sacrifices a land
@@ -2863,6 +2882,24 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
     # word says — and it is why an "any number" sacrifice never fails to be
     # paid, so ``could_pay`` below is untouched by it.
     any_number = bool(instruction.payload.get("any_number"))
+    if instruction.payload.get("all"):
+        # "…sacrifices **all** creatures they control" (Living Death). Nothing
+        # is chosen (CR 701.21a): every match each payer controls is taken,
+        # gathered before any leaves.
+        described = dict(instruction.payload.get("filter") or {})
+        for seat in payers:
+            payer = game.players[seat]
+            doomed = [
+                game.permanent_at(payer, index)
+                for index in game._sacrifice_candidate_indices(payer, described, exclude)
+            ]
+            gone = [p.card.name for p in doomed if game.sacrifice_permanent(p) is not None]
+            game.log.append(
+                f"{payer.name} sacrificed {', '.join(gone) or 'nothing'} "
+                f"({context.card.name})"
+            )
+        context.results["sacrificed_this_way"] = True
+        return True, "resolved"
     could_pay = True
     for seat in payers:
         described = dict(instruction.payload.get("filter") or {})

@@ -71,6 +71,7 @@ from .sentence_rebinding import (
     rebind_delayed_pronoun_to_sentence_target,
     rebind_keyword_loss_pronoun_to_clause_target,
     rebind_pump_pronoun_to_sentence_target,
+    rebind_token_maker_to_previous_player,
 )
 from .repeats import (_attach_repeat_for_types,
                       _attach_repeat_optional_process,
@@ -631,4 +632,6 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
     # empties the ability's own permanent instead. Composed rather than folded
     # into the walk above, because the two rewrite different nodes under
     # different conditions — see `rebinding.py` for why each is narrow.
-    return rebind_delayed_pronoun_to_sentence_target(sequence)
+    return rebind_token_maker_to_previous_player(
+        rebind_delayed_pronoun_to_sentence_target(sequence)
+    )

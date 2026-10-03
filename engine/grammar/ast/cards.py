@@ -779,3 +779,16 @@ class EachPlayerClaimsExiledCard:
     starting_with: "PlayerRef | None" = None
     tapped: bool = False
     until_pile_empty: bool = False
+
+
+@dataclass(frozen=True)
+class RandomGraveyardCardFate:
+    """"Reorder your graveyard at random. An opponent chooses a card at random
+    in your graveyard. If it's a creature card, put it onto the battlefield.
+    Otherwise, exile it." (Search for Survivors.)
+
+    One node for the paragraph: "it" is the card the random pick named, which
+    no other sentence holds, and its type decides between the two moves.
+    ``card_type`` is the printed test; the two destinations are fixed words.
+    """
+    card_type: str

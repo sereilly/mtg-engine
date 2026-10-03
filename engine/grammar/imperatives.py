@@ -34,6 +34,7 @@ from .paragraphs import (
     _parse_coin_flip_damage_loop,
     _parse_exchange_greatest_mana_value,
     _parse_pay_or_sacrifice_greatest_mana_value,
+    _parse_random_graveyard_card_fate,
     _parse_rebalance_lands,
 )
 from .stream import TokenStream
@@ -148,6 +149,11 @@ def parse_imperative(
     tariff = _parse_pay_or_sacrifice_greatest_mana_value(stream)
     if tariff is not None:
         return tariff
+    # Search for Survivors' four sentences, which open on a verb ("Reorder")
+    # no production reads alone. Refuses without consuming.
+    survivors = _parse_random_graveyard_card_fate(stream)
+    if survivors is not None:
+        return survivors
     colour_shield = _parse_source_of_choice_effect(stream)
     if colour_shield is not None:
         return colour_shield

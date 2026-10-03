@@ -4163,6 +4163,39 @@ def exile_cost_sacrifices(game: Game, instruction: OracleInstruction, context: O
     return True, "resolved"
 
 
+@effect_handler("move_random_graveyard_card")
+def move_random_graveyard_card(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Reorder your graveyard at random. An opponent chooses a card at random
+    in your graveyard. If it's a creature card, put it onto the battlefield.
+    Otherwise, exile it." (Search for Survivors.)
+
+    The graveyard is an ordered pile here (CR 404.1's top card is read by
+    other cards), so the reorder is performed, not skipped. A pick "at random"
+    is nobody's decision, so no prompt is armed; it needs an opponent to make
+    it, and with none left nothing is chosen. The module RNG, which
+    ``run_ai_simulation`` seeds, so a seed replays the run.
+    """
+    caster = context.caster
+    caster_index = game.players.index(caster)
+    payload = instruction.payload
+    pile = caster.graveyard
+    if payload.get("shuffle_first"):
+        random.shuffle(pile)
+    if not pile or not list(game.opponents_of(caster_index)):
+        game.log.append(f"{context.card.name}: no card was chosen")
+        return True, "resolved"
+    card = pile.pop(random.randrange(len(pile)))
+    if card_has_type(card, str(payload.get("card_type") or "creature")):
+        game._put_permanent_onto_battlefield(
+            caster_index, Permanent(card=card), None, from_zone="graveyard"
+        )
+        game.log.append(f"{context.card.name} put {card.name} onto the battlefield")
+    else:
+        caster.exile.append(card)
+        game.log.append(f"{context.card.name} exiled {card.name}")
+    return True, "resolved"
+
+
 @effect_handler("exile_target_graveyard_card")
 def exile_target_graveyard_card(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Exile target card from a graveyard." (Return to Nature's third mode,
@@ -4405,6 +4438,16 @@ def exile_cards_from_graveyard(game: Game, instruction: OracleInstruction, conte
     #
     # A count of zero is a legal outcome, not a reason to guess: X may be 0, and
     # CR 608.2b says an announcement naming nothing exiles nothing.
+    #
+    # "…you may exile **a land card from your graveyard**" (Forgotten Harvest)
+    # prints no "target", so nothing was announced: the lowering emits no
+    # ``targets`` description and the controller picks as it resolves, through
+    # the same prompt the other two piles use.
+    if owner == "you" and not instruction.payload.get("targets"):
+        game.arm_graveyard_exile_pick(
+            caster_index, caster_index, dict(instruction.payload), context
+        )
+        return True, "resolved"
     if owner == "you":
         count = instruction.payload.get("count")
         wanted = int(context.x_value or 0) if count == "x" else int(count or 1)
@@ -5679,13 +5722,18 @@ def put_target_on_library_top(game: Game, instruction: OracleInstruction, contex
             context,
         )
         return True, "resolved"
+    # "…on **the bottom** of its owner's library." (Mercenary Informer.) The
+    # same move to the library's other end; the lowering emits it on this
+    # single-target shape only.
+    end = "bottom" if instruction.payload.get("library_end") == "bottom" else "top"
     game.remove_from_battlefield(target_perm)
     game._remove_aura_effects(target_perm)
     game.put_card_into_library(
-        owner, target_perm.card, "top", from_battlefield=target_perm
+        owner, target_perm.card, end, from_battlefield=target_perm
     )
+    where = "on top of" if end == "top" else "on the bottom of"
     game.log.append(
-        f"{context.card.name}: {target_perm.card.name} put on top of {owner.name}'s library"
+        f"{context.card.name}: {target_perm.card.name} put {where} {owner.name}'s library"
     )
     return True, "resolved"
 
@@ -8492,8 +8540,11 @@ def put_exiled_cards_into_zone(game: Game, instruction: OracleInstruction, conte
                 # earlier when there was none. The guard is what said so.
                 if game.put_card_into_graveyard(owner, card):
                     moved.append(card)
-            # Through the write seam, so CR 903.9b rides it.
-            elif game.put_card_into_hand(caster, card):
+            # Through the write seam, so CR 903.9b rides it. "…its **owner's**
+            # hand" (Psychic Theft) is the seat whose exile held it.
+            elif game.put_card_into_hand(
+                owner if instruction.payload.get("to_owner") else caster, card
+            ):
                 moved.append(card)
             break
     if moved:
