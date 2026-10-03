@@ -2656,6 +2656,13 @@ class PermanentStateMixin:
                 return False
         if filt.colors and not (set(filt.colors) & self._effective_colors(target_perm)):
             return False
+        # "**Nonblack** creatures get -1/-1." (Ascendant Evincar.) The same
+        # layer-5 reader the other way round: a creature in any excluded colour
+        # is out, and a colourless one is in (CR 105.2c).
+        if filt.excluded_colors and (
+            set(filt.excluded_colors) & self._effective_colors(target_perm)
+        ):
+            return False
         if any(not target_perm.has_type(subtype) for subtype in filt.subtypes):
             return False
         # "**Legendary** creatures you control have …" (Legends' five banding

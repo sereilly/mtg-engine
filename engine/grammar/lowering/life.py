@@ -26,7 +26,7 @@ from ..errors import LoweringError
 from ._cost_records import optional_cost_key
 from ._seats import _player_recipient
 from ._amounts import (count_spec, halved_count_spec, recorded_count_spec,
-                       x_offset_amount)
+                       seat_scoped_count_spec, x_offset_amount)
 from ._common import (
     dropped_narrowings,
     _amount_payload,
@@ -722,6 +722,29 @@ def _lower_lose_life(
         raise LoweringError(
             "no life-loss handler counts the turn's death tally", node=node
         )
+    # "Each player loses 1 life for each creature **they** control."
+    # (Stronghold Discipline.) One number per losing seat, counted on that
+    # seat's own battlefield — the per-recipient channel the halved loss above
+    # and the damage sweeps already read, with the printed amount as the
+    # multiplier. Only for a recipient the handler *loops*: under a single seat
+    # "they" has nothing to range over, and the target-opponent graveyard reading
+    # below keeps its own payload.
+    if (
+        node.per_each is not None
+        and node.player.kind in _PER_SEAT_LIFE_RECIPIENTS
+        and isinstance(node.amount, ast.Fixed)
+    ):
+        per_seat = seat_scoped_count_spec(
+            node.per_each, node, multiplier=node.amount.value
+        )
+        if per_seat is not None:
+            return (
+                OracleInstruction("target_loses_life", "", {
+                    "amount": "x",
+                    X_FROM_COUNT_PER_RECIPIENT: per_seat,
+                    "recipient": node.player.kind,
+                }),
+            )
     # "…for each creature card in their graveyard" (Liliana, Death Mage) — the
     # loss is multiplied by a zone count of the losing player's.
     if node.per_each is not None:

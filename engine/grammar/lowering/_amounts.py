@@ -20,10 +20,13 @@ the halving over it), how big a printed P/T change is, and where an X definition
 is written onto the sentence that reads one.
 """
 
+import dataclasses
+
 from ...oracle_types import OracleInstruction, TAPPED_THIS_WAY, X_FROM_COUNT
 from .. import ast
 from ..errors import LoweringError
 from ._common import dropped_narrowings
+from ._cost_records import cost_record_spec
 
 
 # ---------------------------------------------------------------------------
@@ -333,6 +336,42 @@ def count_spec(
     return spec
 
 
+def seat_scoped_count_spec(
+    filt: "ast.ObjectFilter", node, *, multiplier: int = 1
+) -> dict | None:
+    """The count spec for a noun phrase narrowed to **the recipient's** seat —
+    "…the number of Islands **that player** controls" (Typhoon), "…for each
+    creature **they** control" (Stronghold Discipline) — or None when the
+    phrase names no such seat.
+
+    One number per recipient, so the spec is read by a handler that loops its
+    recipients and hands ``evaluate_count`` each seat directly: the controller
+    narrowing is stripped before :func:`count_spec` sees it (nothing downstream
+    tests a controller key on a count, which is why that function refuses one)
+    and the scope is the loop. ``owner`` is dropped rather than left saying
+    "you", which is the one seat the phrase certainly does not mean.
+
+    On the floor because two families spend it: a damage sweep
+    (``_counted_damage._recipient_seat_count``) and a life loss
+    (``life._lower_lose_life``). It was the damage family's alone until the
+    second sentence arrived, and a second copy would be two answers to "whose
+    board does *they* name?".
+    """
+    if filt.controller != "that_player":
+        return None
+    if filt.zone_owner is not None:
+        # The phrase would then name two different players — the zone's owner
+        # and "that player" — and only one of them can be the recipient.
+        raise LoweringError(
+            "a per-recipient count cannot also name a zone owner", node=node
+        )
+    spec = count_spec(
+        dataclasses.replace(filt, controller=None), node, multiplier=multiplier
+    )
+    spec.pop("owner", None)
+    return spec
+
+
 def recorded_count_spec(
     amount: "ast.Amount", produced: frozenset[str], node
 ) -> dict | None:
@@ -607,6 +646,17 @@ def _x_definition_spec(
                 "offset": definition.offset,
             }
         }
+    # "{1}{B}, Discard a creature card: Volrath the Fallen gets +X/+X until end
+    # of turn, where X is **the discarded card's mana value**." A quantity the
+    # ability's own *cost* recorded (CR 601.2h), read off the payment path's
+    # record at resolution — so only where a resolution reads this spec at all
+    # (``recorded`` set): a durationless pump is a layer-7c contribution the
+    # P/T refresh rebuilds with no resolution context, where no payment record
+    # exists to be read.
+    if recorded is not None:
+        paid = cost_record_spec(definition, node)
+        if paid is not None:
+            return paid
     if recorded is not None and isinstance(definition, ast.ThatMuch):
         # "…, where X is the number of cards **revealed this way**." The parse
         # resolved the printed noun and participle against

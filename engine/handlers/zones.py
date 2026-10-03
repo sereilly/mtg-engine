@@ -3628,14 +3628,29 @@ def exile_target_permanent(game: Game, instruction: OracleInstruction, context: 
         game.players.index(context.caster)
         if context.caster in game.players else None
     )
-    perm = resolve_target_permanent(
-        game,
-        context,
-        predicate=lambda candidate: subject_matches(
+    def _answers(candidate) -> bool:
+        return subject_matches(
             game, candidate, described, observer=observer,
             source=context.source_permanent,
-        ),
-    )
+        )
+
+    # **A recorded id is the choice** (CR 601.2c), read strictly: the permanent
+    # it names if that still answers the printed description, and otherwise
+    # nothing (CR 608.2b). ``resolve_target_permanent`` falls through to a scan
+    # of the target's battlefield when the id fails its predicate, which is
+    # right for a caller that recorded no choice and wrong for one that did:
+    # Eradicate cast at a creature made black in response exiled the creature
+    # beside it, and Topple ("…with the greatest power among creatures on the
+    # battlefield") exiled whichever creature had just overtaken its target. A
+    # seat-only announcement (no id) keeps the scan.
+    recorded = context.target_permanent_id
+    if isinstance(recorded, list):
+        recorded = recorded[0] if recorded else None
+    if isinstance(recorded, int):
+        named = game.permanent_by_id(recorded)
+        perm = named if named is not None and _answers(named) else None
+    else:
+        perm = resolve_target_permanent(game, context, predicate=_answers)
     if perm is None:
         game.log.append(f"{card.name}: no valid permanent to exile")
         return True, "resolved"
@@ -7594,6 +7609,14 @@ def look_top_pick_to_hand(game: Game, instruction: OracleInstruction, context: O
         return True, "resolved"
     caster_index = game.players.index(caster)
     chooser_index = game.players.index(chooser)
+    # "**Reveal** a number of cards from the top of your library …" (Eye of
+    # Yawgmoth.) CR 701.20a shows the pile to every player, which is the whole
+    # difference from the looks this handler otherwise performs (CR 701.20e) —
+    # so it is recorded and logged by name, before the pick moves any of them.
+    if payload.get("revealed"):
+        shown = [card.name for card in caster.library[:top_count]]
+        game.record_reveal(caster_index, shown)
+        game.log.append(f"{caster.name} reveals {', '.join(shown)}")
     # The narrowing, the optionality and the order the rest go back in all ride
     # the prompt, so what is offered, what an answer is checked against and what
     # a non-interactive seat takes are one rule (``live_look_top_candidates``).

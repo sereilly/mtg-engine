@@ -251,9 +251,11 @@ def pump_target_creature_until_eot(game: Game, instruction: OracleInstruction, c
         # which is what every payload written before the channel table meant.
         until = str(instruction.payload.get("duration") or "end_of_turn")
         apply_temp_pt_boost(target_perm, power_delta, toughness_delta, until=until)
+        # Signed by the format, not by a literal "+": a "-X/+X" (Belbe's Armor)
+        # or a printed "-2/-0" logged as "+-2" reads as a typo for a boost.
         game.log.append(
             f"{card.name} gives {target_perm.card.name} "
-            f"+{power_delta}/+{toughness_delta} until "
+            f"{power_delta:+}/{toughness_delta:+} until "
             + until.replace("_", " ")
         )
     return True, "resolved"
@@ -448,8 +450,13 @@ def buff_creatures_global(game: Game, instruction: OracleInstruction, context: O
     # fixes the affected set and the size when the effect begins, and a count
     # re-taken inside the loop would change as the loop's own boosts landed.
     x_count = instruction.payload.get("x_from_count")
+    # "All creatures get +X/-X until end of turn." (Flowstone Slide.) With no
+    # count to size it, an X is the one the spell *announced* (CR 107.3a) — the
+    # same fallback every targeted pump beside this one makes. It read None
+    # here, so a variable sweep resolved at 0/0 while reporting supported.
     x_value = (
-        count_from_payload(game, context, x_count) if x_count is not None else None
+        count_from_payload(game, context, x_count)
+        if x_count is not None else context.x_value
     )
     power_delta = resolve_amount(instruction.payload.get("power", 0), x_value)
     toughness_delta = resolve_amount(instruction.payload.get("toughness", 0), x_value)

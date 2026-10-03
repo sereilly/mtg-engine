@@ -15,6 +15,7 @@ compiled program and the two share a vocabulary deliberately — see its
 
 from __future__ import annotations
 
+import dataclasses
 import random
 import re
 
@@ -60,7 +61,8 @@ from ...game_types import SimulationResult, StackItem, chosen_damage_source
 from ...handlers._common import graveyard_card_matches
 from ...models import CardDefinition, Permanent, PlayerState
 from ...oracle import _COLOR_WORD_TO_SYMBOL, compile_card_oracle
-from ...oracle_types import x_spend_colors_from_text
+from ...oracle_types import (carries_x_bound, substitute_x_bounds,
+                             without_x_bounds, x_spend_colors_from_text)
 from ...restricted_mana import CAST, PaymentPurpose
 from ...target_restrictions import forbidden_target
 from ...targeting import (bounce_subject_filter, destroy_subject_filter,
@@ -3738,6 +3740,21 @@ class SpellCastingMixin:
             )
         if primary is None:
             return True, "valid"
+        # "Gain control of target creature with mana value **X or less**."
+        # (Dominate.) CR 601.2b announces X before CR 601.2c chooses the target,
+        # so the bound is checked against the announced number — the
+        # substitution the dispatcher makes at resolution, made here so every arm
+        # below reads an integer. A probe made before X exists (the picker
+        # enumerating ahead of the X prompt) cannot answer the bound and leaves
+        # it out; the announcement and the resolution re-ask it with the number.
+        if carries_x_bound(primary.payload):
+            primary = dataclasses.replace(
+                primary,
+                payload=(
+                    substitute_x_bounds(primary.payload, x_value)
+                    if x_value is not None else without_x_bounds(primary.payload)
+                ),
+            )
 
         # CR 601.2c: the caster announces how many targets a variable-target
         # spell will have, and the maximum is what the card printed. The picker
@@ -3994,7 +4011,23 @@ class SpellCastingMixin:
                         self, perm, steal_filter, observer=caster_index
                     )
 
-                if isinstance(target_permanent_index, int):
+                # The target named **by id** is checked here too. Every other
+                # narrowing reaches it through ``cast_target_refusal``'s
+                # enumeration, but that probe runs before X exists — so "mana
+                # value **X or less**" (Dominate) is asked of the named creature
+                # only here, with the announced X substituted above. Left to
+                # the resolution, an id that fails the bound falls through
+                # ``pick_target_permanent``'s scan and steals a creature nobody
+                # named.
+                named = next(
+                    (pid for pid in (target_permanent_ids or []) if isinstance(pid, int)),
+                    None,
+                )
+                if named is not None:
+                    chosen = self.permanent_by_id(named)
+                    if chosen is None or not _legal_steal_target(chosen):
+                        return False, f"no valid target for {card.name}"
+                elif isinstance(target_permanent_index, int):
                     chosen = self.permanent_at(target_idx, target_permanent_index)
                     if chosen is None or not _legal_steal_target(chosen):
                         return False, f"no valid target for {card.name}"

@@ -477,7 +477,7 @@ def accept_additional_cost_paid(stream: "TokenStream") -> str | None:
     stack, and by resolution the pool that paid it is empty (CR 500.5).
 
     A named function rather than an inline branch for
-    :func:`accept_sacrificed_for_cost`'s reason, and the same reason twice over
+    ``cost_records.accept_cost_channel_possessive``'s reason, and the same reason twice over
     here: two front ends read the phrase — the leading "for each" iterator and
     the trailing life-gain multiplier — and two copies of a phrase that names a
     payment channel is how the two come to name different ones.

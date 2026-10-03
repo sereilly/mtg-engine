@@ -742,6 +742,18 @@ def _narrowing_flags(source: dict) -> dict:
         value = source.get(key)
         if value:
             narrowed[key] = list(value) if isinstance(value, (list, tuple)) else value
+    # "Exile target creature **with the greatest power among creatures on the
+    # battlefield**." (Topple.) Not object-only — the extreme is read off the
+    # whole board — but the enumerator's loop holds the game, which is all the
+    # printed comparison set asks for: "creatures on the battlefield" names no
+    # seat. A set that did ("among creatures you control") would find no
+    # observer here and offer nothing, the direction that cannot widen a target
+    # description. Without it the picker offered every creature and CR 601.2c's
+    # gate, which reads this spec, accepted a target the resolution then
+    # declined to exile.
+    superlative = source.get("superlative_among")
+    if superlative:
+        narrowed["superlative_among"] = superlative
     if narrowed:
         flags["filter"] = narrowed
     return flags

@@ -16,10 +16,8 @@ from .lexer import GToken, NUMBER, PT, WORD
 # printed "equal to …" reaches both families, which is why the split is
 # by what the quantity *is* rather than by which reader asks for it.
 from .cost_records import (accept_counters_removed_for_cost,
-                           accept_cost_characteristic_of,
-                           accept_exiled_for_cost,
-                           accept_sacrificed_for_cost,
-                           accept_tapped_for_cost)
+                           accept_cost_channel_possessive,
+                           accept_cost_characteristic_of)
 from .records import accept_damage_dealt_by_chosen_cast
 from .stream import TokenStream
 from .vocabulary import ALL_SUBTYPES, CARD_TYPES, NUMBER_WORDS, singular as _singular
@@ -449,12 +447,9 @@ def _parse_counted_amount(
     # The leading "the" is this reader's, exactly as it is one function up.
     channel = stream.mark()
     stream.accept_word("the")
-    for accept_channel in (
-        accept_sacrificed_for_cost, accept_exiled_for_cost, accept_tapped_for_cost,
-    ):
-        payment = accept_channel(stream)
-        if payment is not None:
-            return payment
+    payment = accept_cost_channel_possessive(stream)
+    if payment is not None:
+        return payment
     stream.reset(channel)
     # "half **the damage dealt by one of those sorcery spells this turn**"
     # (Backdraft). A history narrowed by a choice, not a count of anything, so
@@ -652,20 +647,13 @@ def _parse_equal_to_body(stream: TokenStream) -> ast.Amount | None:
     if inverted is not None:
         return inverted
 
-    exiled = accept_exiled_for_cost(stream)
-    if exiled is not None:
-        return exiled
-
-    sacrificed = accept_sacrificed_for_cost(stream)
-    if sacrificed is not None:
-        return sacrificed
-
-    # "…equal to **the tapped creature's power**" (Unerring Sling) — the third
-    # payment channel, read here beside its two siblings and through the same
-    # kind of named reader for their reason: two front ends read the phrase.
-    tapped = accept_tapped_for_cost(stream)
-    if tapped is not None:
-        return tapped
+    # "…equal to **the tapped creature's power**" (Unerring Sling), and the
+    # sacrificed, exiled and discarded channels beside it: every payment
+    # channel's possessive through the one reader the where-clause front end
+    # asks too (``cost_records.accept_cost_channel_possessive``).
+    possessive = accept_cost_channel_possessive(stream)
+    if possessive is not None:
+        return possessive
 
     # "…equal to **the amount of mana they paid this way**." (Liege of the
     # Hollows.) A back-reference to a payment an earlier step of this same

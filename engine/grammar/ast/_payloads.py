@@ -374,8 +374,18 @@ def object_filter_payload(self: "ObjectFilter") -> dict[str, object]:
     # take one family over, and for the same reason: what picks one object out
     # of a set is a question for the chooser, not for the candidate.
     if self.superlative is not None:
-        payload["superlative"] = {
+        spelled: dict[str, object] = {
             "extreme": self.superlative.extreme,
             "characteristic": self.superlative.characteristic,
         }
+        # "…target creature with the greatest power **among creatures on the
+        # battlefield**" (Topple). With the comparison set printed, the extreme
+        # *is* a question about one candidate against a board the game can read,
+        # so it travels under its own key — one ``subject_matches`` answers — and
+        # the bare key above keeps its deliberate refusal.
+        if self.superlative.among is not None:
+            spelled["among"] = self.superlative.among.to_payload()
+            payload["superlative_among"] = spelled
+        else:
+            payload["superlative"] = spelled
     return payload

@@ -561,7 +561,12 @@ def _lower_gain_control(
             raise LoweringError(
                 "the control change cannot test this restriction", node=node
             )
-        _describe_targets(described, subject)
+        # "Gain control of target creature with mana value **X or less**."
+        # (Dominate.) The handler re-asks the description at resolution through
+        # ``subject_matches`` after the dispatcher has put the announced X in it,
+        # and the cast gate substitutes the same X before CR 601.2c's check — so
+        # this kind honours a bound the announcement supplies.
+        _describe_targets(described, subject, announced_x_bound=True)
         return (OracleInstruction("gain_control_of_target", "", described),)
     if node.duration == "until_end_of_turn":
         if subject.quantifier in ("that", "it"):

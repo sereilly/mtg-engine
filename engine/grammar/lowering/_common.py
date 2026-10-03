@@ -203,12 +203,26 @@ def _is_you(recipient: ast.Recipient) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def _signed(amount: ast.Amount, negative: bool) -> int | str:
+def _signed(amount: ast.Amount, negative: bool) -> int | str | dict:
+    """One half of a printed P/T modification, sign and all.
+
+    "Target creature gets **-X**/+X until end of turn." (Belbe's Armor.)
+    "All creatures get +X/**-X** until end of turn." (Flowstone Slide.) A
+    negated *variable* is ``{"times_x": -1}`` — the shape a "-1/-1 **for
+    each** …" repetition already lowers to (``_amounts._per_each_amount``), so
+    the sign rides inside the amount and ``resolve_amount`` applies it wherever
+    the number is resolved. A separate ``*_negative`` flag beside a bare ``"x"``
+    would be honoured only by the handlers taught to read it, and every other
+    one would pump by +X — the direction that grows the creature the card
+    shrinks. A reader that does ``int()`` on its amount refuses the dict
+    loudly instead (the static channels in ``grammar/statics.py`` check
+    ``isinstance(..., int)`` and refuse in their own words).
+    """
     value = _amount_payload(amount)
     if negative and isinstance(value, int):
         return -value
     if negative:
-        raise LoweringError("negative variable pump is not supported", node=amount)
+        return {"times_x": -1}
     return value
 
 

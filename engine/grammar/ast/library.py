@@ -337,6 +337,13 @@ class LookTopPickToHand:
     #: one seat by construction here (the possessive says "their"), so one
     #: field answers both; a card that split them would be a different node.
     looker: "PlayerRef | None" = None
+    #: "**Reveal** a number of cards from the top of your library …" (Eye of
+    #: Yawgmoth) where every other card in the family *looks*. CR 701.20a
+    #: against CR 701.20e: a reveal shows the pile to every player, so the
+    #: printed verb is carried and the handler records the reveal
+    #: (``Game.record_reveal``) — read as a look, the opponent would never see
+    #: cards the card shows them.
+    revealed: bool = False
 
 @dataclass(frozen=True)
 class RevealTopOpponentChooses:

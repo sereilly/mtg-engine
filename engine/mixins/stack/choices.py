@@ -54,7 +54,7 @@ from ...oracle_types import OracleInstruction
 from ...subject_filters import subject_matches
 
 
-def _record_sacrificed_card(record, player_index: int, card) -> None:
+def _record_sacrificed_card(record, player_index: int, perm) -> None:
     """Write one given-up card into a resolution's scratchpad, twice over.
 
     ``sacrificed_cards`` is the flat list Gargantuan Gorilla's "if you
@@ -72,6 +72,17 @@ def _record_sacrificed_card(record, player_index: int, card) -> None:
     """
     if record is None:
         return
+    card = perm.card
+    # "Sacrifice a creature. Rupture deals damage equal to **that creature's
+    # power** …" The permanent's computed P/T, read *before* it leaves (the
+    # caller records ahead of the sacrifice): a moment later it is a card in a
+    # graveyard with no computed characteristics at all (CR 613.1), so this is
+    # CR 608.2h's last-known information. The keys the destroy step writes for
+    # the identical back-reference, so one reader answers both verbs; the
+    # lowering admits the reading only behind a step that gives up exactly one
+    # object (``_records._PRODUCES_FOR_ONE_OBJECT``).
+    record["its_power"] = max(0, int(perm.effective_power))
+    record["its_toughness"] = max(0, int(perm.effective_toughness))
     record.setdefault("sacrificed_cards", []).append(card)
     record.setdefault(SACRIFICED_CARDS_BY_SEAT, {}).setdefault(
         player_index, []
@@ -8592,7 +8603,7 @@ class PendingChoicesMixin:
             perm = self.default_sacrifice_pick(
                 [self.permanent_at(player, i) for i in valid]
             )
-            _record_sacrificed_card(record, player_index, perm.card)
+            _record_sacrificed_card(record, player_index, perm)
             self.sacrifice_permanent(perm)
             self.log.append(f"{player.name} sacrificed {perm.card.name} ({reason})")
 
@@ -8754,7 +8765,7 @@ class PendingChoicesMixin:
         for perm in [self.permanent_at(player, i) for i in sorted(chosen, reverse=True)]:
             total_power += int(perm.effective_power)
             total_toughness += int(perm.effective_toughness)
-            _record_sacrificed_card(record, player_index, perm.card)
+            _record_sacrificed_card(record, player_index, perm)
             self.sacrifice_permanent(perm)
             removed.append(perm.card.name)
         for name in reversed(removed):

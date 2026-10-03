@@ -58,6 +58,45 @@ def substitute_x_bounds(payload: dict, x_value: int | None) -> dict:
     return _substituted(payload, resolved)
 
 
+def carries_x_bound(payload: object) -> bool:
+    """Whether *payload* holds a filter bound the announcement supplies (X)."""
+    return _carries_x_bound(payload)
+
+
+def without_x_bounds(payload: dict) -> dict:
+    """*payload* with every ``X_BOUND`` filter bound **removed**.
+
+    For the one reader that asks before X exists: a target picker enumerating
+    "target creature with mana value **X** or less" (Dominate) ahead of the X
+    prompt (CR 601.2b) cannot answer the bound, and reading it as 0 would offer
+    nothing. The bound is not dropped from the card — the announcement gate and
+    the resolution each re-ask it through :func:`substitute_x_bounds` with the
+    number the caster announced — so the picker's list is a hint (idiom 9), never
+    the last word.
+    """
+    if not _carries_x_bound(payload):
+        return payload
+    return _stripped(payload)
+
+
+def _stripped(value: object) -> object:
+    if isinstance(value, dict):
+        return {
+            key: _stripped(inner)
+            for key, inner in value.items()
+            if not (
+                key in _BOUND_KEYS
+                and isinstance(inner, dict)
+                and inner.get("value") == X_BOUND
+            )
+        }
+    if isinstance(value, list):
+        return [_stripped(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_stripped(item) for item in value)
+    return value
+
+
 #: The filter keys whose value is a ``{op, value}`` bound. All three, because
 #: emitting one and resolving another is how a restriction vanishes silently —
 #: the argument ``object_filter_payload`` already makes about emitting them.

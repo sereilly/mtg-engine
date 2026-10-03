@@ -16,10 +16,11 @@ graph had already fallen apart there.
 """
 
 from ...oracle_types import (PER_OBJECT_SEAT_RECORDS, REVEALED_HAND_CARDS,
-                             OracleInstruction)
+                             OracleInstruction, X_FROM_COUNT)
 from ...subject_filters import card_only_filter
 from .. import ast
 from ..errors import LoweringError
+from ._cost_records import cost_record_spec
 from ._common import (
     chargeable_card_filter,
     graveyard_position_payload,
@@ -610,12 +611,22 @@ def _lower_look_top_pick(
     entirely when the cast came from anywhere else — the conditional reads
     ``OracleExecutionContext.cast_from_zone``."""
     payload: dict[str, object] = {}
+    # "Reveal a number of cards … equal to **the sacrificed creature's
+    # power**." (Eye of Yawgmoth.) A quantity the ability's own cost recorded,
+    # on the ``x_from_count`` channel the dispatcher resolves into the X this
+    # handler already reads for Sealed Fate's "the top X cards" — so the count
+    # is the one the payment path kept (CR 608.2h), read by the evaluator every
+    # other cost-paid amount goes through.
+    paid = cost_record_spec(node.count, node)
+    if paid is not None:
+        payload["amount"] = "x"
+        payload[X_FROM_COUNT] = paid
     # "Look at **that many** cards" (Garruk's Harbinger): the count is the
     # firing event's number, read out of the trigger's captured context by the
     # same channel every other back-reference uses. Demanded of the event rather
     # than assumed: under a trigger that records no quantity the words name
     # nothing, and a silent zero would look at no cards at all.
-    if isinstance(node.count, ast.ThatMuch):
+    elif isinstance(node.count, ast.ThatMuch):
         payload.update(_back_reference_payload(node.count, frozenset(), event))
     else:
         amount = _amount_payload(node.count)
@@ -669,6 +680,11 @@ def _lower_look_top_pick(
         payload["pick_destination"] = node.pick_destination
     if node.all_to_hand_if_cast_elsewhere:
         payload["all_to_hand_if_cast_elsewhere"] = True
+    # "**Reveal** a number of cards …" (Eye of Yawgmoth): CR 701.20a's public
+    # look, which the handler records. Emitted only when printed, so every
+    # payload in the family stays byte-identical.
+    if node.revealed:
+        payload["revealed"] = True
     # Who looks, when the sentence names them. Only the one seat this handler
     # can find without a second question: "target player" is chosen as the
     # ability is activated (CR 602.2b) and arrives as ``context.target``.

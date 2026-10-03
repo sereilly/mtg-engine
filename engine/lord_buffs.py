@@ -315,6 +315,15 @@ class LordBuffFilter:
     # a buff carrying this with nothing chosen yet reaches nothing, the safe
     # direction — a dropped narrowing would shrink every creature on the board.
     chosen_creature_type: bool = False
+    # "**Nonblack** creatures get -1/-1." (Ascendant Evincar.) The colour
+    # exclusion, its own field for ``excluded_types``' reason one row up: a
+    # negative is not a narrower positive. Answered through the layer-5 colour
+    # accessor, so a creature *made* black escapes the debuff and a black one
+    # made blue is caught; a colourless creature is nonblack (CR 105.2c), which
+    # falls out of testing membership rather than absence. Dropped, the sweep
+    # would shrink every creature on the board — the Evincar's own black team
+    # included.
+    excluded_colors: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -935,6 +944,11 @@ def lord_buff_payload(buff: LordBuff) -> dict[str, object]:
     # the flag here is an anthem over every creature rather than over one type.
     if buff.filter.chosen_creature_type:
         payload["chosen_creature_type"] = True
+    # Emitted only when printed, so every payload written before the field
+    # existed stays byte-identical; spelled as the pump sweep's key for the
+    # same exclusion (``buff_creatures_global``'s ``exclude_colors``).
+    if buff.filter.excluded_colors:
+        payload["exclude_colors"] = list(buff.filter.excluded_colors)
     if buff.keywords:
         payload["keywords"] = list(buff.keywords)
     if buff.lost_keywords:
@@ -970,6 +984,7 @@ def lord_buff_from_payload(payload: dict) -> LordBuff:
             excluded_types=tuple(payload.get("exclude_types") or ()),
             chosen_land_type=bool(payload.get("chosen_land_type")),
             chosen_creature_type=bool(payload.get("chosen_creature_type")),
+            excluded_colors=tuple(payload.get("exclude_colors") or ()),
         ),
         power=int(payload.get("power", 0)),
         toughness=int(payload.get("toughness", 0)),

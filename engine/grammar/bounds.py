@@ -392,7 +392,7 @@ _SUPERLATIVE_CHARACTERISTICS = (
 
 
 def accept_superlative(
-    stream: TokenStream, *, article: bool = True
+    stream: TokenStream, *, article: bool = True, parse_filter=None,
 ) -> "ast.Superlative | None":
     """``[the] least|greatest power|toughness|mana value``, or None.
 
@@ -421,6 +421,14 @@ def accept_superlative(
         return None
     for words, name in _SUPERLATIVE_CHARACTERISTICS:
         if stream.accept_phrase(*words):
+            # "…with the greatest power **among creatures on the battlefield**"
+            # (Topple). The comparison set, read only where a noun-phrase
+            # reader is handed in — `postmodifiers`' own *parse_filter*, for the
+            # reason it takes one: ``nouns`` sits above this layer. The
+            # tie-break sentence ("…tied for least toughness") passes none, and
+            # has to agree with the phrase it breaks the tie of.
+            if parse_filter is not None and stream.accept_word("among"):
+                return ast.Superlative(extreme, name, among=parse_filter(stream))
             return ast.Superlative(extreme, name)
     # An extreme over a characteristic nothing can read is not this phrase.
     # Refusing without consuming is what makes the line fail loudly at whatever
