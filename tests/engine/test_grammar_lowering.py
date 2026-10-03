@@ -4520,12 +4520,6 @@ def test_a_sentences_only_target_reads_another_as_the_source_exclusion():
 @pytest.mark.parametrize(
     "line",
     [
-        # The word behind the first choice ...
-        "Target creature gets +1/+1 until end of turn. Another target creature "
-        "gains flying until end of turn.",
-        # ... and in front of it: the order does not change what is missing.
-        "Target creature gains flying until end of turn. Another target creature "
-        "gets +1/+1 until end of turn.",
         # Two of them, neither with a slot to differ from.
         "Another target creature gains flying until end of turn and another "
         "target creature gains trample until end of turn.",
@@ -4539,13 +4533,71 @@ def test_another_target_refuses_when_no_lowering_has_a_slot_per_clause(line):
     one permanent. Read as the source exclusion instead, the word would name a
     restriction the card never printed.
 
-    The first of these compiled **supported** on the round-70 engine, with the
-    word dropped entirely and both clauses on one creature."""
+    The two lines this used to hold beside this one — one plain "target" and
+    one "another" — now have that slot each (see the test below). This one
+    still does not: with the word on *both* phrases there is no first choice
+    for either to differ from, and ``_roles.plan_another_target_roles`` declines
+    it."""
     result = compile_line(line, card_name="Test")
 
     assert result.parsed
     assert not result.lowered
     assert "slot per clause" in (result.failure_reason or "")
+
+
+@pytest.mark.parametrize(
+    "line, first_gets, second_gets",
+    [
+        # The word behind the first choice ...
+        ("Target creature gets +1/+1 until end of turn. Another target creature "
+         "gains flying until end of turn.", "pump", "flying"),
+        # ... and in front of it: the order does not change what is spent where.
+        ("Target creature gains flying until end of turn. Another target creature "
+         "gets +1/+1 until end of turn.", "flying", "pump"),
+    ],
+)
+def test_another_target_after_a_first_target_is_a_slot_per_clause(
+    line, first_gets, second_gets
+):
+    """The printed "another" is the proof of two announcements (CR 115.3: the
+    word "target" twice, the second forbidding the repeat), so the pair lowers
+    as two ordered roles and each clause spends its own (Prophecy wave 2,
+    ``_roles.plan_another_target_roles`` — Withdraw's shape, any verb). Driven:
+    the two creatures are on two battlefields and each gets only its own
+    clause, which is the hazard the refusal above was protecting against."""
+    from engine import Game, PlayerState
+    from engine.models import Permanent
+    from tests.helpers import _mk_card, _mk_creature_card, resolve_stack
+
+    result = compile_line(line, card_name="Test")
+    assert result.lowered, result.failure_reason
+    slots = [step.payload["targets"] for step in result.instructions]
+    assert [slot["role"] for slot in slots] == ["creature", "another creature"]
+    assert slots[0]["roles"][1].get("distinct") is True
+
+    spell = _mk_card("Test Spell", "Instant", oracle_text=line)
+    game = Game(players=[PlayerState(name="P0", hand=[spell]), PlayerState(name="P1")])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    game._close_current_priority_step()
+    first = Permanent(card=_mk_creature_card("First", 2, 2))
+    second = Permanent(card=_mk_creature_card("Second", 2, 2))
+    game._put_permanent_onto_battlefield(0, first, None)
+    game._put_permanent_onto_battlefield(1, second, None)
+    assert game.cast_from_hand(
+        0, "Test Spell", target_permanent_ids=[first.permanent_id, second.permanent_id],
+    ).supported
+    resolve_stack(game)
+
+    def got(permanent) -> str:
+        if game._has_keyword(permanent, "flying"):
+            return "flying"
+        return "pump" if permanent.effective_power == 3 else "nothing"
+
+    assert (got(first), got(second)) == (first_gets, second_gets)
+    assert (first.effective_power, second.effective_power) == (
+        (3, 2) if first_gets == "pump" else (2, 3)
+    )
 
 
 def test_the_two_slot_lowerings_keep_the_distinctness_they_can_carry():

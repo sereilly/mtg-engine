@@ -14,8 +14,9 @@ The damage family had already answered the same phrase the right way for
 Bellowing Fiend (``lowering/_recipients.py``, through
 ``damage_trigger_names_damaged_end``); the life-loss lowering had never been
 handed the trigger's subject, so it could not ask. A damager spelled "this
-creature" cannot be the creature "that creature" names (CR 109.2: a permanent
-calls itself "this creature"), so under such a trigger a seat key naming the
+creature" cannot be the creature "that creature" names (CR 201.5: text naming
+the object it is on means that object, and Oracle spells the name "this
+creature"), so under such a trigger a seat key naming the
 damager's controller is always a misreading — "you" is how the card would have
 said it.
 
