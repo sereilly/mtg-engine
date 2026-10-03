@@ -43,7 +43,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | MMQ | 335 | 465 | 91.8% | 91.6% | 66.2% | 278 |
 | NEM | 143 | 219 | 80.4% | 80.4% | 64.4% | 123 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| PCY *(measured)* | 143 | 207 | 89.9% | 87.0% | 57.0% | 113 |
+| PCY *(measured)* | 143 | 207 | 90.8% | 88.4% | 58.5% | 114 |
 | **All (shipped)** | **6307** | **9244** | **90.6%** | **89.9%** | **61.2%** | **4803** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -56,8 +56,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 471 | 209 | expected a subject |  |
-| 143 | 73 | unrecognized effect verb |  |
+| 470 | 208 | expected a subject |  |
+| 142 | 72 | unrecognized effect verb |  |
 | 125 | 61 | unconsumed text |  |
 | 48 | 30 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
@@ -2186,6 +2186,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Dry Spell**
   - `Dry Spell deals 1 damage to each creature and each player.`
   - `Dry Spell deals 1 damage to each creature and each player.`
+- **Dual Nature**
+  - `Whenever a nontoken creature enters, its controller creates a token that's a copy of that creature.`
+  - `Whenever a nontoken creature leaves the battlefield, exile all tokens with the same name as that creature.`
+  - `When this enchantment leaves the battlefield, exile all tokens created with this enchantment.`
 - **Duct Crawler**
   - `{1}{R}: Target creature can't block this creature this turn.`
 - **Dungeon Shade**

@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**412 / 618 tracked rules covered (66%)** — 2550 tests, 0 unannotated.
+**412 / 618 tracked rules covered (66%)** — 2554 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -688,11 +688,11 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(59 tests, subrules bcd)*
 - [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(19 tests)*
 - [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(10 tests)*
-- [x] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit... *(3 tests, subrules c)*
+- [x] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit... *(5 tests, subrules c)*
 - [x] **603.7** An effect may create a delayed triggered ability that can do something at a later time. A delayed... *(36 tests, subrules bcde)*
 - [x] **603.8** Some triggered abilities trigger when a game state (such as a player controlling no permanents of... *(8 tests)*
 - [ ] **603.9** Some triggered abilities trigger specifically when a player loses the game. These abilities trigg...
-- [x] **603.10** Normally, objects that exist immediately after an event are checked to see if the event matched a... *(13 tests, subrules a)*
+- [x] **603.10** Normally, objects that exist immediately after an event are checked to see if the event matched a... *(14 tests, subrules a)*
 - [x] **603.11** Some objects have a static ability that’s linked to one or more triggered abilities. (See rule 60... *(1 tests)*
 - [x] **603.12** A resolving spell or ability may allow or instruct a player to take an action and create a trigge... *(2 tests)*
 
@@ -934,7 +934,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **707.2** When copying an object, the copy acquires the copiable values of the original object’s characteri... *(31 tests, subrules abc)*
 - [x] **707.3** The copy’s copiable values become the copied information, as modified by the copy’s status (see r... *(2 tests)*
 - [x] **707.4** Some effects cause a permanent that’s copying a permanent to copy a different object while remain... *(2 tests)*
-- [x] **707.5** An object that enters the battlefield “as a copy” or “that’s a copy” of another object becomes a ... *(2 tests)*
+- [x] **707.5** An object that enters the battlefield “as a copy” or “that’s a copy” of another object becomes a ... *(3 tests)*
 - [ ] **707.6** When copying a permanent, any choices that have been made for that permanent aren’t copied. Inste...
 - [ ] **707.7** If a pair of linked abilities are copied, those abilities will be similarly linked to one another...
 - [ ] **707.8** When copying a melded permanent or other double-faced permanent, use the copiable values of the f...
