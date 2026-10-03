@@ -199,6 +199,20 @@ def _lower_redirect_damage(node: ast.RedirectDamage) -> tuple[OracleInstruction,
                 "a redirect cannot test " + ", ".join(sorted(untestable)),
                 node=node,
             )
+    elif (
+        isinstance(recipient, ast.PlayerRef)
+        and recipient.kind == "controller"
+        and not node.from_chosen_source
+        and isinstance(node.dealt_by, ast.TargetSpec)
+        and node.dealt_by.quantifier == "target"
+    ):
+        # "…by target unblocked creature is dealt to **its controller**
+        # instead." (Mirror Strike.) "Its" is the announced source's, and its
+        # controller is CR 109.5's live answer when the damage would be dealt —
+        # Reflect Damage's ``to_source_controller`` derivation, read off the
+        # damage's own source rather than frozen at resolution, so a creature
+        # that changes hands sends the damage to whoever controls it then.
+        payload["new_recipient"] = "source_controller"
     else:
         raise LoweringError(
             "no handler resolves this redirect's new recipient", node=node
@@ -217,13 +231,22 @@ def _lower_redirect_damage(node: ast.RedirectDamage) -> tuple[OracleInstruction,
     ):
         return _lower_source_class_redirect(node, spec)
     if node.combat_only:
-        # The printed word is honoured by exactly one lowering. Every record
-        # below moves damage of any kind, so a "combat" that reached one would
-        # be dropped — and a redirect wider than the card prints is the silent
-        # direction.
-        raise LoweringError(
-            "only the source-class redirect is scoped to combat damage", node=node
-        )
+        # The printed word is honoured by the record's own ``combat_only`` flag
+        # (``damage_redirects.applicable_redirect`` reads it off the event), and
+        # the one arm below that carries it onto the record is the targeted
+        # source's: "All **combat** damage that would be dealt to you this turn
+        # by target unblocked creature…" (Mirror Strike). The chosen-source arm
+        # does not hand it on, so it still refuses there — a redirect wider
+        # than the card prints is the silent direction.
+        if node.from_chosen_source or not (
+            isinstance(spec, ast.TargetSpec) and spec.quantifier == "target"
+        ):
+            raise LoweringError(
+                "only a source-class or a targeted-source redirect is scoped to "
+                "combat damage",
+                node=node,
+            )
+        payload["combat_only"] = True
     if node.from_chosen_source:
         if node.dealt_by is not None:
             raise LoweringError(

@@ -2066,6 +2066,42 @@ def redirect_damage_until_eot(
             "this turn is dealt to its controller instead"
         )
         return True, "resolved"
+    if targets_source and payload.get("new_recipient") == "source_controller":
+        # "All combat damage that would be dealt to you this turn by target
+        # unblocked creature is dealt to **its controller** instead." (Mirror
+        # Strike.) The record watches the caster and the announced source, and
+        # its taker is the source's controller derived when the damage would be
+        # dealt — Reflect Damage's ``to_source_controller``, on a record that
+        # *does* name the recipient it protects. The source is re-checked
+        # against the printed phrase (CR 608.2b) and never guessed.
+        described = (payload.get("targets") or {}).get("filter") or {}
+        moved_source = resolve_target_permanent(
+            game,
+            context,
+            predicate=lambda perm: permanent_matches_filter(perm, described),
+            fallback_players=(),
+        )
+        if moved_source is None:
+            game.log.append(f"{card_name}: its target is gone, nothing is redirected")
+            return True, "resolved"
+        add_redirect(
+            caster,
+            DamageRedirect(
+                new_recipient=None,
+                source=moved_source,
+                uses=payload.get("uses"),
+                to_source_controller=True,
+                combat_only=bool(payload.get("combat_only")),
+                source_name=card_name or None,
+            ),
+        )
+        game.log.append(
+            f"{card_name}: "
+            + ("combat damage " if payload.get("combat_only") else "damage ")
+            + f"{moved_source.card.name} would deal to {caster.name} this turn "
+            "is dealt to its controller instead"
+        )
+        return True, "resolved"
     if payload.get("new_recipient") == "source":
         new_recipient = context.source_permanent
     elif payload.get("new_recipient") == "target":
@@ -2122,6 +2158,9 @@ def redirect_damage_until_eot(
             new_recipient=new_recipient,
             source=moved_source,
             uses=payload.get("uses"),
+            # "All **combat** damage … by target attacking creature …": the
+            # lowering carries the word only on the targeted-source arm.
+            combat_only=bool(payload.get("combat_only")),
             source_name=card_name or None,
         ),
     )

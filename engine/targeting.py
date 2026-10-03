@@ -530,6 +530,14 @@ def _narrowing_flags(source: dict) -> dict:
     ):
         if source.get(key):
             flags[key] = True
+    # "…by **target unblocked creature**" (Mirror Strike, Gossamer Chains). The
+    # filter's ``unblocked_only`` is the picker's ``unblocked_attacker`` —
+    # Forcefield's flag, which the enumerator already applies. An activation
+    # also asks the instruction's own filter, so Gossamer Chains was already
+    # honoured; a *cast* asks only these flags, and without this one Mirror
+    # Strike offered (and its announcement gate admitted) a blocked creature.
+    if source.get("unblocked_only"):
+        flags["unblocked_attacker"] = True
     # Carried by value, not flattened to a flag: "attacking or blocking" and
     # "tapped or blocking" are the same key with different words in it, and a
     # bare True would tell the picker a union applies without saying which one.
