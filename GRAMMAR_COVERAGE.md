@@ -43,7 +43,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | MMQ | 335 | 465 | 91.8% | 91.6% | 66.2% | 278 |
 | NEM | 143 | 219 | 80.4% | 80.4% | 64.4% | 123 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| PCY *(measured)* | 143 | 207 | 82.6% | 76.8% | 47.8% | 94 |
+| PCY *(measured)* | 143 | 207 | 86.0% | 81.6% | 51.7% | 102 |
 | **All (shipped)** | **6307** | **9244** | **90.6%** | **89.9%** | **61.2%** | **4803** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -56,10 +56,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 475 | 213 | expected a subject |  |
-| 144 | 74 | unrecognized effect verb |  |
-| 128 | 64 | unconsumed text |  |
-| 51 | 33 | granted ability in quotes | phase 3 (quoted abilities) |
+| 472 | 210 | expected a subject |  |
+| 143 | 73 | unrecognized effect verb |  |
+| 127 | 63 | unconsumed text |  |
+| 49 | 31 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 21 | 7 | expected what this creature can't block, or a duration |  |
 | 18 | 13 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
@@ -766,6 +766,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this creature dies, it deals X damage to target creature, where X is 3 plus the amount of damage dealt to this creature this turn by other sources named Blazing Effigy.`
 - **Blessed Reversal**
   - `You gain 3 life for each creature attacking you.`
+- **Blessed Wind**
+  - `Target player's life total becomes 20.`
 - **Blessed Wine**
   - `You gain 1 life.`
   - `Draw a card at the beginning of the next turn's upkeep.`
@@ -1176,6 +1178,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Cave-In deals 2 damage to each creature and each player.`
 - **Cavern Crawler**
   - `{R}: This creature gets +1/-1 until end of turn.`
+- **Celestial Convergence**
+  - `At the beginning of your upkeep, remove an omen counter from this enchantment. If there are no omen counters on this enchantment, the player with the highest life total wins the game. If two or more players are tied for highest life total, the game is a draw.`
 - **Celestial Dawn**
   - `Lands you control are Plains.`
   - `Lands you control are Plains.`
@@ -2406,6 +2410,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Target player reveals their hand. You choose a nonbasic land card from it. That player discards that card.`
 - **Endangered Armodon**
   - `When you control a creature with toughness 2 or less, sacrifice this creature.`
+- **Endbringer's Revel**
+  - `{4}: Return target creature card from a graveyard to its owner's hand. Any player may activate this ability but only as a sorcery.`
 - **Endless Wurm**
   - `At the beginning of your upkeep, sacrifice this creature unless you sacrifice an enchantment.`
 - **Endoskeleton**
@@ -3192,6 +3198,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Look at target player's hand.`
 - **Gliding Licid**
   - `{U}, {T}: This creature loses this ability and becomes an Aura enchantment with enchant creature. Attach it to target creature. You may pay {U} to end this effect.`
+- **Glittering Lion**
+  - `{3}: Until end of turn, this creature loses "Prevent all damage that would be dealt to this creature." Any player may activate this ability.`
+- **Glittering Lynx**
+  - `{2}: Until end of turn, this creature loses "Prevent all damage that would be dealt to this creature." Any player may activate this ability.`
 - **Gloom Sower**
   - `Whenever this creature becomes blocked by a creature, that creature's controller loses 2 life and you gain 2 life.`
 - **Glorious Anthem**
@@ -3918,6 +3928,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, put a time counter on this artifact.`
   - `All creatures get +1/+0 for each time counter on this artifact.`
   - `{3}: Remove a time counter from this artifact. Any player may activate this ability but only during any upkeep step.`
+- **Inflame**
+  - `Inflame deals 2 damage to each creature dealt damage this turn.`
 - **Infuse**
   - `Untap target artifact, creature, or land.`
   - `Draw a card at the beginning of the next turn's upkeep.`
@@ -5085,6 +5097,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this creature becomes the target of a spell or ability, return this creature to its owner's hand.`
 - **Mirri's Guile**
   - `At the beginning of your upkeep, you may look at the top three cards of your library, then put them back in any order.`
+- **Mirror Strike**
+  - `All combat damage that would be dealt to you this turn by target unblocked creature is dealt to its controller instead.`
 - **Mirror Universe**
   - `{T}, Sacrifice this artifact: Exchange life totals with target opponent. Activate only during your upkeep.`
 - **Miscalculation**
@@ -7170,6 +7184,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {C}.`
 - **Sheltering Prayers**
   - `Basic lands each player controls have shroud as long as that player controls three or fewer lands. (They can't be the targets of spells or abilities.)`
+- **Shield Dancer**
+  - `{2}{W}: The next time target attacking creature would deal combat damage to this creature this turn, that creature deals that damage to itself instead.`
 - **Shield Mate**
   - `Sacrifice this creature: Target creature gets +0/+4 until end of turn.`
 - **Shield Sphere**
