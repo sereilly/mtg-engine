@@ -35,6 +35,7 @@ from .. import ast
 from ..errors import LoweringError
 
 from ._filters import _filter_payload
+from ._targets import _targeted_specs, _targets_payload
 #: A printed relation whose *other end is itself a target*, and the key the
 #: dependent role carries to say which role answers it.
 #:
@@ -206,7 +207,9 @@ _UNENUMERABLE_CONTROLLERS = frozenset({
 _ROLE_STRUCTURAL_KEYS = frozenset({"quantifier", "roles", "role"})
 
 
-def _sequence_role_name(described: dict, taken: set) -> str | None:
+def _sequence_role_name(
+    described: dict, taken: set, *, another: bool = False
+) -> str | None:
     """What the picker calls one step's slot, or None when it has no name.
 
     The printed noun, exactly as :func:`describe_independent_target_roles`
@@ -218,6 +221,11 @@ def _sequence_role_name(described: dict, taken: set) -> str | None:
     None where the name would be missing or would repeat one already taken: a
     roles walk turns a name back into a slot, so two slots sharing one is an
     announcement whose halves cannot be told apart at resolution.
+
+    *another* is the slot's printed "**another**" (Withdraw's "then return
+    another target creature"), which qualifies a repeated noun exactly as a
+    printed controller does below — it is the word that tells the two slots
+    apart, so it is the word the key carries.
     """
     from ...targeting import SEAT_ROLE_KINDS
 
@@ -237,7 +245,10 @@ def _sequence_role_name(described: dict, taken: set) -> str | None:
     # (``roleTargetNoun``, ``web/static/app.js``), so no caster reads it.
     if isinstance(name, str) and name in taken:
         controller = filt.get("controller")
-        name = f"{controller} {name}" if isinstance(controller, str) else None
+        if isinstance(controller, str):
+            name = f"{controller} {name}"
+        else:
+            name = f"another {name}" if another else None
     if not isinstance(name, str) or name in taken:
         return None
     return name
@@ -480,3 +491,204 @@ def describe_sequence_target_roles(
         for (position, _described), role in zip(announced, roles)
     }
     return _stamp_slot_roles(tuple(instructions), roles, by_position, [])
+
+
+#: The branch keys a wrapper's nested steps sit under, for the *other-target*
+#: pair below. :data:`_ANNOUNCEMENT_BRANCH_KEYS`, for the reason that table
+#: gives: every printed instance of "target" in them is announced with the
+#: spell or ability (CR 601.2c), whichever way the resolution then goes.
+_ANOTHER_TARGET_BRANCH_KEYS = _ANNOUNCEMENT_BRANCH_KEYS
+
+
+@dataclasses.dataclass(frozen=True)
+class AnotherTargetRoles:
+    """A sentence whose two targets the printed "**another**" proves are two.
+
+    *steps* is the sentence with the word lifted off its spec, so no lowering
+    reads it as CR 113.7's source exclusion; *slots* is each target's own
+    description in printed order, and *roles* the shared ordered list both
+    slots are stamped with once the steps are lowered.
+    """
+
+    steps: tuple
+    slots: tuple
+    roles: tuple
+
+
+def _replace_spec(node, old, new):
+    """*node* with the one ``TargetSpec`` object *old* replaced by *new*.
+
+    By identity: the two specs of a two-target sentence are, once the word is
+    lifted, equal by value, and only the object says which one was printed
+    second.
+    """
+    if node is old:
+        return new
+    if isinstance(node, tuple):
+        return tuple(_replace_spec(item, old, new) for item in node)
+    if dataclasses.is_dataclass(node) and not isinstance(node, type):
+        changes = {}
+        for field in dataclasses.fields(node):
+            value = getattr(node, field.name)
+            replaced = _replace_spec(value, old, new)
+            if replaced is not value:
+                changes[field.name] = replaced
+        return dataclasses.replace(node, **changes) if changes else node
+    return node
+
+
+def plan_another_target_roles(steps) -> "AnotherTargetRoles | None":
+    """Read a printed "**another** target" as two announced slots, or None.
+
+    "Return target creature to its owner's hand. Then return **another** target
+    creature to its owner's hand unless its controller pays {1}." (Withdraw.)
+    The parse resolves anaphora at parse time, so one target named twice and two
+    targets named once can look identical by the time a line is lowered
+    (:func:`describe_sequence_target_roles` sets out the 42-announcement
+    remainder that leaves). The printed "another" is the one word that settles
+    it: a back-reference names the *same* object as its antecedent, and
+    "another" forbids exactly that — so a pair whose second slot prints it is
+    two announcements by its own say-so (CR 115.3: the word "target" twice, and
+    a sentence that forbids the repeat the rule would otherwise allow).
+
+    Narrow, for the card this must not claim:
+
+    * exactly two targeted phrases, the **second** printing the word — the
+      shape ``_refuse_unfused_distinctness`` refuses, and nothing wider;
+    * both a plain "target" object slot. "Up to one" may be answered with
+      nothing, which a roles walk cannot say (``_slot_roles_spec``);
+    * a narrowing the roles walk can enumerate in full, for
+      :func:`describe_sequence_target_roles`' own reason.
+
+    None leaves the sentence to ``_refuse_unfused_distinctness``.
+    """
+    from ...subject_filters import untestable_filter_keys
+
+    specs = [spec for step in steps for spec in _targeted_specs(step)]
+    if len(specs) != 2:
+        return None
+    first, second = specs
+    if first.distinct_from_prior or not second.distinct_from_prior:
+        return None
+    if first.quantifier != "target" or second.quantifier != "target":
+        return None
+    plain = dataclasses.replace(second, distinct_from_prior=False)
+    slots = (_targets_payload(first), _targets_payload(plain))
+    roles: list[dict] = []
+    names: set = set()
+    for position, described in enumerate(slots):
+        if not isinstance(described, dict) or described.get("kind") != "object":
+            return None
+        name = _sequence_role_name(described, names, another=position == 1)
+        narrowing = described.get("filter") or {}
+        if (
+            name is None
+            or untestable_filter_keys(narrowing)
+            or narrowing.get("controller") in _UNENUMERABLE_CONTROLLERS
+        ):
+            return None
+        names.add(name)
+        role = {
+            key: value for key, value in described.items()
+            if key not in _ROLE_STRUCTURAL_KEYS
+        }
+        role.update({"role": name, "count": 1, "filter": narrowing})
+        if position == 1:
+            # The printed word, written down. The roles walk already refuses
+            # an object an earlier role took (``legality.role_target_options``)
+            # — that is what *enforces* it — and the key is what says this
+            # slot's sentence asked for it rather than the walk's default.
+            role["distinct"] = True
+        roles.append(role)
+    return AnotherTargetRoles(
+        steps=_replace_spec(tuple(steps), second, plain),
+        slots=slots,
+        roles=tuple(roles),
+    )
+
+
+def _another_target_leaves(instructions, found: list) -> None:
+    """Every instruction under *instructions* with no nested steps, in order."""
+    for instruction in instructions:
+        payload = getattr(instruction, "payload", None) or {}
+        nested = [
+            payload.get(key) for key in _ANOTHER_TARGET_BRANCH_KEYS
+            if isinstance(payload.get(key), (list, tuple))
+        ]
+        if not nested:
+            found.append(instruction)
+        for branch in nested:
+            _another_target_leaves(branch, found)
+
+
+def _restamped(instructions, stamped: dict):
+    """*instructions* with each leaf in *stamped* (by identity) replaced."""
+    rewritten = []
+    for instruction in instructions:
+        if id(instruction) in stamped:
+            rewritten.append(stamped[id(instruction)])
+            continue
+        payload = getattr(instruction, "payload", None) or {}
+        updated = dict(payload)
+        changed = False
+        for key in _ANOTHER_TARGET_BRANCH_KEYS:
+            branch = payload.get(key)
+            if isinstance(branch, (list, tuple)):
+                inner = _restamped(tuple(branch), stamped)
+                if any(a is not b for a, b in zip(inner, branch)):
+                    updated[key] = inner
+                    changed = True
+        rewritten.append(
+            dataclasses.replace(instruction, payload=updated)
+            if changed else instruction
+        )
+    return tuple(rewritten)
+
+
+def stamp_another_target_roles(lowered, plan: AnotherTargetRoles) -> tuple:
+    """*lowered* with each of *plan*'s two slots stamped onto the step it spends.
+
+    The slot is the **leaf** that acts on the chosen object — the bounce, not
+    the offer wrapped round it — exactly where
+    :func:`describe_sequence_target_roles` stamps Lunge's two damage steps; the
+    resolution scopes each leaf to its own role, and an offer to the role its
+    branch spends (``handlers/control_flow._role_scoped``).
+
+    Which leaf is which slot is asked of the engine's own picker rather than
+    assumed: a leaf qualifies only when the slot's description says nothing its
+    kind did not already say (``targeting.derive_instruction_spec`` answers the
+    same for both), and exactly one leaf per slot, in printed order, must. A
+    lowering that put the object somewhere else — or two leaves that could each
+    be it — refuses the line rather than stamping a guess.
+    """
+    from ...targeting import derive_instruction_spec
+
+    leaves: list = []
+    _another_target_leaves(tuple(lowered), leaves)
+    targeting = [
+        leaf for leaf in leaves
+        if derive_instruction_spec((leaf,)) is not None
+    ]
+    if len(targeting) != 2 or targeting[0] is targeting[1]:
+        raise LoweringError(
+            'a printed "another target" needs one acting step per target',
+        )
+    roles = list(plan.roles)
+    stamped: dict = {}
+    for leaf, described, role in zip(targeting, plan.slots, roles):
+        candidate = dataclasses.replace(
+            leaf, payload={**leaf.payload, "targets": described}
+        )
+        if derive_instruction_spec((candidate,)) != derive_instruction_spec((leaf,)):
+            raise LoweringError(
+                f"the step acting on the {role['role']} reads a different "
+                "target than the sentence printed",
+            )
+        stamped[id(leaf)] = dataclasses.replace(leaf, payload={
+            **leaf.payload,
+            "targets": {
+                **described, "kind": "roles", "roles": roles,
+                "role": role["role"],
+            },
+        })
+    return _restamped(tuple(lowered), stamped)

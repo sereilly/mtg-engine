@@ -382,6 +382,14 @@ class OracleExecutionContext:
     # Empty outside a loop, so the readers that consult it fall through to the
     # trigger context exactly as they did before it existed.
     iteration_seats: dict = field(default_factory=dict)
+    # ``(target, target_permanent_id, target_permanent_index)`` as a several-
+    # **role** announcement left them, saved by
+    # ``handlers/control_flow._role_scoped`` when it narrows the channels above
+    # to one role's object. None until a role scopes the context. Every later
+    # role is resolved against this rather than against the narrowed channels:
+    # a branch inside one role's scope can spend another role (Crooked Scales'
+    # toll buys a repeat of the whole flip, opponent's creature included).
+    announced_targets: tuple | None = None
 
 
 def chosen_damage_source(

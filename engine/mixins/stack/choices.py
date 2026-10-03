@@ -7374,18 +7374,32 @@ class PendingChoicesMixin:
         the payment is made — and the two must run the same way: through
         ``run_resumable``, against the context the offer was armed with.
         """
+        from ...handlers.control_flow import _role_scoped
+
         context = entry.get("_context")
         if not steps or context is None:
             return False
+
+        # Each step scoped to the announced **role** it spends, exactly as
+        # ``handlers/control_flow._run`` scopes the steps of a sequence. This
+        # path ran them against the frozen context as it stood, so a branch
+        # answered through the prompt spent whichever target the announcement
+        # listed first: Crooked Scales' "destroy target creature you control
+        # unless you pay {3}", declined by a seat that *could* pay, read the
+        # opponent's creature, found it was not "you control", and destroyed
+        # nothing. A step whose object has gone is skipped (CR 608.2b).
+        def run_step(step) -> None:
+            scoped = _role_scoped(self, step, context)
+            if scoped is not None:
+                self._execute_oracle_instruction(step, scoped)
+
         # Through ``run_resumable`` for the same reason ``handlers/control_flow``'s
         # sequence is: a step may stop to ask its controller something, and the
         # steps behind it have to be recorded or they are silently lost.
         # Tetravus is the card that needed it — "remove any number of +1/+1
         # counters. **If you do, create that many … tokens**" ran the removal,
         # suspended on the count, and never made the tokens.
-        run_resumable(
-            self, steps, lambda step: self._execute_oracle_instruction(step, context)
-        )
+        run_resumable(self, steps, run_step)
         return True
 
     def _resolve_mode_choice(
