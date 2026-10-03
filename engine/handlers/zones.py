@@ -5413,9 +5413,9 @@ def phase_in_and_out_matching(game: Game, instruction: OracleInstruction, contex
 def phase_out_enchanted(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"{U}{U}: Enchanted creature phases out." (Vanishing, CR 702.26.)
 
-    The Aura's own attachment, read off ``attached_to`` the way every other
-    enchanted-subject handler reads it — no target is chosen, so there is
-    nothing to describe and nothing to re-check at resolution.
+    The Aura's own attachment, read through ``attached_host`` the way every
+    other enchanted-subject handler reads it — no target is chosen, so there
+    is nothing to describe and nothing to re-check at resolution.
 
     **The Aura goes with it and comes back with it.** That is not this
     handler's doing: ``phase_out_permanent`` drags a host's attached Auras
@@ -5427,8 +5427,13 @@ def phase_out_enchanted(game: Game, instruction: OracleInstruction, context: Ora
     source = context.source_permanent
     if source is None:
         return False, "ability not implemented"
-    host = source.metadata.get("attached_to")
-    if host is None or not game.is_on_battlefield(host):
+    # Last-known information (CR 608.2h): Vanishing destroyed in response to
+    # its own activation still phases out the creature it was on — the ability
+    # exists independently of its source (CR 113.7a).
+    from ._common import attached_host
+
+    host = attached_host(game, source)
+    if host is None:
         game.log.append(f"{context.card.name}: nothing enchanted to phase out")
         return True, "resolved"
     game.phase_out_permanent(host)

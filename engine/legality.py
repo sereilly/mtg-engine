@@ -443,6 +443,44 @@ _UNCHECKED_CAST_TARGET_KINDS = frozenset({
 })
 
 
+def _resolution_rechecks_description(spec: dict) -> bool:
+    """Whether ``illegal_targets_refusal`` re-asks *spec*'s printed
+    description of each surviving permanent target (CR 608.2b).
+
+    Yes for every spec whose targets are battlefield permanents named by id —
+    the ones ``Game._described_cast_target_slots`` enumerates. **Wider than**
+    ``_UNCHECKED_CAST_TARGET_KINDS`` **by one kind**, ``spell_or_permanent``
+    (the Laces, Unsubstantiate): the announcement gate leaves it out because a
+    named *index* there may be a stack position, but at resolution the target
+    is an id, which names a permanent and nothing else, so the permanent half
+    of the description is answerable exactly as for a "permanent" spec.
+
+    No for the shapes the question is not about:
+
+    * a **cost** picker (``sacrifice_cost`` / ``discard_cost`` / ``exile_cost``
+      on the spec itself) — a payment is not a target (CR 601.2b vs 601.2c),
+      and a sacrificed creature has, by design, left the description;
+    * a **stack** target — its own branch below, and a spell's type does not
+      change on the stack in this pool;
+    * a **graveyard** target — a card in a zone has no computed
+      characteristics to change (CR 613.1), and the stamp branch below already
+      answers its "is it still there?";
+    * a **roles** spec — every role carries its own description and relation,
+      which ``handlers/_common.roles_still_legal`` re-asks at resolution
+      through the same ``ROLE_RELATION_TESTS`` the picker narrowed with. A flat
+      enumeration here would compare the second role's target against the
+      first role's list.
+    """
+    kind = spec.get("kind")
+    if kind in (_UNCHECKED_CAST_TARGET_KINDS - {"spell_or_permanent"}):
+        return False
+    if kind in (GRAVEYARD_TARGET_KIND, ROLES_TARGET_KIND):
+        return False
+    if spec.get("sacrifice_cost") or spec.get("discard_cost") or spec.get("exile_cost"):
+        return False
+    return True
+
+
 def _ability_target_quantifiers(instruction) -> list[str]:
     """Every *mandatory-context* ``targets`` quantifier this ability carries.
 
@@ -2024,6 +2062,29 @@ class LegalityMixin:
             return None
         return f"{card.name} can't name the same target twice"
 
+    def _described_cast_target_slots(
+        self, caster_index: int, card: CardDefinition, spec: dict
+    ) -> set[tuple[int, int]]:
+        """Every battlefield slot *card*'s printed target description admits
+        **now**, as ``(seat, index)``.
+
+        The one answer to "does this permanent still match what the spell
+        printed?", asked by both ends of a spell's life: CR 601.2c as it is
+        announced (:meth:`cast_target_refusal`) and CR 608.2b as it resolves
+        (:meth:`illegal_targets_refusal`). It is the picker's own enumeration —
+        every narrowing a spec carries (``filter``, ``own_only``,
+        ``attacking_only``, ``defending_player_only`` …) and every per-kind arm
+        ``_validate_cast_targets`` re-checks a single slot with — so the
+        announcement and the resolution cannot come to disagree about what a
+        printed word means. Two copies of that list is how "nonblack" came to
+        be enforced at announcement and forgotten at resolution.
+        """
+        valid = self._enumerate_targets(caster_index, card, spec, for_cast=True)
+        return {
+            (t["seat"], t["index"]) for t in valid
+            if t.get("kind") == "permanent" and t.get("index") is not None
+        }
+
     def cast_target_refusal(
         self, caster_index: int, card: CardDefinition, *,
         target_player_index=None, target_permanent_index=None,
@@ -2196,11 +2257,7 @@ class LegalityMixin:
                                                  target_player_index)
         if repeated is not None:
             return repeated
-        valid = self._enumerate_targets(caster_index, card, spec, for_cast=True)
-        legal = {
-            (t["seat"], t["index"]) for t in valid
-            if t.get("kind") == "permanent" and t.get("index") is not None
-        }
+        legal = self._described_cast_target_slots(caster_index, card, spec)
         refused = f"no valid target for {card.name}"
         chosen: list = []
         for permanent_id in named_ids:
@@ -2269,6 +2326,20 @@ class LegalityMixin:
         reason it stamps them: a slot renumbers while the object waits, and an
         index that has come to mean a different permanent would answer this
         question about the wrong one.
+
+        **"Legal" is the announcement's question, asked again.** A permanent
+        target is legal when it is still on the battlefield, still targetable,
+        *and still among what CR 601.2c would let the caster name now* —
+        :meth:`_described_cast_target_slots`, the same enumeration
+        :meth:`cast_target_refusal` checked it against. "Nonblack", "tapped",
+        "you control", "attacking", "with flying", "with the greatest power"
+        (Topple): every narrowing the picker enforced is re-enforced here
+        without being re-read. The shapes that question does not cover are
+        named in :func:`_resolution_rechecks_description`. A spell with several
+        targets still resolves while **any** one is legal; the illegal ones are
+        each left alone by their handler's own resolver (608.2b's last
+        sentence), which is what the census over the pool's multi-target spells
+        found every one of them already doing.
 
         One deliberate exclusion, because the engine cannot answer
         "all targets" for it rather than because the rule stops:
@@ -2357,12 +2428,28 @@ class LegalityMixin:
             return None
 
         legality: list[bool] = []
+        # **The printed description is re-asked too** (CR 608.2b: a target
+        # that "no longer meets the targeting requirements" is illegal). This
+        # loop asked only "still there, still targetable", so a spell whose
+        # target stopped answering its description resolved anyway: Sever Soul
+        # whose target was made black in response gained its life, Vendetta and
+        # Reckless Spite cost theirs, Spinning Darkness dealt its damage to the
+        # now-black creature — and where the handler's own resolver refused the
+        # id, its fall-through scan acted on a permanent nobody named (Ritual of
+        # the Machine stole the creature *beside* its recoloured target).
+        #
+        # The question is the announcement's, asked again through
+        # ``_described_cast_target_slots`` — not a second reading of the words.
+        # Computed lazily, once per resolution, only for a target that survived
+        # the two cheaper tests.
+        described = _resolution_rechecks_description(spec)
+        offered: set[tuple[int, int]] | None = None
         ids = item.target_permanent_id
         for permanent_id in (ids if isinstance(ids, (list, tuple)) else [ids]):
             if not isinstance(permanent_id, int):
                 continue
             target = self.permanent_by_id(permanent_id)
-            legality.append(
+            legal = (
                 target is not None
                 and self.is_on_battlefield(target)
                 # CR 608.2b's "other changes to the game state": protection or
@@ -2372,6 +2459,16 @@ class LegalityMixin:
                     target, card, caster_index=item.caster_index,
                 )
             )
+            if legal and described:
+                if offered is None:
+                    offered = self._described_cast_target_slots(
+                        item.caster_index, card, spec
+                    )
+                legal = (
+                    self.controller_index_of(target),
+                    self.battlefield_index_of(target),
+                ) in offered
+            legality.append(legal)
         stamps = item.target_graveyard_card
         for stamp in (stamps if isinstance(stamps, list) else [stamps]):
             if stamp is None:

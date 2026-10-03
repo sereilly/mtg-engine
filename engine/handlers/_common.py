@@ -79,11 +79,21 @@ def attached_host(
     unattaches stays on the battlefield (CR 704.5n) with the record still on
     it, so a recompute reading last-known information would keep buffing the
     creature it used to be on — forever, and with nothing to undo.
+
+    **Last-known information is only for a source that has left.** CR 608.2h
+    reads an object's *current* information while it is still in the zone the
+    effect expects it in, and its last-known information only once it is not.
+    So the fallback is asked only when *source* is off the battlefield: an
+    Equipment unattached in response to its own ability, or a Licid that ended
+    its Aura form, is still a permanent and is attached to nothing — "equipped
+    creature" names no creature, rather than the one it used to be on. That is
+    the same mistake the continuous-effect paragraph above guards against,
+    arriving through a resolution instead of a recompute.
     """
     if source is None:
         return None
     host = source.metadata.get("attached_to")
-    if host is None and last_known:
+    if host is None and last_known and not game.is_on_battlefield(source):
         host = source.metadata.get("last_attached_to")
     if host is None or not game.is_on_battlefield(host):
         return None

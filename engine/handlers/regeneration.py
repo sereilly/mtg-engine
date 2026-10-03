@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ._common import (block_pair_permanents, permanent_matches_filter,
-                      resolve_target_permanent)
+from ._common import (attached_host, block_pair_permanents,
+                      permanent_matches_filter, resolve_target_permanent)
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -53,11 +53,20 @@ def grant_regeneration_to_self(game: Game, instruction: OracleInstruction, conte
 
 @effect_handler("grant_regeneration_to_enchanted_creature")
 def grant_regeneration_to_enchanted_creature(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"{G}: Regenerate enchanted creature." (Regeneration, Fortitude, The
+    Brute and seven more.)
+
+    The creature is read through ``attached_host`` — last-known information
+    (CR 608.2h) — because the ability exists independently of the Aura
+    (CR 113.7a): destroying the Aura in response to its own activation leaves a
+    shield still owed to the creature it enchanted. The live record alone is
+    cleared by the Aura's teardown, so ten Auras' shields were silently lost.
+    """
     card = context.card
     source_permanent = context.source_permanent
     if source_permanent is None:
         return False, "ability not implemented"
-    enchanted = source_permanent.metadata.get("attached_to")
+    enchanted = attached_host(game, source_permanent)
     if enchanted is None:
         return False, "aura not attached to a creature"
     enchanted.regeneration_shield += 1

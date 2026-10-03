@@ -1146,12 +1146,20 @@ def sacrifice_attached_permanent(game: Game, instruction: OracleInstruction, con
     answer is to do nothing rather than to charge a cost that cannot be paid.
     """
     source = context.source_permanent
-    attached = source.metadata.get("attached_to") if source is not None else None
-    if attached is None or not game.is_on_battlefield(attached):
+    # Last-known information (CR 608.2h), for ``destroy_attached_permanent``'s
+    # reason: a Slow Motion destroyed with its upkeep trigger on the stack still
+    # names the creature it was on, and the trigger still offers "sacrifice
+    # that creature unless you pay {2}". The offer side
+    # (``control_flow._action_is_takeable``) reads the same helper.
+    attached = attached_host(game, source)
+    if attached is None:
         game.log.append(f"{context.card.name}: nothing attached to sacrifice")
         return True, "resolved"
     game.sacrifice_permanent(attached)
     game.log.append(f"{context.card.name}: {attached.card.name} was sacrificed")
+    # Every handler answers ``(supported, detail)``. This one fell off the end
+    # and answered None, which the dispatcher hands to whatever unpacks it.
+    return True, "resolved"
 
 
 @effect_handler("destroy_bound_permanent")
