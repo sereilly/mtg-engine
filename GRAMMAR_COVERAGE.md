@@ -43,7 +43,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | MMQ | 335 | 465 | 91.8% | 91.6% | 66.2% | 278 |
 | NEM | 143 | 219 | 80.4% | 80.4% | 64.4% | 123 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| PCY *(measured)* | 143 | 207 | 70.5% | 63.3% | 38.2% | 75 |
+| PCY *(measured)* | 143 | 207 | 72.0% | 65.2% | 39.1% | 77 |
 | **All (shipped)** | **6307** | **9244** | **90.6%** | **89.9%** | **61.2%** | **4803** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -56,8 +56,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 483 | 221 | expected a subject |  |
-| 146 | 76 | unrecognized effect verb |  |
+| 482 | 220 | expected a subject |  |
+| 145 | 75 | unrecognized effect verb |  |
 | 131 | 67 | unconsumed text |  |
 | 51 | 33 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
@@ -5607,6 +5607,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Draw a card at the beginning of the next turn's upkeep.`
   - `Target creature can't block this turn.`
   - `Draw a card at the beginning of the next turn's upkeep.`
+- **Panic Attack**
+  - `Up to three target creatures can't block this turn.`
 - **Paradigm Shift**
   - `Exile all cards from your library. Then shuffle your graveyard into your library.`
 - **Parallax Dementia**
@@ -7137,6 +7139,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Sheltered Valley**
   - `At the beginning of your upkeep, if you control three or fewer lands, you gain 1 life.`
   - `{T}: Add {C}.`
+- **Sheltering Prayers**
+  - `Basic lands each player controls have shroud as long as that player controls three or fewer lands. (They can't be the targets of spells or abilities.)`
 - **Shield Mate**
   - `Sacrifice this creature: Target creature gets +0/+4 until end of turn.`
 - **Shield Sphere**

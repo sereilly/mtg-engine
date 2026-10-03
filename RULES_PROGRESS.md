@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**412 / 618 tracked rules covered (66%)** — 2548 tests, 0 unannotated.
+**412 / 618 tracked rules covered (66%)** — 2550 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -630,7 +630,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 509. Declare Blockers Step
 
-- [x] **509.1** First, the defending player declares blockers. This turn-based action doesn’t use the stack. To d... *(84 tests, subrules abcdfghi)*
+- [x] **509.1** First, the defending player declares blockers. This turn-based action doesn’t use the stack. To d... *(87 tests, subrules abcdfghi)*
 - [x] **509.2** Second, the active player gets priority. (See rule 117, “Timing and Priority.”) *(4 tests, subrules a)*
 - [x] **509.3** Triggered abilities that trigger on blockers being declared may have different trigger conditions. *(15 tests, subrules acdg)*
 - [x] **509.4** If a creature is put onto the battlefield blocking, its controller chooses which attacking creatu... *(1 tests)*
