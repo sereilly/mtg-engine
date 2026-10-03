@@ -1137,6 +1137,11 @@ def _cost_picker_spec(cost, *, announced: dict | None = None) -> dict | None:
         sacrifice_count = getattr(cost, "sacrifice_count", 1)
         if isinstance(sacrifice_count, int) and sacrifice_count > 1:
             spec["count"] = sacrifice_count
+        # "Sacrifice **X** lands" (Copper-Leaf Angel): how many is the X the
+        # activator announces (CR 601.2b), so the spec says an X is owed — the
+        # flag the cast side's X box already reads — rather than a number.
+        if sacrifice_count == "x":
+            spec["announces_x"] = True
         # `kind` already *is* the head noun, so re-stating it in the carried
         # filter would be the same restriction written twice. A type *union* has
         # no head noun (`kind` falls back to "permanent"), so it rides along.

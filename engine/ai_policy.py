@@ -31,7 +31,7 @@ from .cast_restrictions import global_cast_ban
 from .legality import targeting_ban_refusal
 from .cast_restrictions import check_cast_timing
 from .cost_modifiers import (cost_reduction_for_cast, reduce_cost,
-                             spell_cost_tax, spell_symbol_tax)
+                             sacrifice_taxes, spell_cost_tax, spell_symbol_tax)
 from .classifier import classify_card
 from .game import Game
 from .handlers._common import permanent_matches_filter
@@ -476,6 +476,24 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
             # test: the charger never fills `sacrifice_also_filter` without
             # `sacrifice_filter`, so a second condition would be unreachable
             # and would read as a claim that it is not.
+            continue
+        # …and the same trade imposed from outside: "Activated abilities of
+        # nontoken Rebels cost an additional "Sacrifice a land"" (Brutal
+        # Suppression), Drought's per-{B} Swamp. Asked of the reader the charger
+        # uses, so a tax the engine would collect is a tax this policy sees.
+        if sacrifice_taxes(
+            game, player_index, ability.cost.mana, "activate", source=permanent,
+        ):
+            continue
+        # "…+X/+0 until end of turn, where X is **the power of the creature
+        # tapped this way**" (Keldon Battlewagon). The effect is as large as the
+        # creature the cost taps, which the score below cannot see — and the
+        # payment's default is the first untapped creature, which for the
+        # Battlewagon is itself: +0/+0 and its own attack spent, every main
+        # phase. Derived from the payload, so it names no card.
+        if "cost_tap_characteristic" in (
+            ability.instruction.payload.get("x_from_count") or {}
+        ):
             continue
 
         # "Put a -1/-1 counter on a creature you control" (Wandering Mage). The

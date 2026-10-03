@@ -233,6 +233,8 @@ def test_w1g3_mageta_destroys_every_other_creature_through_regeneration(set_pool
 def test_w1g3_copper_leaf_angel_sacrifices_x_lands_for_x_counters(set_pool):
     """"{T}, Sacrifice X lands: Put X +1/+1 counters on this creature." The X
     announced is both the payment and the effect; a named land is honoured."""
+    spec = _w1g3_spec(set_pool, "Copper-Leaf Angel")
+    assert spec["sacrifice_cost"] and spec["kind"] == "land" and spec["announces_x"]
     forest = set_pool("LEA")["Forest"]
     game, (angel, f1, f2, f3), _ = _w1g3_game(
         [set_pool("PCY")["Copper-Leaf Angel"], forest, forest, forest],

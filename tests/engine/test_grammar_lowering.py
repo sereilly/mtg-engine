@@ -2867,14 +2867,25 @@ def test_counter_removal_cost_refuses_a_subject_it_cannot_record():
 def test_both_discard_costs_the_engine_charges_are_accepted():
     """Two costs, not two spellings of one: "the last card you drew this turn"
     names its card by history and leaves the payer no choice, while "a card"
-    is the payer's pick. Both are collected on activation, so both parse; a
-    counted "discard two cards" still refuses, because nothing charges it."""
+    is the payer's pick. Both are collected on activation, so both parse.
+
+    A counted "discard two cards" refused here until Prophecy's spellshapers:
+    the charger had always taken a count, and its reader now reads the printed
+    one (``cast_costs.read_discard_clause``), so the line parses *and* charges
+    two. An "X" count still refuses — nothing announces a discarded X on an
+    activation."""
+    from engine.oracle import parse_activated_ability_cost
+
     assert compile_line(
         "{2}, {T}, Discard the last card you drew this turn: Draw a card.",
         card_name="Jandor's Ring",
     ).parsed
     assert compile_line("Discard a card: Draw a card.", card_name="Test").parsed
-    assert not compile_line("Discard two cards: Draw a card.", card_name="Test").parsed
+    assert compile_line("Discard two cards: Draw a card.", card_name="Test").parsed
+    assert parse_activated_ability_cost(
+        "Discard two cards: Draw a card."
+    ).discard_cards == 2
+    assert not compile_line("Discard X cards: Draw a card.", card_name="Test").parsed
 
 
 def test_sacrifice_cost_distinguishes_the_source_from_a_chosen_permanent():
