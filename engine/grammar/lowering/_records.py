@@ -1,10 +1,11 @@
 """What each instruction kind records in the resolution scratchpad.
 
-One table, ``_PRODUCES``, and the two accessors that ask it. A *registry*
-rather than logic, exactly as ``categories`` beside it is: a handler writes a
-value and a later sentence of the same effect reads it back ("that much", "if
-you do", "died this way"), and the only thing that can say the two agree is a
-declaration both sides are held to.
+One table, ``_PRODUCES``, its two payload-conditional refinements, and the two
+accessors that ask them. A *registry* rather than logic, exactly as
+``categories`` beside it is: a handler writes a value and a later sentence of
+the same effect reads it back ("that much", "if you do", "died this way"), and
+the only thing that can say the two agree is a declaration both sides are held
+to.
 
 Beside `_common` rather than inside it, and beside `categories` rather than
 inside it, for `_events`' own stated reason: what a step **records** is keyed by
@@ -21,8 +22,8 @@ one of them. The **first** entry is the *primary* record — the one "if you do"
 tests, because that rider asks whether the step took place and the primary is
 what a step of that kind always writes when it does.
 
-**The first paragraph is true again as of the Phase 0 before the next set.** Two
-CR 615.5 predicates — ``names_the_shielded_object`` and
+**The first paragraph is true again as of the Phase 0 after Mercadian
+Masques.** Two CR 615.5 predicates — ``names_the_shielded_object`` and
 ``counts_prevented_damage`` — had accumulated at the bottom of this file, and
 neither read ``_PRODUCES`` at all: they were here because this is a floor, not
 because this is *their* floor. They now sit in ``_prevented_riders``, whose
@@ -30,49 +31,53 @@ stated subject is the rider a shield carries and whose docstring already cited
 the same two cards. Which is the pre-split this module needed as well as the one
 it wanted — the cut that restores a module's subject is worth more headroom than
 the cut that only buys lines.
+
+**A new record gets a terse row**: the card that needed it and a pointer to
+where its key is named — the ``grant_extra_turn`` and ``flip_coin`` rows are
+the model. *Why* the value has to be recorded rather than read off the board
+is a fact about the key, and it lives with the key in ``_record_keys`` or
+``oracle_types``; written here as well, it is a second copy that drifts. Say
+here only what the key's definition cannot: which record is primary, which
+payloads write it, why a record is withheld. Prophecy's Phase 0 found 34 rows
+restating their key's own argument and nine comment blocks separated from their
+rows by later insertions, which is what this table looks like when it holds the
+argument twice.
 """
 
 from __future__ import annotations
 
-from ...oracle_types import (CHOSEN_COLOR_THIS_WAY,
+# The key names from the modules that name them, not through `_events`'
+# re-exports. This table says which instruction kind writes which record, so it
+# and the namer of each string belong next to each other — until Tempest's
+# Phase 0 the fourteen `_record_keys` names were read through `_events`, which
+# is neither, and the hop was invisible only because that module re-exported
+# them. Prophecy's Phase 0 did the same for the eight left behind (six
+# `oracle_types` names and `_deaths`' two); `_events` is read only for the two
+# keys it defines itself.
+from ...oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
+                             CHOSEN_COLOR_THIS_WAY,
                              CHOSEN_CREATURE_TYPE_THIS_WAY,
                              CHOSEN_NUMBER_THIS_WAY,
                              CHOSEN_TARGET_GRAVEYARD_SLOTS,
                              CHOSEN_TARGET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
-                             MILLED_THIS_WAY,
-                             REVEALED_HAND_CARDS,
-                             REVEALED_THIS_WAY,
-                             REVEALED_TOP_CARDS_BY_SEAT,
-                             SEARCHED_PERMANENTS,
                              COUNTERED_ABILITY_SOURCE,
-                             COUNTERED_SPELL_CONTROLLER,
-                             COUNTERED_SPELL_NAME, DISCARDED_BY_SEAT,
-                             MANA_PAID_BY_SEAT,
-                             DREW_BY_SEAT,
-                             EXILED_BY_SEAT,
-                             DREW_COUNT,
-                             COUNTERS_REMOVED, HAND_CARDS_TO_LIBRARY,
-                             MILLED_THIS_WAY,
-                             PER_OBJECT_SEAT_RECORDS,
-                             SACRIFICED_CARDS_BY_SEAT,
-                             SACRIFICED_COUNT,
-                             LIFE_LOST_THIS_WAY,
+                             COUNTERED_SPELL_CONTROLLER, COUNTERED_SPELL_NAME,
+                             COUNTERS_REMOVED, DISCARDED_BY_SEAT, DREW_BY_SEAT,
+                             DREW_COUNT, EXILED_BY_SEAT, EXILED_THIS_WAY,
+                             EXILED_THIS_WAY_OBJECTS, HAND_CARDS_TO_LIBRARY,
+                             LAST_TARGET_CONTROLLER, LAST_TARGET_NAME,
+                             LAST_TARGET_OWNER, LIFE_LOST_THIS_WAY,
                              MANA_LOST_COUNT, MANA_LOST_THIS_WAY,
-                             TAPPED_THIS_WAY, TAPPED_THIS_WAY_OBJECTS,
-                             X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT)
-from ._events import (ATTACHED_PERMANENT_CONTROLLER,
-                      EXILED_SPELL_CONTROLLER,
-                      EXILED_SPELL_RECORD,
-                      LAST_TARGET_CONTROLLER, LAST_TARGET_NAME,
-                      LAST_TARGET_OWNER,
-                      EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS,
-                      _EVENT_SUBJECT_POWER_RECORD,
+                             MANA_PAID_BY_SEAT, MILLED_THIS_WAY,
+                             PER_OBJECT_SEAT_RECORDS, REVEALED_HAND_CARDS,
+                             REVEALED_THIS_WAY, REVEALED_TOP_CARDS_BY_SEAT,
+                             SACRIFICED_CARDS_BY_SEAT, SACRIFICED_COUNT,
+                             SEARCHED_PERMANENTS, TAPPED_THIS_WAY,
+                             TAPPED_THIS_WAY_OBJECTS, X_FROM_COUNT,
+                             X_FROM_COUNT_PER_RECIPIENT)
+from ._deaths import (_EVENT_SUBJECT_POWER_RECORD,
                       _EVENT_SUBJECT_TOUGHNESS_RECORD)
-# The key *names* straight from the floor that owns them. This table says which
-# instruction kind writes which record, so the two modules are the writer and
-# the namer of one string and belong next to each other — until Tempest's
-# Phase 0 these fourteen were read through `_events`, which is neither, and the
-# hop was invisible only because that module re-exported them.
+from ._events import EXILED_SPELL_CONTROLLER, EXILED_SPELL_RECORD
 from ._record_keys import (CHOSEN_CAST_DAMAGE, CHOSEN_DAMAGE_SOURCE,
                            CONTROL_EXCHANGED_PERMANENTS,
                            CHOSEN_PERMANENT, CHOSEN_PLAYER, COUNTED_NUMBER,
@@ -85,39 +90,24 @@ from ._record_keys import (CHOSEN_CAST_DAMAGE, CHOSEN_DAMAGE_SOURCE,
 
 
 _PRODUCES: dict[str, str | tuple[str, ...]] = {
-    # Two records, because the sentence after a damage step may ask two
-    # different questions about it. How much was dealt is the first and the
-    # primary; who or what took it — and what it could absorb *before* the
-    # damage — is the second, and the only place "…but not more life than the
-    # player's life total before the damage was dealt" (Drain Life, Soul Burn)
-    # has to read from. Reading the board instead would read the life total the
-    # damage just changed, which is the number the words exclude.
+    # Two records: how much was dealt, the primary, and who or what took it
+    # (Drain Life, Soul Burn) — see ``_record_keys.DAMAGE_RECIPIENT``.
     "deal_damage": ("damage_dealt", DAMAGE_RECIPIENT),
-    # "This creature deals damage equal to its power to target creature.
-    # **That creature** deals damage equal to its power to this creature."
-    # (Tracker.) The bite records which permanent it chose, because that is the
-    # only place the sentence after it can read the creature from: the ability
-    # has one target and the second sentence names it without choosing again.
+    # "…**That creature** deals damage equal to its power to this creature."
+    # (Tracker.) The bite's one target, which the second sentence names without
+    # choosing again — see ``_record_keys._DAMAGED_PERMANENTS``.
     "source_bites_target": "damaged_permanents",
-    # "…chooses a creature that this card could enchant. **If the player does**,
-    # return this card … **attached to that creature**." (Takklemaggot.) The
-    # chosen permanent's id, which is both what the branch tests and what the
-    # step behind it acts on — the choice is not a target, so nothing on the
-    # board or on the stack records it.
-    #
-    # …and the **other** member of the set it was offered: "That player chooses
-    # and sacrifices one of those creatures. Put a -1/-1 counter on **the
-    # other**." (Retribution.) The pick is the only step holding both halves,
-    # and by the sentence behind it the chosen one is in a graveyard — so a
-    # read of the board would answer "whichever of the two is still there",
-    # which is the right permanent only when nothing else went wrong.
+    # "…**If the player does**, return this card … **attached to that
+    # creature**." (Takklemaggot.) The chosen permanent's id, both what the
+    # branch tests and what the step behind it acts on; the choice is not a
+    # target, so nothing else records it — see
+    # ``_record_keys.CHOSEN_PERMANENT``. …and the **other** member of the set
+    # it was offered (Retribution) — see ``_record_keys.OTHER_CHOSEN_PERMANENT``.
     "choose_permanent": (CHOSEN_PERMANENT, OTHER_CHOSEN_PERMANENT),
-    # "You and that opponent each gain control of all creatures the other
-    # controls until end of turn. **Those creatures** gain haste until end of
-    # turn." (Reins of Power.) Every creature the swap moved, both directions in
-    # one record — the sentence behind it names them all, and by then the board
-    # cannot answer: the two sets have changed hands, so neither printed seat
-    # phrase names what the card means any more.
+    # "…**Those creatures** gain haste until end of turn." (Reins of Power.)
+    # Every creature the swap moved, both directions — by then the two sets
+    # have changed hands, so neither printed seat phrase names them. See
+    # ``oracle_types.CONTROL_EXCHANGED_PERMANENTS``.
     "exchange_control_of_sets_until_eot": CONTROL_EXCHANGED_PERMANENTS,
     # "…exchange control of this creature and up to one target creature an
     # opponent controls. **If you don't or can't make an exchange**, sacrifice
@@ -136,10 +126,9 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # five.
     "exchange_control_of_targets": CONTROL_EXCHANGED_PERMANENTS,
     # "Count the number of permanents. **If the number** is odd, …" (Chaos
-    # Moon.) The count is the whole of what the sentence does, and the only
-    # place the two conditions behind it can read that number from — asking the
-    # board again would be a second count, which is a different question the
-    # moment anything between them changes it.
+    # Moon.) See ``_record_keys.COUNTED_NUMBER``; asking the board again would
+    # be a second count, a different question the moment anything between them
+    # changes it.
     "count_objects": COUNTED_NUMBER,
     # "Choose a player who cast one or more sorcery spells this turn.
     # Backdraft deals damage to **that player** …" The seat is the whole of what
@@ -151,10 +140,7 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # player is written, so the hand-over behind it needs no key of its own.
     "choose_opponent": CHOSEN_PLAYER,
     # "Destroy all creatures **of the creature type of your choice**."
-    # (Extinction.) The word the sweep in the same sentence spends. A record
-    # rather than a characteristic for the reason every entry here is one:
-    # nothing on a board holds it — the card is a sorcery, so there is no
-    # permanent for a CR 614.1c entry choice to have been written on.
+    # (Extinction.) See ``oracle_types.CHOSEN_CREATURE_TYPE_THIS_WAY``.
     "choose_creature_type": CHOSEN_CREATURE_TYPE_THIS_WAY,
     # "**Choose target opponent.** … When it regenerates this way, **that
     # player** may draw a card." (Soldevi Sentry.) The seat the *targeting*
@@ -170,32 +156,20 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # "Counter target spell. … an amount of {C} equal to **that spell's** mana
     # value." (Mana Drain.) The countered spell's mana value — the one thing
     # about it that survives the counter, and only because the counter wrote it
-    # down.
-    # …and **whose** spell it was: "Its controller may draw up to two cards at
-    # the beginning of the next turn's upkeep." (Arcane Denial.) Two records for
-    # one step, because the sentence behind a counter can ask two different
-    # questions about the spell that is no longer there — how big it was, and
-    # who cast it. The mana value stays primary: it is the one an "if you do"
-    # would test, and it has been the primary since Mana Drain.
+    # down. …and **whose** spell it was (Arcane Denial) — see
+    # ``oracle_types.COUNTERED_SPELL_CONTROLLER``. The mana value stays primary:
+    # it is the one an "if you do" would test.
     "counter_top_stack_spell": (
         "countered_spell_mana_value", COUNTERED_SPELL_CONTROLLER,
-        # "…all cards with the same name as **that spell**" (Quash). The third
-        # question the sentence behind a counter can ask about the object that
-        # is no longer there: what it was called. Declared beside the seat
-        # because the strip reads both — the name says what to look for and the
-        # seat says whose zones to look in.
+        # …and what it was called (Quash) — see
+        # ``oracle_types.COUNTERED_SPELL_NAME``. Beside the seat because the
+        # strip reads both: the name says what to look for and the seat says
+        # whose zones to look in.
         COUNTERED_SPELL_NAME,
     ),
-    # "Counter target activated ability from an artifact, creature, enchantment,
-    # or land. **That permanent's** activated abilities can't be activated this
-    # turn." (Interdict.) The counter records which permanent the ability came
-    # from, because the sentence behind it names that permanent and by then the
-    # ability is off the stack with no card to ask (CR 113.7a).
+    # "…**That permanent's** activated abilities can't be activated this
+    # turn." (Interdict.) See ``oracle_types.COUNTERED_ABILITY_SOURCE``.
     "counter_stack_ability": COUNTERED_ABILITY_SOURCE,
-    # "Destroy all nonblack creatures. … where X is the number of creatures
-    # that **died this way**." (Hellfire.) A sweep records how many permanents
-    # it actually destroyed, which is the only place a later clause can read
-    # that set from — by then the board no longer holds it.
     # "…destroy the other creature at end of combat. At the beginning of the
     # next end step, **if that creature was destroyed this way**, …" (Infinite
     # Authority.) The delayed destroy records which creature it marked and which
@@ -203,6 +177,10 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # then neither is anything the board can be asked for — the victim is in a
     # graveyard and the pair the trigger bound is long past.
     "delayed_destroy_blocked_or_blocker": "end_of_combat_destruction",
+    # "Destroy all nonblack creatures. … where X is the number of creatures
+    # that **died this way**." (Hellfire.) A sweep records how many permanents
+    # it actually destroyed, which is the only place a later clause can read
+    # that set from — by then the board no longer holds it.
     # Each of these records the victims and their controllers beside the count,
     # so "for each <noun> destroyed this way, its controller …" reaches a set
     # rather than an empty list. Declared as two products because they are two
@@ -245,12 +223,10 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     "exile_cards_from_graveyard": EXILED_THIS_WAY,
     # "Each player exiles all creature cards from their graveyard, then … then
     # puts all cards **they** exiled this way onto the battlefield." (Living
-    # Death.) The per-seat record rather than the flat one beside it, and the
-    # pronoun in the sentence behind it is why: "they" asks the question once
-    # per player, and a flat list answering it would hand each of them the
-    # whole table's graveyards. The sweep writes one entry per seat, including
-    # the empty ones — a seat the map never mentioned reads as somebody else's
-    # pile the moment a later step iterates it.
+    # Death.) The per-seat record — see ``oracle_types.EXILED_BY_SEAT``. The
+    # sweep writes one entry per seat, including the empty ones: a seat the map
+    # never mentioned reads as somebody else's pile the moment a later step
+    # iterates it.
     # …and the flat pair beside it, because the same step answers a second
     # question a card actually prints: "you gain 1 life **for each card exiled
     # this way**" (Honor the Fallen) asks how many, over the whole table, and
@@ -260,32 +236,21 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     "exile_graveyard_cards": (
         EXILED_BY_SEAT, EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS,
     ),
+    # Which mana the emptied pool held (Drain Power) and how much (Pygmy Hippo)
+    # — see ``oracle_types.MANA_LOST_THIS_WAY`` and ``MANA_LOST_COUNT``. The
+    # dict is primary: it is what an "if you do" would test.
+    "lose_all_unspent_mana": (MANA_LOST_THIS_WAY, MANA_LOST_COUNT),
+    # "You gain life equal to **the life lost this way**." (Subversion.) See
+    # ``oracle_types.LIFE_LOST_THIS_WAY``.
+    "target_loses_life": LIFE_LOST_THIS_WAY,
     # CR 705.2: only the player who flipped wins or loses that flip, and both
     # "if you win" and "if you lose" read the one result — so the flip records
     # it and the conditionals after it read the record, rather than each
     # sentence flipping a coin of its own.
-    # "…**that player loses all unspent mana** and you add the mana lost this
-    # way." (Drain Power.) "…**lose all unspent mana**. If you do, … you add an
-    # amount of {C} equal to the amount of mana that player lost this way."
-    # (Pygmy Hippo.) Two records for one step, because the two cards printing
-    # it ask two different questions of the pool that is now empty: which mana
-    # it held, and how much. The dict is primary — it is what an "if you do"
-    # would test — and the count rides beside it so a reader wanting a number
-    # need not know the dict's shape.
-    "lose_all_unspent_mana": (MANA_LOST_THIS_WAY, MANA_LOST_COUNT),
-    # "…each opponent loses 1 life. You gain life equal to **the life lost this
-    # way**." (Subversion.) How much the step really took, summed across its
-    # victims — the printed number is what *each* of them loses, so at any table
-    # bigger than two the sentence behind it names a number the card never
-    # prints. Nor can a board read supply it: by then the life totals are the
-    # ones this step left behind.
-    "target_loses_life": LIFE_LOST_THIS_WAY,
     "flip_coin": "coin_flip",
-    # "Target opponent puts the cards from their hand on top of their library.
-    # Search that player's library for **that many** cards." (Jester's Mask.)
-    # How many went is the only place the search behind it can read its count:
-    # by then the hand is empty and the library has grown by an amount nothing
-    # else records.
+    # "…Search that player's library for **that many** cards." (Jester's Mask.)
+    # See ``oracle_types.HAND_CARDS_TO_LIBRARY``; by then the hand is empty and
+    # nothing else records how many went.
     "put_hand_cards_on_library": HAND_CARDS_TO_LIBRARY,
     # "Shuffle a card from your hand into your library. **If you do**, draw
     # two cards at the beginning of the next turn's upkeep." (Lat-Nam's
@@ -312,26 +277,18 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # many cards" (Flux) had no per-seat producer to demand and the looped
     # draw would have read one seat's answer for everybody.
     "each_player_discards_up_to_cards": ("discarded_count", DISCARDED_BY_SEAT),
-    # "Each player may pay any amount of mana. Then each player creates …
-    # tokens equal to **the amount of mana they paid this way**." (Liege of the
-    # Hollows.) The per-seat map, written as each prompt is answered — the
-    # only place the number exists, since how much a seat pays is a decision it
-    # has not made when the instruction returns.
+    # "…tokens equal to **the amount of mana they paid this way**." (Liege of
+    # the Hollows.) See ``oracle_types.MANA_PAID_BY_SEAT``.
     "each_player_pays_any_mana": MANA_PAID_BY_SEAT,
     # "Each player may draw up to two cards. **For each card less than two a
-    # player draws this way**, that player gains 2 life." (Truce.) The draw's
-    # per-seat tally, written as each prompt is answered — the only place it
-    # exists, since how many a seat drew is a decision it has not made when the
-    # instruction returns. Per seat rather than a single number for
-    # ``DISCARDED_BY_SEAT``'s reason: a shortfall is one answer per player, and
-    # one key would let the last seat to answer decide everybody's life gain.
+    # player draws this way**, …" (Truce.) Written as each prompt is answered,
+    # since how many a seat drew is a decision it has not made when the
+    # instruction returns — see ``oracle_types.DREW_BY_SEAT``.
     "each_player_draws_up_to_cards": DREW_BY_SEAT,
-    # "That player draws an additional card for each growth counter on this
-    # enchantment, **then** this enchantment deals damage to the player equal to
-    # **the number of cards they drew this way**." (Malignant Growth.) How many
-    # really arrived, which is the only place the second half can read the
-    # number from: the count the first half asked for is not the count a
-    # replacement or an empty library let through.
+    # "…equal to **the number of cards they drew this way**." (Malignant
+    # Growth.) How many really arrived, which is not the count the first half
+    # asked for once a replacement or an empty library has had its say — see
+    # ``oracle_types.DREW_COUNT``.
     "draw_target_cards": DREW_COUNT,
     # "Target player discards two cards, **then draws as many cards as they
     # discarded this way**." (Forget.) The chosen-discard prompt is the same
@@ -348,10 +305,9 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # says which of its cards an earlier step named.
     "choose_cards_in_hand": "chosen_hand_cards",
     # "Choose X target attacking creatures. **For each of those creatures**, …"
-    # (Winter's Chill.) The same shape one zone over: the choice records the set
-    # it named, which is the only place the loop behind it can read it from —
-    # nothing about a board says which attacking creatures a spell targeted, and
-    # by the time the loop runs one of them may have left combat.
+    # (Winter's Chill.) The same shape one zone over — see
+    # ``oracle_types.CHOSEN_TARGET_PERMANENTS``; by the time the loop runs, one
+    # of them may have left combat.
     # Two records, because "controlled by the same opponent" names a *player*
     # as well as a set: "**That player** chooses and sacrifices one of those
     # creatures" (Retribution) reads the seat, and this step is the only one
@@ -371,15 +327,11 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # and ``context.target`` is one slot that cannot hold both answers.
     "choose_target_permanent": (CHOSEN_TARGET_PERMANENTS, CHOSEN_PLAYER),
     # "**Choose two target creature cards in your graveyard.** … return **the
-    # chosen cards** to the battlefield tapped." (Victimize.) The same
-    # announcement one zone over, under a key of its own: what it records is a
-    # list of graveyard *slots*, and a reader written for the permanents above
-    # would take them for ``permanent_id``s.
+    # chosen cards** to the battlefield tapped." (Victimize.) See
+    # ``oracle_types.CHOSEN_TARGET_GRAVEYARD_SLOTS``.
     "choose_target_cards": CHOSEN_TARGET_GRAVEYARD_SLOTS,
     # "Target player loses all poison counters. Leeches deals **that much**
-    # damage to that player." The removal records how many actually came off,
-    # which is the only place the sentence behind it can read the number: by
-    # then the store holds zero, so a read of the board would deal none.
+    # damage to that player." See ``oracle_types.COUNTERS_REMOVED``.
     "remove_all_counters_from_target_player": COUNTERS_REMOVED,
     # "…remove all charge counters from it. **Add {C} for each charge counter
     # removed this way.**" (Ventifact Bottle.) The same record one object
@@ -394,8 +346,8 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # **that many** +1/+1 counters on this creature." The same key, for the same
     # reason: the count is what the next sentence is about.
     "exile_any_number_of_own_tokens": "trigger_count",
-    # The exile records whose permanent it removed, which is what "Its
-    # controller creates a token" reads (Angelic Ascension, Secure the Scene).
+    # Whose permanent the exile removed, for "Its controller creates a token"
+    # (Angelic Ascension) — see ``oracle_types.LAST_TARGET_CONTROLLER``.
     # …and its **toughness**: "Exile target nonwhite attacking creature. You
     # gain life equal to **its toughness**" (Exile) asks a question about an
     # object that by then is a card in exile with no computed characteristics
@@ -417,12 +369,10 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # refuse for want of a producer, which is the loud failure.
     "exile_target_permanent": (
         LAST_TARGET_CONTROLLER, _EVENT_SUBJECT_TOUGHNESS_RECORD,
-        # "…all cards with the same name as **that creature**" (Eradicate;
-        # Scour, Splinter and Sowing Salt over the other three card types).
-        # Safe to declare where the *power* above is not: nothing else in the
-        # grammar reads a name record, so this un-refuses no near-miss — it
-        # buys exactly the one sentence that names it, and any other reader
-        # would have to be written to ask for it.
+        # …and what it was called (Eradicate) — see
+        # ``oracle_types.LAST_TARGET_NAME``. Safe to declare where the *power*
+        # above is not: nothing else in the grammar reads a name record, so
+        # this un-refuses no near-miss.
         LAST_TARGET_NAME,
     ),
     # "Create Stangg Twin, a … token. Exile **that token** when …" (Stangg).
@@ -467,17 +417,6 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # exiled, whoever exiled it.
     "exile_random_card_from_hand": "exiled_cards",
     "search_and_exile_matching": "exiled_cards",
-    # "…until a creature card **or X cards have been put into their graveyard
-    # this way**" (Helm of Obedience). The loop records the cards it put there
-    # that its own stopping filter matched, which is what both sentences behind
-    # it read: "if one or more creature cards were put into that graveyard this
-    # way" asks whether the set is empty, and "put one of them onto the
-    # battlefield" takes from it. Nothing else can answer either, because a
-    # graveyard holds cards this effect never touched.
-    # "Look at the top card of target player's library. **If it's a nonland
-    # card**, …" (Wand of Denial.) The card the look turned up, under the key
-    # every "is it a …?" clause reads. A look and a reveal differ in who sees
-    # the card, not in which object the pronoun behind them names.
     # "**Choose a card name**, then target opponent mills a card. If a card
     # with the chosen name was milled this way, …" (Foreshadow.) The name is the
     # whole of what the first sentence does, and the only place the third can
@@ -495,12 +434,11 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # declaration true of Duress as well: the pick is a chosen card whatever
     # becomes of it.
     "reveal_hand_and_choose": "chosen_card_name",
+    # "Look at the top card of target player's library. **If it's a nonland
+    # card**, …" (Wand of Denial.) The card the look turned up, under the key
+    # every "is it a …?" clause reads. A look and a reveal differ in who sees
+    # the card, not in which object the pronoun behind them names.
     "look_at_target_library_top": "revealed_card",
-    # "…**target opponent mills a card**. If a card with the chosen name was
-    # milled this way, …" (Foreshadow.) What the mill actually put into a
-    # graveyard, under the key the repeated mill beside it already writes: "put
-    # into that graveyard **this way**" is one question, and a second key would
-    # be a second reader of it.
     # "…that player discards all the cards in their hand, then draws **that
     # many** cards." (Shocker.) How many the sweep actually binned, under the
     # key the counted discards already write — the printed sentence names no
@@ -511,7 +449,17 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # (Windfall) is a maximum across seats, and the flat number above is
     # whichever seat the loop emptied last.
     "discard_hand": ("discarded_count", DISCARDED_BY_SEAT),
+    # "…**target opponent mills a card**. If a card with the chosen name was
+    # milled this way, …" (Foreshadow.) See ``oracle_types.MILLED_THIS_WAY``,
+    # the key the repeated mill below writes too.
     "mill_target_player": MILLED_THIS_WAY,
+    # "…until a creature card **or X cards have been put into their graveyard
+    # this way**" (Helm of Obedience). The loop records the cards it put there
+    # that its own stopping filter matched, which is what both sentences behind
+    # it read: "if one or more creature cards were put into that graveyard this
+    # way" asks whether the set is empty, and "put one of them onto the
+    # battlefield" takes from it. Nothing else can answer either, because a
+    # graveyard holds cards this effect never touched.
     "mill_until_matching": MILLED_THIS_WAY,
     # And the graveyard exile, which is what "If **it** was a creature card"
     # reads (Scavenging Ooze) — the same key, because the question the
@@ -539,20 +487,14 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # are separate keys rather than one: only the first is available
     # synchronously, and only the second says what was chosen.
     #
-    # ``SACRIFICED_CARDS_BY_SEAT`` is the third and asks a question neither of
-    # the two above can: **which seats** gave something up. "…deals 2 damage to
-    # each player who sacrificed a Plains this way" (Desolation) is one
-    # sentence about several payers, and the flat list would answer it for
-    # every seat at once the moment any one of them lost a Plains.
+    # ``SACRIFICED_CARDS_BY_SEAT`` is the third: **which seats** gave something
+    # up (Desolation) — see ``oracle_types.SACRIFICED_CARDS_BY_SEAT``.
     #
-    # ``SACRIFICED_COUNT`` is the fourth and the only one that is a *number*:
-    # "Sacrifice any number of creatures. Last-Ditch Effort deals **that much**
-    # damage to any target." A bare back-reference resolves against the effect's
-    # produced quantities, and neither the boolean nor either list is one — so
-    # without this row the sentence had no producer to name and refused, while
-    # Reprocess's "for each permanent sacrificed this way" (which names its
-    # producer outright) worked from the list. Last, so ``primary_produced``
-    # still answers "did the sacrifice happen" with the boolean it always has.
+    # ``SACRIFICED_COUNT`` is the fourth and the only *number*, for Last-Ditch
+    # Effort's bare "that much" — see ``oracle_types.SACRIFICED_COUNT``.
+    # (Reprocess's "for each permanent sacrificed this way" names its producer
+    # outright and reads the list.) Last, so ``primary_produced`` still answers
+    # "did the sacrifice happen" with the boolean it always has.
     "sacrifice_matching_permanent": (
         "sacrificed_this_way", "sacrificed_cards", SACRIFICED_CARDS_BY_SEAT,
         SACRIFICED_COUNT,
@@ -564,11 +506,6 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # the token's recipient can come from, because by then the creature is a
     # card in a graveyard.
     "sacrifice_bound_permanent": ("sacrificed_this_way", LAST_TARGET_CONTROLLER),
-    # "Tap up to two target creatures. **Those creatures** don't untap…"
-    # (Frost Breath.) The tap records which permanents it affected, by id, and
-    # the sentence after it reads that record rather than re-resolving the slots
-    # — by then a target may have left, and CR 611.2c fixed the set when the
-    # effect began.
     # "Target creature you control can't be blocked this turn. **Destroy it**
     # and this creature at end of combat." (Goblin Sappers.) The grant records
     # the creature it chose, so the delayed destroy behind it has a producer to
@@ -576,45 +513,25 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # the Sappers would destroy themselves twice.
     "grant_unblockable_to_target": "unblockable_permanents",
     # "X target attacking creatures become blocked. Choking Vines deals 1 damage
-    # to **each of those creatures**." The mirror image of the grant one line
-    # up, recording for its reason exactly: the sentence behind it names the
-    # creatures this step chose and nothing else in the resolution can say which
-    # they were -- a board read would find every blocked attacker, including the
-    # ones the defending player blocked in the ordinary way.
+    # to **each of those creatures**." See ``_record_keys._BLOCKED_PERMANENTS``;
+    # a board read would find every blocked attacker, including the ones the
+    # defending player blocked in the ordinary way.
     "become_blocked": "blocked_permanents",
-    # "Tap all untapped Islands that player controls and this enchantment deals
-    # X damage to the player, **where X is the number of Islands tapped this
-    # way**." (Monsoon.) How many the sweep turned, which is the only place the
-    # clause behind it can read the number from — by then the board says how
-    # many *are* tapped rather than how many this effect tapped. The count
-    # alone: the victims are still on the battlefield, unlike a destruction
-    # sweep's, so there is nothing about them a later sentence could not ask
-    # the board for.
     # "Put a paralyzation counter on each creature blocking or blocked by this
-    # creature and tap **those creatures**." (Dread Wight.) The placement is
-    # the only step that can say which permanents the sentence is about: its
-    # set is named by a combat relation, and the three sentences that read it
-    # back run in the end-of-combat step, where the combat is on its way out
-    # (CR 511.2). So the counters record their recipients by id, and the tap,
-    # the untap restriction and the granted ability all read that record.
+    # creature and tap **those creatures**." (Dread Wight.) See
+    # ``_record_keys._PERMANENTS_GIVEN_COUNTERS``.
     "add_named_counter_to_creatures_in_combat_with_source": _PERMANENTS_GIVEN_COUNTERS,
-    # "Distribute three +1/+1 counters among one, two, or three target
-    # creatures. **For each +1/+1 counter you put on a creature this way,**
-    # …" (Bounty of the Hunt.) The placement records one entry per counter,
-    # which is what the sentence behind it counts — the division the caster
-    # announced is on the stack item and says how many went where, and
-    # nothing on the board afterwards can say which of a creature's counters
-    # this spell put there.
+    # "…**For each +1/+1 counter you put on a creature this way,** …" (Bounty
+    # of the Hunt.) One entry per counter — see
+    # ``oracle_types.COUNTERS_PLACED_THIS_WAY``; nothing on the board afterwards
+    # can say which of a creature's counters this spell put there.
     "add_counter_to_target": _COUNTERS_PLACED_THIS_WAY,
-    # "Return target white or black creature card from your graveyard to the
-    # battlefield. **That creature** gains "Cumulative upkeep {2}."" (Dreams of
-    # the Dead.) The permanent did not exist when the ability was activated —
-    # the ability's target is a *card* in a graveyard — so the reanimation is
-    # the only step that can say which permanent the sentences behind it name.
+    # "…**That creature** gains "Cumulative upkeep {2}."" (Dreams of the Dead.)
+    # See ``_record_keys._REANIMATED_PERMANENTS``.
     # …**and the mana value of the card it moved**. "Put target creature card
     # from a graveyard onto the battlefield under your control. You lose life
     # equal to **that card's mana value**." (Reanimate.) The same record the
-    # destroy above declares and for the same reason: the number is about an
+    # destroy row below declares and for the same reason: the number is about an
     # object the reader cannot go and look at — here because the sentence named
     # a card in a *graveyard*, so there was no permanent to read when the
     # ability was announced, and CR 400.7 makes what arrived a new object.
@@ -632,30 +549,27 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # behind this step cannot mean the permanent that died — and every reader
     # in the resolution is still holding that one.
     "return_source_card_to_battlefield": _REANIMATED_PERMANENTS,
-    # "…put that card onto the battlefield, then shuffle. **That Dragon** gains
-    # haste until end of turn. Exile **it** at the beginning of the next end
-    # step." (Zirilan of the Claw.) The reanimation's twin one zone over: the
-    # permanent did not exist when the ability was activated — its subject is a
-    # *card* in a library — so the search is the only step that can say which
-    # permanent the sentences behind it name.
+    # "…**That Dragon** gains haste until end of turn. Exile **it** at the
+    # beginning of the next end step." (Zirilan of the Claw.) The reanimation's
+    # twin one zone over — see ``oracle_types.SEARCHED_PERMANENTS``.
     "search_library": SEARCHED_PERMANENTS,
     # "You may put a creature card from your hand onto the battlefield. If you
-    # do, sacrifice **it** unless you pay its mana cost reduced by {2}."
-    # (Flash.) The third member of the same family: the permanent did not exist
-    # when the spell was cast — its subject is a *card* in a hand — so the move
-    # is the only step that can say which permanent the sentence behind it
-    # names.
+    # do, sacrifice **it** …" (Flash.) The third member of the same family —
+    # see ``_record_keys.PUT_FROM_HAND_PERMANENTS``.
     "put_chosen_card_from_hand_onto_battlefield": PUT_FROM_HAND_PERMANENTS,
     # "Take an extra turn after this one. At the beginning of **that turn's**
     # end step, you lose the game." (Final Fortune.) The queued turn, recorded
     # so the delay behind it has something to refer back to — see
-    # ``_events.EXTRA_TURN_GRANTED``.
+    # ``_record_keys.EXTRA_TURN_GRANTED``.
     "grant_extra_turn": EXTRA_TURN_GRANTED,
-    # Two records, for the destroy family's reason: "…where X is the number of
-    # Islands **tapped this way**" (Monsoon) asks how many the sweep turned, and
-    # "**They** don't untap during their controller's next untap step" (Joven's
-    # Ferrets) asks which permanents the printed noun phrase named. The count is
-    # the primary — it is what a step of this kind has always written.
+    # "Tap all untapped Islands that player controls and this enchantment deals
+    # X damage to the player, **where X is the number of Islands tapped this
+    # way**." (Monsoon.) How many the sweep turned — by then the board says how
+    # many *are* tapped rather than how many this effect tapped. And which
+    # permanents the printed noun phrase named, for "**They** don't untap during
+    # their controller's next untap step" (Joven's Ferrets): two records, for
+    # the destroy family's reason. The count is the primary — it is what a step
+    # of this kind has always written.
     "tap_all_matching": (TAPPED_THIS_WAY, TAPPED_THIS_WAY_OBJECTS),
     # "Each player may tap any number of untapped white creatures they control.
     # **For each creature tapped this way, that player** chooses…" (Raiding
@@ -671,18 +585,18 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
         TAPPED_THIS_WAY, TAPPED_THIS_WAY_OBJECTS,
         PER_OBJECT_SEAT_RECORDS["controller"],
     ),
-    # "…chooses up to two Plains. **Then destroy all Plains that weren't chosen
-    # this way by any player.**" (Raiding Party.) What the pick named, so the
-    # sweep behind it has a set to subtract. Written by every seat asked and
-    # every iteration, into the one key — the sentence that reads it is one
-    # question about all of the answers.
+    # "…**Then destroy all Plains that weren't chosen this way by any
+    # player.**" (Raiding Party.) See ``oracle_types.CHOSEN_THIS_WAY_OBJECTS``.
     "choose_permanents": CHOSEN_THIS_WAY_OBJECTS,
     # "Target creature you cast this turn **has base power and toughness 0/1**
     # …. At the beginning of your next upkeep, put a +1/+1 counter on **that
-    # creature**." (Cycle of Life.) The rewrite records what it chose, because
-    # the sentence behind it is a delayed ability that fires a turn later and
-    # chooses nothing of its own.
+    # creature**." (Cycle of Life.) See ``oracle_types.BASE_PT_SET_PERMANENTS``.
     "set_base_pt_target_until_eot": _BASE_PT_SET_PERMANENTS,
+    # "Tap up to two target creatures. **Those creatures** don't untap…"
+    # (Frost Breath.) The tap records which permanents it affected, by id, and
+    # the sentence after it reads that record rather than re-resolving the slots
+    # — by then a target may have left, and CR 611.2c fixed the set when the
+    # effect began.
     "tap_target_permanent": "tapped_permanents",
     # "…tap the creature, **remove it** from combat" (Imprison). The Aura's tap
     # names its own attachment rather than a target, so it is a different
@@ -697,19 +611,19 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # CR 611.2c fixes the set when the effect begins, so a vigilance attacker
     # nobody tapped is still "it".
     "untap_self": "untapped_permanents",
+    # "Remove target attacking creature you control from combat **and untap
+    # it**." (Reconnaissance.) The same shape the untap below is in for
+    # Disharmony, with the two steps in the other order — see
+    # ``_record_keys.REMOVED_FROM_COMBAT_PERMANENTS``. Harmless for the
+    # printings that read a record rather than write one (Disharmony, Imprison,
+    # Melee): nothing is printed behind their removal, so the key is written and
+    # never read.
+    "remove_from_combat": REMOVED_FROM_COMBAT_PERMANENTS,
     # "Untap target attacking creature and remove **it** from combat. Gain
     # control of **that creature** until end of turn." (Disharmony.) The untap
     # records what it resolved — affected, not merely flipped: a vigilance
     # attacker that was never tapped is still "it" (CR 611.2c fixes the set
     # when the effect begins) — and both later sentences read the record.
-    # "Remove target attacking creature you control from combat **and untap
-    # it**." (Reconnaissance.) The removal records what it took out of combat,
-    # for the untap behind it to name — the same shape the untap below is in
-    # for Disharmony, with the two steps in the other order. Harmless for the
-    # printings that read a record rather than write one (Disharmony, Imprison,
-    # Melee): nothing is printed behind their removal, so the key is written and
-    # never read.
-    "remove_from_combat": REMOVED_FROM_COMBAT_PERMANENTS,
     "untap_target_permanent": "untapped_permanents",
     # "…untap enchanted land. **You gain control of that land** until end of
     # turn." (Wellspring.) The Aura's own untap, recorded under the same key
@@ -717,21 +631,14 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # not something the sentence behind it can see, so it must not be
     # something it has to know.
     "untap_enchanted_creature": "untapped_permanents",
-    # "…reveal the top card of your library. **If it's** a creature or land
-    # card, draw a card." (Track Down.) The reveal records what it showed and
-    # the conditional after it reads that record — not the library, which the
-    # draw in its own branch would have changed underneath it.
     # "Target player reveals their hand." (Sirocco, Inquisition, Amnesia.) What
     # was shown, for the sentence that narrows it — see
-    # ``_events.REVEALED_HAND_CARDS``.
+    # ``oracle_types.REVEALED_HAND_CARDS``.
     "reveal_hand": REVEALED_HAND_CARDS,
     # "**Choose a number greater than 0 and a color.** … If that opponent
     # reveals exactly **the chosen number** of cards of **the chosen color**,
-    # you draw a card." (Scrying Glass.) Two steps, two records, and until this
-    # row neither of them recorded anything at all: both handlers wrote their
-    # answer onto the source permanent, where a *continuous* reader finds it
-    # (Chromatic Armor's shield, Shapeshifter's characteristic-defining P/T)
-    # and a later step of the same resolution does not.
+    # you draw a card." (Scrying Glass.) Two steps, two records — see
+    # ``oracle_types.CHOSEN_NUMBER_THIS_WAY`` and ``CHOSEN_COLOR_THIS_WAY``.
     #
     # Declared unconditionally, the way ``count_objects`` declares the number
     # it takes: what a step records is a property of the step, and a producer
@@ -740,17 +647,19 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     "choose_number": CHOSEN_NUMBER_THIS_WAY,
     "choose_color": CHOSEN_COLOR_THIS_WAY,
     # "Reveal any number of blue cards in your hand." (Brine Seer and the
-    # eleven cards printed with it.) **Two** records from one step, and the
-    # count is the primary: every sentence in the pool that follows this one
-    # spends "the number of cards revealed this way", and a narrowed reading
-    # ("for each **blue instant** card revealed this way", Sirocco) can only be
-    # answered off the cards. See ``oracle_types.REVEALED_THIS_WAY``.
+    # eleven cards printed with it.) **Two** records, and the count is the
+    # primary: every sentence in the pool that follows this one spends it — see
+    # ``oracle_types.REVEALED_THIS_WAY``.
     #
     # Deliberately **not** in ``_record_keys._PRODUCED_QUANTITIES``: no card
     # prints a bare "that much" after a reveal, so admitting it there would be
     # a reading nothing exercises — and a second candidate for every bare
     # back-reference in a sentence that also reveals.
     "reveal_cards_from_hand": (REVEALED_THIS_WAY, REVEALED_HAND_CARDS),
+    # "…reveal the top card of your library. **If it's** a creature or land
+    # card, draw a card." (Track Down.) The reveal records what it showed and
+    # the conditional after it reads that record — not the library, which the
+    # draw in its own branch would have changed underneath it.
     "reveal_top_of_library": "revealed_card",
     # "Target player reveals a card at random from their hand." (Wand of
     # Ith.) The same record, from a different zone: the sentences behind it
@@ -783,9 +692,8 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # off the battlefield would find nothing and gain nothing.
     "bounce_target_creature": "returned_mana_value",
     # "Destroy enchanted land **and this Aura deals 2 damage to that land's
-    # controller**." (Orcish Mine.) The victim's seat, read before the destroy:
-    # the sentence behind this step names a player and the only place that
-    # player exists by then is this record (CR 608.2h).
+    # controller**." (Orcish Mine.) See
+    # ``oracle_types.ATTACHED_PERMANENT_CONTROLLER``.
     "destroy_attached_permanent": ATTACHED_PERMANENT_CONTROLLER,
     # "At the beginning of your upkeep, put a +1/+0 counter on **enchanted
     # creature**. If that creature has three or more … **it deals damage equal
@@ -820,24 +728,18 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # object that no longer exists by the time the token is built — CR 613.1
     # gives a card in a graveyard no computed characteristics at all, so the
     # numbers are frozen where the object still had them (CR 608.2h, idiom 6).
-    # …and the victim's **controller**, which is the same record the exile row
-    # above declares and was written here under a second name. "Destroy target
-    # creature. **Its controller** creates a 1/1 white Spirit creature token"
-    # (Afterlife) and "…**Its controller** reveals cards from the top of their
-    # library" (Polymorph) are the exile's two riders printed behind a destroy,
-    # and both refused for want of a producer that the handler had been writing
-    # all along as ``last_target_controller_index``.
+    # …and the victim's **controller**, the record the exile row above declares
+    # (Afterlife, Polymorph) — see ``oracle_types.LAST_TARGET_CONTROLLER``.
     "destroy_target_permanent": (
         "its_mana_value", "destroyed_target", "destroyed_this_way",
         _EVENT_SUBJECT_POWER_RECORD, _EVENT_SUBJECT_TOUGHNESS_RECORD,
         LAST_TARGET_CONTROLLER,
         # …and what it was called (Wake of Destruction), for the reason the
-        # exile beside it declares the same key: the sweep in the second half
+        # exile row above declares the same key: the sweep in the second half
         # of that sentence compares against a permanent this step destroys.
         LAST_TARGET_NAME,
-        # …and the victim's **owner** (Path of Peace). Its own key beside the
-        # controller because CR 108.3 and CR 109.5 answer differently for every
-        # stolen permanent, and the destroy step writes both at the same moment.
+        # …and the victim's **owner** (Path of Peace) — see
+        # ``oracle_types.LAST_TARGET_OWNER``.
         LAST_TARGET_OWNER,
         # "…equal to the number of artifacts **they controlled** that were put
         # into a graveyard this way." (Builder's Bane.) The same per-object
