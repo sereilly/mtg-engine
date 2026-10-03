@@ -178,7 +178,10 @@ def test_a_subtype_only_target_needs_no_special_case(by_name, name, ability_inde
         ("Orcish Artillery", 0, {"kind": "any"}),
         ("Disrupting Scepter", 0, {"kind": "player"}),
         ("Millstone", 0, {"kind": "player"}),
-        ("Icy Manipulator", 0, {"kind": "permanent"}),
+        # "target artifact, creature, or land": the union the permanent picker
+        # cannot name rides the filter (W2G2).
+        ("Icy Manipulator", 0, {"kind": "permanent",
+                                "filter": {"type_filter": ["artifact", "creature", "land"]}}),
         ("Aladdin", 0, {"kind": "artifact"}),
         ("Ley Druid", 0, {"kind": "land"}),
         ("Demonic Hordes", 0, {"kind": "land"}),

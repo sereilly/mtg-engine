@@ -2428,9 +2428,10 @@ class LegalityMixin:
             return None
 
         legality: list[bool] = []
-        # **The printed description is re-asked too** (CR 608.2b: a target
-        # that "no longer meets the targeting requirements" is illegal). This
-        # loop asked only "still there, still targetable", so a spell whose
+        # **The printed description is re-asked too** (CR 608.2b: "Other
+        # changes to the game state may cause a target to no longer be legal;
+        # for example, its characteristics may have changed"). This loop
+        # asked only "still there, still targetable", so a spell whose
         # target stopped answering its description resolved anyway: Sever Soul
         # whose target was made black in response gained its life, Vendetta and
         # Reckless Spite cost theirs, Spinning Darkness dealt its damage to the
@@ -3164,10 +3165,15 @@ class LegalityMixin:
         return True
 
     def _permanent_matches_target_kind(self, perm: Permanent, kind: str, spec: dict, casting_aura: bool) -> bool:
-        # Effective type line so copies match by their copied types — a Copy
-        # Artifact copying a Mox is an "Artifact Enchantment" and must be a
-        # legal target both as an artifact and as an enchantment.
-        type_line = perm.effective_card.type_line.lower()
+        # **Every head noun is a layer-4 question** (CR 613.1d), asked through
+        # ``has_type``. It was the effective card's *printed* line here, and
+        # ``card.primary_type`` for lands: right for a copy (layer 1 is folded
+        # in either way — a Copy Artifact copying a Mox is an "Artifact
+        # Enchantment" and is offered as both), wrong for every type an effect
+        # adds or takes away. A creature made an artifact (Xenic Poltergeist,
+        # Ashnod's Transmogrant) was never offered to Shatter, and a Sol Ring
+        # that had stopped being an artifact still was — so CR 608.2b, which
+        # re-asks this enumeration at resolution, called that target legal.
         # "…**that isn't enchanted**" (Time Elemental). Asked before the kind
         # switch because the restriction is not about the head noun: the card
         # prints it on "permanent", and a card printing it on "creature" would
@@ -3236,7 +3242,7 @@ class LegalityMixin:
             # Volcanic Eruption: a divided spell that targets Mountains, not creatures.
             land_filter = spec.get("land_filter")
             if land_filter:
-                if perm.card.primary_type != "land":
+                if not perm.has_type("land"):
                     return False
                 # CR 305.7: setting a land's subtype replaces its old ones, so
                 # a Mountain turned into an Island is NOT a legal "target
@@ -3305,14 +3311,14 @@ class LegalityMixin:
                 return False
             return True
         if kind == "artifact":
-            if "artifact" not in type_line:
+            if not perm.has_type("artifact"):
                 return False
             # Guardian Beast: noncreature artifacts it protects can't be enchanted.
             if casting_aura and self._untapped_artifact_protector_active(perm):
                 return False
             return True
         if kind == "land":
-            if perm.card.primary_type != "land":
+            if not perm.has_type("land"):
                 return False
             if casting_aura and _cant_be_enchanted_by_auras(perm):
                 return False
@@ -3336,7 +3342,7 @@ class LegalityMixin:
             # Colour is settled above the switch; what is left here is the one
             # narrowing only this branch has.
             if spec.get("enchant_enchantment"):
-                return "enchantment" in type_line
+                return perm.has_type("enchantment")
             return True
         return False
 

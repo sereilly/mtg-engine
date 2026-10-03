@@ -563,7 +563,12 @@ def _narrowing_flags(source: dict) -> dict:
         # that offered an opponent's creature would let a player choose a target
         # the effect then declines to affect, with nothing on screen saying why.
         flags["own_only"] = True
-    elif source.get("controller") == "opponent":
+    elif source.get("controller") in ("opponent", "not_you"):
+        # "target creature **you don't control**" (Provoke) is the same seat
+        # test: CR 102.2 makes every other player an opponent, and this engine
+        # has no teammates. Left off, Provoke could be aimed at its caster's own
+        # creature and still drew its card.
+        #
         # "target artifact **an opponent controls**" (Hyperion Blacksmith). The
         # mirror of `own_only` and a seat test for the same reason, so it is the
         # picker's job rather than the permanent matcher's. Without it the
@@ -754,6 +759,20 @@ def _narrowing_flags(source: dict) -> dict:
     superlative = source.get("superlative_among")
     if superlative:
         narrowed["superlative_among"] = superlative
+    # "Exile target creature **with power 2 or less**." (Last Breath.) A printed
+    # P/T bound is a property of the candidate alone, so the enumeration can ask
+    # it like any key above — and it has to, for the reason the five keys above
+    # give: on a spell whose ``primary`` is a ``sequence`` no arm of
+    # ``_validate_cast_targets`` ever saw it, so a Hill Giant was a legal
+    # announcement, nothing was exiled, and CR 608.2b (which re-asks this spec)
+    # could not call the target illegal. An **integer** bound only: "mana value
+    # X or less" (Dominate) is substituted from the announcement by the cast
+    # gate, and a bound the enumeration cannot evaluate must stay off the spec
+    # rather than ride it unanswerable.
+    for key in ("power", "toughness"):
+        bound = source.get(key)
+        if isinstance(bound, dict) and isinstance(bound.get("value"), int):
+            narrowed[key] = dict(bound)
     if narrowed:
         flags["filter"] = narrowed
     return flags
@@ -3356,7 +3375,33 @@ def _from_targets_payload(targets) -> dict | None:
         # A targeted object with no type restriction is any permanent.
         return {"kind": "permanent", **flags}
     derived = _kind_for_type_filter(type_filter)
-    return {"kind": derived, **flags} if derived is not None else None
+    if derived is None:
+        return None
+    if derived == "permanent" and type_filter != "permanent":
+        # **The head noun the picker's kind could not carry.** A union ("target
+        # artifact, creature, **or** land") and the nouns with no picker of
+        # their own ("target **enchantment**", "artifact or enchantment") all
+        # fall back to the general permanent picker, whose docstring promised
+        # that the filter "narrows it back down at enumeration time" — and for a
+        # *spell* nothing did: an ability's enumeration delegates to its own
+        # instruction filter, but a cast's has only this spec. So Serene
+        # Offering ("Destroy target enchantment. You gain 4 life.") could be
+        # announced at a creature and gained its life for destroying nothing,
+        # Aftershock at an enchantment dealt its 3 damage to its caster, and
+        # CR 608.2b — which re-asks this same enumeration — could never find
+        # either target illegal. ``type_filter`` is object-testable, and the
+        # matcher reads a union and ``artifact_or_enchantment`` through layer 4.
+        flags = {
+            **flags,
+            "filter": {
+                **(flags.get("filter") or {}),
+                "type_filter": (
+                    list(type_filter) if isinstance(type_filter, (list, tuple))
+                    else type_filter
+                ),
+            },
+        }
+    return {"kind": derived, **flags}
 
 
 def spec_only_subtype(spec: dict | None) -> str | None:

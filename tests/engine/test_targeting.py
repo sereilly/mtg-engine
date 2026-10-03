@@ -134,7 +134,11 @@ def test_an_aura_on_a_graveyard_card_is_not_a_battlefield_target(supported_cards
         ("Steal Artifact", {"kind": "artifact"}),   # Enchant artifact
         ("Shatter", {"kind": "artifact"}),          # type_filter=artifact
         ("Stone Rain", {"kind": "land"}),           # type_filter=land
-        ("Disenchant", {"kind": "permanent"}),      # type_filter=artifact_or_enchantment
+        # type_filter=artifact_or_enchantment: no picker of its own, so the
+        # head noun rides the filter the enumeration asks (W2G2) — without it
+        # a cast's picker offered every permanent.
+        ("Disenchant", {"kind": "permanent",
+                        "filter": {"type_filter": "artifact_or_enchantment"}}),
         # Flags, each from the same place its behaviour comes from.
         ("Animate Wall", {"kind": "creature", "enchant_wall": True}),
         ("Feedback", {"kind": "permanent", "enchant_enchantment": True}),

@@ -258,6 +258,88 @@ def test_a_change_the_description_does_not_mention_leaves_the_target_legal(catal
     assert not any(_GATE in line for line in game.log), game.log
 
 
+def _w2g2_refused(game, spell, target) -> bool:
+    queued = game.queue_from_hand(
+        0, spell.name, target_player_index=game.controller_index_of(target),
+        target_permanent_ids=[target.permanent_id],
+    )
+    return not queued.supported and not game.stack
+
+
+# The other end of the same predicate. CR 608.2b can only be as narrow as the
+# description it re-asks, and for twenty shipped spells that description — the
+# derived cast spec — was wider than the card: a head noun the permanent picker
+# cannot name ("target enchantment", "artifact, creature, or land"), a P/T bound,
+# "you don't control". Each was announceable at a target the card excludes
+# (CR 601.2c), and so was never found illegal at resolution either.
+
+
+@pytest.mark.cr("601.2c", "115.1a")
+@pytest.mark.parametrize(("spell_name", "target_name", "seat"), [
+    # "Destroy target enchantment. You gain 4 life." — cast at a creature it
+    # destroyed nothing and gained the life.
+    ("Serene Offering", "Hill Giant", 1),
+    # "Destroy target artifact, creature, or land. Aftershock deals 3 damage to
+    # you." — cast at an enchantment it dealt its caster 3 for nothing.
+    ("Aftershock", "Bad Moon", 1),
+    # "Exile target creature with power 2 or less. Its controller gains 4 life."
+    ("Last Breath", "Hill Giant", 1),
+    # "Untap target creature you don't control. That creature blocks this turn
+    # if able. Draw a card." — at the caster's own creature it still drew.
+    ("Provoke", "Grizzly Bears", 0),
+])
+def test_a_target_outside_the_printed_description_is_not_announceable(
+    catalog_by_name, spell_name, target_name, seat,
+):
+    spell = catalog_by_name[spell_name]
+    target = _w2g2_perm(catalog_by_name[target_name])
+    boards = {0: [], 1: []}
+    boards[seat].append(target)
+    game = _w2g2_table(spell, mine=boards[0], theirs=boards[1])
+
+    assert _w2g2_refused(game, spell, target), game.log
+    assert game.players[0].life == 20 and spell in game.players[0].hand
+
+
+@pytest.mark.cr("601.2c", "613.1d")
+def test_a_creature_made_an_artifact_is_an_artifact_target(catalog_by_name):
+    """"That creature becomes an artifact in addition to its other types."
+    The picker read the printed type line, so a Bear made an artifact (Xenic
+    Poltergeist, Ashnod's Transmogrant) was never a legal "target artifact"."""
+    from engine.layer_bridge import GAINED_TYPES
+
+    spell = catalog_by_name["Shatter"]
+    bear = _w2g2_perm(catalog_by_name["Grizzly Bears"])
+    bear.metadata[GAINED_TYPES] = [{"card_types": ["artifact"], "source": "test"}]
+    game = _w2g2_table(spell, theirs=[bear])
+
+    _w2g2_cast(game, spell, bear)
+    resolve_stack(game)
+
+    assert not game.is_on_battlefield(bear), game.log
+
+
+@pytest.mark.cr("608.2b", "613.1d")
+def test_an_artifact_target_that_stopped_being_an_artifact_is_illegal(catalog_by_name):
+    """The same layer-4 read at the other end: Crumble ("Destroy target
+    artifact. It can't be regenerated. That artifact's controller gains life
+    equal to its mana value.") whose target stopped being an artifact in
+    response is countered, not resolved for its life."""
+    spell = catalog_by_name["Crumble"]
+    ring = _w2g2_perm(catalog_by_name["Sol Ring"])
+    game = _w2g2_table(spell, theirs=[ring])
+    _w2g2_cast(game, spell, ring)
+
+    ring.metadata[SET_CARD_TYPES] = {
+        "card_types": ["enchantment"], "timestamp": 10**6, "source": "test",
+    }
+    resolve_stack(game)
+
+    assert game.is_on_battlefield(ring)
+    assert game.players[1].life == 20, game.log
+    assert _w2g2_countered(game, spell), game.log
+
+
 @pytest.mark.cr("608.2b", "506.4")
 def test_a_blocking_target_removed_from_combat_is_illegal(catalog_by_name):
     """"Target blocking creature gets +7/+7 until end of turn." (Righteousness.)

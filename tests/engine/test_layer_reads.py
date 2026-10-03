@@ -370,7 +370,6 @@ PRIMARY_TYPE_BASELINE: dict[str, int] = {
     "handlers/prevention.py": 1,
     "handlers/stack.py": 2,
     "handlers/tapping.py": 2,
-    "legality.py": 2,
     "mana_payment.py": 1,
     "mixins/effects.py": 1,
     "mixins/game_ending.py": 1,
