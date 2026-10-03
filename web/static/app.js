@@ -11578,12 +11578,18 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     return;
   }
 
+  // Both colour prompts below carry the ability the menu chose: a land's mana
+  // abilities are separate abilities (CR 605), and a body sent without the
+  // index made the server tap the land's *first* one — a Karplusan Forest
+  // asked for {R} off its coloured ability produced {C} and no damage, and a
+  // mana ability Overlaid Terrain granted could never be reached.
   if (cardRequiresManaColorChoice(card)) {
     pendingManaColor = {
       cardName,
       permanentIndex,
       targetSeat,
       oracleText: card.oracle_text || "",
+      abilityIndex,
     };
     renderActivationPrompt();
     return;
@@ -11597,6 +11603,7 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
       permanentIndex,
       targetSeat,
       oracleText: card.oracle_text || "",
+      abilityIndex,
       colorOptions,
       // `fan` routes the choice to the on-board mana fan rather than the modal;
       // renderActivationPrompt keeps the prompt panel hidden while it's set.
@@ -11724,7 +11731,7 @@ function resolvePendingManaColor(manaColor) {
 
   updateActionHint(`Activating ${pending.cardName} for ${manaColor} mana...`);
 
-  sendAction(withPermanentId(
+  const colorBody = withPermanentId(
     {
       seat,
       action: "activate",
@@ -11734,7 +11741,9 @@ function resolvePendingManaColor(manaColor) {
       mana_color: manaColor,
     },
     "permanent_id", seat, pending.permanentIndex,
-  ))
+  );
+  if (Number.isInteger(pending.abilityIndex)) colorBody.ability_index = pending.abilityIndex;
+  sendAction(colorBody)
     .then(() => updateActionHint(`Activated ${pending.cardName} and chose ${manaColor}.`))
     .catch((e) => updateActionHint(e.message, true));
 }

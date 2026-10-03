@@ -83,6 +83,29 @@ def _is_free_beyond_tapping(cost) -> bool:
     )
 
 
+def is_tap_alone_mana_ability(ability) -> bool:
+    """Whether *ability* is one the tap-for-mana seam may run: a supported mana
+    ability (CR 605.1a; an ``if_then`` "…add {C}{C} instead" too) whose whole
+    cost is {T} (CR 106.12's "tap for mana").
+
+    One predicate for the three readers that ask it — the seam's own walk, the
+    seam taking an ability the player chose by index, and the web route that
+    decides which of the engine's two entry points a land click goes to. Those
+    answering separately is how the route kept a three-kind set of its own
+    while the seam asked CR 605.1a, and a land's coloured second ability went
+    down the path that skips every swap and trigger the seam announces.
+    """
+    from ..mana_payment import is_mana_ability
+
+    instruction = getattr(ability, "instruction", None)
+    if instruction is None or not getattr(ability, "supported", False):
+        return False
+    if not (is_mana_ability(ability) or instruction.kind == "if_then"):
+        return False
+    cost = ability.cost
+    return bool(cost.requires_tap) and _is_free_beyond_tapping(cost)
+
+
 class TurnManagementMixin:
     def select_starting_player(
         self, rng: random.Random | None = None
@@ -432,9 +455,21 @@ class TurnManagementMixin:
         land with the second and not the first must be **refused**, because that
         summary is Scryfall's list of symbols the land can make and says nothing
         at all about what they cost.
+
+        **A land whose type an effect set has neither** (CR 305.7): it "loses
+        all abilities generated from its rules text … and gains the appropriate
+        mana ability for each new basic land type", which is the summary path.
+        ``land_types.lost_abilities_to_type_change`` named three readers — layer
+        6, the activation gate, the trigger scan — and this was the fourth that
+        did not ask: a Karplusan Forest under Blood Moon tapped for its printed
+        {C} through this seam while the activation path refused the very same
+        ability, and a Mishra's Workshop still made {C}{C}{C}.
         """
+        from ..land_types import lost_abilities_to_type_change
         from ..mana_payment import is_mana_ability
 
+        if lost_abilities_to_type_change(land):
+            return None, False
         priced = False
         for ability in compile_card_oracle(land.effective_card).activated_abilities:
             instruction = ability.instruction
@@ -442,11 +477,38 @@ class TurnManagementMixin:
                 continue
             if not (is_mana_ability(ability) or instruction.kind == "if_then"):
                 continue
-            cost = ability.cost
-            if cost.requires_tap and _is_free_beyond_tapping(cost):
+            if is_tap_alone_mana_ability(ability):
                 return instruction, priced
             priced = True
         return None, priced
+
+    def _chosen_land_mana_ability(self, land, ability_index: int):
+        """The instruction of the mana ability *ability_index* names on *land*,
+        or None when that ability is not one this seam may run.
+
+        CR 605: each mana ability is a separate ability its controller chooses
+        to activate, and the index is the one the activation path and the wire
+        already address a permanent's abilities by
+        (``targeting.usable_activated_abilities`` over the playable card). So a
+        Karplusan Forest's coloured second ability, or the "{T}: Add two mana
+        of any one color" Overlaid Terrain grants it, is reachable through the
+        seam rather than always losing to the land's own first ability.
+
+        Only a tap-alone mana ability: anything costing more is the activation
+        path's to pay (CR 602.2b), which this seam refuses by design.
+        """
+        from ..land_types import lost_abilities_to_type_change
+        from ..targeting import usable_activated_abilities
+
+        if lost_abilities_to_type_change(land):
+            return None
+        usable = usable_activated_abilities(
+            compile_card_oracle(self.playable_card_of(land))
+        )
+        if not 0 <= ability_index < len(usable):
+            return None
+        chosen = usable[ability_index]
+        return chosen.instruction if is_tap_alone_mana_ability(chosen) else None
 
     def tap_land_for_mana(
         self,
@@ -456,8 +518,16 @@ class TurnManagementMixin:
         permanent_index: int | None = None,
         *,
         permanent_id: int | None = None,
+        ability_index: int | None = None,
     ) -> bool:
         """Tap one land for mana (CR 605.1a), as its controller.
+
+        *ability_index* is which of the land's mana abilities the player chose
+        (CR 605: each is its own ability), indexing the same list the
+        activation path does. Omitted, the land's first tap-alone mana ability
+        runs, which is the answer for every land with one — and the reason a
+        *granted* one (Overlaid Terrain) or a painland's coloured second one
+        could never be reached here.
 
         *permanent_id* addresses the land the way the rest of the engine does
         and takes precedence over the name-and-slot pair above it, which exists
@@ -484,11 +554,40 @@ class TurnManagementMixin:
         if land is None or land.tapped:
             return False
 
+        # Tapping a land for mana *is* activating its mana ability (CR 106.12),
+        # so the gates the activation path asks of that ability are asked here
+        # too — this seam is the second door to the same ability, and a gate
+        # one door asks and the other does not is a rule enforced on half the
+        # wire. CR 302.6 (through CR 602.5a): a land that is a creature —
+        # Mishra's Factory animated, a Forest under Living Lands — has the
+        # summoning-sickness rule like any creature, and a {T} mana ability is
+        # a {T} ability. CR 602.5's per-permanent ban ("That permanent's
+        # activated abilities can't be activated this turn", Interdict) prints
+        # no mana-ability exception. Both refused here as the activation path
+        # refuses them, with nothing tapped.
+        from ..spell_prohibitions import permanent_activations_forbidden
+
+        if self._is_summoning_sick(land):
+            self.log.append(f"{land.card.name} has summoning sickness")
+            return False
+        if permanent_activations_forbidden(self, land):
+            self.log.append(
+                f"{land.card.name}'s activated abilities can't be activated this turn"
+            )
+            return False
+
         # A land with no mana ability at all (Island of Wak-Wak, Bazaar of
         # Baghdad) can't be tapped for mana — without this, the color fallback
-        # below would invent a green mana out of nothing.
+        # below would invent a green mana out of nothing. A compiled one the
+        # summary does not know about (a mana ability granted to such a land)
+        # is a mana ability all the same.
         mana_ability, priced_mana_ability = self._land_mana_abilities(land)
-        if not land.effective_produced_mana:
+        if ability_index is not None:
+            mana_ability = self._chosen_land_mana_ability(land, ability_index)
+            if mana_ability is None:
+                return False
+            priced_mana_ability = False
+        if mana_ability is None and not land.effective_produced_mana:
             if not land.basic_land_types:
                 return False
 
@@ -613,6 +712,13 @@ class TurnManagementMixin:
                     target=player,
                     card=land.card,
                     source_permanent=land,
+                    # The colour again, on the key the activation path carries
+                    # it on (``new_color``), because the payload injection above
+                    # rewrites only the *outer* instruction: a painland's "Add
+                    # {R} or {G}. This land deals 1 damage to you." lowers to a
+                    # ``sequence`` whose nested add step never sees it, and asked
+                    # for {G} would make the first printed alternative.
+                    choices={"new_color": self._chosen_mana_color(chosen_color)},
                 ),
             )
         else:
