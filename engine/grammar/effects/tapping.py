@@ -15,8 +15,8 @@ from .. import ast
 from ..errors import GrammarError
 from ..lexer import PT
 from ..phrases import (
-    _expect_counter_kind, _parse_mana_payment, parse_bound_subject,
-    parse_subject_filter_at,
+    _expect_counter_kind, _parse_mana_payment, _parse_per_each_counters,
+    parse_bound_subject, parse_subject_filter_at,
 )
 from ..nouns import parse_object_filter
 from ..references import (_parse_further_subjects, parse_player_ref,
@@ -277,7 +277,14 @@ def _parse_tap_untap(stream: TokenStream) -> ast.Statement:
             return ast.Conjunction(tuple(
                 ast.Tap(each, shared_mana) for each in (subject, *further)
             ))
-        return ast.Tap(subject, shared_mana)
+        # "…that player taps an untapped artifact, creature, or land they
+        # control **for each fade counter on this artifact**." (Tangle Wire.)
+        # How many of the one-each subject are tapped, read through the shared
+        # counter-pile reader Smokestack's sacrifice and Sporogenesis's tokens
+        # already use, so the three counted sentences cannot read the clause
+        # three ways. Carried whole; the lowering decides which piles it can
+        # count and refuses the rest by name.
+        return ast.Tap(subject, shared_mana, count=_parse_per_each_counters(stream))
     if further:
         return ast.Conjunction(tuple(
             ast.Untap(each) for each in (subject, *further)

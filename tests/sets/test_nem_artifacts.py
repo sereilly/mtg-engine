@@ -80,4 +80,125 @@ def test_w1g1_rejuvenation_chamber_gains_life_until_it_fades_out(set_pool):
     assert "Rejuvenation Chamber was sacrificed" in game.log
 
 
+def _w1g1a_wire_game(set_pool, *, interactive=()):
+    """Tangle Wire on P1's side, entered through the seam with its four
+    counters, and P2's turn begun — so the next call is P2's upkeep."""
+    game = _w1g1a_duel()
+    game.interactive_seats = set(interactive)
+    wire = _W1G1APermanent(card=set_pool("NEM")["Tangle Wire"])
+    game._put_permanent_onto_battlefield(0, wire, None)
+    return game, wire
+
+
+def _w1g1a_board(game, seat: int, set_pool, names) -> list:
+    """Permanents with no upkeep triggers of their own (Alpha's Forest and
+    Sol Ring), so the only thing on the stack at an upkeep is the Wire."""
+    lea = set_pool("LEA")
+    out = []
+    for name in names:
+        perm = _W1G1APermanent(card=lea[name])
+        game._put_permanent_onto_battlefield(seat, perm, None)
+        out.append(perm)
+    return out
+
+
+def test_w1g1_tangle_wire_taps_one_of_the_upkeep_players_permanents_per_counter(set_pool):
+    """"At the beginning of each player's upkeep, **that player** taps an
+    untapped artifact, creature, or land they control for each fade counter on
+    this artifact." On the opponent's upkeep it is the opponent who taps — four
+    of their five permanents, none of the Wire controller's."""
+    game, wire = _w1g1a_wire_game(set_pool)
+    theirs = _w1g1a_board(game, 1, set_pool, ["Sol Ring"] * 2 + ["Forest"] * 3)
+
+    _w1g1a_upkeep(game, 1)
+
+    # `_w1g1a_upkeep` untaps after resolving, so read the log's record.
+    assert "Tangle Wire tapped Sol Ring, Sol Ring, Forest, Forest" in game.log
+    assert _w1g1a_counters_on(wire, "fade") == 4, "not its controller's upkeep"
+    assert all(game.is_on_battlefield(p) for p in theirs)
+
+
+def test_w1g1_tangle_wire_taps_everything_when_the_player_has_too_little(set_pool):
+    """Four counters and two permanents: they tap both (CR 609.3) rather than
+    the prompt asking for four and getting nothing."""
+    game, _wire = _w1g1a_wire_game(set_pool)
+    theirs = _w1g1a_board(game, 1, set_pool, ["Forest", "Sol Ring"])
+    game.turn += 1
+    game.begin_turn_bookkeeping(1)
+
+    game.resolve_upkeep(1)
+    _w1g1a_resolve_stack(game)
+
+    assert [p.tapped for p in theirs] == [True, True]
+
+
+def test_w1g1_tangle_wire_never_offers_an_already_tapped_permanent(set_pool):
+    """"An **untapped** artifact, creature, or land": a permanent that is
+    already tapped is not a choice, so it cannot be used to soak a counter.
+    With two of five already tapped, the other three are the whole offer."""
+    game, _wire = _w1g1a_wire_game(set_pool, interactive=(1,))
+    theirs = _w1g1a_board(game, 1, set_pool, ["Forest"] * 5)
+    game.turn += 1
+    game.begin_turn_bookkeeping(1)
+    theirs[0].tapped = theirs[1].tapped = True
+
+    game.resolve_upkeep(1)
+
+    [owed] = game.pending_choices
+    offered = {p.permanent_id for p in game.live_permanent_set_choices(owed)}
+    assert offered == {p.permanent_id for p in theirs[2:]}
+    assert (owed.data["up_to"], owed.data["at_least"]) == (4, 3)
+
+
+def test_w1g1_tangle_wire_asks_an_interactive_player_which_to_tap(set_pool):
+    """The upkeep player chooses — a prompt the stack waits on — and a short
+    answer is refused, since "for each" says how many are tapped, not how many
+    may be."""
+    game, _wire = _w1g1a_wire_game(set_pool, interactive=(1,))
+    theirs = _w1g1a_board(game, 1, set_pool, ["Forest"] * 5)
+    game.turn += 1
+    game.begin_turn_bookkeeping(1)
+
+    game.resolve_upkeep(1)
+
+    assert [item.card.name for item in game.stack] == ["Tangle Wire"]
+    [owed] = game.pending_choices
+    assert owed.player_index == 1
+    assert not game.confirm_permanent_set_choice(
+        1, [p.permanent_id for p in theirs[:3]]
+    )
+    assert game.confirm_permanent_set_choice(
+        1, [p.permanent_id for p in theirs[1:]]
+    )
+    _w1g1a_resolve_stack(game)
+
+    assert [p.tapped for p in theirs] == [False, True, True, True, True]
+    assert game.stack == []
+
+
+def test_w1g1_tangle_wire_counts_the_counters_left_when_it_resolves(set_pool):
+    """The number is read at resolution off the pile on the Wire, so on its
+    controller's upkeep — two triggers — the count depends on which resolves
+    first. The engine keeps one controller's simultaneous triggers in printed
+    order (it does not yet offer CR 603.3b's choice), so the Wire's tap
+    resolves on top of the fade removal and counts four; and on the next of
+    the controller's upkeeps, three."""
+    game, wire = _w1g1a_wire_game(set_pool)
+    mine = _w1g1a_board(game, 0, set_pool, ["Forest"] * 5)
+
+    game.turn += 1
+    game.begin_turn_bookkeeping(1)
+    game.resolve_upkeep(1)
+    _w1g1a_resolve_stack(game)
+    game.turn += 1
+    game.begin_turn_bookkeeping(0)
+    for perm in game.all_permanents():
+        perm.tapped = False
+    game.resolve_upkeep(0)
+    _w1g1a_resolve_stack(game)
+
+    tapped_now = sum(p.tapped for p in (*mine, wire))
+    assert tapped_now == 4
+    assert _w1g1a_counters_on(wire, "fade") == 3
+
 # --- end W1G1 ---

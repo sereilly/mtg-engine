@@ -275,4 +275,36 @@ def test_w1g1_skyshroud_behemoth_enters_tapped_with_its_two_counters(set_pool):
     assert _w1g1_counters_on(behemoth, "fade") == 2
     assert (behemoth.effective_power, behemoth.effective_toughness) == (10, 10)
 
+
+def test_w1g1_rusting_golem_is_as_big_as_its_fade_counters_and_dies_a_0_0(set_pool):
+    """"Rusting Golem's power and toughness are each equal to the number of
+    fade counters on it." A characteristic-defining ability read off the same
+    pile fading takes from: a 5/5 as it enters, one smaller after each of its
+    controller's upkeeps — and a 0/0 at the fifth, which the state-based
+    check puts in the graveyard (CR 704.5f) an upkeep before fading itself
+    would have sacrificed it."""
+    game = _w1g1_duel()
+    p1 = game.players[0]
+    p1.hand = [set_pool("NEM")["Rusting Golem"]]
+    assert game.cast_from_hand(0, "Rusting Golem").supported
+    _w1g1_resolve_stack(game)
+    [golem] = [p for p in p1.battlefield if p.card.name == "Rusting Golem"]
+    assert (golem.effective_power, golem.effective_toughness) == (5, 5)
+
+    sizes = []
+    for seat in (1, 0) * 5:
+        game.turn += 1
+        game.begin_turn_bookkeeping(seat)
+        game.resolve_upkeep(seat)
+        _w1g1_resolve_stack(game)
+        game.check_state_based_actions()
+        if seat == 0:
+            sizes.append(
+                golem.effective_power if game.is_on_battlefield(golem) else "gone"
+            )
+
+    assert sizes == [4, 3, 2, 1, "gone"]
+    assert [c.name for c in p1.graveyard] == ["Rusting Golem"]
+    assert "Rusting Golem was sacrificed" not in game.log
+
 # --- end W1G1 ---

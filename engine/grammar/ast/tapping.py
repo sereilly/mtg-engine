@@ -20,6 +20,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from ._core import (
+    CountersOnEventSubject,
+    CountersOnSource,
     ObjectFilter,
     PlayerRef,
     Recipient,
@@ -42,6 +44,13 @@ class Tap:
     #: on a sweep is every land on that player's board rather than the ones
     #: the card names.
     matching_tapped_land_mana: bool = False
+    #: "…taps an untapped artifact, creature, or land they control **for each
+    #: fade counter on this artifact**." (Tangle Wire.) How many of the
+    #: one-each subject are tapped, read through the shared
+    #: ``phrases._parse_per_each_counters`` the sacrifice and token counts use
+    #: — so it is a ``CountersOnSource`` (or an event-subject pile, which the
+    #: lowering refuses by name). None is the ordinary one-permanent tap.
+    count: CountersOnSource | CountersOnEventSubject | None = None
 
 
 @dataclass(frozen=True)

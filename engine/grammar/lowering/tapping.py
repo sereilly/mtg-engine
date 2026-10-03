@@ -19,7 +19,9 @@ from __future__ import annotations
 
 import dataclasses
 
-from ...oracle_types import OracleInstruction, TAPPED_THIS_WAY_OBJECTS
+from ...oracle_types import (
+    CHOSEN_THIS_WAY_OBJECTS, OracleInstruction, TAPPED_THIS_WAY_OBJECTS,
+)
 from .. import ast
 from ..errors import LoweringError
 from ...subject_filters import untestable_filter_keys
@@ -146,6 +148,80 @@ def _lower_tap_lands_sharing_produced_mana(
     )
 
 
+def _lower_tap_per_counter(
+    node: ast.Tap, spec: ast.TargetSpec, event: str | None
+) -> tuple[OracleInstruction, ...]:
+    """"…**that player** taps an untapped artifact, creature, or land they
+    control for each fade counter on this artifact." (Tangle Wire.)
+
+    The chosen-tap pair the one-permanent spelling below already emits (Koskun
+    Falls' "tap an untapped creature you control"), with the plural prompt in
+    place of the singular: ``choose_permanents`` sized off the pile by
+    ``count_from`` — the one evaluator every computed number goes through, read
+    at resolution, so a counter spent since the trigger fired is a permanent
+    fewer — and ``exact_count``, because "for each" says how many *are* tapped,
+    not how many may be. A seat with fewer candidates taps them all (CR 609.3),
+    which the handler answers rather than this.
+
+    Who picks is the seat the sentence names: "you", or "that player" under an
+    event that froze one (The Abyss's reading of the same pronoun). The board
+    drawn from is that seat's own — "they control" — lifted out of the filter
+    into ``controlled_by`` because ``subject_matches`` has no seat to compare a
+    bare "that_player" against. "Untapped" stays in the filter and is tested,
+    so an already-tapped permanent is never offered.
+    """
+    count = node.count
+    if not isinstance(count, ast.CountersOnSource):
+        raise LoweringError(
+            "only a pile on this permanent sizes a counted tap", node=node
+        )
+    if not (
+        spec.quantifier in ("a", "an") and spec.count == 1 and not spec.targeted
+    ):
+        raise LoweringError(
+            "a counted tap picks one untargeted permanent per counter", node=node
+        )
+    seat = spec.filter.controller
+    if seat == "you":
+        chooser = "you"
+    elif seat == "that_player":
+        if event not in _EVENT_SUBJECT_PLAYERS:
+            raise LoweringError(
+                f"no event named {event!r} freezes the seat 'that player' names",
+                node=node,
+            )
+        chooser = EVENT_SUBJECT_PLAYER
+    else:
+        raise LoweringError(
+            "a counted tap is chosen from the tapping player's own board",
+            node=node,
+        )
+    described = testable_filter_payload(
+        dataclasses.replace(spec.filter, controller=None),
+        refusal="the tap prompt cannot test this restriction",
+        node=node,
+        require_narrowing=False,
+    )
+    return (
+        OracleInstruction(
+            "choose_permanents", "",
+            {
+                "result_key": CHOSEN_THIS_WAY_OBJECTS,
+                "chooser": chooser,
+                "controlled_by": "chooser",
+                "filter": described,
+                "count_from": {"source_counters": count.kind},
+                "exact_count": True,
+                "prompt": f"Choose a permanent to tap for each {count.kind} counter.",
+            },
+        ),
+        OracleInstruction(
+            "tap_recorded_permanents", "",
+            {"permanents_from": CHOSEN_THIS_WAY_OBJECTS},
+        ),
+    )
+
+
 def _lower_tap(
     node: ast.Tap | ast.Untap,
     event: str | None = None,
@@ -154,6 +230,10 @@ def _lower_tap(
     if not isinstance(node.subject, ast.TargetSpec):
         raise LoweringError("tap/untap needs an object target", node=node)
     spec = node.subject
+    # Asked first, so no branch below can receive a counted tap and quietly
+    # tap one permanent where the card prints a pile's worth.
+    if getattr(node, "count", None) is not None:
+        return _lower_tap_per_counter(node, spec, event)
     if getattr(node, "matching_tapped_land_mana", False):
         return _lower_tap_lands_sharing_produced_mana(node, spec, event)
     # "…and tap **those creatures**." (Dread Wight.) The bound plural: the set
