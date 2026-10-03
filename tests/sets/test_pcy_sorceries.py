@@ -122,6 +122,8 @@ def test_w1g2_outbreak_can_be_cast_by_discarding_a_swamp_card(set_pool):
     alternative = next(o for o in offers if o["kind"] == "alternative")
     assert alternative["payable"]
     assert [c["name"] for c in alternative["hand_choices"]] == ["Swamp"]
+    # The button names the price: the Swamp is discarded, not exiled.
+    assert alternative["hand_verb"] == "discard"
 
     result = game.cast_from_hand(
         0, "Outbreak", alternative_cost=True, alternative_cost_hand_index=1,

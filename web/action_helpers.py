@@ -179,6 +179,7 @@ def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
         alternative_cost=req.alternative_cost,
         alternative_cost_hand_index=req.alternative_cost_hand_index,
         alternative_cost_permanent_ids=req.alternative_cost_permanent_ids,
+        alternative_cost_other_hand_indices=req.alternative_cost_other_hand_indices,
         # …and CR 601.2b's optional additional cost, forwarded whole for the
         # reason every cost field here is: dropped, the spell resolves having
         # quietly declined a price the caller announced, and the effect that

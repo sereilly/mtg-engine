@@ -1050,6 +1050,25 @@ class LegalityMixin:
                     if position != spell_hand_index
                     and any(held is payer for payer in payers)
                 ]
+                # Which zone the chosen card goes to, so the button names it:
+                # "Discard a Swamp card" (Outbreak) and Dream Halls' granted
+                # discard were offered as "Exile Swamp", a price the player is
+                # not paying — the card lands in the graveyard, where a spell
+                # may read it back.
+                entry["hand_verb"] = (
+                    "exile" if cost.exile_from_hand is not None else "discard"
+                )
+                # "…discard an Island card **and another card**" (Foil): how
+                # many further cards, and which may be them — every card but
+                # the spell. The client keeps the one it chose for the Island
+                # half out of this list; the engine refuses it either way.
+                if cost.discard_others:
+                    entry["other_discards"] = cost.discard_others
+                    entry["other_hand_choices"] = [
+                        {"index": position, "name": held.name}
+                        for position, held in enumerate(caster.hand)
+                        if position != spell_hand_index
+                    ]
             # "…you may **sacrifice a creature** rather than pay this spell's
             # mana cost" (Mind Swords), "**tap an untapped creature you
             # control**" (Lashknife): a price paid with a permanent owes the

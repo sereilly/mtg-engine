@@ -143,3 +143,82 @@ def test_w1g2_snag_has_no_alternative_cost_without_a_forest_card(set_pool):
     result = game.cast_from_hand(0, "Snag", alternative_cost=True)
     assert not result.supported
     assert sorted(c.name for c in game.players[0].hand) == ["Snag", "Swamp"]
+
+
+def _w1g2_foil_game(set_pool, hand):
+    """P1's Lightning Bolt on the stack at P2, and P2 holding Foil plus *hand*,
+    mana enforced and P2's pool empty — so Foil resolves only off its
+    alternative cost."""
+    lea, pcy = set_pool("LEA"), set_pool("PCY")
+    game = _W1G2Game(players=[
+        _W1G2PlayerState(name="P1", hand=[lea["Lightning Bolt"]]),
+        _W1G2PlayerState(name="P2", hand=[pcy["Foil"]] + [lea[n] for n in hand]),
+    ])
+    game.start_turn(0)
+    game.players[0].mana_pool["R"] = 1
+    game.enforce_mana_costs = True
+    queued = game.queue_from_hand(0, "Lightning Bolt", target_player_index=1)
+    assert queued.supported, queued.details
+    return game
+
+
+def test_w1g2_foil_counters_for_an_island_card_and_another_card(set_pool):
+    """"You may discard an Island card and another card rather than pay this
+    spell's mana cost. Counter target spell."
+
+    Two cards, and the second is the caster's choice (CR 601.2h): the Swamp
+    named goes with the Island and the Mountain stays — the deterministic pick
+    would have taken the Mountain, the first card after the Island. The Bolt is
+    countered and P2 is untouched.
+    """
+    program = _w1g2_compile(set_pool("PCY")["Foil"])
+    assert program.supported, program.reason
+
+    game = _w1g2_foil_game(set_pool, ["Island", "Mountain", "Swamp"])
+    result = game.cast_from_hand(
+        1, "Foil", target_stack_index=0, alternative_cost=True,
+        alternative_cost_hand_index=1, alternative_cost_other_hand_indices=[3],
+    )
+    assert result.supported, result.details
+    _w1g2_resolve_stack(game)
+
+    assert [c.name for c in game.players[1].hand] == ["Mountain"]
+    assert sorted(c.name for c in game.players[1].graveyard) == [
+        "Foil", "Island", "Swamp",
+    ]
+    assert game.players[1].life == 20, game.log
+    assert [c.name for c in game.players[0].graveyard] == ["Lightning Bolt"]
+
+
+def test_w1g2_foil_needs_both_cards_and_an_island_among_them(set_pool):
+    """The Island alone is no payment of a two-card price, and two cards with no
+    Island among them are not either: both refused at CR 601.2h with nothing
+    spent, the Bolt still on the stack."""
+    for hand in (["Island"], ["Mountain", "Swamp"]):
+        game = _w1g2_foil_game(set_pool, hand)
+        result = game.cast_from_hand(
+            1, "Foil", target_stack_index=0, alternative_cost=True,
+        )
+        assert not result.supported, hand
+        assert sorted(c.name for c in game.players[1].hand) == sorted(["Foil"] + hand)
+        assert [item.card.name for item in game.stack] == ["Lightning Bolt"]
+
+
+def test_w1g2_foil_another_card_is_never_the_island_or_the_spell(set_pool):
+    """"Another" is a different card: naming the Island that pays the first
+    half, or Foil itself (CR 601.2a), is refused — while a *second* Island is a
+    perfectly good other card, and two copies leave the hand as two."""
+    game = _w1g2_foil_game(set_pool, ["Island", "Mountain"])
+    for named in ([1], [0]):
+        result = game.cast_from_hand(
+            1, "Foil", target_stack_index=0, alternative_cost=True,
+            alternative_cost_hand_index=1, alternative_cost_other_hand_indices=named,
+        )
+        assert not result.supported, named
+
+    game = _w1g2_foil_game(set_pool, ["Island", "Island"])
+    result = game.cast_from_hand(
+        1, "Foil", target_stack_index=0, alternative_cost=True,
+    )
+    assert result.supported, result.details
+    assert game.players[1].hand == []

@@ -529,6 +529,13 @@ class SpellCastingMixin:
         # additional costs in force beside an alternative one and the two
         # payments would otherwise read one list.
         alternative_cost_permanent_ids: list[int] | None = None,
+        # "You may discard an Island card **and another card** …" (Foil): which
+        # further cards in hand pay the discard beyond the one
+        # `alternative_cost_hand_index` names, by position in the hand the
+        # caster is looking at. The caster's choice (CR 601.2h), so it is
+        # announced; None is the deterministic pick, as for every cost choice
+        # here.
+        alternative_cost_other_hand_indices: list[int] | None = None,
         # CR 601.2b's *optional* additional cost, and how many times each offer
         # was taken: ``{"{1}{R}": 2, "{1}{G}": 1}``. Announced with the cast for
         # the reason every other cost choice here is — 601.2b is one step, and a
@@ -581,6 +588,7 @@ class SpellCastingMixin:
             alternative_cost=alternative_cost,
             alternative_cost_hand_index=alternative_cost_hand_index,
             alternative_cost_permanent_ids=alternative_cost_permanent_ids,
+            alternative_cost_other_hand_indices=alternative_cost_other_hand_indices,
             optional_cost_payments=optional_cost_payments,
             chosen_creature_type=chosen_creature_type,
             chosen_source_seat=chosen_source_seat,
@@ -851,6 +859,9 @@ class SpellCastingMixin:
         # …and which permanents pay its sacrifice / return / tap half, by id
         # (see `cast_from_hand`). None is the deterministic pick.
         alternative_cost_permanent_ids: list[int] | None = None,
+        # …and which further cards pay its "and another card" (Foil), by hand
+        # position (see `cast_from_hand`). None is the deterministic pick.
+        alternative_cost_other_hand_indices: list[int] | None = None,
         # CR 601.2b's *optional* additional cost, and how many times each offer
         # was taken: ``{"{1}{R}": 2, "{1}{G}": 1}``. Announced with the cast for
         # the reason every other cost choice here is — 601.2b is one step, and a
@@ -1455,6 +1466,18 @@ class SpellCastingMixin:
                     alternative_cost_permanent_ids,
                 )
             )
+        alternative_others: "list[CardDefinition]" = []
+        if alternative_denial is None:
+            # …and which further cards pay its "and another card" (Foil),
+            # resolved to cards now for the hand card's reason above.
+            alternative_others, alternative_denial = (
+                self._resolve_alternative_cost_others(
+                    caster_index, card, chosen_alternative,
+                    named_hand_index=alternative_cost_hand_index,
+                    named_others=alternative_cost_other_hand_indices,
+                    spell_hand_index=hand_index if from_zone == "hand" else None,
+                )
+            )
         if alternative_denial is not None:
             self.log.append(alternative_denial)
             return SimulationResult(
@@ -1904,6 +1927,7 @@ class SpellCastingMixin:
         self._pay_alternative_cost(
             caster_index, card, chosen_alternative, alternative_card,
             named_permanents=alternative_permanents,
+            other_cards=alternative_others,
         )
         # CR 601.2f's increases, in life. Gated far above, where the targets
         # settle what they come to, and paid here with every other cost —
@@ -2755,6 +2779,115 @@ class SpellCastingMixin:
             named.append(found)
         return named, None
 
+    def _alternative_cost_first_position(
+        self,
+        caster_index: int,
+        card: CardDefinition,
+        cost: "AlternativeCost",
+        *,
+        named_hand_index: int | None,
+        spell_hand_index: int | None,
+    ) -> int | None:
+        """The hand position paying the narrowed half of *cost*'s discard.
+
+        The named one when the caster named it, else the position the
+        deterministic pick in :meth:`_resolve_alternative_cost` takes — the
+        first payer in hand order — so "another card" is never the same card.
+        """
+        if named_hand_index is not None:
+            return named_hand_index
+        payers = self._alternative_cost_payers(
+            caster_index, cost, spell_hand_index=spell_hand_index, spell=card,
+        )
+        return next(
+            (
+                position
+                for position, held in enumerate(self.players[caster_index].hand)
+                if position != spell_hand_index
+                and any(held is payer for payer in payers)
+            ),
+            None,
+        )
+
+    def _alternative_cost_other_positions(
+        self,
+        caster_index: int,
+        card: CardDefinition,
+        cost: "AlternativeCost",
+        *,
+        named_hand_index: int | None,
+        spell_hand_index: int | None,
+    ) -> list[int]:
+        """The hand positions that may pay *cost*'s "and another card" (Foil).
+
+        Every card but the spell (CR 601.2a) and the one paying the narrowed
+        half — "another" is CR 109.5's other object, not a second copy of the
+        word. By position, because two copies of one card in hand are the same
+        Python object and only the position tells them apart. One enumeration
+        for the offer, the announcement's check, the CR 601.2h gate and the
+        default pick.
+        """
+        first = self._alternative_cost_first_position(
+            caster_index, card, cost,
+            named_hand_index=named_hand_index, spell_hand_index=spell_hand_index,
+        )
+        return [
+            position
+            for position in range(len(self.players[caster_index].hand))
+            if position not in (spell_hand_index, first)
+        ]
+
+    def _resolve_alternative_cost_others(
+        self,
+        caster_index: int,
+        card: CardDefinition,
+        cost: "AlternativeCost | None",
+        *,
+        named_hand_index: int | None,
+        named_others: "list[int] | None",
+        spell_hand_index: int | None,
+    ) -> "tuple[list[CardDefinition], str | None]":
+        """CR 601.2b: which further cards pay "and another card" (Foil).
+
+        Resolved to cards at the announcement, while the positions still mean
+        the hand the caster is looking at — the arrangement the narrowed half's
+        card already has. A named position that cannot pay (the spell itself,
+        the card paying the narrowed half, one named twice, more than the cost
+        takes) is a refusal with nothing spent, never a slide onto a neighbour;
+        nothing named, or fewer than the cost takes, is filled by the
+        deterministic pick in hand order. A short hand is not refused here: the
+        CR 601.2h gate says so, in one place.
+        """
+        if cost is None or not cost.discard_others:
+            if named_others:
+                return [], (
+                    f"{card.name} can't be cast that way: its alternative cost "
+                    f"discards no further card (CR 601.2b)"
+                )
+            return [], None
+        hand = self.players[caster_index].hand
+        allowed = self._alternative_cost_other_positions(
+            caster_index, card, cost,
+            named_hand_index=named_hand_index, spell_hand_index=spell_hand_index,
+        )
+        named = list(named_others or ())
+        if len(set(named)) != len(named) or len(named) > cost.discard_others:
+            return [], (
+                f"{card.name} can't be cast: its alternative cost discards "
+                f"{cost.discard_others} further card(s), each named once "
+                f"(CR 601.2b)"
+            )
+        if any(position not in allowed for position in named):
+            return [], (
+                f"{card.name} can't be cast: a card named to pay its "
+                f"alternative cost is the spell or is already paying it "
+                f"(CR 601.2a)"
+            )
+        positions = named + [
+            position for position in allowed if position not in named
+        ][: cost.discard_others - len(named)]
+        return [hand[position] for position in positions], None
+
     def _unpayable_alternative_cost(
         self,
         caster_index: int,
@@ -2794,6 +2927,20 @@ class SpellCastingMixin:
             return (
                 f"{card.name} can't be cast: no card in hand answers its "
                 f"alternative cost, {cost.describe()} (CR 601.2h)"
+            )
+        # "…discard an Island card **and another card**" (Foil). The Island
+        # alone is no more a payment than none: the gate counts the cards left
+        # once the spell and the Island are set aside, through the enumeration
+        # the default pick and the offer read.
+        if cost.discard_others and len(
+            self._alternative_cost_other_positions(
+                caster_index, card, cost,
+                named_hand_index=None, spell_hand_index=spell_hand_index,
+            )
+        ) < cost.discard_others:
+            return (
+                f"{card.name} can't be cast: not enough other cards in hand "
+                f"for its alternative cost, {cost.describe()} (CR 601.2h)"
             )
         # "You may **sacrifice two Mountains** rather than pay this spell's
         # mana cost." (Fireblast.) The *count* is what makes this unpayable:
@@ -2974,8 +3121,13 @@ class SpellCastingMixin:
         chosen: "CardDefinition | None",
         *,
         named_permanents: "list[Permanent] | None" = None,
+        other_cards: "list[CardDefinition] | None" = None,
     ) -> None:
         """Perform the announced alternative cost (CR 601.2h).
+
+        *other_cards* is what ``_resolve_alternative_cost_others`` settled at
+        the announcement for "and another card" (Foil), discarded after the
+        card paying the narrowed half and through the same seams.
 
         Called once the spell is off the hand and on the stack (CR 601.2a), so
         the spell itself cannot pay and a second copy of it still can — which is
@@ -3164,6 +3316,18 @@ class SpellCastingMixin:
             self.log.append(
                 f"{caster.name} discarded {paying.name} to cast {card.name}"
             )
+            # "…**and another card**" (Foil). One card per entry and by
+            # identity through the seam, which removes exactly one copy — so a
+            # second Island chosen as the "another card" leaves as the second
+            # copy rather than taking both with the first.
+            for other in other_cards or ():
+                if not any(held is other for held in caster.hand):
+                    continue  # gated above; a hand that changed since is a no-op
+                self.take_card_from_hand(caster, other)
+                self._discard_card(caster, other)
+                self.log.append(
+                    f"{caster.name} discarded {other.name} to cast {card.name}"
+                )
             return
         if cost.exile_from_hand is None:
             return

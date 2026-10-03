@@ -463,3 +463,89 @@ def test_w1g2n_the_client_sends_the_chosen_permanents():
     beside the hand index the exile-paid costs already send."""
     assert "offer.permanent_choices" in APP_JS
     assert "announced.alternative_cost_permanent_ids = permanentIds.slice()" in APP_JS
+
+
+# --- W1G2 (Prophecy): "discard an Island card and another card" ---
+#
+# Foil's alternative cost takes two cards, and the second is the caster's
+# choice exactly as the first is (CR 601.2b/601.2h): one hand index could not
+# name both. The offer lists the further candidates, the cast carries them back
+# on their own field, and a discard-paid offer names its verb so the button does
+# not say "Exile" for a card bound for the graveyard. Foil and Outbreak are
+# Prophecy, which is `measured`, so they are placed into a hand directly.
+
+
+def test_w1g2p_a_discard_paid_offer_names_its_verb_and_its_further_cards():
+    """The offer the spec route serves is ``Game.cast_cost_offers``; the route
+    looks the card up in the shipped catalog, so a measured card is asked of
+    the engine half directly."""
+    _, _, game = _session()
+    game.players[0].hand = [
+        _POOL["Foil"], _LEA["Island"], _LEA["Mountain"], _LEA["Swamp"],
+    ]
+
+    (offer,) = game.cast_cost_offers(0, _POOL["Foil"], spell_hand_index=0)
+
+    assert offer["label"] == "discard an Island card and another card"
+    assert offer["hand_verb"] == "discard"
+    assert offer["hand_choices"] == [{"index": 1, "name": "Island"}]
+    assert offer["other_discards"] == 1
+    assert [c["index"] for c in offer["other_hand_choices"]] == [1, 2, 3], (
+        "every card but the spell; the client drops the one paying the Island"
+    )
+
+
+def test_w1g2p_the_cast_discards_the_other_card_the_caster_named():
+    """Through the route: the Swamp named goes with the Island and the Mountain
+    stays. The deterministic pick would have taken the Mountain (the first card
+    after the Island), so the card left in hand is the one only the
+    announcement could have spared."""
+    sid, _, game = _session()
+    game.players[0].hand = [
+        _LEA["Lightning Bolt"], _POOL["Foil"], _LEA["Island"], _LEA["Mountain"],
+        _LEA["Swamp"],
+    ]
+    game.players[0].mana_pool["R"] = 1
+    queued = game.queue_from_hand(0, "Lightning Bolt", target_player_index=1)
+    assert queued.supported, queued.details
+
+    response = client.post(
+        f"/api/sessions/{sid}/action",
+        json={
+            "seat": 0,
+            "action": "cast",
+            "card_name": "Foil",
+            "target_stack_index": 0,
+            "alternative_cost": True,
+            "alternative_cost_hand_index": 1,
+            "alternative_cost_other_hand_indices": [3],
+        },
+    )
+    assert response.status_code == 200, response.text
+
+    assert [c.name for c in game.players[0].hand] == ["Mountain"], game.log
+    assert {"Island", "Swamp"} <= {c.name for c in game.players[0].graveyard}
+
+
+def test_w1g2p_dream_halls_offer_says_discard_through_the_route():
+    """The shipped card the verb was wrong for: Dream Halls' granted cost
+    *discards* a card that shares a colour, and the button read "Exile"."""
+    sid, _, game = _session()
+    game.players[0].battlefield = [Permanent(card=_SHIPPED["Dream Halls"])]
+    game._settle()
+    game.players[0].hand = [_SHIPPED["Counterspell"], _SHIPPED["Counterspell"]]
+
+    (offer,) = _spec(sid, "Counterspell", hand_index=0)["cost_offers"]
+
+    assert offer["kind"] == "alternative"
+    assert offer["hand_verb"] == "discard"
+    assert offer["hand_choices"] == [{"index": 1, "name": "Counterspell"}]
+
+
+def test_w1g2p_the_client_sends_the_further_cards_and_names_the_verb():
+    assert "offer.other_hand_choices" in APP_JS
+    assert (
+        "announced.alternative_cost_other_hand_indices = "
+        "pending.alternativeOthers.slice()"
+    ) in APP_JS
+    assert 'offer.hand_verb === "discard" ? "Discard" : "Exile"' in APP_JS

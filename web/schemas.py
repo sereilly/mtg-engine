@@ -531,6 +531,11 @@ class GameActionRequest(BaseModel):
     # Swords), by id. Absent is the engine's deterministic pick; the choices
     # are `legality.cast_cost_offers`' `permanent_choices`.
     alternative_cost_permanent_ids: list[int] | None = None
+    # …and which further cards in hand pay its "and another card" ("You may
+    # discard an Island card and another card …", Foil), by hand position.
+    # Absent is the engine's deterministic pick; the choices are
+    # `legality.cast_cost_offers`' `other_hand_choices`.
+    alternative_cost_other_hand_indices: list[int] | None = None
     # CR 601.2b's *optional* additional cost, and how many times each offer was
     # taken: ``{"{1}{R}": 2}``. Its own field beside the two above for their
     # reason — CR 118.9d keeps every price in force on one cast, so a shared
