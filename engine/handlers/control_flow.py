@@ -301,6 +301,23 @@ def _condition_player(game: Game, context: OracleExecutionContext, whose):
     return context.target
 
 
+def _any_opponent(game: Game, context: OracleExecutionContext, holds) -> bool:
+    """Whether *holds* is true of **some** opponent of the asking seat.
+
+    "If **an opponent** has no cards in hand" (Avatar of Will): the article is
+    an existential over the seats CR 102.2 makes opponents, and only living ones
+    (CR 800.4a — ``Game.opponents_of``). Not :func:`_condition_player`, which
+    names one seat: a duel cannot tell the two readings apart, and a
+    free-for-all table answers them differently.
+    """
+    if context.caster not in game.players:
+        return False
+    return any(
+        holds(game.players[seat])
+        for seat in game.opponents_of(game.players.index(context.caster))
+    )
+
+
 def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dict) -> bool:
     """Evaluate a lowered condition payload.
 
@@ -635,14 +652,53 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
                 for permanent in game.controlled_by(context.caster)
                 if permanent_matches_filter(permanent, filters)
             )
+            # "…controls **at least four** more creatures than you" (Avatar of
+            # Might). ``count`` is the printed margin, and the bare "more" rides
+            # as 0 — a lead of one, which is what "more" means. So every payload
+            # written before the margin existed reads exactly as it did.
+            lead = max(1, int(payload.get("count") or 0))
+            rivals = [
+                player for player in game.players
+                if player is not context.caster and not player.lost
+            ]
+            if who == "target_opponent":
+                # "If **target opponent** controls more lands than you" (Tithe).
+                # The seat the cast announced (its picker asks for an opponent),
+                # not any of them: at a three-seat table another opponent's
+                # lands are not the target's. No announced opponent holds for
+                # nobody.
+                rivals = [p for p in rivals if p is context.target]
             return any(
                 sum(
                     1
                     for permanent in game.controlled_by(player)
                     if permanent_matches_filter(permanent, filters)
-                ) > own
-                for player in game.players
-                if player is not context.caster and not player.lost
+                ) - own >= lead
+                for player in rivals
+            )
+        if who == "opponent" and wanted is not None and not payload.get("shared_name"):
+            # "if **an opponent** controls three or more creatures" (Defense of
+            # the Heart) / "…seven or more lands" (Avatar of Fury). The article
+            # is an existential over seats: *one* opponent must hold the count.
+            # The pooled tally above reads the union of every opponent's board,
+            # which a duel cannot tell apart and a free-for-all table can — two
+            # opponents with two creatures each are not "an opponent controls
+            # three", and answering yes makes the card fire, or cost less, on a
+            # board it does not name. A presence test ("an opponent controls a
+            # Swamp") is the same answer either way and keeps the pooled read.
+            return any(
+                _compare_count(
+                    sum(
+                        1
+                        for permanent in game.controlled_by(player)
+                        if permanent is not source
+                        and permanent_matches_filter(permanent, filters)
+                    ),
+                    op,
+                    wanted,
+                )
+                for player in players
+                if not player.lost
             )
         return _compare_count(count, op, wanted)
 
@@ -880,15 +936,25 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         # that player has five or more cards in hand" (Misers' Cage). Read when
         # the instruction is followed (CR 608.2c), not when the ability was
         # activated: a pile that changed in between is the pile this asks about.
+        zone = str(payload.get("zone") or "library")
+
+        def pile_holds(player) -> bool:
+            pile = getattr(player, zone, None)
+            return pile is not None and _compare_count(
+                len(pile), str(payload.get("op", "")), payload.get("value")
+            )
+
+        if payload.get("player") == "opponent":
+            # "If **an opponent** has no cards in hand" (Avatar of Will). The
+            # article is an existential over seats, which `_condition_player`
+            # cannot answer — it names one seat, and for this word it named the
+            # resolution's *target*, which a cast-time cost and an untargeted
+            # trigger do not have.
+            return _any_opponent(game, context, pile_holds)
         player = _condition_player(game, context, payload.get("player"))
         if player is None:
             return False
-        pile = getattr(player, str(payload.get("zone") or "library"), None)
-        if pile is None:
-            return False
-        return _compare_count(
-            len(pile), str(payload.get("op", "")), payload.get("value")
-        )
+        return pile_holds(player)
 
     if kind == "player_life":
         # "If that player has 5 or less life" (Razor Pendulum). The twin of the
@@ -904,11 +970,33 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         # which is what leaves the Dogs where they are on a level board.
         if str(payload.get("op", "")) == "more_than_each_other_player":
             return most_life_seat(game) is not None
+
+        def life_holds(player) -> bool:
+            return _compare_count(
+                int(player.life), str(payload.get("op", "")), payload.get("value")
+            )
+
+        if payload.get("player") == "opponent":
+            # "if **an opponent** has 10 or less life" — the existential the
+            # zone count above answers for the same word, for its reason.
+            return _any_opponent(game, context, life_holds)
         player = _condition_player(game, context, payload.get("player"))
         if player is None:
             return False
+        return life_holds(player)
+
+    if kind == "cards_in_zones":
+        # "If there are **ten or more creature cards total in all graveyards**"
+        # (Avatar of Woe). The count is a ``count_spec`` — the one a
+        # where-clause over the same noun phrase builds — so it is answered by
+        # the one evaluator every such count goes through, and the narrowings a
+        # card in a graveyard can carry are the ones that one tests.
+        from ._common import count_from_payload
+
         return _compare_count(
-            int(player.life), str(payload.get("op", "")), payload.get("value")
+            count_from_payload(game, context, dict(payload.get("count") or {})),
+            str(payload.get("op", "")),
+            payload.get("value"),
         )
 
     if kind == "life_total_difference":

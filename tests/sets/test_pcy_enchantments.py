@@ -305,3 +305,78 @@ def test_rhystic_circle_lets_its_controller_answer_first(set_pool):
     game._settle()
 
     assert _w1g1_giant_hits(game, giant) == 0
+
+# --- W1G2: spell costs ---
+from engine import Game as _W1G2Game
+from engine import PlayerState as _W1G2PlayerState
+from engine.models import Permanent as _W1G2Permanent
+from engine.oracle import compile_card_oracle as _w1g2_compile
+from tests.helpers import resolve_stack as _w1g2_resolve_stack
+
+
+def _w1g2_entangler_combat(set_pool, *, enchant: bool):
+    """Three attacking Bears against P2's lone Wall of Wood, with Entangler
+    cast by P2 onto the Wall first when *enchant* — through the real cast, so
+    the picker's target and the attachment are the engine's own."""
+    lea = set_pool("LEA")
+    wall = _W1G2Permanent(card=lea["Wall of Wood"])
+    bears = [_W1G2Permanent(card=lea["Grizzly Bears"]) for _ in range(3)]
+    game = _W1G2Game(players=[
+        _W1G2PlayerState(name="P1", battlefield=list(bears)),
+        _W1G2PlayerState(
+            name="P2", battlefield=[wall], hand=[set_pool("PCY")["Entangler"]]
+        ),
+    ])
+    game._sync_control()
+    game.enforce_mana_costs = False
+    if enchant:
+        game.start_turn(1)
+        result = game.cast_from_hand(
+            1, "Entangler", target_player_index=1, target_permanent_index=0,
+            target_permanent_ids=[wall.permanent_id],
+        )
+        assert result.supported, result.details
+        _w1g2_resolve_stack(game)
+    for bear in bears:
+        bear.summoning_sick = False
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    declared, why = game.declare_attackers(0, [0, 1, 2], 1)
+    assert declared, why
+    game.advance_combat_phase()
+    return game, wall
+
+
+def test_w1g2_entangler_lets_the_enchanted_creature_block_every_attacker(set_pool):
+    """"Enchanted creature can block any number of creatures." (CR 509.1b.)
+
+    Wall of Glare's permission one sentence-subject over, asked of the Auras
+    attached when blockers are declared — the same table, with "enchanted"
+    rewritten to "this", so the two printings cannot come to mean different
+    ceilings. Unenchanted, the same Wall blocks one.
+    """
+    program = _w1g2_compile(set_pool("PCY")["Entangler"])
+    assert program.supported, program.reason
+
+    game, wall = _w1g2_entangler_combat(set_pool, enchant=True)
+    assert game._max_blocks_for(wall) >= 3
+    blocked, why = game.declare_blockers(1, {0: [0, 1, 2]})
+    assert blocked, why
+
+    game, wall = _w1g2_entangler_combat(set_pool, enchant=False)
+    assert game._max_blocks_for(wall) == 1
+    blocked, why = game.declare_blockers(1, {0: [0, 1, 2]})
+    assert not blocked, why
+
+
+def test_w1g2_entanglers_permission_ends_with_the_aura(set_pool):
+    """Nothing is stamped on the creature: the ceiling is read off the Aura
+    while it is attached, so destroying the Aura takes the permission with it
+    and nothing has to remember to clear a flag."""
+    game, wall = _w1g2_entangler_combat(set_pool, enchant=True)
+    entangler = next(
+        p for p in game.all_permanents() if p.card.name == "Entangler"
+    )
+    assert game._max_blocks_for(wall) > 1
+    game.remove_from_battlefield(entangler)
+    assert game._max_blocks_for(wall) == 1

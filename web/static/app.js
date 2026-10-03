@@ -10139,12 +10139,35 @@ function renderActivationPrompt() {
             `<div>Alternative cost: ${escapeHtml(offer.label)} — you can't pay it right now.</div>`,
           );
         } else if (Array.isArray(offer.hand_choices)) {
+          // The verb is the backend's (`hand_verb`): a discard cost (Dream
+          // Halls, Outbreak) puts the card in the graveyard, not in exile.
+          const verb = offer.hand_verb === "discard" ? "Discard" : "Exile";
           for (const choice of offer.hand_choices) {
             const on = pending.alternative === choice.index;
             buttons.push(
               `<button type="button" class="prompt-choice-btn${on ? " selected" : ""}"`
-              + ` data-alt-choice="${choice.index}">Exile ${escapeHtml(choice.name)}</button>`,
+              + ` data-alt-choice="${choice.index}">${verb} ${escapeHtml(choice.name)}</button>`,
             );
+          }
+          // "…discard an Island card **and another card**" (Foil): once the
+          // first card is chosen, which other card(s) go with it. Naming fewer
+          // than the cost takes leaves the rest to the engine's default pick.
+          const others = Number(offer.other_discards || 0);
+          if (others > 0 && Number.isInteger(pending.alternative)
+              && Array.isArray(offer.other_hand_choices)) {
+            const otherButtons = offer.other_hand_choices
+              .filter((choice) => choice.index !== pending.alternative)
+              .map((choice) => {
+                const on = (pending.alternativeOthers || []).includes(choice.index);
+                return `<button type="button" class="prompt-choice-btn${on ? " selected" : ""}"`
+                  + ` data-alt-other="${choice.index}" data-alt-other-count="${others}">`
+                  + `${verb} ${escapeHtml(choice.name)}</button>`;
+              });
+            rows.push(`<div>Instead of its mana cost: ${escapeHtml(offer.label)}</div>`);
+            rows.push(`<div class="prompt-choice-row">${buttons.join("")}</div>`);
+            rows.push(`<div>…and ${others === 1 ? "another card" : `${others} other cards`}:</div>`);
+            rows.push(`<div class="prompt-choice-row">${otherButtons.join("")}</div>`);
+            continue;
           }
         } else if (Array.isArray(offer.permanent_choices)) {
           // CR 601.2b: a price paid with a permanent ("sacrifice a creature",
@@ -10256,6 +10279,13 @@ function renderActivationPrompt() {
       btn.addEventListener("click", () => {
         toggleCastAlternativePermanent(
           Number(btn.dataset.altPerm), Number(btn.dataset.altPermCount || 1),
+        );
+      });
+    });
+    steps.querySelectorAll("[data-alt-other]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        toggleCastAlternativeOther(
+          Number(btn.dataset.altOther), Number(btn.dataset.altOtherCount || 1),
         );
       });
     });
@@ -12177,6 +12207,9 @@ function startCastOfferPrompt(card, castAction = "cast") {
     // hand position of the card being exiled (or `true` for an alternative cost
     // with no exile half).
     alternative: null,
+    // The hand positions paying an alternative cost's "and another card"
+    // (Foil), beside the one `alternative` names.
+    alternativeOthers: [],
     handIndex: pendingCastHandCard?.handIndex ?? null,
     refreshing: false,
   };
@@ -12233,6 +12266,27 @@ function setCastAlternativeCost(choice) {
   const pending = pendingCastOffers;
   if (!pending) return;
   pending.alternative = choice;
+  // The card now paying the narrowed half cannot also be "another card".
+  pending.alternativeOthers = (pending.alternativeOthers || [])
+    .filter((index) => index !== choice);
+  if (!Number.isInteger(choice)) pending.alternativeOthers = [];
+  renderActivationPrompt();
+}
+
+// One card in or out of an alternative cost's "and another card" (Foil), up to
+// the printed count; at a count of one a second click swaps rather than adds.
+function toggleCastAlternativeOther(handIndex, count) {
+  const pending = pendingCastOffers;
+  if (!pending || !Number.isInteger(handIndex)) return;
+  let chosen = (pending.alternativeOthers || []).slice();
+  if (chosen.includes(handIndex)) {
+    chosen = chosen.filter((index) => index !== handIndex);
+  } else if (count <= 1) {
+    chosen = [handIndex];
+  } else if (chosen.length < count) {
+    chosen.push(handIndex);
+  }
+  pending.alternativeOthers = chosen;
   renderActivationPrompt();
 }
 
@@ -12274,6 +12328,9 @@ function confirmCastOffers() {
     announced.alternative_cost = true;
     if (Number.isInteger(pending.alternative)) {
       announced.alternative_cost_hand_index = pending.alternative;
+      if ((pending.alternativeOthers || []).length) {
+        announced.alternative_cost_other_hand_indices = pending.alternativeOthers.slice();
+      }
     }
     const permanentIds = altPermanentIds(pending.alternative);
     if (permanentIds.length) {

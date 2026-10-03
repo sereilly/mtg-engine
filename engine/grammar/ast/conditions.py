@@ -109,6 +109,25 @@ class ZoneHasCards:
 
 
 @dataclass(frozen=True)
+class CardsInZones:
+    """"If there are **ten or more creature cards total in all graveyards**"
+    (Avatar of Woe).
+
+    The described twin of :class:`ZoneHasCards`: that node asks how tall one
+    seat's pile is and nothing about the cards in it matters, this one counts
+    the cards a printed noun phrase names across whichever piles its zone scope
+    covers. Not an :class:`OnBattlefield` with a zone either — that node asks
+    what *permanents* exist through the layer system, and a card in a graveyard
+    has no computed characteristics at all (CR 613.1). The filter carries its
+    own zone and owner, so the count is ``lowering/_amounts.count_spec``'s and
+    the evaluator is ``count_from_payload`` — one count of one noun phrase,
+    whether it is printed in a where-clause or a condition.
+    """
+    filter: ObjectFilter
+    comparison: Comparison
+
+
+@dataclass(frozen=True)
 class PlayerLifeIs:
     """"If **that player has 5 or less life**" (Razor Pendulum).
 
@@ -598,6 +617,7 @@ Condition = Union[
     # (this module).
     AttackersAimedAtYou,
     BlockersOfBoundCreature,
+    CardsInZones,
     Controls,
     EveryOf,
     IsState,

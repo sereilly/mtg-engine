@@ -53,6 +53,7 @@ from .bounds import parse_comparison
 from .errors import GrammarError
 from .nouns import parse_object_filter
 from .references import parse_player_ref
+from .seat_comparisons import accept_margin
 from .seats import accept_life_total_of
 from .stream import TokenStream
 from .vocabulary import COLOR_WORDS
@@ -304,6 +305,15 @@ def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
             # "if an opponent controls more creatures than you" (Garruk,
             # Unleashed). The comparison is against the asker's own count, so
             # it is an op of its own rather than a number to compare with.
+            #
+            # "…controls **at least four** more creatures than you" (Avatar of
+            # Might). The margin the lead must reach, read by the reader the
+            # seat-comparison clause ("who has at least two fewer…") already
+            # uses, and carried as the comparison's value — 0 for the bare
+            # "more", which the evaluator reads as a lead of one.
+            margin = accept_margin(stream)
+            if margin is not None and not stream.at_word("more"):
+                raise stream.error("expected 'more' after the printed margin")
             if stream.accept_word("more"):
                 filt = parse_object_filter(stream)
                 # "if that player controls more lands than **each other
@@ -320,6 +330,11 @@ def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
                 # other player" is not satisfied by an equal count, which is
                 # what makes the card do nothing on a mirrored board.
                 if stream.accept_phrase("than", "each", "other", "player"):
+                    if margin is not None:
+                        # A superlative with a margin is a sentence nothing
+                        # prints and nothing evaluates; read as the bare
+                        # superlative it would hold on a lead of one.
+                        raise stream.error("a superlative carries no margin")
                     return ast.Controls(
                         player, filt,
                         ast.Comparison("more_than_each_other_player", ast.Fixed(0)),
@@ -329,7 +344,10 @@ def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
                         "expected 'than you' or 'than each other player' after "
                         "the count"
                     )
-                return ast.Controls(player, filt, ast.Comparison("more_than_you", ast.Fixed(0)))
+                return ast.Controls(
+                    player, filt,
+                    ast.Comparison("more_than_you", ast.Fixed(margin or 0)),
+                )
             negated = bool(stream.accept_word("no")) or verb_negated
             # "you control **a** Swamp". The article carries no meaning of its
             # own, but the noun parser refuses it as an unknown adjective, so
@@ -576,6 +594,26 @@ def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
                     dataclasses.replace(there_filter, on_the_battlefield=False),
                     there_comparison,
                 )
+            # "if there are **ten or more creature cards total in all
+            # graveyards**" (Avatar of Woe). The same existential with the
+            # noun phrase scoped to a pile instead of the battlefield, which
+            # the noun parser has already read onto the filter's zone and
+            # owner ("total" is the zone reader's) — so what is left is to say
+            # which count it is. *Cards*, printed: a phrase about permanents
+            # scoped to a graveyard is not a sentence Magic prints.
+            if (
+                there_filter is not None
+                and there_filter.zone != "battlefield"
+                and there_filter.is_card
+                and not there_filter.on_the_battlefield
+            ):
+                if there_comparison is None:
+                    there_comparison = (
+                        ast.Comparison("eq", ast.Fixed(0))
+                        if there_quantifier == "no"
+                        else ast.Comparison("ge", ast.Fixed(1))
+                    )
+                return ast.CardsInZones(there_filter, there_comparison)
     stream.reset(there_mark)
 
     # "if **no creatures are on the battlefield**" (Pestilence, Withering

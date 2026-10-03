@@ -238,6 +238,14 @@ class Shield:
     #: is what makes every recipient find it, exactly as ``_class_shields``
     #: makes a described permanent find Shadowbane's.
     any_recipient: bool = False
+    #: "Prevent all **combat** damage that would be dealt by unblocked creatures
+    #: this turn." (Snag.) The shield answers only an event whose ``combat`` flag
+    #: is set (CR 510.2): a ping from the same unblocked creature after blockers
+    #: are declared is noncombat damage and goes through. Its own field rather
+    #: than a narrowing of ``source_filter``, because it is a property of the
+    #: *event* and no filter tests an event — dropped, the shield would be
+    #: strictly wider than the card prints.
+    combat_only: bool = False
     #: "**If damage from a black source** is prevented this way, you gain that
     #: much life." (Shadowbane.) The colours of the *source* that make the
     #: shield's CR 615.5 rider fire — deliberately not ``colors`` beside it:
@@ -805,7 +813,8 @@ def make_color_shield(
 
 
 def make_subject_shield(
-    source_filter: dict, seat: int | None = None, source_name: str | None = None
+    source_filter: dict, seat: int | None = None, source_name: str | None = None,
+    *, any_recipient: bool = False, combat_only: bool = False,
 ) -> Shield:
     """A blanket shield against every source a printed noun phrase describes.
 
@@ -813,6 +822,12 @@ def make_subject_shield(
     :meth:`Shield.spent` can never become true, so it lasts until its
     ``lifetime`` sweeps it and a second attacker this turn is prevented exactly
     like the first — "prevent **all** damage", not "the next damage".
+
+    *any_recipient* is Penance's flag on Al-abara's Carpet's shield: "Prevent
+    all combat damage that would be dealt **by unblocked creatures** this
+    turn" (Snag) prints no recipient, so it stops that damage to whoever it was
+    headed for — the caster's face or an opponent's. *combat_only* is the
+    printed "combat" (see :class:`Shield`).
     """
     return Shield(
         kind=PREVENT_FROM_SUBJECT,
@@ -821,6 +836,8 @@ def make_subject_shield(
         source_filter=dict(source_filter),
         filter_seat=seat,
         source_name=source_name,
+        any_recipient=any_recipient,
+        combat_only=combat_only,
     )
 
 

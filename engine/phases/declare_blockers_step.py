@@ -12,7 +12,8 @@ when a creature becomes blocked.
 import random
 import re
 
-from ..auras import attached_combat_restrictions, aura_restriction_active
+from ..auras import (attached_block_ceiling, attached_combat_restrictions,
+                     aura_restriction_active)
 from ..combat_permissions import (ADDITIONAL_BLOCKS_UNTIL_EOT,
                                   CAN_BLOCK_ANY_NUMBER_UNTIL_EOT,
                                   MUST_BLOCK_ALL_UNTIL_EOT,
@@ -126,7 +127,11 @@ class DeclareBlockersStepMixin:
         # cumulative, so a creature whose own line already blocks an additional
         # one keeps that and gains these.
         granted = int(blocker.metadata.get(ADDITIONAL_BLOCKS_UNTIL_EOT, 0) or 0)
-        return 1 + printed + granted
+        # "Enchanted creature can block any number of creatures." (Entangler.)
+        # The printed permission one sentence-subject over, asked of the Auras
+        # attached right now, so it ends when the Aura leaves.
+        attached = attached_block_ceiling(blocker)
+        return 1 + printed + granted + attached
 
     def declare_blockers(
         self,

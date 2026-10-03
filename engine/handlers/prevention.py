@@ -991,11 +991,28 @@ def grant_source_class_prevention_shield(game: Game, instruction: OracleInstruct
     described = dict(instruction.payload.get("filter") or {})
     seat = game.players.index(caster)
     source_name = context.card.name if context.card else None
-    add_shield(caster, make_subject_shield(described, seat, source_name))
-    game.log.append(
-        f"{caster.name} is shielded this turn from damage dealt by matching "
-        f"sources ({source_name})"
-    )
+    # "Prevent all combat damage that would be dealt **by unblocked creatures**
+    # this turn." (Snag.) The same shield with no recipient printed: it still
+    # hangs off the caster's seat, which is where the cleanup sweep finds it,
+    # and `prevention._table_shields` is what lets every damaged object reach
+    # it — the arrangement Penance's colour shield already has.
+    any_recipient = bool(instruction.payload.get("any_recipient"))
+    combat_only = bool(instruction.payload.get("combat_only"))
+    add_shield(caster, make_subject_shield(
+        described, seat, source_name,
+        any_recipient=any_recipient, combat_only=combat_only,
+    ))
+    damage = "combat damage" if combat_only else "damage"
+    if any_recipient:
+        game.log.append(
+            f"{source_name}: all {damage} that would be dealt by matching "
+            "sources this turn is prevented"
+        )
+    else:
+        game.log.append(
+            f"{caster.name} is shielded this turn from {damage} dealt by "
+            f"matching sources ({source_name})"
+        )
     return True, "resolved"
 
 

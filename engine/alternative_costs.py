@@ -171,6 +171,15 @@ class AlternativeCost:
     #: afterwards and an exiled one is not, and a spell may read either back.
     #: ``None`` means "no discard", never "any card".
     discard_from_hand: tuple[dict, ...] | None = None
+    #: "You may discard an Island card **and another card** rather than pay this
+    #: spell's mana cost." (Foil.) How many *further* cards the discard takes,
+    #: each any card at all but distinct from the one paying the narrowed half
+    #: and from the spell (CR 601.2a). A count rather than more payloads,
+    #: because "another card" narrows nothing — and its own field rather than a
+    #: count on ``discard_from_hand``, because the two halves answer different
+    #: descriptions: two Island cards would pay "two Island cards" and so would
+    #: an Island and a Mountain here. Only ever set beside a discard.
+    discard_others: int = 0
     #: "…a card **that shares a color with that spell**." (Dream Halls.) A
     #: relation between the card paying and the spell being cast, which no
     #: filter payload can express: ``card_matches_any`` tests one card against a
@@ -309,6 +318,11 @@ class AlternativeCost:
                 + (
                     " that shares a color with it"
                     if self.shares_color_with_spell else ""
+                )
+                + (
+                    "" if not self.discard_others
+                    else " and another card" if self.discard_others == 1
+                    else f" and {self.discard_others} other cards"
                 )
             )
         if self.exile_from_hand is not None:
@@ -526,10 +540,12 @@ def _a_card_answering(alternatives: tuple[dict, ...]) -> str:
     """"a blue card" / "a red or green card" / "a card" — what *alternatives*
     name, for a description.
 
-    Only the colour keys are spelled out, because those are the only narrowings
-    this cost's pool prints; anything else falls back to the head noun the rest
-    of the engine describes a filter with. A description is not a gate, so an
-    unspelled narrowing costs a vaguer sentence and nothing else.
+    The colour keys are spelled out, and since Prophecy the **land subtype**
+    too — "discard a Swamp card" (Outbreak), "a Forest card" (Snag) — which the
+    head noun below answered as "a card", so the offer the client showed named
+    no price at all. Anything else falls back to that head noun. A description
+    is not a gate, so an unspelled narrowing costs a vaguer sentence and nothing
+    else.
     """
     from .subject_filters import filter_head_noun
 
@@ -541,10 +557,14 @@ def _a_card_answering(alternatives: tuple[dict, ...]) -> str:
             [alternative["color_filter"]] if alternative.get("color_filter") else []
         )
         words.extend(_SYMBOL_TO_COLOR_WORD.get(color, color) for color in colors)
+        subtype = alternative.get("subtype_filter")
+        if not colors and isinstance(subtype, str) and subtype:
+            words.append(subtype.capitalize())
     if not words:
         noun = filter_head_noun(alternatives[0])
         return f"a {noun} card" if noun != "permanent" else "a card"
-    return "a " + " or ".join(words) + " card"
+    # "an Island card", by the same crude vowel test the board half uses.
+    return _article(words[0]) + " " + " or ".join(words) + " card"
 
 
 def read_condition(condition: str) -> "CostCondition | None":
@@ -708,6 +728,7 @@ def _read_cost_clauses(costs: str) -> dict | None:
         "pay_life": 0,
         "exile_from_hand": None,
         "discard_from_hand": None,
+        "discard_others": 0,
         "shares_color_with_spell": False,
         "sacrifice_filter": None,
         "sacrifice_count": 1,
@@ -720,10 +741,25 @@ def _read_cost_clauses(costs: str) -> dict | None:
         "opponent_gains_life": 0,
         "others_gain_life": 0,
     }
+    # Whether the clause just read was the discard (or one of its "another
+    # card" continuations), which is the only place a bare "another card" can
+    # be the verb's second object.
+    after_discard = False
     for clause in re.split(r",\s*|\s+and\s+", costs):
         clause = clause.strip()
         if not clause:
             continue
+        # "discard an Island card **and another card**" (Foil). The splitter
+        # above takes the conjunction for a clause boundary, so the discard's
+        # second object arrives as a clause with no verb. Read as the discard's
+        # only directly behind it: anywhere else it is a noun phrase no verb
+        # owns, and the all-or-nothing rule refuses the sentence.
+        if clause == "another card":
+            if not after_discard or fields["shares_color_with_spell"]:
+                return None
+            fields["discard_others"] += 1
+            continue
+        after_discard = False
         life = _PAY_LIFE.match(clause)
         if life is not None:
             fields["pay_life"] += int(life.group(1))
@@ -856,6 +892,7 @@ def _read_cost_clauses(costs: str) -> dict | None:
                 return None
             fields["discard_from_hand"] = named
             fields["shares_color_with_spell"] = bool(discarded.group("sharing"))
+            after_discard = True
             continue
         # "**sacrifice two Mountains**" (Fireblast). Read through the additional
         # cost's own reader, never a second split of the same words: the two

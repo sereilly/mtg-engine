@@ -28,6 +28,7 @@ from __future__ import annotations
 
 from .. import ast
 from ..errors import LoweringError
+from ._amounts import count_spec
 from ._common import _is_enchanted, testable_filter_payload
 from ._events import (ATTACHED_PERMANENT_CONTROLLER, _EVENT_SUBJECT_OBJECTS,
                       _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER,
@@ -508,6 +509,33 @@ def _lower_condition(
             "kind": "zone_card_count",
             "player": _condition_seat(condition, condition.player, event, "zone count"),
             "zone": condition.zone,
+            "op": condition.comparison.op,
+            "value": bound.value,
+        }
+    if isinstance(condition, ast.CardsInZones):
+        # "If there are ten or more creature cards total in all graveyards"
+        # (Avatar of Woe). The count is ``count_spec``'s — the reader the
+        # where-clause "the number of creature cards in all graveyards" already
+        # goes through — so a narrowing a card in a graveyard cannot answer
+        # refuses here exactly as it refuses there, and the one evaluator
+        # (``count_from_payload``) answers both. A seat the spec would have to
+        # resolve off a target or an event is refused: this clause is asked
+        # where nothing has been chosen (an intervening-if, a cast-time cost),
+        # and "the target's graveyard" would be answered about nobody.
+        bound = condition.comparison.value
+        if not isinstance(bound, ast.Fixed):
+            raise LoweringError(
+                "a card count compares against a printed number", node=condition
+            )
+        spec = count_spec(condition.filter, condition)
+        if spec.get("owner") not in ("you", "all"):
+            raise LoweringError(
+                "a card count in a condition is taken over your piles or all "
+                "of them", node=condition,
+            )
+        return {
+            "kind": "cards_in_zones",
+            "count": spec,
             "op": condition.comparison.op,
             "value": bound.value,
         }

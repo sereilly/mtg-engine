@@ -172,13 +172,26 @@ def accept_zone_scope(stream: TokenStream, d) -> bool | None:
     finish fall into the readers behind it, which is how a half-read
     possessive ends up naming somebody else's graveyard.
     """
-    if not stream.at_word("from", "in"):
+    # "ten or more creature cards **total** in all graveyards" (Avatar of Woe).
+    # The adverb says the count is summed over every pile the scope names, which
+    # is what ``owner: "all"`` already does — so it adds nothing to the draft and
+    # is read only immediately in front of "in all", the one scope it can be
+    # about. In front of a single pile it would mean nothing, and a word that
+    # means nothing where it is printed is a sentence this should not read.
+    total = (
+        stream.at_word("total")
+        and stream.peek_word(1) == "in"
+        and stream.peek_word(2) == "all"
+    )
+    if not total and not stream.at_word("from", "in"):
         return None
     # "from your graveyard" / "in a graveyard" — which zone the objects
     # are in, and whose. Both halves are recorded: a handler that only
     # searches the caster's own graveyard must be able to refuse
     # "from a graveyard" rather than search the wrong one.
     probe = stream.mark()
+    if total:
+        stream.advance()
     stream.advance()
     owner = accept_zone_possessive(stream)
     every = False

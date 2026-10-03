@@ -47,12 +47,19 @@ def _lower_prevent_from_subject(
     """"Prevent all damage that would be dealt to you this turn by <noun
     phrase>." (Al-abara's Carpet.)
 
+    "Prevent all combat damage that would be dealt **by unblocked creatures**
+    this turn." (Snag.) The same shield with no recipient printed at all: it
+    stops that damage to whoever it was headed for, which is Penance's
+    ``any_recipient`` reach on the same seat-held shield. And the printed
+    "combat" rides as ``combat_only`` — it was read by the parse and dropped
+    here, which no shipped card printed until Snag.
+
     Four refusals, each a way this sentence could otherwise mean more than it
     says:
 
-    * the recipient must be **you**. The shield hangs off the ability's
-      controller; a shield printed for one creature or for a chosen player
-      would be armed on the wrong object.
+    * the recipient must be **you**, or not printed at all. The shield hangs
+      off the ability's controller; a shield printed for one creature or for a
+      chosen player would be armed on the wrong object.
     * the source must be a *described class*, not a chosen target. A quantifier
       that picks one object is the marker ``prevent_damage_by_target_until_eot``
       leaves, and re-matching a phrase against every source is a different
@@ -62,10 +69,22 @@ def _lower_prevent_from_subject(
       dealt, which is a shield strictly wider than the card prints.
     * the duration must be this turn, because that is what the sweep gives it.
     """
-    if not _is_you(node.to):
+    any_recipient = node.to is None
+    if not any_recipient and not _is_you(node.to):
         raise LoweringError(
             "the source-class shield is armed on its controller, not on a "
             "chosen recipient",
+            node=node,
+        )
+    if any_recipient and (
+        node.from_filter is not None
+        or node.to_and_by
+        or node.dealt_by_others
+        or node.unaffected_if_cost_paid is not None
+    ):
+        raise LoweringError(
+            "the recipient-free source-class shield names one described class "
+            "of sources and nothing else",
             node=node,
         )
     spec = node.dealt_by
@@ -88,10 +107,15 @@ def _lower_prevent_from_subject(
         refusal="the source-class shield cannot test this noun phrase",
         node=node,
     )
+    payload: dict[str, object] = {"filter": described}
+    # Both emitted only when printed, so Al-abara's Carpet's and Scarecrow's
+    # payloads stay byte-identical.
+    if any_recipient:
+        payload["any_recipient"] = True
+    if node.combat_only:
+        payload["combat_only"] = True
     return (
-        OracleInstruction(
-            "grant_source_class_prevention_shield", "", {"filter": described}
-        ),
+        OracleInstruction("grant_source_class_prevention_shield", "", payload),
     )
 
 
@@ -212,6 +236,16 @@ def _lower_prevent_all(
             # flying**" (Al-abara's Carpet). Both ends named, which is a
             # narrower shield than either half — one on the protected player
             # that answers only to sources the printed noun phrase describes.
+            return _lower_prevent_from_subject(node)
+        if (
+            isinstance(node.dealt_by, ast.TargetSpec)
+            and not node.dealt_by.targeted
+            and node.dealt_by.quantifier in ("all", "each")
+        ):
+            # "…dealt **by unblocked creatures** this turn" (Snag). A
+            # *described* class with no recipient named — the same shield
+            # reaching every recipient, rather than the directional one below,
+            # which is armed on one chosen object.
             return _lower_prevent_from_subject(node)
         if node.duration.kind not in _REST_OF_TURN:
             raise LoweringError(
