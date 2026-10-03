@@ -42,7 +42,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | UDS | 143 | 204 | 91.7% | 91.2% | 65.7% | 121 |
 | MMQ | 335 | 465 | 91.8% | 91.6% | 66.2% | 278 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| NEM *(measured)* | 143 | 219 | 74.0% | 70.3% | 54.8% | 108 |
+| NEM *(measured)* | 143 | 219 | 74.9% | 74.0% | 58.4% | 115 |
 | **All (shipped)** | **6164** | **9025** | **90.8%** | **90.2%** | **61.1%** | **4680** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -57,7 +57,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ---: | ---: | --- | --- |
 | 473 | 211 | expected a subject |  |
 | 142 | 73 | unrecognized effect verb |  |
-| 123 | 58 | unconsumed text |  |
+| 122 | 57 | unconsumed text |  |
 | 44 | 27 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 18 | 6 | expected what this creature can't block, or a duration |  |
@@ -79,7 +79,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 2 | 1 | expected 'the number of' in a where-clause |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
 | 2 | 1 | expected 'top' |  |
-| 2 | 2 | negative variable pump is not supported |  |
+| 1 | 1 | expected what to gain control of |  |
 
 ## Cards executing through the grammar
 
@@ -456,6 +456,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever enchanted artifact becomes tapped or a player activates an ability of enchanted artifact without {T} in its activation cost, this Aura deals 2 damage to that artifact's controller.`
 - **Ascendant Evincar**
   - `Other black creatures get +1/+1.`
+  - `Nonblack creatures get -1/-1.`
 - **Ashen Ghoul**
   - `{B}: Return this card from your graveyard to the battlefield. Activate only during your upkeep and only if three or more creature cards are above this card.`
 - **Ashen Powder**
@@ -677,6 +678,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `This creature gets +1/+1 as long as an opponent controls a nontoken white permanent.`
 - **Befoul**
   - `Destroy target land or nonblack creature. It can't be regenerated.`
+- **Belbe's Armor**
+  - `{X}, {T}: Target creature gets -X/+X until end of turn.`
 - **Belbe's Portal**
   - `{3}, {T}: You may put a creature card of the chosen type from your hand onto the battlefield.`
 - **Bellowing Fiend**
@@ -2026,6 +2029,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}{B}, {T}, Discard a card: Choose a card name. Exile the top six cards of your library, then reveal cards from the top of your library until you reveal a card with the chosen name. Put that card into your hand and exile all other cards revealed this way.`
 - **Dizzying Gaze**
   - `{R}: Enchanted creature deals 1 damage to target creature with flying.`
+- **Dominate**
+  - `Gain control of target creature with mana value X or less.`
 - **Dominating Licid**
   - `{1}{U}{U}, {T}: This creature loses this ability and becomes an Aura enchantment with enchant creature. Attach it to target creature. You may pay {U} to end this effect.`
 - **Donate**
@@ -2499,6 +2504,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Eye of Singularity**
   - `When this enchantment enters, destroy each permanent with the same name as another permanent, except for basic lands. They can't be regenerated.`
   - `Whenever a permanent other than a basic land enters, destroy all other permanents with that name. They can't be regenerated.`
+- **Eye of Yawgmoth**
+  - `{3}, {T}, Sacrifice a creature: Reveal a number of cards from the top of your library equal to the sacrificed creature's power. Put one into your hand and exile the rest.`
 - **Fabled Passage**
   - `{T}, Sacrifice this land: Search your library for a basic land card, put it onto the battlefield tapped, then shuffle. Then if you control four or more lands, untap that land.`
 - **Fade Away**
@@ -2786,6 +2793,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{2}, Discard a card: Put a +1/+1 counter on this creature or this creature gains flying, first strike, or trample. (This effect lasts indefinitely.)`
 - **Flowstone Shambler**
   - `{R}: This creature gets +1/-1 until end of turn.`
+- **Flowstone Slide**
+  - `All creatures get +X/-X until end of turn.`
 - **Flowstone Strike**
   - `Target creature gets +1/-1 and gains haste until end of turn.`
 - **Flowstone Surge**
@@ -6560,6 +6569,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{X}, {T}, Sacrifice this artifact: X target creatures with power 2 or less can't be blocked this turn.`
 - **Runesword**
   - `{3}, {T}: Target attacking creature gets +2/+0 until end of turn. When that creature leaves the battlefield this turn, sacrifice this artifact. If the creature deals damage to a creature this turn, the creature dealt damage can't be regenerated this turn. If a creature dealt damage by the targeted creature would die this turn, exile that creature instead.`
+- **Rupture**
+  - `Sacrifice a creature. Rupture deals damage equal to that creature's power to each creature without flying and each player.`
 - **Rushwood Elemental**
   - `At the beginning of your upkeep, you may put a +1/+1 counter on this creature.`
 - **Rushwood Grove**
@@ -7635,6 +7646,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Sacrifice a creature: Destroy target nonblack creature.`
 - **Stronghold Biologist**
   - `{U}{U}, {T}, Discard a card: Counter target creature spell.`
+- **Stronghold Discipline**
+  - `Each player loses 1 life for each creature they control.`
 - **Stronghold Gambit**
   - `Each player chooses a card in their hand. Then each player reveals their chosen card. The owner of each creature card revealed this way with the lowest mana value puts it onto the battlefield.`
 - **Stronghold Machinist**
@@ -8157,6 +8170,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Tooth of Ramos**
   - `{T}: Add {W}.`
   - `Sacrifice this artifact: Add {W}.`
+- **Topple**
+  - `Exile target creature with the greatest power among creatures on the battlefield. (If two or more creatures are tied for greatest power, target any one of them.)`
 - **Tor Wauki**
   - `{T}: Tor Wauki deals 2 damage to target attacking or blocking creature.`
 - **Torch Song**
