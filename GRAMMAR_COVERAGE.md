@@ -43,7 +43,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | MMQ | 335 | 465 | 91.8% | 91.6% | 66.2% | 278 |
 | NEM | 143 | 219 | 80.4% | 80.4% | 64.4% | 123 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| PCY *(measured)* | 143 | 207 | 72.0% | 65.2% | 39.1% | 77 |
+| PCY *(measured)* | 143 | 207 | 75.4% | 68.6% | 42.5% | 83 |
 | **All (shipped)** | **6307** | **9244** | **90.6%** | **89.9%** | **61.2%** | **4803** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -70,17 +70,17 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 6 | 1 | a counted redirect off the source moves the damage onto one chosen target |  |
 | 6 | 1 | unsupported life-loss target 'owner' |  |
 | 5 | 5 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
-| 5 | 5 | unrecognized discard cost |  |
 | 4 | 1 | the sacrifice prompt cannot test this restriction |  |
 | 4 | 1 | expected 'that' |  |
 | 4 | 1 | attach needs one chosen permanent to attach to |  |
-| 4 | 3 | expected 'the number of' in a where-clause |  |
 | 4 | 1 | expected a destination zone after 'return' |  |
 | 4 | 4 | expected a quantity |  |
 | 3 | 1 | expected 'of' |  |
+| 3 | 2 | expected 'the number of' in a where-clause |  |
 | 3 | 3 | unrecognized "can't be" restriction |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 2 | expected 'counter or counters' |  |
+| 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
 
 ## Cards executing through the grammar
 
@@ -229,6 +229,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Aleatory**
   - `Flip a coin. If you win the flip, target creature gets +1/+1 until end of turn.`
   - `Draw a card at the beginning of the next turn's upkeep.`
+- **Alexi, Zephyr Mage**
+  - `{X}{U}, {T}, Discard two cards: Return X target creatures to their owners' hands.`
 - **Ali Baba**
   - `{R}: Tap target Wall.`
   - `{R}: Tap target Wall.`
@@ -1548,6 +1550,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of each player's upkeep, this artifact deals 1 damage to that player.`
   - `At the beginning of each player's upkeep, this artifact deals 1 damage to that player.`
   - `At the beginning of each player's upkeep, this artifact deals 1 damage to that player.`
+- **Copper-Leaf Angel**
+  - `{T}, Sacrifice X lands: Put X +1/+1 counters on this creature.`
 - **Coral Atoll**
   - `When this land enters, sacrifice it unless you return an untapped Island you control to its owner's hand.`
   - `{T}: Add {C}{U}.`
@@ -3377,6 +3381,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{B}, Pay 2 life: Draw a card.`
   - `{B}, Pay 2 life: Draw a card.`
   - `{B}, Pay 2 life: Draw a card.`
+- **Greel, Mind Raker**
+  - `{X}{B}, {T}, Discard two cards: Target player discards X cards at random.`
 - **Green Mana Battery**
   - `{2}, {T}: Put a charge counter on this artifact.`
   - `{T}, Remove any number of charge counters from this artifact: Add {G}, then add an additional {G} for each charge counter removed this way.`
@@ -4068,6 +4074,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Jeweled Amulet**
   - `{1}, {T}: Put a charge counter on this artifact. Note the type of mana spent to pay this activation cost. Activate only if there are no charge counters on this artifact.`
   - `{T}, Remove a charge counter from this artifact: Add one mana of this artifact's last noted type.`
+- **Jeweled Spirit**
+  - `Sacrifice two lands: This creature gains protection from artifacts or from the color of your choice until end of turn.`
 - **Jeweled Torque**
   - `Whenever a player casts a spell of the chosen color, you may pay {2}. If you do, you gain 2 life.`
 - **Jhoira's Toolbox**
@@ -4094,6 +4102,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Destroy all artifacts, creatures, and lands. They can't be regenerated.`
 - **Jolrael's Favor**
   - `{1}{G}: Regenerate enchanted creature.`
+- **Jolrael, Empress of Beasts**
+  - `{2}{G}, {T}, Discard two cards: All lands target player controls become 3/3 creatures until end of turn. They're still lands.`
 - **Jolrael, Mwonvuli Recluse**
   - `Whenever you draw your second card each turn, create a 2/2 green Cat creature token.`
   - `{4}{G}{G}: Until end of turn, creatures you control have base power and toughness X/X, where X is the number of cards in your hand.`
@@ -4220,6 +4230,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}, Sacrifice two lands: Destroy target land.`
 - **Keldon Battlewagon**
   - `When this creature attacks, sacrifice it at end of combat.`
+  - `Tap an untapped creature you control: This creature gets +X/+0 until end of turn, where X is the power of the creature tapped this way.`
 - **Keldon Berserker**
   - `Whenever this creature attacks, if you control no untapped lands, it gets +3/+0 until end of turn.`
 - **Keldon Champion**
@@ -4425,6 +4436,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Shuffle a card from your hand into your library. If you do, draw two cards at the beginning of the next turn's upkeep.`
 - **Latulla's Orders**
   - `Whenever enchanted creature deals combat damage to defending player, you may destroy target artifact that player controls.`
+- **Latulla, Keldon Overseer**
+  - `{X}{R}, {T}, Discard two cards: Latulla deals X damage to any target.`
 - **Launch**
   - `When this Aura is put into a graveyard from the battlefield, return it to its owner's hand.`
 - **Lava Axe**
