@@ -666,3 +666,54 @@ def test_601_2c_a_divided_announcement_is_read_before_the_cost_moves_the_board(
     assert bear.damage_prevention_pool == 2, (
         "the creature named behind the sacrificed source still got its share"
     )
+
+
+# --- W1G1 (NEM): a counter cost is paid after the last refusal ---
+
+
+def _w1g1_counter_creature() -> "CardDefinition":
+    from engine.models import CardDefinition
+
+    return CardDefinition(
+        name="Counter Pinger", mana_cost="", cmc=0.0, type_line="Creature — Test",
+        oracle_text=(
+            "This creature enters with three charge counters on it.\n"
+            "{1}, Remove a charge counter from this creature: This creature "
+            "deals 1 damage to any target."
+        ),
+        colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": "Counter Pinger", "type_line": "Creature — Test",
+             "power": "1", "toughness": "1"},
+    )
+
+
+@pytest.mark.cr("602.2b", "601.2h", "733.1")
+def test_a_counter_cost_is_not_spent_on_an_activation_refused_for_mana():
+    """Ancient Hydra's shape: "{1}, Remove a fade counter from this creature:
+    …". The counter was charged above the mana payment, so an activation with
+    no mana was refused with a counter already gone — a cost paid for nothing,
+    which CR 733.1 says is reversed. Paid now below the last refusal."""
+    from engine.named_counters import counters_on
+
+    game, p1, p2 = _duel(enforce=True)
+    game.begin_turn_bookkeeping(0)
+    pinger = Permanent(card=_w1g1_counter_creature())
+    game._put_permanent_onto_battlefield(0, pinger, None)
+    assert counters_on(pinger, "charge") == 3
+
+    refused = game.activate_permanent_ability(0, "Counter Pinger", target_player_index=1)
+
+    assert not refused.supported
+    assert counters_on(pinger, "charge") == 3
+    assert p2.life == 20
+
+    p1.mana_pool["C"] = 1
+    paid = game.activate_permanent_ability(0, "Counter Pinger", target_player_index=1)
+    from tests.helpers import resolve_stack
+
+    resolve_stack(game)
+    assert paid.supported
+    assert counters_on(pinger, "charge") == 2
+    assert p2.life == 19
+
+# --- end W1G1 ---

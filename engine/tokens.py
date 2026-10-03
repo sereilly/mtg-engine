@@ -188,8 +188,8 @@ def token_line_supported(line: str) -> bool:
 
 def make_token_card(
     name: str,
-    power: int | None,
-    toughness: int | None,
+    power: int | str | None,
+    toughness: int | str | None,
     type_line: str,
     *,
     colors: Sequence[str] = (),

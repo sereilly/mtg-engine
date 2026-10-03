@@ -907,6 +907,24 @@ def evaluate_count(
         from ..named_counters import counters_on
 
         return max(0, _scaled(counters_on(source, str(counters)), spec))
+    # "…equal to the number of fade counters on **Saproling Burst**." (The
+    # Burst's Saproling, whose text names its maker.) The same pile, read off
+    # the permanent the token maker stamped as this token's creator — by id,
+    # because a Burst that left and came back is a new object (CR 400.7) whose
+    # counters are not the ones this token's maker had. A maker that has left
+    # the battlefield holds no pile here, so the count is zero and the token is
+    # a 0/0, which is what the card's rulings give once the Burst is gone.
+    maker_counters = spec.get("creator_counters")
+    if maker_counters is not None:
+        if source is None or game is None:
+            return 0
+        from ..named_counters import counters_on
+        from ..tokens import CREATED_WITH_PERMANENT_ID
+
+        maker = game.permanent_by_id(source.metadata.get(CREATED_WITH_PERMANENT_ID))
+        if maker is None or not game.is_on_battlefield(maker):
+            return 0
+        return max(0, _scaled(counters_on(maker, str(maker_counters)), spec))
     # "…where X is **the life paid as this artifact entered**" (Phyrexian
     # Processor). A number the permanent is carrying that is not a pile of
     # counters: it was chosen once as a CR 614.1c entry replacement and is read

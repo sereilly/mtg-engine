@@ -30,6 +30,7 @@ from ..shields import (
 )
 from ..divided_damage import DIVIDED_TARGETS, EVENLY, divide, divided_entry
 from ..next_damage import (DAMAGE_DOUBLED_NEXT, DAMAGE_PREVENTED_NEXT, arm)
+from ..oracle_types import single_chosen_id
 from ._common import (divided_target_permanent, names_a_target_list,
                       recorded_permanent_ids, attached_host, bound_permanent,
                       resolve_amount, resolve_target_permanent,
@@ -96,13 +97,35 @@ def apply_prevention_shield(
     target player. Records `source_name` (the granting card) so the UI can show
     its art on the shield badge, and *source_filter* — the printed phrase naming
     whose damage the shield stops — so a narrowed shield reaching this recipient
-    is narrowed here too. Returns the name of the beneficiary."""
-    if (
+    is narrowed here too. Returns the name of the beneficiary.
+
+    **The chosen creature is found by id first**, the slot only when no id was
+    announced (the emblem path, which has no resolution context). It was slot
+    only, so an "any target" announced by id alone — which the engine's own
+    activation API accepts — shielded the creature's *controller* instead (Defender
+    en-Vec, Samite Healer), and an index held across a resolution addressed
+    whichever creature slid into the slot when one ahead of it left.
+    """
+    permanent = None
+    chosen_id = (
+        single_chosen_id(context.target_permanent_id)
+        if context is not None else None
+    )
+    if chosen_id is not None:
+        found = game.permanent_by_id(chosen_id)
+        if found is None or not game.is_on_battlefield(found):
+            # CR 608.2b: the one creature this named has left, so it is an
+            # illegal target and shields nothing — never its controller, who
+            # was not the target.
+            game.log.append(f"{source_name}: the creature it named is gone")
+            return ""
+        permanent = found
+    elif (
         isinstance(target_permanent_index, int)
         and 0 <= target_permanent_index < len(target.battlefield)
-        and target.battlefield[target_permanent_index].is_creature
     ):
         permanent = target.battlefield[target_permanent_index]
+    if permanent is not None and permanent.is_creature:
         _record_shield(
             context,
             _grant_pool(

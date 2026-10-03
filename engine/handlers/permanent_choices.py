@@ -493,7 +493,16 @@ def _choose_permanents_for_one_seat(
             source=context.source_permanent,
         )
         if payload.get("exact_count"):
-            at_least = up_to
+            # **As many as there are, when there are fewer** (CR 609.3: an
+            # effect that attempts the impossible does as much as possible).
+            # "Taps an untapped artifact, creature, or land they control for
+            # each fade counter" (Tangle Wire) asks four of a player with two,
+            # and they tap both — where reading the floor whole would have the
+            # seat choose nothing and tap nothing. Only here, where the count
+            # is an *effect's* instruction: a printed price with a floor
+            # ("return two Forests", Bull Elephant) sets ``at_least`` itself
+            # and stays indivisible, because a cost is not an effect.
+            at_least = min(up_to, len(candidates))
         if up_to <= 0:
             # CR 608.2's "as much as possible": a count of nothing is not a
             # prompt with no answer, it is a step that asked for nothing.

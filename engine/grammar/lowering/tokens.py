@@ -153,10 +153,23 @@ def _lower_create_token(
         return (OracleInstruction("create_token", "", payload),)
     if "creature" not in node.types:
         raise LoweringError("make_token_card only builds creature tokens", node=node)
+    # "…token. It has "This token's power and toughness are each equal to …""
+    # (Saproling Burst.) No printed number, because the token's own CR 604.3
+    # ability defines both halves; the card is built with ``*`` for each, as a
+    # printed */* creature's is, and recomputed from that ability once it is on
+    # the battlefield. Asked of the CDA table that will recompute it, so a half
+    # ("…power is equal to …") still refuses.
+    from ...characteristic_defining import defines_whole_pt
+
+    defined_by_ability = (
+        node.power is None and node.toughness is None
+        and any(defines_whole_pt(line) for line in node.granted_lines)
+    )
     if (
         node.counted_pt is None
         and node.pt_from is None
         and (node.power is None or node.toughness is None)
+        and not defined_by_ability
     ):
         raise LoweringError("a creature token has a printed power/toughness", node=node)
     if node.name:
@@ -194,8 +207,14 @@ def _lower_create_token(
         # reads a number, exactly as a pump or a counted damage does. Both
         # halves, because the production admitted them only as the *same*
         # variable.
-        "power": "x" if node.counted_pt is not None else node.power,
-        "toughness": "x" if node.counted_pt is not None else node.toughness,
+        "power": (
+            "x" if node.counted_pt is not None
+            else "*" if defined_by_ability else node.power
+        ),
+        "toughness": (
+            "x" if node.counted_pt is not None
+            else "*" if defined_by_ability else node.toughness
+        ),
         "type_line": type_line,
     }
     if node.pt_from is not None:

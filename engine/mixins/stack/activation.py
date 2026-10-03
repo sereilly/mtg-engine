@@ -2005,30 +2005,6 @@ class AbilityActivationMixin:
             # one.
             exiled_for_cost = exiled_set_for_cost[0]
 
-        # The counter-removal cost, charged here rather than where it was
-        # counted: every gate between the two can still refuse the activation,
-        # and a refusal after the counters came off is a cost paid for nothing
-        # (CR 602.2b). Through the one removal seam, so a cost that takes the
-        # last counter off is the same event as an effect that does.
-        if counters_removed_for_cost:
-            from ...named_counters import remove_counters
-
-            # The chosen permanent when the card named one (Spike Rogue), and
-            # the source otherwise (Scavenging Ghoul). One payment either way:
-            # what differs is only which permanent gives the counters up, which
-            # is the whole of `remove_counter_filter` — the same arrangement the
-            # placing twin makes below with `counter_cost_permanent`.
-            payer = counter_removal_permanent or permanent
-            remove_counters(
-                payer, ability.cost.remove_counter, counters_removed_for_cost
-            )
-            if payer is not permanent:
-                self.log.append(
-                    f"{payer.card.name} gave up {counters_removed_for_cost} "
-                    f"{ability.cost.remove_counter} counter(s) "
-                    f"({permanent.card.name}'s cost)"
-                )
-
         required_cost = dict(ability.cost.mana)
         # "Pay {1} **for each +1/+1 counter on this creature**" (Skeleton
         # Scavengers). CR 601.2f computes the cost as the ability is
@@ -2249,6 +2225,42 @@ class AbilityActivationMixin:
                 details = f"{permanent.card.name} is already tapped"
                 self.log.append(details)
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
+
+        # The counter-removal cost, charged here rather than where it was
+        # counted: every gate between the two can still refuse the activation,
+        # and a refusal after the counters came off is a cost paid for nothing
+        # (CR 602.2b). Through the one removal seam, so a cost that takes the
+        # last counter off is the same event as an effect that does.
+        #
+        # **Below the last refusal, not merely below the counting.** It sat
+        # above the mana payment and the {T} checks, so Ancient Hydra's "{1},
+        # Remove a fade counter" activated with no mana was refused with the
+        # counter already gone — one upkeep of the creature's life paid for
+        # nothing. Nothing after this point refuses. (The mana above is still
+        # paid ahead of the two {T} checks; that ordering is the pool's, not
+        # this cost's, and is reported rather than moved in this round.)
+        # Reading the counters *before* this is also CR 601.2f's order: a cost
+        # sized off the counters is determined before any cost is paid.
+        if counters_removed_for_cost:
+            from ...named_counters import remove_counters
+
+            # The chosen permanent when the card named one (Spike Rogue), and
+            # the source otherwise (Scavenging Ghoul). One payment either way:
+            # what differs is only which permanent gives the counters up, which
+            # is the whole of `remove_counter_filter` — the same arrangement the
+            # placing twin makes below with `counter_cost_permanent`.
+            payer = counter_removal_permanent or permanent
+            remove_counters(
+                payer, ability.cost.remove_counter, counters_removed_for_cost
+            )
+            if payer is not permanent:
+                self.log.append(
+                    f"{payer.card.name} gave up {counters_removed_for_cost} "
+                    f"{ability.cost.remove_counter} counter(s) "
+                    f"({permanent.card.name}'s cost)"
+                )
+
+        if requires_tap:
             self.become_tapped(permanent)
             # The {T} symbol is a permanent tapped to pay for its *own*
             # ability, which is what the phrase says too — recorded beside the

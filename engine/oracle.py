@@ -50,6 +50,7 @@ from .oracle_types import (
 from .characteristic_defining import dynamic_pt_for
 from .auras import aura_claim, unclaimed_aura_lines
 from .cycling import expand_cycling_lines, unread_cycling_line
+from .fading import unread_fading_line
 from .equipment import expand_equip_lines, has_equip_ability, is_equip_line
 from .alternative_costs import (
     alternative_cost_claims_line,
@@ -6193,6 +6194,12 @@ def expand_ability_lines(
       pay-or-sacrifice upkeep trigger to the grammar, to CR 603.4's
       intervening-if gate the upkeep step already checks, and to the registered
       handler that charges it, none of which know the word.
+    * a **fading** keyword line becomes the *two* abilities CR 702.32a says it
+      represents — "This permanent enters with N fade counters on it." and "At
+      the beginning of your upkeep, remove a fade counter from this permanent.
+      If you can't, sacrifice the permanent." (``engine/fading.py``), one line
+      each. From there it is the named-counter entry state and an ordinary
+      upkeep trigger with a ``CouldNot`` branch, none of which know the word.
 
     And one rewrite that is the *card's* rather than the rules': a legendary
     card's shortened self-reference written out in full
@@ -6205,6 +6212,7 @@ def expand_ability_lines(
     """
     from .cast_costs import expand_buyback_lines
     from .echo import expand_echo_lines
+    from .fading import expand_fading_lines
     from .self_reference import expand_short_self_references
 
     oracle_text = expand_short_self_references(
@@ -6215,6 +6223,9 @@ def expand_ability_lines(
     # the rewrites below reads one, so the order between them carries no
     # meaning and nesting it would only make the next addition here a conflict.
     oracle_text = expand_echo_lines(oracle_text)
+    # CR 702.32a's, for echo's reason: a whole line in, whole lines out, read by
+    # none of the rewrites below.
+    oracle_text = expand_fading_lines(oracle_text)
 
     # Its own statement rather than another layer of the nested call below. The
     # composition is what every keyword-as-a-rewrite adds itself to, so it is
@@ -7048,6 +7059,20 @@ def _compile_card_oracle(
             False,
             "unsupported",
             f"unimplemented cycling ability: {unread_cycling}",
+            normalized_text,
+        )
+    # …and a **fading** line the CR 702.32a rewrite could not read
+    # (``engine/fading.py``), for the same reason: an artifact or enchantment
+    # whose other line compiles would otherwise report supported with the
+    # keyword dropped — a permanent that never fades and is never sacrificed.
+    # Rejuvenation Chamber and Saproling Burst were exactly that before the
+    # rewrite existed.
+    unread_fading = unread_fading_line(oracle_text)
+    if unread_fading is not None:
+        return OracleProgram(
+            False,
+            "unsupported",
+            f"unimplemented fading ability: {unread_fading}",
             normalized_text,
         )
 

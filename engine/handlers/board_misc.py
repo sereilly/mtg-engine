@@ -1717,10 +1717,16 @@ def create_token(game: Game, instruction: OracleInstruction, context: OracleExec
                 subtype = str(recorded).strip().title()
                 type_line = f"Creature — {subtype}"
                 token_name = default_token_name((subtype.lower(),))
+    # ``*`` is a P/T the token's own CR 604.3 ability defines (Saproling Burst's
+    # Saproling), carried through as a printed */* creature card carries it and
+    # recomputed once the token is on the battlefield; every other value is a
+    # number.
     token_card = make_token_card(
         token_name,
-        None if printed_power is None else int(printed_power),
-        None if printed_toughness is None else int(printed_toughness),
+        None if printed_power is None
+        else "*" if printed_power == "*" else int(printed_power),
+        None if printed_toughness is None
+        else "*" if printed_toughness == "*" else int(printed_toughness),
         type_line,
         colors=colors,
         keywords=tuple(payload.get("keywords") or ()),

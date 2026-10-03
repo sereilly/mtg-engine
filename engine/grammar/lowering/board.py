@@ -354,6 +354,18 @@ def _lower_sacrifice(
         and not node.subject.targeted
         and not _is_source(node.subject)
     ):
+        if node.subject.quantifier == "that":
+            # "Sacrifice **that** creature" / "…**the** permanent" outside a
+            # delay that bound it. A back-reference names one object the
+            # sentence already holds, and this prompt offers a *choice* — so
+            # read here it is "sacrifice a creature of your choice", the
+            # referent dropped and the card compiling supported. Refused by
+            # name instead: measured over the pool, only "a", "any number" and
+            # "all" ever reach this prompt, so nothing printed loses support.
+            raise LoweringError(
+                "a back-reference names one object, not a choice for the "
+                "sacrifice prompt", node=node,
+            )
         described = _forced_sacrifice_filter(node.subject.filter)
         if described is None:
             raise LoweringError(
