@@ -5833,9 +5833,18 @@ class PendingChoicesMixin:
         Not a valuation — hand order is seed-deterministic, which is what AI
         and headless play need, and it is the same policy every other pick out
         of a hand in this file states. A seat that should choose cleverly needs
-        a weight in ``engine/ai_valuation.py``, not a branch here.
+        a weight in ``engine/ai_valuation.py``, not a branch here — and the one
+        that does is ``ai_policy.order_hand_pick``: a pick the program then puts
+        onto the battlefield for its owner (Stronghold Gambit) takes the card
+        that sentence admits, at its superlative's extreme.
         """
-        live = self.live_choose_cards_in_hand(choice)
+        from ...ai_policy import order_hand_pick
+
+        context = choice.data.get("_context")
+        live = order_hand_pick(
+            self, choice.player_index, self.live_choose_cards_in_hand(choice),
+            choice.data.get("_payload") or {}, getattr(context, "card", None),
+        )
         wanted = self._how_many_cards_to_choose(choice)
         # For "any number of" that is every eligible card, which is the offer's
         # ceiling rather than a valuation: nothing is spent to reveal, and every
@@ -7847,14 +7856,15 @@ class PendingChoicesMixin:
         return frozenset(self_recipients)
 
     def _default_optional_pay(self, choice: PendingChoice) -> None:
-        """Pay when the floating mana is already there; an unpayable "unless you
-        pay" entry applies its decline consequence (Hasran Ogress' damage).
+        """Pay when the seat can and should; an unpayable "unless you pay"
+        entry applies its decline consequence (Hasran Ogress' damage).
 
-        A *stated policy*, not the payability test: the non-interactive default
-        spends mana it already has and never taps a land for an optional cost,
-        because tapping is a real decision about the rest of the turn.
-        ``_player_can_pay_optional`` is the wider question and belongs to the
-        seat that was actually asked.
+        A *stated policy*, not the payability test. Floating mana is always
+        spent; an untapped land only when ``ai_policy.optional_pay_may_tap_lands``
+        says the tap is worth it — a toll always, a gift only with mana nothing
+        else this turn would spend — because tapping is a real decision about
+        the rest of the turn. ``_player_can_pay_optional`` is the wider question
+        and belongs to the seat that was actually asked.
 
         **The whole policy in one line: take gifts, pay tolls, make no trades.**
         A cost this could not see was one it charged nothing for, so every
@@ -7870,19 +7880,45 @@ class PendingChoicesMixin:
         gives an offer it cannot afford."""
         entry = choice.data
         player = self.players[choice.player_index]
+        # **Which mana the seat may spend**, and it is no longer always the
+        # pool. "Never taps a land" was the whole of this policy's mana half,
+        # and at the moments these offers arrive — an upkeep, a combat damage
+        # step, the opponent's turn — the pool is empty, so the AI declined
+        # every mana-priced offer it was ever made: Vaporous Djinn's "unless
+        # you pay {U}{U}" sacrificed the Djinn at its first upkeep with two
+        # Islands untapped, and Rootwater Thief never paid its {2}. Whether
+        # tapping a land is worth it is a *weight* — pay tolls always, take
+        # gifts only with mana nothing else this turn will spend — and it lives
+        # with the other weights (`ai_policy.optional_pay_may_tap_lands`).
+        # Paying is then the plan `_pay_optional` already spends, lands and all.
+        from ...ai_policy import optional_pay_may_tap_lands
+
+        may_tap: list[bool] = []  # asked once, and only when the pool falls short
+
+        def payable(cost) -> bool:
+            if plan_payment(player.mana_pool, (), cost) is not None:
+                return True
+            if not may_tap:
+                may_tap.append(
+                    optional_pay_may_tap_lands(self, choice.player_index, entry)
+                )
+            return may_tap[0] and plan_payment(
+                player.mana_pool, untapped_mana_lands(self.controlled_by(player)),
+                cost, produces=self._land_payment_colors,
+            ) is not None
+
         # A life cost has no "already floating" reading — nothing is held in
         # reserve to spend — so the stated policy is the one a player at a
         # healthy life total would take: pay, unless it would be lethal.
         life_cost = int(entry.get("life_cost", 0) or 0)
         mana_covered = next(
             (
-                plan
+                True
                 for cost in (
                     entry.get("cost") or {},
                     *(entry.get("cost_alternatives") or ()),
                 )
-                for plan in (plan_payment(player.mana_pool, (), cost),)
-                if plan is not None
+                if payable(cost)
             ),
             None,
         )
@@ -7916,7 +7952,7 @@ class PendingChoicesMixin:
             option = next(
                 (
                     index for index in reversed(range(len(graded)))
-                    if plan_payment(player.mana_pool, (), graded[index]) is not None
+                    if payable(graded[index])
                 ),
                 None,
             )

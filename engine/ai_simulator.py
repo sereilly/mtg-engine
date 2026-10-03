@@ -8,7 +8,7 @@ import random
 
 from .ai_combat import run_ai_combat_phase
 from .ai_policy import (choose_activation_action, choose_cast_action,
-                        choose_hand_activation_action)
+                        choose_hand_activation_action, planned_tap_color)
 from .card_loader import load_cards
 from .game import Game
 from .search_filters import card_has_type
@@ -54,6 +54,14 @@ class SimulationReport:
     #: *silent* one (even the empty declaration refused) is an issue rather than
     #: a count, because that seat blocks with nobody for the rest of the game.
     refused_blocks: Counter[str] = field(default_factory=Counter)
+    #: The activation-side twin of ``refused_casts``, and the one this report
+    #: never had: an activation the engine declines spends nothing and breaks
+    #: no rule, and the AI proposes it again next turn. NEM's wave 2 found 80 of
+    #: them across one ten-game run each of USG, TMP and MMQ by reading the
+    #: log by hand — Serra's Hymn announced with no division, Rootwater Diver
+    #: and Groundskeeper aimed at an empty graveyard — while every number this
+    #: report printed read clean.
+    refused_activations: Counter[str] = field(default_factory=Counter)
     #: How much combat actually happened. Reported for the reason
     #: `interaction_count` is: "no illegal interactions" over a run where nobody
     #: ever attacked is a true statement about nothing, and that was every run
@@ -634,9 +642,16 @@ def run_ai_simulation(
                     )
                     card_to_cast = cast_zone[cast_action.hand_index]
 
-                    for permanent_index in cast_action.land_tap_indices:
+                    # Each land asked for the colour the plan counted on
+                    # (`planned_tap_color`); the seam's "G" default made a dual
+                    # or a swapped land produce something the plan did not.
+                    for position, permanent_index in enumerate(cast_action.land_tap_indices):
                         permanent = game.players[active].battlefield[permanent_index]
-                        game.tap_land_for_mana(active, permanent.card.name, permanent_index=permanent_index)
+                        game.tap_land_for_mana(
+                            active, permanent.card.name,
+                            chosen_color=planned_tap_color(cast_action, position),
+                            permanent_index=permanent_index,
+                        )
 
                     before = _snap(game)
                     # Forward the *whole* choice. Dropping the permanent target
@@ -698,9 +713,13 @@ def run_ai_simulation(
 
                 activation_action = None if game.is_game_over() else choose_activation_action(game, active)
                 if activation_action is not None:
-                    for permanent_index in activation_action.land_tap_indices:
+                    for position, permanent_index in enumerate(activation_action.land_tap_indices):
                         permanent = game.players[active].battlefield[permanent_index]
-                        game.tap_land_for_mana(active, permanent.card.name, permanent_index=permanent_index)
+                        game.tap_land_for_mana(
+                            active, permanent.card.name,
+                            chosen_color=planned_tap_color(activation_action, position),
+                            permanent_index=permanent_index,
+                        )
 
                     result = game.activate_permanent_ability(
                         active,
@@ -716,6 +735,10 @@ def run_ai_simulation(
                         f"G{game_index} T{turn} {active_player.name} "
                         f"activate {activation_action.permanent_name} -> {result.details}"
                     )
+                    if not result.supported:
+                        report.refused_activations[
+                            f"{activation_action.permanent_name}: {result.details}"
+                        ] += 1
 
                 # An ability activated from the seat's **hand** (CR 113.6j) —
                 # cycling. A separate pass rather than a branch above, because
@@ -727,7 +750,7 @@ def run_ai_simulation(
                     else choose_hand_activation_action(game, active)
                 )
                 if hand_activation is not None:
-                    for permanent_index in hand_activation.land_tap_indices:
+                    for position, permanent_index in enumerate(hand_activation.land_tap_indices):
                         # Through the seam: the two loops above this one predate
                         # the id migration and are held by a ratchet, so a third
                         # open-coded slot read would raise the baseline for a
@@ -736,7 +759,9 @@ def run_ai_simulation(
                         if permanent is None:
                             continue
                         game.tap_land_for_mana(
-                            active, permanent.card.name, permanent_index=permanent_index
+                            active, permanent.card.name,
+                            chosen_color=planned_tap_color(hand_activation, position),
+                            permanent_index=permanent_index,
                         )
                     result = game.activate_from_hand(
                         active,
@@ -751,6 +776,10 @@ def run_ai_simulation(
                         f"activate {hand_activation.card_name} from hand "
                         f"-> {result.details}"
                     )
+                    if not result.supported:
+                        report.refused_activations[
+                            f"{hand_activation.card_name} (from hand): {result.details}"
+                        ] += 1
 
                 # CR 506-511, the half of a turn this loop did not have. It went
                 # main phase -> cast -> activate -> next seat, so no simulated

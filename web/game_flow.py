@@ -20,6 +20,7 @@ from engine.ai_policy import (
     choose_hand_activation_action,
     choose_cast_action,
     choose_combat_instant_cast_action,
+    planned_tap_color,
 )
 
 from .prompts import auto_resolve_ai_prompts
@@ -138,9 +139,15 @@ def _ai_step(session: Session) -> bool:
             else game.players[seat].hand
         )
         card_to_cast = cast_zone[cast_action.hand_index]
-        for permanent_index in cast_action.land_tap_indices:
+        # Each land asked for the colour the plan counted on — see
+        # `engine.ai_policy.planned_tap_color`.
+        for position, permanent_index in enumerate(cast_action.land_tap_indices):
             permanent = game.players[seat].battlefield[permanent_index]
-            game.tap_land_for_mana(seat, permanent.card.name, permanent_index=permanent_index)
+            game.tap_land_for_mana(
+                seat, permanent.card.name,
+                chosen_color=planned_tap_color(cast_action, position),
+                permanent_index=permanent_index,
+            )
 
         if has_human_opponent:
             result = game.queue_from_hand(
@@ -191,9 +198,13 @@ def _ai_step(session: Session) -> bool:
 
     activation_action = choose_activation_action(game, seat)
     if activation_action is not None:
-        for permanent_index in activation_action.land_tap_indices:
+        for position, permanent_index in enumerate(activation_action.land_tap_indices):
             permanent = game.players[seat].battlefield[permanent_index]
-            game.tap_land_for_mana(seat, permanent.card.name, permanent_index=permanent_index)
+            game.tap_land_for_mana(
+                seat, permanent.card.name,
+                chosen_color=planned_tap_color(activation_action, position),
+                permanent_index=permanent_index,
+            )
         game.activate_permanent_ability(
             seat,
             activation_action.permanent_name,
@@ -210,7 +221,7 @@ def _ai_step(session: Session) -> bool:
     # against are the ones the cast and the battlefield activation left alone.
     hand_activation = choose_hand_activation_action(game, seat)
     if hand_activation is not None:
-        for permanent_index in hand_activation.land_tap_indices:
+        for position, permanent_index in enumerate(hand_activation.land_tap_indices):
             # Through the seam, for the reason the ratchet in
             # `tests/engine/test_control_reads.py` exists: the loops around this
             # one are grandfathered slot reads, and a new one would raise their
@@ -218,7 +229,11 @@ def _ai_step(session: Session) -> bool:
             permanent = game.permanent_at(seat, permanent_index)
             if permanent is None:
                 continue
-            game.tap_land_for_mana(seat, permanent.card.name, permanent_index=permanent_index)
+            game.tap_land_for_mana(
+                seat, permanent.card.name,
+                chosen_color=planned_tap_color(hand_activation, position),
+                permanent_index=permanent_index,
+            )
         game.activate_from_hand(
             seat,
             hand_activation.card_name,
@@ -238,19 +253,27 @@ def _ai_respond_to_priority(session: Session, seat: int) -> str | None:
     instant_action = choose_combat_instant_cast_action(game, seat)
     if instant_action is not None:
         card_to_cast = game.players[seat].hand[instant_action.hand_index]
-        for permanent_index in instant_action.land_tap_indices:
+        for position, permanent_index in enumerate(instant_action.land_tap_indices):
             permanent = game.players[seat].battlefield[permanent_index]
-            game.tap_land_for_mana(seat, permanent.card.name, permanent_index=permanent_index)
+            game.tap_land_for_mana(
+                seat, permanent.card.name,
+                chosen_color=planned_tap_color(instant_action, position),
+                permanent_index=permanent_index,
+            )
         result = game.queue_from_hand(
             seat,
             card_to_cast.name,
             target_player_index=instant_action.target_player_index,
+            # The chosen permanent, forwarded like the main-phase executor
+            # forwards it. This was the gap this comment used to name: the
+            # policy aimed a seat and the handler scanned it, so a spell whose
+            # handler has no scan (Sivvi's Valor) resolved doing nothing.
+            target_permanent_index=instant_action.target_permanent_index,
+            target_permanent_ids=instant_action.target_permanent_ids,
             x_value=instant_action.x_value,
-            # CR 601.2d. This executor forwards less of the announcement than
-            # the main-phase one does (a chosen permanent never reaches it,
-            # which is a gap of its own), but a divided spell dropped here is
-            # not merely aimed badly — it is refused at announcement, so the
-            # seat would offer the same instant every combat and do nothing.
+            # CR 601.2d: a divided spell dropped here is not merely aimed badly
+            # — it is refused at announcement, so the seat would offer the same
+            # instant every combat and do nothing.
             divided_targets=instant_action.divided_targets,
         )
         if result.supported:
@@ -489,14 +512,21 @@ def _advance_phase(session: Session) -> None:
                     )
                     if instant_action is not None:
                         card_to_cast = game.players[defender_index].hand[instant_action.hand_index]
-                        for permanent_index in instant_action.land_tap_indices:
+                        for position, permanent_index in enumerate(instant_action.land_tap_indices):
                             permanent = game.players[defender_index].battlefield[permanent_index]
-                            game.tap_land_for_mana(defender_index, permanent.card.name, permanent_index=permanent_index)
+                            game.tap_land_for_mana(
+                                defender_index, permanent.card.name,
+                                chosen_color=planned_tap_color(instant_action, position),
+                                permanent_index=permanent_index,
+                            )
                         game.cast_from_hand(
                             defender_index,
                             card_to_cast.name,
                             target_player_index=instant_action.target_player_index,
+                            target_permanent_index=instant_action.target_permanent_index,
+                            target_permanent_ids=instant_action.target_permanent_ids,
                             x_value=instant_action.x_value,
+                            divided_targets=instant_action.divided_targets,
                         )
                         return
                     # CR 509.2: declaring blockers opened a priority window for the

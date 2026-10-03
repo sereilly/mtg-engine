@@ -191,24 +191,457 @@ _OWN_CATEGORIES = frozenset({"pump", "counters", "regeneration", "evasion", "att
 #: rather than about a card, and narrow on purpose: the *other* redirects in the
 #: pool name the source whose damage moves ("target attacking creature"), which
 #: really is the opponent's.
-_OWN_KINDS = frozenset({"redirect_next_damage_to_source_until_eot"})
+_OWN_KINDS = frozenset({
+    "redirect_next_damage_to_source_until_eot",
+    # The same shape with the source chosen at resolution or left open: "All
+    # damage that would be dealt to target creature this turn is dealt to you
+    # instead" (Sivvi's Valor), "...to target creature this turn by a source of
+    # your choice is dealt to this creature instead" (Oracle's Attendants). The
+    # named creature is the one *spared*, so it is the caster's own; the
+    # ``damage`` category had all three aimed at the opponent's board.
+    "redirect_damage_off_target_until_eot",
+    "redirect_chosen_source_damage_off_target_until_eot",
+    # "Untap target permanent" is categorised ``tapping`` beside "tap target
+    # permanent", which is the family and the opposite side: an untap is a
+    # second use of something, and every card in the pool printing the bare
+    # template (Jandor's Saddlebags, Candelabra of Tawnos, Ley Druid, Infuse)
+    # means one of its controller's own.
+    "untap_target_permanent",
+    "untap_target_land",
+})
+
+
+#: Kinds whose effect on the object they target is a **denial** — the target is
+#: worse off for it — and whose category is silent or wrong about that. Every
+#: entry here had the AI aiming the effect at its own board, measured at NEM's
+#: wave 2: "Target creature can't attack or block this turn" (Off Balance) had
+#: no category answer at all, so the spell and every ability printing it took
+#: the caster's seat on a score tie and the AI kept its own creature home.
+#:
+#: The question is "does this hamper its target", answered per *kind* — what the
+#: compiled program does — and never per card, so an invented card printing any
+#: of these templates is aimed correctly the day it is ingested.
+_OPPONENT_KINDS = frozenset({
+    # CR 506-509 combat restrictions on the named creature.
+    "target_cant_attack_until_eot",
+    "target_cant_block_until_eot",
+    "target_cant_block_source_until_eot",
+    "force_target_to_block_until_eot",
+    "become_blocked",
+    # CR 615 aimed at what the target deals rather than what it is dealt:
+    # "Prevent all combat damage that would be dealt by target creature"
+    # (Subdue, Warning, Lady Evangela). ``prevention`` called it a shield.
+    "prevent_damage_by_target_until_eot",
+    # A rider stripped off the target: "can't be regenerated" (Gravebind),
+    # "loses all abilities" (Humble), "loses flying" (Radjan Spirit). The
+    # ``regeneration`` / ``pump`` categories read them as the gifts they undo.
+    "deny_regeneration_to_target",
+    "remove_target_abilities_until_eot",
+    "remove_target_keyword_until_eot",
+    # CR 613 layer 2: taking a permanent is never aimed at one's own.
+    "gain_control_of_target",
+    "gain_control_until_eot",
+    "steal_target_linked_to_source",
+    "bid_life_for_control",
+    # Removal one zone over from destroy: exile, the library, the hand.
+    "exile_target_permanent",
+    "exile_until_leaves_or_untaps",
+    "put_target_on_library_top",
+    "shuffle_target_permanent_into_library",
+    "bounce_target_creature",
+})
 
 
 def activation_target_side(instruction: OracleInstruction) -> str | None:
     """"opponent" / "you" / None — whose permanent an object-targeted activated
     ability should be aimed at, derived from ``INSTRUCTION_CATEGORIES`` and the
-    handful of kinds whose category cannot answer (``_OWN_KINDS``)."""
+    kinds whose category cannot answer (``_OWN_KINDS``, ``_OPPONENT_KINDS``)."""
     from .grammar.lowering.categories import INSTRUCTION_CATEGORIES
 
     kind = getattr(instruction, "kind", None)
     if kind in _OWN_KINDS:
         return "you"
+    if kind in _OPPONENT_KINDS:
+        return "opponent"
     category = INSTRUCTION_CATEGORIES.get(kind)
     if category in _OPPONENT_CATEGORIES:
         return "opponent"
     if category in _OWN_CATEGORIES:
         return "you"
     return None
+
+
+#: Targeted kinds whose category is about something *other* than the target,
+#: so it must not decide the side. "Destroy all creatures blocked by target
+#: Wall" (Glyph of Reincarnation) and "Tap all creatures blocking target
+#: attacking creature" (Feint) name the caster's own creature as the reference
+#: point for an effect on the opponent's; "tap or untap target permanent"
+#: (Twiddle) is both directions at once. No preference: the score decides, as
+#: it did before any of this was derived.
+_NO_SIDE_KINDS = frozenset({
+    "destroy_all_matching",
+    "tap_creatures_blocking_target",
+    "tap_or_untap_target",
+})
+
+
+#: The targeted kinds whose ``power`` / ``toughness`` / ``counter`` payload is a
+#: **change** to the target's P/T. Named because the same keys mean a *base*
+#: value elsewhere ("has base power and toughness 0/1", Humble), where a
+#: positive number is no gift at all.
+_PT_DELTA_KINDS = frozenset({
+    "pump_target_creature_until_eot",
+    "pump_targets_until_eot",
+    "pump_target_while_source_tapped",
+    "add_counter_to_target",
+})
+
+
+def _pt_delta_sign(instruction: OracleInstruction) -> int:
+    """+1 / -1 / 0: whether the P/T change *instruction* makes is a gift or a
+    penalty, read off its own payload.
+
+    The sign is what decides the side for the P/T families, whose category
+    (``pump``, ``counters``) is right about the family and silent about the
+    direction: "Target creature gets +3/+3" (Giant Growth) and "…gets -5/-0"
+    (Shrink) are one instruction kind. Three payload spellings: printed numbers,
+    an X with its ``*_negative`` flag, and a counter's own "+1/+1" / "-1/-0".
+    """
+    from .pt import pt_counter_deltas
+
+    if instruction.kind not in _PT_DELTA_KINDS:
+        return 0
+    payload = instruction.payload or {}
+    total = 0
+    for key in ("power", "toughness"):
+        value = payload.get(key)
+        if isinstance(value, int) and not isinstance(value, bool):
+            total += value
+        elif value is not None and payload.get(f"{key}_negative") is not None:
+            total += -1 if payload.get(f"{key}_negative") else 1
+    counter = payload.get("counter")
+    if isinstance(counter, str):
+        deltas = pt_counter_deltas(counter)
+        if deltas is not None:
+            total += sum(deltas)
+    return (total > 0) - (total < 0)
+
+
+def instruction_target_side(instruction: OracleInstruction) -> str | None:
+    """Whose permanent the object *instruction* targets should be — "you",
+    "opponent", or None for no preference.
+
+    Three readings, most specific first: the printed noun phrase's own
+    controller ("target creature **you control**"), the sign of a P/T change
+    (Giant Growth against Shrink), and then the kind/category reading
+    :func:`activation_target_side` makes. One reader for a spell's targets and
+    an ability's, because what an instruction does to its target does not depend
+    on whether a spell or an ability produced it.
+    """
+    targets = (instruction.payload or {}).get("targets")
+    described = targets.get("filter") if isinstance(targets, dict) else None
+    controller = (described or {}).get("controller")
+    if controller in _PRINTED_SEATS:
+        return _PRINTED_SEATS[controller]
+    if instruction.kind in _NO_SIDE_KINDS:
+        return None
+    sign = _pt_delta_sign(instruction)
+    if sign:
+        return "you" if sign > 0 else "opponent"
+    return activation_target_side(instruction)
+
+
+def denies_its_target(instruction: OracleInstruction) -> bool:
+    """Whether what *instruction* does to its object target leaves that object
+    worse off — destroyed, exiled, returned, tapped, taken, restricted.
+
+    Asked where the printed noun phrase has already put the target on the
+    actor's **own** board ("Destroy target artifact, creature, or land you
+    control", Rats of Rath; "Return target land you control to its owner's
+    hand", Trade Routes). There the effect is a price the card charges for
+    something else, or a rescue this policy has no way to time, and a seat
+    that activates it for its own sake destroys its own permanent — which the
+    activation chooser used to do, falling back to the only legal target.
+    """
+    from .grammar.lowering.categories import INSTRUCTION_CATEGORIES
+
+    kind = getattr(instruction, "kind", None)
+    if kind in _OWN_KINDS or kind in _NO_SIDE_KINDS:
+        return False
+    if kind in _OPPONENT_KINDS:
+        return True
+    return INSTRUCTION_CATEGORIES.get(kind) in ("destruction", "tapping")
+
+
+def _spell_object_target_steps(card: CardDefinition) -> tuple[OracleInstruction, ...]:
+    """Every step of *card*'s spell program that names an **object** target,
+    wrappers opened (``sequence``, ``if_then``, ``may``)."""
+    found: list[OracleInstruction] = []
+
+    def walk(instructions) -> None:
+        for instruction in instructions:
+            targets = (instruction.payload or {}).get("targets")
+            if isinstance(targets, dict) and targets.get("kind") == "object":
+                found.append(instruction)
+            for key in ("steps", "then", "else", "action", "otherwise"):
+                nested = (instruction.payload or {}).get(key)
+                if isinstance(nested, (list, tuple)):
+                    walk(nested)
+
+    walk(_spell_instructions(card))
+    return tuple(found)
+
+
+def spell_target_side(card: CardDefinition) -> str | None:
+    """Whose permanent *card*'s object target should be, as a spell — "you",
+    "opponent", or None when its steps disagree or none has an answer.
+
+    The spell-side twin of :func:`activation_target_side`, and the question
+    ``ai_policy._choose_target_for_spell`` had no case for: its score is a
+    handful of text probes (draw, gain life, damage, destroy, bounce), so a
+    spell outside them scored the caster and the opponent equally and the tie
+    went to the caster. Off Balance kept the AI's own creature home, Crumble
+    destroyed its own artifact and Shrink shrank its own attacker.
+
+    Every object-targeting step is read through :func:`instruction_target_side`,
+    and where they differ the **denial** wins. A printed seat on the noun phrase
+    ("target creature an opponent controls") outranks both, because the
+    enumeration enforces it anyway. Otherwise one hampering step makes the
+    target the opponent's: Traitorous Greed takes the creature, untaps it and
+    gives it haste, and the untap and the haste are what make the theft worth
+    having, not a reason to steal one's own creature. The other way round — a
+    gift with a printed drawback on its own target — is not a template this
+    pool prints, and aiming a gift at the opponent is the cheaper mistake.
+    """
+    steps = _spell_object_target_steps(card)
+    printed = {
+        _PRINTED_SEATS.get(
+            ((step.payload.get("targets") or {}).get("filter") or {}).get("controller")
+        )
+        for step in steps
+    } - {None}
+    if len(printed) == 1:
+        return next(iter(printed))
+    sides = {instruction_target_side(step) for step in steps} - {None}
+    if "opponent" in sides:
+        return "opponent"
+    if "you" in sides:
+        return "you"
+    return None
+
+
+#: The printed controller narrowings a target's noun phrase can carry, as sides.
+_PRINTED_SEATS = {"you": "you", "not_you": "opponent", "opponent": "opponent"}
+
+
+def hand_entry_steps(instruction: OracleInstruction) -> tuple[dict, ...]:
+    """The payload of every "put a … card from **your** hand onto the
+    battlefield" step *instruction* carries, wrappers opened (a "you may"
+    included).
+
+    The whole effect of such an ability is the card it puts in, so with no card
+    the printed noun admits in the controller's hand its resolution is nothing:
+    Belbe's Portal paid {3} every turn of a simulated game to log "has no card
+    Belbe's Portal could put onto the battlefield". Which cards a step admits is
+    the engine's own ``put_from_hand_candidates``; this only finds the steps.
+    """
+    found: list[dict] = []
+
+    def walk(step) -> None:
+        payload = getattr(step, "payload", None) or {}
+        if step.kind == "put_chosen_card_from_hand_onto_battlefield" and payload.get(
+            "whose"
+        ) in (None, "you"):
+            found.append(dict(payload))
+        for key in ("steps", "then", "else", "action", "otherwise"):
+            nested = payload.get(key)
+            if isinstance(nested, (list, tuple)):
+                for inner in nested:
+                    walk(inner)
+
+    if instruction is not None:
+        walk(instruction)
+    return tuple(found)
+
+
+def hand_pick_entry_consumer(card: CardDefinition, result_key: str) -> dict | None:
+    """What *card*'s program does with a hand pick recorded under
+    *result_key*, when what it does is put the picked cards **onto the
+    battlefield for their owner** — the printed noun phrase that admits a pick
+    and the superlative that decides between the picks — or None.
+
+    "Each player chooses a card in their hand. … The owner of each creature
+    card revealed this way with the lowest mana value puts it onto the
+    battlefield." (Stronghold Gambit.) A pick that the next sentence turns into
+    a free permanent is a gift to the picker, and the picks that receive it are
+    the ones this answer describes; the stated default took the first card in
+    hand order and revealed a land or an artifact as often as a creature.
+    """
+    for instruction in _walk_program(compile_card_oracle(card)):
+        payload = instruction.payload or {}
+        if (
+            instruction.kind == "put_chosen_hand_cards_onto_battlefield"
+            and str(payload.get("cards_from")) == str(result_key)
+        ):
+            return {
+                "card_filter": dict(payload.get("card_filter") or {}),
+                "superlative": dict(payload.get("superlative") or {}),
+            }
+    return None
+
+
+def spell_hand_pick_entry_filters(card: CardDefinition) -> tuple[dict, ...]:
+    """For each "choose a card in your hand" step of *card*'s spell program
+    whose pick the program then puts onto the battlefield for its owner
+    (:func:`hand_pick_entry_consumer`), the noun phrase a pick must answer to
+    get there.
+
+    A caster holding no such card gets nothing from the spell, and Stronghold
+    Gambit's "each player" makes it worse than nothing: the opponent's pick is
+    the only one that can enter. Asked before the cast for that reason.
+    """
+    filters: list[dict] = []
+
+    def walk(instructions) -> None:
+        for instruction in instructions:
+            payload = instruction.payload or {}
+            if instruction.kind == "choose_cards_in_hand":
+                consumer = hand_pick_entry_consumer(
+                    card, str(payload.get("result_key") or "chosen_hand_cards")
+                )
+                if consumer is not None:
+                    filters.append(consumer["card_filter"])
+            for key in ("steps", "then", "else", "action", "otherwise"):
+                nested = payload.get(key)
+                if isinstance(nested, (list, tuple)):
+                    walk(nested)
+
+    walk(_spell_instructions(card))
+    return tuple(filters)
+
+
+def _reads_chosen_creature_type(value) -> bool:
+    """Whether a payload, at any depth, names "the chosen type" (CR 614.1c's
+    entry record), by the ``chosen_creature_type`` key or the token's
+    ``from_chosen`` list."""
+    if isinstance(value, dict):
+        if value.get("chosen_creature_type"):
+            return True
+        if "creature_type" in tuple(value.get("from_chosen") or ()):
+            return True
+        return any(_reads_chosen_creature_type(inner) for inner in value.values())
+    if isinstance(value, (list, tuple)):
+        return any(_reads_chosen_creature_type(inner) for inner in value)
+    if isinstance(value, OracleInstruction):
+        return _reads_chosen_creature_type(value.payload)
+    return False
+
+
+def chosen_creature_type_side(card: CardDefinition) -> str | None:
+    """Whose creatures *card*'s "choose a creature type" should name — "you",
+    "opponent", or None when nothing it prints says.
+
+    The entry default read the **opponents'** board for every such card, which
+    is right for the ones that hose the type and backwards for the ones that
+    feed it. W1G5 watched Belbe's Portal pay {3} every turn to put a creature of
+    the opponent's type out of a hand that held none. The answer is in what the
+    card does with the word:
+
+    * a P/T change to the type, by its sign ("All creatures of the chosen type
+      get -1/-1", Engineered Plague);
+    * something put onto the battlefield **for its controller** that the type
+      describes — a card from the controller's own hand (Belbe's Portal), a
+      token the card creates (Volrath's Laboratory);
+    * the two derivation tables that read "of the chosen type" on lines the
+      compiled program does not carry: an untap lock is a denial (An-Zerrin
+      Ruins), a cost reduction a gift (Urza's Incubator) and a cost increase a
+      tax.
+
+    Readings that disagree, or none at all (Conspiracy, whose type is about the
+    controller's creatures *becoming* it), are None and keep the standing
+    default.
+    """
+    from .cost_modifiers import cost_modifiers_for
+    from .untap_restrictions import untap_restriction_for
+
+    sides: set[str] = set()
+    for instruction in _walk_program(compile_card_oracle(card)):
+        payload = instruction.payload or {}
+        if not _reads_chosen_creature_type(payload):
+            continue
+        if instruction.kind == "lord_buff":
+            total = sum(
+                value for value in (payload.get("power"), payload.get("toughness"))
+                if isinstance(value, int) and not isinstance(value, bool)
+            )
+            if total:
+                sides.add("you" if total > 0 else "opponent")
+        elif instruction.kind == "create_token":
+            sides.add("you")
+        elif instruction.kind == "put_chosen_card_from_hand_onto_battlefield" and (
+            payload.get("whose") in (None, "you")
+        ):
+            sides.add("you")
+    text = card.oracle_text or ""
+    restriction = untap_restriction_for(text)
+    if restriction is not None and _reads_chosen_creature_type(
+        getattr(restriction, "blocked", None)
+    ):
+        sides.add("opponent")
+    for modifier in cost_modifiers_for(text):
+        if modifier.chosen_creature_type:
+            sides.add("you" if modifier.reduces else "opponent")
+    return next(iter(sides)) if len(sides) == 1 else None
+
+
+def spell_denies_its_own_target(card: CardDefinition) -> bool:
+    """Whether *card*, as a spell, prints a target on its caster's **own**
+    board and then denies it (:func:`denies_its_target`) — "Return target
+    permanent you control to its owner's hand" (Scapegoat), "Tap target
+    untapped creature you control" (Energy Tap). The spell-side twin of the
+    activation chooser's question, for the same reason."""
+    return any(
+        ((step.payload.get("targets") or {}).get("filter") or {}).get("controller")
+        == "you"
+        and denies_its_target(step)
+        for step in _spell_object_target_steps(card)
+    )
+
+
+def caster_sacrifice_steps(card: CardDefinition) -> tuple[dict, ...]:
+    """The payload of every step in which *card*'s caster **sacrifices** as part
+    of the spell's effect — not a cost (CR 601.2b), a printed instruction
+    ("Sacrifice a creature. Rupture deals damage equal to that creature's
+    power…"). Each carries the printed ``filter`` and, for "sacrifice **any
+    number of** …", ``any_number``.
+
+    CR 701.21a: a player sacrifices only what they control, and an effect that
+    has its controller sacrifice something they do not have does nothing — and
+    every such spell in the pool keys the rest of itself to the sacrifice ("that
+    creature's power", "if you do", "for each permanent sacrificed this way").
+    So a board with nothing matching is a resolution that does nothing, which is
+    the question the AI asks before casting. Steps scoped to another player
+    (``who``: "each_player", "target_opponent") are not the caster's.
+    """
+    found: list[dict] = []
+
+    def walk(instructions) -> None:
+        for instruction in instructions:
+            payload = instruction.payload or {}
+            if instruction.kind == "sacrifice_matching_permanent" and payload.get(
+                "who"
+            ) in (None, "you", "caster"):
+                found.append({
+                    "filter": dict(payload.get("filter") or {}),
+                    "any_number": bool(payload.get("any_number")),
+                })
+            for key in ("steps", "then", "else", "action", "otherwise"):
+                nested = payload.get(key)
+                if isinstance(nested, (list, tuple)):
+                    walk(nested)
+
+    walk(_spell_instructions(card))
+    return tuple(found)
 
 
 #: Instruction kinds whose whole effect is that the player performing them
@@ -797,15 +1230,24 @@ __all__ = [
     "TollLoss",
     "cards_drawn_by_controller",
     "cards_drawn_by_target",
+    "caster_sacrifice_steps",
     "castable_commanders",
+    "chosen_creature_type_side",
     "counters_a_spell",
+    "denies_its_target",
     "destroyed_permanent_filter",
     "divided_shape",
     "is_mana_ability",
     "mana_ability_amount",
     "exiled_search_pile_comes_back",
+    "hand_entry_steps",
+    "hand_pick_entry_consumer",
+    "instruction_target_side",
     "offered_action_is_a_payment",
     "returns_creature_to_hand",
     "several_target_slot_sides",
+    "spell_denies_its_own_target",
+    "spell_hand_pick_entry_filters",
+    "spell_target_side",
     "toll_branch_loss",
 ]

@@ -139,8 +139,9 @@ def test_an_unpriceable_side_keeps_the_pay_tolls_policy(set_pool):
 
 def test_a_mana_priced_toll_is_left_to_the_floating_mana_policy(set_pool):
     """A toll paid in mana is not this comparison's to improve: the default
-    spends only what is floating, and floating mana would otherwise empty at
-    the end of the step."""
+    pays it out of the pool and the untapped lands whenever it can
+    (``ai_policy.optional_pay_may_tap_lands``), and nothing here prices a
+    tapped land against the penalty."""
     game = Game(players=[PlayerState(name="A"), PlayerState(name="B")])
     entry = {
         "card_name": "probe",

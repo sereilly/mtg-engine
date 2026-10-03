@@ -5,17 +5,23 @@ import re
 
 from .ai_valuation import (
     SPELL_TYPES,
-    activation_target_side,
     cards_drawn_by_controller,
     cards_drawn_by_target,
+    caster_sacrifice_steps,
     castable_commanders,
     counters_a_spell,
+    denies_its_target,
     destroyed_permanent_filter,
     divided_shape,
+    hand_entry_steps,
+    instruction_target_side,
     is_mana_ability,
     mana_ability_amount,
     returns_creature_to_hand,
     several_target_slot_sides,
+    spell_denies_its_own_target,
+    spell_hand_pick_entry_filters,
+    spell_target_side,
     toll_branch_loss,
 )
 from .activation_permissions import activation_permission_denial
@@ -84,6 +90,13 @@ class CastAction:
     # which name only creatures, dealt their damage to a player's face. See
     # `choose_divided_targets`.
     divided_targets: list[tuple] | None = None
+    # The colour to ask each land in ``land_tap_indices`` for, position for
+    # position (`_plan_land_taps`). The tap seam takes one
+    # (`tap_land_for_mana(chosen_color=…)`) and every executor sent the default
+    # "G", so a dual or a land under Harvest Mage made whatever that default
+    # mapped to rather than what the plan had counted on. Empty means no
+    # colour was planned, and an executor keeps the seam's default.
+    land_tap_colors: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -104,6 +117,8 @@ class ActivationAction:
     # here for the first time — in two different *zones*, which one seat and one
     # index cannot say. None for every other ability.
     target_role_refs: list[dict] | None = None
+    # See `CastAction.land_tap_colors`.
+    land_tap_colors: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -128,6 +143,19 @@ class HandActivationAction:
     ability_index: int
     land_tap_indices: tuple[int, ...]
     score: float
+    # See `CastAction.land_tap_colors`.
+    land_tap_colors: tuple[str, ...] = ()
+
+
+def planned_tap_color(action, position: int) -> str:
+    """The colour an executor asks the *position*-th planned land for.
+
+    The plan's own colour where it has one (``land_tap_colors``), and otherwise
+    the tap seam's default, which is what every executor sent before the plan
+    carried colours — so an action built without them taps exactly as it did.
+    """
+    colors = getattr(action, "land_tap_colors", ()) or ()
+    return colors[position] if position < len(colors) else "G"
 
 
 def choose_attack_target(game: Game, player_index: int) -> int:
@@ -275,12 +303,32 @@ def _cast_candidate(
             several = _choose_several_targets(game, player_index, card)
             if several is not None:
                 target, target_permanent_index, target_permanent_ids = several
+            else:
+                single = _choose_single_object_target(game, player_index, card, target)
+                if single == ():
+                    # The side the effect wants holds no legal target, so the
+                    # cast would resolve doing nothing — or doing it to the
+                    # caster's own permanent. Skipped rather than proposed.
+                    return None
+                if single is not None:
+                    target, target_permanent_index, target_permanent_ids = single
+    if not _caster_can_make_its_sacrifices(game, player_index, card):
+        # "Sacrifice a creature. Rupture deals damage equal to that creature's
+        # power…": with nothing to sacrifice the whole resolution is nothing.
+        return None
+    if not _caster_holds_a_hand_pick_entrant(game, player_index, card, hand_index):
+        # "Each player chooses a card in their hand. … The owner of each
+        # creature card revealed this way with the lowest mana value puts it
+        # onto the battlefield." With no creature card of its own to pick, the
+        # caster's Stronghold Gambit can only hand the opponent a free one.
+        return None
     tap_indices: tuple[int, ...] = ()
+    tap_colors: tuple[str, ...] = ()
 
     alternative_cost = False
     if game.enforce_mana_costs and card.primary_type != "land":
         required = _cost_for(game, player, card, x_value, extra_generic=extra_generic)
-        plan = _plan_taps_for_cost(player, required)
+        plan = _plan_land_taps(game, player, required)
         if plan is None:
             # CR 118.9: the mana cost is not the only price. A spell whose
             # printed alternative cost this board *can* pay is castable right
@@ -298,7 +346,7 @@ def _cast_candidate(
                 return None
             alternative_cost = True
         else:
-            tap_indices = tuple(plan)
+            tap_indices, tap_colors = plan
 
     score = _score_cast(game, player_index, card, target, x_value)
     if from_zone == "command":
@@ -315,6 +363,7 @@ def _cast_candidate(
         from_zone=from_zone,
         alternative_cost=alternative_cost,
         divided_targets=divided_targets,
+        land_tap_colors=tap_colors,
     )
 
 
@@ -407,7 +456,7 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
         if ability is None or ability.instruction is None:
             continue
 
-        # A mana ability is activated to *pay* for something (_plan_taps_for_cost
+        # A mana ability is activated to *pay* for something (_plan_land_taps
         # arranges that), never for its own sake: mana added here empties at the
         # end of the step, and Black Lotus sacrifices itself to add it. The set
         # this replaced named two instruction kinds that no longer exist, so the
@@ -554,11 +603,28 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
             perms = [t for t in legal if t.get("kind") == "permanent"]
             if not perms:
                 continue
-            side = activation_target_side(ability.instruction)
+            # Which board, from what the effect does to its target
+            # (`ai_valuation.instruction_target_side`) — and **only** that
+            # board. This fell back to "any legal permanent" when the wanted
+            # side had none, which is how a destroy, a tap or a "can't block"
+            # with no opposing target landed on the activator's own creature,
+            # and a pump with no friendly one landed on an opponent's: an
+            # activation that resolves and harms the seat that paid for it.
+            side = instruction_target_side(ability.instruction)
+            if side == "you" and denies_its_target(ability.instruction):
+                # "Destroy target … you control" (Rats of Rath), "Return target
+                # land you control to its owner's hand" (Trade Routes): the
+                # printed seat is the activator's and the effect is a denial,
+                # so activating it for its own sake only costs the seat a
+                # permanent. Before this the fallback above aimed Rats of
+                # Rath at whatever it found.
+                continue
             if side == "you":
-                perms = [t for t in perms if t["seat"] == player_index] or perms
+                perms = [t for t in perms if t["seat"] == player_index]
             elif side == "opponent":
-                perms = [t for t in perms if t["seat"] != player_index] or perms
+                perms = [t for t in perms if t["seat"] != player_index]
+            if not perms:
+                continue
             def _power(t):
                 perm = game.permanent_at(t["seat"], t["index"])
                 return perm.effective_power if perm is not None else 0
@@ -567,13 +633,42 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
             target = chosen["seat"]
             target_permanent_index = chosen["index"]
 
+        # CR 601.2d asked of an ability: a divided announcement ("…divided as
+        # you choose", Serra's Hymn) is one this chooser never makes, and the
+        # engine refuses an activation announced without it — so proposing one
+        # is a turn spent on a refusal, every turn. Then the engine's own
+        # announcement gate (CR 602.2b/601.2c) over exactly what this policy is
+        # about to announce: an ability whose only legal targets are cards in
+        # an empty graveyard (Rootwater Diver, Groundskeeper) passed every
+        # check above, because they look only at battlefield targets, and was
+        # refused with nothing paid. Neither shows in `refused_casts`, which
+        # counts casts; one ten-game run each of USG, TMP and MMQ logged 44
+        # refused Serra's Hymn, 21 Rootwater Diver and 15 Groundskeeper
+        # activations.
+        if spec is not None and spec.get("kind") == "divided":
+            continue
+        # "{3}, {T}: You may put a creature card of the chosen type from your
+        # hand onto the battlefield." With no such card in hand the ability's
+        # whole effect is nothing, and the cost is still paid: Belbe's Portal
+        # spent {3} every turn of NEM's simulation to log that it had no card.
+        if not _hand_entry_has_a_card(game, player_index, permanent, ability.instruction):
+            continue
+        if game.activation_target_refusal(
+            player_index, permanent, ability,
+            target_player_index=target,
+            target_permanent_index=target_permanent_index,
+            target_role_refs=target_role_refs,
+        ) is not None:
+            continue
+
         land_taps: tuple[int, ...] = ()
+        tap_colors: tuple[str, ...] = ()
         required = dict(ability.cost.mana)
         if game.enforce_mana_costs and any(required.values()):
-            plan = _plan_taps_for_cost(player, required)
+            plan = _plan_land_taps(game, player, required)
             if plan is None:
                 continue
-            land_taps = tuple(plan)
+            land_taps, tap_colors = plan
 
         score = _score_activation(game, player_index, ability.instruction, target)
         if score <= 0.0:
@@ -586,6 +681,7 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
             score=score,
             target_permanent_index=target_permanent_index,
             target_role_refs=target_role_refs,
+            land_tap_colors=tap_colors,
         )
         if best is None or candidate.score > best.score:
             best = candidate
@@ -686,12 +782,13 @@ def choose_hand_activation_action(
         # over an ability the engine would let it take for nothing.
         from .mixins.stack.activation import hand_activation_cost
 
+        tap_colors: tuple[str, ...] = ()
         required = hand_activation_cost(game, player_index, card, ability)[0]
         if game.enforce_mana_costs and any(required.values()):
-            plan = _plan_taps_for_cost(player, required)
+            plan = _plan_land_taps(game, player, required)
             if plan is None:
                 continue
-            land_taps = tuple(plan)
+            land_taps, tap_colors = plan
 
         # The seat is the target: nothing activatable from a hand in the pool
         # aims anywhere else, and an ability that did would be refused at
@@ -705,6 +802,7 @@ def choose_hand_activation_action(
             ability_index=0,
             land_tap_indices=land_taps,
             score=score,
+            land_tap_colors=tap_colors,
         )
         if best is None or candidate.score > best.score:
             best = candidate
@@ -1387,14 +1485,29 @@ def choose_combat_instant_cast_action(game: Game, player_index: int) -> CastActi
         divided = choose_divided_targets(game, player_index, card, x_value)
         if divided is not None and not divided:
             continue
+        # The same "would the resolution do anything" questions the main-phase
+        # chooser asks (`_cast_candidate`), for the same reasons: a one-object
+        # spell names its permanent on the side the effect wants or is not
+        # cast, and a spell that sacrifices what its caster lacks is not cast.
+        target_permanent_index: int | None = None
+        target_permanent_ids: list[int] | None = None
+        if divided is None:
+            single = _choose_single_object_target(game, player_index, card, target)
+            if single == ():
+                continue
+            if single is not None:
+                target, target_permanent_index, target_permanent_ids = single
+        if not _caster_can_make_its_sacrifices(game, player_index, card):
+            continue
         tap_indices: tuple[int, ...] = ()
+        tap_colors: tuple[str, ...] = ()
 
         if game.enforce_mana_costs:
             required = _cost_for(game, player, card, x_value)
-            plan = _plan_taps_for_cost(player, required)
+            plan = _plan_land_taps(game, player, required)
             if plan is None:
                 continue
-            tap_indices = tuple(plan)
+            tap_indices, tap_colors = plan
 
         score = _score_cast(game, player_index, card, target, x_value)
         # During declare blockers, prefer combat-relevant instants.
@@ -1413,7 +1526,10 @@ def choose_combat_instant_cast_action(game: Game, player_index: int) -> CastActi
             land_tap_indices=tap_indices,
             score=score,
             hand_index=hand_index,
+            target_permanent_index=target_permanent_index,
+            target_permanent_ids=target_permanent_ids,
             divided_targets=list(divided) if divided else None,
+            land_tap_colors=tap_colors,
         )
         if _is_better_cast(candidate, best):
             best = candidate
@@ -1582,12 +1698,16 @@ def _score_tutor_choice(game: Game, player_index: int, card: CardDefinition) -> 
         else:
             score -= 4.0
     elif game.enforce_mana_costs:
-        pool = _preview_pool_with_all_untapped_lands(game, player)
         required = _cost_for(game, player, card, x_value if x_value is not None else 0)
-        if _can_pay_cost(pool, required, player):
+        if _plan_land_taps(game, player, required) is not None:
             score += 3.0  # castable as soon as it reaches hand
         else:
-            available = sum(pool.values())
+            available = sum(
+                player.mana_pool.get(symbol, 0) for symbol in _MANA_SYMBOLS
+            ) + sum(
+                1 for permanent in game.controlled_by(player)
+                if permanent.card.primary_type == "land" and not permanent.tapped
+            )
             score -= min(5.0, max(0.0, float(card.cmc) - available))
 
     # A tutored burn spell that closes the game outranks everything else.
@@ -2272,9 +2392,167 @@ def _choose_several_targets(
     return seat, by_seat[seat][:maximum], None
 
 
+#: Cast specs whose legal answers are not permanents on a battlefield — a
+#: player, a spell, a card in a graveyard or a hand, a choice of modes. The
+#: single-object chooser below has nothing to say about them.
+_NOT_OBJECT_SPECS = frozenset({
+    "none", "modal", "player", "stack", "graveyard_creature", "hand_card",
+    "spell_or_permanent",
+})
+
+
+def _choose_single_object_target(
+    game: Game, caster_index: int, card: CardDefinition, preferred_seat: int
+):
+    """Name the one permanent a one-object-target spell is cast at:
+    ``(seat, index, [permanent_id])``, ``()`` when the side the effect wants
+    holds no legal target, or None when *card* is not such a spell.
+
+    The cast used to name a **seat** and leave the permanent to the handler's
+    board scan — the headless convention, which W1G2 measured 156 of 182
+    creature-targeting spells accepting. Two ways that resolved doing nothing,
+    both measured in NEM's simulation: a handler with no scan to fall into
+    (Sivvi's Valor: "its target is gone"), and a seat with no permanent the
+    printed noun admits (Topple aimed at a seat whose creatures were not the
+    greatest). Naming the permanent out of the engine's own enumeration — the
+    list the browser's picker offers a human — answers both, and the first
+    legal permanent on the seat is the one the scan would have taken.
+
+    Which seat is ``ai_valuation.spell_target_side``: a side the effect wants
+    with nothing legal on it is ``()``, because the alternative is aiming a
+    denial at the caster's own board or a gift at an opponent's. With no side,
+    *preferred_seat* (the score's choice) first and then any seat — a spell that
+    can only do something on the other board is cast there rather than at
+    nothing. A spec offering a **player** is left alone: "any target" damage is
+    aimed at a face by the seat it already carries.
+    """
+    program = compile_card_oracle(card)
+    spec = derive_cast_spec(card, program)
+    if (
+        not isinstance(spec, dict)
+        or spec.get("kind") in _NOT_OBJECT_SPECS
+        or spec_roles(spec)
+        or _targets_are_optional(program)
+    ):
+        return None
+    legal = game._enumerate_targets(caster_index, card, spec, for_cast=True)
+    if not legal or any(entry.get("kind") != "permanent" for entry in legal):
+        return None
+    if spell_denies_its_own_target(card):
+        # "Return target permanent you control to its owner's hand"
+        # (Scapegoat): a denial the printed words aim at the caster's own
+        # board, which this policy has no rescue to time it for.
+        return ()
+    side = spell_target_side(card)
+    others = [seat for seat in range(len(game.players)) if seat != caster_index]
+    if side == "you":
+        order = [caster_index]
+    elif side == "opponent":
+        first = choose_attack_target(game, caster_index)
+        order = [first] + [seat for seat in others if seat != first]
+    else:
+        order = [preferred_seat] + [
+            seat for seat in [caster_index, *others] if seat != preferred_seat
+        ]
+    for seat in order:
+        for entry in legal:
+            if entry.get("seat") != seat:
+                continue
+            permanent_id = game.permanent_id_of(game.permanent_at(seat, entry["index"]))
+            if isinstance(permanent_id, int):
+                return seat, entry["index"], [permanent_id]
+    return ()
+
+
+def _caster_can_make_its_sacrifices(
+    game: Game, caster_index: int, card: CardDefinition
+) -> bool:
+    """Whether every sacrifice *card*'s own effect has its caster make will
+    give something up (``ai_valuation.caster_sacrifice_steps``).
+
+    Asked of the engine's own candidate list — the one the sacrifice handler
+    picks from — so the policy and the resolution cannot disagree about what
+    "a creature" admits. "Sacrifice **any number of** …" is answered by the
+    seat's own default, which is the stated policy in
+    ``_resolve_sacrifice_inline``: a seat nobody asks gives up none. So this
+    seat's Renounce, Reprocess or Landslide would sacrifice nothing and the
+    rest of the spell, counting what went, would do nothing — measured at
+    MMQ, where skipping a self-exiling Last Breath left Renounce as the cast
+    and it resolved for zero.
+    """
+    player = game.players[caster_index]
+    for step in caster_sacrifice_steps(card):
+        if step["any_number"]:
+            return False
+        if not game._sacrifice_candidate_indices(player, step["filter"]):
+            return False
+    return True
+
+
+def _caster_holds_a_hand_pick_entrant(
+    game: Game, caster_index: int, card: CardDefinition, hand_index: int | None
+) -> bool:
+    """Whether the caster holds — besides *card* itself, which is on the stack
+    by then (CR 601.2a) — a card the spell's own "choose a card in your hand"
+    pick could put onto the battlefield
+    (``ai_valuation.spell_hand_pick_entry_filters``).
+
+    Through ``_card_matches_filter``, the matcher the entering step itself asks.
+    """
+    from .handlers._common import _card_matches_filter
+
+    filters = spell_hand_pick_entry_filters(card)
+    if not filters:
+        return True
+    player = game.players[caster_index]
+    held = [c for slot, c in enumerate(player.hand) if slot != hand_index]
+    return all(
+        any(_card_matches_filter(c, wanted, game=game, owner=player) for c in held)
+        for wanted in filters
+    )
+
+
+def _hand_entry_has_a_card(
+    game: Game, player_index: int, source: Permanent, instruction
+) -> bool:
+    """Whether every "put a … card from your hand onto the battlefield" step of
+    an ability (``ai_valuation.hand_entry_steps``) has a card to put.
+
+    The candidates are the engine's own (``put_from_hand_candidates``), with
+    "of the chosen type" resolved off the source the way the handler resolves
+    it (``_resolve_chosen_subtype``), so the policy and the resolution cannot
+    disagree about which cards the step admits.
+    """
+    from .handlers._common import _resolve_chosen_subtype
+    from .handlers.zones import put_from_hand_candidates
+
+    player = game.players[player_index]
+    for payload in hand_entry_steps(instruction):
+        described = _resolve_chosen_subtype(
+            dict(payload.get("card_filter") or {}), source
+        )
+        if not put_from_hand_candidates(
+            game, {**payload, "card_filter": described}, player
+        ):
+            return False
+    return True
+
+
 def _choose_target_for_spell(
     card: CardDefinition, caster_index: int, game: Game, x_value: int | None = None
 ) -> int:
+    # Whose permanent the spell's object target should be, when the compiled
+    # program says (`ai_valuation.spell_target_side`). Asked before the score,
+    # because the score below is a handful of text probes and every spell
+    # outside them tied the two seats — and the tie goes to the caster, so
+    # "Target creature can't attack or block this turn" kept the AI's own
+    # creature home. The side is a claim about what the effect does to its
+    # target, never about which card printed it.
+    side = spell_target_side(card)
+    if side == "you":
+        return caster_index
+    if side == "opponent":
+        return choose_attack_target(game, caster_index)
     self_score = _score_spell_target(card, caster_index, caster_index, game, x_value)
     opponent_index = choose_attack_target(game, caster_index)
     opp_score = _score_spell_target(card, caster_index, opponent_index, game, x_value)
@@ -2530,8 +2808,10 @@ def toll_decline_is_smaller_loss(
     tolls — rather than comparing a number to a guess.
 
     Deliberately silent on a mana-priced toll: the default pays those out of
-    floating mana only, and mana that would otherwise empty at the end of the
-    step is not a loss this comparison could improve on.
+    floating mana and, since ``optional_pay_may_tap_lands``, out of untapped
+    lands too — always, because a toll's other answer is a loss as well and
+    the standing policy is to pay. Pricing a tapped land against the penalty
+    is a weight nobody has measured a need for yet.
 
     *entry* is the armed `optional_pay` data and *self_recipients* the printed
     player references that resolve to the offered seat, both supplied by the
@@ -2567,6 +2847,86 @@ def toll_decline_is_smaller_loss(
     return _toll_loss_price(game, player_index, declining) < _toll_loss_price(
         game, player_index, paying
     )
+
+
+def optional_pay_may_tap_lands(game: Game, player_index: int, entry: dict) -> bool:
+    """Whether a seat nobody asked may tap its untapped lands to pay a
+    mana-priced "you may pay" / "unless you pay" (`_default_optional_pay`).
+
+    The policy that default states — **take gifts, pay tolls, make no trades** —
+    had a mana half that read "never tap a land", and the offers this answers
+    arrive where the pool is empty: an upkeep, a combat damage step, an
+    opponent's turn. So every mana-priced toll was declined (Vaporous Djinn
+    sacrificed itself with its two Islands untapped) and every mana-priced gift
+    was refused (Rootwater Thief's {2}, Liliana's Devotee's {1}{B}). The
+    plumbing to pay from lands was already there — ``_optional_pay_plan`` is a
+    ``plan_payment`` over the untapped lands — and this is the weight that
+    decides when to use it:
+
+    * **A toll is always paid from the board when it can be.** Both answers
+      are losses and the standing policy is to pay; refusing an affordable toll
+      because the mana was in a land rather than in the pool was never the
+      policy, only a consequence of where the pool happened to be.
+    * **A gift is paid from lands only with mana nothing else will spend.** On
+      another seat's turn the lands sit until this seat's untap step anyway. On
+      the seat's own turn they are what it casts with, so a gift is taken only
+      when no spell in hand could be cast with them now — the same question
+      ``choose_cast_action`` answers, asked of the same candidates.
+    * **And only a gift the seat's own object offers.** An offer another
+      seat's spell makes this one ("that player may pay {R}{R}. If the player
+      does, they may copy this spell", Chain Lightning) is priced by a card
+      somebody else chose to cast, and what accepting does is left to defaults
+      this policy cannot value — the copy keeps its original target, which is
+      the payer's own creature. Those keep the floating-mana rule.
+    """
+    if entry.get("_on_decline") or int(entry.get("damage", 0) or 0) > 0:
+        return True
+    context = entry.get("_context")
+    if getattr(context, "caster", None) is not game.players[player_index]:
+        return False
+    if game.active_player_index != player_index:
+        return True
+    return not any(
+        card.primary_type != "land"
+        and _cast_candidate(game, player_index, card, hand_index) is not None
+        for hand_index, card in enumerate(game.players[player_index].hand)
+    )
+
+
+def order_hand_pick(
+    game: Game, player_index: int, candidates, payload: dict, source_card
+) -> list[int]:
+    """*candidates* (hand slots) in the order a seat nobody asked should pick
+    them for a "choose a card in your hand" (`_default_choose_cards_in_hand`).
+
+    Unchanged — hand order, the stated default — unless the program behind the
+    pick puts the picked card onto the battlefield for its owner
+    (``ai_valuation.hand_pick_entry_consumer``). Then the cards that sentence
+    admits come first, and among them the one at its superlative's extreme:
+    "with the **lowest** mana value" enters only the lowest, so the cheapest
+    admitted card is the pick that can win the comparison. Everything else
+    keeps its hand order behind them.
+    """
+    from .ai_valuation import hand_pick_entry_consumer
+    from .handlers._common import _card_matches_filter
+
+    order = list(candidates)
+    key = str((payload or {}).get("result_key") or "chosen_hand_cards")
+    consumer = hand_pick_entry_consumer(source_card, key) if source_card else None
+    if consumer is None:
+        return order
+    player = game.players[player_index]
+    admitted = [
+        slot for slot in order
+        if _card_matches_filter(
+            player.hand[slot], consumer["card_filter"], game=game, owner=player
+        )
+    ]
+    superlative = consumer["superlative"]
+    if superlative.get("characteristic") == "mana_value":
+        sign = 1 if superlative.get("extreme") == "least" else -1
+        admitted.sort(key=lambda slot: (sign * int(player.hand[slot].cmc or 0), slot))
+    return admitted + [slot for slot in order if slot not in admitted]
 
 
 def _choose_equip_target(game: Game, player_index: int, equipment) -> int | None:
@@ -2743,68 +3103,100 @@ def _pick_x_value(
 def _max_affordable_x(
     game: Game, player: PlayerState, card: CardDefinition, extra_generic: int = 0
 ) -> int:
-    pool = _preview_pool_with_all_untapped_lands(game, player)
-
+    # Through the tap planner rather than a summed preview pool: the preview
+    # counted each land as one fixed symbol, so a dual or a swapped land could
+    # only ever pay for the first colour it listed, and the X it sized was the
+    # X a board of single-colour lands would afford.
     for x_value in range(15, -1, -1):
         required = _cost_for(game, player, card, x_value, extra_generic=extra_generic)
-        if _can_pay_cost(pool, required, player):
+        if _plan_land_taps(game, player, required) is not None:
             return x_value
     return 0
 
 
-def _preview_pool_with_all_untapped_lands(game: Game, player: PlayerState) -> dict[str, int]:
-    pool = {symbol: player.mana_pool.get(symbol, 0) for symbol in _MANA_SYMBOLS}
-    for permanent in game.controlled_by(player):
-        if permanent.card.primary_type != "land" or permanent.tapped:
-            continue
-        symbol = _land_symbol(permanent)
-        pool[symbol] = pool.get(symbol, 0) + 1
-    return pool
+def _plan_land_taps(
+    game: Game, player: PlayerState, required: dict[str, int]
+) -> tuple[tuple[int, ...], tuple[str, ...]] | None:
+    """Which untapped lands to tap for *required*, and **which colour to ask
+    each one for**: ``(slots, colours)`` in tap order, or None when the board
+    cannot pay.
 
+    What a land can make is the engine's answer, ``Game._land_payment_colors``
+    — the hook the optional-pay planner and the client's colour prompt read —
+    and not the printed summary's first symbol, which is what this read. That
+    one symbol was wrong three ways, measured at NEM: under a seat-wide swap
+    (Deep Water, Harvest Mage) a Forest makes {U} or a colour of the tapper's
+    choice, so the plan tapped it for a {G} it would not make; a land carrying
+    a granted ability (Overlaid Terrain's "{T}: Add two mana of any one
+    color") was still the colour it was printed; and a dual land could only
+    ever pay its first colour.
 
-def _plan_taps_for_cost(player: PlayerState, required: dict[str, int]) -> list[int] | None:
+    The colour travels with the plan because the tap seam asks for one
+    (``tap_land_for_mana``'s ``chosen_color``) and the executors sent the
+    default "G" for every land — so a Taiga the plan counted as {R} made {G},
+    and a land under Harvest Mage made green whatever the plan needed.
+
+    The greedy order is the one this function always had, so a board of
+    single-colour lands is planned exactly as before: a pip is matched first
+    by lands whose **first** colour it is, in battlefield order, and only then
+    by a land that lists it further along; the generic remainder takes each
+    land at its first colour. **How much** a tap makes is
+    :func:`_land_mana_amount` — two for a land under Overlaid Terrain, which
+    this counted as one and so planned a two-land board as unable to cast
+    anything costing three.
+    """
     pool = {symbol: player.mana_pool.get(symbol, 0) for symbol in _MANA_SYMBOLS}
     untapped_lands = [
-        (index, _land_symbol(permanent))
-        for index, permanent in enumerate(player.battlefield)
+        (index, _land_symbols(game, permanent), _land_mana_amount(game, permanent))
+        for index, permanent in enumerate(game.controlled_by(player))
         if permanent.card.primary_type == "land" and not permanent.tapped
     ]
 
     if _can_pay_cost(pool, required, player):
-        return []
+        return (), ()
 
     chosen: list[int] = []
+    colors: list[str] = []
     remaining = list(untapped_lands)
 
+    def take(position: int, symbol: str) -> None:
+        land_index, _symbols, amount = remaining.pop(position)
+        chosen.append(land_index)
+        colors.append(symbol)
+        pool[symbol] = pool.get(symbol, 0) + amount
+
     for symbol in _MANA_SYMBOLS:
-        need = max(0, required.get(symbol, 0) - pool.get(symbol, 0))
-        while need > 0:
-            match_idx = next((idx for idx, (_, produced) in enumerate(remaining) if produced == symbol), None)
+        while required.get(symbol, 0) - pool.get(symbol, 0) > 0:
+            match_idx = next(
+                (idx for idx, (_, makes, _n) in enumerate(remaining) if makes[0] == symbol),
+                None,
+            )
+            if match_idx is None:
+                match_idx = next(
+                    (idx for idx, (_, makes, _n) in enumerate(remaining) if symbol in makes),
+                    None,
+                )
             if match_idx is None:
                 break
-            land_index, produced = remaining.pop(match_idx)
-            chosen.append(land_index)
-            pool[produced] = pool.get(produced, 0) + 1
-            need -= 1
+            take(match_idx, symbol)
 
     while remaining and not _can_pay_cost(pool, required, player):
         best_idx = 0
         best_benefit = -1
-        for idx, (_, produced) in enumerate(remaining):
+        for idx, (_, makes, _n) in enumerate(remaining):
+            produced = makes[0]
             benefit = 2 if pool.get(produced, 0) < required.get(produced, 0) else 1
             if produced == "C" and required.get("generic", 0) == 0:
                 benefit = 0
             if benefit > best_benefit:
                 best_benefit = benefit
                 best_idx = idx
-        land_index, produced = remaining.pop(best_idx)
-        chosen.append(land_index)
-        pool[produced] = pool.get(produced, 0) + 1
+        take(best_idx, remaining[best_idx][1][0])
 
     if not _can_pay_cost(pool, required, player):
         return None
 
-    return chosen
+    return tuple(chosen), tuple(colors)
 
 
 def _can_pay_cost(
@@ -2876,11 +3268,50 @@ def _can_pay_cost(
     return available_generic >= generic
 
 
-def _land_symbol(permanent: Permanent) -> str:
-    if permanent.card.produced_mana:
-        return permanent.card.produced_mana[0]
+def _land_mana_amount(game: Game, permanent: Permanent) -> int:
+    """How many mana one tap of *permanent* makes, as the planner counts it.
 
+    The free mana ability the tap seam will run (``_land_mana_abilities``):
+    its pip run ("{C}{C}", Ancient Tomb) or its any-colour count ("two mana of
+    any one color", the ability Overlaid Terrain grants). One wherever that
+    cannot be read off the payload — a basic, a choice between pips, an amount
+    behind a condition — and one under a swap that replaces the amount ("…one
+    mana of a color of your choice instead of any other type **and amount**",
+    Harvest Mage). Restricted mana ("Spend this mana only to cast artifact
+    spells") counts one as well: the planner cannot tell which costs it may
+    pay, and one is what it always assumed.
+    """
+    from . import land_mana_swaps
+
+    swapped = land_mana_swaps.swapped_production(game, permanent)
+    if swapped is not None and swapped.replaces_amount:
+        return 1
+    free, _priced = game._land_mana_abilities(permanent)
+    payload = (getattr(free, "payload", None) or {}) if free is not None else {}
+    if not payload or payload.get("spend_only"):
+        return 1
+    pips = payload.get("pips")
+    if pips:
+        return max(1, sum(int(count) for _symbol, count in pips))
+    any_count = payload.get("any_color_count")
+    if isinstance(any_count, int) and not isinstance(any_count, bool):
+        return max(1, any_count)
+    return 1
+
+
+def _land_symbols(game: Game, permanent: Permanent) -> tuple[str, ...]:
+    """Every symbol tapping *permanent* for mana could put in the pool, the one
+    it would make unasked first.
+
+    ``Game._land_payment_colors`` — the engine's own answer, swaps and granted
+    abilities included — and the basic land types layer 4 gives it where that
+    is silent. "C" for a land that names neither, which is what this planner
+    has always assumed of one.
+    """
+    symbols = tuple(game._land_payment_colors(permanent))
+    if symbols:
+        return symbols
     # Layer 4 already knows which basic land types this permanent currently
     # has, printed or granted by a type-changing effect.
-    symbols = permanent.basic_land_mana
-    return symbols[0] if symbols else "C"
+    basic = tuple(permanent.basic_land_mana)
+    return basic if basic else ("C",)
