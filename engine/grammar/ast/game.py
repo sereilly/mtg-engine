@@ -375,6 +375,22 @@ class ChooseColor:
 
 
 @dataclass(frozen=True)
+class ChooseCreatureType:
+    """``Choose a creature type.`` (Outbreak.)
+
+    :class:`ChooseColor`'s sibling one characteristic over, as a *spell's*
+    sentence: CR 608.2d's choice made while the effect resolves, recorded in the
+    resolution's scratchpad under ``CHOSEN_CREATURE_TYPE_THIS_WAY`` — the record
+    "destroy all creatures of the creature type of your choice" (Extinction)
+    already writes from the middle of its own sentence. The sentence after it
+    ("All creatures **of that type** get -1/-1") reads it back.
+
+    Carries no fields: the catalog is CR 205.3m's creature types, which no card
+    narrows, and the chooser is the effect's controller (CR 608.2d).
+    """
+
+
+@dataclass(frozen=True)
 class ChooseOpponent:
     """``Choose one of your opponents.`` (Goblin Festival.)
 

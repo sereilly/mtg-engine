@@ -257,6 +257,22 @@ def lower_naming_statement(
             ),
         )
 
+    if isinstance(statement, ast.ChooseCreatureType):
+        # "Choose a creature type." (Outbreak.) The step Extinction's "of the
+        # creature type of your choice" already puts in front of its own
+        # sentence (``lowering/_common.split_creature_type_choice``), printed
+        # as a sentence of its own — the same instruction and the same record,
+        # so the sentence behind it reads the word back exactly as Extinction's
+        # sweep does.
+        from ..oracle_types import CHOSEN_CREATURE_TYPE_THIS_WAY
+
+        return (
+            OracleInstruction(
+                "choose_creature_type", "",
+                {"result_key": CHOSEN_CREATURE_TYPE_THIS_WAY},
+            ),
+        )
+
     if isinstance(statement, ast.ChooseCardType):
         # The colour choice's sibling above, with the same two readings of who
         # names it and the same refusals — the printed option list is the only

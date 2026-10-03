@@ -58,6 +58,7 @@ from .effects import (
     _parse_change_text,
     _parse_choose_cards_in_hand,
     _parse_choose_color,
+    _parse_choose_creature_type,
     _parse_choose_opponent,
     parse_choose_card_name,
     parse_choose_card_type,
@@ -578,6 +579,11 @@ def parse_imperative_verb(
         chosen_color = _parse_choose_color(stream)
         if chosen_color is not None:
             return chosen_color
+        # "Choose a creature type." (Outbreak.) The colour's sibling one
+        # characteristic over, for its reason and non-consuming the same way.
+        chosen_creature_type = _parse_choose_creature_type(stream)
+        if chosen_creature_type is not None:
+            return chosen_creature_type
         # "Choose artifact, creature, or land." (Turnabout.) The colour's
         # sibling one characteristic over, and the *bare imperative* spelling of
         # the sentence `player_verbs` already reads with a subject in front of

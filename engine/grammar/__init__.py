@@ -457,11 +457,50 @@ def graveyard_position_payload_for(
     return graveyard_position_payload(position, seats=seats)
 
 
+def condition_payload_for(phrase: str) -> dict | None:
+    """The lowered payload of the printed condition *phrase*, or None to refuse.
+
+    "**If an opponent controls seven or more lands**, this spell costs {6} less
+    to cast." (Avatar of Fury.) The string-in front door onto the grammar's own
+    condition reader — the one an intervening-if and a sentence-level "if" go
+    through — for a table outside the grammar that arrives with the clause
+    already delimited: ``engine/cost_modifiers.py``'s self-reduction. A third
+    reader of "an opponent controls seven or more lands" beside that table's
+    string list and this grammar would be a third answer to what the words
+    mean; asking this one means ``handlers/control_flow.evaluate_condition``
+    answers the payload, exactly as it answers every other printed "if".
+
+    Lowered with no event and nothing produced, which is what refuses every
+    clause that needs one — "that player", "it", a coin flip, a record this
+    resolution wrote — since the caller asks where nothing has fired and
+    nothing has resolved. The whole phrase must be consumed, as
+    :func:`card_filter_payload` requires: a trailing word nothing read is a
+    narrowing the gate would ignore.
+    """
+    from .conditions import _parse_condition
+    from .lowering.conditions import _lower_condition
+
+    lexed = tokenize(phrase.strip())
+    if not lexed.tokens:
+        return None
+    stream = TokenStream(lexed.tokens, lexed.normalized)
+    try:
+        condition = _parse_condition(stream)
+    except GrammarError:
+        return None
+    if not stream.exhausted:
+        return None
+    try:
+        return _lower_condition(condition)
+    except LoweringError:
+        return None
+
+
 __all__ = [
     "GRAMMAR_ONLY_PAYLOAD_KEYS",
     "behavioural_payload",
     "CompiledLine", "GRAMMAR_CATEGORIES", "GrammarError", "LoweringError",
-    "ast", "card_filter_payload", "compile_line",
+    "ast", "card_filter_payload", "compile_line", "condition_payload_for",
     "graveyard_position_payload_for", "parse_line",
     "subject_filter_payload",
 ]

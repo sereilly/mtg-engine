@@ -483,6 +483,19 @@ def buff_creatures_global(game: Game, instruction: OracleInstruction, context: O
     # Emitted by the lowering only when there is something to carry, so every
     # card compiled before this key existed takes the same path it always did.
     described = instruction.payload.get("filter")
+    # "Choose a creature type. All creatures **of that type** get -1/-1 until
+    # end of turn." (Outbreak.) The word the step in front of this one wrote
+    # into the scratchpad (CR 608.2d), resolved here the way Extinction's sweep
+    # resolves its own — and with that sweep's rule: **no word means no
+    # sweep**. A missing record read as "no narrowing" is not a card that does
+    # less, it is one that shrinks every creature on the table.
+    chosen_subtype = None
+    scratch_key = instruction.payload.get("subtype_filter_from")
+    if scratch_key is not None:
+        chosen_subtype = context.results.get(str(scratch_key))
+        if not chosen_subtype:
+            game.log.append(f"{card.name}: no creature type was chosen")
+            return True, "resolved"
     if instruction.payload.get("opponents_only"):
         # "Creatures your opponents control get -2/-2 until end of turn"
         # (Massacre Wurm): every opponent's board and none of the caster's.
@@ -520,6 +533,10 @@ def buff_creatures_global(game: Game, instruction: OracleInstruction, context: O
             # one does not (CR 613 layer 4) — the same reader the type test
             # above it uses, rather than the printed type line.
             if subtypes and not any(perm.has_type(name) for name in subtypes):
+                continue
+            # The chosen word, through the same layer-4 reader: a creature
+            # made a Zombie this turn is one of "that type".
+            if chosen_subtype and not perm.has_type(str(chosen_subtype)):
                 continue
             # "**Nonartifact** creatures get -1/-1 until end of turn." (Stench
             # of Decay.) The same layer-4 reader in the other direction, for

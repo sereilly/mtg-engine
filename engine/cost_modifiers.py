@@ -1384,8 +1384,17 @@ def cost_modifier_reduction_sentences(oracle_text: str) -> tuple[str, ...]:
 # ---------------------------------------------------------------------------
 
 
-# "[During your turn, ]this spell costs {…} less to cast[ if <condition>]."
+# "[If <condition>, ][During your turn, ]this spell costs {…} less to cast[ if
+# <condition>]."
+#
+# The condition is printed in **either** position: trailing on Stormwing Entity,
+# fronted on Prophecy's five Avatars ("If you have 3 or less life, this spell
+# costs {6} less to cast"). One sentence in two English word orders, so one
+# pattern with two delimiting groups rather than two tables — and a line
+# printing both is refused below, because two conditions is a conjunction
+# nothing here was asked to read.
 _SELF_REDUCTION = re.compile(
+    r"(?:if (?P<fronted>.+?), )?"
     r"(?:(?P<during>during your turn), )?this spell costs (?P<pips>(?:\{[^}]+\})+) "
     r"less to cast(?: if (?P<condition>[^.]+))?"
     r"(?:, where x is (?P<counted>[^.]+))?\.?$"
@@ -1407,10 +1416,73 @@ _SELF_REDUCTION_COUNTS: dict[str, str] = {
 # caster's own state answers. A wording outside this table refuses the line —
 # reading an unrecognized condition as "true" would make the spell cheaper than
 # it is, which is the one direction a cost error must never go.
+#
+# **Closed at these two.** Every other condition is read by the grammar's own
+# condition reader (``grammar.condition_payload_for``) and answered by
+# ``handlers/control_flow.evaluate_condition`` — the pair every printed
+# intervening-if already goes through — and is gated below on the kinds a
+# cast-time question can answer. These two stay because the grammar does not
+# read the "you've" contraction or a spell-type narrowing on the cast record;
+# retiring them means teaching it both, not adding a row here.
 _SELF_CONDITIONS: dict[str, str] = {
     "you've cast an instant or sorcery spell this turn": "cast_instant_or_sorcery",
     "you've gained 3 or more life this turn": "gained_three_life",
 }
+
+#: The lowered condition kinds a spell's own reduction may stand behind (CR
+#: 601.2f), and so the ones :func:`_cast_time_gate` admits. Every one is a
+#: question about the board, the zones or the life totals **as they are now**:
+#: a reduction is calculated while the spell is being cast, when nothing has
+#: fired, nothing has resolved and nothing was recorded "this way", so a kind
+#: reading a trigger's frozen context or a resolution's scratchpad would be
+#: answered off an empty record — False forever, or worse, true by default.
+_CAST_TIME_CONDITION_KINDS = frozenset({
+    "controls", "on_battlefield", "zone_card_count", "player_life",
+    "cards_in_zones",
+})
+
+#: The seat words those kinds may carry. "You" is the caster; "opponent" is the
+#: existential the evaluator answers over every living opponent. Any other word
+#: names a target, an event's player or a superlative, none of which a spell in
+#: the middle of being cast has.
+_CAST_TIME_SEATS = frozenset({"you", "opponent"})
+
+
+def _cast_time_gate(payload: dict) -> bool:
+    """Whether a lowered condition is one a cast-time reduction can answer.
+
+    Refusing is the safe direction here and only here: a reduction whose gate
+    could not be asked would be read as unconditional, which is a spell cheaper
+    than it prints.
+    """
+    kind = payload.get("kind")
+    if kind in ("all_of", "any_of"):
+        parts = payload.get("conditions") or ()
+        return bool(parts) and all(_cast_time_gate(part) for part in parts)
+    if kind not in _CAST_TIME_CONDITION_KINDS:
+        return False
+    if any(
+        key in payload and payload[key] not in _CAST_TIME_SEATS
+        for key in ("who", "player")
+    ):
+        return False
+    # "another"/"other": the asking object is a card in a hand, not a permanent,
+    # and an exclusion of it is a sentence no spell prints about itself.
+    described = payload.get("filter") or {}
+    return not (described.get("exclude_self") or described.get("exclude_event_subject"))
+
+
+def _gate_holds(game, caster_index: int, card, gate: dict) -> bool:
+    """Ask *gate* of the caster's game now, through the one evaluator."""
+    from .game_types import OracleExecutionContext
+    from .handlers.control_flow import evaluate_condition
+
+    caster = game.players[caster_index]
+    # ``target`` is the caster only because the context needs one: no kind
+    # :func:`_cast_time_gate` admits reads it.
+    return evaluate_condition(
+        game, OracleExecutionContext(caster=caster, target=caster, card=card), gate,
+    )
 
 
 # "This ability costs {N} less to activate for each <noun phrase>."
@@ -1505,6 +1577,13 @@ class SelfCostReduction:
     #: the *question* to ask rather than as a number, and answered against the
     #: caster's board or history at CR 601.2f, when the cost is calculated.
     counted: str | None = None
+    #: "**If an opponent controls seven or more lands**, this spell costs {6}
+    #: less to cast." (Avatar of Fury.) Any condition outside
+    #: ``_SELF_CONDITIONS``, as the grammar's own condition reader lowers it —
+    #: the payload ``handlers/control_flow.evaluate_condition`` answers for
+    #: every intervening-if in the pool, asked here of the caster at CR 601.2f.
+    #: None when the reduction is unconditional or gated by a row of the table.
+    gate: dict | None = None
 
 
 @lru_cache(maxsize=None)
@@ -1515,10 +1594,21 @@ def self_cost_reduction(oracle_text: str) -> SelfCostReduction | None:
         if match is None:
             continue
         condition = match.group("condition")
+        fronted = match.group("fronted")
+        if condition is not None and fronted is not None:
+            # Two printed conditions, one in each position: a conjunction
+            # nothing here reads, and either half alone is a cheaper spell.
+            return None
+        condition = fronted if fronted is not None else condition
+        gate = None
         if condition is not None:
             key = _SELF_CONDITIONS.get(condition.strip())
             if key is None:
-                return None
+                from .grammar import condition_payload_for
+
+                gate = condition_payload_for(condition)
+                if gate is None or not _cast_time_gate(gate):
+                    return None
             condition = key
         # "{X} … where X is <count>" (Volcanic Salvo). A generic reduction whose
         # size is a question rather than a number; the pips must be exactly
@@ -1532,8 +1622,9 @@ def self_cost_reduction(oracle_text: str) -> SelfCostReduction | None:
             if counted is None:
                 return None
             return SelfCostReduction(
-                CostReduction(0), condition=None,
+                CostReduction(0), condition=condition,
                 during_your_turn=bool(match.group("during")), counted=counted,
+                gate=gate,
             )
         generic = 0
         colored: dict[str, int] = {}
@@ -1551,6 +1642,7 @@ def self_cost_reduction(oracle_text: str) -> SelfCostReduction | None:
             reduction=CostReduction(generic, tuple(sorted(colored.items()))),
             condition=condition,
             during_your_turn=match.group("during") is not None,
+            gate=gate,
         )
     return None
 
@@ -1681,6 +1773,14 @@ def self_cost_reduction_for_cast(game, caster_index: int, card) -> CostReduction
     elif described.condition == "gained_three_life":
         if caster.life_gained_this_turn < 3:
             return CostReduction()
+    # "If you have 3 or less life, …" (Avatar of Hope). Asked now, at CR
+    # 601.2f, which is when a cost is calculated — so the AI's affordability
+    # read, the client's playable highlight and the cast itself all see the
+    # same answer, because all three come through ``cost_reduction_for_cast``.
+    if described.gate is not None and not _gate_holds(
+        game, caster_index, card, described.gate
+    ):
+        return CostReduction()
     # "…where X is <count>": the size is asked of the caster now, at CR 601.2f,
     # which is when a cost is calculated — not at announcement and not at
     # resolution, so a creature entering in response does not change what was

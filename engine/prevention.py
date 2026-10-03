@@ -800,6 +800,10 @@ def _live(game, event: dict, kind: str, *, chosen: bool | None = None):
     ):
         if shield.kind != kind or shield.spent:
             continue
+        if shield.combat_only and not event.get("combat"):
+            # "Prevent all **combat** damage …" (Snag): the event's own flag,
+            # which no property of the source can stand in for.
+            continue
         if chosen is not None and (shield.source is not None) != chosen:
             continue
         if not _source_matches(

@@ -301,6 +301,23 @@ def _parse_choose_color(stream: TokenStream) -> ast.Statement | None:
     return None
 
 
+def _parse_choose_creature_type(stream: TokenStream) -> ast.Statement | None:
+    """``Choose a creature type.`` (Outbreak.)
+
+    :func:`_parse_choose_color`'s sentence one characteristic over, refusing the
+    same way and for its reason: exactly four words and nothing after them but
+    the punctuation that ends a clause, None with the cursor untouched for every
+    other "choose" sentence.
+    """
+    mark = stream.mark()
+    if stream.accept_phrase("choose", "a", "creature", "type") and (
+        stream.exhausted or stream.at_punct(".", ",")
+    ):
+        return ast.ChooseCreatureType()
+    stream.reset(mark)
+    return None
+
+
 def _parse_choose_opponent(stream: TokenStream) -> "ast.ChooseOpponent | None":
     """``Choose one of your opponents.`` (Goblin Festival.)
 

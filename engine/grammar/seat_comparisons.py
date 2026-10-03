@@ -79,13 +79,18 @@ _REFERENCE_SEATS: dict[str, str] = {
 _POSSESSIVE_ZONES: frozenset[str] = frozenset({"graveyard", "hand", "library"})
 
 
-def _accept_margin(stream: TokenStream) -> int | None:
+def accept_margin(stream: TokenStream) -> int | None:
     """``at least two`` in front of "more"/"fewer", or None (which is one).
 
     "…who has **at least two** fewer creature cards in their graveyard than you
     do" (Keeper of the Dead). A printed number rather than part of the phrase,
     for :class:`ast.BoardCount`'s stated reason: spelling the threshold into
     the words makes every other threshold a non-match.
+
+    Public because the *condition* half of the same comparison reads it too —
+    "if an opponent controls **at least four** more creatures than you" (Avatar
+    of Might, ``condition_counts``) — and one margin spelled twice is two
+    answers to what "at least" admits.
 
     Non-consuming on refusal, so a plain "more" is read by the caller
     immediately after.
@@ -103,7 +108,7 @@ def _accept_margin(stream: TokenStream) -> int | None:
 def _accept_direction(stream: TokenStream) -> tuple[bool, int] | None:
     """``[at least N] more|fewer`` — the direction and the threshold, or None."""
     mark = stream.mark()
-    margin = _accept_margin(stream)
+    margin = accept_margin(stream)
     if stream.accept_word("more"):
         return True, margin or 1
     if stream.accept_word("fewer"):

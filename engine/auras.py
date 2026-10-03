@@ -2601,6 +2601,44 @@ def attached_combat_restrictions(permanent) -> tuple:
     return tuple(found)
 
 
+def aura_block_permission(line: str) -> int:
+    """How many attackers beyond the printed one an Aura's *line* lets the
+    permanent it is attached to block, or 0.
+
+    "Enchanted creature can block any number of creatures." (Entangler.) Wall of
+    Glare and Avatar of Hope print the same permission about themselves, so the
+    difference between the cards is the subject of the sentence and nothing
+    else — which is why this rewrites the subject and asks
+    ``combat_permissions.printed_block_ceiling`` instead of holding a second
+    copy of its table, exactly as :func:`aura_combat_restriction` asks the
+    restriction table. An Equipment printing it is the same rule (CR 301.5f).
+    """
+    from .combat_permissions import printed_block_ceiling
+
+    normalized = _line_text(line)
+    match = _ATTACHED_SUBJECT.match(normalized)
+    if match is None:
+        return 0
+    return printed_block_ceiling(
+        (f"this {match.group('noun')}{normalized[match.end():]}",)
+    )
+
+
+def attached_block_ceiling(permanent) -> int:
+    """The block permissions the Auras on *permanent* grant it, summed.
+
+    Asked when the declare-blockers step reads the ceiling (CR 509.1b), so the
+    permission ends when the Aura does with nothing to clear — the shape
+    :func:`attached_combat_restrictions` has. Summed rather than maximised for
+    ``printed_block_ceiling``'s reason: CR 509.1b's permissions add.
+    """
+    return sum(
+        aura_block_permission(raw_line)
+        for aura in auras_attached_to(permanent)
+        for raw_line in (aura.effective_card.oracle_text or "").splitlines()
+    )
+
+
 #: "This token can't be enchanted." (Tetravus's Tetravites.) A restriction the
 #: permanent prints about **itself**, which is the opposite direction from
 #: everything else in this file — those describe what an Aura does to what it is
@@ -2913,6 +2951,8 @@ def aura_continuous_claim(line: str) -> str | None:
         return "attack-conditioned untap restriction — auras.aura_restriction_active"
     if aura_combat_restriction(normalized) is not None:
         return "attached combat restriction — auras.attached_combat_restrictions"
+    if aura_block_permission(normalized):
+        return "attached block permission (CR 509.1b) — auras.attached_block_ceiling"
     # "Enchanted creature can't be the target of spells and can't be enchanted
     # by other Auras." (Anti-Magic Aura.) Both clauses, or neither: the reader
     # claims a line only when it implements every restriction the line conjoins,

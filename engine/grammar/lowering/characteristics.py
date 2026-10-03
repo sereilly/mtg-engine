@@ -29,6 +29,8 @@ went with them and is imported back, because a table with a reader on each side
 of a cut belongs on the floor rather than in one of the two families.
 """
 
+import dataclasses
+
 from ...oracle_types import OracleInstruction
 from ...subject_filters import (object_only_filter,
                                 unimplemented_filter_keywords,
@@ -429,6 +431,25 @@ def _lower_pump(
         filt = node.subject.filter
         if filt.card_types != ("creature",):
             raise LoweringError("global buff on a non-creature scope", node=node)
+        # "Choose a creature type. All creatures **of that type** get -1/-1
+        # until end of turn." (Outbreak.) "That type" is the word the sentence
+        # in front of this one recorded (CR 608.2d), taken off the filter and
+        # carried as the scratchpad slot the handler resolves — the
+        # ``subtype_filter_from`` key Extinction's sweep already reads. Only
+        # with that step in this same effect: with no producer the words name
+        # nothing, and an unresolved "that type" read as no narrowing is a
+        # sweep over every creature on the battlefield.
+        bound_type: dict[str, object] = {}
+        if filt.of_bound_type:
+            from ...oracle_types import CHOSEN_CREATURE_TYPE_THIS_WAY
+
+            if CHOSEN_CREATURE_TYPE_THIS_WAY not in produced:
+                raise LoweringError(
+                    "'of that type' names a creature type no step of this "
+                    "effect chose", node=node,
+                )
+            filt = dataclasses.replace(filt, of_bound_type=False)
+            bound_type["subtype_filter_from"] = CHOSEN_CREATURE_TYPE_THIS_WAY
         leftover = _restrictions_beyond(
             filt,
             frozenset({
@@ -582,6 +603,15 @@ def _lower_pump(
                     node=node,
                 )
             payload["filter"] = described
+        if bound_type:
+            if node.duration.kind == "while_source_tapped":
+                # A recompute rebuilt from the source's record has no
+                # resolution scratchpad to read the chosen word back out of.
+                raise LoweringError(
+                    "a continuous buff cannot read a word this resolution chose",
+                    node=node,
+                )
+            payload.update(bound_type)
         if node.duration.kind == "while_source_tapped":
             # "All creatures get +2/+2 **for as long as this artifact remains
             # tapped**." (Thran Weaponry.) The global twin of
