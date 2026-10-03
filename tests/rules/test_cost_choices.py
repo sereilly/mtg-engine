@@ -488,3 +488,16 @@ def test_w3g5_cadaverous_bloom_exiles_the_card_its_controller_names():
     assert result.supported, result.details
     assert [c.name for c in game.players[0].exile] == ["Island"]
     assert [c.name for c in game.players[0].hand] == ["Forest"]
+
+
+@pytest.mark.cr("601.2h", "702.18a")
+def test_w3g5_a_shrouded_creature_is_offered_to_an_exile_cost():
+    """Shroud stops a permanent being *targeted* (CR 702.18a), and exiling one
+    to pay City of Shadows' cost targets nothing. The engine has always taken
+    Autumn Willow as the payment; the picker offered nothing, because its
+    "a cost is not a target" test listed the sacrifice, tap and return flags
+    and not the exile — so a player whose only creature had shroud was told
+    there was nothing to exile while the engine would have exiled it."""
+    game, (_city, willow), _ = _table(["City of Shadows", "Autumn Willow"])
+    offered = game.activation_target_spec(0, 0, ability_index=0)["valid_targets"]
+    assert [t["name"] for t in offered] == ["Autumn Willow"]

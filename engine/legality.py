@@ -1835,10 +1835,9 @@ class LegalityMixin:
         # board does not make them unactivatable. Their own paths validate them.
         #
         # Every cost flag, through the one reader of them (PCY W3G5): this was a
-        # list of four, which left City of Shadows' and Necropolis' exile
-        # cost to be refused as a target its payer could not *target* — a
-        # shrouded creature exiled to pay is not targeted — and would have done
-        # the same to Benthic Explorers' untap the day it had a picker.
+        # list of four, and a cost flag it does not name is asked a target's
+        # question — Benthic Explorers' untap the day it had a picker, and an
+        # exile cost already.
         if (
             spec_is_a_cost(spec)
             or spec.get("also_stack") or spec.get("requires_source")
