@@ -1965,6 +1965,20 @@ instruments current.
    **`oracle_diff compare` belongs before the suite, not after** — it caught an
    arity mismatch that all five post-split scans are structurally blind to,
    failing in seconds with a full traceback where the suite scatters failures.
+
+   **Nemesis is the rule's second clean run, and it says what the trigger
+   is.** Four grammar modules sat within 25 lines; the three that several
+   groups' families *could* reach were pre-split and the fourth was briefed to
+   its one owner. Integration then crossed **zero** caps across ten groups and
+   two waves — while two of the three splitters reported that the set's cards
+   would mostly **not** land in their module (the conditions this set prints
+   parse in `condition_counts.py`, and only one of fading's counter sentences
+   is a placement). The split paid anyway, because at 14 lines under, any one
+   group adding any one clause crosses it. So the trigger is **"shared and
+   tight"**, not "this set's cards land here" — Exodus's finding that the
+   second question cannot be answered, confirmed from the other side. The one
+   owned module split cleanly in round, and the one that drifted to 978 during
+   wave 1 was relieved by its next owner moving a single misplaced function.
 4. Clear anything above in Known gaps marked for Phase 0.
 
 ## Phase 1 — Ingest and measure
@@ -2205,6 +2219,21 @@ not its slot" is the same rule with an index instead of a name.
 The scheduling rule that follows: **the count of no-card groups is set by the
 size of the enumerated pile, not by how many cards are left.** Six cards did not
 need five groups; the pile did.
+
+**Nemesis ran it with three cards left and four groups**, one on the cards and
+three on the pile wave 1 had measured and declined. The pile groups fixed, each
+with a census validated backwards: an activation that spent mana or exiled
+cards and was *then* refused (493 shipped refusals that had paid something);
+CR 608.2b never re-checking a target's description (130 resolutions acting on
+an illegal target, most of them on a *bystander* through a handler's fallback
+scan); Blood Moon not reaching the land tap path (103 shipped lands tapping for
+their printed mana); and the AI aiming 56 of 112 denial spells at its own
+creatures. `oracle_diff` read **0, 1 and 0** on those three engine merges —
+6ED's finding again, that the pool's remaining defects live in dispatch, on the
+wire and in policy, where the compiled map cannot look. And a wave-1 group that
+merely *lists* what it measured and left is what made a wave-2 group's cold
+start possible: every one of the three pile briefs was a wave-1 report's
+"measured, not fixed" section with the parts already named.
 
 **6ED took that rule to its limit: a wave of five groups and *no* cards at
 all.** The set arrived 335/335 supported with every instrument at zero, so
@@ -2490,6 +2519,14 @@ not. `test_the_shipped_sets_are_in_printing_order` is the one that
 can fire; append the entry at the wrong end once and watch it, which costs a
 minute and converts an assumption into an observation.
 
+**Make the wrong insert with the same textual move as the right one.**
+Nemesis' rehearsal was hand-spliced and the splice left a stray comma line, so
+`test_registration_preserves_everything_else_byte_for_byte` fired beside the
+order guard — a second red that was the rehearsal's own formatting rather than
+anything the rehearsal was asking. One move script with a "wrong end" switch
+makes the order guard the only thing that can fire, which is the observation the
+rehearsal exists to make.
+
 Step 1 is a **rehearsal**, and it is implementation work rather than a
 formality — budget for it. Move the manifest entry from `measured` to `sets`
 locally and run everything *before* committing. Promotion instantly widens
@@ -2728,6 +2765,15 @@ review directly shrinks this phase.
    engine refuses costs nothing and breaks no rule, but the AI re-proposes the
    same card every turn, so a seat holding one does nothing for the rest of the
    game. Neither number existed while the simulator played one fixed decklist.
+
+   **A zero in the combat counts is a question for the pre-set commit, not a
+   finding.** At Nemesis' close the seeded Alpha run declared **0 blockers**
+   against 59 attackers, right after a wave that had rewritten the AI's target
+   choice. The same run at the commit before W2G4, and at the commit before the
+   set, read the same 0 — it is what those seeded Alpha games do, not what the
+   wave did. One extra run against a throwaway `git worktree add <dir> <rev>`
+   settles it; remove the worktree from the main checkout, never from inside
+   it, or Windows holds the directory open.
 
 ## Phase 6 — Retrospective and playbook update
 
@@ -3778,3 +3824,23 @@ under the key `"owner"` — which is a *printed possessive* that table is keyed 
 — silently rerouting Exhume and turning four guards red. Neither is visible to a
 duplicate-definition sweep: there is one definition per module either way.
 
+### NEM — 2026-10-02
+
+*One wave of six groups landed 53 of 56 cards with **no declines** across six
+briefs — and the closing wave's three pile
+groups again outweighed the cards.* Fading was a rewrite (both sentences CR
+702.32a defines compiled on the day of the ingest), so one group took the
+keyword and all fourteen cards that print or count it, and the three Parallax
+cards that needed it waited one wave. Briefs were written as two shared files
+and a per-group sheet generated from the instruments rather than from memory;
+every group still corrected about a third of its own, in the direction UDS
+named (the refusal site over-stated the gap: three "new" alternative-cost
+shapes were MMQ's, Rusting Golem needed no code).
+
+*Phase 0 edits:* the pre-split trigger is "shared and tight", confirmed from
+the side Exodus could not see. *Phase 3:* Nemesis' no-card wave as the second
+data point for the scheduling rule. *Phase 4:* rehearse the wrong insert with
+the same move script. *Phase 5:* read a zero against the pre-set commit.
+Zero hooks added, the eleventh consecutive set; reliance 1.3% -> 1.2%. Nothing
+drained from Known gaps; the shipped defects the set measured and left are
+ROADMAP entries, not playbook ones.

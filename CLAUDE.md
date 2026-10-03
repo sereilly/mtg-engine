@@ -675,7 +675,14 @@ adding entries, not editing dispatch**:
   A handler declining its own target is the rule's *last* sentence only, so
   "Destroy target artifact. You gain life equal to its mana value" gained the
   life for destroying nothing. Both read targets by `permanent_id`, never by
-  index. Both are instants and sorceries only, and the three shapes they
+  index, and **both ask the same predicate** —
+  `LegalityMixin._described_cast_target_slots`, the whole enumeration of what
+  the printed target phrase admits — so a Terror target turned black in
+  response is illegal at resolution exactly as it would have been at
+  announcement. It asked only "still there and targetable?" until Nemesis, and
+  130 resolutions in a census acted on an illegal target, most of them on a
+  bystander a handler's fallback scan found. Modal spells are excluded (their
+  derived spec is mode 0's; see `ROADMAP.md`). Both are instants and sorceries only, and the three shapes they
   deliberately decline — a triggered ability's targets, a spell that can target
   a player, an Aura or graveyard target — are in `ROADMAP.md` with the reason
   each is a separate round.

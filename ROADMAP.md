@@ -324,7 +324,21 @@ one card prints this") reads as a work item long after it stopped being true.
   seats ("target opponent who has more life than you do" — the Keepers, the
   Oaths) at resolution, bounded to specs carrying `compared` and to objects
   whose compared seat is their **only** printed target. It is not a down
-  payment on the three declines below, each of which is its own round:
+  payment on the three declines below, each of which is its own round.
+
+  **The gate re-asks the target's *description* (NEM wave 2).** It used to ask
+  only whether a target was still on the battlefield and targetable, so a
+  Terror target turned black resolved — or, far more often, the handler's
+  fall-through scan acted on a *bystander*. `illegal_targets_refusal` now asks
+  `LegalityMixin._described_cast_target_slots`, the very enumeration CR
+  601.2c's half uses, so announcement and resolution are one predicate. Census
+  over 280 single-target spells and 19 board changes: 130 resolutions acted on
+  an illegal target before, 0 after. **Modal spells are excluded** (the derived
+  spec is mode 0's; Active Volcano's bounce was being countered): including
+  them means a per-mode spec per `item.chosen_modes` and a `mode_index` through
+  `_enumerate_targets(for_cast=True)` — about 31 shipped cards. Telim'Tor's
+  Edict ("you own or control") needs an observer in the enumerator's
+  `subject_matches` call. The declines:
 
   * **A triggered ability's targets.** The death sweep enqueues a dies-trigger
     while the dying permanent is still listed, so Blazing Effigy's "it deals 3
@@ -351,14 +365,52 @@ one card prints this") reads as a work item long after it stopped being true.
     CR 601.2c's "can the announcement be made at all?" is asked per primary
     kind only.
 
-- **Five handler paths still resolve by index alone**, reached today only by
+- **Four handler paths still resolve by index alone**, reached today only by
   instants and so caught by the CR 608.2b gate first; the next *activated*
-  ability printed with the same text walks in. Re-verified 2026-09-07 — still
-  five, none reading `target_permanent_id`: `board_misc.mark_text_modified`,
-  `combat.remove_creature_from_combat`, `prevention.apply_prevention_shield`,
-  `zones.exile_target_creature_until_eot` and
-  `zones.exile_creature_gain_life_equal_to_power`. All five also carry a "fall
-  back to the first matching permanent" default, the look-alike class.
+  ability printed with the same text walks in. Four since NEM wave 1, which
+  made `prevention.apply_prevention_shield` read the id first (35 shipped
+  "any target" shields reached it): `board_misc.mark_text_modified`,
+  `combat.remove_creature_from_combat`, `zones.exile_target_creature_until_eot`
+  and `zones.exile_creature_gain_life_equal_to_power`. All four also carry a
+  "fall back to the first matching permanent" default, the look-alike class.
+
+- **A still-legal target that changed controller is missed, and a bystander is
+  hit** (NEM W2G2, measured and left — whole-pool scope). Cast Boomerang at the
+  opponent's Grizzly Bears, take control of the Bears in response, and
+  Boomerang returns the opponent's Hill Giant: `pick_target_permanent` accepts
+  an announced id only on the announced *seat* and otherwise falls back to the
+  index and a scan. Census: 227 cast cases, the target hit 46 times, missed
+  181, a bystander hit 95; activated abilities, 450 (ability, change) pairs and
+  272 bystander hits across 148 cards. The likely fix is the one the push side
+  already has — settle the seat *from the id* at resolution, as
+  `_settle_announced_target_seat` does when the object goes on the stack.
+
+- **No CR 603.3b choice orders a controller's simultaneous triggers** (NEM
+  W1G1). They keep printed order, so on its own upkeep Tangle Wire's tap
+  resolves before its fade removal and taps one more permanent than its
+  controller might choose. Pinned as the current behaviour in its test.
+
+- **Some triggers never reach the stack** (NEM W2G1, W2G2). An Aura's "when
+  this enters, tap enchanted creature" (Paralyze, Cocoon, Roots, Thirst)
+  resolves inside the Aura's own resolution with no stack object, so it cannot
+  be responded to (CR 603.3) — the standing approximation
+  `modal_triggers.INLINE_TRIGGER_CONDITIONS` records. When enters triggers
+  move to the stack, `exile_graveyard_until_leaves` (Idol of Endurance) needs an
+  `is_on_battlefield(source)` check or it exiles permanently (CR 610.3b).
+
+- **Smaller ones NEM measured and left, each with its parts named in the wave's
+  merge commits:** Glyph of Delusion grants its untap lock to the *Wall*
+  (`grant_target_ability_text` has no `subject_role`, so it reads slot 0); six
+  lands whose mana ability costs more than {T} (Gemstone Mine, the five MMQ
+  depletion lands) announce no tap-for-mana event — the post-tap block of
+  `tap_land_for_mana` wants to be a helper the activation path's mana branch
+  calls; the client's dual-land colour fan offers a land's whole colour summary
+  rather than the chosen ability's symbols; a mana ability whose effect fails
+  while resolving inline is reported as a refused activation after its costs
+  are paid, skipping the state-based check; Dominate's X prompt has no minimum,
+  so a too-small X is refused by the engine rather than prevented in the UI;
+  and the AI still reads Conspiracy's and Disharmony's sides wrong (a
+  `derived_static_rule` reading, and a pronoun walk across steps).
 
 - **`land_enters` has one fire site, inside land-*play* resolution**
   (`mixins/stack/resolution.py`), so a land an effect puts onto the battlefield
@@ -855,9 +907,12 @@ expire:
 > what is already there); `test_the_shipped_sets_are_in_printing_order` is the
 > assertion that can.
 
-Run against `set_progress.json` on 2026-09-09, with 6ED shipped, it answers
-**Urza's Destiny** (UDS, 1999-06-07, 143 cards, 142 of them new to the release
-line), then Mercadian Masques, Nemesis and Prophecy. 6ED itself was the previous
+Run against `set_progress.json` on 2026-10-02, with Nemesis shipped, it
+answers **Prophecy** (PCY, 2000-06-05, 143 cards), then Invasion and Planeshift
+— and then Seventh Edition, the next reprint-shaped set, whose sources are the
+pool's own. On 2026-09-09, with 6ED shipped, the same rule answered Urza's
+Destiny, then Mercadian Masques, Nemesis and Prophecy, and the first three of
+those have since shipped in that order. 6ED itself was the previous
 answer and is the caution to read beside the rule: `set_progress.json` said **0**
 new cards and it brought two, because that column counts against the release
 line and this manifest is a subset of it. Every ingest estimate this file has carried was stale by the
@@ -964,6 +1019,7 @@ a wave is five parallel worktree groups integrated serially.
 | 6ED | 335 | 100% | 0 (2 new cards, both already parsed) |
 | UDS | 143 | 69.9% | 2 waves + 1 closer |
 | MMQ | 335 | 73.7% | 3 waves + 1 closer |
+| NEM | 143 | 66.4% | 1 wave + 1 closer |
 
 Three data points shape an estimate. **Legends** is the warning: the lowest
 starting coverage and the flattest ranking — after eight rounds, 113 of its 135
@@ -979,17 +1035,18 @@ mis-playing along the way, which every set since Ice Age has repeated and which
 is the argument for the Rock Hydra step.
 
 **Where the pool stands** (regenerate rather than trust these; read
-2026-09-10): 3,715 unique cards over 25 sets, 5,829 printings, 100% supported.
-Grammar parses 90.6% of lines, lowers 90.0% and executes 60.7%
-(`GRAMMAR_COVERAGE.md`). **1.4%** of supported cards carry a name-keyed hook —
-53 cards, 59 entries in 6 registries (`HOOK_RELIANCE.md`) — and the projection
-that implies for the release line has fallen from 1,195 hand-written entries to
-**416**, across twelve consecutive sets that added no hook and retired several.
-That is the measure moving the way the architecture needs it to. Parse
-coverage: 3,713 of 3,715 supported cards fully claimed, 2 acknowledged, **0
-unclaimed** (`PARSE_COVERAGE.md`). `RULES_PROGRESS.md` is the CR coverage
-tracker. `CARD_VERIFICATION.md` is a log, not a target: 611 passed (403
-in-game, 208 auto), 49 equivalent, 0 failed, 3,055 untested.
+2026-10-02, at Nemesis' close): 4,169 unique cards over 27 sets, 6,307
+printings, 100% supported. Grammar parses 90.6% of lines, lowers 89.9% and
+executes 61.2% (`GRAMMAR_COVERAGE.md`; the lowered row fell 0.3pp on Nemesis'
+*membership*, not on any production). **1.2%** of supported cards carry a
+name-keyed hook — 52 cards, 58 entries in 6 registries (`HOOK_RELIANCE.md`) —
+and the projection that implies for the release line has fallen from 1,195
+hand-written entries to **363**, across fourteen consecutive sets that added no
+hook and retired several. That is the measure moving the way the architecture
+needs it to. Parse coverage: 4,167 of 4,169 supported cards fully claimed, 2
+acknowledged, **0 unclaimed** (`PARSE_COVERAGE.md`). `RULES_PROGRESS.md` is the
+CR coverage tracker. `CARD_VERIFICATION.md` is a log, not a target: 624 passed
+(403 in-game, 221 auto), 50 equivalent, 0 failed, 3,352 untested.
 
 **A whole wave can fix a hundred cards and move no compiled program**, and 6ED's
 is the run to cite. Five groups, five Known-gaps entries, zero cards implemented,
