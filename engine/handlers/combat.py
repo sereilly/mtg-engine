@@ -1368,7 +1368,22 @@ def target_cant_block_until_eot(game: Game, instruction: OracleInstruction, cont
     Not the blanket ``cant_block_until_eot`` beside it: that arms a board-wide
     filter, and a targeted restriction routed through it would reach every
     creature its noun phrase describes.
+
+    "**Up to three target creatures** can't block this turn." (Panic Attack.)
+    The same mark on each creature of a chosen list, resolved strictly — a
+    per-slot fallback would mark one creature twice where the player chose
+    two, and a slot whose creature left is simply not affected (CR 608.2b).
     """
+    if _names_a_list(instruction):
+        chosen = resolve_target_permanents(
+            game, context, predicate=lambda p: p.is_creature
+        )
+        if not chosen:
+            game.log.append(f"{context.card.name}: no creature to stop blocking")
+        for each in chosen:
+            each.metadata[CANT_BLOCK_UNTIL_EOT] = True
+            game.log.append(f"{each.card.name} can't block this turn")
+        return True, "resolved"
     target_creature = resolve_target_permanent(
         game, context, predicate=lambda p: p.is_creature
     )

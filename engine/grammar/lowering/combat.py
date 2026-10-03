@@ -511,6 +511,17 @@ def _lower_combat_restriction(
             return (
                 OracleInstruction("target_cant_block_until_eot", "", targeted),
             )
+        # "**Up to three target creatures** can't block this turn." (Panic
+        # Attack.) The row above over a list of chosen creatures (CR 601.2c),
+        # and the same kind: its handler resolves the list strictly when the
+        # description says several, exactly as ``grant_unblockable_to_target``
+        # — its mirror — does for Runed Arch.
+        if _names_several_targets(node.subject):
+            several: dict[str, object] = {}
+            _describe_several_targets(several, node.subject)
+            return (
+                OracleInstruction("target_cant_block_until_eot", "", several),
+            )
         if node.subject.quantifier != "all":
             raise LoweringError(
                 "the blanket can't-block reads a plural subject", node=node

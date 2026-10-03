@@ -1238,6 +1238,25 @@ _IF_NOUN_ON_BATTLEFIELD = re.compile(
     r"(?:is|are) on the battlefield$"
 )
 
+#: "This creature can't block **if you control an untapped land**." (Branded
+#: Brawlers, Veteran Brawlers.) The seat-scoped qualifier above printed with
+#: "if" rather than "as long as" — for a static restriction the two words ask
+#: one question, re-asked at every declaration, so it builds the same
+#: ``{"who": "you", "subject": …}`` condition and is answered by the same
+#: ``restriction_condition_holds``.
+#:
+#: **"You" only, and that is the gate rather than an omission.** The defending
+#: player's spelling ("…can't attack if defending player controls an untapped
+#: land", the Brawlers' *other* line, and Goblin Mutant's) is read by the
+#: grammar's ``cant_attack_unless_defender_controls`` production, and
+#: ``test_combat_restrictions_match_the_derivation_table_exactly`` holds a line
+#: both readers claim to one payload — so a table row reading that sentence as
+#: ``cant_attack`` with a condition would be a second reader of a line the
+#: grammar already owns, disagreeing with it.
+_IF_YOU_CONTROL = re.compile(
+    r"^(?P<rest>.+?) if (?P<who>you) control an? (?P<board>.+)$"
+)
+
 #: The kinds whose enforcement site **asks** about a condition. A qualifier
 #: attached to any other kind would be a restriction applied unconditionally —
 #: silently, and in the direction of doing more than the card says — so the line
@@ -1379,7 +1398,9 @@ def combat_restriction_for(
     # asks about would be worse than one nobody reads, so the attachment is
     # gated on `CONDITIONAL_RESTRICTION_KINDS`.
     condition: dict | None = None
-    qualifier = _AS_LONG_AS.match(normalized_line)
+    qualifier = _AS_LONG_AS.match(normalized_line) or _IF_YOU_CONTROL.match(
+        normalized_line
+    )
     if qualifier is not None:
         board = _printed_noun(qualifier.group("board"))
         if board is None:
