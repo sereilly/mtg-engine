@@ -25,19 +25,15 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**7 unclaimed sentence(s) across 4 supported card(s).**
+**4 unclaimed sentence(s) across 3 supported card(s).**
 
+- **Parallax Nexus**
+  - `remove a fade counter from this enchantment: target opponent exiles a card from their hand. activate only as a sorcery`
+  - `when this enchantment leaves the battlefield, each player returns to their hand all cards they own exiled with it`
 - **Parallax Tide**
-  - `fading 5`
   - `when this enchantment leaves the battlefield, each player returns to the battlefield all cards they own exiled with it`
 - **Parallax Wave**
-  - `fading 5`
   - `when this enchantment leaves the battlefield, each player returns to the battlefield all cards they own exiled with it`
-- **Rejuvenation Chamber**
-  - `fading 2`
-- **Saproling Burst**
-  - `fading 7`
-  - `remove a fade counter from this enchantment: create a green saproling creature token. it has "this token's power and toughness are each equal to the number of fade counters on saproling burst."`
 
 ## Acknowledged simplifications
 

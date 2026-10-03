@@ -42,7 +42,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | UDS | 143 | 204 | 91.7% | 91.2% | 65.7% | 121 |
 | MMQ | 335 | 465 | 91.8% | 91.6% | 66.2% | 278 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| NEM *(measured)* | 143 | 219 | 78.1% | 77.6% | 61.6% | 121 |
+| NEM *(measured)* | 143 | 219 | 79.0% | 78.5% | 62.6% | 122 |
 | **All (shipped)** | **6164** | **9025** | **90.8%** | **90.2%** | **61.1%** | **4680** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -57,8 +57,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ---: | ---: | --- | --- |
 | 470 | 208 | expected a subject |  |
 | 141 | 72 | unrecognized effect verb |  |
-| 121 | 56 | unconsumed text |  |
-| 43 | 26 | granted ability in quotes | phase 3 (quoted abilities) |
+| 120 | 55 | unconsumed text |  |
+| 42 | 25 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 18 | 6 | expected what this creature can't block, or a duration |  |
 | 17 | 15 | expected 'unless defending player controls' |  |
@@ -6707,6 +6707,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Saprazzan Skerry**
   - `{T}, Remove a depletion counter from this land: Add {U}{U}. If there are no depletion counters on this land, sacrifice it.`
 - **Saproling Burst**
+  - `Remove a fade counter from this enchantment: Create a green Saproling creature token. It has "This token's power and toughness are each equal to the number of fade counters on Saproling Burst."`
   - `When this enchantment leaves the battlefield, destroy all tokens created with this enchantment. They can't be regenerated.`
 - **Saproling Cluster**
   - `{1}, Discard a card: Create a 1/1 green Saproling creature token. Any player may activate this ability.`
@@ -7805,6 +7806,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature blocks or becomes blocked by a creature, that creature loses first strike until end of turn.`
 - **Tangle Kelp**
   - `When this Aura enters, tap enchanted creature.`
+- **Tangle Wire**
+  - `At the beginning of each player's upkeep, that player taps an untapped artifact, creature, or land they control for each fade counter on this artifact.`
 - **Taniwha**
   - `At the beginning of your upkeep, all lands you control phase out. (They phase in before you untap during your next untap step.)`
 - **Tar Pit Warrior**

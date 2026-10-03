@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**411 / 617 tracked rules covered (66%)** — 2495 tests, 0 unannotated.
+**412 / 618 tracked rules covered (66%)** — 2516 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -89,7 +89,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [616. Interaction of Replacement and/or Prevention Effects](#616-interaction-of-replacement-andor-prevention-effects) | 2/2 | 100% |
 | [700. General](#700-general) | 2/15 | 13% |
 | [701. Keyword Actions](#701-keyword-actions) | 19/19 | 100% |
-| [702. Keyword Abilities](#702-keyword-abilities) | 31/31 | 100% |
+| [702. Keyword Abilities](#702-keyword-abilities) | 32/32 | 100% |
 | [703. Turn-Based Actions](#703-turn-based-actions) | 4/4 | 100% |
 | [704. State-Based Actions](#704-state-based-actions) | 8/8 | 100% |
 | [705. Flipping a Coin](#705-flipping-a-coin) | 2/3 | 66% |
@@ -666,7 +666,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(252 tests, subrules abcdefghi)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(254 tests, subrules abcdefghi)*
 - [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(26 tests, subrules a)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [x] **601.5** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*
@@ -676,7 +676,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 602. Activating Activated Abilities
 
 - [x] **602.1** Activated abilities have a cost and an effect. They are written as “[Cost]: [Effect.] [Activation... *(14 tests, subrules ab)*
-- [x] **602.2** To activate an ability is to put it onto the stack and pay its costs, so that it will eventually ... *(39 tests, subrules ab)*
+- [x] **602.2** To activate an ability is to put it onto the stack and pay its costs, so that it will eventually ... *(41 tests, subrules ab)*
 - [x] **602.3** Some abilities specify that one of their controller’s opponents does something the controller wou... *(3 tests)*
 - [ ] **602.4** Activating an ability that alters costs won’t affect spells and abilities that are already on the...
 - [x] **602.5** A player can’t begin to activate an ability that’s prohibited from being activated. *(39 tests, subrules ace)*
@@ -692,7 +692,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **603.7** An effect may create a delayed triggered ability that can do something at a later time. A delayed... *(36 tests, subrules bcde)*
 - [x] **603.8** Some triggered abilities trigger when a game state (such as a player controlling no permanents of... *(8 tests)*
 - [ ] **603.9** Some triggered abilities trigger specifically when a player loses the game. These abilities trigg...
-- [x] **603.10** Normally, objects that exist immediately after an event are checked to see if the event matched a... *(12 tests, subrules a)*
+- [x] **603.10** Normally, objects that exist immediately after an event are checked to see if the event matched a... *(13 tests, subrules a)*
 - [x] **603.11** Some objects have a static ability that’s linked to one or more triggered abilities. (See rule 60... *(1 tests)*
 - [x] **603.12** A resolving spell or ability may allow or instruct a player to take an action and create a trigge... *(2 tests)*
 
@@ -734,7 +734,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 608. Resolving Spells and Abilities
 
 - [x] **608.1** Each time all players pass in succession, the spell or ability on top of the stack resolves. (See... *(1 tests)*
-- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(92 tests, subrules bcdhmn)*
+- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(96 tests, subrules bcdhmn)*
 - [x] **608.3** If the object that’s resolving is a permanent spell, its resolution may involve several steps. Th... *(3 tests, subrules ab)*
 
 ### 609. Effects
@@ -776,7 +776,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 613. Interaction of Continuous Effects
 
-- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(113 tests, subrules abcdefg)*
+- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(114 tests, subrules abcdefg)*
 - [x] **613.2** Within layer 1, apply effects in a series of sublayers in the order described below. Within each ... *(17 tests, subrules ac)*
 - [x] **613.3** Within layers 2–6, apply effects from characteristic-defining abilities first (see rule 604.3), t... *(2 tests)*
 - [x] **613.4** Within layer 7, apply effects in a series of sublayers in the order described below. Within each ... *(76 tests, subrules abcd)*
@@ -816,7 +816,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **615.4** Prevention effects must exist before the appropriate damage event occurs—they can’t “go back in t...
 - [x] **615.5** Some prevention effects also include an additional effect, which may refer to the amount of damag... *(1 tests)*
 - [x] **615.6** If damage that would be dealt is prevented, it never happens. A modified event may occur instead,... *(2 tests)*
-- [x] **615.7** Some prevention effects generated by the resolution of a spell or ability refer to a specific amo... *(12 tests)*
+- [x] **615.7** Some prevention effects generated by the resolution of a spell or ability refer to a specific amo... *(14 tests)*
 - [x] **615.8** Some prevention effects generated by the resolution of a spell or ability refer to the next time ... *(8 tests)*
 - [x] **615.9** Some effects generated by the resolution of a spell or ability prevent damage from a source of a ... *(5 tests)*
 - [ ] **615.10** Some prevention effects generated by static abilities refer to a specific amount of damage—for ex...
@@ -863,7 +863,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **701.18** Play *(6 tests, subrules ab)*
 - [x] **701.19** Regenerate *(29 tests, subrules abc)*
 - [x] **701.20** Reveal *(8 tests, subrules ab)*
-- [x] **701.21** Sacrifice *(14 tests, subrules a)*
+- [x] **701.21** Sacrifice *(16 tests, subrules a)*
 - [x] **701.22** Scry *(8 tests, subrules ab)*
 - [x] **701.23** Search *(4 tests, subrules ad)*
 - [x] **701.24** Shuffle *(2 tests, subrules a)*
@@ -899,6 +899,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.28** Shadow *(6 tests, subrules abc)*
 - [x] **702.29** Cycling *(15 tests, subrules abef)*
 - [x] **702.30** Echo *(16 tests, subrules ab)*
+- [x] **702.32** Fading *(14 tests, subrules a)*
 - [x] **702.36** Fear *(5 tests, subrules ab)*
 - [x] **702.108** Prowess *(3 tests, subrules a)*
 - [x] **702.111** Menace *(4 tests, subrules ab)*
@@ -951,7 +952,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 733. Handling Illegal Actions
 
-- [x] **733.1** If a player takes an illegal action or starts to take an action but can’t legally complete it, th... *(3 tests)*
+- [x] **733.1** If a player takes an illegal action or starts to take an action but can’t legally complete it, th... *(4 tests)*
 - [x] **733.2** When reversing illegal spells and abilities, the player who had priority retains it and may take ... *(2 tests)*
 
 ### 800. General
