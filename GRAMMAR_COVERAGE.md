@@ -43,7 +43,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | MMQ | 335 | 465 | 91.8% | 91.6% | 66.2% | 278 |
 | NEM | 143 | 219 | 80.4% | 80.4% | 64.4% | 123 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| PCY *(measured)* | 143 | 207 | 86.0% | 81.6% | 51.7% | 102 |
+| PCY *(measured)* | 143 | 207 | 89.9% | 87.0% | 57.0% | 113 |
 | **All (shipped)** | **6307** | **9244** | **90.6%** | **89.9%** | **61.2%** | **4803** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -56,10 +56,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 472 | 210 | expected a subject |  |
+| 471 | 209 | expected a subject |  |
 | 143 | 73 | unrecognized effect verb |  |
-| 127 | 63 | unconsumed text |  |
-| 49 | 31 | granted ability in quotes | phase 3 (quoted abilities) |
+| 125 | 61 | unconsumed text |  |
+| 48 | 30 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 21 | 7 | expected what this creature can't block, or a duration |  |
 | 18 | 13 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
@@ -75,12 +75,12 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 4 | 1 | attach needs one chosen permanent to attach to |  |
 | 4 | 1 | expected a destination zone after 'return' |  |
 | 3 | 1 | expected 'of' |  |
-| 3 | 2 | expected 'the number of' in a where-clause |  |
 | 3 | 3 | unrecognized "can't be" restriction |  |
-| 3 | 3 | expected a quantity |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
+| 2 | 1 | expected 'the number of' in a where-clause |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
 | 2 | 1 | expected 'top' |  |
+| 1 | 1 | expected what to gain control of |  |
 
 ## Cards executing through the grammar
 
@@ -1916,6 +1916,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Search your library for a card, put that card into your hand, then shuffle.`
   - `Search your library for a card, put that card into your hand, then shuffle.`
   - `Search your library for a card, put that card into your hand, then shuffle.`
+- **Denying Wind**
+  - `Search target player's library for up to seven cards and exile them. Then that player shuffles.`
 - **Deranged Hermit**
   - `When this creature enters, create four 1/1 green Squirrel creature tokens.`
   - `Squirrel creatures get +1/+1.`
@@ -2334,6 +2336,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Elephant Graveyard**
   - `{T}: Add {C}.`
   - `{T}: Regenerate target Elephant.`
+- **Elephant Resurgence**
+  - `Each player creates a green Elephant creature token. Those creatures have "This token's power and toughness are each equal to the number of creature cards in its controller's graveyard."`
 - **Eliminate**
   - `Destroy target creature or planeswalker with mana value 3 or less.`
 - **Elite Archers**
@@ -2940,6 +2944,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Target player discards two cards, then draws as many cards as they discarded this way.`
   - `Target player discards two cards, then draws as many cards as they discarded this way.`
   - `Target player discards two cards, then draws as many cards as they discarded this way.`
+- **Forgotten Harvest**
+  - `At the beginning of your upkeep, you may exile a land card from your graveyard. If you do, put a +1/+1 counter on target creature.`
 - **Forgotten Lore**
   - `Target opponent chooses a card in your graveyard. You may pay {G}. If you do, repeat this process except that opponent can't choose a card already chosen for Forgotten Lore. Then put the last chosen card into your hand.`
 - **Formation**
@@ -3905,6 +3911,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Infernal Denizen**
   - `At the beginning of your upkeep, sacrifice two Swamps. If you can't, tap this creature, and an opponent may gain control of a creature you control of their choice for as long as this creature remains on the battlefield.`
   - `{T}: Gain control of target creature for as long as this creature remains on the battlefield.`
+- **Infernal Genesis**
+  - `At the beginning of each player's upkeep, that player mills a card. Then they create X 1/1 black Minion creature tokens, where X is the milled card's mana value.`
 - **Infernal Harvest**
   - `Infernal Harvest deals X damage divided as you choose among any number of target creatures.`
 - **Infernal Medusa**
@@ -4251,6 +4259,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature attacks, if you control no untapped lands, it gets +3/+0 until end of turn.`
 - **Keldon Champion**
   - `When this creature enters, it deals 3 damage to target player or planeswalker.`
+- **Keldon Firebombers**
+  - `When this creature enters, each player sacrifices all lands they control except for three.`
 - **Keldon Vandals**
   - `When this creature enters, destroy target artifact.`
 - **Kelsinko Ranger**
@@ -4976,6 +4986,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Remove X winch counters from this artifact: You may put a creature card with mana value X from your hand onto the battlefield.`
 - **Mercenaries**
   - `{3}: The next time this creature would deal damage to you this turn, prevent that damage. Any player may activate this ability.`
+- **Mercenary Informer**
+  - `{2}{W}: Put target nontoken Mercenary on the bottom of its owner's library.`
 - **Merchant Scroll**
   - `Search your library for a blue instant card, reveal that card, put it into your hand, then shuffle.`
 - **Merchant Ship**
@@ -5603,6 +5615,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Choose a creature type. All creatures of that type get -1/-1 until end of turn.`
 - **Outmaneuver**
   - `X target blocked creatures assign their combat damage this turn as though they weren't blocked.`
+- **Overburden**
+  - `Whenever a player puts a nontoken creature onto the battlefield, that player returns a land they control to its owner's hand.`
 - **Overlaid Terrain**
   - `Lands you control have "{T}: Add two mana of any one color."`
 - **Overrun**
@@ -6043,6 +6057,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Psychic Purge**
   - `Psychic Purge deals 1 damage to any target.`
   - `When a spell or ability an opponent controls causes you to discard this card, that player loses 5 life.`
+- **Psychic Theft**
+  - `Target player reveals their hand. You choose an instant or sorcery card from it and exile that card. You may cast that card for as long as it remains exiled. At the beginning of the next end step, if you haven't cast the card, return it to its owner's hand.`
 - **Psychic Transfer**
   - `If the difference between your life total and target player's life total is 5 or less, exchange life totals with that player.`
   - `If the difference between your life total and target player's life total is 5 or less, exchange life totals with that player.`
@@ -6295,6 +6311,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Return up to X target cards from your graveyard to your hand, where X is the number of black permanents target opponent controls as you cast this spell.`
 - **Reaping the Rewards**
   - `You gain 2 life.`
+- **Rebel Informer**
+  - `{3}: Put target nontoken Rebel on the bottom of its owner's library.`
 - **Rebirth**
   - `Each player may ante the top card of their library. If a player does, that player's life total becomes 20.`
   - `Each player may ante the top card of their library. If a player does, that player's life total becomes 20.`
@@ -6989,6 +7007,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Sacrifice this enchantment: Target creature gets +3/+3 until end of turn.`
 - **Sealed Fate**
   - `Look at the top X cards of target opponent's library. Exile one of those cards and put the rest back on top of that player's library in any order.`
+- **Search for Survivors**
+  - `Reorder your graveyard at random. An opponent chooses a card at random in your graveyard. If it's a creature card, put it onto the battlefield. Otherwise, exile it.`
 - **Searing Spear Askari**
   - `{1}{R}: This creature gains menace until end of turn. (It can't be blocked except by two or more creatures.)`
 - **Searing Touch**
@@ -8230,6 +8250,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{B}: This creature deals 1 damage to each creature and each player.`
 - **Three Wishes**
   - `Exile the top three cards of your library face down. You may look at those cards for as long as they remain exiled. Until your next turn, you may play those cards. At the beginning of your next upkeep, put any of those cards you didn't play into your graveyard.`
+- **Thresher Beast**
+  - `Whenever this creature becomes blocked, defending player sacrifices a land of their choice.`
 - **Thrill of Possibility**
   - `Draw two cards.`
 - **Thrive**
