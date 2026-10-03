@@ -1045,8 +1045,8 @@ hand-written entries to **363**, across fourteen consecutive sets that added no
 hook and retired several. That is the measure moving the way the architecture
 needs it to. Parse coverage: 4,167 of 4,169 supported cards fully claimed, 2
 acknowledged, **0 unclaimed** (`PARSE_COVERAGE.md`). `RULES_PROGRESS.md` is the
-CR coverage tracker. `CARD_VERIFICATION.md` is a log, not a target: 624 passed
-(403 in-game, 221 auto), 50 equivalent, 0 failed, 3,352 untested.
+CR coverage tracker. `CARD_VERIFICATION.md` is a log, not a target: 627 passed
+(403 in-game, 224 auto), 50 equivalent, 0 failed, 3,492 untested.
 
 **A whole wave can fix a hundred cards and move no compiled program**, and 6ED's
 is the run to cite. Five groups, five Known-gaps entries, zero cards implemented,
