@@ -42,7 +42,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | UDS | 143 | 204 | 91.7% | 91.2% | 65.7% | 121 |
 | MMQ | 335 | 465 | 91.8% | 91.6% | 66.2% | 278 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| NEM *(measured)* | 143 | 219 | 74.9% | 74.0% | 58.4% | 115 |
+| NEM *(measured)* | 143 | 219 | 78.1% | 77.6% | 61.6% | 121 |
 | **All (shipped)** | **6164** | **9025** | **90.8%** | **90.2%** | **61.1%** | **4680** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -55,10 +55,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 473 | 211 | expected a subject |  |
-| 142 | 73 | unrecognized effect verb |  |
-| 122 | 57 | unconsumed text |  |
-| 44 | 27 | granted ability in quotes | phase 3 (quoted abilities) |
+| 470 | 208 | expected a subject |  |
+| 141 | 72 | unrecognized effect verb |  |
+| 121 | 56 | unconsumed text |  |
+| 43 | 26 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 18 | 6 | expected what this creature can't block, or a duration |  |
 | 17 | 15 | expected 'unless defending player controls' |  |
@@ -3416,6 +3416,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Put all enchantments on top of their owners' libraries.`
 - **Harrow**
   - `Search your library for up to two basic land cards, put them onto the battlefield, then shuffle.`
+- **Harvest Mage**
+  - `{G}, {T}, Discard a card: Until end of turn, if you tap a land for mana, it produces one mana of a color of your choice instead of any other type and amount.`
 - **Harvest Wurm**
   - `When this creature enters, sacrifice it unless you return a basic land card from your graveyard to your hand.`
 - **Hasran Ogress**
@@ -4172,6 +4174,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, if your opponents control no creatures, this creature deals 4 damage to you.`
 - **Khabál Ghoul**
   - `At the beginning of each end step, put a +1/+1 counter on this creature for each creature that died this turn.`
+- **Kill Switch**
+  - `{2}, {T}: Tap all other artifacts. They don't untap during their controllers' untap steps for as long as this artifact remains tapped.`
 - **Killer Bees**
   - `{G}: This creature gets +1/+1 until end of turn.`
   - `{G}: This creature gets +1/+1 until end of turn.`
@@ -4687,6 +4691,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this creature enters, return target creature to its owner's hand.`
 - **Mana Breach**
   - `Whenever a player casts a spell, that player returns a land they control to its owner's hand.`
+- **Mana Cache**
+  - `At the beginning of each player's end step, put a charge counter on this enchantment for each untapped land that player controls.`
+  - `Remove a charge counter from this enchantment: Add {C}. Any player may activate this ability but only during their turn before the end step.`
 - **Mana Clash**
   - `You and target opponent each flip a coin. Mana Clash deals 1 damage to each player whose coin comes up tails. Repeat this process until both players' coins come up heads on the same flip.`
   - `You and target opponent each flip a coin. Mana Clash deals 1 damage to each player whose coin comes up tails. Repeat this process until both players' coins come up heads on the same flip.`
@@ -5493,6 +5500,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Target opponent reveals their hand. You choose a creature card from it. That player discards that card.`
 - **Outmaneuver**
   - `X target blocked creatures assign their combat damage this turn as though they weren't blocked.`
+- **Overlaid Terrain**
+  - `Lands you control have "{T}: Add two mana of any one color."`
 - **Overrun**
   - `Creatures you control get +3/+3 and gain trample until end of turn. (Each of those creatures can deal excess combat damage to the player or planeswalker it's attacking.)`
 - **Overtaker**
@@ -6425,6 +6434,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Rishadan Port**
   - `{T}: Add {C}.`
   - `{1}, {T}: Tap target land.`
+- **Rising Waters**
+  - `At the beginning of each player's upkeep, that player untaps a land they control.`
 - **Ritual of Steel**
   - `When this Aura enters, draw a card at the beginning of the next turn's upkeep.`
 - **Ritual of the Machine**
@@ -8897,6 +8908,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{W}{W}: This creature gets +2/+0 until end of turn. Activate only once each turn.`
 - **Wild Dogs**
   - `At the beginning of your upkeep, if a player has more life than each other player, the player with the most life gains control of this creature.`
+- **Wild Mammoth**
+  - `At the beginning of your upkeep, if a player controls more creatures than each other player, the player who controls the most creatures gains control of this creature.`
 - **Wild Wurm**
   - `When this creature enters, flip a coin. If you lose the flip, return this creature to its owner's hand.`
 - **Wildfire**

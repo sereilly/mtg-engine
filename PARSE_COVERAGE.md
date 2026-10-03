@@ -25,7 +25,7 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**8 unclaimed sentence(s) across 5 supported card(s).**
+**7 unclaimed sentence(s) across 4 supported card(s).**
 
 - **Parallax Tide**
   - `fading 5`
@@ -35,8 +35,6 @@ anything anyone did, and every ingest would arrive red.
   - `when this enchantment leaves the battlefield, each player returns to the battlefield all cards they own exiled with it`
 - **Rejuvenation Chamber**
   - `fading 2`
-- **Rising Waters**
-  - `at the beginning of each player's upkeep, that player untaps a land they control`
 - **Saproling Burst**
   - `fading 7`
   - `remove a fade counter from this enchantment: create a green saproling creature token. it has "this token's power and toughness are each equal to the number of fade counters on saproling burst."`
