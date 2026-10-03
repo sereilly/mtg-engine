@@ -12,6 +12,26 @@ unclaimed text. Do not edit by hand.
 - With UNCLAIMED text (must fix or acknowledge): **0**
 - With deletion-probe findings (ignored words): **494**
 
+## Measured sets — reported, not gated
+
+Cards in a `measured` set (see `cards/manifest.json`) that the
+compiler calls **supported** while carrying a printed line nothing
+implements. They are the debt behind that set's progress number, and
+`--hollow-lines` sees only the ones that produced an *ability part* —
+a line yielding nothing at all leaves that probe nothing to find.
+
+Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
+`HOOK_RELIANCE.md`'s ceilings exclude the same sets: a ratchet over a
+set nobody has implemented fires on its composition rather than on
+anything anyone did, and every ingest would arrive red.
+
+**2 unclaimed sentence(s) across 2 supported card(s).**
+
+- **Celestial Convergence**
+  - `at the beginning of your upkeep, remove an omen counter from this enchantment. if there are no omen counters on this enchantment, the player with the highest life total wins the game. if two or more players are tied for highest life total, the game is a draw`
+- **Heightened Awareness**
+  - `as this enchantment enters, discard your hand`
+
 ## Acknowledged simplifications
 
 | Card | Sentence | Why it is acceptable |

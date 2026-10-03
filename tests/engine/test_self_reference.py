@@ -114,6 +114,12 @@ def test_no_card_in_the_pool_loses_a_word_to_the_expansion(_r28_pool):
     one ability reads "Volrath gets +X/+X until end of turn". "Volrath" is not
     a word the game uses to describe objects, so it is the legend naming itself
     and the expansion is right to write the whole name.
+
+    Prophecy added one more: Mageta the Lion's activated ability reads
+    "Destroy all creatures except for Mageta". That exclusion is the legend
+    naming itself -- the one creature the sweep spares -- and "Mageta" is not a
+    word the game uses to describe objects, so the expansion is right to write
+    the whole name.
     """
     changed = {
         card.name
@@ -136,4 +142,5 @@ def test_no_card_in_the_pool_loses_a_word_to_the_expansion(_r28_pool):
         "Starke of Rath",
         "Crovax the Cursed",
         "Volrath the Fallen",
+        "Mageta the Lion",
     }

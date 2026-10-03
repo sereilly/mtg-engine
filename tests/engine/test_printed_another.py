@@ -128,11 +128,21 @@ def test_every_card_printing_another_target_carries_the_exclusion():
     effect reaches a strictly larger set than the card prints, and nothing
     anywhere says so -- the card compiles supported, every guard is green, and
     the only witness is the board.
+
+    Scoped to **supported** cards, because a refused line has not consumed the
+    word -- it has declined the whole sentence, which is the outcome this file
+    wants for a word no reader can honour yet. Prophecy's Withdraw is the case
+    that drew the line: "Then return another target creature ... unless its
+    controller pays {1}" refuses in the lowering with "a printed 'another
+    target' in a multi-clause sentence needs a lowering with a slot per
+    clause", so it reached this census as a card carrying *no* program for
+    that line and read as a drop. The census names it unsupported with that
+    reason; once it compiles, it is in scope here like every other card.
     """
     dropped = [
         card.name
         for card in _cards_printing_another_target()
-        if not _program_exclusions(card)
+        if compile_card_oracle(card).supported and not _program_exclusions(card)
     ]
     assert dropped == [], (
         'these cards print "another target" and their compiled program carries '
