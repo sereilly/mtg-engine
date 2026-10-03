@@ -838,3 +838,18 @@ def _lower_sacrifice_and_return_targets(
     return (
         OracleInstruction("sacrifice_and_return_targets", "", payload),
     )
+
+
+def _lower_random_graveyard_card_fate(
+    node: ast.RandomGraveyardCardFate,
+) -> tuple[OracleInstruction, ...]:
+    """Search for Survivors' paragraph, as one instruction: shuffle the
+    caster's graveyard, take a card at random, and send it to the battlefield
+    when it has the printed type, to exile otherwise. The type is payload; the
+    two destinations are the node's fixed words and the kind's meaning."""
+    return (
+        OracleInstruction(
+            "move_random_graveyard_card", "",
+            {"shuffle_first": True, "card_type": node.card_type},
+        ),
+    )

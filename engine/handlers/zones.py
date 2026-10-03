@@ -4104,6 +4104,39 @@ def exile_cost_sacrifices(game: Game, instruction: OracleInstruction, context: O
     return True, "resolved"
 
 
+@effect_handler("move_random_graveyard_card")
+def move_random_graveyard_card(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Reorder your graveyard at random. An opponent chooses a card at random
+    in your graveyard. If it's a creature card, put it onto the battlefield.
+    Otherwise, exile it." (Search for Survivors.)
+
+    The graveyard is an ordered pile here (CR 404.1's top card is read by
+    other cards), so the reorder is performed, not skipped. A pick "at random"
+    is nobody's decision, so no prompt is armed; it needs an opponent to make
+    it, and with none left nothing is chosen. The module RNG, which
+    ``run_ai_simulation`` seeds, so a seed replays the run.
+    """
+    caster = context.caster
+    caster_index = game.players.index(caster)
+    payload = instruction.payload
+    pile = caster.graveyard
+    if payload.get("shuffle_first"):
+        random.shuffle(pile)
+    if not pile or not list(game.opponents_of(caster_index)):
+        game.log.append(f"{context.card.name}: no card was chosen")
+        return True, "resolved"
+    card = pile.pop(random.randrange(len(pile)))
+    if card_has_type(card, str(payload.get("card_type") or "creature")):
+        game._put_permanent_onto_battlefield(
+            caster_index, Permanent(card=card), None, from_zone="graveyard"
+        )
+        game.log.append(f"{context.card.name} put {card.name} onto the battlefield")
+    else:
+        caster.exile.append(card)
+        game.log.append(f"{context.card.name} exiled {card.name}")
+    return True, "resolved"
+
+
 @effect_handler("exile_target_graveyard_card")
 def exile_target_graveyard_card(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Exile target card from a graveyard." (Return to Nature's third mode,

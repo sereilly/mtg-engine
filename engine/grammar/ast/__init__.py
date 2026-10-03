@@ -327,6 +327,7 @@ from .library import (
 from .cards import (
     Draw,
     EachPlayerClaimsExiledCard,
+    RandomGraveyardCardFate,
     Discard,
     Mill,
     MillUntil,
@@ -712,6 +713,7 @@ __all__ = [
     # cards
     "Draw",
     "EachPlayerClaimsExiledCard",
+    "RandomGraveyardCardFate",
     "Discard",
     "LookTopCycleForLife",
     "SeparateLibraryTopIntoPiles",

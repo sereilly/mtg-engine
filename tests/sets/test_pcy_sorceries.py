@@ -189,6 +189,56 @@ def test_w1g6_psychic_theft_returns_the_uncast_card_at_the_end_step(set_pool):
     assert [c.name for c in game.players[0].hand] == []
 
 
+def _w1g6_survivors(set_pool, graveyard):
+    game = _W1G6Game(players=[
+        _W1G6PlayerState(
+            name="P0", hand=[set_pool("PCY")["Search for Survivors"]],
+            graveyard=list(graveyard),
+        ),
+        _W1G6PlayerState(name="P1"),
+    ])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    game._close_current_priority_step()
+    assert game.cast_from_hand(0, "Search for Survivors").supported
+    _w1g6_resolve(game)
+    return game  # _w1g6_survivors
+
+
+def test_w1g6_search_for_survivors_returns_a_creature_card(set_pool):
+    """"…An opponent chooses a card at random in your graveyard. If it's a
+    creature card, put it onto the battlefield." A graveyard of one creature
+    card leaves nothing to chance."""
+    game = _w1g6_survivors(set_pool, [_w1g6_creature_card("Elk")])
+    assert [p.card.name for p in game.controlled_by(0)] == ["Elk"]
+    assert [c.name for c in game.players[0].graveyard] == ["Search for Survivors"]
+    assert not game.players[0].exile
+
+
+def test_w1g6_search_for_survivors_exiles_a_noncreature_card(set_pool):
+    """"Otherwise, exile it." — and only the one card the pick named."""
+    game = _w1g6_survivors(set_pool, [_w1g6_mk_card("Forest", "Basic Land — Forest")])
+    assert not list(game.controlled_by(0))
+    assert [c.name for c in game.players[0].exile] == ["Forest"]
+
+
+def test_w1g6_search_for_survivors_takes_exactly_one_of_several(set_pool):
+    import random
+
+    random.seed(7)
+    pile = [_w1g6_creature_card("Elk"), _w1g6_mk_card("Forest", "Basic Land — Forest"),
+            _w1g6_creature_card("Ox"), _w1g6_mk_card("Swamp", "Basic Land — Swamp")]
+    game = _w1g6_survivors(set_pool, pile)
+    moved = [p.card.name for p in game.controlled_by(0)] + [c.name for c in game.players[0].exile]
+    assert len(moved) == 1
+    left = sorted(c.name for c in game.players[0].graveyard if c.name != "Search for Survivors")
+    assert sorted(left + moved) == ["Elk", "Forest", "Ox", "Swamp"]
+    if moved[0] in ("Elk", "Ox"):
+        assert not game.players[0].exile
+    else:
+        assert not list(game.controlled_by(0))
+
+
 def test_w1g6_denying_wind_default_takes_at_most_seven(set_pool):
     game = _w1g6_denying_wind_table(set_pool)
     _w1g6_resolve(game)
