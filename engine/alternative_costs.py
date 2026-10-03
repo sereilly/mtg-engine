@@ -255,6 +255,18 @@ class AlternativeCost:
     #: gain, so the CR 601.2h gate must not ask this one the payer's question.
     #: Always payable for the same reason.
     opponent_gains_life: int = 0
+    #: "If you control a Forest, rather than pay this spell's mana cost, you may
+    #: **have each other player gain 6 life**." (Reverent Silence; Skyshroud
+    #: Cutter prints 5.) Invigorate's price paid to **every** other seat rather
+    #: than to one the caster picks, which is why it is a field beside
+    #: ``opponent_gains_life`` and not that one with a flag: the two answer
+    #: CR 119.7 differently. One opponent who cannot gain life leaves Invigorate
+    #: payable through another, and leaves this one unpayable outright --
+    #: "a cost that involves having **that player** gain life can't be paid",
+    #: and here every other player is that player. A duel cannot tell the two
+    #: apart; a free-for-all table can, and the wrong one is a spell cast for
+    #: less than it prints.
+    others_gain_life: int = 0
     #: "You may **cast this spell without paying its mana cost**." (The five
     #: Mercadian Masques Legates.) CR 118.9's *second* printed spelling, named
     #: in the rule beside the first -- "Alternative costs are usually phrased,
@@ -333,6 +345,10 @@ class AlternativeCost:
         if self.opponent_gains_life:
             parts.append(
                 f"have an opponent gain {self.opponent_gains_life} life"
+            )
+        if self.others_gain_life:
+            parts.append(
+                f"have each other player gain {self.others_gain_life} life"
             )
         if self.exile_graveyard_position is not None:
             spec = self.exile_graveyard_position
@@ -459,6 +475,16 @@ _RETURN_TO_HAND = re.compile(
 #: opponent" is a different, strictly larger price that would need a different
 #: payment, so the wider phrase refuses here rather than being charged as one.
 _OPPONENT_GAINS_LIFE = re.compile(r"^have an opponent gain (\d+) life$")
+
+#: "…**have each other player gain 6 life**…" (Reverent Silence, Skyshroud
+#: Cutter.) The wider recipient the pattern above refuses, read as its own
+#: payment: every other seat gains, nobody is picked, and CR 119.7 makes one
+#: seat that cannot gain life an unpayable cost rather than a smaller one.
+#: "Each opponent" is not this phrase -- in a game with teams it names fewer
+#: seats -- and no card in the pool prints it, so it still refuses.
+_EACH_OTHER_PLAYER_GAINS_LIFE = re.compile(
+    r"^have each other player gain (\d+) life$"
+)
 
 #: "…its controller may **discard a card that shares a color with that
 #: spell**." (Dream Halls.) The noun phrase is delimited here and *read* by
@@ -692,6 +718,7 @@ def _read_cost_clauses(costs: str) -> dict | None:
         "tap_count": 0,
         "reveal_hand": False,
         "opponent_gains_life": 0,
+        "others_gain_life": 0,
     }
     for clause in re.split(r",\s*|\s+and\s+", costs):
         clause = clause.strip()
@@ -786,6 +813,13 @@ def _read_cost_clauses(costs: str) -> dict | None:
         if gained is not None:
             fields["opponent_gains_life"] += int(gained.group(1))
             continue
+        # "**have each other player gain 6 life**" (Reverent Silence). The
+        # same gain handed to every other seat rather than one, so it is its
+        # own field for CR 119.7's sake -- see ``AlternativeCost``.
+        gained = _EACH_OTHER_PLAYER_GAINS_LIFE.match(clause)
+        if gained is not None:
+            fields["others_gain_life"] += int(gained.group(1))
+            continue
         exiled = _EXILE_FROM_HAND.match(clause)
         if exiled is not None:
             if fields["exile_from_hand"] is not None:
@@ -854,6 +888,7 @@ def _read_cost_clauses(costs: str) -> dict | None:
         and not fields["tap_count"]
         and not fields["reveal_hand"]
         and not fields["opponent_gains_life"]
+        and not fields["others_gain_life"]
     ):
         # "You may — rather than pay this spell's mana cost." A sentence whose
         # every clause was read as nothing is a free spell, which is the one

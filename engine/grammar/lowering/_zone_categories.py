@@ -164,6 +164,9 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     "exile_entire_library": "zones",
     "exile_random_card_from_hand": "zones",
     "exile_chosen_card_from_hand": "zones",
+    # Mind Swords: the same hidden-zone pick made by every seat, a printed
+    # number of times each — still a card leaving a hand for exile.
+    "exile_cards_from_hand": "zones",
     # The pile spelling of the row above (Duplicity, Scroll Rack): the same
     # hidden zone, a quantifier up.
     "exile_hand_pile": "zones",

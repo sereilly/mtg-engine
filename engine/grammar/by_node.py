@@ -24,6 +24,7 @@ from . import ast
 from .lowering import (_lower_play_with_hand_revealed, _lower_add_mana_for_tapped_land, _lower_activate_each_lands_mana_ability, _lower_lose_unspent_mana,
                        _lower_discard, _lower_exile_entire_library,
                        _lower_exile_random_from_hand, _lower_mill,
+                       _lower_exile_cards_from_hand,
                        _lower_move_counter, _lower_note_mana_spent,
                        _lower_bid_life_for_control, _lower_become_blocked,
                        _lower_produces_mana_instead, _lower_spend_mana_as_though,
@@ -341,6 +342,7 @@ _BY_NODE_TYPE_WITH_EVENT: dict[type, object] = {
     # "…**that player** exiles a card at random from their hand" (Elkin Lair):
     # the same seat question one zone over, and the same answer.
     ast.ExileRandomFromHand: _lower_exile_random_from_hand,
+    ast.ExileCardsFromHand: _lower_exile_cards_from_hand,
     ast.Mill: _lower_mill,
     # "…**that player** skips their next combat phase" (Blinding Angel): the
     # seat the damage event froze, so the lowering has to know which event

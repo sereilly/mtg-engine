@@ -521,6 +521,12 @@ class SpellCastingMixin:
         # paid the mana cost the caller said they were replacing.
         alternative_cost: bool | None = None,
         alternative_cost_hand_index: int | None = None,
+        # Which permanents pay the alternative cost's sacrifice / return / tap
+        # half ("you may sacrifice a creature …", Mind Swords), by id. Its own
+        # channel rather than `cost_permanent_ids`, because CR 118.9d keeps the
+        # additional costs in force beside an alternative one and the two
+        # payments would otherwise read one list.
+        alternative_cost_permanent_ids: list[int] | None = None,
         # CR 601.2b's *optional* additional cost, and how many times each offer
         # was taken: ``{"{1}{R}": 2, "{1}{G}": 1}``. Announced with the cast for
         # the reason every other cost choice here is — 601.2b is one step, and a
@@ -572,6 +578,7 @@ class SpellCastingMixin:
             cost_hand_index=cost_hand_index,
             alternative_cost=alternative_cost,
             alternative_cost_hand_index=alternative_cost_hand_index,
+            alternative_cost_permanent_ids=alternative_cost_permanent_ids,
             optional_cost_payments=optional_cost_payments,
             chosen_creature_type=chosen_creature_type,
             chosen_source_seat=chosen_source_seat,
@@ -839,6 +846,9 @@ class SpellCastingMixin:
         # it would cast every Force of Will for a life and a card.
         alternative_cost: bool | None = None,
         alternative_cost_hand_index: int | None = None,
+        # …and which permanents pay its sacrifice / return / tap half, by id
+        # (see `cast_from_hand`). None is the deterministic pick.
+        alternative_cost_permanent_ids: list[int] | None = None,
         # CR 601.2b's *optional* additional cost, and how many times each offer
         # was taken: ``{"{1}{R}": 2, "{1}{G}": 1}``. Announced with the cast for
         # the reason every other cost choice here is — 601.2b is one step, and a
@@ -1432,6 +1442,17 @@ class SpellCastingMixin:
                 spell_hand_index=hand_index if from_zone == "hand" else None,
             )
         )
+        if alternative_denial is None:
+            # …and which permanents pay its sacrifice / return / tap half, named
+            # by id and checked now, for the hand card's reason above: a named
+            # permanent that cannot pay is a refusal with nothing spent, never
+            # a quiet slide onto the default pick.
+            alternative_permanents, alternative_denial = (
+                self._resolve_alternative_cost_permanents(
+                    caster_index, card, chosen_alternative,
+                    alternative_cost_permanent_ids,
+                )
+            )
         if alternative_denial is not None:
             self.log.append(alternative_denial)
             return SimulationResult(
@@ -1880,6 +1901,7 @@ class SpellCastingMixin:
         # alternative one, so both are paid, in the order CR 601.2h leaves free.
         self._pay_alternative_cost(
             caster_index, card, chosen_alternative, alternative_card,
+            named_permanents=alternative_permanents,
         )
         # CR 601.2f's increases, in life. Gated far above, where the targets
         # settle what they come to, and paid here with every other cost —
@@ -2644,6 +2666,93 @@ class SpellCastingMixin:
             )
         return cost, hand[named_hand_index], None
 
+    @staticmethod
+    def alternative_cost_permanent_payment(
+        cost: "AlternativeCost | None",
+    ) -> "tuple[str, int] | None":
+        """The one battlefield payment *cost* names, as ``(verb, count)``.
+
+        "Sacrifice a creature" (Mind Swords), "tap an untapped creature you
+        control" (Lashknife), "return two Islands you control to their owner's
+        hand" (Gush): the verb keys ``_COST_CANDIDATE_FIELDS``, so the offer,
+        the announcement's check and the payment enumerate one candidate list.
+
+        None when the cost takes no permanent — and when it prints **two**
+        such verbs, a shape no card in the pool has: one list of ids could not
+        say which permanent pays which verb, so such a cost offers no choice
+        and takes the deterministic pick, which is what every one of these
+        costs did before the choice existed.
+        """
+        if cost is None:
+            return None
+        found = [
+            (verb, count)
+            for verb, present, count in (
+                ("sacrifice", cost.sacrifice_filter is not None,
+                 max(1, cost.sacrifice_count)),
+                ("return", cost.return_filter is not None,
+                 max(1, cost.return_count)),
+                ("tap", bool(cost.tap_count), cost.tap_count),
+            )
+            if present
+        ]
+        return found[0] if len(found) == 1 else None
+
+    def _resolve_alternative_cost_permanents(
+        self,
+        caster_index: int,
+        card: CardDefinition,
+        cost: "AlternativeCost | None",
+        named_ids: "list[int] | None",
+    ) -> "tuple[list[Permanent], str | None]":
+        """CR 601.2b: which permanents the caster named to pay *cost*.
+
+        A cost that names an object owes a **choice** — which creature is
+        tapped for Lashknife, which is sacrificed for Mind Swords, which
+        Mountain goes to Fireblast — and every one of these was paid by
+        ``default_sacrifice_pick`` whatever the player wanted, because the
+        announcement had nowhere to carry the answer. The choice is made here,
+        as the spell is announced, out of the same candidate list the CR 601.2h
+        gate counts and the payment re-enumerates.
+
+        Nothing named is the deterministic default, which keeps AI and headless
+        play unblocked. A named id that is not a candidate — another seat's
+        creature, an already-tapped one, a land the phrase does not name — is a
+        refusal with nothing spent, never a slide onto a legal neighbour; so is
+        an id named twice, or more ids than the cost takes. Fewer than the cost
+        takes is a partial naming, and the payment fills the rest by the
+        default rule, exactly as the counted additional sacrifice does.
+        """
+        if not named_ids:
+            return [], None
+        payment = self.alternative_cost_permanent_payment(cost)
+        if payment is None:
+            return [], (
+                f"{card.name} can't be cast that way: its alternative cost "
+                f"names no permanent to choose (CR 601.2b)"
+            )
+        verb, count = payment
+        if len(set(named_ids)) != len(named_ids) or len(named_ids) > count:
+            return [], (
+                f"{card.name} can't be cast: its alternative cost takes "
+                f"{count} permanent(s), each named once (CR 601.2b)"
+            )
+        candidates = self._additional_cost_candidates(
+            caster_index, cost, giving_up=verb
+        )
+        named: list[Permanent] = []
+        for permanent_id in named_ids:
+            found = self.permanent_by_id(permanent_id)
+            # By identity: `in` compares Permanents by value and would accept
+            # a look-alike on the wrong battlefield.
+            if found is None or not any(perm is found for perm in candidates):
+                return [], (
+                    f"{card.name} can't be cast: the permanent named to "
+                    f"{verb} for its alternative cost cannot pay it (CR 601.2b)"
+                )
+            named.append(found)
+        return named, None
+
     def _unpayable_alternative_cost(
         self,
         caster_index: int,
@@ -2767,6 +2876,25 @@ class SpellCastingMixin:
                 f"{card.name} can't be cast: no opponent may gain life, so its "
                 f"alternative cost cannot be paid (CR 119.7)"
             )
+        # "…you may **have each other player gain 6 life**." (Reverent
+        # Silence.) The same CR 119.7 sentence asked the other way round: every
+        # other seat is "that player", so **one** that cannot gain life is an
+        # unpayable cost, where Invigorate's caster could have handed the life
+        # to someone else. Admitted, the payment below would skip the banned
+        # seat and the spell would be cast for less than it prints.
+        if cost.others_gain_life:
+            from ...life_prohibitions import life_gain_banned
+
+            banned = [
+                self.players[seat].name
+                for seat in self._other_living_seats(caster_index)
+                if life_gain_banned(self, self.players[seat])
+            ]
+            if banned:
+                return (
+                    f"{card.name} can't be cast: {', '.join(banned)} can't gain "
+                    f"life, so its alternative cost cannot be paid (CR 119.7)"
+                )
         # "You may **exile the top three black cards of your graveyard** rather
         # than pay this spell's mana cost." (Spinning Darkness.) The *count*
         # again, and the scan with it: CR 118.3 lets a cost be paid only in
@@ -2817,12 +2945,33 @@ class SpellCastingMixin:
             None,
         )
 
+    def _other_living_seats(self, caster_index: int) -> list[int]:
+        """Every seat but *caster_index* still in the game, in turn order from
+        the active player (CR 101.4).
+
+        "Have **each other player** gain 6 life" (Reverent Silence) is paid to
+        all of them, so the gate and the payment walk one list -- the
+        arrangement ``_life_gain_cost_payer`` makes for the one-seat price
+        beside it, for its reason.
+        """
+        count = len(self.players)
+        active = self.active_player_index or 0
+        return sorted(
+            (
+                seat for seat in range(count)
+                if seat != caster_index and not self.players[seat].lost
+            ),
+            key=lambda seat: ((seat - active) % count, seat),
+        )
+
     def _pay_alternative_cost(
         self,
         caster_index: int,
         card: CardDefinition,
         cost: "AlternativeCost | None",
         chosen: "CardDefinition | None",
+        *,
+        named_permanents: "list[Permanent] | None" = None,
     ) -> None:
         """Perform the announced alternative cost (CR 601.2h).
 
@@ -2835,10 +2984,33 @@ class SpellCastingMixin:
         immutable ``CardDefinition`` per copy, so every copy in a hand is the
         same Python object and the obvious identity filter would exile all of
         them while this puts exactly one into exile.
+
+        *named_permanents* is what ``_resolve_alternative_cost_permanents``
+        checked at the announcement: the permanents the caster chose to pay the
+        sacrifice / return / tap half, taken first and by identity, with the
+        deterministic pick filling whatever the caster left unnamed.
         """
         if cost is None:
             return
         caster = self.players[caster_index]
+        named = list(named_permanents or ())
+
+        def pick(candidates: "list[Permanent]") -> "Permanent":
+            # The caster's own choice while one of theirs is still a candidate
+            # (each payment renumbers the board, so the list is re-asked per
+            # permanent), and the default rule for the rest.
+            claimed = next(
+                (
+                    perm for perm in named
+                    if any(candidate is perm for candidate in candidates)
+                ),
+                None,
+            )
+            if claimed is None:
+                return self.default_sacrifice_pick(candidates)
+            named[:] = [perm for perm in named if perm is not claimed]
+            return claimed
+
         if cost.pay_life:
             caster.life -= cost.pay_life
             self.log.append(
@@ -2859,7 +3031,7 @@ class SpellCastingMixin:
                 candidates = self._additional_cost_candidates(caster_index, cost)
                 if not candidates:
                     break  # gated above; a board that changed since is a no-op
-                victim = self.default_sacrifice_pick(candidates)
+                victim = pick(candidates)
                 name = victim.card.name
                 if self.sacrifice_permanent(victim) is not None:
                     self.log.append(
@@ -2882,7 +3054,7 @@ class SpellCastingMixin:
                 )
                 if not candidates:
                     break  # gated above; a board that changed since is a no-op
-                giving = self.default_sacrifice_pick(candidates)
+                giving = pick(candidates)
                 name = giving.card.name
                 return_permanent_to_owners_hand(self, giving, caster)
                 self.log.append(
@@ -2903,7 +3075,7 @@ class SpellCastingMixin:
                 )
                 if not candidates:
                     break  # gated above; a board that changed since is a no-op
-                tapping = self.default_sacrifice_pick(candidates)
+                tapping = pick(candidates)
                 self.become_tapped(tapping)
                 self.log.append(
                     f"{caster.name} tapped {tapping.card.name} to cast "
@@ -2938,6 +3110,16 @@ class SpellCastingMixin:
             if opponent is not None:
                 self._gain_life(
                     self.players[opponent], cost.opponent_gains_life, card.name
+                )
+        if cost.others_gain_life:
+            # "…**have each other player gain 6 life**…" (Reverent Silence.)
+            # Every other seat, through ``_gain_life`` for the reason the
+            # one-seat price above goes through it -- a cost payment is still a
+            # life gain the replacements and prohibitions see (CR 118.11) --
+            # and over the seats the gate just cleared.
+            for seat in self._other_living_seats(caster_index):
+                self._gain_life(
+                    self.players[seat], cost.others_gain_life, card.name
                 )
         if cost.exile_graveyard_position is not None:
             from ...graveyard_order import positions_named

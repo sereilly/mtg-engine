@@ -281,6 +281,31 @@ def lower_pronoun_exile(
                 node=node,
             )
         return (OracleInstruction("exile_bound_permanent", "", {}),)
+    # "Create a 4/4 white Angel creature token with flying. **Exile it** at the
+    # beginning of the next end step." (Angelic Favor.) The branch above's
+    # reading with a token maker as the step in front: the pronoun's antecedent
+    # is the token, not the spell, so it lowers to the "exile that token" kind
+    # below — whose handler reads the id the maker wrote, which the delayed
+    # entry captures when it is created (CR 603.7c).
+    #
+    # Read as the source instead it lowered to ``exile_self``, and for an
+    # instant that exiled **Angelic Favor out of its owner's graveyard** at the
+    # end step while the 4/4 flier stayed for the rest of the game — compiled
+    # supported, wrong in the caster's favour, and seen only by driving it.
+    # ``produced`` is the whole gate, as it is above: Dark Maze's "exile it"
+    # has no token maker in front of it and keeps the source reading.
+    if (
+        _is_source(subject)
+        and isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "it"
+        and CREATED_TOKEN in produced
+    ):
+        if node.duration.kind is not None or node.counters:
+            raise LoweringError(
+                "an exile of a created token carries no duration or counters",
+                node=node,
+            )
+        return (OracleInstruction("exile_created_token", "", {}),)
     if _is_source(subject):
         if node.duration.kind is not None:
             raise LoweringError(

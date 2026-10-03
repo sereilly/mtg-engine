@@ -213,6 +213,15 @@ class Shield:
     #: control", CR 109.5); the two narrowings a shield can carry never both
     #: appear in the pool, and the seat means the same thing for either.
     recipients: dict | None = None
+    #: "Prevent all damage that would be dealt this turn **to creatures you
+    #: control**." (Sivvi's Ruse.) A ``recipients`` shield whose phrase is the
+    #: *whole* of what it covers: Shadowbane's "you **and/or** creatures you
+    #: control" covers the seat it hangs off as well, and this one hangs off a
+    #: seat only because a class has nothing else to hang off (the cleanup sweep
+    #: walks seats). Read by ``prevention._live`` before it counts a seat's own
+    #: shields as protecting that seat -- without it the caster's own face would
+    #: be shielded by a sentence that never names them.
+    spares_holder: bool = False
     #: "The next time a black or red source of your choice would deal damage
     #: this turn, prevent that damage." (Penance.) CR 615.8's shield printed
     #: with **no recipient at all** — it is keyed on the source and stops that
@@ -512,8 +521,13 @@ def badge_view(doc: str) -> property:
     """
 
     def get(self) -> str | None:
+        # A shield that spares its holder (Sivvi's Ruse) protects creatures,
+        # not the seat it hangs off, so it puts no badge on that seat.
         return next(
-            (s.source_name for s in reversed(shields_on(self)) if s.source_name and not s.spent),
+            (
+                s.source_name for s in reversed(shields_on(self))
+                if s.source_name and not s.spent and not s.spares_holder
+            ),
             None,
         )
 
@@ -807,6 +821,36 @@ def make_subject_shield(
         source_filter=dict(source_filter),
         filter_seat=seat,
         source_name=source_name,
+    )
+
+
+def make_recipient_class_shield(
+    recipients: dict, seat: int | None = None, source_name: str | None = None
+) -> Shield:
+    """A blanket shield around every permanent a printed noun phrase describes.
+
+    "Prevent all damage that would be dealt this turn to creatures you
+    control." (Sivvi's Ruse.) :func:`make_subject_shield` with the phrase on the
+    other end of the event: the *recipients* are described instead of the
+    sources, and every source is answered. The same kind and therefore the same
+    interceptor and the same band -- a blanket is a blanket whichever end of the
+    event its phrase narrows.
+
+    It hangs off *seat*'s player, because a class has nothing else to hang off
+    and the cleanup sweep walks seats; ``prevention._class_shields`` is what
+    makes a described permanent find it, and ``spares_holder`` is what keeps
+    the seat itself out of a sentence that never named it. The set is never
+    captured: CR 615.1's shields watch the event, so a creature that enters
+    after this resolved is covered and one that changed hands is not.
+    """
+    return Shield(
+        kind=PREVENT_FROM_SUBJECT,
+        amount=None,
+        uses=None,
+        recipients=dict(recipients),
+        filter_seat=seat,
+        source_name=source_name,
+        spares_holder=True,
     )
 
 

@@ -5811,6 +5811,63 @@ def exile_chosen_card_from_hand(game: Game, instruction: OracleInstruction, cont
     return True, "resolved"
 
 
+@effect_handler("exile_cards_from_hand")
+def exile_cards_from_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Each player exiles two cards from their hand." (Mind Swords.)
+
+    Each seat chooses out of its own hidden hand (CR 400.2), in turn order from
+    the active player (CR 101.4), so this arms the pick
+    ``exile_chosen_card_from_hand`` already arms — the **mandatory** printing of
+    it, which has no Decline — once per card owed. One card at a time rather
+    than a new multi-card prompt: the chooser sees the whole hand at each pick,
+    so nothing is decided with less information than one simultaneous pick of
+    two would give, and the prompt, its renderer and its non-interactive
+    default (the lowest-index eligible card) are the ones that already exist.
+
+    CR 608.2's "as much as possible": a seat holding fewer eligible cards than
+    the printed number exiles every one it has, and a seat with none is
+    logged and skipped. Nothing is linked to a permanent — the sentence names
+    no "exiled with" pile — and the cards leave through the hand seam in the
+    prompt's resolver, never by an identity filter over the hand.
+    """
+    payload = instruction.payload
+    amount = int(payload.get("amount", 1) or 0)
+    caster_index = game.players.index(context.caster)
+    if payload.get("actor") == "each_opponent":
+        candidates = set(game.opponents_of(caster_index))
+    else:
+        candidates = set(range(len(game.players)))
+    count = len(game.players)
+    active = game.active_player_index or 0
+    seats = sorted(
+        (seat for seat in candidates if not game.players[seat].lost),
+        key=lambda seat: ((seat - active) % count, seat),
+    )
+    pick = {
+        "optional": False,
+        "card_filter": dict(payload.get("card_filter") or {}),
+    }
+    card_name = getattr(context.card, "name", "")
+    for seat in seats:
+        player = game.players[seat]
+        owed = min(amount, len(exile_from_hand_candidates(game, pick, player)))
+        if owed <= 0:
+            game.log.append(f"{card_name}: {player.name} has no card to exile")
+            continue
+        game.log.append(
+            f"{card_name}: {player.name} exiles {owed} card(s) from their hand"
+        )
+        for _ in range(owed):
+            game.arm_pending_choice(
+                "exile_from_hand_choice", seat,
+                card_name=card_name,
+                _payload=pick,
+                _context=context,
+                _source_permanent=None,
+            )
+    return True, "resolved"
+
+
 def put_from_hand_candidates(game, payload: dict, player) -> list[int]:
     """The hand slots a "put a … card from your hand onto the battlefield" offer
     may be answered with.

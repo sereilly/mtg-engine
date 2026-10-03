@@ -1008,6 +1008,25 @@ class LegalityMixin:
                     if position != spell_hand_index
                     and any(held is payer for payer in payers)
                 ]
+            # "…you may **sacrifice a creature** rather than pay this spell's
+            # mana cost" (Mind Swords), "**tap an untapped creature you
+            # control**" (Lashknife): a price paid with a permanent owes the
+            # caster a choice of which one (CR 601.2b), and the candidates are
+            # the list the CR 601.2h gate counts and the payment takes from.
+            # By id, because that is what ``alternative_cost_permanent_ids``
+            # carries back and what survives the board renumbering behind
+            # each payment.
+            permanent_payment = self.alternative_cost_permanent_payment(cost)
+            if permanent_payment is not None:
+                verb, count = permanent_payment
+                entry["permanent_verb"] = verb
+                entry["permanent_count"] = count
+                entry["permanent_choices"] = [
+                    {"id": perm.permanent_id, "name": perm.card.name}
+                    for perm in self._additional_cost_candidates(
+                        caster_index, cost, giving_up=verb
+                    )
+                ]
             offers.append(entry)
             # CR 118.9a: only one alternative cost may be applied, and
             # ``_resolve_alternative_cost`` refuses a card printing two rather

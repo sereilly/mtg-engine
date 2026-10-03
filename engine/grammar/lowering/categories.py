@@ -385,6 +385,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # unchanged.
     "lock_damage_to_target": "prevention",
     "grant_source_class_prevention_shield": "prevention",
+    # Its mirror with the printed phrase on the recipient end (Sivvi's Ruse):
+    # the same blanket, describing what it protects rather than what it stops.
+    "grant_recipient_class_prevention_shield": "prevention",
     "prevent_damage_from_targeting_sources_until_eot": "prevention",
     # "…the next time it would deal damage this turn, prevent that damage."
     # (Desperate Gambit's losing flip.) A CR 615 shield like every row above it,
@@ -430,6 +433,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # creature. Same family: what moves is still the recipient of one damage
     # event, and which end of it the sentence announces is payload.
     "redirect_chosen_source_damage_off_target_until_eot": "damage",
+    # Sivvi's Valor: the row above with nothing chosen but the creature — the
+    # record answers to every source.
+    "redirect_damage_off_target_until_eot": "damage",
     # Kor Chant: the same chosen source with the *taker* announced as a second
     # target too. Same family for the same reason — what moves is still the
     # recipient of a damage event, and how many of the sentence's ends are

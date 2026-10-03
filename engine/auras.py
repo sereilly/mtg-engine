@@ -1037,6 +1037,7 @@ def _enchant_line_claimed(line: str) -> bool:
 def _aura_line_claimed(line: str, card_name: str) -> bool:
     """Whether one Aura/Equipment effect line has an implementation behind it."""
     from .oracle import _is_supported_keyword_line
+    from .alternative_costs import alternative_cost_claims_line
     from .cast_costs import cast_cost_claims_line
     from .cast_timing import cast_permission_line
     from .enter_effects import enter_effect_line
@@ -1079,6 +1080,15 @@ def _aura_line_claimed(line: str, card_name: str) -> bool:
         # Asked as those tables rather than listed here, so a clause they cannot
         # charge leaves the line unclaimed and the card unsupported.
         or cast_cost_claims_line(line)
+        # "If you control a Plains, you may tap an untapped creature you control
+        # rather than pay this spell's mana cost." (Lashknife.) CR 118.9's
+        # alternative cost, the other half of the price the line above reads —
+        # paid *rather than* the mana cost where that one is paid beside it, and
+        # spent as the spell is cast (CR 601.2b/601.2h), so it is no effect the
+        # Aura has while attached. Asked as the table that offers, gates and
+        # charges it, so a clause that table refuses leaves the line unclaimed
+        # and the Aura unsupported rather than castable at a price nobody reads.
+        or alternative_cost_claims_line(line)
         # "You may cast this spell as though it had flash. If you cast it any
         # time a sorcery couldn't have been cast, …" (Mirage's five-Aura cycle.)
         # A *timing permission* plus the penalty printed with it — neither an

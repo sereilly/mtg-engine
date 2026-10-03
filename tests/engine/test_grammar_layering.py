@@ -1761,7 +1761,7 @@ def test_layers_only_import_downward(layers):
         # library shares with it the printed word "Search" and no vocabulary at
         # all.
         ("effects", ("_strips",), ()),
-        ("lowering", ("_common", "_filters", "_events", "_frozen_seats", "_deaths", "_delays", "_amounts", "_counted_damage", "_counted_pumps", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_conjuncts", "_bound_returns", "_bound_exiles", "_described_returns", "_piles", "_counter_stores", "_plus_one_counters", "_named_counters", "_blankets", "_prevented_riders", "_pump_categories", "_zone_categories", "_record_keys", "_record_conditions", "_cost_records", "_superlatives", "_recipients", "_collapses", "_declaration_costs", "categories", "conditions"), ()),
+        ("lowering", ("_common", "_filters", "_events", "_frozen_seats", "_deaths", "_delays", "_amounts", "_counted_damage", "_counted_pumps", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_conjuncts", "_bound_returns", "_bound_exiles", "_described_returns", "_piles", "_counter_stores", "_plus_one_counters", "_named_counters", "_blankets", "_counted_redirects", "_prevented_riders", "_pump_categories", "_zone_categories", "_record_keys", "_record_conditions", "_cost_records", "_superlatives", "_recipients", "_collapses", "_declaration_costs", "categories", "conditions"), ()),
         # `costs` is shared beside `_core` rather than a family: a cost is
         # charged on the way to the stack and never lowered, so it has no
         # `effects/` or `lowering/` twin to be a family of — and both
@@ -2410,6 +2410,19 @@ FAMILY_SHARED = {
     # back. Al-abara's Carpet's source-scoped blanket came with it because it is
     # a blanket too and is reached only from inside the one that moved.
     "_blankets",
+    # `_counted_redirects` split out of `lowering/redirection.py` at Nemesis'
+    # first wave, when Sivvi's Valor's and Oracle's Attendants' blanket
+    # redirects off an announced target took that module past the guard. The
+    # line is `_blankets`' own axis on the redirect side — the printed
+    # *quantity* — and it is the one the parse side already draws inside its
+    # single production: "All damage …" moves the whole event, "the next N
+    # damage …" moves N points (CR 615.7's numeric shield with CR 614.9's
+    # verb). `_lower_redirect_damage` already handed a counted node down
+    # before any of its branches could read it, so the call graph was two
+    # components joined by that one dispatch. A floor for `_blankets`' reason
+    # exactly: `redirection` reads it and it reads nothing back. Both functions
+    # moved byte-identically, so no compiled program moves.
+    "_counted_redirects",
     # `_prevented_riders` split out of `lowering/prevention.py` at Mercadian
     # Masques' first wave, when Charm Peddler's chosen-source shield over an
     # announced creature took that module past the guard. The line is the one

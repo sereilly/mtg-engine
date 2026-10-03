@@ -10146,6 +10146,23 @@ function renderActivationPrompt() {
               + ` data-alt-choice="${choice.index}">Exile ${escapeHtml(choice.name)}</button>`,
             );
           }
+        } else if (Array.isArray(offer.permanent_choices)) {
+          // CR 601.2b: a price paid with a permanent ("sacrifice a creature",
+          // "tap an untapped creature you control") is the caster's choice of
+          // *which* one. Each button toggles one candidate into the payment, up
+          // to the printed count; naming fewer leaves the rest to the engine's
+          // default pick, exactly as the counted additional cost does.
+          const chosenIds = altPermanentIds(pending.alternative);
+          const verb = offer.permanent_verb === "return" ? "Return"
+            : offer.permanent_verb === "tap" ? "Tap" : "Sacrifice";
+          for (const choice of offer.permanent_choices) {
+            const on = chosenIds.includes(choice.id);
+            buttons.push(
+              `<button type="button" class="prompt-choice-btn${on ? " selected" : ""}"`
+              + ` data-alt-perm="${choice.id}" data-alt-perm-count="${Number(offer.permanent_count || 1)}">`
+              + `${verb} ${escapeHtml(choice.name)}</button>`,
+            );
+          }
         } else {
           const on = pending.alternative === true;
           buttons.push(
@@ -10232,6 +10249,13 @@ function renderActivationPrompt() {
         const raw = btn.dataset.altChoice;
         setCastAlternativeCost(
           raw === "decline" ? null : raw === "take" ? true : Number(raw),
+        );
+      });
+    });
+    steps.querySelectorAll("[data-alt-perm]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        toggleCastAlternativePermanent(
+          Number(btn.dataset.altPerm), Number(btn.dataset.altPermCount || 1),
         );
       });
     });
@@ -12203,6 +12227,31 @@ function setCastAlternativeCost(choice) {
   renderActivationPrompt();
 }
 
+// The permanents named to pay an alternative cost's sacrifice / return / tap
+// half, when that is what `pending.alternative` holds (`{permanentIds: [...]}`).
+function altPermanentIds(alternative) {
+  return alternative && Array.isArray(alternative.permanentIds)
+    ? alternative.permanentIds : [];
+}
+
+// One candidate in or out of the payment. Choosing any is taking the
+// alternative cost; a count of one swaps rather than refusing a second click,
+// because the player is changing their mind, not adding a second creature.
+function toggleCastAlternativePermanent(permanentId, count) {
+  const pending = pendingCastOffers;
+  if (!pending || !Number.isInteger(permanentId)) return;
+  let ids = altPermanentIds(pending.alternative).slice();
+  if (ids.includes(permanentId)) {
+    ids = ids.filter((id) => id !== permanentId);
+  } else if (count <= 1) {
+    ids = [permanentId];
+  } else if (ids.length < count) {
+    ids.push(permanentId);
+  }
+  pending.alternative = ids.length ? { permanentIds: ids } : null;
+  renderActivationPrompt();
+}
+
 // The announcement is made: copy it onto `pendingCastCost` (which every cast
 // path already merges into whatever body it sends) and continue into the rest
 // of the cast — the mandatory-cost picker, then the targets, then the cast.
@@ -12216,6 +12265,10 @@ function confirmCastOffers() {
     announced.alternative_cost = true;
     if (Number.isInteger(pending.alternative)) {
       announced.alternative_cost_hand_index = pending.alternative;
+    }
+    const permanentIds = altPermanentIds(pending.alternative);
+    if (permanentIds.length) {
+      announced.alternative_cost_permanent_ids = permanentIds.slice();
     }
   }
   pendingCastOffers = null;

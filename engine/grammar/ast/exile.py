@@ -67,6 +67,25 @@ class ExileRandomFromHand:
 
 
 @dataclass(frozen=True)
+class ExileCardsFromHand:
+    """``<player> exiles <N> cards from their hand.`` (Mind Swords: "Each
+    player exiles two cards from their hand.")
+
+    :class:`ExileRandomFromHand`'s sentence with the *player* choosing, and a
+    node of its own for the reason that one gives against a mode: the random
+    exile chooses nothing and records the card for "you may play that card",
+    where this one is a pick out of a hidden zone (CR 400.2) and the pick is
+    the whole effect. ``filter`` is the whole noun phrase, zone and owner
+    included, exactly as :class:`ChooseCardsInHand` carries its own: the
+    lowering names what it honours by construction (the zone, the owner) and
+    refuses any narrowing beyond them it cannot test.
+    """
+    player: PlayerRef
+    count: Amount
+    filter: ObjectFilter
+
+
+@dataclass(frozen=True)
 class PutExiledCardIntoZone:
     """``Put that card into your hand.`` (Necropotence, inside its delay.)
 

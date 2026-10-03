@@ -36,8 +36,8 @@ from ._bound_exiles import (_entering_counter_payload, lower_pronoun_exile,
 from ._events import EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS
 from ._piles import _sweep_graveyard_actor
 from ._common import (
-    _PAYLOAD_HONOURED_FILTER_FIELDS, _describe_several_targets,
-    _describe_targets, _filter_payload,
+    _PAYLOAD_HONOURED_FILTER_FIELDS, _amount_payload,
+    _describe_several_targets, _describe_targets, _filter_payload,
     _names_several_targets, _restrictions_beyond, dropped_narrowings,
 )
 
@@ -932,5 +932,47 @@ def _lower_each_player_claims_exiled_card(
                 "tapped": node.tapped,
                 "until_pile_empty": node.until_pile_empty,
             },
+        ),
+    )
+
+
+def _lower_exile_cards_from_hand(
+    node: "ast.ExileCardsFromHand", event: str | None = None
+) -> tuple[OracleInstruction, ...]:
+    """"Each player exiles two cards from their hand." (Mind Swords.)
+
+    A pick out of a hidden zone (CR 400.2), made by each seat in turn order
+    (CR 101.4). The hand is honoured by construction — the actor's own is the
+    only one the handler reads — and every other key of the phrase must survive
+    ``card_only_filter`` (CR 613.1: a card in hand has no computed
+    characteristics). Refused: a seat word the handler does not walk, and a
+    count it cannot name before the prompt is armed.
+    """
+    actor = node.player.kind
+    if actor not in ("each_player", "each_opponent"):
+        raise LoweringError(
+            f"no handler has {actor!r} exile cards from their hand", node=node
+        )
+    count = _amount_payload(node.count)
+    if not isinstance(count, int) or count < 1:
+        raise LoweringError("the hand exile names a printed number", node=node)
+    leftover = _restrictions_beyond(
+        node.filter,
+        _PAYLOAD_HONOURED_FILTER_FIELDS | {"is_card", "zone", "zone_owner"},
+    )
+    if leftover:
+        raise LoweringError(
+            f"the hand exile does not honour {leftover[0]!r}", node=node
+        )
+    narrowing = node.filter.to_payload()
+    narrowing.pop("zone", None)
+    narrowing.pop("zone_owner", None)
+    described = card_only_filter(narrowing)
+    if described is None:
+        raise LoweringError("no hand pick can test this narrowing", node=node)
+    return (
+        OracleInstruction(
+            "exile_cards_from_hand", "",
+            {"actor": actor, "amount": count, "card_filter": described},
         ),
     )

@@ -95,6 +95,59 @@ def _lower_prevent_from_subject(
     )
 
 
+def _lower_prevent_all_to_class(
+    node: ast.PreventDamage,
+) -> tuple[OracleInstruction, ...]:
+    """"Prevent all damage that would be dealt this turn to creatures you
+    control." (Sivvi's Ruse.)
+
+    :func:`_lower_prevent_from_subject`'s blanket with the printed noun phrase
+    on the other end of the event — it names the permanents protected rather
+    than the sources stopped — and the non-combat sibling of Pack Leader's
+    scoped record below, which is a turn-wide flag the end-of-combat sweep
+    clears and so cannot carry a shield that has to outlive combat.
+
+    Every refusal is a way the sentence could otherwise mean more than it says:
+
+    * a source narrowing, a second recipient or a two-way reading have their
+      own shields and none of them is this one; armed here they would be
+      dropped and the blanket would stop damage the card lets through.
+    * the duration is this turn, because that is what the cleanup sweep gives
+      a ``Shield``.
+    * the phrase must *describe* something — an empty filter is every
+      permanent on the battlefield — and every key of it must be one
+      ``subject_matches`` can test, since the shield asks the phrase of each
+      damaged permanent when the damage would be dealt (CR 615.1).
+    """
+    if (
+        node.dealt_by is not None
+        or node.dealt_by_others
+        or node.from_filter is not None
+        or node.to_and_by
+        or node.unaffected_if_cost_paid is not None
+    ):
+        raise LoweringError(
+            "the recipient-class blanket names no source and no second end",
+            node=node,
+        )
+    if node.duration.kind not in _REST_OF_TURN:
+        raise LoweringError(
+            "the recipient-class blanket lasts exactly this turn", node=node
+        )
+    # ``require_narrowing`` (the default) is the empty-filter refusal: a phrase
+    # that narrowed nothing would shield every permanent on the battlefield.
+    described = testable_filter_payload(
+        node.to.filter,
+        refusal="the recipient-class blanket cannot test this noun phrase",
+        node=node,
+    )
+    return (
+        OracleInstruction(
+            "grant_recipient_class_prevention_shield", "", {"filter": described}
+        ),
+    )
+
+
 def _lower_prevent_all(
     node: ast.PreventDamage,
     produced: frozenset[str] = frozenset(),
@@ -479,6 +532,13 @@ def _lower_prevent_all(
                 "prevent_damage_to_target_until_eot", "", payload,
             ),
         )
+    if (
+        not node.combat_only
+        and isinstance(node.to, ast.TargetSpec)
+        and not node.to.targeted
+        and node.to.quantifier in ("all", "each")
+    ):
+        return _lower_prevent_all_to_class(node)
     if not node.combat_only:
         raise LoweringError("no handler prevents all damage of every kind", node=node)
     if node.to is not None:
