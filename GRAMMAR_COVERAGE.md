@@ -42,7 +42,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | UDS | 143 | 204 | 91.7% | 91.2% | 65.7% | 121 |
 | MMQ | 335 | 465 | 91.8% | 91.6% | 66.2% | 278 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| NEM *(measured)* | 143 | 219 | 70.8% | 65.8% | 50.2% | 101 |
+| NEM *(measured)* | 143 | 219 | 72.6% | 68.5% | 53.0% | 104 |
 | **All (shipped)** | **6164** | **9025** | **90.8%** | **90.2%** | **61.1%** | **4680** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -55,9 +55,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 475 | 213 | expected a subject |  |
+| 474 | 212 | expected a subject |  |
 | 144 | 75 | unrecognized effect verb |  |
-| 124 | 59 | unconsumed text |  |
+| 123 | 58 | unconsumed text |  |
 | 44 | 27 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 18 | 6 | expected what this creature can't block, or a duration |  |
@@ -677,6 +677,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `This creature gets +1/+1 as long as an opponent controls a nontoken white permanent.`
 - **Befoul**
   - `Destroy target land or nonblack creature. It can't be regenerated.`
+- **Belbe's Portal**
+  - `{3}, {T}: You may put a creature card of the chosen type from your hand onto the battlefield.`
 - **Bellowing Fiend**
   - `Whenever this creature deals damage to a creature, this creature deals 3 damage to that creature's controller and 3 damage to you.`
 - **Benalish Missionary**
@@ -4518,6 +4520,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this enchantment enters, each player chooses five lands they control and sacrifices the rest.`
 - **Lin Sivvi, Defiant Hero**
   - `{X}, {T}: Search your library for a Rebel permanent card with mana value X or less, put it onto the battlefield, then shuffle.`
+  - `{3}: Put target Rebel card from your graveyard on the bottom of your library.`
 - **Lion's Eye Diamond**
   - `Discard your hand, Sacrifice this artifact: Add three mana of any one color. Activate only as an instant.`
 - **Lithophage**
@@ -5484,6 +5487,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Ovinomancer**
   - `When this creature enters, sacrifice it unless you return three basic lands you control to their owner's hand.`
   - `{T}, Return this creature to its owner's hand: Destroy target creature. It can't be regenerated. That creature's controller creates a 0/1 green Sheep creature token.`
+- **Pack Hunt**
+  - `Search your library for up to three cards with the same name as target creature, reveal them, put them into your hand, then shuffle.`
 - **Pack Leader**
   - `Other Dogs you control get +1/+1.`
   - `Whenever this creature attacks, prevent all combat damage that would be dealt this turn to Dogs you control.`
@@ -6495,6 +6500,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}{U}: Look at the top card of target player's library.`
 - **Rootwater Thief**
   - `{U}: This creature gains flying until end of turn.`
+  - `Whenever this creature deals combat damage to a player, you may pay {2}. If you do, search that player's library for a card and exile it, then the player shuffles.`
 - **Roterothopter**
   - `{2}: This creature gets +1/+0 until end of turn. Activate no more than twice each turn.`
 - **Rouse**
@@ -7621,6 +7627,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Sacrifice a creature: Destroy target nonblack creature.`
 - **Stronghold Biologist**
   - `{U}{U}, {T}, Discard a card: Counter target creature spell.`
+- **Stronghold Gambit**
+  - `Each player chooses a card in their hand. Then each player reveals their chosen card. The owner of each creature card revealed this way with the lowest mana value puts it onto the battlefield.`
 - **Stronghold Machinist**
   - `{U}{U}, {T}, Discard a card: Counter target noncreature spell.`
 - **Stronghold Taskmaster**
@@ -7861,6 +7869,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Target opponent discards two cards.`
 - **Terrain Generator**
   - `{T}: Add {C}.`
+  - `{2}, {T}: You may put a basic land card from your hand onto the battlefield tapped.`
 - **Territorial Dispute**
   - `At the beginning of your upkeep, sacrifice this enchantment unless you sacrifice a land.`
 - **Terror**

@@ -25,10 +25,8 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**10 unclaimed sentence(s) across 7 supported card(s).**
+**8 unclaimed sentence(s) across 5 supported card(s).**
 
-- **Belbe's Portal**
-  - `{3}, {t}: you may put a creature card of the chosen type from your hand onto the battlefield`
 - **Parallax Tide**
   - `fading 5`
   - `when this enchantment leaves the battlefield, each player returns to the battlefield all cards they own exiled with it`
@@ -42,8 +40,6 @@ anything anyone did, and every ingest would arrive red.
 - **Saproling Burst**
   - `fading 7`
   - `remove a fade counter from this enchantment: create a green saproling creature token. it has "this token's power and toughness are each equal to the number of fade counters on saproling burst."`
-- **Terrain Generator**
-  - `{2}, {t}: you may put a basic land card from your hand onto the battlefield tapped`
 
 ## Acknowledged simplifications
 
@@ -551,7 +547,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | parse rule | 3878 |
 | activation cost | 1709 |
 | trigger table | 1231 |
-| static-line table | 923 |
+| static-line table | 927 |
 | keyword table | 806 |
 | aura enchant noun (oracle_instructions attach) | 282 |
 | activation_restrictions.py | 125 |
@@ -573,7 +569,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | activation gate (stack/activation) | 4 |
 | cost_x_definitions.py | 4 |
 | x spend color (stack/activation) | 4 |
-| revealed_hands.py | 4 |
 | modal machinery | 4 |
 | auras.py (board-counted clamped penalty) | 4 |
 | card_hooks bespoke (name-keyed, whole card) | 3 |
