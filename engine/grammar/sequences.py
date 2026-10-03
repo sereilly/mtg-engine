@@ -45,6 +45,7 @@ import dataclasses
 from . import ast
 from .control_flow import (_attach_if_that_card_was_returned, _attach_if_you_cant,
                           _attach_if_you_do, _attach_otherwise, _attach_when_you_do,
+                          _attach_tied_life_draw,
                           _parse_conditional_instead_rider, _parse_who_cant_rider)
 from .effects import (
     _parse_activation_restriction,
@@ -381,6 +382,13 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             # opens on "if two or more", which none of them does, and it
             # refuses without consuming.
             if _attach_superlative_tie_break(stream, steps):
+                continue
+            # "If two or more players are tied for highest life total, the game
+            # is a draw." (Celestial Convergence.) The other arm of the win in
+            # front of it, beside the creature tie-break above for the order's
+            # reason: both open on "if two or more" and each refuses without
+            # consuming whatever the other one reads.
+            if _attach_tied_life_draw(stream, steps):
                 continue
             # "Otherwise, it gets +4/-X until end of turn." (Blood Lust.) The
             # second arm of the conditional sentence before it.

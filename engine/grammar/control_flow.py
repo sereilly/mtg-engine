@@ -90,6 +90,55 @@ def _attach_otherwise(stream: TokenStream, steps: list[ast.Statement]) -> bool:
     return True
 
 
+def _attach_tied_life_draw(stream: TokenStream, steps: list[ast.Statement]) -> bool:
+    """``…the player with the highest life total wins the game. If two or more
+    players are tied for highest life total, the game is a draw.`` (Celestial
+    Convergence.)
+
+    The second sentence is the *other arm* of the first, not a sentence of its
+    own: read alone, "if two or more players are tied, the game is a draw"
+    would end a game on every level board, whether or not the omen counters had
+    run out — the card's rulings make the draw the tie case of the win. So the
+    win is rewritten in place to ``if a player has more life than each other
+    player, they win; otherwise the game is a draw`` — Wild Dogs' existential
+    life gate (CR 104.2b and CR 104.4c on its two arms), whose strict reading is
+    exactly "nobody is tied for highest".
+
+    The win may sit inside the conditional the sentence before it opened (the
+    card's own shape) or stand alone; either way it must name the life leader,
+    because a tie sentence after any other win names a tie the win never asked
+    about. Refuses without consuming.
+    """
+    last = steps[-1] if steps else None
+    target = last.then if isinstance(last, ast.Conditional) and last.otherwise is None else last
+    if not (
+        isinstance(target, ast.WinGame) and target.player.kind == "most_life"
+    ):
+        return False
+    mark = stream.mark()
+    if not stream.accept_phrase(
+        "if", "two", "or", "more", "players", "are", "tied", "for", "highest",
+        "life", "total",
+    ):
+        stream.reset(mark)
+        return False
+    stream.accept_punct(",")
+    if not stream.accept_phrase("the", "game", "is", "a", "draw"):
+        stream.reset(mark)
+        return False
+    stream.accept_punct(".")
+    split = ast.Conditional(
+        ast.PlayerLifeIs(
+            ast.PlayerRef("any_player"),
+            ast.Comparison("more_than_each_other_player", ast.Fixed(0)),
+        ),
+        target,
+        otherwise=ast.DrawGame(),
+    )
+    steps[-1] = replace(last, then=split) if target is not last else split
+    return True
+
+
 def _parse_conditional_instead_rider(
     stream: TokenStream, steps: list[ast.Statement]
 ) -> bool:

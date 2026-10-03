@@ -91,7 +91,16 @@ def _lower_win_game(node: ast.WinGame) -> tuple[OracleInstruction, ...]:
     other player as having lost (104.2a) and takes no player argument. A card
     handing the win to someone else is refused rather than lowered onto a
     handler that would win it for the wrong seat.
+
+    "…**the player with the highest life total** wins the game." (Celestial
+    Convergence.) The one other seat the handler can name: Wild Dogs' strict
+    life leader, read off the board as the instruction runs, under the payload
+    key ``winner``. A tie names nobody and nobody wins — the card's own next
+    sentence says what happens then, and that sentence is a branch the grammar
+    builds around this one (``control_flow._attach_tied_life_draw``).
     """
+    if node.player.kind == "most_life":
+        return (OracleInstruction("player_wins_game", "", {"winner": "most_life"}),)
     if node.player.kind != "you":
         raise LoweringError(
             f"no handler makes {node.player.kind!r} win the game", node=node

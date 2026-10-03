@@ -740,6 +740,23 @@ def sacrifice_all_on_enter(line: str, card_name: str | None = None) -> dict | No
     return object_only_filter(payload)
 
 
+#: "As this enchantment enters, **discard your hand**." (Heightened Awareness.)
+#: :data:`SACRIFICE_ALL_ON_ENTER`'s shape one zone over: the whole set, nobody
+#: chooses, performed by the entry state at CR 614.1c's moment rather than by a
+#: trigger — so there is no window in which the permanent is on the battlefield
+#: and the hand is still held. Any self-noun, for that row's reason.
+DISCARD_HAND_ON_ENTER = re.compile(r"^as this [a-z]+ enters, discard your hand$")
+
+
+def discards_hand_on_enter(line: str, card_name: str | None = None) -> bool:
+    """Whether *line* is "As this <noun> enters, discard your hand".
+
+    One reader for the entry state that performs it and the support gate that
+    claims it, for :func:`sacrifice_all_on_enter`'s reason.
+    """
+    return DISCARD_HAND_ON_ENTER.match(_self_normalized(line, card_name)) is not None
+
+
 #: "As this creature enters, pay any amount of life. The amount you pay can't be
 #: more than the total number of <objects> your opponents control plus the total
 #: number of <cards> in their graveyards." (Nameless Race.)
@@ -1488,6 +1505,8 @@ def enter_effect_line(line: str, card_name: str | None = None) -> str | None:
         return "sacrifices any number as it enters"
     if sacrifice_all_on_enter(normalized) is not None:
         return "sacrifices all of a kind as it enters"
+    if discards_hand_on_enter(normalized):
+        return "discards its controller's hand as it enters"
     if pay_any_life_on_enter(normalized) is not None:
         return "pays any amount of life as it enters"
     # The three-sentence entry cost (Frankenstein's Monster). Claimed here
@@ -1534,6 +1553,8 @@ __all__ = [
     "chooses_two_card_names_on_enter",
     "COPY_ARTIFACT_ON_ENTER",
     "COPY_CREATURE_ON_ENTER",
+    "DISCARD_HAND_ON_ENTER",
+    "discards_hand_on_enter",
     "ENTERS_TAPPED",
     "ENTERS_WITH_NAMED_COUNTER",
     "ENTERS_WITH_PT_COUNTERS",

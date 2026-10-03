@@ -133,16 +133,31 @@ def opponents_lose_half_life(game: Game, instruction: OracleInstruction, context
 
 @effect_handler("player_wins_game")
 def player_wins_game(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    caster = context.caster
     card = context.card
-    # 104.3f: if caster would also lose simultaneously, they lose instead
-    if not caster.lost:
-        # Mark all opponents as lost so caster is last standing (104.2a)
+    winner = context.caster
+    if instruction.payload.get("winner") == "most_life":
+        # "…**the player with the highest life total** wins the game."
+        # (Celestial Convergence.) The strict leader as the instruction runs —
+        # the reader Wild Dogs' gate and hand-over share, so a tie names nobody
+        # and nobody wins here; the card's own tie sentence is the branch the
+        # grammar builds in front of this step.
+        from .control_flow import most_life_seat
+
+        seat = most_life_seat(game)
+        if seat is None:
+            game.log.append(
+                f"{card.name}: no single player has the highest life total"
+            )
+            return True, "resolved"
+        winner = game.players[seat]
+    # 104.3f: if the winner would also lose simultaneously, they lose instead
+    if not winner.lost:
+        # Mark all opponents as lost so the winner is last standing (104.2a)
         for player in game.players:
-            if player is not caster and not player.lost:
+            if player is not winner and not player.lost:
                 player.lost = True
                 game.log.append(f"{card.name}: {player.name} lost (104.2b: opponent loses)")
-        game.log.append(f"{card.name}: {caster.name} wins the game (104.2b)")
+        game.log.append(f"{card.name}: {winner.name} wins the game (104.2b)")
     return True, "resolved"
 
 

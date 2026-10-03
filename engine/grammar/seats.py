@@ -182,6 +182,12 @@ def parse_player_ref(stream: TokenStream) -> ast.PlayerRef | None:
         # each other player"): the two agree because both are strict.
         if stream.accept_phrase("with", "the", "most", "life"):
             return ast.PlayerRef("most_life")
+        # "…**the player with the highest life total** wins the game."
+        # (Celestial Convergence.) The same superlative in the other printed
+        # wording, so the same referent: a spelling, not a second kind, and a
+        # tie names nobody here exactly as it does above.
+        if stream.accept_phrase("with", "the", "highest", "life", "total"):
+            return ast.PlayerRef("most_life")
         # "…**the player who controls the most creatures** gains control of
         # this creature." (Wild Mammoth.) The same description over a board
         # count instead of a life total, and the same reading: answered by the
