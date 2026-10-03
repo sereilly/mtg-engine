@@ -17,6 +17,7 @@ from engine.ai_combat import declare_ai_blockers
 
 from engine.ai_policy import (
     choose_activation_action,
+    choose_foreign_activation_action,
     choose_hand_activation_action,
     choose_cast_action,
     choose_combat_instant_cast_action,
@@ -239,6 +240,34 @@ def _ai_step(session: Session) -> bool:
             hand_activation.card_name,
             ability_index=hand_activation.ability_index,
             hand_index=hand_activation.hand_index,
+        )
+        _auto_resolve_ai_pending(session)
+
+    # An ability on a permanent **another seat controls** that this one may
+    # activate (CR 602.1b, "Any player may activate this ability") — a human's
+    # Volrath's Dungeon, Ribbon Snake or Task Mage Assembly. Last, so it spends
+    # only mana the seat's own plays left. The permanent is counted into its
+    # controller's battlefield (`source_controller_index`); the lands are the
+    # activator's.
+    foreign_activation = choose_foreign_activation_action(game, seat)
+    if foreign_activation is not None:
+        for position, permanent_index in enumerate(foreign_activation.land_tap_indices):
+            land = game.permanent_at(seat, permanent_index)
+            if land is None:
+                continue
+            game.tap_land_for_mana(
+                seat, land.card.name,
+                chosen_color=planned_tap_color(foreign_activation, position),
+                permanent_index=permanent_index,
+            )
+        game.activate_permanent_ability(
+            seat,
+            foreign_activation.permanent_name,
+            target_player_index=foreign_activation.target_player_index,
+            permanent_index=foreign_activation.permanent_index,
+            target_permanent_index=foreign_activation.target_permanent_index,
+            ability_index=foreign_activation.ability_index,
+            source_controller_index=foreign_activation.source_controller_index,
         )
         _auto_resolve_ai_pending(session)
 
