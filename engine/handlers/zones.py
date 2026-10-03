@@ -3499,7 +3499,19 @@ def exile_self(game: Game, instruction: OracleInstruction, context: OracleExecut
             game.exile_resolving_spell = True
             context.results["exiled_self"] = True
             game.log.append(f"{context.card.name} will be exiled as it resolves")
-            _register(game.players.index(context.caster), context.card)
+            # Registered under the seat whose exile the resolution tail will
+            # bin it to — its **owner's** (CR 400.3), which is the resolving
+            # stack object's ``owner_index`` and not the caster when the spell
+            # was cast out of another player's zone. A record keyed to the
+            # caster would never be live, and All Hallow's Eve's scream
+            # counters would never come off.
+            resolving = (getattr(game, "resolving_items", None) or [None])[-1]
+            owner_seat = (
+                resolving.owner_index
+                if resolving is not None and resolving.card is context.card
+                else game.players.index(context.caster)
+            )
+            _register(owner_seat, context.card)
             return True, "resolved"
         game.log.append(f"{context.card.name}: nothing to exile")
         return True, "resolved"
@@ -8006,9 +8018,25 @@ def return_spell_or_creature_to_hand(game: Game, instruction: OracleInstruction,
     nothing is binned and no counter triggers fire; a chosen creature is the
     ordinary bounce."""
     chosen = context.stack_target
-    if chosen is not None and chosen in game.stack:
-        game.stack.remove(chosen)
-        owner = game.players[chosen.caster_index]
+    # By identity, as every other leave-the-stack site walks it: a
+    # ``StackItem`` compares by value, so two casts of one card with one target
+    # are equal and ``in``/``remove`` would find whichever sits lower.
+    slot = next(
+        (index for index, item in enumerate(game.stack) if item is chosen), None
+    )
+    if chosen is not None and slot is not None:
+        del game.stack[slot]
+        if chosen.is_copy:
+            # CR 707.10a: a copy of a spell leaving the stack ceases to exist —
+            # it has no card to put in anybody's hand.
+            game.log.append(
+                f"{context.card.name} returned {chosen.card.name} (copy) from "
+                "the stack, and it ceases to exist"
+            )
+            return True, "resolved"
+        # "to its **owner's** hand" (CR 108.3) — the stack object's owner, who
+        # is not its caster when it was cast out of another player's zone.
+        owner = game.players[chosen.owner_index]
         game.put_card_into_hand(owner, chosen.card)
         game.log.append(
             f"{context.card.name} returned {chosen.card.name} from the stack "

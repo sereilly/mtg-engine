@@ -500,9 +500,13 @@ ACTIVATED_LABELS: dict[str, str] = {
     # `if_then` and `may` are already here for exactly that reason.
     "for_each": "activated_repeated",
     # Dwarven Armorer's "+0/+1 counter **or** a +1/+0 counter" is a choice
-    # between modes (CR 700.2), lowered onto the same `choose_one` the modal
-    # spells use. The shape again: what the ability is for depends on which
-    # mode is taken.
+    # between alternatives, lowered onto the same `choose_one` the modal heads
+    # use. The shape again: what the ability is for depends on which one is
+    # taken. The bucket's word is older than the distinction — no activated
+    # `choose_one` in the pool is modal in CR 700.2's sense (a printed modal
+    # activated ability is rewritten one ability per bullet), and every one is
+    # chosen at resolution (CR 608.2d, `modal_triggers.MODAL_HEAD_KEY`). The
+    # label is kept so the support report's buckets do not move.
     "choose_one": "activated_modal",
     # Fungal Bloom. `add_named_counter_to_self` is already `activated_counter`
     # above, and the target twin is the same ability pointed elsewhere.
@@ -1027,7 +1031,9 @@ TRIGGERED_LABELS: dict[str, str] = {
     # A combat restriction laid on a creature (Wall of Dust), beside the
     # `triggered_combat` the optional combat triggers already take.
     "cant_attack_during_controllers_next_turn": "triggered_combat",
-    # Gabriel Angelfire's modal upkeep grant. `choose_one` is a wrapper and says
+    # Gabriel Angelfire's upkeep grant ("choose flying, first strike, trample,
+    # or rampage 3" — a CR 608.2d choice, not a modal one; Elder Gargaroth and
+    # Trufflesnout are the modal heads). `choose_one` is a wrapper and says
     # nothing by itself, but every mode of the one card that prints it grants a
     # keyword — so it takes the keyword-grant bucket, exactly as `if_then` takes
     # the bucket of the branch the Urza's cycle guards. A second card choosing

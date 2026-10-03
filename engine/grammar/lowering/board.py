@@ -184,7 +184,7 @@ def _lower_regenerate(node: ast.Regenerate) -> tuple[OracleInstruction, ...]:
 # means the effect's own controller — so it is the one payer with no key.
 #
 # ``target_opponent`` and ``target_player`` stay apart even though the handler
-# resolves both to the seat the spell chose: CR 115.4 makes them different
+# resolves both to the seat the spell chose: CR 102.2/102.3 makes them different
 # spells, and collapsing them would offer the caster's own seat as a legal
 # target for "target **opponent** sacrifices".
 #

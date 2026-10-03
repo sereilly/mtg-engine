@@ -887,7 +887,7 @@ _KIND_TO_SPEC: dict[str, dict] = {
     "waive_shroud_for_target_player": {"kind": "player"},
     "return_all_owned_artifacts_to_hand": {"kind": "player"},
     # Word of Command looks at *target opponent's* hand: the caster's own seat is
-    # not a legal choice (CR 115.4).
+    # not a legal choice (CR 102.2/102.3).
     "peek_hand_and_force_play": {"kind": "player", "opponents_only": True},
     # Fork copies the chosen spell and lets the caster choose new targets for the
     # copy, so the UI runs a second prompt rather than sending the cast at once.
@@ -1282,7 +1282,7 @@ def _look_top_pick_spec(payload: dict) -> dict | None:
 
     The ``pile_owner`` half reads the lowering's own ``targets`` description
     rather than restating it, because the narrowing is part of the answer:
-    "target opponent" may not choose the caster (CR 115.4) and "target player"
+    "target opponent" may not choose the caster (CR 102.2/102.3) and "target player"
     may. Restating it was never the bug, though. The bug is that this function
     is registered in ``_KIND_TO_SPEC_FROM_PAYLOAD``, which **pre-empts** the
     generic ``targets`` reading in :func:`_from_instruction` — so answering None
@@ -1387,7 +1387,7 @@ def _chooser_announcement_spec(payload: dict) -> dict | None:
     payload's own ``targets`` description says *which* seats were legal answers,
     which is the half a bare ``{"kind": "player"}`` drops. "**Target opponent**
     chooses any number of creatures they control" (Oracle en-Vec) may not name
-    the caster (CR 115.4), and a picker told only "a player" offers them.
+    the caster (CR 102.2/102.3), and a picker told only "a player" offers them.
 
     Read through :func:`_from_targets_payload` rather than by reaching into the
     description, so a narrowing added to that reader reaches this prompt for
@@ -1845,7 +1845,7 @@ def player_pronoun_spec(word) -> dict | None:
     None for every other word, which is what makes this safe to ask of a
     payload key that usually holds something else: "each player" and
     "defending player" name a set or a seat the rules already fix, and neither
-    announces anything (CR 115.4 is about a *chosen* player).
+    announces anything (CR 115.1 is about a *chosen* target).
     """
     spec = _PLAYER_PRONOUN_SPECS.get(str(word or ""))
     return dict(spec) if spec is not None else None
@@ -1859,7 +1859,7 @@ def _forced_sacrifice_spec(payload: dict) -> dict | None:
     a creature" (Goremand) choose nothing — the payers follow from the effect's
     own controller. "Target opponent sacrifices a creature of their choice with
     flying" (Run Afoul) chooses a player, and it may not choose the caster
-    (CR 115.4). One instruction kind serves all three, so only the payload can
+    (CR 102.2/102.3). One instruction kind serves all three, so only the payload can
     tell them apart; answering "player" for every one of them would put a
     picker in front of Goremand, whose answer nothing reads.
     """
@@ -1874,7 +1874,7 @@ def _sweep_controller_spec(payload: dict) -> dict | None:
     A sweep over a described set that nonetheless *targets*, and the two facts
     live in different halves of the payload: the noun phrase says which
     permanents are touched, the ``controller`` key inside it says whose, and
-    only the second is a choice (CR 115.4).
+    only the second is a choice (CR 601.2c).
 
     One instruction kind serves both readings, exactly as
     ``_forced_sacrifice_spec`` does one entry down, so only the payload can tell
@@ -1930,7 +1930,7 @@ def _counted_scope_spec(payload: dict) -> dict | None:
     controller narrowing onto the spec's ``owner`` (``lowering/_amounts``),
     because nothing downstream tests a controller key and the count has to be
     *scoped* to a player instead. That lift is the whole announcement: the seat
-    is a CR 115.4 choice made at the announcement (CR 601.2c) and every other
+    is a target choice (CR 115.1) made at the announcement (CR 601.2c) and every other
     ``owner`` value names a seat the rules already fix ("you", "all", the seat a
     firing event froze), which the shared pronoun reader answers None for.
 
@@ -2035,7 +2035,7 @@ def _graveyard_to_library_spec(payload: dict) -> dict:
     # would then move whatever card happened to sit at that slot.
     if payload.get("graveyard_owner") == "you":
         spec["own_graveyard_only"] = True
-    # "from **an opponent's** graveyard" (Misinformation). CR 115.4's exclusion
+    # "from **an opponent's** graveyard" (Misinformation). CR 102.2/102.3's exclusion
     # with nothing chosen: the pile is not a target, but which piles the *cards*
     # may be taken from is printed, and left unscoped the picker would offer the
     # caster their own graveyard — a strictly better card than the one printed,
@@ -2211,7 +2211,7 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     # their next untap step." (Exhaustion.) The third verb over the two rows
     # above, and the same two halves of one payload: the noun phrase says which
     # permanents, the ``controller`` key inside it says whose, and only the
-    # second is a choice (CR 115.4). ``_matching_sweep_spec`` rather than the
+    # second is a choice (CR 601.2c). ``_matching_sweep_spec`` rather than the
     # bare seat reader, because this kind's *other* printing chooses an object
     # instead ("Target creature doesn't untap during its controller's next
     # untap step", Barl's Cage) and reaches the picker through the ordinary
@@ -3242,7 +3242,7 @@ def _from_targets_payload(targets) -> dict | None:
             spec["attacked_this_turn"] = True
         if targets.get("opponents_only"):
             # "Target opponent" — the caster's own seat is not a legal answer
-            # (CR 115.4). The same flag Word of Command's kind-table entry
+            # (CR 102.2/102.3). The same flag Word of Command's kind-table entry
             # carries, enforced by legality's seat check.
             spec["opponents_only"] = True
         if targets.get("damaged_by_source"):
@@ -3259,7 +3259,7 @@ def _from_targets_payload(targets) -> dict | None:
         spec = {"kind": "player_or_planeswalker"}
         if targets.get("opponents_only"):
             # "Target **opponent** or planeswalker" (Eternal Flame): the same
-            # union with the caster's own seat struck out (CR 115.4), carried on
+            # union with the caster's own seat struck out (CR 102.2/102.3), carried on
             # the same flag the plain player picker above reads. Legality's seat
             # loop already asks it for this kind; without it here the flag never
             # reaches the loop and the caster is offered as a legal target.

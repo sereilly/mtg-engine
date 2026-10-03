@@ -499,7 +499,7 @@ def _targets_payload(
             )
         if recipient.kind == "target_opponent":
             # "Target opponent" is a player target the caster's own seat cannot
-            # answer (CR 115.4) — the same flag the phase-out sweep and Word of
+            # answer (CR 102.2/102.3) — the same flag the phase-out sweep and Word of
             # Command's spec carry, so every player picker reads one vocabulary.
             #
             # "…**or planeswalker**" (Eternal Flame) widens the same slot the

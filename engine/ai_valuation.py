@@ -789,6 +789,57 @@ def offered_action_is_a_payment(steps, self_recipients=()) -> bool:
     return _step_is_a_payment(leading, frozenset(self_recipients))
 
 
+#: The alternatives whose whole effect is to give one permanent a keyword, or
+#: take one away, and whose recipient a resolution context names: the source
+#: itself, or the object the ability was announced with (CR 602.2b).
+_GRANTS_TO_SOURCE = frozenset({"grant_self_keyword_until_eot", "grant_self_flying_until_eot"})
+_GRANTS_TO_TARGET = frozenset({"grant_target_keyword_until_eot", "grant_target_flying_until_eot"})
+_REMOVES_FROM_TARGET = frozenset({"remove_target_keyword_until_eot"})
+
+
+def offered_alternative_changes_nothing(game, instruction, context) -> bool:
+    """Whether taking this alternative of a CR 608.2d choice would leave the
+    board exactly as it is.
+
+    The choice is made *while the effect is applied*, so the board it is made
+    on is the one the opponent's response left — which is the whole point of
+    asking then rather than at activation, and what makes a better default
+    than printed order possible. "Target creature loses first strike **or**
+    swampwalk" (Urborg) aimed at a swampwalker, or "loses your choice of
+    flying, first strike, or trample" (Walking Sponge) aimed at a trampler,
+    takes nothing if the first printed word is taken; "this creature gains
+    flying, first strike, or trample" (Flowstone Sculpture) on a creature that
+    already flies grants nothing.
+
+    Answered for one shape only — a keyword given or taken — because that is
+    the one whose effect is fully read off the board. Every other alternative
+    answers False, which leaves the caller's printed-order policy exactly as it
+    was.
+    """
+    kind = getattr(instruction, "kind", None)
+    payload = getattr(instruction, "payload", None) or {}
+    if kind in _GRANTS_TO_SOURCE:
+        recipient = getattr(context, "source_permanent", None)
+    elif kind in _GRANTS_TO_TARGET or kind in _REMOVES_FROM_TARGET:
+        announced = getattr(context, "target_permanent_id", None)
+        if isinstance(announced, list):
+            announced = announced[0] if len(announced) == 1 else None
+        recipient = game.permanent_by_id(announced) if isinstance(announced, int) else None
+    else:
+        return False
+    if recipient is None or not game.is_on_battlefield(recipient):
+        return False
+    keywords = tuple(payload.get("keywords") or ())
+    if not keywords and kind.endswith("_flying_until_eot"):
+        keywords = ("flying",)
+    if not keywords:
+        return False
+    held = [bool(game._has_keyword(recipient, keyword)) for keyword in keywords]
+    if kind in _REMOVES_FROM_TARGET:
+        return not any(held)
+    return all(held)
+
+
 @dataclass(frozen=True)
 class TollLoss:
     """What one branch of a *toll* takes from the offered seat, as resources.

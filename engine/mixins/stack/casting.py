@@ -2000,6 +2000,12 @@ class SpellCastingMixin:
             spell_item = StackItem(
                     card=card,
                     caster_index=caster_index,
+                    # CR 108.3/400.3: the seat whose pile the card left owns
+                    # it — the caster's for a hand, a command zone or their own
+                    # graveyard, the opponent's for Grinning Totem's exile — and
+                    # that seat's zones are where it goes when it leaves the
+                    # stack, whoever cast it.
+                    owner_index=source_seat,
                     target_player_index=target_player_index,
                     target_permanent_index=target_permanent_index,
                     target_permanent_id=target_permanent_ids,
@@ -2132,6 +2138,9 @@ class SpellCastingMixin:
             target_permanent_index=target_permanent_index,
             x_value=resolved_x_value,
             choices=dict(cost_spoils),
+            # A land played out of another seat's exile (Grinning Totem) enters
+            # under its player's control and stays its owner's card (CR 108.3).
+            owner_index=source_seat,
         )
         return SimulationResult(card.name, True, classification.effect_kind, "resolved")
     # ------------------------------------------------------------------

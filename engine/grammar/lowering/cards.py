@@ -478,7 +478,7 @@ def _lower_mill(
     if node.player.kind in ("target_player", "target_opponent"):
         # "Target **opponent** mills two cards" (Teferi's Tutelage). The handler
         # already mills ``context.target``, whoever that is; what "opponent"
-        # changes is which seats the picker may offer (CR 115.4), and that rides
+        # changes is which seats the picker may offer (CR 102.2/102.3), and that rides
         # on the targets description `_describe_targets` builds — the same
         # `opponents_only` flag every other opponent-targeted effect carries.
         # Reading it as a plain target player would have let the caster mill

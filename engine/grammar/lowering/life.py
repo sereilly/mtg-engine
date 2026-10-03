@@ -763,7 +763,7 @@ def _lower_lose_life(
         }
         # The narrowing, for the reason the plain branch below records it: the
         # gate above admits only "target opponent", so a bare `player` spec
-        # offered the ability's own controller (CR 115.4).
+        # offered the ability's own controller (CR 102.2/102.3).
         _describe_targets(payload, node.player)
         return (OracleInstruction("target_loses_life", "", payload),)
     # "**That player**" after an event that was *about an object*: the object's
@@ -810,7 +810,7 @@ def _lower_lose_life(
         # life" (Ebony Charm, Forbidden Ritual, Vito) reached the picker as a
         # bare instruction kind, and `targeting._KIND_SPECS` answers
         # ``{"kind": "player"}`` for `target_loses_life` — which offers the
-        # caster their own face, a live two-player bug (CR 115.4). The
+        # caster their own face, a live two-player bug (CR 102.2). The
         # description is what every other player picker in the engine reads,
         # and it is `_targets_payload`'s answer rather than a flag invented
         # here, so "target opponent" narrows the same way whichever sentence

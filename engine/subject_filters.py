@@ -1039,7 +1039,7 @@ def subject_matches(
             if that_player is None or not game.controls(that_player, obj):
                 return False
         # "…each creature **target opponent** controls" (Simoon). A seat the
-        # *spell* chose (CR 115.4), which is the third of these and the one that
+        # *spell* chose (CR 601.2c), which is the third of these and the one that
         # was not here: it fell through to the "not you" test below and became
         # **any** opponent — right in a two-player game by coincidence, and in a
         # free-for-all a spell that burns three boards where the card names one.

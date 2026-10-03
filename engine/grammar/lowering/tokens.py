@@ -59,7 +59,7 @@ def _stamp_token_recipient(
     if who == "target_opponent":
         # "**Target opponent** creates a 1/1 green Hippo creature token."
         # (Phelddagrif; Phantasmal Sphere prints the same shape.) The seat
-        # is chosen, so the ability targets (CR 115.4) and the picker has to
+        # is chosen, so the ability targets (CR 115.1c/115.1d) and the picker has to
         # be told — a ``recipient_players`` key with no description beside
         # it would name a seat nothing ever asks for, and the token would go
         # to whichever seat the handler reached for. The same description

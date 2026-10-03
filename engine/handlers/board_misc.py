@@ -2725,7 +2725,7 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
     is what a bare imperative means (CR 109.5). "Each opponent" arms the same
     prompt for each of them, still living, in seat order so the AI simulation
     stays seed-reproducible. The two targeted forms are the seat the spell
-    already chose; they stay apart in the payload because CR 115.4 makes "target
+    already chose; they stay apart in the payload because CR 102.2/102.3 makes "target
     opponent" and "target player" different spells, and only the picker cares.
     ``event_subject_player`` is the seat a trigger's own condition named
     (Mana Vortex's "each player's upkeep, **that player** sacrifices"), read

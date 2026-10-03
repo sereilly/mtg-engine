@@ -414,7 +414,7 @@ def destroy_all_matching(game: Game, instruction: OracleInstruction, context: Or
     # less, it is one that takes the board.
     # "Destroy all creatures **target player** controls." (Mogg Infestation;
     # Simoon prints the same noun phrase with "opponent" and the damage sweep
-    # already hands it over.) A seat *this* resolution chose (CR 115.4), which
+    # already hands it over.) A seat *this* resolution chose (CR 601.2c), which
     # no read of a permanent can supply — so it goes to the matcher, which
     # refuses the word without one. Absent it, the phrase fell through the
     # matcher's seat comparisons and the sweep took every creature on the table.

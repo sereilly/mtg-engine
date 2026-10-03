@@ -196,11 +196,11 @@ def exile_target_spell(game: Game, instruction: OracleInstruction, context: Orac
             "stack, and it ceases to exist"
         )
         return True, "resolved"
-    # CR 400.3/406.1: the card goes to its **owner's** exile. The caster's seat
-    # is what the stack object carries and is every other leave-the-stack site's
-    # existing approximation of the owner in this pool;
-    # ``_redirect_countered_card`` states the same caveat about the same field.
-    owner_index = target.caster_index
+    # CR 400.3/406.1: the card goes to its **owner's** exile — the stack
+    # object's ``owner_index`` (CR 108.3), which is the caster only when the
+    # caster owns the card. A spell cast out of an opponent's exile (Grinning
+    # Totem) goes back to that opponent's pile, and the record names them.
+    owner_index = target.owner_index
     owner = game.players[owner_index]
     counters = {
         str(name): resolve_amount(count, context.x_value)
@@ -212,9 +212,10 @@ def exile_target_spell(game: Game, instruction: OracleInstruction, context: Orac
     )
     record = record_exiled_card(
         game, target.card, owner_index,
-        # CR 108.4 gives a card in exile no controller, so its abilities belong
-        # to its owner — and here the two are the same seat, the one the printed
-        # possessive names ("**that player's** upkeeps").
+        # CR 108.4 gives a card in exile no controller, so its own abilities
+        # belong to its owner. The printed possessive ("**that player's**
+        # upkeeps") is a different seat once the two come apart — the *spell's*
+        # controller, recorded on its own key below.
         controller_index=owner_index,
         counters=counters,
         announcement=_stack_announcement(target),
@@ -226,7 +227,10 @@ def exile_target_spell(game: Game, instruction: OracleInstruction, context: Orac
     # "remove a delay counter from **it**" reaches the card in exile with no
     # second channel (CR 608.2h).
     context.results[EXILE_RECORD_KEY] = record
-    context.results[EXILED_SPELL_CONTROLLER_KEY] = owner_index
+    # "Target spell's **controller** … each of **that player's** upkeeps" — the
+    # seat that controlled the spell (CR 108.4), which is its caster, and which
+    # is the owner only when the caster owns the card.
+    context.results[EXILED_SPELL_CONTROLLER_KEY] = target.caster_index
     if counters:
         game.log.append(
             f"{target.card.name} was exiled with "
@@ -291,6 +295,10 @@ def put_exiled_card_onto_stack_as_copy(game: Game, instruction: OracleInstructio
     copy = StackItem(
         card=record.card,
         caster_index=seat,
+        # The physical card is the object (see the docstring), so CR 608.2n
+        # bins it to its **owner's** graveyard — the seat whose exile it just
+        # left, whoever puts it on the stack.
+        owner_index=record.owner_index,
         target_player_index=announcement.target_player_index,
         target_permanent_index=announcement.target_permanent_index,
         target_permanent_id=announcement.target_permanent_id,
@@ -923,8 +931,9 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
                 game, card, countered, str(destination), counterer=context.caster
             )
         else:
+            # CR 701.6a: "its **owner's** graveyard" (CR 108.3).
             game._bin_spell_card(
-                game.players[countered.caster_index], countered.card,
+                game.players[countered.owner_index], countered.card,
                 exile_instead=countered.exile_instead_of_graveyard,
                 verb=f"was countered by {card.name}",
             )
@@ -954,11 +963,11 @@ def _redirect_countered_card(
     when something diverted the card, and the log says which happened.
 
     The **owner**, not the caster: CR 404.3's destination is the owner's zone
-    and this replaces only *which* zone, not whose. ``_bin_spell_card``'s
-    caller passes the caster seat, which is the same player for every cast in
-    this pool and is that call site's existing approximation, not one to copy.
+    and this replaces only *which* zone, not whose. ``StackItem.owner_index``
+    (CR 108.3) is that seat, and it is not the caster for a spell cast out of
+    another player's zone (Psychic Theft, Grinning Totem).
     """
-    owner = game.players[countered.caster_index]
+    owner = game.players[countered.owner_index]
     if destination == "battlefield_your_control":
         # "…put that card onto the battlefield **under your control** instead
         # of into its owner's graveyard." (Desertion.) The one destination on

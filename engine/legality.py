@@ -1913,7 +1913,7 @@ class LegalityMixin:
         # all — it always can, because a player is always there — and that was
         # read as though it settled the other half of CR 601.2c too. It does
         # not: "target **opponent**" strikes the activator's own seat out
-        # (CR 115.4), ``_enumerate_targets`` already leaves it out of the
+        # (CR 102.2/102.3), ``_enumerate_targets`` already leaves it out of the
         # offered list, and nothing compared the seat the caller named against
         # that list. The picker never offered it; a script, the AI and a test
         # could all name it, and the ability resolved.
@@ -3449,7 +3449,7 @@ class LegalityMixin:
         for seat, player in enumerate(self.players):
             if spec.get("own_graveyard_only") and seat != caster_index:
                 continue
-            # "from **an opponent's** graveyard" (Misinformation) — CR 115.4's
+            # "from **an opponent's** graveyard" (Misinformation) — CR 102.2/102.3's
             # own-seat exclusion applied to the *pile* the cards are chosen
             # from. The mirror of the scope above and offered for the same
             # reason: a picker that ignored the printed word would let the
