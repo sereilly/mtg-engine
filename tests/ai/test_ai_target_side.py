@@ -290,6 +290,18 @@ def test_an_activated_restriction_never_falls_back_to_the_activators_own_creatur
     assert game.permanent_at(1, action.target_permanent_index).card is theirs
 
 
+def test_a_denial_its_own_words_aim_at_the_activator_is_not_activated():
+    """"{B}: Destroy target artifact, creature, or land you control." (Rats of
+    Rath's template.) The chooser found the only legal target — its own — and
+    destroyed it, because the wanted side fell back to "any legal permanent"."""
+    rats = _activator("{B}: Destroy target artifact, creature, or land you control.")
+    game = _duel(
+        mine=[rats, _mk_creature_card("Own Bear", 2, 2)],
+        theirs=[_mk_creature_card("Their Bear", 2, 2)],
+    )
+    assert choose_activation_action(game, 0) is None
+
+
 def test_an_activation_with_no_legal_graveyard_target_is_not_proposed(set_pool):
     """"{1}{G}: Return target basic land card from your graveyard to your hand"
     (Groundskeeper) with an empty graveyard: refused by the engine with nothing

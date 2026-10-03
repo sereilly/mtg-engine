@@ -351,6 +351,28 @@ def instruction_target_side(instruction: OracleInstruction) -> str | None:
     return activation_target_side(instruction)
 
 
+def denies_its_target(instruction: OracleInstruction) -> bool:
+    """Whether what *instruction* does to its object target leaves that object
+    worse off — destroyed, exiled, returned, tapped, taken, restricted.
+
+    Asked where the printed noun phrase has already put the target on the
+    actor's **own** board ("Destroy target artifact, creature, or land you
+    control", Rats of Rath; "Return target land you control to its owner's
+    hand", Trade Routes). There the effect is a price the card charges for
+    something else, or a rescue this policy has no way to time, and a seat
+    that activates it for its own sake destroys its own permanent — which the
+    activation chooser used to do, falling back to the only legal target.
+    """
+    from .grammar.lowering.categories import INSTRUCTION_CATEGORIES
+
+    kind = getattr(instruction, "kind", None)
+    if kind in _OWN_KINDS or kind in _NO_SIDE_KINDS:
+        return False
+    if kind in _OPPONENT_KINDS:
+        return True
+    return INSTRUCTION_CATEGORIES.get(kind) in ("destruction", "tapping")
+
+
 def _spell_object_target_steps(card: CardDefinition) -> tuple[OracleInstruction, ...]:
     """Every step of *card*'s spell program that names an **object** target,
     wrappers opened (``sequence``, ``if_then``, ``may``)."""
@@ -570,6 +592,20 @@ def chosen_creature_type_side(card: CardDefinition) -> str | None:
         if modifier.chosen_creature_type:
             sides.add("you" if modifier.reduces else "opponent")
     return next(iter(sides)) if len(sides) == 1 else None
+
+
+def spell_denies_its_own_target(card: CardDefinition) -> bool:
+    """Whether *card*, as a spell, prints a target on its caster's **own**
+    board and then denies it (:func:`denies_its_target`) — "Return target
+    permanent you control to its owner's hand" (Scapegoat), "Tap target
+    untapped creature you control" (Energy Tap). The spell-side twin of the
+    activation chooser's question, for the same reason."""
+    return any(
+        ((step.payload.get("targets") or {}).get("filter") or {}).get("controller")
+        == "you"
+        and denies_its_target(step)
+        for step in _spell_object_target_steps(card)
+    )
 
 
 def caster_sacrifice_steps(card: CardDefinition) -> tuple[dict, ...]:
@@ -1198,6 +1234,7 @@ __all__ = [
     "castable_commanders",
     "chosen_creature_type_side",
     "counters_a_spell",
+    "denies_its_target",
     "destroyed_permanent_filter",
     "divided_shape",
     "is_mana_ability",
@@ -1209,6 +1246,7 @@ __all__ = [
     "offered_action_is_a_payment",
     "returns_creature_to_hand",
     "several_target_slot_sides",
+    "spell_denies_its_own_target",
     "spell_hand_pick_entry_filters",
     "spell_target_side",
     "toll_branch_loss",

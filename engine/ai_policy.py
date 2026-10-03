@@ -10,6 +10,7 @@ from .ai_valuation import (
     caster_sacrifice_steps,
     castable_commanders,
     counters_a_spell,
+    denies_its_target,
     destroyed_permanent_filter,
     divided_shape,
     hand_entry_steps,
@@ -18,6 +19,7 @@ from .ai_valuation import (
     mana_ability_amount,
     returns_creature_to_hand,
     several_target_slot_sides,
+    spell_denies_its_own_target,
     spell_hand_pick_entry_filters,
     spell_target_side,
     toll_branch_loss,
@@ -609,6 +611,14 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
             # and a pump with no friendly one landed on an opponent's: an
             # activation that resolves and harms the seat that paid for it.
             side = instruction_target_side(ability.instruction)
+            if side == "you" and denies_its_target(ability.instruction):
+                # "Destroy target … you control" (Rats of Rath), "Return target
+                # land you control to its owner's hand" (Trade Routes): the
+                # printed seat is the activator's and the effect is a denial,
+                # so activating it for its own sake only costs the seat a
+                # permanent. Before this the fallback above aimed Rats of
+                # Rath at whatever it found.
+                continue
             if side == "you":
                 perms = [t for t in perms if t["seat"] == player_index]
             elif side == "opponent":
@@ -2428,6 +2438,11 @@ def _choose_single_object_target(
     legal = game._enumerate_targets(caster_index, card, spec, for_cast=True)
     if not legal or any(entry.get("kind") != "permanent" for entry in legal):
         return None
+    if spell_denies_its_own_target(card):
+        # "Return target permanent you control to its owner's hand"
+        # (Scapegoat): a denial the printed words aim at the caster's own
+        # board, which this policy has no rescue to time it for.
+        return ()
     side = spell_target_side(card)
     others = [seat for seat in range(len(game.players)) if seat != caster_index]
     if side == "you":
