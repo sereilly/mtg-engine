@@ -8448,8 +8448,11 @@ def put_exiled_cards_into_zone(game: Game, instruction: OracleInstruction, conte
                 # earlier when there was none. The guard is what said so.
                 if game.put_card_into_graveyard(owner, card):
                     moved.append(card)
-            # Through the write seam, so CR 903.9b rides it.
-            elif game.put_card_into_hand(caster, card):
+            # Through the write seam, so CR 903.9b rides it. "…its **owner's**
+            # hand" (Psychic Theft) is the seat whose exile held it.
+            elif game.put_card_into_hand(
+                owner if instruction.payload.get("to_owner") else caster, card
+            ):
                 moved.append(card)
             break
     if moved:

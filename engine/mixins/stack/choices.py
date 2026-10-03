@@ -2551,6 +2551,23 @@ class PendingChoicesMixin:
                 f"{card.name} went on top of {victim.name}'s library"
             )
             return True
+        if fate == "exile":
+            # "…and exile that card." (Psychic Theft.) Into its owner's exile
+            # (CR 400.3), recorded as ``exiled_cards`` for the permission and
+            # the delayed return behind it — the record Grinning Totem's
+            # search leaves for the same two sentences.
+            victim = self.players[victim_index]
+            if not 0 <= hand_index < len(victim.hand):
+                return False
+            card = victim.hand[hand_index]
+            if not self.take_card_from_hand(victim, card):
+                return False
+            victim.exile.append(card)
+            record = choice.data.get("record")
+            if record is not None:
+                record["exiled_cards"] = [card]
+            self.log.append(f"{card.name} was exiled from {victim.name}'s hand")
+            return True
         if fate != "exile_until_source_leaves":
             return False
         # "Exile that card until this creature leaves the battlefield."

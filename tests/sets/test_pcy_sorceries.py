@@ -108,6 +108,87 @@ def test_w1g6_denying_wind_exiles_up_to_seven_from_the_targets_library(set_pool)
     assert not game.players[0].exile and not game.players[0].library
 
 
+def _w1g6_theft_table(set_pool):
+    shock = set_pool("STH")["Shock"]
+    bear = _w1g6_creature_card("Bear")
+    game = _W1G6Game(players=[
+        _W1G6PlayerState(name="P0", hand=[set_pool("PCY")["Psychic Theft"]]),
+        _W1G6PlayerState(name="P1", hand=[bear, shock]),
+    ])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    game._close_current_priority_step()
+    assert game.cast_from_hand(0, "Psychic Theft", target_player_index=1).supported
+    _w1g6_resolve(game)
+    game.auto_resolve_pending_choices()
+    _w1g6_resolve(game)
+    return game  # _w1g6_theft_table
+
+
+def test_w1g6_psychic_theft_exiles_the_instant_and_lets_you_cast_it(set_pool):
+    """"Target player reveals their hand. You choose an instant or sorcery card
+    from it and exile that card. You may cast that card for as long as it
+    remains exiled." The instant — not the creature — goes to its owner's
+    exile, and the caster casts it from there."""
+    game = _w1g6_theft_table(set_pool)
+    assert [c.name for c in game.players[1].exile] == ["Shock"]
+    assert [c.name for c in game.players[1].hand] == ["Bear"]
+    grant = game.cast_permissions[0]
+    assert (grant.player_index, grant.zone_seat, grant.mode) == (0, 1, "cast")
+
+    result = game.cast_from_hand(0, "Shock", target_player_index=1, from_zone="exile")
+    assert result.supported, result.details
+    _w1g6_resolve(game)
+    assert game.players[1].life == 18
+    assert not game.players[1].exile
+    assert not game.cast_permissions
+    # Which graveyard the resolved Shock lands in is not asserted: every
+    # leave-the-stack site approximates the owner with the caster's seat (see
+    # handlers/stack.py's exile path), so it goes to P0's — CR 400.3 says P1's.
+    # Reported at the round with Grinning Totem, the other card it reaches.
+
+    game.resolve_end_step(0)
+    game._settle()
+    assert [c.name for c in game.players[1].hand] == ["Bear"]
+
+
+def test_w1g6_psychic_theft_waits_for_an_interactive_pick(set_pool):
+    """An interactive caster answers the pick; the permission and the delayed
+    return are made only once it is answered, over the card it named."""
+    pcy, sth = set_pool("PCY"), set_pool("STH")
+    game = _W1G6Game(players=[
+        _W1G6PlayerState(name="P0", hand=[pcy["Psychic Theft"]]),
+        _W1G6PlayerState(name="P1", hand=[sth["Shock"], _w1g6_creature_card("Bear")]),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    game.start_turn(0)
+    game._close_current_priority_step()
+    assert game.cast_from_hand(0, "Psychic Theft", target_player_index=1).supported
+    game.resolve_top_of_stack()  # one step: the helper would answer the pick
+    assert [c.kind for c in game.pending_choices] == ["revealed_hand_pick"]
+    assert not game.cast_permissions
+    assert not game.confirm_revealed_hand_pick(0, 1), "a creature is not an instant"
+    assert game.confirm_revealed_hand_pick(0, 0)
+    _w1g6_resolve(game)
+    assert [c.name for c in game.players[1].exile] == ["Shock"]
+    assert [c.name for c in game.cast_permissions[0].cards] == ["Shock"]
+    assert [t.event for t in game.delayed_triggers] == ["next_end_step"]
+
+
+def test_w1g6_psychic_theft_returns_the_uncast_card_at_the_end_step(set_pool):
+    """"At the beginning of the next end step, if you haven't cast the card,
+    return it to its owner's hand." Its owner's hand, not the caster's."""
+    game = _w1g6_theft_table(set_pool)
+    assert [c.name for c in game.players[1].exile] == ["Shock"]
+
+    game.resolve_end_step(0)
+    game._settle()
+    assert not game.players[1].exile
+    assert sorted(c.name for c in game.players[1].hand) == ["Bear", "Shock"]
+    assert [c.name for c in game.players[0].hand] == []
+
+
 def test_w1g6_denying_wind_default_takes_at_most_seven(set_pool):
     game = _w1g6_denying_wind_table(set_pool)
     _w1g6_resolve(game)

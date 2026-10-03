@@ -340,6 +340,10 @@ def _lower_put_exiled_card_into_zone(
     # the card in a zone no handler implements.
     if zone.name == "hand" and owner == "you":
         payload: dict[str, object] = {"zone": "hand"}
+    elif zone.name == "hand" and owner == "owner" and node.only_if_unplayed:
+        # "…if you haven't cast the card, return it to **its owner's** hand."
+        # (Psychic Theft.) The seat whose exile held it, not the caster's.
+        payload = {"zone": "hand", "to_owner": True}
     elif zone.name == "graveyard" and owner in ("owner", "you"):
         payload = {"zone": "graveyard"}
     else:
