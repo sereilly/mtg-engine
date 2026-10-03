@@ -8,7 +8,7 @@ import random
 
 from .ai_combat import run_ai_combat_phase
 from .ai_policy import (choose_activation_action, choose_cast_action,
-                        choose_hand_activation_action)
+                        choose_hand_activation_action, planned_tap_color)
 from .card_loader import load_cards
 from .game import Game
 from .search_filters import card_has_type
@@ -634,9 +634,16 @@ def run_ai_simulation(
                     )
                     card_to_cast = cast_zone[cast_action.hand_index]
 
-                    for permanent_index in cast_action.land_tap_indices:
+                    # Each land asked for the colour the plan counted on
+                    # (`planned_tap_color`); the seam's "G" default made a dual
+                    # or a swapped land produce something the plan did not.
+                    for position, permanent_index in enumerate(cast_action.land_tap_indices):
                         permanent = game.players[active].battlefield[permanent_index]
-                        game.tap_land_for_mana(active, permanent.card.name, permanent_index=permanent_index)
+                        game.tap_land_for_mana(
+                            active, permanent.card.name,
+                            chosen_color=planned_tap_color(cast_action, position),
+                            permanent_index=permanent_index,
+                        )
 
                     before = _snap(game)
                     # Forward the *whole* choice. Dropping the permanent target
@@ -698,9 +705,13 @@ def run_ai_simulation(
 
                 activation_action = None if game.is_game_over() else choose_activation_action(game, active)
                 if activation_action is not None:
-                    for permanent_index in activation_action.land_tap_indices:
+                    for position, permanent_index in enumerate(activation_action.land_tap_indices):
                         permanent = game.players[active].battlefield[permanent_index]
-                        game.tap_land_for_mana(active, permanent.card.name, permanent_index=permanent_index)
+                        game.tap_land_for_mana(
+                            active, permanent.card.name,
+                            chosen_color=planned_tap_color(activation_action, position),
+                            permanent_index=permanent_index,
+                        )
 
                     result = game.activate_permanent_ability(
                         active,
@@ -727,7 +738,7 @@ def run_ai_simulation(
                     else choose_hand_activation_action(game, active)
                 )
                 if hand_activation is not None:
-                    for permanent_index in hand_activation.land_tap_indices:
+                    for position, permanent_index in enumerate(hand_activation.land_tap_indices):
                         # Through the seam: the two loops above this one predate
                         # the id migration and are held by a ratchet, so a third
                         # open-coded slot read would raise the baseline for a
@@ -736,7 +747,9 @@ def run_ai_simulation(
                         if permanent is None:
                             continue
                         game.tap_land_for_mana(
-                            active, permanent.card.name, permanent_index=permanent_index
+                            active, permanent.card.name,
+                            chosen_color=planned_tap_color(hand_activation, position),
+                            permanent_index=permanent_index,
                         )
                     result = game.activate_from_hand(
                         active,

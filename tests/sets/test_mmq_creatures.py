@@ -782,10 +782,10 @@ def test_extravagant_spirits_toll_scales_with_the_hand(set_pool):
     an ordinary count spec and is taken when the ability resolves (CR 608.2) -
     the hand as it stands then, not as it stood when the trigger fired.
 
-    The card is asserted at the compiled program because a *headless* seat
-    never taps a land for an optional cost (a stated policy, not the payability
-    test), so no board this test could build would show the price being paid;
-    Megatherium below pays the same toll out of a pool it already holds.
+    The card is asserted at the compiled program, which is what this test is
+    about; a headless seat now pays a toll out of its untapped lands too
+    (``ai_policy.optional_pay_may_tap_lands``), and Megatherium below pays the
+    same toll out of a pool it already holds.
     """
     from engine.oracle import compile_card_oracle
 

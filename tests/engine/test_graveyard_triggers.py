@@ -137,8 +137,10 @@ def test_every_graveyard_functioning_trigger_reaches_its_zone():
         # declined out of hand when the seat cannot pay, and the ability then
         # does nothing — which is a pass this guard must not accept. Five basics
         # cover any small cost, and the seat is interactive so the offer is
-        # *asked* rather than defaulted: the non-interactive default deliberately
-        # never taps a land for an optional cost.
+        # *asked* rather than defaulted: the non-interactive default taps a
+        # land for an optional gift only when nothing else would spend it
+        # (`ai_policy.optional_pay_may_tap_lands`), which is a policy question
+        # and not the one this guard asks.
         for basic in ("Plains", "Island", "Swamp", "Mountain", "Forest"):
             p1.battlefield.append(Permanent(card=pool[basic]))
         game._sync_control()

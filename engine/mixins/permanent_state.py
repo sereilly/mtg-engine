@@ -559,7 +559,9 @@ class PermanentStateMixin:
             default_color = self._default_chosen_color(caster_index)
             permanent.metadata["chosen_color"] = default_color
             permanent.metadata["chosen_creature_type"] = (
-                self._default_chosen_creature_type(caster_index)
+                self._default_chosen_creature_type(
+                    caster_index, permanent.effective_card
+                )
             )
             self.arm_pending_choice(
                 "enter_choice", caster_index,
@@ -570,7 +572,9 @@ class PermanentStateMixin:
             )
         if chooses_creature_type_on_enter(text) and not chooses_pair:
             permanent.metadata["chosen_creature_type"] = (
-                self._default_chosen_creature_type(caster_index)
+                self._default_chosen_creature_type(
+                    caster_index, permanent.effective_card
+                )
             )
             self.arm_pending_choice(
                 "enter_choice", caster_index,
@@ -2310,7 +2314,7 @@ class PermanentStateMixin:
             return "W"
         return max(sorted(counts), key=lambda c: counts[c])
 
-    def _default_chosen_creature_type(self, caster_index: int) -> str:
+    def _default_chosen_creature_type(self, caster_index: int, card=None) -> str:
         """The creature type An-Zerrin Ruins takes when nobody chooses.
 
         The type *caster_index*'s opponents have most of among nontoken
@@ -2318,6 +2322,16 @@ class PermanentStateMixin:
         reason a default is stated rather than left to the first word of a
         catalog (idiom 8): a type nobody controls makes the enchantment inert,
         which is legal and pointless.
+
+        **Unless the card feeds the type rather than hosing it**, which
+        ``ai_valuation.chosen_creature_type_side`` reads off what *card* does
+        with the word: Belbe's Portal puts a creature of the chosen type out of
+        its controller's hand, Urza's Incubator makes its controller's spells
+        of the type cheaper, and the opponents' type is the one answer certain
+        to make either of them do nothing. Those take the type the controller's
+        **own** cards have most of (:meth:`_own_creature_type_counts`). The
+        weight-free half of "take gifts": derived from the compiled program and
+        the two text tables, never from a name.
 
         Read through ``computed_types``, so a creature whose type line a layer-4
         effect rewrote counts as what it *is* rather than as what it was
@@ -2328,12 +2342,59 @@ class PermanentStateMixin:
         choice there, and the printed catalog's most common type is the one most
         likely to matter if a board arrives later.
         """
+        if card is not None:
+            from ..ai_valuation import chosen_creature_type_side
+
+            if chosen_creature_type_side(card) == "you":
+                own = self._own_creature_type_counts(caster_index)
+                if own:
+                    return max(sorted(own), key=lambda word: own[word])
         counts = self._creature_type_counts(
             skip_seat=caster_index, include_tokens=False
         )
         if not counts:
             return "human"
         return max(sorted(counts), key=lambda word: counts[word])
+
+    def _own_creature_type_counts(self, seat: int) -> dict[str, int]:
+        """How many of *seat*'s creature cards **still to be played** have each
+        type — its hand and its library — or, when those hold none, the
+        creatures it already controls.
+
+        The cards that want their controller's type spend it on cards not yet
+        in play: Belbe's Portal reads the hand, Urza's Incubator every creature
+        spell yet to be cast, and the library is where both come from — a
+        player knows their own decklist. The board is the fallback rather than
+        the count because a type the seat has already played out is the one a
+        Portal can no longer feed. Hand and library through
+        ``card_creature_types``, the board through ``computed_types``: the two
+        readers ``object_creature_types`` names for the two kinds of object.
+        """
+        from ..layer_bridge import computed_types, printed_shape
+        from ..object_creature_types import card_creature_types
+
+        counts: dict[str, int] = {}
+        player = self.players[seat]
+        for zone in (player.hand, player.library):
+            for owned in zone:
+                # A creature *card*: `card_creature_types` hands a noncreature
+                # card its printed subtypes (an Aura, a Forest), which are not
+                # creature types and are not what the choice is choosing.
+                if "creature" not in printed_shape(owned)[0]:
+                    continue
+                for subtype in card_creature_types(self, owned, seat):
+                    counts[subtype] = counts.get(subtype, 0) + 1
+        if counts:
+            return counts
+        for perm in self.controlled_by(seat):
+            if perm.metadata.get("is_token"):
+                continue
+            card_types, subtypes = computed_types(perm)
+            if "creature" not in card_types:
+                continue
+            for subtype in subtypes:
+                counts[subtype] = counts.get(subtype, 0) + 1
+        return counts
 
     def _creature_type_counts(
         self, *, skip_seat: int | None = None, include_tokens: bool = True
