@@ -552,6 +552,10 @@ def test_w1g3_jeweled_spirit_gains_protection_from_artifacts_or_a_colour(set_poo
     )
     result = game.queue_permanent_ability(0, "Jeweled Spirit", mana_color="R")
     assert result.supported, result.details
+    # "…artifacts **or** from the color…" is not modal (CR 700.2), so the
+    # alternative is asked at resolution (CR 608.2d), not at activation.
+    assert game.pending_choice_of("mode_choice", 0) is None
+    game.resolve_top_of_stack()
     assert game.resolve_pending_choice("mode_choice", 0, mode_index=1)
     resolve_stack(game)
     assert game._protection_qualities(spirit) == {("color", "R")}

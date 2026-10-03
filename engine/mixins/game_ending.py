@@ -85,8 +85,27 @@ class GameEndingMixin:
                 f"{permanent.card.name} leaves the game ({player.name} left the game, CR 800.4a)"
             )
         self.remove_all_from_battlefield(list(self.controlled_by(player_index)))
-        # CR 800.4a: stack objects this player owns/controls cease to exist.
-        self.stack = [item for item in self.stack if item.caster_index != player_index]
+        # CR 800.4a: stack objects this player **owns** leave with them, and so
+        # do the ones they control. Ownership is ``owner_index`` (CR 108.3), not
+        # the caster: a card this player owns that somebody else cast out of
+        # their exile (Psychic Theft) leaves the game too, and a card somebody
+        # else owns that *this* player cast is "still controlled by that
+        # player" and is exiled — into its owner's exile, where CR 400.3 sends
+        # it — rather than deleted from a game its owner is still in.
+        survivors = []
+        for item in self.stack:
+            if item.owner_index == player_index:
+                continue
+            if item.caster_index == player_index:
+                if not (item.is_ability or item.is_copy):
+                    self._bin_spell_card(
+                        self.players[item.owner_index], item.card,
+                        exile_instead=True,
+                        verb=f"left the stack with {player.name}",
+                    )
+                continue
+            survivors.append(item)
+        self.stack = survivors
         self.log.append(f"{player.name} has left the game (CR 800.4a)")
 
     def check_state_based_actions(self) -> bool:

@@ -66,7 +66,7 @@ from .target_immunity import immunity_claims_line
 from .effect_labels import activated_label, triggered_label
 from .lord_buffs import LORD_BUFF_KIND, lord_buff_for, lord_buff_payload
 from .zone_copies import ZONE_TOP_COPY_KIND
-from .modal_triggers import (MODAL_INSTRUCTION_KIND,
+from .modal_triggers import (MODAL_HEAD_KEY, MODAL_INSTRUCTION_KIND,
                              modal_trigger_mode_is_derivable,
                              modal_trigger_targeting_refusal)
 from .cumulative_upkeep import cumulative_upkeep_triggers
@@ -4195,7 +4195,13 @@ def _modal_trigger_ability(
     inline_refusal = modal_trigger_targeting_refusal(trig.condition.kind, tuple(modes))
     if inline_refusal is not None:
         return inline_refusal
-    choose = OracleInstruction(MODAL_INSTRUCTION_KIND, "", {"modes": tuple(modes)})
+    # Marked modal (CR 700.2): the bulleted head is the only form that chooses
+    # as the ability goes on the stack. An "A or B" the grammar lowers onto the
+    # same kind carries no mark and chooses at resolution (CR 608.2d) — see
+    # ``modal_triggers.MODAL_HEAD_KEY``.
+    choose = OracleInstruction(
+        MODAL_INSTRUCTION_KIND, "", {"modes": tuple(modes), MODAL_HEAD_KEY: True}
+    )
     return (
         ParsedTriggeredAbility(
             source_line=" ".join([head] + [f"• {b}" for b in bullets]),

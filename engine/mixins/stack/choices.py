@@ -4447,8 +4447,12 @@ class PendingChoicesMixin:
                     # 704.5e: a countered copy of a spell ceases to exist.
                     self.log.append(f"{data['card_name']} countered {target.card.name} (copy), which ceases to exist")
                 else:
+                    # The payer is the spell's *controller*; the card goes to
+                    # its *owner's* graveyard (CR 701.6a, CR 108.3), and the
+                    # two are different seats for a spell cast out of another
+                    # player's zone.
                     self._bin_spell_card(
-                        controller, target.card,
+                        self.players[target.owner_index], target.card,
                         exile_instead=target.exile_instead_of_graveyard,
                         verb=f"was countered by {data['card_name']}",
                     )

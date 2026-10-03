@@ -36,10 +36,30 @@ from .targeting import derive_instruction_spec
 
 #: The instruction kind a "Choose one —" head lowers to. Named once rather than
 #: spelled at each reader: `engine/oracle.py` builds it, the enqueue path
-#: detects it, and `handlers/control_flow.py` still executes the *nested* form
-#: (a "gains flying or first strike" alternative inside a larger effect), which
+#: detects it, and `handlers/control_flow.py` still executes the *non-modal*
+#: form (a "gains flying or first strike" alternative inside an effect), which
 #: is a different question at a different time.
 MODAL_INSTRUCTION_KIND = "choose_one"
+
+#: The payload key that makes a ``choose_one`` a **modal head** (CR 700.2).
+#:
+#: The kind alone cannot say it, because one kind carries two rules. CR 700.2
+#: defines a modal ability by its printed *form* — "two or more options in a
+#: bulleted list preceded by instructions … such as 'Choose one —'" — and only a
+#: modal ability chooses as it goes on the stack (CR 700.2a/b). Every other
+#: "A or B" an effect offers — "loses first strike **or** swampwalk" (Urborg),
+#: "a +0/+1 counter **or** a +1/+0 counter" (Dwarven Armorer), "choose flying,
+#: first strike, trample, or rampage 3" (Gabriel Angelfire) — is a choice
+#: CR 608.2d makes "while applying the effect", which is the
+#: ``handlers/control_flow.choose_one`` handler at resolution.
+#:
+#: Read off the kind, the push path took all nine shipped abilities of the
+#: second shape as modal and asked at activation, so a player who saw the
+#: response could not answer it with the other alternative. Only
+#: ``oracle._modal_trigger_ability`` writes the key — the one place a bulleted
+#: head is assembled — so an alternative the grammar lowers is unmodal by
+#: construction rather than by a list.
+MODAL_HEAD_KEY = "modal"
 
 
 #: Trigger conditions this engine carries out **inline**, without ever putting
@@ -72,9 +92,13 @@ def modal_trigger_modes(instruction: OracleInstruction | None) -> tuple[dict, ..
     """The modes of *instruction* when it is a modal head, else ``()``.
 
     One reader for the payload shape, so "is this ability modal?" and "what are
-    its modes?" are the same question asked once.
+    its modes?" are the same question asked once. A ``choose_one`` without
+    :data:`MODAL_HEAD_KEY` answers ``()``: it is a CR 608.2d choice, and the
+    ability goes on the stack with nothing chosen.
     """
     if instruction is None or instruction.kind != MODAL_INSTRUCTION_KIND:
+        return ()
+    if not instruction.payload.get(MODAL_HEAD_KEY):
         return ()
     return tuple(instruction.payload.get("modes") or ())
 

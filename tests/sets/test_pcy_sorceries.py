@@ -593,10 +593,11 @@ def test_w1g6_psychic_theft_exiles_the_instant_and_lets_you_cast_it(set_pool):
     assert game.players[1].life == 18
     assert not game.players[1].exile
     assert not game.cast_permissions
-    # Which graveyard the resolved Shock lands in is not asserted: every
-    # leave-the-stack site approximates the owner with the caster's seat (see
-    # handlers/stack.py's exile path), so it goes to P0's — CR 400.3 says P1's.
-    # Reported at the round with Grinning Totem, the other card it reaches.
+    # CR 400.3: the resolved Shock goes to its *owner's* graveyard — P1's —
+    # whoever cast it (``StackItem.owner_index``, W2G5). P0's holds only the
+    # Theft itself.
+    assert [c.name for c in game.players[1].graveyard] == ["Shock"]
+    assert [c.name for c in game.players[0].graveyard] == ["Psychic Theft"]
 
     game.resolve_end_step(0)
     game._settle()

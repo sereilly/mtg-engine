@@ -452,15 +452,19 @@ class StackResolutionMixin:
             labels=[option["label"] for option in options],
             _options=tuple(options),
             _trigger_item=item,
-            # An **activated** modal ability chose its targets when it was
-            # activated (CR 602.2b), so the mode picker must keep them.
-            # Dwarven Armorer is the card that shows why: "Put a +0/+1 counter
-            # or a +1/+0 counter on target creature" is one target shared by
-            # both modes, named at activation — and choosing again handed the
-            # counter to whichever creature the default picker found first,
-            # which was the Armorer itself. Same rule as the twin flag one
-            # method up: asking again replaces a choice a player has made with
-            # one they have not.
+            # An object announced with its targets already made — a copy
+            # (CR 707.10), or an activated modal ability (CR 602.2b) — keeps
+            # them, so the mode picker must not ask again. Same rule as the twin
+            # flag one method up: asking again replaces a choice a player has
+            # made with one they have not.
+            #
+            # Dwarven Armorer used to be the card that showed why, and no longer
+            # reaches here at all: "a +0/+1 counter **or** a +1/+0 counter" is
+            # not modal (CR 700.2 needs a bulleted list), so it is chosen while
+            # the effect is applied (CR 608.2d) — see
+            # ``modal_triggers.MODAL_HEAD_KEY``. A printed modal *activated*
+            # ability is rewritten one ability per bullet before it compiles,
+            # so the flag's live reader today is the copy.
             _keep_targets=targets_already_chosen,
         )
 
@@ -1109,7 +1113,7 @@ class StackResolutionMixin:
                 # goes through the same binning as a resolved spell. An ability
                 # and a token copy have no card to put anywhere.
                 self._bin_spell_card(
-                    self.players[item.caster_index], item.card,
+                    self.players[item.owner_index], item.card,
                     exile_instead=item.exile_instead_of_graveyard,
                     verb="was countered by the rules",
                 )
@@ -1187,6 +1191,7 @@ class StackResolutionMixin:
             cast_from_zone=item.cast_from_zone,
             choices=item.choices,
             trigger_context=item.trigger_context,
+            owner_index=item.owner_index,
         )
         return
     def _resolve_card(
@@ -1218,8 +1223,15 @@ class StackResolutionMixin:
         # (`handlers/_common.frozen_that_player_seat`), so the phrase has one
         # answer whether a trigger or a mode choice bound it.
         trigger_context: dict | None = None,
+        # CR 108.3: who owns the card, when that is not its caster — see
+        # ``StackItem.owner_index``. The spell's card goes to *this* seat's
+        # zones as it leaves the stack (CR 400.3, CR 608.2n), and a permanent
+        # it becomes is this seat's card under the caster's control.
+        owner_index: int | None = None,
     ) -> None:
         caster = self.players[caster_index]
+        owner_seat = caster_index if owner_index is None else owner_index
+        owner = self.players[owner_seat]
         primary_type = card.primary_type
 
         if primary_type in {"land", "creature", "artifact", "enchantment", "planeswalker"}:
@@ -1272,6 +1284,16 @@ class StackResolutionMixin:
             chosen_creature_type = (choices or {}).get("chosen_creature_type")
             if chosen_creature_type:
                 permanent.metadata["chosen_creature_type"] = chosen_creature_type
+            # CR 108.3: a permanent spell cast out of another seat's zone
+            # (Grinning Totem) enters under its caster's control and is still
+            # its owner's card. ``owner_index_of`` otherwise answers with the
+            # seat it entered under, so it would die into the caster's
+            # graveyard (CR 400.3). The channel reanimation and Desertion
+            # already write for the same reason; stamped before the entry so an
+            # entry replacement that sends it "to its owner's graveyard instead"
+            # reads the right owner too.
+            if owner_seat != caster_index:
+                permanent.metadata["owner_player_index"] = owner_seat
             self._put_permanent_onto_battlefield(
                 caster_index, permanent, target_player_index,
                 was_cast=True, from_zone=cast_from_zone,
@@ -1333,8 +1355,8 @@ class StackResolutionMixin:
                 holder = self.controller_index_of(permanent)
                 if holder is not None:
                     self.remove_from_battlefield(permanent)
-                self.put_card_into_graveyard(caster, card)
-                self.log.append(f"{card.name} had no legal target and was put into {caster.name}'s graveyard")
+                self.put_card_into_graveyard(owner, card)
+                self.log.append(f"{card.name} had no legal target and was put into {owner.name}'s graveyard")
                 self._refresh_dynamic_creatures()
                 return
             self._refresh_dynamic_creatures()
@@ -1481,7 +1503,9 @@ class StackResolutionMixin:
                     # card from the target's hand; it goes to the graveyard only when
                     # confirm_word_of_command finishes the resolution.
                     pending_woc.data["_spell_card"] = card
-                    pending_woc.data["_spell_caster_index"] = caster_index
+                    # The seat the card is binned to: its owner's (CR 608.2n),
+                    # under the key the finishing step has always read.
+                    pending_woc.data["_spell_caster_index"] = owner_seat
                     pending_woc.data["_spell_exile_instead"] = exile_instead_of_graveyard
                     return
                 # CR 724.1b: "End the turn" exiles every object on the stack
@@ -1505,8 +1529,10 @@ class StackResolutionMixin:
                 held.finish_resolution = finish
                 self._log_spell_awaiting_choice(card)
                 return
+            # CR 608.2n: "into its **owner's** graveyard" — the caster's only
+            # when the caster owns it.
             self._bin_spell_card(
-                caster, card,
+                owner, card,
                 exile_instead=exile_instead_of_graveyard or first_pass["ends_turn"],
                 verb="resolved",
                 # CR 702.27a's second static ability, asked here because "as it

@@ -3596,8 +3596,16 @@ def choose_one(game: Game, instruction: OracleInstruction, context: OracleExecut
     ``mixins/stack/resolution._choose_trigger_mode`` does, and by the time such
     an ability resolves ``_chosen_trigger_instruction`` has already substituted
     the chosen mode — so a modal head never arrives here with a mode still to
-    pick. What does arrive is the nested form, where there is no announcement to
-    hang the choice on and the branch simply runs against this same context.
+    pick. What does arrive is every choice CR 608.2d makes "while applying the
+    effect": the nested form, **and a whole ability whose effect is one "A or
+    B"** — Urborg's "loses first strike or swampwalk", Dwarven Armorer's "a
+    +0/+1 counter or a +1/+0 counter", Gabriel Angelfire's "choose flying, first
+    strike, trample, or rampage 3". Those are not modal (CR 700.2 is a bulleted
+    list), so they went on the stack with nothing chosen and are asked here,
+    after the opponent has had the chance to respond. Which ``choose_one`` is
+    which is ``modal_triggers.MODAL_HEAD_KEY``. There is no announcement to hang
+    the choice on and the branch simply runs against this same context — the
+    targets the ability was activated with included (CR 602.2b).
 
     The pick is a ``mode_choice`` pending prompt for an interactive controller;
     every other seat takes the default (the first printed mode - a stated

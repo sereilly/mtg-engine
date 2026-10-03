@@ -295,6 +295,25 @@ class StackItem:
     # ``_release_stack_item`` runs it and clears it; None for an ability, or a
     # spell nothing held.
     finish_resolution: Callable[[], None] | None = None
+    # CR 108.3: the seat that **owns** this object's card, which is where
+    # CR 400.3 sends it whenever it leaves the stack for a graveyard, a hand, a
+    # library or exile — resolving (CR 608.2n), countered (CR 701.6a), removed
+    # with every target illegal (CR 608.2b), exiled by an effect or by "end the
+    # turn" (CR 724.1b), or bounced. Left off, it is the caster, which is right
+    # for every spell cast out of its caster's own hand and is what
+    # ``__post_init__`` fills in. The cast path sets it when a permission opened
+    # *another* seat's zone (Psychic Theft, Grinning Totem): the caster
+    # controls the spell (CR 108.4) and does not own it, and every bin site used
+    # to read ``caster_index`` as the owner, so a stolen Shock resolved into the
+    # thief's graveyard.
+    #
+    # Fixed at construction, never recomputed from ``caster_index``: an effect
+    # that changes who controls a spell does not change who owns its card.
+    owner_index: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.owner_index is None:
+            self.owner_index = self.caster_index
 
     @property
     def is_ability(self) -> bool:

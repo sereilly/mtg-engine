@@ -549,7 +549,16 @@ class PhaseStepsMixin:
         """
         exiled = []
         for item in self.stack:
-            owner = self.players[item.caster_index]
+            if item.is_ability or item.is_copy:
+                # An ability (CR 113.7a) and a copy of a spell (CR 707.10a)
+                # have no card: exiled off the stack, each simply ceases to
+                # exist. Binning ``item.card`` put the *source permanent's*
+                # card into exile beside the permanent still on the
+                # battlefield — and a copy's original card a second time.
+                exiled.append(item.card.name)
+                continue
+            # CR 400.3: its owner's exile (CR 108.3), not its caster's.
+            owner = self.players[item.owner_index]
             self._bin_spell_card(owner, item.card, exile_instead=True, verb="was exiled")
             exiled.append(item.card.name)
         self.stack.clear()
