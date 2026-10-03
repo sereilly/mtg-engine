@@ -657,14 +657,24 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             # as 0 — a lead of one, which is what "more" means. So every payload
             # written before the margin existed reads exactly as it did.
             lead = max(1, int(payload.get("count") or 0))
+            rivals = [
+                player for player in game.players
+                if player is not context.caster and not player.lost
+            ]
+            if who == "target_opponent":
+                # "If **target opponent** controls more lands than you" (Tithe).
+                # The seat the cast announced (its picker asks for an opponent),
+                # not any of them: at a three-seat table another opponent's
+                # lands are not the target's. No announced opponent holds for
+                # nobody.
+                rivals = [p for p in rivals if p is context.target]
             return any(
                 sum(
                     1
                     for permanent in game.controlled_by(player)
                     if permanent_matches_filter(permanent, filters)
                 ) - own >= lead
-                for player in game.players
-                if player is not context.caster and not player.lost
+                for player in rivals
             )
         if who == "opponent" and wanted is not None and not payload.get("shared_name"):
             # "if **an opponent** controls three or more creatures" (Defense of

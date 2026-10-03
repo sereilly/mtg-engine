@@ -80,8 +80,8 @@ def test_w1g2_snag_prevents_unblocked_creatures_combat_damage(set_pool):
     """"Prevent all combat damage that would be dealt by unblocked creatures
     this turn." Cast by the defender off a discarded Forest: the unblocked Bear
     deals P2 nothing, and the *blocked* Bear's damage to the Wall is not
-    prevented — "unblocked" is asked of the source when the damage would be
-    dealt (CR 509.1h, CR 615.9), not of every attacker.
+    prevented — "unblocked" (CR 509.1h) is asked of the source when the damage
+    would be dealt, not of every attacker.
     """
     program = _w1g2_compile(set_pool("PCY")["Snag"])
     assert program.supported, program.reason
@@ -109,9 +109,10 @@ def test_w1g2_snag_reaches_every_recipient_not_only_its_caster(set_pool):
 
 
 def test_w1g2_snag_leaves_noncombat_damage_alone(set_pool):
-    """"…**combat** damage…": a ping from the same unblocked attacker is
-    noncombat damage (CR 120.2) and goes through. The word is the event's, not
-    the source's, which is why it rides the shield as its own field."""
+    """"…**combat** damage…": a ping from the same unblocked attacker is not
+    the damage CR 510.2 deals in the combat damage step, and goes through. The
+    word is the event's, not the source's, which is why it rides the shield as
+    its own field."""
     game, bears, _wall = _w1g2_snag_combat(set_pool, caster=1)
     game._set_phase_and_step("combat", "declare_attackers")
     declared, why = game.declare_attackers(0, [0, 1], 1)

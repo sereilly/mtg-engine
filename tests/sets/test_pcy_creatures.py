@@ -285,3 +285,35 @@ def test_w1g2_defense_of_the_heart_counts_one_opponents_creatures(set_pool):
     assert not evaluate_condition(game, context, gate), "2 + 2 is not one opponent's 3"
     game._put_permanent_onto_battlefield(2, _W1G2Permanent(card=bear), None)
     assert evaluate_condition(game, context, gate)
+
+
+def test_w1g2_tithe_compares_the_targeted_opponent_only(set_pool):
+    """"If **target opponent** controls more lands than you, you may search
+    your library for an additional Plains card." (Tithe.) The lead comparison
+    the Avatar of Might margin rides on answered over *any* opponent whatever
+    the seat word said, so at a three-seat table Tithe aimed at an opponent
+    with fewer lands still found its second Plains because somebody else had
+    more. The picker announces the opponent (``derive_cast_spec`` asks for a
+    player, opponents only), so the comparison is with that seat.
+    """
+    from engine.game_types import OracleExecutionContext
+    from engine.handlers.control_flow import evaluate_condition
+
+    tithe = set_pool("VIS")["Tithe"]
+    steps = _w1g2_compile(tithe).instructions[0].payload["steps"]
+    gate = next(step for step in steps if step.kind == "if_then").payload["condition"]
+    assert gate["who"] == "target_opponent"
+
+    land = set_pool("LEA")["Plains"]
+    game = _W1G2Game(players=[_W1G2PlayerState(name=f"P{n}") for n in (1, 2, 3)])
+    for seat, count in ((0, 1), (1, 0), (2, 5)):
+        for _ in range(count):
+            game._put_permanent_onto_battlefield(seat, _W1G2Permanent(card=land), None)
+
+    def asked_of(seat):
+        return evaluate_condition(game, OracleExecutionContext(
+            caster=game.players[0], target=game.players[seat], card=tithe,
+        ), gate)
+
+    assert not asked_of(1), "P2 has fewer lands; P3's five are not the target's"
+    assert asked_of(2)
