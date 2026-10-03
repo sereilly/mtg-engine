@@ -43,6 +43,7 @@ class DeclareAttackersStepMixin:
         bands: list[list[int]] | None = None,
         attacker_targets: dict[int, int] | None = None,
         attacker_planeswalker_ids: dict[int, int] | None = None,
+        cost_permanent_ids: list[int] | None = None,
     ) -> tuple[bool, str]:
         """Declare attackers (CR 508). Under CR 802 (attack multiple players), each
         attacker may name its own defending player via ``attacker_targets`` (attacker
@@ -55,7 +56,15 @@ class DeclareAttackersStepMixin:
         controls — ``attacker_planeswalker_ids`` maps attacker battlefield idx to
         the attacked planeswalker's ``permanent_id``. Such an attacker's
         defending *player* (for blocks, restrictions and CR 508.5) is the
-        planeswalker's controller, derived here rather than asked for twice."""
+        planeswalker's controller, derived here rather than asked for twice.
+
+        CR 508.1h: the active player determines the total cost to attack, and
+        *which* Islands Leviathan sacrifices or which creature Hollow Warrior
+        taps is part of it. ``cost_permanent_ids`` names them, by id, the
+        channel an activation's chosen costs arrive on; the plans reach for
+        them first and fill the rest from the default. A named permanent the
+        plans do not spend is refused rather than overridden. None — every AI
+        and headless caller — is the default alone, unchanged."""
         if self.current_turn_phase != "combat" or self.current_step != "declare_attackers":
             return False, "attackers can only be declared during declare_attackers"
         if controller_index != self.active_player_index:
@@ -279,7 +288,8 @@ class DeclareAttackersStepMixin:
         # several attackers' costs draw on one board, and `can_attack` answers
         # for one creature at a time.
         sacrifice_plan = self._declaration_sacrifice_plan(
-            controller_index, declared_attackers
+            controller_index, declared_attackers,
+            preferred_ids=cost_permanent_ids or (),
         )
         if sacrifice_plan is None:
             return False, "cannot pay the sacrifice cost to declare these attackers"
@@ -289,9 +299,15 @@ class DeclareAttackersStepMixin:
         tap_plan = self.declaration_tap_plan(
             controller_index, declared_attackers, "attack",
             unavailable=[*sacrifice_plan, *(mana_plan.tapped if mana_plan else ())],
+            preferred_ids=cost_permanent_ids or (),
         )
         if tap_plan is None:
             return False, "cannot tap a creature to pay these attackers' cost"
+        named_refusal = self.declaration_cost_name_refusal(
+            cost_permanent_ids, sacrifice_plan, tap_plan
+        )
+        if named_refusal is not None:
+            return False, named_refusal
 
         self.combat_attackers = dict(per_attacker_defender)
         self.combat_attacked_planeswalkers = dict(per_attacker_walker)
@@ -452,7 +468,11 @@ class DeclareAttackersStepMixin:
             self._enqueue_triggered_batch(events)
 
     def _declaration_sacrifice_plan(
-        self, controller_index: int, attackers: list[Permanent]
+        self,
+        controller_index: int,
+        attackers: list[Permanent],
+        *,
+        preferred_ids: "list[int] | tuple[()]" = (),
     ) -> "list[Permanent] | None":
         """Which permanents pay the whole declaration's CR 508.1g sacrifices,
         or None when the board cannot pay them all.
@@ -475,7 +495,8 @@ class DeclareAttackersStepMixin:
         Candidates are ordered by ``sacrifice_preference_key`` so the policy
         every other forced sacrifice follows decides *which* permanent answers a
         cost whenever more than one could; the matching only decides which cost
-        each one answers.
+        each one answers. *preferred_ids* — what the declaring player named
+        (CR 508.1h) — come first, through ``declaration_cost_order``.
         """
         units: list[tuple[dict, Permanent]] = []
         for attacker in attackers:
@@ -488,7 +509,7 @@ class DeclareAttackersStepMixin:
             return []
         candidates = sorted(
             self.controlled_by(controller_index),
-            key=self.sacrifice_preference_key,
+            key=self.declaration_cost_order(preferred_ids),
         )
         # Kuhn's algorithm. The attacker a cost is paid *for* is never eaten by
         # it — it is the creature the cost buys the attack for — which is the

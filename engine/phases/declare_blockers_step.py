@@ -140,8 +140,13 @@ class DeclareBlockersStepMixin:
         *,
         acting_index: int | None = None,
         _camouflage_resolution: bool = False,
+        cost_permanent_ids: list[int] | None = None,
     ) -> tuple[bool, str]:
         """CR 509.1: *controller_index*'s declare-blockers turn-based action.
+
+        ``cost_permanent_ids`` is CR 509.1d's choice — which creature a Hollow
+        Warrior's block taps — by id, exactly as ``declare_attackers`` takes it
+        for CR 508.1h. None is the default plan, unchanged.
 
         ``acting_index`` is who is *making the choices* (CR 509.1a), which is
         normally the defending player and is another seat while "You choose
@@ -585,9 +590,15 @@ class DeclareBlockersStepMixin:
                 [resolved_blockers[idx] for idx in assignments],
                 "block",
                 unavailable=list(block_plan.tapped) if block_plan else (),
+                preferred_ids=cost_permanent_ids or (),
             )
             if block_taps is None:
                 return False, "can't tap a creature to pay those blockers' cost"
+            named_refusal = self.declaration_cost_name_refusal(
+                cost_permanent_ids, block_taps
+            )
+            if named_refusal is not None:
+                return False, named_refusal
             self._pay_block_declaration_mana(controller_index, block_total, block_plan)
             self.pay_declaration_taps(controller_index, block_taps, "block")
             if life_owed:

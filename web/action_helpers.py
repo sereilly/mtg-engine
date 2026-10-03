@@ -172,6 +172,9 @@ def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
         # the activation path has always forwarded is forwarded here too.
         cost_permanent_ids=req.cost_permanent_ids,
         cost_hand_index=req.cost_hand_index,
+        # …and the further cards of a "discard two cards" cost (Forbid's
+        # buyback), on the activation path's field.
+        cost_other_hand_indices=req.cost_other_hand_indices,
         # CR 118.9's announcement, on its own pair of fields for the reason the
         # cost fields above are on theirs: an alternative cost and an additional
         # cost can both apply to one cast (CR 118.9d), so one field could not

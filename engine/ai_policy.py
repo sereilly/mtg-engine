@@ -625,6 +625,9 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
             and spec.get("kind") in object_kinds
             and not spec.get("sacrifice_cost")
             and not spec.get("discard_cost")
+            # A tap-cost picker (Llanowar Behemoth) names no target either: the
+            # payment is the engine's default for a seat that names nothing.
+            and not spec.get("tap_cost")
         ):
             # The AI activates the first usable ability (selected above), which
             # is usable_activated_abilities()[0] — the index activation_target_spec

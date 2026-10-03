@@ -37,7 +37,8 @@ from ...oracle_types import x_spend_colors_from_text
 from ...activation_restrictions import x_zero_restriction_line
 from ...cast_restrictions import combat_play_ban, global_play_timing
 from ...activation_zones import GRAVEYARD, HAND, ability_functions_from
-from ...targeting import derive_activation_spec, usable_activated_abilities
+from ...targeting import (derive_activation_spec, spec_is_a_cost,
+                          usable_activated_abilities)
 from ...mana_payment import is_mana_ability, mana_cost_from_symbols
 from ...events import emit
 from ...game_types import (OracleExecutionContext, OracleStateMachine,
@@ -78,6 +79,41 @@ COST_PERFORMING_KINDS: frozenset[str] = frozenset()
 
 #: The pool's symbols, in the order every payment path spends them.
 _POOL_SYMBOLS = ("W", "U", "B", "R", "G", "C")
+
+
+def _named_discard_positions(
+    hand: list, cost, first: int | None, others: "list[int] | None"
+) -> "tuple[list[int], str | None]":
+    """The hand positions the payer named for a "Discard N cards" cost, or why
+    the naming is refused (CR 602.2b through CR 601.2b).
+
+    *first* is ``cost_hand_index`` and *others* ``cost_other_hand_indices`` —
+    the first card and the rest, the shape the cast side's "and another card"
+    (Foil, ``alternative_cost_other_hand_indices``) already announces on. A
+    named position that cannot pay — off the end of the hand, a card the
+    printed phrase does not name, one named twice, or more cards than the cost
+    takes — is a refusal with nothing spent, never a slide onto a neighbour.
+    Naming fewer than the cost takes is not: the rest are the deterministic
+    pick, which is what keeps a seat that names nothing (AI, headless) paying
+    exactly what it always did.
+    """
+    named = ([first] if isinstance(first, int) else []) + list(others or ())
+    if not named:
+        return [], None
+    if len(set(named)) != len(named) or len(named) > cost.discard_cards:
+        return [], (
+            f"its cost discards {cost.discard_cards} card(s), each named once"
+        )
+    for position in named:
+        if not (isinstance(position, int) and 0 <= position < len(hand)):
+            return [], (
+                f"no card at hand position {position} to discard for its cost"
+            )
+        if not card_matches_any(hand[position], cost.discard_filters):
+            return [], (
+                f"{hand[position].name} does not answer its discard cost"
+            )
+    return named, None
 
 
 def activation_life_cost(cost, permanent, controller=None) -> int:
@@ -345,6 +381,11 @@ class AbilityActivationMixin:
         # before anything taps and a slot renumbers as soon as one does.
         cost_permanent_ids: list[int] | None = None,
         cost_hand_index: int | None = None,
+        # "Discard **two** cards" (the Prophecy spellshapers): the cards after
+        # the one ``cost_hand_index`` names, by hand position — the shape the
+        # cast side's "and another card" announces on. None is the
+        # deterministic pick, as for every cost choice here.
+        cost_other_hand_indices: list[int] | None = None,
         # "**Choose flying, first strike, trample, or shadow**:" (Phyrexian
         # Splicer). A choice printed in the *cost* clause, so CR 602.2b sends it
         # through CR 601.2b and it is announced with the activation — before
@@ -376,6 +417,7 @@ class AbilityActivationMixin:
             cost_permanent_index=cost_permanent_index,
             cost_permanent_ids=cost_permanent_ids,
             cost_hand_index=cost_hand_index,
+            cost_other_hand_indices=cost_other_hand_indices,
             chosen_keyword=chosen_keyword,
             source_seat=source_seat,
             source_permanent_index=source_permanent_index,
@@ -611,6 +653,7 @@ class AbilityActivationMixin:
         cost_permanent_index: int | None = None,
         cost_permanent_ids: list[int] | None = None,
         cost_hand_index: int | None = None,
+        cost_other_hand_indices: list[int] | None = None,
         # "**Choose flying, first strike, trample, or shadow**:" (Phyrexian
         # Splicer). A choice printed in the *cost* clause, so CR 602.2b sends it
         # through CR 601.2b and it is announced with the activation — before
@@ -1217,7 +1260,12 @@ class AbilityActivationMixin:
         # walked straight through.
         if self.targeting_bans:
             ban_spec = derive_activation_spec(ability)
-            if ban_spec is not None and ban_spec.get("kind") not in (
+            # A cost picker is not a target (CR 601.2b vs 601.2c): Atog eating
+            # an artifact under Peace Talks targets nothing, and neither does
+            # a creature tapped to pay Llanowar Behemoth.
+            if ban_spec is not None and not spec_is_a_cost(ban_spec) and ban_spec.get(
+                "kind"
+            ) not in (
                 "none", "modal", "hand_card", "stack", "spell_or_permanent",
             ):
                 source_name = self.targeting_bans[-1].get("source_name", "an effect")
@@ -1491,18 +1539,26 @@ class AbilityActivationMixin:
                 # Bears in a hand are the same object and an `is not named`
                 # test skipped the second — "Discard two cards" (the Prophecy
                 # spellshapers) out of a hand of two Bears collected one card
-                # and was activated for half its price. The named position
+                # and was activated for half its price. The named positions
                 # first, then the payable positions in hand order.
-                first = (
-                    cost_hand_index if isinstance(cost_hand_index, int)
-                    else next(
-                        i for i, held in enumerate(hand)
-                        if card_matches_any(held, ability.cost.discard_filters)
-                    )
+                #
+                # "Discard **two** cards" is two choices, and CR 602.2b gives
+                # the payer both: ``cost_hand_index`` names the first and
+                # ``cost_other_hand_indices`` the rest — the shape the cast
+                # side's "and another card" (Foil) already announces on, so the
+                # second card is the player's rather than the default's.
+                named, denial = _named_discard_positions(
+                    hand, ability.cost, cost_hand_index, cost_other_hand_indices
                 )
-                positions = [first] + [
+                if denial is not None:
+                    details = f"{permanent.card.name}: {denial}"
+                    self.log.append(details)
+                    return SimulationResult(
+                        permanent.card.name, False, "unsupported", details
+                    )
+                positions = named + [
                     i for i, held in enumerate(hand)
-                    if i != first
+                    if i not in named
                     and card_matches_any(held, ability.cost.discard_filters)
                 ]
                 discard_cost_cards = [

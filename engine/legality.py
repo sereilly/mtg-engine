@@ -480,7 +480,10 @@ def _resolution_rechecks_description(spec: dict) -> bool:
         return False
     if kind in (GRAVEYARD_TARGET_KIND, ROLES_TARGET_KIND):
         return False
-    if spec.get("sacrifice_cost") or spec.get("discard_cost") or spec.get("exile_cost"):
+    if (
+        spec.get("sacrifice_cost") or spec.get("discard_cost")
+        or spec.get("exile_cost") or spec.get("tap_cost")
+    ):
         return False
     return True
 
@@ -1802,6 +1805,7 @@ class LegalityMixin:
         # board does not make them unactivatable. Their own paths validate them.
         if (
             spec.get("sacrifice_cost") or spec.get("discard_cost")
+            or spec.get("tap_cost")
             or spec.get("also_stack") or spec.get("requires_source")
         ):
             return None
@@ -2636,7 +2640,9 @@ class LegalityMixin:
         # A **cost** payment is not a target (CR 601.2b vs 601.2c), and the
         # spec says so — the same flag the seat loop below reads — so a
         # sacrifice cost keeps enumerating while the ban is up.
-        if self.targeting_bans and not triggered and not spec.get("sacrifice_cost"):
+        if self.targeting_bans and not triggered and not (
+            spec.get("sacrifice_cost") or spec.get("tap_cost")
+        ):
             return []
         # "…**defending player controls**" (Floral Spuzzem, Kukemssa Pirates,
         # Yare). Not relative to the seat choosing but to a combat, and which
@@ -2819,7 +2825,9 @@ class LegalityMixin:
         # offer one, so the answer depended on whether you were a person or a
         # script. That is the picker/resolution disagreement the round-48 guard
         # exists for, arriving through the cost field instead of the target one.
-        paying_a_cost = bool(spec.get("sacrifice_cost"))
+        # A tap cost the same: tapping a White Knight to pay Opposition's cost
+        # is not targeting it.
+        paying_a_cost = bool(spec.get("sacrifice_cost") or spec.get("tap_cost"))
         for seat, player in enumerate(self.players):
             # A sacrifice cost (Sacrifice) only offers the caster's own creatures.
             if spec.get("own_only") and seat != caster_index:

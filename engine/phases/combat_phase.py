@@ -140,6 +140,7 @@ class CombatPhaseMixin:
         kind: str,
         *,
         unavailable: "list[Permanent] | tuple[()]" = (),
+        preferred_ids: "list[int] | tuple[()]" = (),
     ) -> "list[Permanent] | None":
         """Which of *seat*'s creatures pay the declaration's tap costs, or None.
 
@@ -161,7 +162,11 @@ class CombatPhaseMixin:
         {T} costs, and this taps *another* creature as part of a cost.
         Candidates are offered in ``sacrifice_preference_key`` order, the
         policy every forced choice of a permanent follows, so the least
-        valuable creature is the one tapped.
+        valuable creature is the one tapped — **after** *preferred_ids*, the
+        permanents the declaring player named (CR 508.1h / 509.1d: the player
+        determines the cost, and which creature taps is part of it). A seat
+        that names none, which is every AI and headless caller, gets exactly
+        the order it always had.
         """
         from ..combat_restrictions import declaration_tap_costs
         from ..subject_filters import subject_matches
@@ -179,7 +184,7 @@ class CombatPhaseMixin:
                 perm for perm in self.controlled_by(seat)
                 if id(perm) not in excluded and not perm.tapped
             ),
-            key=self.sacrifice_preference_key,
+            key=self.declaration_cost_order(preferred_ids),
         )
         paid_by: dict[int, int] = {}
 
@@ -200,6 +205,92 @@ class CombatPhaseMixin:
             if not _assign(unit, set()):
                 return None
         return [candidates[slot] for slot in sorted(paid_by)]
+
+    def declaration_cost_order(self, preferred_ids: "list[int] | tuple[()]" = ()):
+        """The sort key a declaration's cost plans offer candidates in.
+
+        The declaring player's named permanents first, in the order named, and
+        then ``sacrifice_preference_key`` — so the matching both plans run
+        reaches for what the player chose before it reaches for the default,
+        and a player who named nothing gets the default alone. One key for the
+        sacrifice plan and the tap plan, so "the player chose" means the same
+        thing for both currencies.
+        """
+        rank = {pid: position for position, pid in enumerate(preferred_ids or ())}
+
+        def key(perm: Permanent):
+            return (
+                rank.get(perm.permanent_id, len(rank)),
+                self.sacrifice_preference_key(perm),
+            )
+
+        return key
+
+    def declaration_cost_name_refusal(
+        self, named_ids: "list[int] | None", *plans: "list[Permanent]"
+    ) -> str | None:
+        """Why a declaration naming *named_ids* for its costs is refused, or None.
+
+        A named permanent the plans did not spend is a choice the player made
+        and the engine would have overridden — a sacrifice or a tap landing on
+        something else. It is refused with nothing spent, the answer every
+        other named cost payment gets when it cannot pay (CR 508.1j / 509.1f:
+        partial payments are not allowed, and nor is a substituted one).
+        """
+        spent = {perm.permanent_id for plan in plans for perm in plan}
+        unused = [pid for pid in (named_ids or ()) if pid not in spent]
+        if not unused:
+            return None
+        names = []
+        for pid in unused:
+            perm = self.permanent_by_id(pid)
+            names.append(perm.card.name if perm is not None else f"permanent {pid}")
+        return f"{', '.join(names)} cannot pay this declaration's costs"
+
+    def declaration_cost_choices(self, permanent: Permanent, kind: str) -> list[dict]:
+        """What *permanent* owes, in permanents its controller picks, to be
+        declared as an attacker or blocker — for the client, which asks the
+        player which ones before it sends the declaration.
+
+        One entry per printed cost: ``verb`` (``"sacrifice"`` / ``"tap"``),
+        ``count`` and ``candidate_ids``, the permanents that could pay it on
+        their own. The plan over the whole declaration stays the engine's
+        (``declaration_tap_plan``, ``_declaration_sacrifice_plan``); this only
+        tells the client there is a choice to offer and among what. Empty for
+        a creature that owes nothing of the kind, which is almost all of them.
+        """
+        from ..combat_restrictions import declaration_tap_costs
+        from ..subject_filters import subject_matches
+
+        seat = self.controller_index_of(permanent)
+        if seat is None:
+            return []
+        choices: list[dict] = []
+        for described in declaration_tap_costs(permanent, kind):
+            choices.append({
+                "verb": "tap",
+                "count": 1,
+                "candidate_ids": [
+                    perm.permanent_id for perm in self.controlled_by(seat)
+                    if perm is not permanent and not perm.tapped
+                    and subject_matches(
+                        self, perm, described, observer=seat, source=permanent
+                    )
+                ],
+            })
+        if kind == "attack":
+            for cost in self._attack_costs_of(permanent):
+                described = dict(cost.get("filter") or {})
+                choices.append({
+                    "verb": "sacrifice",
+                    "count": max(0, int(cost.get("count", 1))),
+                    "candidate_ids": [
+                        perm.permanent_id for perm in self.controlled_by(seat)
+                        if perm is not permanent
+                        and subject_matches(self, perm, described)
+                    ],
+                })
+        return choices
 
     def pay_declaration_taps(self, seat: int, plan: list[Permanent], kind: str) -> None:
         """Tap what :meth:`declaration_tap_plan` chose (CR 508.1j / 509.1f)."""

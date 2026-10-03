@@ -518,6 +518,11 @@ class GameActionRequest(BaseModel):
     cost_permanent_ids: list[int] | None = None
     # Which card in hand pays a "Discard a card" activation cost.
     cost_hand_index: int | None = None
+    # …and which further cards pay a cost that discards more than one
+    # ("Discard two cards", the Prophecy spellshapers; Forbid's buyback), by
+    # hand position. The shape `alternative_cost_other_hand_indices` below has
+    # for Foil's "and another card". Absent is the engine's deterministic pick.
+    cost_other_hand_indices: list[int] | None = None
     # CR 118.9: cast this spell for its printed *alternative* cost rather than
     # its mana cost ("You may pay 1 life and exile a blue card from your hand
     # rather than pay this spell's mana cost"), and which card in hand pays the

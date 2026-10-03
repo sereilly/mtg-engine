@@ -35,6 +35,10 @@ def _action_declare_attackers(session, req, seat_type):
         defending_player_index=req.target_seat,
         bands=req.bands,
         attacker_planeswalker_ids=walker_targets or None,
+        # CR 508.1h: which permanents pay the declaration's sacrifices and taps
+        # (Leviathan's Islands, Hollow Warrior's creature), by id. Absent is
+        # the engine's default plan.
+        cost_permanent_ids=req.cost_permanent_ids,
     )
     if not ok:
         raise HTTPException(status_code=400, detail=details)
@@ -82,7 +86,9 @@ def _action_declare_blockers(session, req, seat_type):
         for k, v in raw_pairs.items()
     }
     ok, details = game.declare_blockers(
-        declaring_for, blocker_pairs, acting_index=req.seat
+        declaring_for, blocker_pairs, acting_index=req.seat,
+        # CR 509.1d: which creatures a block's tap cost taps, by id.
+        cost_permanent_ids=req.cost_permanent_ids,
     )
     if not ok:
         raise HTTPException(status_code=400, detail=details)

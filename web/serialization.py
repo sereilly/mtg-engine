@@ -314,7 +314,7 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
     # game._effective_colors honors all three.
     effective_colors = sorted(game._effective_colors(perm))
 
-    return {
+    payload = {
         # Stable identity (CR 400.7), unique across every seat and unchanged for
         # as long as this permanent is on the battlefield. The client's handle on
         # a card: an *index* into this array is only valid until the next poll,
@@ -451,6 +451,39 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         ),
         "loyalty_any_time": loyalty_any_time,
     }
+    # CR 508.1h / 509.1d: what declaring this creature costs in permanents its
+    # controller picks — Leviathan's two Islands, Hollow Warrior's creature to
+    # tap — so the client can ask *which* before it sends the declaration.
+    # Only while that declaration is open, and only when there is something to
+    # say, so every other permanent's payload is unchanged.
+    declaration_costs = _declaration_costs(perm, game)
+    if declaration_costs:
+        payload["declaration_costs"] = declaration_costs
+    return payload
+
+
+def _declaration_costs(perm: Permanent, game: Game) -> dict:
+    """``{"attack": [...]}`` / ``{"block": [...]}`` from
+    ``Game.declaration_cost_choices``, for the declaration currently open."""
+    if game.current_turn_phase != "combat" or not game._is_creature(perm):
+        return {}
+    seat = game.controller_index_of(perm)
+    if (
+        game.current_step == "declare_attackers"
+        and not game.combat_attackers_locked
+        and seat == game.active_player_index
+    ):
+        choices = game.declaration_cost_choices(perm, "attack")
+        return {"attack": choices} if choices else {}
+    if (
+        game.current_step == "declare_blockers"
+        and not game.combat_blockers_locked
+        and seat is not None
+        and seat != game.active_player_index
+    ):
+        choices = game.declaration_cost_choices(perm, "block")
+        return {"block": choices} if choices else {}
+    return {}
 
 
 # Counter metadata keys whose bare name doesn't read as the counter's kind

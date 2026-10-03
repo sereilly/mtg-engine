@@ -518,6 +518,11 @@ class SpellCastingMixin:
         # `activate_permanent_ability` takes them.
         cost_permanent_ids: list[int] | None = None,
         cost_hand_index: int | None = None,
+        # "Buyback—Discard **two** cards" (Forbid): the cards after the one
+        # `cost_hand_index` names, by position in the hand the caster is
+        # looking at — the shape `alternative_cost_other_hand_indices` below
+        # announces "and another card" on. None is the deterministic pick.
+        cost_other_hand_indices: list[int] | None = None,
         # CR 118.9's choice, forwarded whole for the reason the cost fields
         # above are: dropping it here would resolve the spell having quietly
         # paid the mana cost the caller said they were replacing.
@@ -585,6 +590,7 @@ class SpellCastingMixin:
             cost_permanent_index=cost_permanent_index,
             cost_permanent_ids=cost_permanent_ids,
             cost_hand_index=cost_hand_index,
+            cost_other_hand_indices=cost_other_hand_indices,
             alternative_cost=alternative_cost,
             alternative_cost_hand_index=alternative_cost_hand_index,
             alternative_cost_permanent_ids=alternative_cost_permanent_ids,
@@ -847,6 +853,9 @@ class SpellCastingMixin:
         # `activate_permanent_ability` takes them.
         cost_permanent_ids: list[int] | None = None,
         cost_hand_index: int | None = None,
+        # …and the further cards a "discard two cards" cost names (see
+        # `cast_from_hand`). None is the deterministic pick.
+        cost_other_hand_indices: list[int] | None = None,
         # CR 118.9's choice: whether to pay the spell's printed *alternative*
         # cost rather than its mana cost, and which card in hand pays the exile
         # half of it. Announced with the cast for the reason the additional
@@ -1432,9 +1441,10 @@ class SpellCastingMixin:
         # fell through to a bare `0` and discarded the *first* card in hand. A
         # cast that names a card it cannot pay with is refused rather than
         # silently repointed, before any mana is spent.
-        cost_hand_card, cost_denial = self._resolve_discard_cost_card(
+        cost_hand_cards, cost_denial = self._resolve_discard_cost_cards(
             caster_index, card, cast_costs,
             cost_hand_index=cost_hand_index,
+            cost_other_hand_indices=cost_other_hand_indices,
             spell_hand_index=hand_index if from_zone == "hand" else None,
         )
         if cost_denial is not None:
@@ -1943,7 +1953,7 @@ class SpellCastingMixin:
             caster_index, card, cast_costs,
             cost_permanent_index=cost_permanent_index,
             cost_permanent_ids=cost_permanent_ids,
-            cost_hand_card=cost_hand_card,
+            cost_hand_cards=cost_hand_cards,
             x_value=resolved_x_value,
             taken=optional_paid,
         )
@@ -2409,16 +2419,18 @@ class SpellCastingMixin:
             and card_matches_any(held, cost.discard_filters)
         ]
 
-    def _resolve_discard_cost_card(
+    def _resolve_discard_cost_cards(
         self,
         caster_index: int,
         card: CardDefinition,
         costs: tuple[AdditionalCost, ...],
         *,
         cost_hand_index: int | None,
+        cost_other_hand_indices: "list[int] | None" = None,
         spell_hand_index: int | None,
-    ) -> tuple["CardDefinition | None", str | None]:
-        """The card a named ``cost_hand_index`` picks, or why it picks none.
+    ) -> tuple["list[CardDefinition]", str | None]:
+        """The cards a named ``cost_hand_index`` (and, for a cost that discards
+        more than one, ``cost_other_hand_indices``) pick, or why they pick none.
 
         CR 601.2b's choices are announced while the spell is still being cast,
         so the index is into the hand the caster can see — the one that still
@@ -2428,34 +2440,53 @@ class SpellCastingMixin:
         engine addresses with ids on the battlefield and cannot here, because a
         hand holds ``CardDefinition``s and two copies of a card are one object.
 
+        "Buyback—Discard **two** cards" (Forbid) is two choices, and the second
+        rode the default until the "others" list existed: the same shape the
+        alternative cost's "and another card" (Foil) announces on and the
+        activation path's "Discard two cards" reads. Naming fewer than the cost
+        takes leaves the rest to the default; naming more, or one twice, is a
+        refusal.
+
         The spell itself is refused: CR 601.2a puts it on the stack before its
         costs are paid, so it is not in the hand to be discarded. Nothing named
         means the deterministic default, which keeps AI and headless play
         unblocked.
         """
         discarding = next((cost for cost in costs if cost.discard_cards), None)
-        if cost_hand_index is None or discarding is None:
-            return None, None
+        named = (
+            [cost_hand_index] if cost_hand_index is not None else []
+        ) + list(cost_other_hand_indices or ())
+        if not named or discarding is None:
+            return [], None
         hand = self.players[caster_index].hand
-        if not 0 <= cost_hand_index < len(hand):
-            return None, (
-                f"{card.name} can't be cast: no card at hand position "
-                f"{cost_hand_index} to discard for its additional cost"
+        if len(set(named)) != len(named) or len(named) > discarding.discard_cards:
+            return [], (
+                f"{card.name} can't be cast: its additional cost discards "
+                f"{discarding.discard_cards} card(s), each named once (CR 601.2b)"
             )
-        if cost_hand_index == spell_hand_index:
-            return None, (
-                f"{card.name} can't be cast: it is on the stack (CR 601.2a) and "
-                "cannot be discarded to pay for itself"
-            )
-        # A named card that does not answer the printed phrase is an error, not
-        # a cheaper cost — refused rather than quietly slid onto a legal one,
-        # which is the same answer the activation path gives the identical cost.
-        if not card_matches_any(hand[cost_hand_index], discarding.discard_filters):
-            return None, (
-                f"{card.name} can't be cast: {hand[cost_hand_index].name} does "
-                f"not answer its additional cost (CR 601.2b)"
-            )
-        return hand[cost_hand_index], None
+        chosen: "list[CardDefinition]" = []
+        for position in named:
+            if not 0 <= position < len(hand):
+                return [], (
+                    f"{card.name} can't be cast: no card at hand position "
+                    f"{position} to discard for its additional cost"
+                )
+            if position == spell_hand_index:
+                return [], (
+                    f"{card.name} can't be cast: it is on the stack (CR 601.2a) "
+                    "and cannot be discarded to pay for itself"
+                )
+            # A named card that does not answer the printed phrase is an error,
+            # not a cheaper cost — refused rather than quietly slid onto a legal
+            # one, which is the same answer the activation path gives the
+            # identical cost.
+            if not card_matches_any(hand[position], discarding.discard_filters):
+                return [], (
+                    f"{card.name} can't be cast: {hand[position].name} does "
+                    f"not answer its additional cost (CR 601.2b)"
+                )
+            chosen.append(hand[position])
+        return chosen, None
 
     # ------------------------------------------------------------------
     # The printed alternative cost (CR 118.9)
@@ -3358,7 +3389,7 @@ class SpellCastingMixin:
         costs: tuple[AdditionalCost, ...],
         *,
         cost_permanent_index: int | None,
-        cost_hand_card: "CardDefinition | None",
+        cost_hand_cards: "list[CardDefinition] | None" = None,
         x_value: int | None = None,
         cost_permanent_ids: list[int] | None = None,
         taken: dict[str, int] | None = None,
@@ -3382,6 +3413,8 @@ class SpellCastingMixin:
         caster = self.players[caster_index]
         sacrificed: Permanent | None = None
         exiled: Permanent | None = None
+        # The named discards, in the order they were named; each pays one card.
+        named_discards = list(cost_hand_cards or ())
         for cost in costs:
             # CR 601.2b's *optional* price, collected only when the
             # announcement took it -- the same reader ``_unpayable_additional_cost``
@@ -3618,16 +3651,18 @@ class SpellCastingMixin:
                                 if card_matches_any(held, cost.discard_filters)
                             ]
                         )
-                        cost_hand_card = None
-                    if cost_hand_card is not None:
+                        named_discards = []
+                    if named_discards:
+                        # One named card pays once: the next one named, found
+                        # by identity in the hand as it now stands.
+                        named_card = named_discards.pop(0)
                         index = next(
                             (
                                 i for i, held in enumerate(caster.hand)
-                                if held is cost_hand_card
+                                if held is named_card
                             ),
                             index,
                         )
-                        cost_hand_card = None  # one named card pays once
                     discarded = caster.hand.pop(index)
                     self._discard_card(caster, discarded)
                     self.log.append(

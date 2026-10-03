@@ -22,6 +22,20 @@ let pendingModalChoice = null;
 // battlefield picker the sacrifice cost uses — and it rides `cost_hand_index`,
 // because a cost is not a target (CR 601.2b vs 601.2c).
 let pendingDiscardCost = null;
+// A cost paid with permanents the payer picks (CR 601.2h through CR 602.2b):
+// "Tap an untapped creature you control" (Opposition), "Tap two untapped
+// Spirits you control" (Shacklegeist), "Sacrifice two Goblins" (Goblin
+// Warrens), "Sacrifice X lands" (Copper-Leaf Angel). The canvas picker answers
+// one permanent at a time; these name a *set*, so they get a toggle list with a
+// confirm. The answer rides `cost_permanent_ids`.
+let pendingPermanentCost = null;
+// The cost an activation has already announced while the rest of it — an X, a
+// target, the mana — is still being asked: the cards picked to discard, the
+// creatures picked to tap. CR 602.2b announces the cost before CR 601.2c's
+// targets, so the cost prompt answers first and the activation is re-entered
+// rather than sent; `sendAction` merges these fields into the activate body
+// for the same permanent and ability, whichever prompt finally sends it.
+let pendingActivationCost = null;
 // A permanent with more than one activated ability (Rock Hydra, Basalt Monolith)
 // awaiting the player's choice of which ability to activate.
 let pendingAbilityChoice = null;
@@ -1166,7 +1180,7 @@ function combatDamageAssignmentPending(state = currentState) {
 
 function hasBlockingPromptForAutoPass(state = currentState) {
   if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getDrawBecomesCounterInfo(state) || getRevealUntilKindInfo(state) || getEntryDiscardTollInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getDiscardUnlessPayLifeInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getPayAnyAmountInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getRepeatProcessInfo(state) || getExileFromHandInfo(state) || getExileHandPileInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getOpponentPicksRevealedInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
-  return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingDiscardCost || pendingAbilityChoice || pendingChannel || pendingAttackTarget);
+  return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingDiscardCost || pendingPermanentCost || pendingAbilityChoice || pendingChannel || pendingAttackTarget);
 }
 
 function shouldAutoPassUntilTurnEnd(state = currentState) {
@@ -3831,7 +3845,7 @@ function isAnyPromptActive(state = currentState) {
   if (getRagingRiverInfo(state)) return true;
   if (getCamouflageInfo(state)) return true;
   if (shouldShowPriorityPrompt(state)) return true;
-  if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingAutoTap || pendingModalChoice || pendingDiscardCost || pendingAbilityChoice || pendingChannel || pendingAttackTarget) return true;
+  if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingAutoTap || pendingModalChoice || pendingDiscardCost || pendingPermanentCost || pendingAbilityChoice || pendingChannel || pendingAttackTarget) return true;
 
   const hasValidAttackers = getValidAttackerIndices(state).length > 0;
   const hasValidBlockers = getValidBlockerAssignments(state).length > 0;
@@ -3946,6 +3960,8 @@ async function handleCombatPromptOk() {
     if (combatBandDraft && selectedAttackersCanBand(state)) {
       declareBody.bands = [declared];
     }
+    // CR 508.1h: costs paid in permanents the player picks are asked first.
+    if (startDeclarationCostPrompt(state, declareBody, "attack", declared)) return true;
     await sendAction(declareBody);
     combatBandDraft = false;
     updateActionHint(
@@ -3960,7 +3976,15 @@ async function handleCombatPromptOk() {
       return false;
     }
     const blockerPairs = { ...combatBlockerDraft };
-    await sendAction({ seat, action: "declare_blockers", blocker_pairs: blockerPairs });
+    const blockBody = { seat, action: "declare_blockers", blocker_pairs: blockerPairs };
+    // CR 509.1d: a block's tap cost (Hollow Warrior) is the defender's choice.
+    // Asked only of the defender's own board — a substituted chooser (Melee)
+    // keeps the engine's default for the creatures it does not control.
+    if (blockDeclarationDefender(state) === seat
+        && startDeclarationCostPrompt(state, blockBody, "block", Object.keys(blockerPairs).map(Number))) {
+      return true;
+    }
+    await sendAction(blockBody);
     updateActionHint(
       `Blockers declared (${Object.keys(blockerPairs).length}). Players may now cast spells/activate abilities before damage.`,
     );
@@ -3986,6 +4010,9 @@ async function confirmPendingAttackTarget(targetSeat) {
     target_seat: targetSeat,
   };
   if (pending.band) declareBody.bands = [pending.attackerIndices];
+  if (currentState && startDeclarationCostPrompt(currentState, declareBody, "attack", pending.attackerIndices)) {
+    return;
+  }
   try {
     await sendAction(declareBody);
     combatBandDraft = false;
@@ -4002,7 +4029,7 @@ async function confirmPendingAttackTarget(targetSeat) {
 
 async function handlePriorityPromptOk() {
   if (!currentState || seat === null) return false;
-  if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingDiscardCost || pendingAbilityChoice || pendingChannel || pendingAttackTarget) return false;
+  if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingDiscardCost || pendingPermanentCost || pendingAbilityChoice || pendingChannel || pendingAttackTarget) return false;
   if (!shouldShowPriorityPrompt(currentState)) return false;
   await sendAction({ seat, action: "pass_priority" });
   updateActionHint("Passed priority.");
@@ -10057,17 +10084,72 @@ function renderActivationPrompt() {
     okBtn.classList.add("hidden");
     customRow.classList.add("hidden");
     title.textContent = `Additional cost — ${pendingDiscardCost.cardName}`;
+    // "Discard **two** cards" (the Prophecy spellshapers, Forbid's buyback) is
+    // a set the payer picks, so the buttons toggle and a confirm sends them;
+    // one card is still answered by the click itself.
+    const discardCount = Math.max(1, Number(pendingDiscardCost.count || 1));
+    const picked = pendingDiscardCost.picked || [];
+    const noun = discardCount === 1 ? "a card" : `${discardCount} cards`;
     body.textContent = pendingDiscardCost.activation
-      ? "Discard a card to activate this ability. Choose which."
-      : "Discard a card to cast it. Choose which.";
+      ? `Discard ${noun} to activate this ability. Choose which.`
+      : `Discard ${noun} to cast it. Choose which.`;
     const cardButtons = pendingDiscardCost.options
       .map(
         (option) =>
-          `<button type="button" class="prompt-choice-btn" data-discard-cost="${option.hand_index}">` +
+          `<button type="button" class="prompt-choice-btn${picked.includes(option.hand_index) ? " selected" : ""}"` +
+          ` data-discard-cost="${option.hand_index}">` +
           `${escapeHtml(option.name)}</button>`,
       )
       .join("");
-    steps.innerHTML = `<div class="prompt-choice-column">${cardButtons}</div>`;
+    const confirmRow = discardCount > 1
+      ? `<button type="button" class="prompt-choice-btn" id="discardCostConfirmBtn"${picked.length === discardCount ? "" : " disabled"}>`
+        + `Discard ${picked.length} of ${discardCount}</button>`
+      : "";
+    steps.innerHTML = `<div class="prompt-choice-column">${cardButtons}${confirmRow}</div>`;
+    document.getElementById("discardCostConfirmBtn")?.addEventListener("click", confirmDiscardCost);
+    okBtn.disabled = true;
+    cancelBtn.classList.remove("hidden");
+    cancelBtn.disabled = false;
+    customOkBtn.disabled = true;
+    return;
+  }
+
+  if (pendingPermanentCost) {
+    const pending = pendingPermanentCost;
+    panel.classList.remove("hidden");
+    okBtn.classList.add("hidden");
+    customRow.classList.add("hidden");
+    title.textContent = `Cost — ${pending.cardName}`;
+    const verb = pending.verb === "tap" ? "Tap" : "Sacrifice";
+    const picked = pending.picked || [];
+    // "Sacrifice X lands" announces X by the lands named (CR 601.2b), so any
+    // number is an answer and the count is what X becomes.
+    const purpose = pending.purpose === "attack" ? "attack"
+      : pending.purpose === "block" ? "block" : "activate this ability";
+    body.textContent = pending.announcesX
+      ? `${verb} X ${pending.noun}(s) to ${purpose}. Choose which; X is how many you choose.`
+      : `${verb} ${pending.count} ${pending.noun}${pending.count === 1 ? "" : "s"} to ${purpose}. Choose which.`;
+    // Two permanents with one name are told apart by their position, so the
+    // player can see that a click picked the second Forest and not the first.
+    const seen = {};
+    const permanentButtons = pending.options
+      .map((option) => {
+        seen[option.name] = (seen[option.name] || 0) + 1;
+        const twins = pending.options.filter((other) => other.name === option.name).length;
+        const label = twins > 1 ? `${option.name} #${seen[option.name]}` : option.name;
+        const on = picked.includes(option.id);
+        return `<button type="button" class="prompt-choice-btn${on ? " selected" : ""}"`
+          + ` data-permanent-cost="${option.id}">${verb} ${escapeHtml(label)}</button>`;
+      })
+      .join("");
+    const ready = pending.announcesX ? true : picked.length === pending.count;
+    const confirmLabel = pending.announcesX
+      ? `${verb} ${picked.length} (X = ${picked.length})`
+      : `${verb} ${picked.length} of ${pending.count}`;
+    steps.innerHTML = `<div class="prompt-choice-column">${permanentButtons}`
+      + `<button type="button" class="prompt-choice-btn" id="permanentCostConfirmBtn"${ready ? "" : " disabled"}>`
+      + `${escapeHtml(confirmLabel)}</button></div>`;
+    document.getElementById("permanentCostConfirmBtn")?.addEventListener("click", confirmPermanentCost);
     okBtn.disabled = true;
     cancelBtn.classList.remove("hidden");
     cancelBtn.disabled = false;
@@ -11317,8 +11399,29 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
   // comes before the target cascades because CR 602.2b announces the cost
   // first, and because the ability whose spec reports it has no target of its
   // own — a card needing both prompts runs them in sequence instead (below).
-  if (cardRequiresDiscardCost(card) &&
-      startActivationDiscardCostPrompt(card, cardName, permanentIndex, abilityIndex)) {
+  //
+  // Once answered, the cost rides `pendingActivationCost` and the activation
+  // comes back through here for the rest — so every cost prompt below asks
+  // only while that stash does not already hold this ability's answer, and a
+  // stash left by some other activation is dropped as stale.
+  if (pendingActivationCost && !activationCostAnswered(permanentIndex, abilityIndex)) {
+    pendingActivationCost = null;
+  }
+  const costAnswered = activationCostAnswered(permanentIndex, abilityIndex);
+  if (!costAnswered && cardRequiresDiscardCost(card) &&
+      startActivationDiscardCostPrompt(card, cardName, targetSeat, permanentIndex, abilityIndex)) {
+    return;
+  }
+
+  // "Tap an untapped creature you control" (Opposition, Earthcraft), "Tap two
+  // untapped Spirits" (Shacklegeist), "Sacrifice two Goblins" (Goblin
+  // Warrens), "Sacrifice X lands" (Copper-Leaf Angel): a *set* of the payer's
+  // permanents, which the one-click canvas picker below cannot collect. There
+  // was no picker for a tap cost at all, so the engine's default tapped
+  // whatever came first — Unerring Sling's damage is the tapped creature's
+  // power, and the player never chose which.
+  if (!costAnswered &&
+      startActivationPermanentCostPrompt(card, cardName, targetSeat, permanentIndex, abilityIndex)) {
     return;
   }
 
@@ -11330,7 +11433,7 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
   // Lotus and a Mox, it took the Lotus.
   {
     const spec = targetSpecOf(card);
-    if (spec.sacrifice_cost) {
+    if (spec.sacrifice_cost && !costAnswered) {
       const fields = pendingTargetFields(card);
       if (fields.validKeys.size === 0) {
         SFX.onError();
@@ -11832,6 +11935,9 @@ function startCastDiscardCostPrompt(card, castAction = "cast") {
   if (!options.length) return false;
   pendingDiscardCost = {
     card, cardName, castAction, options,
+    // "Buyback—Discard **two** cards" (Forbid): how many the payer picks.
+    count: Math.max(1, Number(castCostSpec(card)?.count || 1)),
+    picked: [],
     // Demonic Embrace: the discard is CR 601.2b and the Aura's enchant target
     // is still CR 601.2c, so the pick continues into the target cascade instead
     // of sending the cast.
@@ -11841,39 +11947,65 @@ function startCastDiscardCostPrompt(card, castAction = "cast") {
   return true;
 }
 
-// Send the cast with the chosen payment on the cost field. `cost_hand_index`
-// indexes the hand as it stands now — the one that still holds the spell —
-// which is the hand the engine resolves it against before the card leaves it.
+// One click in the discard prompt. A one-card cost is answered by the click;
+// a counted one toggles the card in or out of the set and waits for the
+// confirm, so a misclick on the second card is a click to undo rather than a
+// card already in the graveyard.
 function payDiscardCost(handIndex) {
   if (!pendingDiscardCost) return;
   const choice = pendingDiscardCost;
+  const count = Math.max(1, Number(choice.count || 1));
+  if (count === 1) {
+    finishDiscardCost([handIndex]);
+    return;
+  }
+  const picked = (choice.picked || []).slice();
+  const at = picked.indexOf(handIndex);
+  if (at >= 0) picked.splice(at, 1);
+  else if (picked.length < count) picked.push(handIndex);
+  choice.picked = picked;
+  renderActivationPrompt();
+}
+
+function confirmDiscardCost() {
+  const choice = pendingDiscardCost;
+  if (!choice) return;
+  const count = Math.max(1, Number(choice.count || 1));
+  if ((choice.picked || []).length !== count) return;
+  finishDiscardCost(choice.picked.slice());
+}
+
+// The payment is chosen: put it on the cost fields. `cost_hand_index` (and
+// `cost_other_hand_indices` for the cards after the first) index the hand as
+// it stands now — the one that still holds the spell — which is the hand the
+// engine resolves them against before the card leaves it.
+function finishDiscardCost(handIndices) {
+  const choice = pendingDiscardCost;
+  if (!choice || !handIndices.length) return;
   pendingDiscardCost = null;
   renderActivationPrompt();
+  const fields = { cost_hand_index: handIndices[0] };
+  if (handIndices.length > 1) fields.cost_other_hand_indices = handIndices.slice(1);
   const activation = choice.activation;
   if (activation) {
-    const body = withPermanentId(
-      {
-        seat,
-        action: "activate",
-        permanent_name: choice.cardName,
-        permanent_index: activation.permanentIndex,
-        cost_hand_index: handIndex,
-      },
-      "permanent_id", seat, activation.permanentIndex,
-    );
-    if (Number.isInteger(activation.abilityIndex)) body.ability_index = activation.abilityIndex;
-    updateActionHint(`Activating ${choice.cardName}...`);
-    sendAction(body)
-      .then(() => updateActionHint(`Activated ${choice.cardName}.`))
-      .catch((e) => updateActionHint(e.message, true));
+    // Half an activation: the discard is announced (CR 602.2b), and whatever
+    // else the ability owes — an X, a target, its mana — is still to be asked.
+    // This used to send the activation right here, with no target and no X, so
+    // every discard-cost ability that also targets (Kris Mage, Bola Warrior,
+    // Seismic Mage, Deepwood Elder's X lands, …) resolved against the engine's
+    // fallback: Kris Mage pinged its own controller.
+    resumeActivationAfterCost(choice.card, activation, fields);
     return;
   }
 
   // Half an announcement: the payment is chosen, the target is not. Record what
   // was paid and run the rest of the cast — `pendingCastCost` carries the
-  // discard onto whichever body the target prompt finally sends.
+  // discard onto whichever body the target prompt finally sends. Merged, never
+  // replaced: Forbid's buyback was announced one prompt earlier on the same
+  // stash, and overwriting it cast the counterspell without the buyback the
+  // player had just paid two cards for.
   if (choice.thenTarget) {
-    pendingCastCost = { cost_hand_index: handIndex };
+    pendingCastCost = { ...(pendingCastCost || {}), ...fields };
     continueCastAfterCost(choice.card, choice.castAction || "cast");
     return;
   }
@@ -11883,7 +12015,7 @@ function payDiscardCost(handIndex) {
     seat,
     action: choice.castAction || "cast",
     card_name: choice.cardName,
-    cost_hand_index: handIndex,
+    ...fields,
   })
     .then(() => {
       updateActionHint(`Cast ${choice.cardName}.`);
@@ -11898,7 +12030,7 @@ function payDiscardCost(handIndex) {
 // The activation twin of startCastDiscardCostPrompt. Nothing is withheld from
 // the hand here — the source is a permanent, so a copy of it in hand is an
 // ordinary card — and the answer rides the same `cost_hand_index` field.
-function startActivationDiscardCostPrompt(card, cardName, permanentIndex, abilityIndex) {
+function startActivationDiscardCostPrompt(card, cardName, targetSeat, permanentIndex, abilityIndex) {
   const options = discardCostOptions(card);
   if (!options.length) return false;
   pendingDiscardCost = {
@@ -11906,10 +12038,238 @@ function startActivationDiscardCostPrompt(card, cardName, permanentIndex, abilit
     cardName,
     castAction: "activate",
     options,
-    activation: { permanentIndex, abilityIndex },
+    count: Math.max(1, Number(castCostSpec(card)?.count || 1)),
+    picked: [],
+    activation: { targetSeat, permanentIndex, abilityIndex },
   };
   renderActivationPrompt();
   return true;
+}
+
+// ---------------------------------------------------------------------------
+// Activation costs paid with permanents the payer picks, several at a time
+// ---------------------------------------------------------------------------
+
+// The cost picker an ability's permanents-for-a-cost need, or null: a tap cost
+// of any size, a sacrifice of more than one, or a sacrifice of X. A lone
+// sacrifice keeps the canvas picker it has always had.
+function activationPermanentCostSpec(card) {
+  const costSpec = castCostSpec(card);
+  if (!costSpec) return null;
+  if (costSpec.tap_cost) return costSpec;
+  if (costSpec.sacrifice_cost && (costSpec.announces_x || Number(costSpec.count || 1) > 1)) {
+    return costSpec;
+  }
+  return null;
+}
+
+function startActivationPermanentCostPrompt(card, cardName, targetSeat, permanentIndex, abilityIndex) {
+  const costSpec = activationPermanentCostSpec(card);
+  if (!costSpec) return false;
+  const verb = costSpec.tap_cost ? "tap" : "sacrifice";
+  // By id, never by slot: the set is chosen before anything taps or leaves,
+  // and the charger reads `cost_permanent_ids`.
+  const options = (costSpec.valid_targets || [])
+    .filter((option) => option?.kind === "permanent")
+    .map((option) => ({
+      id: permanentIdAt(option.seat, option.index),
+      name: option.name,
+    }))
+    .filter((option) => Number.isInteger(option.id));
+  const announcesX = !!costSpec.announces_x;
+  const count = Math.max(1, Number(costSpec.count || 1));
+  if (!announcesX && options.length < count) {
+    // CR 601.2h: a cost the board cannot cover is not paid with less. Said
+    // here, before anything else is asked; the engine refuses it the same way.
+    SFX.onError();
+    updateActionHint(`${cardName} has too few permanents to ${verb} for its cost.`, true);
+    return true;
+  }
+  pendingPermanentCost = {
+    card,
+    cardName,
+    verb,
+    noun: costSpec.kind || "permanent",
+    count,
+    announcesX,
+    options,
+    picked: [],
+    activation: { targetSeat, permanentIndex, abilityIndex },
+  };
+  renderActivationPrompt();
+  updateActionHint(`Choose what ${cardName} will ${verb} to pay its cost.`);
+  return true;
+}
+
+// One permanent in or out of the payment. A count of one swaps rather than
+// refusing a second click, because the player is changing their mind.
+function togglePermanentCost(permanentId) {
+  const pending = pendingPermanentCost;
+  if (!pending || !Number.isInteger(permanentId)) return;
+  let picked = (pending.picked || []).slice();
+  if (picked.includes(permanentId)) {
+    picked = picked.filter((id) => id !== permanentId);
+  } else if (!pending.announcesX && pending.count === 1) {
+    picked = [permanentId];
+  } else if (pending.announcesX || picked.length < pending.count) {
+    picked.push(permanentId);
+  }
+  pending.picked = picked;
+  renderActivationPrompt();
+}
+
+function confirmPermanentCost() {
+  const pending = pendingPermanentCost;
+  if (!pending) return;
+  const picked = (pending.picked || []).slice();
+  if (!pending.announcesX && picked.length !== pending.count) return;
+  pendingPermanentCost = null;
+  renderActivationPrompt();
+  if (pending.declaration) {
+    continueDeclarationCost(pending.declaration, picked);
+    return;
+  }
+  const fields = { cost_permanent_ids: picked };
+  // "Sacrifice X lands": the number named is the X announced (CR 601.2b), so
+  // the two cannot disagree — and an X the engine is never told is zero.
+  if (pending.announcesX) fields.x_value = picked.length;
+  resumeActivationAfterCost(pending.card, pending.activation, fields);
+}
+
+// Whether the activation now being asked has already announced its cost —
+// the re-entry below comes back through `startActivationPrompt`, and the cost
+// prompts must not ask a second time.
+function activationCostAnswered(permanentIndex, abilityIndex) {
+  const stash = pendingActivationCost;
+  if (!stash) return false;
+  return stash.permanentIndex === permanentIndex
+    && (Number.isInteger(stash.abilityIndex) ? stash.abilityIndex : null)
+      === (Number.isInteger(abilityIndex) ? abilityIndex : null);
+}
+
+// Record the announced cost and run the rest of the activation: its X, its
+// targets, its mana. Every one of those prompts ends in `sendAction`, which
+// merges the stash into the activate body it sends.
+function resumeActivationAfterCost(card, activation, fields) {
+  pendingActivationCost = {
+    permanentIndex: activation.permanentIndex,
+    abilityIndex: Number.isInteger(activation.abilityIndex) ? activation.abilityIndex : null,
+    fields: { ...(activationCostAnswered(activation.permanentIndex, activation.abilityIndex)
+      ? pendingActivationCost.fields : {}), ...fields },
+  };
+  // A spec that *is* the cost picker (Llanowar Behemoth, Goblin Warrens,
+  // Copper-Leaf Angel) describes no target: its `kind` is the cost's noun, and
+  // every target branch of the cascade reads `kind`. So the rest of that
+  // activation is asked of a card whose spec says, truthfully, that nothing
+  // is targeted. A cost riding beside a real target (`cost_spec`) leaves the
+  // spec alone — the target is exactly what is still owed.
+  const spec = targetSpecOf(card);
+  const costOnly = !spec?.cost_spec && ACTIVATION_COST_FLAGS.some((flag) => spec?.[flag]);
+  const rest = costOnly
+    ? { ...card, target_spec: { kind: "none", requires_target: false, valid_targets: [] } }
+    : card;
+  startActivationPrompt(rest, activation.targetSeat, activation.permanentIndex);
+}
+
+// The flags `engine/targeting._cost_picker_spec` sets (its
+// `COST_PICKER_FLAGS`): a spec carrying one at its top level is a payment
+// picker and nothing else.
+const ACTIVATION_COST_FLAGS = ["sacrifice_cost", "discard_cost", "exile_cost", "tap_cost"];
+
+// ---------------------------------------------------------------------------
+// A declaration's costs paid in permanents the player picks (CR 508.1h / 509.1d)
+// ---------------------------------------------------------------------------
+//
+// "This creature can't attack unless you sacrifice two Islands" (Leviathan),
+// "…unless you tap an untapped creature you control not declared as an
+// attacking or blocking creature this combat" (Hollow Warrior). The engine
+// has always charged these with a matching over the whole declaration, and
+// picked the permanents itself — so a player with four Islands, two of them
+// tapped, never chose which two went. The server says, per declared creature,
+// what it owes and among what (`declaration_costs`); the player picks, and the
+// ids ride `cost_permanent_ids`, which the engine's plans reach for first.
+
+// The choices this declaration owes, one group per verb, keeping only the
+// groups that are a real choice (more candidates than the count). A group the
+// board cannot cover is left to the engine, which refuses the declaration and
+// says why.
+function declarationCostGroups(state, kind, declaredIndices) {
+  const me = state?.players?.[seat];
+  if (!me || !Array.isArray(me.battlefield)) return [];
+  const declaredIds = new Set(
+    declaredIndices
+      .map((index) => me.battlefield[index])
+      .filter((perm) => perm && typeof perm === "object")
+      .map((perm) => perm.id),
+  );
+  const groups = new Map();
+  for (const index of declaredIndices) {
+    const perm = me.battlefield[index];
+    const owed = perm && typeof perm === "object" ? perm.declaration_costs?.[kind] : null;
+    for (const cost of owed || []) {
+      const group = groups.get(cost.verb) || { verb: cost.verb, count: 0, ids: new Set() };
+      group.count += Number(cost.count || 0);
+      for (const id of cost.candidate_ids || []) {
+        // The creatures being declared are never what a tap cost taps — the
+        // printed exclusion, and the engine's.
+        if (cost.verb === "tap" && declaredIds.has(id)) continue;
+        group.ids.add(id);
+      }
+      groups.set(cost.verb, group);
+    }
+  }
+  const nameOf = (id) => me.battlefield.find((perm) => perm && perm.id === id)?.name || `#${id}`;
+  return [...groups.values()]
+    .filter((group) => group.count > 0 && group.ids.size > group.count)
+    .map((group) => ({
+      verb: group.verb,
+      count: group.count,
+      options: [...group.ids].map((id) => ({ id, name: nameOf(id) })),
+    }));
+}
+
+// Open the picker for the first group, or return false when there is nothing
+// to choose and the caller should send the declaration as it is.
+function startDeclarationCostPrompt(state, body, kind, declaredIndices) {
+  const groups = declarationCostGroups(state, kind, declaredIndices);
+  if (!groups.length) return false;
+  openDeclarationCostGroup({ body, kind, remaining: groups, chosen: [] });
+  return true;
+}
+
+function openDeclarationCostGroup(declaration) {
+  const [group, ...rest] = declaration.remaining;
+  pendingPermanentCost = {
+    cardName: declaration.kind === "attack" ? "Declare attackers" : "Declare blockers",
+    verb: group.verb,
+    noun: "permanent",
+    count: group.count,
+    announcesX: false,
+    options: group.options,
+    picked: [],
+    purpose: declaration.kind,
+    declaration: { ...declaration, remaining: rest },
+  };
+  renderActivationPrompt();
+  updateActionHint(
+    `Choose what to ${group.verb} to ${declaration.kind === "attack" ? "attack" : "block"}.`,
+  );
+}
+
+function continueDeclarationCost(declaration, picked) {
+  const chosen = [...declaration.chosen, ...picked];
+  if (declaration.remaining.length) {
+    openDeclarationCostGroup({ ...declaration, chosen });
+    return;
+  }
+  const body = { ...declaration.body, cost_permanent_ids: chosen };
+  sendAction(body)
+    .then(() => {
+      combatBandDraft = false;
+      updateActionHint(declaration.kind === "attack" ? "Attackers declared." : "Blockers declared.");
+      if (currentState) renderCombatControls(currentState);
+    })
+    .catch((e) => updateActionHint(e.message, true));
 }
 
 // Show the generic mode-choice prompt for a modal spell. Returns true when the
@@ -13627,7 +13987,9 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
   }
 
   if (pending.__castCostStage) {
-    pendingCastCost = { cost_permanent_index: selectedPermanentIndex };
+    // Merged onto what the offer prompt already announced (an optional
+    // buyback, an alternative cost), never in place of it.
+    pendingCastCost = { ...(pendingCastCost || {}), cost_permanent_index: selectedPermanentIndex };
     const costPermanentId = permanentIdAt(selectedTarget, selectedPermanentIndex);
     if (Number.isInteger(costPermanentId)) pendingCastCost.cost_permanent_id = costPermanentId;
     continueCastAfterCost(pending.card, pending.castAction || "cast");
@@ -13678,8 +14040,13 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
     // Dwarven Weaponsmith: the target is chosen, now the cost. Two prompts
     // because CR 601.2c and CR 601.2b are two announcements on two fields —
     // one picker collecting both would have to send one of them as the other.
+    // A cost already announced before the target (a discard, a set of
+    // creatures to tap) rides `pendingActivationCost` and is not asked again.
     const costSpec = spec?.cost_spec;
-    if (costSpec && !pending.__costStage && !pending.__costOnly) {
+    if (
+      costSpec && !pending.__costStage && !pending.__costOnly
+      && !activationCostAnswered(pending.sourcePermanentIndex, pending.abilityIndex)
+    ) {
       const costTargets = costSpec.valid_targets || [];
       if (!costTargets.length) {
         updateActionHint(
@@ -15837,6 +16204,10 @@ function selectStackSpellTarget(arrayIndex) {
           permanent_index: pending.sourcePermanentIndex,
           target_stack_index: arrayIndex,
         };
+    // Which ability, as every other activate body says — without it a
+    // multi-ability permanent resolved its *first* ability, and the cost the
+    // ability announced (`pendingActivationCost`) could not find its body.
+    if (Number.isInteger(pending.abilityIndex)) body.ability_index = pending.abilityIndex;
     updateActionHint(`Activating ${pending.cardName} at ${item.card?.name || "spell"}...`);
     sendAction(body)
       .then(() => updateActionHint(`Activated ${pending.cardName}.`))
@@ -19212,6 +19583,23 @@ async function sendAction(actionBody) {
     body.chosen_keyword = pendingChosenAbilityWord;
     pendingChosenAbilityWord = null;
   }
+  // And the cost the activation announced before its X and its targets were
+  // asked (`pendingActivationCost`): carried onto the activate body for *that*
+  // permanent and ability, whichever prompt built it. Written onto the
+  // caller's body too, so an "insufficient mana" retry that resends it after
+  // the auto-tap still carries the cards and creatures the player picked —
+  // the stash itself is spent here. A land tapped for mana in between is a
+  // different activation and leaves it alone.
+  if (
+    body.action === "activate" && pendingActivationCost
+    && activationCostAnswered(body.permanent_index, body.ability_index)
+  ) {
+    for (const [field, value] of Object.entries(pendingActivationCost.fields)) {
+      if (body[field] == null) body[field] = value;
+      if (actionBody[field] == null) actionBody[field] = value;
+    }
+    pendingActivationCost = null;
+  }
   // "Choose one or more —": while a collection is open, a cast body is not a
   // cast — it is the target the current mode's own prompt just produced. Capture
   // it and open the next mode's prompt instead of sending. Intercepted here
@@ -19535,7 +19923,7 @@ for (const elementId of ["selfName", "oppName", "selfLife", "oppLife"]) {
 
 q("promptCancelBtn").addEventListener("click", () => {
   SFX.onMenuCancel();
-  const wasCasting = !!(pendingCastTarget || pendingCastX || pendingCastDivision || pendingAutoTap || pendingModalChoice || pendingDiscardCost || pendingCastOffers || pendingCastCreatureType);
+  const wasCasting = !!(pendingCastTarget || pendingCastX || pendingCastDivision || pendingAutoTap || pendingModalChoice || pendingDiscardCost || pendingPermanentCost || pendingCastOffers || pendingCastCreatureType);
   pendingActivation = null;
   pendingCastOffers = null;
   pendingCastCreatureType = null;
@@ -19547,6 +19935,8 @@ q("promptCancelBtn").addEventListener("click", () => {
   pendingModalChoice = null;
   pendingModeCollection = null;
   pendingDiscardCost = null;
+  pendingPermanentCost = null;
+  pendingActivationCost = null;
   pendingAbilityChoice = null;
   pendingChannel = null;
   const wasPickingAttackTarget = !!pendingAttackTarget;
@@ -19630,6 +20020,12 @@ q("promptSteps").addEventListener("click", (event) => {
     return;
   }
 
+  const permanentCost = target.dataset.permanentCost;
+  if (permanentCost !== undefined && pendingPermanentCost) {
+    togglePermanentCost(Number(permanentCost));
+    return;
+  }
+
   const attackSeat = target.dataset.attackSeat;
   if (attackSeat !== undefined && pendingAttackTarget) {
     confirmPendingAttackTarget(Number(attackSeat));
@@ -19697,6 +20093,8 @@ q("endTurnBtn").addEventListener("click", async () => {
     pendingCastX = null;
     pendingCastDivision = null;
     pendingManaColor = null;
+    pendingPermanentCost = null;
+    pendingActivationCost = null;
     battlefieldCanvas?.hideManaFan();
     const isSelfTurn = !!currentState && seat !== null && currentState.current_turn === seat;
     autoPassTurnEndEnabled = true;
