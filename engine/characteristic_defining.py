@@ -281,7 +281,12 @@ def _counted_noun_phrase(match: re.Match) -> dict[str, object] | None:
     from .grammar.lowering._amounts import count_spec
     from .grammar.phrases import parse_subject_filter
 
-    filt = parse_subject_filter(match.group("counted"), plural=True)
+    # "…creature cards in **its controller's** graveyard." (Elephant
+    # Resurgence's token.) A CDA's sentence is about its own permanent, so
+    # "its" can only be that permanent and its controller is the "you" of this
+    # ability (CR 109.5) — the seat "your graveyard" already counts.
+    counted = re.sub(r"\bits controller's\b", "your", match.group("counted"))
+    filt = parse_subject_filter(counted, plural=True)
     if filt is None:
         return None
     # The printed constant is optional. "**Maro's** power and toughness are each
