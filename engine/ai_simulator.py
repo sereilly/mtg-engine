@@ -8,6 +8,7 @@ import random
 
 from .ai_combat import run_ai_combat_phase
 from .ai_policy import (choose_activation_action, choose_cast_action,
+                        choose_foreign_activation_action,
                         choose_hand_activation_action, planned_tap_color)
 from .card_loader import load_cards
 from .game import Game
@@ -85,6 +86,11 @@ class SimulationReport:
     #: Cards the active player discarded to maximum hand size in cleanup
     #: (CR 514.1) — a number that could only ever have read zero before.
     cleanup_discards: int = 0
+    #: Abilities activated on a permanent another seat controls (CR 602.1b,
+    #: "Any player may activate this ability"). Zero in every run before
+    #: `ai_policy.choose_foreign_activation_action` existed, because every
+    #: chooser walked the seat's own battlefield.
+    foreign_activations: int = 0
 
     @property
     def ok(self) -> bool:
@@ -565,6 +571,50 @@ def _snap(game: Game) -> tuple[PlayerState, PlayerState]:
     return (_clone_player(game, game.players[0]), _clone_player(game, game.players[1]))
 
 
+def _execute_foreign_activation(
+    game: Game, active: int, action, report: SimulationReport,
+    game_index: int, turn: int,
+) -> None:
+    """Carry out `ai_policy.choose_foreign_activation_action`'s choice.
+
+    The activator pays (CR 602.1a) from its own lands, so the taps are on
+    *active*'s board; the permanent is on ``action.source_controller_index``'s,
+    which is what ``activate_permanent_ability`` counts ``permanent_index``
+    into when it is given that seat.
+    """
+    for position, permanent_index in enumerate(action.land_tap_indices):
+        land = game.permanent_at(active, permanent_index)
+        if land is None:
+            continue
+        game.tap_land_for_mana(
+            active, land.card.name,
+            chosen_color=planned_tap_color(action, position),
+            permanent_index=permanent_index,
+        )
+    result = game.activate_permanent_ability(
+        active,
+        action.permanent_name,
+        target_player_index=action.target_player_index,
+        permanent_index=action.permanent_index,
+        target_permanent_index=action.target_permanent_index,
+        target_role_refs=action.target_role_refs,
+        ability_index=action.ability_index,
+        source_controller_index=action.source_controller_index,
+    )
+    _resolve_pending_choices(game)
+    report.interaction_count += 1
+    report.foreign_activations += 1
+    owner = game.players[action.source_controller_index].name
+    report.log_lines.append(
+        f"G{game_index} T{turn} {game.players[active].name} "
+        f"activate {owner}'s {action.permanent_name} -> {result.details}"
+    )
+    if not result.supported:
+        report.refused_activations[
+            f"{action.permanent_name} ({owner}'s): {result.details}"
+        ] += 1
+
+
 def _play_combat_phase(
     game: Game, active: int, report: SimulationReport, game_index: int, turn: int
 ) -> None:
@@ -951,6 +1001,20 @@ def run_ai_simulation(
                         report.refused_activations[
                             f"{hand_activation.card_name} (from hand): {result.details}"
                         ] += 1
+
+                # An ability on a permanent **another seat controls** that this
+                # seat may activate (CR 602.1b, "Any player may activate this
+                # ability"). Last of the main-phase passes, so it spends only
+                # mana nothing of the seat's own wanted. No simulated seat had
+                # ever done this: every chooser walked its own board.
+                foreign_activation = (
+                    None if game.is_game_over()
+                    else choose_foreign_activation_action(game, active)
+                )
+                if foreign_activation is not None:
+                    _execute_foreign_activation(
+                        game, active, foreign_activation, report, game_index, turn,
+                    )
 
                 # CR 506-511, the half of a turn this loop did not have. It went
                 # main phase -> cast -> activate -> next seat, so no simulated

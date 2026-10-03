@@ -70,6 +70,14 @@ def main() -> int:
         f"{report.cleanup_discards} card(s) discarded to hand size"
     )
 
+    # CR 602.1b: abilities activated on a permanent another seat controls
+    # ("Any player may activate this ability"). Only a pool printing one can
+    # move it, so it is shown when it did.
+    if report.foreign_activations:
+        print(
+            f"Activations on another seat's permanent: {report.foreign_activations}"
+        )
+
     if report.refused_attacks:
         total = sum(report.refused_attacks.values())
         print(f"Attack declarations the engine declined: {total} (the AI proposed an illegal set)")

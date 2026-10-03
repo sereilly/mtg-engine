@@ -1226,6 +1226,229 @@ def exiled_search_pile_comes_back(card: CardDefinition) -> bool:
     return False
 
 
+# --- What an activated ability does to the permanent it is printed on --------
+#
+# CR 602.1b lets an ability's own text say who may activate it ("Any player may
+# activate this ability"), and CR 113.8 makes whoever activated it the
+# ability's controller — so its "you", its targets and its costs are the
+# activator's. The one thing that does **not** move with the activator is the
+# permanent the ability is printed on. That is why these abilities exist at
+# all: "This creature loses flying until end of turn" (Ribbon Snake), "Destroy
+# this enchantment" (Volrath's Dungeon), "Return this creature to its owner's
+# hand" (Quicksilver Wall) are drawbacks printed for an *opponent* to pay for.
+#
+# So one reading answers two questions in opposite directions. Asked by the
+# source's controller, an effect that removes or hampers its own source is a
+# loss, and the activation chooser was paying for it every main phase — 2.5 for
+# "anything else", so it bounced its own Quicksilver Wall for {4}, stripped its
+# own Ribbon Snake's flying and paid 5 life to destroy its own Volrath's
+# Dungeon. Asked by any other seat, the same effect is the reason to pay.
+
+#: Kinds whose effect takes the ability's own source off the battlefield and
+#: does not bring it back: destroyed, exiled, sacrificed, returned to a hand,
+#: put into a library.
+SOURCE_REMOVAL_KINDS = frozenset({
+    "destroy_self",
+    "exile_self",
+    "sacrifice_self",
+    "return_source_card_to_owners_hand",
+    "put_source_card_on_library_top",
+    "shuffle_source_card_into_library",
+})
+
+#: The removals the source's owner gets back: a card returned to a hand or put
+#: on top of a library is a turn of tempo, not a permanent gone.
+SOURCE_RETURN_KINDS = frozenset({
+    "return_source_card_to_owners_hand",
+    "put_source_card_on_library_top",
+})
+
+#: Kinds whose effect takes something away from the source and gives it
+#: nothing: a keyword or a printed line lost (Ribbon Snake, Glittering Lion),
+#: regeneration denied (Clergy of the Holy Nimbus), the source tapped (Deep
+#: Spawn's shroud costs it its untap), the source phased out for the turn.
+SOURCE_HAMPER_KINDS = frozenset({
+    "remove_self_keyword",
+    "remove_self_ability_text",
+    "deny_regeneration_to_self",
+    "tap_self",
+    "phase_out_self",
+})
+
+#: Payload flags that point a step's effect at the ability's own source
+#: ("prevent the next 1 damage … to this creature", Mercenaries' "the next time
+#: this creature would deal damage").
+_SOURCE_PAYLOAD_FLAGS = ("to_self", "to_source", "from_source")
+
+
+def _effect_steps(instruction: OracleInstruction) -> tuple[OracleInstruction, ...]:
+    """*instruction*'s leaf steps, wrappers (``sequence``, ``if_then``,
+    ``may``) opened and themselves left out."""
+    found: list[OracleInstruction] = []
+
+    def walk(item) -> None:
+        payload = getattr(item, "payload", None) or {}
+        nested = [
+            payload.get(key)
+            for key in ("steps", "then", "else", "action", "otherwise", "effect")
+            if isinstance(payload.get(key), (list, tuple))
+        ]
+        if not nested:
+            found.append(item)
+            return
+        for group in nested:
+            for child in group:
+                if hasattr(child, "kind"):
+                    walk(child)
+
+    walk(instruction)
+    return tuple(found)
+
+
+def _acts_on_source(step: OracleInstruction) -> bool:
+    """Whether one step's effect lands on the ability's own source.
+
+    The kind vocabulary is verb_object, and ``self`` / ``source`` is its word
+    for the permanent the ability is printed on (``pump_self``,
+    ``return_source_card_to_owners_hand``, ``grant_self_keyword_until_eot``) —
+    80 kinds in the table, all spelled that way. A kind that reached the
+    source some other way would read as not touching it, so every caller below
+    *declines* on a yes and uses this only to rule a step in, never out.
+    """
+    kind = str(getattr(step, "kind", "") or "")
+    if kind in SOURCE_REMOVAL_KINDS or kind in SOURCE_HAMPER_KINDS:
+        return True
+    if {"self", "source"} & set(kind.split("_")):
+        return True
+    payload = getattr(step, "payload", None) or {}
+    return any(payload.get(flag) for flag in _SOURCE_PAYLOAD_FLAGS)
+
+
+def harms_its_own_source(instruction: OracleInstruction | None) -> bool:
+    """Whether any step of an ability's effect removes or hampers the permanent
+    the ability is printed on.
+
+    Asked by the activation chooser for its own seat's permanents, where the
+    answer is a reason **not** to activate: a self-bounce, a self-destruction
+    or a lost keyword is a rescue or a drawback, and a main-phase chooser with
+    no response window has nothing to rescue. 59 abilities on 58 cards print
+    one across both manifest roles, 10 of them on cards any player may
+    activate; of the 45 non-Aura permanents whose *first* ability is one — the
+    ability that chooser reads — it proposed 30 before this existed.
+    """
+    if instruction is None:
+        return False
+    return any(
+        step.kind in SOURCE_REMOVAL_KINDS or step.kind in SOURCE_HAMPER_KINDS
+        for step in _effect_steps(instruction)
+    )
+
+
+def source_toughness_change(instruction: OracleInstruction | None) -> int | None:
+    """The toughness change an effect makes to its own source, when that is the
+    whole of the effect — every step a ``pump_self`` with printed numbers — or
+    None. "This creature gets -1/-1 until end of turn" (Flailing Soldier) is
+    -1; a trade that shrinks the source *and* gives it flying is None, because
+    the flying is half of what the ability is for.
+    """
+    if instruction is None:
+        return None
+    total = 0
+    for step in _effect_steps(instruction):
+        if step.kind != "pump_self":
+            return None
+        toughness = (step.payload or {}).get("toughness")
+        if not isinstance(toughness, int) or isinstance(toughness, bool):
+            return None
+        total += toughness
+    return total
+
+
+def ability_target_side(instruction: OracleInstruction | None) -> str | None:
+    """Whose permanent an ability's object target should be — "you",
+    "opponent", or None when no step answers — read step by step with the
+    wrappers opened, the denial winning where steps differ.
+
+    :func:`spell_target_side`'s rule, asked of one ability rather than a card.
+    The top-level reading cannot see through a ``sequence``: "Target creature
+    gains protection from the color of its controller's choice" (Wishmonger)
+    is a colour choice and then a grant, and read as one instruction it has no
+    side at all — so the chooser fell back to the biggest creature on either
+    board and gave protection to an opponent's.
+    """
+    if instruction is None:
+        return None
+    steps = [
+        step for step in _effect_steps(instruction)
+        if isinstance((step.payload or {}).get("targets"), dict)
+    ]
+    sides = {instruction_target_side(step) for step in steps} - {None}
+    if "opponent" in sides:
+        return "opponent"
+    if "you" in sides:
+        return "you"
+    return None
+
+
+def foreign_activation_use(ability) -> str | None:
+    """What activating *ability* is for, to a seat that does **not** control
+    the permanent it is printed on — or None when it is for nothing that seat
+    can count on.
+
+    * ``"removes_source"`` — the whole effect takes the source off its
+      controller's battlefield for good (Volrath's Dungeon, Aether Storm).
+      Removal of an opponent's permanent, bought with the activation cost.
+    * ``"returns_source"`` — the same, to a hand or the top of a library
+      (Quicksilver Wall), so the owner plays it again: tempo, worth it when it
+      costs the owner more to recast than it cost to bounce, or when it clears
+      a blocker the activator is about to attack past.
+    * ``"shrinks_source"`` — the whole effect lowers the source's toughness
+      (the Flailing creatures' "-1/-1"). Worth it only when that is lethal,
+      which the policy asks of the live permanent.
+    * ``"aimed"`` — the effect never touches its source and names a target,
+      which the activator chooses (CR 113.8): Task Mage Assembly's 1 damage,
+      Scandalmonger's discard, Endbringer's Revel's graveyard return. It is
+      the same ability whichever seat holds the permanent, so it is worth what
+      it would be worth on the activator's own board.
+
+    Everything else is declined, and the reasons are the policy:
+
+    * a *hamper* that is not lethal on its own — "loses flying" (Ribbon
+      Snake), "loses 'Prevent all damage …'" (Glittering Lion), "can't be
+      regenerated" (Clergy of the Holy Nimbus) — is worth paying for only with
+      something lined up to cash it in this turn, and this chooser has one
+      activation in a main phase and no combat plan to read;
+    * a *gift* to the source ("+1/+1", Flailing Soldier's other ability)
+      helps the permanent's controller;
+    * an untargeted effect on everyone (Squallmonger's 1 damage to each
+      player) or one about the source's own damage (Mercenaries) is not the
+      activator's to aim, and its value is the board's, not the seat's.
+    """
+    instruction = getattr(ability, "instruction", None)
+    if instruction is None:
+        return None
+    steps = _effect_steps(instruction)
+    if not steps:
+        return None
+    if all(step.kind in SOURCE_REMOVAL_KINDS for step in steps):
+        if any(step.kind in SOURCE_RETURN_KINDS for step in steps):
+            return "returns_source"
+        return "removes_source"
+    change = source_toughness_change(instruction)
+    if change is not None and change < 0:
+        return "shrinks_source"
+    if any(_acts_on_source(step) for step in steps):
+        return None
+    from .targeting import derive_activation_spec
+
+    spec = derive_activation_spec(ability) or {}
+    if spec.get("kind") in (None, "none", "hand_card") or spec.get(
+        "sacrifice_cost"
+    ) or spec.get("discard_cost"):
+        return None
+    return "aimed"
+
+
 def _walk_program(program):
     """Every instruction on a program, wrappers opened."""
     def walk(instructions):
@@ -1248,10 +1471,14 @@ def _walk_program(program):
 __all__ = [
     "MANA_ABILITY_KINDS",
     "SELF_PAYMENT_KINDS",
+    "SOURCE_HAMPER_KINDS",
+    "SOURCE_REMOVAL_KINDS",
+    "SOURCE_RETURN_KINDS",
     "SPELL_TYPES",
     "CounterProfile",
     "DividedShape",
     "TollLoss",
+    "ability_target_side",
     "cards_drawn_by_controller",
     "cards_drawn_by_target",
     "caster_sacrifice_steps",
@@ -1264,12 +1491,15 @@ __all__ = [
     "is_mana_ability",
     "mana_ability_amount",
     "exiled_search_pile_comes_back",
+    "foreign_activation_use",
     "hand_entry_steps",
+    "harms_its_own_source",
     "hand_pick_entry_consumer",
     "instruction_target_side",
     "offered_action_is_a_payment",
     "returns_creature_to_hand",
     "several_target_slot_sides",
+    "source_toughness_change",
     "spell_denies_its_own_target",
     "spell_hand_pick_entry_filters",
     "spell_target_side",
