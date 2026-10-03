@@ -227,6 +227,20 @@ def target_loses_life(game: Game, instruction: OracleInstruction, context: Oracl
             game.log.append(f"{card.name}: no recorded controller, no life lost")
             return True, "resolved"
         victims = [game.players[seat]]
+    elif recipient == "damaged_permanent_controller":
+        # "Whenever this creature deals combat damage to a creature, **that
+        # creature's controller** loses 2 life" (Death Charmer). The seat that
+        # controlled the permanent the damage *hit*, frozen by the one damage
+        # seam (`damage_events._announce`) — the other end of the event from
+        # the branch above, which is the damager's. The same key the damage
+        # handler reads for Bellowing Fiend's identical phrase. Lethal damage is
+        # the usual case here, so the creature is a card in a graveyard by
+        # resolution and no board read could answer it (CR 603.10).
+        seat = (context.trigger_context or {}).get("damaged_permanent_controller")
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            game.log.append(f"{card.name}: no recorded controller, no life lost")
+            return True, "resolved"
+        victims = [game.players[seat]]
     elif recipient == "event_subject_player":
         # "That player" after an event about a **player**: whose upkeep, end
         # step or draw the firing was, frozen into the trigger's context by

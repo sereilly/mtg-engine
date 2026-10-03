@@ -607,3 +607,154 @@ def test_w1g5_mirror_strike_leaves_other_attackers_alone(set_pool):
     _w1g5_to_postcombat(game)
     assert (me.life, them.life) == (17, 18)
 # end of the W1G5 instants block
+
+
+# --- W2G1: tolls, part two ---
+from engine import Game as _W2G1Game, PlayerState as _W2G1PlayerState
+from engine.models import Permanent as _W2G1Permanent
+from engine.oracle import compile_card_oracle as _w2g1_compile
+from engine.targeting import derive_cast_spec as _w2g1_cast_spec
+from tests.helpers import (_mk_creature_card as _w2g1_creature,
+                           resolve_stack as _w2g1_resolve_stack)
+
+
+def _w2g1_withdraw_duel(set_pool, *, p1_islands: int, p0_islands: int = 0):
+    """P0 holds Withdraw and one creature; P1 two creatures and some Islands.
+
+    Every seat interactive, so the {1} toll is a prompt the test answers rather
+    than a default the AI takes for it."""
+    island = set_pool("LEA")["Island"]
+    game = _W2G1Game(players=[
+        _W2G1PlayerState(
+            name="P0", hand=[set_pool("PCY")["Withdraw"]],
+            battlefield=[_W2G1Permanent(card=island) for _ in range(p0_islands)],
+        ),
+        _W2G1PlayerState(
+            name="P1",
+            battlefield=[_W2G1Permanent(card=island) for _ in range(p1_islands)],
+        ),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0, 1}
+    game.start_turn(0)
+    game._close_current_priority_step()
+    creatures = {
+        name: _W2G1Permanent(card=_w2g1_creature(name, power, power))
+        for name, power in (("My Elf", 1), ("Their Bear", 2), ("Their Ogre", 3))
+    }
+    game._put_permanent_onto_battlefield(0, creatures["My Elf"], None)
+    game._put_permanent_onto_battlefield(1, creatures["Their Bear"], None)
+    game._put_permanent_onto_battlefield(1, creatures["Their Ogre"], None)
+    return game, creatures  # _w2g1_withdraw_duel
+
+
+def _w2g1_cast_withdraw(game, first, second):
+    result = game.cast_from_hand(
+        0, "Withdraw", target_permanent_ids=[first.permanent_id, second.permanent_id],
+    )
+    assert result.supported, result
+    game.resolve_top_of_stack()
+    return result  # _w2g1_cast_withdraw
+
+
+def _w2g1_names(game, seat: int) -> list[str]:
+    return sorted(p.card.name for p in game.controlled_by(seat) if p.is_creature)
+
+
+def test_w2g1_withdraw_announces_two_creatures_the_second_another(set_pool):
+    """"Return target creature … Then return **another** target creature …"
+    Two instances of the word, so two slots (CR 601.2c), and the printed
+    "another" forbids the repeat CR 115.3 would otherwise allow: the picker
+    never offers the first choice for the second slot."""
+    withdraw = set_pool("PCY")["Withdraw"]
+    assert _w2g1_cast_spec(withdraw, _w2g1_compile(withdraw)) == {
+        "kind": "roles",
+        "roles": [
+            {"kind": "creature", "role": "creature"},
+            {"kind": "creature", "role": "another creature"},
+        ],
+    }
+    game, creatures = _w2g1_withdraw_duel(set_pool, p1_islands=0)
+    walk = game.cast_target_spec(0, withdraw)["valid_targets"]
+    assert len(walk) == 3
+    for first in walk:
+        first_name = game.role_object_at(first).card.name
+        offered = {game.role_object_at(second).card.name for second in first["next"]}
+        assert first_name not in offered
+        assert offered == set(creatures) - {first_name}
+
+
+def test_w2g1_withdraw_refuses_the_same_creature_twice(set_pool):
+    game, creatures = _w2g1_withdraw_duel(set_pool, p1_islands=0)
+    bear = creatures["Their Bear"]
+    refused = game.cast_from_hand(
+        0, "Withdraw", target_permanent_ids=[bear.permanent_id, bear.permanent_id],
+    )
+    assert not refused.supported
+    assert [c.name for c in game.players[0].hand] == ["Withdraw"]
+    assert game.is_on_battlefield(bear)
+
+
+def test_w2g1_withdraw_offers_the_toll_to_the_second_creatures_controller(set_pool):
+    """The first creature is the caster's own, the second the opponent's: the
+    offer is the **second** creature's controller's to answer, and declining
+    it sends that creature home too."""
+    game, creatures = _w2g1_withdraw_duel(set_pool, p1_islands=1)
+    _w2g1_cast_withdraw(game, creatures["My Elf"], creatures["Their Bear"])
+
+    assert [c.player_index for c in game.pending_choices] == [1]
+    assert game.confirm_optional_pay(1, accept=False)
+    _w2g1_resolve_stack(game)
+
+    assert [c.name for c in game.players[0].hand] == ["My Elf"]
+    assert [c.name for c in game.players[1].hand] == ["Their Bear"]
+    assert _w2g1_names(game, 1) == ["Their Ogre"]
+
+
+def test_w2g1_withdraw_second_creature_stays_when_its_controller_pays(set_pool):
+    game, creatures = _w2g1_withdraw_duel(set_pool, p1_islands=1)
+    _w2g1_cast_withdraw(game, creatures["My Elf"], creatures["Their Bear"])
+
+    assert game.confirm_optional_pay(1, accept=True)
+    _w2g1_resolve_stack(game)
+
+    assert [c.name for c in game.players[0].hand] == ["My Elf"]
+    assert game.players[1].hand == []
+    assert _w2g1_names(game, 1) == ["Their Bear", "Their Ogre"]
+    assert sum(1 for p in game.controlled_by(1) if p.tapped) == 1
+
+
+def test_w2g1_withdraw_asks_the_caster_when_the_second_creature_is_theirs(set_pool):
+    """Reversed: the opponent's creature first, the caster's own second — so
+    the caster is the one asked, and the opponent's Islands are never touched."""
+    game, creatures = _w2g1_withdraw_duel(set_pool, p1_islands=1, p0_islands=1)
+    _w2g1_cast_withdraw(game, creatures["Their Ogre"], creatures["My Elf"])
+
+    assert [c.player_index for c in game.pending_choices] == [0]
+    assert game.confirm_optional_pay(0, accept=False)
+    _w2g1_resolve_stack(game)
+
+    assert [c.name for c in game.players[1].hand] == ["Their Ogre"]
+    assert [c.name for c in game.players[0].hand] == ["My Elf"]
+    assert not any(p.tapped for p in game.controlled_by(1))
+
+
+def test_w2g1_withdraw_with_the_second_creature_gone_still_returns_the_first(set_pool):
+    """CR 608.2b: one illegal target among two does not stop the spell. The
+    second creature left in response, so nobody is offered a toll about it —
+    there is no controller to ask — and the first is still returned."""
+    game, creatures = _w2g1_withdraw_duel(set_pool, p1_islands=1)
+    result = game.queue_from_hand(
+        0, "Withdraw",
+        target_permanent_ids=[
+            creatures["Their Ogre"].permanent_id, creatures["Their Bear"].permanent_id,
+        ],
+    )
+    assert result.supported, result
+    game.remove_from_battlefield(creatures["Their Bear"])
+    _w2g1_resolve_stack(game)
+
+    assert game.pending_choices == []
+    assert [c.name for c in game.players[1].hand] == ["Their Ogre"]
+    assert not any(p.tapped for p in game.controlled_by(1))
+# end of the W2G1 instants block

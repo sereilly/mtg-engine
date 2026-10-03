@@ -28,6 +28,8 @@ from ..oracle_types import OracleInstruction
 from . import ast
 from .errors import LoweringError
 from .lowering._events import LOOP_BOUND_OBJECT, LOOP_BOUND_PLAYER
+from .lowering._roles import (plan_another_target_roles,
+                              stamp_another_target_roles)
 from .lowering.where_x import lower_where_x
 from .lowering.control_flow import (
     _lower_may, _lower_one_of, _lower_unless_player_pays,
@@ -302,7 +304,8 @@ def lower_statement(
     if isinstance(statement, ast.GainLife):
         return _lower_gain_life(statement, produced, event)
     if isinstance(statement, ast.LoseLife):
-        return _lower_lose_life(statement, event, produced)
+        # …and its subject, for `_lower_damage`'s reason above (Death Charmer).
+        return _lower_lose_life(statement, event, produced, event_subject)
     if isinstance(statement, ast.Destroy):
         # The **unfiltered** event, and this is the one of the three that is not
         # a dispatch question. `_lower_delayed_destroy` reads it to ask whether
@@ -832,15 +835,23 @@ def lower_statement(
         )
         if fused is not None:
             return fused
-        _refuse_unfused_distinctness(statement.steps)
+        # "…Then return **another** target creature…" (Withdraw): the word is
+        # the proof of two announcements, so the pair is lowered as two roles
+        # (`_roles.plan_another_target_roles`) instead of refused below.
+        another = plan_another_target_roles(statement.steps)
+        if another is None:
+            _refuse_unfused_distinctness(statement.steps)
         # The narrowing travels with the kind, as it does everywhere else it is
         # threaded: a trigger's noun phrase is as true of the second sentence of
         # its effect as of the first, and dropped here it left
         # `binds_block_pair` unable to tell a bound pair from a bare firing.
-        return _lower_steps(
-            statement.steps, produced, event, event_subject,
-            lower_statement=lower_statement,
+        lowered = _lower_steps(
+            statement.steps if another is None else another.steps,
+            produced, event, event_subject, lower_statement=lower_statement,
         )
+        if another is None:
+            return lowered
+        return stamp_another_target_roles(lowered, another)
 
     if isinstance(statement, ast.Conditional):
         then = lower_statement(statement.then, produced, event=event, event_subject=event_subject, whole_effect=False)

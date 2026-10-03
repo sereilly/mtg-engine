@@ -541,12 +541,39 @@ def untapped_mana_lands(permanents: Iterable["Permanent"]) -> list["Permanent"]:
         if perm.card.primary_type == "land"
         and not perm.tapped
         and perm.effective_produced_mana
+        and land_text_is_run(perm)
     ]
+
+
+def land_text_is_run(land) -> bool:
+    """Whether the engine runs any of *land*'s printed text at all.
+
+    ``effective_produced_mana`` is Scryfall's summary of which symbols a land
+    can make, and for a basic or a dual (whose only text is CR 305.6 reminder
+    text) it is exactly the land. For a land whose printed mana ability the
+    engine cannot compile it is a guess at the land with every cost and every
+    condition taken out. Rhystic Cave is the case: "{T}: Choose a color. Add one
+    mana of that color unless any player pays {1}. Activate only as an instant"
+    summarises to WUBRG, so both mana seams read it as a free five-colour land
+    no player could deny and no timing restricted — on a card reported
+    unsupported. 1 of the 156 producing lands in both manifest roles.
+
+    A land whose types an effect has replaced is answered by its new types
+    (CR 305.7: it loses its printed abilities and gains the basic one), so it
+    counts as run whatever its printed text was.
+    """
+    from .land_types import lost_abilities_to_type_change
+    from .oracle import compile_card_oracle
+
+    if lost_abilities_to_type_change(land):
+        return True
+    return compile_card_oracle(land.effective_card).supported
 
 
 __all__ = [
     "COLOR_SYMBOLS", "ManaPayment", "fungible_colors_headroom",
-    "fungible_types_headroom", "generic_cost", "mana_cost_from_symbols",
+    "fungible_types_headroom", "generic_cost", "land_text_is_run",
+    "mana_cost_from_symbols",
     "mana_cost_label", "plan_payment",
     "total_pips",
     "untapped_mana_lands",

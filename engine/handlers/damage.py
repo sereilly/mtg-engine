@@ -427,11 +427,11 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         # *hit*, frozen by the one damage seam — the other end from
         # `event_subject_controller` directly below, which is the damager's.
         #
-        # Implemented here and nowhere else on purpose: the word is produced by
-        # one lowering branch (`lowering/damage.py`), for a phrase only a damage
-        # sentence can print, so a second family reading it would be a key with
-        # no sentence behind it. No record means the words named nobody, and the
-        # damage does not happen rather than landing on a guess.
+        # Two families read it: this one, and the life-loss handler for Death
+        # Charmer's "that creature's controller loses 2 life" — both produced by
+        # lowerings that ask `damage_trigger_names_damaged_end`, so a key with
+        # no sentence behind it cannot appear. No record means the words named
+        # nobody, and the damage does not happen rather than landing on a guess.
         seat = (context.trigger_context or {}).get("damaged_permanent_controller")
         if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
             game.log.append(f"{card.name}: no recorded controller, no damage dealt")

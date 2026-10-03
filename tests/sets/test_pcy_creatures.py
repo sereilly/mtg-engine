@@ -1211,3 +1211,93 @@ def test_w1g6_keldon_firebombers_leaves_each_player_three_lands(set_pool):
     assert all(game.is_on_battlefield(p) for p in theirs)
     assert game.is_on_battlefield(bear)
     assert any(p.card.name == "Keldon Firebombers" for p in game.controlled_by(0))
+
+
+# --- W2G1: tolls, part two ---
+from engine import Game as _W2G1Game, PlayerState as _W2G1PlayerState
+from engine.models import Permanent as _W2G1Permanent
+from tests.helpers import _mk_card as _w2g1_mk_card, resolve_stack as _w2g1_resolve
+
+
+def _w2g1_charmer_combat(set_pool, *, charmer_seat: int, p1_islands: int = 0):
+    """Death Charmer and a 0/5 Wall on opposite sides, one combat to blocks.
+
+    The Charmer attacks when it is seat 0's and blocks when it is seat 1's;
+    either way it deals combat damage to the Wall, whose controller is the
+    seat the toll and the loss both belong to."""
+    island = set_pool("LEA")["Island"]
+    game = _W2G1Game(players=[
+        _W2G1PlayerState(name="P0"),
+        _W2G1PlayerState(
+            name="P1", battlefield=[_W2G1Permanent(card=island) for _ in range(p1_islands)],
+        ),
+    ])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    game._close_current_priority_step()
+    charmer = _W2G1Permanent(card=set_pool("PCY")["Death Charmer"])
+    game._put_permanent_onto_battlefield(charmer_seat, charmer, None)
+    charmer.metadata["summoning_sickness_turn"] = -99
+    other = _W2G1Permanent(card=_w2g1_mk_card(
+        "Stone Wall", "Creature — Wall", power=0 if charmer_seat == 0 else 1,
+        toughness=5,
+    ))
+    game._put_permanent_onto_battlefield(1 - charmer_seat, other, None)
+    other.metadata["summoning_sickness_turn"] = -99
+    attacker, blocker = (charmer, other) if charmer_seat == 0 else (other, charmer)
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(
+        0, [game.players[0].battlefield.index(attacker)]
+    )[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(
+        1, {game.players[1].battlefield.index(blocker): 0}
+    )[0]
+    return game, other  # _w2g1_charmer_combat
+
+
+def _w2g1_to_combat_damage(game, *, answer=None):
+    for _ in range(4):
+        game.advance_combat_phase()
+        _w2g1_resolve(game)
+        if answer is not None and game.pending_choices:
+            seat, accept = answer
+            assert [c.player_index for c in game.pending_choices] == [seat]
+            assert game.confirm_optional_pay(seat, accept=accept)
+            answer = None
+        game.auto_resolve_pending_choices()
+        _w2g1_resolve(game)
+    return answer  # _w2g1_to_combat_damage: None once the offer was answered
+
+
+def test_w2g1_death_charmer_drains_the_damaged_creatures_controller(set_pool):
+    """"Whenever this creature deals combat damage to a creature, that
+    creature's controller loses 2 life unless they pay {2}." The Wall's
+    controller cannot pay, so **they** lose 2 — not the Charmer's controller,
+    who is the other end of the same damage event."""
+    game, _wall = _w2g1_charmer_combat(set_pool, charmer_seat=0)
+    _w2g1_to_combat_damage(game)
+
+    assert (game.players[0].life, game.players[1].life) == (20, 18)
+    assert any("P1 lost 2 life" in line for line in game.log), game.log[-6:]
+
+
+def test_w2g1_death_charmer_toll_is_paid_by_the_damaged_creatures_controller(set_pool):
+    """The same seat is offered the {2}: paying it taps two of their Islands
+    and nobody loses life."""
+    game, _wall = _w2g1_charmer_combat(set_pool, charmer_seat=0, p1_islands=2)
+    assert _w2g1_to_combat_damage(game, answer=(1, True)) is None, "no offer made"
+
+    assert (game.players[0].life, game.players[1].life) == (20, 20)
+    assert sum(1 for p in game.controlled_by(1) if p.tapped) == 2
+
+
+def test_w2g1_death_charmer_blocking_drains_the_attackers_controller(set_pool):
+    """Blocking, the creature it damages is the attacker — so the active
+    player, who controls it, loses the life, and the Charmer's controller
+    (the defender) does not."""
+    game, _attacker = _w2g1_charmer_combat(set_pool, charmer_seat=1)
+    _w2g1_to_combat_damage(game)
+
+    assert (game.players[0].life, game.players[1].life) == (18, 20)

@@ -112,33 +112,87 @@ def _role_scoped(
     every other instruction in the pool: the narrowing is inert until a
     lowering writes the key. Returns None where the role no longer resolves,
     which the caller reads as "skip this step" (CR 608.2b).
+
+    **A wrapper is scoped to the one role its branches spend.** "Then return
+    another target creature to its owner's hand **unless its controller pays
+    {1}**" (Withdraw) puts the role on the bounce inside the offer, and the
+    offer itself names none — so ``_offered_seats("controller")`` read the
+    *first* creature off the unscoped list and asked the wrong player. Scoped
+    here, the offer asks the second creature's controller. A wrapper whose
+    branches spend two roles (or none) is left alone; each of its steps is
+    scoped when it runs.
+
+    **A scoped context remembers the announcement it was cut from**
+    (``announced_targets``), and every role is resolved against that rather
+    than against whatever an enclosing scope left in the channels. A wrapper's
+    branch may spend a *different* role from the wrapper's own: Crooked Scales'
+    toll, scoped to "target creature you control", buys "repeat this process",
+    which runs the won arm's "target creature an opponent controls" again under
+    the toll's context — and resolved against the scoped channels that arm
+    would have read the payer's own creature.
     """
-    from ..targeting import payload_own_role, role_is_seat, spec_roles
+    from ..targeting import (payload_own_role, payload_role_slot, role_is_seat,
+                             spec_roles)
     from ._common import resolve_role_permanent, resolve_role_player
 
-    role = payload_own_role(step.payload)
-    if role is None:
-        return context
+    payload = step.payload
+    role = payload_own_role(payload)
+    # A wrapper is never *skipped* for its branch's object having gone: what
+    # it decides for itself may not be about that object at all ("…unless
+    # **you** pay {3} and repeat this process", Crooked Scales, is still an
+    # offer). Only the steps that spend the role are CR 608.2b's to skip.
+    wrapper = role is None
+    if wrapper:
+        spent = _role_its_branches_spend(step)
+        if spent is None:
+            return context
+        role, payload = spent
     entry = next(
         (
-            described for described in spec_roles(step.payload.get("targets"))
+            described for described in spec_roles(payload.get("targets"))
             if described.get("role") == role
         ),
         None,
     )
     if entry is None:  # pragma: no cover - a payload with a name and no list
         return context
+    announced = _announced_context(context)
+    remembered = (
+        announced.target, announced.target_permanent_id,
+        announced.target_permanent_index,
+    )
     if role_is_seat(entry):
-        seat = resolve_role_player(game, context, step.payload, role)
+        seat = resolve_role_player(game, announced, payload, role)
         if seat is None or game.players[seat].lost:
-            return None
+            return context if wrapper else None
         return dataclasses.replace(
             context, target=game.players[seat],
             target_permanent_index=None, target_permanent_id=None,
+            announced_targets=remembered,
         )
-    permanent = resolve_role_permanent(game, context, step.payload, role)
+    permanent = resolve_role_permanent(game, announced, payload, role)
     if permanent is None or not game.is_on_battlefield(permanent):
-        return None
+        if not wrapper:
+            return None
+        # The wrapper runs naming the **departed** object: an id recorded for
+        # a permanent that has left is the one choice every resolver reads as
+        # gone (``pick_target_permanent``'s step 0b), so "its controller" is
+        # offered nothing (Withdraw) and the step spending the role skips
+        # itself — while an offer that was never about the object still is
+        # made. With no id recorded there is nothing to name it by, and the
+        # wrapper is skipped rather than handed a context a scan could fill.
+        slot = payload_role_slot(payload, role)
+        ids = announced.target_permanent_id
+        recorded = (
+            ids[slot] if isinstance(ids, list) and slot is not None
+            and 0 <= slot < len(ids) else None
+        )
+        if not isinstance(recorded, int):
+            return None
+        return dataclasses.replace(
+            context, target_permanent_index=None, target_permanent_id=recorded,
+            announced_targets=remembered,
+        )
     seat = game.controller_index_of(permanent)
     return dataclasses.replace(
         context,
@@ -150,7 +204,65 @@ def _role_scoped(
         target=game.players[seat] if seat is not None else context.target,
         target_permanent_index=game.battlefield_index_of(permanent),
         target_permanent_id=game.permanent_id_of(permanent),
+        announced_targets=remembered,
     )
+
+
+def _announced_context(context: OracleExecutionContext) -> OracleExecutionContext:
+    """*context* with its target channels as the announcement left them.
+
+    The identity for every context no role has scoped yet; for one that has, the
+    three channels it saved before narrowing (see :func:`_role_scoped`).
+    """
+    saved = context.announced_targets
+    if saved is None:
+        return context
+    target, ids, indices = saved
+    return dataclasses.replace(
+        context, target=target, target_permanent_id=ids,
+        target_permanent_index=indices,
+    )
+
+
+#: Where a wrapper's nested steps sit, for :func:`_role_its_branches_spend`.
+#: The lowering's own walk over the same announcement
+#: (``grammar/lowering/_roles._ANNOUNCEMENT_BRANCH_KEYS``) — a role stamped
+#: under any of these is one the resolution can reach. ``reflexive`` is absent
+#: for that table's reason: CR 603.12 makes it a separate ability with its own
+#: targets.
+_ROLE_BRANCH_KEYS = ("steps", "then", "else", "action", "otherwise")
+
+
+def _role_its_branches_spend(step: OracleInstruction):
+    """``(role, payload)`` for the one role *step*'s nested steps spend, or None.
+
+    None when no nested step names a role (every wrapper in the pool but the
+    ones a roles lowering built) or when they name more than one — a wrapper
+    over two roles has no single object to be about.
+    """
+    from ..targeting import payload_own_role
+
+    found: dict[str, dict] = {}
+
+    def walk(instruction) -> None:
+        payload = getattr(instruction, "payload", None) or {}
+        own = payload_own_role(payload)
+        if own is not None:
+            found.setdefault(own, payload)
+        for key in _ROLE_BRANCH_KEYS:
+            branch = payload.get(key)
+            if isinstance(branch, (list, tuple)):
+                for nested in branch:
+                    walk(nested)
+
+    for key in _ROLE_BRANCH_KEYS:
+        branch = (step.payload or {}).get(key)
+        if isinstance(branch, (list, tuple)):
+            for nested in branch:
+                walk(nested)
+    if len(found) != 1:
+        return None
+    return next(iter(found.items()))
 
 
 @effect_handler("sequence")
