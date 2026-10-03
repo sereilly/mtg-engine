@@ -2227,9 +2227,11 @@ FAMILY_SHARED = {
     # it carried two registries with two different keys — which family a kind
     # belongs to, and what a kind writes into the resolution scratchpad — and
     # only the first is what the module is named for. Shared for `_events`'
-    # reason: two lowering families read it (`control_flow` threads what each
-    # step records forward, `where_x` asks whether "this way" has a producer),
-    # so it cannot live in either.
+    # reason: four lowering families read it (`control_flow` threads what an
+    # offer's action records into its `then`, `sequences` threads each step's
+    # records forward and asks the primary for "if you do", `repeats` hands a
+    # round's records to the condition printed after it, and `where_x` asks
+    # whether "this way" has a producer), so it cannot live in any of them.
     "_records",
     # `_sweeps` split out of `lowering/damage.py` the next time *that* module
     # reached the guard, along CR 611.2c's line: a set the sentence **describes**
