@@ -120,7 +120,7 @@ def cards_drawn_by_target(card: CardDefinition, x_value: int | None = None) -> i
     return None
 
 
-def target_loses_life(card: CardDefinition) -> bool:
+def spell_makes_its_target_lose_life(card: CardDefinition) -> bool:
     """Whether resolving *card* makes its **target player** lose life.
 
     "Target player loses 4 life and you gain 4 life." (Soul Feast.) The spell
