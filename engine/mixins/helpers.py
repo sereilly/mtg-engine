@@ -103,18 +103,28 @@ class GameHelpersMixin:
     def _stack_item_colors(self, item) -> tuple[str, ...]:
         """Effective color symbols of a spell on the stack.
 
-        Two effects can move it, in this order. A Lace card's choice
-        (``StackItem.choices["new_color"]``) is on the object itself and wins,
-        because it was applied to this spell; a board-wide static ("The same is
-        true for **spells you control**", Celestial Dawn) is read off the board
-        under it, so a Lace resolved onto one spell is not undone by an
-        enchantment that recolours every spell its controller casts.
+        Two effects can move it, in this order. A Lace card's recolour
+        (``StackItem.choices["color_override"]``) is on the object itself and
+        wins, because it was applied to this spell; a board-wide static ("The
+        same is true for **spells you control**", Celestial Dawn) is read off
+        the board under it, so a Lace resolved onto one spell is not undone by
+        an enchantment that recolours every spell its controller casts.
+
+        **Not** ``choices["new_color"]``, which this read until PCY W3G2. That
+        key is what a spell or ability was *announced* with — a text change's
+        replacement word (Sleight of Mind), an any-one-colour mana spell's
+        colour (Metamorphosis) — and reading it here made every such object that
+        colour on the stack: a blue Sleight of Mind cast to write "red" was a
+        red spell, which Blue Elemental Blast ("counter target red spell")
+        could counter and Red Elemental Blast could not. What an effect did to
+        the object and what its
+        controller said about its effect are two facts, so they are two keys.
 
         An instance method since Mirage -- it was a ``staticmethod`` and every
         call site already passed through ``self``/``game``, so the board became
         askable without touching one of them.
         """
-        recolored = getattr(item, "choices", {}).get("new_color")
+        recolored = getattr(item, "choices", {}).get("color_override")
         if recolored:
             return (recolored,)
         from ..object_colors import card_colors

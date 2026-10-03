@@ -90,8 +90,12 @@ def test_regeneration_destroyed_in_response_still_shields_its_creature():
 @pytest.mark.cr("113.7a", "608.2h")
 def test_dream_coat_destroyed_in_response_still_recolours_its_creature():
     game, aura, bear = _w2g2_enchanted("Dream Coat")
+    # The colour is asked as the ability resolves (CR 608.2d, PCY W3G2), of the
+    # seat that activated it, and lands on the last-known host.
+    game.interactive_seats = {0}
 
-    _w2g2_activate_then_lose_the_aura(game, aura, mana_color="U")
+    _w2g2_activate_then_lose_the_aura(game, aura)
+    assert game.confirm_color_set_choice(0, ["U"]), game.log
 
     assert computed_colors(bear) == {"U"}, game.log
 

@@ -292,7 +292,7 @@ def sacrifice_creature_for_mana(game: Game, instruction: OracleInstruction, cont
 
     ``color``       the mana symbol produced, or None when the card says "of any
                     one color" and the caster picks (the pick rides
-                    ``context.choices["new_color"]``, like the laces' colour).
+                    ``context.choices["new_color"]`` from the cast).
     ``bonus``       added to the sacrificed creature's mana value — Sacrifice
                     adds 0, Metamorphosis's "1 plus …" adds 1.
     ``spend_only``  the spell type the mana is locked to, or None for unrestricted

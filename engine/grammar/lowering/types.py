@@ -573,7 +573,7 @@ def _lower_become_color(
         # because the two describe different pickers: a lace targets a spell or
         # a permanent and names its colour in the text, while this one targets
         # whatever its printed noun phrase says and reads the colour back off
-        # the choice made when the ability was activated. The noun phrase is
+        # the choice made as the ability resolves. The noun phrase is
         # described here, so "you control" is enforced by the picker rather
         # than dropped — the lace kind's fixed `spell_or_permanent` spec would
         # have offered every permanent on the board.
@@ -614,7 +614,18 @@ def _lower_become_color(
         if until_eot:
             payload["until_eot"] = True
         _describe_targets(payload, node.subject)
-        return (OracleInstruction("recolor_target_chosen_color", "", payload),)
+        recolor = OracleInstruction("recolor_target_chosen_color", "", payload)
+        if several:
+            # The set offer asks for itself, on the standing colour-set prompt
+            # the handler arms against the target it has just resolved.
+            return (recolor,)
+        # One colour is asked by the step in front, CR 608.2d's arrangement for
+        # every "of your choice" (``keywords._chosen_color_prelude`` states it
+        # for the protection grant beside this): the controller of the ability
+        # names it while the effect is applied, after every response, and the
+        # recolour spends what that step recorded. It used to ride the
+        # activation, which CR 602.2b does not announce.
+        return (OracleInstruction("choose_color", "", {"chooser": "you"}), recolor)
     if node.duration.kind in ("until_end_of_turn", "this_turn"):
         # "{2}: **This creature** becomes colorless until end of turn." (Raging
         # Spirit.) The ability's own source, which is not a target and never

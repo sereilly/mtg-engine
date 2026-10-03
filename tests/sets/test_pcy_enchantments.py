@@ -182,20 +182,22 @@ def test_w1g3_brutal_suppression_charges_a_rebel_a_land(set_pool):
     game, (scouts, forest) = _w1g3_suppressed(
         set_pool, [set_pool("MMQ")["Rappelling Scouts"], lea["Forest"]],
     )
-    result = game.queue_permanent_ability(0, "Rappelling Scouts", mana_color="B")
+    result = game.queue_permanent_ability(0, "Rappelling Scouts")
     assert result.supported, result.details
     resolve_stack(game)
 
     assert not game.is_on_battlefield(forest)
     assert [c.name for c in game.players[0].graveyard] == ["Forest"]
-    assert ("color", "B") in game._protection_qualities(scouts)
+    # The colour is asked as the ability resolves (W3G2); this seat is not
+    # interactive, so it took its default — some colour, which is the point.
+    assert [kind for kind, _ in game._protection_qualities(scouts)] == ["color"]
 
 
 def test_w1g3_brutal_suppression_with_no_land_refuses_before_paying(set_pool):
     """CR 601.2h via 602.2b: an additional cost that cannot be paid makes the
     ability unactivatable — refused with nothing on the stack and nothing paid."""
     game, (scouts,) = _w1g3_suppressed(set_pool, [set_pool("MMQ")["Rappelling Scouts"]])
-    result = game.queue_permanent_ability(0, "Rappelling Scouts", mana_color="B")
+    result = game.queue_permanent_ability(0, "Rappelling Scouts")
 
     assert not result.supported
     assert "Land" in result.details and "Brutal Suppression" in result.details
@@ -210,7 +212,7 @@ def test_w1g3_brutal_suppression_spares_tokens_and_non_rebels(set_pool):
         set_pool, [set_pool("MMQ")["Rappelling Scouts"], lea["Forest"]],
         token_rebel=True,
     )
-    result = game.queue_permanent_ability(0, "Rappelling Scouts", mana_color="B")
+    result = game.queue_permanent_ability(0, "Rappelling Scouts")
     assert result.supported, result.details
     resolve_stack(game)
     assert game.is_on_battlefield(forest)

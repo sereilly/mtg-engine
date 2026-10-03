@@ -840,6 +840,35 @@ def offered_alternative_changes_nothing(game, instruction, context) -> bool:
     return all(held)
 
 
+def threatening_color(game, seat: int) -> str | None:
+    """The colour of the opposing object a colour chosen *now* is answering,
+    or None when nothing on the stack is one.
+
+    "The color of your choice" is named while the effect is applied (CR
+    608.2d), which is after every response has resolved and with the stack
+    beneath it still waiting — so when Mother of Runes resolves in answer to a
+    Lightning Bolt, the Bolt is the topmost object under it, and red is the
+    colour whose protection makes the Bolt's target illegal (CR 702.16b). That
+    is the whole of the derivation: the topmost object on the stack an opponent
+    of *seat* controls, and the first of its colours in CR 105.1's order.
+    Through ``_stack_item_colors``, so a spell a Lace recoloured answers as the
+    colour it now is, and an ability answers as its source's colour — the
+    colour CR 702.16e's damage prevention asks about.
+
+    Nothing on the stack names no colour, and the caller falls back to its own
+    board-wide policy.
+    """
+    for item in reversed(getattr(game, "stack", ()) or ()):
+        controller = getattr(item, "caster_index", None)
+        if controller is None or controller == seat:
+            continue
+        colors = set(game._stack_item_colors(item))
+        for color in ("W", "U", "B", "R", "G"):
+            if color in colors:
+                return color
+    return None
+
+
 @dataclass(frozen=True)
 class TollLoss:
     """What one branch of a *toll* takes from the offered seat, as resources.

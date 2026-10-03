@@ -632,7 +632,8 @@ def grant_team_keyword_until_eot(game: Game, instruction: OracleInstruction, con
             granted += 1
     noun = "permanent(s)" if every_permanent else "creature(s)"
     game.log.append(
-        f"{context.card.name}: {granted} {noun} gain {', '.join(keywords)}"
+        f"{context.card.name}: {granted} {noun} gain "
+        f"{', '.join(_named_keywords(keywords, context))}"
         + DURATION_WORDS.get(lifetime["duration"], "")
     )
     return True, "resolved"
@@ -697,7 +698,8 @@ def grant_keyword_to_block_pair(game: Game, instruction: OracleInstruction, cont
         game.log.append(f"{context.card.name}: no creature in the block pair")
         return True, "no target"
     game.log.append(
-        f"{context.card.name}: {granted} creature(s) gain {', '.join(keywords)}"
+        f"{context.card.name}: {granted} creature(s) gain "
+        f"{', '.join(_named_keywords(keywords, context))}"
     )
     return True, "resolved"
 
@@ -729,7 +731,7 @@ def grant_keyword_to_creatures_in_combat_with_source(game: Game, instruction: Or
         granted += 1
     game.log.append(
         f"{context.card.name}: {granted} creature(s) in combat with it gain "
-        + ", ".join(keywords)
+        + ", ".join(_named_keywords(keywords, context))
         + DURATION_WORDS.get(lifetime["duration"], "")
     )
     return True, "resolved"
@@ -1842,7 +1844,8 @@ def grant_target_keyword_until_eot(game: Game, instruction: OracleInstruction, c
                 _grant_one_keyword(game, permanent, keyword, context, lifetime)
         game.log.append(
             ", ".join(p.card.name for p in chosen)
-            + f" gain {' and '.join(keywords)}{lasting} ({card.name})"
+            + f" gain {' and '.join(_named_keywords(keywords, context))}"
+            + f"{lasting} ({card.name})"
         )
         return True, "resolved"
 
@@ -1853,7 +1856,8 @@ def grant_target_keyword_until_eot(game: Game, instruction: OracleInstruction, c
     for keyword in keywords:
         _grant_one_keyword(game, target_creature, keyword, context, lifetime)
     game.log.append(
-        f"{target_creature.card.name} gains {' and '.join(keywords)}{lasting} ({card.name})"
+        f"{target_creature.card.name} gains "
+        f"{' and '.join(_named_keywords(keywords, context))}{lasting} ({card.name})"
     )
     return True, "resolved"
 
@@ -2178,13 +2182,15 @@ def _grant_one_keyword(game, permanent, keyword: str, context, lifetime=None) ->
     with a comment saying no card in the pool used it yet; Feat of Resistance is
     that card.
 
-    "The color of your choice" is resolved here because CR 608.2d makes the
-    choice part of the *resolution*. An unanswered choice grants nothing rather
-    than defaulting to a colour: a protection the player did not pick is a
-    protection from the wrong things, and doing nothing is the honest failure.
+    "The color of your choice" is *spent* here and asked one step earlier,
+    because CR 608.2d makes the choice part of the *resolution*: the lowering
+    puts a ``choose_color`` step in front of every grant that prints it, and
+    that step records the answer this reads. An unanswered choice grants
+    nothing rather than defaulting to a colour: a protection the player did not
+    pick is a protection from the wrong things, and doing nothing is the honest
+    failure.
     """
-    from ..grammar.phrases import (PROTECTION_FROM_CHOSEN_COLOR,
-                                   PROTECTION_FROM_TARGETS_CONTROLLERS_CHOSEN_COLOR)
+    from ..grammar.keywords import CHOSEN_COLOR_PROTECTIONS
     from ..keywords import (LINE_DERIVED_KEYWORDS, grant_ability_line,
                             keyword_ability_name)
     from ..oracle_types import CHOSEN_COLOR_THIS_WAY
@@ -2206,26 +2212,21 @@ def _grant_one_keyword(game, permanent, keyword: str, context, lifetime=None) ->
     if not keyword.startswith("protection from "):
         grant_keyword(permanent, keyword, **lifetime)
         return
-    if keyword in (
-        PROTECTION_FROM_CHOSEN_COLOR,
-        PROTECTION_FROM_TARGETS_CONTROLLERS_CHOSEN_COLOR,
-    ):
-        # Two printed phrasings, two channels, and **which one is read is the
-        # keyword's own business** rather than a fallback chain. "The color of
-        # your choice" is named by whoever announced the spell or ability, so it
-        # rides the announcement (``choices["new_color"]``). "The color of its
-        # controller's choice" (Wishmonger) is named by the controller of the
-        # creature being granted to, who announced nothing — the step in front
-        # of this one asked them and wrote the answer into this resolution's
-        # scratchpad. Reading both keys for either phrase would let an
-        # announcement made for some other purpose answer a question it was
-        # never asked.
-        named = (
-            context.results.get(CHOSEN_COLOR_THIS_WAY)
-            if keyword == PROTECTION_FROM_TARGETS_CONTROLLERS_CHOSEN_COLOR
-            else (context.choices or {}).get("new_color")
-        )
-        symbol = game._normalize_mana_color(named)
+    if keyword in CHOSEN_COLOR_PROTECTIONS:
+        # Three printed phrasings and **one channel**: whichever seat was asked
+        # — the controller of this spell or ability for "the color of your
+        # choice", the creature's controller for Wishmonger's "its
+        # controller's", the "Choose a color." sentence in front for "the
+        # chosen color" — the step that asked wrote the answer into this
+        # resolution's scratchpad, and only that step writes it.
+        #
+        # It used to read "your choice" off the announcement
+        # (``choices["new_color"]``), the key an any-colour *mana* ability
+        # names its colour on. A colour is not something CR 601.2 / 602.2b
+        # announce, so an interactive seat was never asked, a client that sent
+        # none granted nothing, and the player had to name the colour before
+        # the opponent's response rather than after it.
+        symbol = game._normalize_mana_color(context.results.get(CHOSEN_COLOR_THIS_WAY))
         if symbol is None:
             game.log.append(
                 f"{context.card.name}: no colour was chosen, so nothing is protected from"
@@ -2241,6 +2242,23 @@ def _grant_one_keyword(game, permanent, keyword: str, context, lifetime=None) ->
 _COLOR_SYMBOL_TO_WORD = {
     "W": "white", "U": "blue", "B": "black", "R": "red", "G": "green",
 }
+
+
+def _named_keywords(keywords, context) -> tuple[str, ...]:
+    """*keywords* as the log names them: a chosen-colour protection by the
+    colour this resolution's choosing step recorded, so the log says
+    "protection from red" rather than repeating the printed choice back to the
+    player who just made it. Every other keyword is its own word."""
+    from ..grammar.keywords import CHOSEN_COLOR_PROTECTIONS
+    from ..oracle_types import CHOSEN_COLOR_THIS_WAY
+
+    results = getattr(context, "results", None) or {}
+    word = _COLOR_SYMBOL_TO_WORD.get(str(results.get(CHOSEN_COLOR_THIS_WAY) or "").upper())
+    return tuple(
+        f"protection from {word}" if word and keyword in CHOSEN_COLOR_PROTECTIONS
+        else keyword
+        for keyword in keywords
+    )
 
 
 def _remove_one_keyword(permanent, keyword: str, *, duration=None, seat=None) -> None:
@@ -2602,7 +2620,7 @@ def grant_self_keyword_until_eot(game: Game, instruction: OracleInstruction, con
     for keyword in keywords:
         _grant_one_keyword(game, source_permanent, keyword, context, lifetime)
     game.log.append(
-        f"{card.name} gains {' and '.join(keywords)}"
+        f"{card.name} gains {' and '.join(_named_keywords(keywords, context))}"
         + DURATION_WORDS.get(lifetime["duration"], "")
     )
     return True, "resolved"
@@ -2633,7 +2651,8 @@ def grant_enchanted_keyword_until_eot(game: Game, instruction: OracleInstruction
     for keyword in keywords:
         _grant_one_keyword(game, enchanted, keyword, context, lifetime)
     game.log.append(
-        f"{card.name}: {enchanted.card.name} gains {' and '.join(keywords)}"
+        f"{card.name}: {enchanted.card.name} gains "
+        f"{' and '.join(_named_keywords(keywords, context))}"
         + DURATION_WORDS.get(lifetime["duration"], "")
     )
     return True, "resolved"

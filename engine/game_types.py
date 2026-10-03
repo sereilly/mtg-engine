@@ -23,11 +23,20 @@ class SimulationResult:
 # tests/engine/test_stack_item_choices.py holds the engine to this list in both
 # directions, which is what makes it a declaration rather than a comment.
 #
-#   new_color        the replacement colour/land-type word of a recolor or
-#                    text-change spell (the Lace cycle, Magical Hack, Sleight of
-#                    Mind, and the "of any one color" mana spells)
+#   new_color        the replacement colour/land-type word a text-change spell
+#                    or ability was announced with (Magical Hack, Sleight of
+#                    Mind), and the colour an "of any one color" mana effect
+#                    names. Never "the color of your choice": CR 608.2d asks
+#                    that while the effect is applied (``choose_color``), and it
+#                    is not something CR 601.2 / 602.2b announce.
 #   old_color        the word being *replaced* by a text change; new_color is
 #                    what replaces it
+#   color_override   the colour an *effect* made this object while it was on
+#                    the stack (the Lace cycle: "target spell becomes red"),
+#                    read by ``_stack_item_colors``. Its own key, not
+#                    new_color, because what a spell was announced with and
+#                    what was done to it are two facts — one key made Sleight
+#                    of Mind cast to write "red" a red spell.
 #   divided_targets  a divided spell's full cross-seat target list (Fireball,
 #                    Volcanic Eruption) as (seat, battlefield_index) pairs, where
 #                    a (seat, None) entry is that player's face. Takes precedence
@@ -36,7 +45,7 @@ class SimulationResult:
 #                    choice prevention spells): a battlefield Permanent or a
 #                    stack spell's CardDefinition
 CHOICE_KEYS = (
-    "new_color", "old_color", "divided_targets", "chosen_source",
+    "new_color", "old_color", "color_override", "divided_targets", "chosen_source",
     # "For each additional {1}{R} you paid, …" (Primitive Justice, Taste of
     # Paradise); "If this spell's additional cost was paid, …" (Undergrowth).
     # An *offer* the caster took, counted — not an object a cost ate like the

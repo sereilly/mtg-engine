@@ -2159,15 +2159,15 @@ def test_knight_of_dawn_chooses_a_colour_and_points_at_nothing(set_pool):
 
 
 def test_knight_of_dawn_gains_protection_from_the_colour_the_seat_named(set_pool):
-    """And the choice is a real one, driven through the wire it rides on: the
-    colour arrives as ``mana_color`` like every other CR 608.2d colour, and an
-    unanswered choice would grant nothing at all."""
+    """And the choice is a real one: CR 608.2d asks it as the ability resolves
+    (PCY W3G2 moved it there off the activation's ``mana_color``), and the
+    colour the seat names is the one granted."""
     knight = _PromoPermanent(card=set_pool("TMP")["Knight of Dawn"])
     game = _promo_board([knight], [])
+    game.interactive_seats = {0}
 
-    assert game.activate_permanent_ability(
-        0, "Knight of Dawn", mana_color="B",
-    ).supported
+    assert game.activate_permanent_ability(0, "Knight of Dawn").supported
+    assert game.confirm_color_choice(0, "B")
     game.resolve_stack()
 
     assert knight.metadata.get("protection_from_black") is True

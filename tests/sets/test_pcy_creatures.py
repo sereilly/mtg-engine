@@ -536,7 +536,7 @@ def test_w1g3_copper_leaf_angel_refuses_an_x_the_board_cannot_pay(set_pool):
 def test_w1g3_jeweled_spirit_gains_protection_from_artifacts_or_a_colour(set_pool):
     """"Sacrifice two lands: This creature gains protection from artifacts or
     from the color of your choice until end of turn." Two protection abilities,
-    one chosen; the colour rides the activation like Knight of Dawn's."""
+    one chosen; the colour is asked once that alternative is taken (W3G2)."""
     lea = set_pool("LEA")
     lands = [lea["Forest"], lea["Mountain"], lea["Forest"]]
 
@@ -550,13 +550,14 @@ def test_w1g3_jeweled_spirit_gains_protection_from_artifacts_or_a_colour(set_poo
     game, (spirit, *_), _ = _w1g3_game(
         [set_pool("PCY")["Jeweled Spirit"], *lands], interactive={0},
     )
-    result = game.queue_permanent_ability(0, "Jeweled Spirit", mana_color="R")
+    result = game.queue_permanent_ability(0, "Jeweled Spirit")
     assert result.supported, result.details
     # "…artifacts **or** from the color…" is not modal (CR 700.2), so the
     # alternative is asked at resolution (CR 608.2d), not at activation.
     assert game.pending_choice_of("mode_choice", 0) is None
     game.resolve_top_of_stack()
     assert game.resolve_pending_choice("mode_choice", 0, mode_index=1)
+    assert game.confirm_color_choice(0, "R")
     resolve_stack(game)
     assert game._protection_qualities(spirit) == {("color", "R")}
 
@@ -1499,3 +1500,83 @@ def test_w2g4_hollow_warrior_blocks_by_tapping_the_creature_named(set_pool):
     assert ok, why
     assert giant.tapped and not zombies.tapped and not warrior.tapped
     assert "W2G4-B tapped Hill Giant to block" in game.log
+
+
+# --- W3G2: colour choice ---
+# Jeweled Spirit: "Sacrifice two lands: This creature gains protection from
+# artifacts or from the color of your choice until end of turn." Both choices
+# are CR 608.2d's, made while the effect is applied: which alternative (W2G5
+# moved that to resolution), and then — only if the colour is the one taken —
+# which colour. The colour used to ride the activation's ``mana_color``.
+
+from engine import Game as _W3G2Game
+from engine import PlayerState as _W3G2PlayerState
+from engine.models import Permanent as _W3G2Permanent
+
+from tests.helpers import resolve_stack as _w3g2_resolve
+
+
+def _w3g2_spirit_bolted(set_pool, *, interactive):
+    """Seat 0's Jeweled Spirit and three lands; seat 1's Lightning Bolt on the
+    stack aimed at the Spirit."""
+    lea = set_pool("LEA")
+    mine = [
+        _W3G2Permanent(card=card)
+        for card in (set_pool("PCY")["Jeweled Spirit"], lea["Forest"],
+                     lea["Plains"], lea["Plains"])
+    ]
+    for permanent in mine:
+        permanent.metadata["summoning_sickness_turn"] = -99
+    game = _W3G2Game(players=[
+        _W3G2PlayerState(name="W3G2-A", battlefield=list(mine)),
+        _W3G2PlayerState(name="W3G2-B", hand=[lea["Lightning Bolt"]]),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    spirit = mine[0]
+    bolt = game.queue_from_hand(
+        1, "Lightning Bolt", target_player_index=0,
+        target_permanent_ids=[spirit.permanent_id],
+    )
+    assert bolt.supported, bolt.details
+    return game, spirit  # _w3g2_spirit_bolted ends here
+
+
+def test_w3g2_jeweled_spirit_names_its_colour_after_the_bolt(set_pool):
+    """Activated in response to a Lightning Bolt, the ability resolves with the
+    Bolt still waiting under it: the alternative is asked, then the colour, and
+    red makes the Bolt's only target illegal (CR 702.16b), so the Bolt does not
+    resolve (CR 608.2b) and the 3/3 Spirit lives."""
+    game, spirit = _w3g2_spirit_bolted(set_pool, interactive={0})
+    activated = game.queue_permanent_ability(0, "Jeweled Spirit")
+    assert activated.supported, activated.details
+    assert game.pending_choice_of("color_choice", 0) is None, "nothing asked yet"
+
+    game.resolve_top_of_stack()
+    labels = game.pending_choice_of("mode_choice", 0).data["labels"]
+    assert game.resolve_pending_choice(
+        "mode_choice", 0, mode_index=labels.index("protection from the color of your choice"),
+    )
+    assert game.pending_choice_of("color_choice", 0) is not None
+    assert [item.card.name for item in game.stack] == ["Lightning Bolt"]
+    assert game.confirm_color_choice(0, "R")
+    _w3g2_resolve(game)
+
+    assert game.is_on_battlefield(spirit), game.log
+    assert game._protection_qualities(spirit) == {("color", "R")}
+    assert [card.name for card in game.players[1].graveyard] == ["Lightning Bolt"]
+
+
+def test_w3g2_jeweled_spirit_asks_no_colour_for_the_artifact_half(set_pool):
+    """The colour question lives inside its alternative: taking "protection from
+    artifacts" asks nothing more, and grants exactly that."""
+    game, spirit = _w3g2_spirit_bolted(set_pool, interactive={0})
+    game.queue_permanent_ability(0, "Jeweled Spirit")
+    game.resolve_top_of_stack()
+    labels = game.pending_choice_of("mode_choice", 0).data["labels"]
+    assert game.resolve_pending_choice(
+        "mode_choice", 0, mode_index=labels.index("protection from artifacts"),
+    )
+
+    assert game.pending_choice_of("color_choice", 0) is None
+    assert game._protection_qualities(spirit) == {("card_type", "artifact")}

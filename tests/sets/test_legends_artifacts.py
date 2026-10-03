@@ -258,17 +258,19 @@ def _tomb_game(set_pool):
 
 
 def test_alchors_tomb_recolours_the_permanent_that_was_targeted(set_pool):
-    """The colour is not in the text — it arrives with the activation (CR 609.3)
-    and reaches the permanent the activator actually named. Both creatures share
-    a name, so a handler locating by value would recolour the wrong one."""
+    """The colour is not in the text — it is asked as the ability resolves (CR
+    608.2d; PCY W3G2 moved it off the activation) and reaches the permanent the
+    activator actually named. Both creatures share a name, so a handler locating
+    by value would recolour the wrong one."""
     game, tomb, mine, theirs = _tomb_game(set_pool)
+    game.interactive_seats = {0}
 
     result = game.activate_permanent_ability(
         0, "Alchor's Tomb", permanent_index=0,
         target_player_index=0,
         target_permanent_ids=[mine.permanent_id],
-        mana_color="U",
     )
+    assert game.confirm_color_choice(0, "U")
     game._settle()
 
     assert result.supported
@@ -287,7 +289,6 @@ def test_alchors_tomb_refuses_a_permanent_the_activator_does_not_control(set_poo
         0, "Alchor's Tomb", permanent_index=0,
         target_player_index=1,
         target_permanent_ids=[theirs.permanent_id],
-        mana_color="U",
     )
     game._settle()
 
@@ -297,16 +298,18 @@ def test_alchors_tomb_refuses_a_permanent_the_activator_does_not_control(set_poo
 
 def test_alchors_tomb_without_a_chosen_colour_recolours_nothing(set_pool):
     """No colour answered means no colour applied — a permanent that became a
-    colour nobody picked is the wrong colour."""
+    colour nobody picked is the wrong colour. The recolour waits behind the
+    question (CR 608.2: the instructions are followed in order)."""
     game, _tomb, mine, _theirs = _tomb_game(set_pool)
+    game.interactive_seats = {0}
 
     game.activate_permanent_ability(
         0, "Alchor's Tomb", permanent_index=0,
         target_player_index=0,
         target_permanent_ids=[mine.permanent_id],
     )
-    game._settle()
 
+    assert [choice.kind for choice in game.pending_choices] == ["color_choice"]
     assert mine.effective_colors == set(mine.card.colors)
 
 

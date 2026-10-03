@@ -2034,46 +2034,48 @@ def choose_color(game: Game, instruction: OracleInstruction, context: OracleExec
     last set it. One step writes both records, because a step that wrote only
     one of them would leave the other reader with nothing and no error.
 
-    A deterministic default is stamped first — the colour the controller's
-    opponents hold most of among nontoken permanents, the same policy the entry
-    state applies — so a headless or AI seat is never blocked and never left
-    with a colour nobody controls, which is a legal choice no player would make.
+    A deterministic default is stamped first — the colour of the opposing object
+    on the stack this choice is answering (``ai_valuation.threatening_color``),
+    and failing one the colour the chooser's opponents hold most of among
+    nontoken permanents, the policy the entry state applies — so a headless or
+    AI seat is never blocked and never left with a colour nobody controls,
+    which is a legal choice no player would make.
     """
     permanent = context.source_permanent
     card_name = getattr(context.card, "name", "an effect")
-    if permanent is None:
+    chooser = instruction.payload.get("chooser")
+    records_on = permanent
+    if permanent is None or chooser == "you":
         # "Choose a color. X target creatures gain protection from the chosen
-        # color until end of turn." (Prismatic Boon.) A **spell**'s choice has
-        # no permanent to be recorded on, and needs none: the sentence that
-        # reads it back is the next step of this same resolution, and CR 608.2d
-        # puts both of them in it. That channel is the resolution's own
-        # ``choices["new_color"]`` — the one "protection from the color of your
-        # choice" has always read — so the colour named on the cast *is* the
-        # colour this sentence asked for. Recording it a second time somewhere
-        # else is the two-answers-to-one-question shape this handler's own
-        # docstring above records removing.
-        named = game._normalize_mana_color((context.choices or {}).get("new_color"))
-        # …and **recorded as this step's answer**, for the sentence behind it
-        # that says "of that color" (Persecute). The permanent branch below
-        # writes its word onto the source, which is where the next sentence of
-        # *that* ability looks; a spell has no source, so the resolution's own
-        # scratchpad is the equivalent place — the same channel every other
-        # "this way" record in the engine uses, and the one
-        # ``CHOSEN_CREATURE_TYPE_THIS_WAY`` already uses for the identical
-        # question one characteristic over.
+        # color until end of turn." (Prismatic Boon.) / "…gains protection from
+        # **the color of your choice**" (Mother of Runes, Feat of Resistance —
+        # the step ``_chosen_color_prelude`` puts in front of the grant.)
+        # CR 109.5's "you": the controller of this spell or ability, which for
+        # an activated one is the player who activated it rather than whoever
+        # controls the permanent now.
         #
-        # Written only when a colour was actually named: an absent record is
-        # what makes the reader refuse rather than sweep, and a key holding
-        # ``None`` would read as an answer.
-        if named:
-            context.results[CHOSEN_COLOR_THIS_WAY] = named
-        game.log.append(
-            f"{card_name}: {named} chosen" if named
-            else f"{card_name}: no colour was chosen"
-        )
-        return True, "resolved"
-    seat = game.controller_index_of(permanent)
-    if instruction.payload.get("chooser") == "event_subject_player":
+        # **Asked**, here, while the effect is applied (CR 608.2d). Both of
+        # these used to read the colour off the announcement —
+        # ``choices["new_color"]``, the wire field an any-colour *mana* ability
+        # names its colour on — which CR 601.2b–c and 602.2b do not announce:
+        # an interactive seat was never asked, an announcement without one did
+        # nothing, and the player had to name the colour before the opponent
+        # responded rather than after.
+        #
+        # The answer goes to this resolution's scratchpad alone. A spell has no
+        # permanent to hold a standing record, and "the color of your choice" on
+        # a permanent names a colour for this resolution's grant, not for a
+        # continuous ability of the permanent's own (Chromatic Armor's shield is
+        # what ``chosen_color`` is for) — a standing record would be a second,
+        # staler answer, which is Wishmonger's reason below.
+        if context.caster not in game.players:
+            game.log.append(f"{card_name}: nobody to choose a colour")
+            return True, "resolved"
+        seat = game.players.index(context.caster)
+        records_on = None
+    else:
+        seat = game.controller_index_of(permanent)
+    if chooser == "event_subject_player":
         # "At the beginning of each player's upkeep, **that player** chooses a
         # color." (Hall of Gemstone.) The seat the fire site froze (CR 603.10),
         # which is a different player every turn and never the enchantment's
@@ -2101,8 +2103,7 @@ def choose_color(game: Game, instruction: OracleInstruction, context: OracleExec
     # Through the same reader the grant resolves its own target with, over the
     # same ``targets`` description the lowering copies onto both steps: two
     # readings of one announcement is how a chooser and a grantee come apart.
-    records_on = permanent
-    if instruction.payload.get("chooser") == "target_controller":
+    if chooser == "target_controller":
         from ._common import resolve_target_permanent
         from .pump import granted_target_legal
 
@@ -2124,22 +2125,26 @@ def choose_color(game: Game, instruction: OracleInstruction, context: OracleExec
         records_on = None
     if seat is None:
         return True, "resolved"
-    counts: dict[str, int] = {}
-    for other in range(len(game.players)):
-        if other == seat or game.players[other].lost:
-            continue
-        for perm in game.controlled_by(other):
-            if perm.metadata.get("is_token"):
+    from ..ai_valuation import threatening_color
+
+    default_color = threatening_color(game, seat)
+    if default_color is None:
+        counts: dict[str, int] = {}
+        for other in range(len(game.players)):
+            if other == seat or game.players[other].lost:
                 continue
-            for color in game._effective_colors(perm):
-                counts[color] = counts.get(color, 0) + 1
-    default_color = max(sorted(counts), key=lambda c: counts[c]) if counts else "W"
+            for perm in game.controlled_by(other):
+                if perm.metadata.get("is_token"):
+                    continue
+                for color in game._effective_colors(perm):
+                    counts[color] = counts.get(color, 0) + 1
+        default_color = max(sorted(counts), key=lambda c: counts[c]) if counts else "W"
     if records_on is not None:
         records_on.metadata["chosen_color"] = default_color
     context.results[CHOSEN_COLOR_THIS_WAY] = default_color
     game.arm_color_choice(
         seat,
-        card_name=permanent.card.name, permanent=records_on,
+        card_name=card_name, permanent=records_on,
         result_key=CHOSEN_COLOR_THIS_WAY, context=context,
         default=default_color,
     )

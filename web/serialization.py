@@ -838,22 +838,23 @@ def _serialize_stack_item(item, game: Game) -> dict:
                 break
 
     # A Lace card (Lifelace, Chaoslace, …) that targeted this spell on the stack
-    # recolored it, recorded on the stack item as ``choices["new_color"]`` (the effective
-    # color the engine reads via _stack_item_colors). Surface it as color_override
-    # so the canvas badges the floating stack card exactly like a recolored
-    # permanent, and swap the displayed colors to match "becomes [color]".
+    # recolored it, recorded on the stack item as ``choices["color_override"]``
+    # (the effective color the engine reads via _stack_item_colors). Surface it
+    # as color_override so the canvas badges the floating stack card exactly
+    # like a recolored permanent, and swap the displayed colors to match
+    # "becomes [color]".
     serialized_card = _serialize_card(item.card)
-    new_color = item.choices.get("new_color")
-    if new_color:
-        serialized_card["color_override"] = new_color
-        serialized_card["colors"] = [new_color]
+    recolored = item.choices.get("color_override")
+    if recolored:
+        serialized_card["color_override"] = recolored
+        serialized_card["colors"] = [recolored]
 
     return {
         "type": item_type,
         "is_triggered": is_triggered,
         "label": label,
         "card": serialized_card,
-        "color_override": new_color,
+        "color_override": recolored,
         "caster_index": item.caster_index,
         "caster_name": game.players[item.caster_index].name,
         "target_player_index": item.target_player_index,

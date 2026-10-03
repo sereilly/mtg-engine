@@ -41,6 +41,26 @@ PROTECTION_FROM_TARGETS_CONTROLLERS_CHOSEN_COLOR = (
     "protection from the color of its controller's choice"
 )
 
+#: "…protection from **the chosen color**" (Prismatic Boon, Reverent Mantra).
+#: The third string, and the difference from the first is *which sentence
+#: asks*. "The color of your choice" is its own question (CR 608.2d), so its
+#: grant lowers with a choosing step in front of it; "the chosen color" asks
+#: nothing — it reads back the answer a "Choose a color." sentence earlier in
+#: the same effect recorded, and refuses where nothing did. One string for both
+#: was right while the colour rode the announcement and both read it there; it
+#: stopped being right when the choice moved to the resolution, because the
+#: lowering has to know whether to put the question in.
+PROTECTION_FROM_THE_CHOSEN_COLOR = "protection from the chosen color"
+
+#: All three, for the reader that answers them alike: every one is granted from
+#: the colour this resolution's choosing step recorded
+#: (``oracle_types.CHOSEN_COLOR_THIS_WAY``), and they differ only in who asked.
+CHOSEN_COLOR_PROTECTIONS = frozenset({
+    PROTECTION_FROM_CHOSEN_COLOR,
+    PROTECTION_FROM_TARGETS_CONTROLLERS_CHOSEN_COLOR,
+    PROTECTION_FROM_THE_CHOSEN_COLOR,
+})
+
 
 def _accept_bands_with_other(stream: TokenStream) -> str | None:
     """One "bands with other [quality]" item of a keyword list, or None.
@@ -125,10 +145,10 @@ def _protection_quality_name(stream: TokenStream) -> str | None:
         "the", "color", "of", "its", "controller", "'s", "choice"
     ):
         return PROTECTION_FROM_TARGETS_CONTROLLERS_CHOSEN_COLOR
-    if stream.accept_phrase("the", "color", "of", "your", "choice") or (
-        stream.accept_phrase("the", "chosen", "color")
-    ):
+    if stream.accept_phrase("the", "color", "of", "your", "choice"):
         return PROTECTION_FROM_CHOSEN_COLOR
+    if stream.accept_phrase("the", "chosen", "color"):
+        return PROTECTION_FROM_THE_CHOSEN_COLOR
     colour = stream.peek_word()
     if colour is None:
         return None
@@ -200,8 +220,9 @@ def parse_keyword_list(stream: TokenStream) -> tuple[tuple[str, ...], bool]:
         # "protection from red" — the argument belongs to the keyword.
         if name == "protection" and stream.accept_word("from"):
             # "…from **the color of your choice**" (Feat of Resistance). CR
-            # 609.3: the colour is chosen as the effect resolves, so the keyword
-            # cannot name it — it names the *choice*, and the grant resolves it.
+            # 608.2d: the colour is chosen as the effect resolves, so the
+            # keyword cannot name it — it names the *choice*, and the lowering
+            # puts the step that asks it in front of the grant.
             # Read before the bare colour word, which would otherwise consume
             # "the" and grant protection from a colour called "the".
             # "…from **the chosen color**" (Prismatic Boon), the same question
@@ -209,8 +230,10 @@ def parse_keyword_list(stream: TokenStream) -> tuple[tuple[str, ...], bool]:
             # "Choose a color. X target creatures gain protection from the
             # chosen color until end of turn." CR 608.2d puts both choices in
             # the same resolution, so they name one colour and read one channel
-            # — a second keyword string would be a second answer to it, and the
-            # grant handler would have to learn which sentence had asked.
+            # — but the *lowering* has to know which sentence asked, because
+            # only "of your choice" puts a choosing step in front of its grant.
+            # So it is its own string (``PROTECTION_FROM_THE_CHOSEN_COLOR``)
+            # read off the same record by the same handler.
             # "…from **the color of its controller's choice**" (Wishmonger).
             # The same CR 608.2d choice asked of a different seat — the
             # controller of the creature the grant lands on, not the controller
