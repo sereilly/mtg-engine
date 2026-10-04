@@ -195,6 +195,11 @@ def object_filter_payload(self: "ObjectFilter") -> dict[str, object]:
         payload["name_from_event"] = True
     if self.name_from_recorded_card:
         payload["name_from_recorded_card"] = True
+    if self.shares_color_with_it:
+        # Emitted so a gate can *see* it: the key is outside every testable
+        # set, so a lowering that does not lift it out and resolve the pronoun
+        # refuses the phrase rather than sweeping without the narrowing.
+        payload["shares_color_with_it"] = True
     if self.excluded_basic_lands:
         payload["exclude_basic_lands"] = True
     if self.not_enchanted:

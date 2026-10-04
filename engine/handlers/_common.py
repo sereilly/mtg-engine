@@ -1806,6 +1806,13 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     # admit every creature on the board.
     if payload.get("not_named_source") or payload.get("with_protection_from"):
         return False
+    # "…that share a color with **it**" (Spreading Plague). A relation to the
+    # object a firing event was about, which only a handler holding the
+    # trigger's context can resolve — the sweep lifts the key out before it
+    # asks here. One that arrives unresolved matches nothing, the direction
+    # every relative key above takes: ignored, it would be every creature.
+    if payload.get("shares_color_with_it"):
+        return False
     # "of the chosen type" (An-Zerrin Ruins) — the same recorded choice one
     # characteristic over, refused here for the identical reason: the record
     # lives on the *source*, this function is the pure half, and ignoring the

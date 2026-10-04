@@ -6,7 +6,9 @@ from ..auras import detach_aura
 from ..dexterity import flip_lands_on
 from ..static_bonuses import singular_land_type
 from ..models import Permanent, PlayerState
-from ..oracle_types import (ATTACHED_PERMANENT_CONTROLLER, LAST_TARGET_CONTROLLER,
+from ..object_colors import share_a_color
+from ..oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
+                            EVENT_SUBJECT_LAST_KNOWN, LAST_TARGET_CONTROLLER,
                             LAST_TARGET_NAME,
                             LAST_TARGET_OWNER,
                             OracleInstruction, PER_OBJECT_SEAT_RECORDS)
@@ -212,6 +214,9 @@ def destroy_all_matching(game: Game, instruction: OracleInstruction, context: Or
             # (Eye of Singularity), both resolved below against the firing
             # event's context — which `subject_matches` never sees.
             "name_from_event", "other_than_event_subject",
+            # "…all other creatures that **share a color with it**" (Spreading
+            # Plague): the same split one relation over.
+            "shares_color_with_event_subject",
             # …and the same comparison against a name this *resolution* wrote
             # down (Wake of Destruction), for the reason its two neighbours are
             # lifted out: `subject_matches` is handed a permanent, a seat and a
@@ -365,6 +370,42 @@ def destroy_all_matching(game: Game, instruction: OracleInstruction, context: Or
         # card destroys (CR 400.7).
         if instruction.payload.get("other_than_event_subject"):
             event_subject_id = tctx.get("event_subject_permanent_id")
+    # "…destroy all other creatures **that share a color with it**." (Spreading
+    # Plague.) CR 105.2's relation against the permanent the firing event was
+    # about. Its colours are read as this resolves, off the object the fire
+    # site froze: while the creature is still on the battlefield that is what
+    # it is *now* (a Lace cast in response changes who dies), and once it has
+    # left the same object is its last-known information (CR 608.2h), which is
+    # what the sentence still means by "it".
+    #
+    # A subject that resolves to nothing, or to a colourless object, ends the
+    # resolution with nothing destroyed — and the second is not a refusal, it
+    # is the card: CR 105.2c's colourless object shares a colour with nothing,
+    # so an artifact creature entering under the Plague kills no one. Both end
+    # here rather than falling through, for the reason every relation around
+    # this one does: a dropped narrowing on a sweep takes the board.
+    shared_colors: frozenset[str] | None = None
+    if instruction.payload.get("shares_color_with_event_subject"):
+        tctx = context.trigger_context or {}
+        entered = tctx.get(EVENT_SUBJECT_LAST_KNOWN)
+        if entered is None:
+            entered = game.permanent_by_id(tctx.get("event_subject_permanent_id"))
+        if entered is None:
+            game.log.append(
+                f"{context.card.name}: no object for 'it' to share a color with"
+            )
+            return True, "resolved"
+        shared_colors = frozenset(game._effective_colors(entered))
+        if not shared_colors:
+            context.results["destroyed_this_way"] = 0
+            context.results["destroyed_this_way_objects"] = []
+            game.log.append(
+                f"{context.card.name}: {entered.card.name} is colorless and "
+                "shares a color with nothing"
+            )
+            return True, "resolved"
+        if instruction.payload.get("other_than_event_subject"):
+            event_subject_id = tctx.get("event_subject_permanent_id")
     attached_to = instruction.payload.get("attached_to")
     host = None
     if attached_to is not None:
@@ -447,6 +488,10 @@ def destroy_all_matching(game: Game, instruction: OracleInstruction, context: Or
         and (host is None or perm.metadata.get("attached_to") is host)
         and (event_name is None or perm.effective_card.name == event_name)
         and (event_subject_id is None or perm.permanent_id != event_subject_id)
+        and (
+            shared_colors is None
+            or share_a_color(shared_colors, game._effective_colors(perm))
+        )
         and (blocked_ids is None or perm.permanent_id in blocked_ids)
         and (
             blocked_by_blocker_id is None

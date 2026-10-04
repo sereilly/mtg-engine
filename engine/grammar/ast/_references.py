@@ -541,6 +541,19 @@ class ObjectFilter:
     # there. Like the one above it, the key travels to the handler, which
     # resolves the name out of the resolution's scratchpad and then matches.
     name_from_recorded_card: bool = False
+    # "…all other creatures **that share a color with it**" (Spreading
+    # Plague). CR 105.2's relation against the object a pronoun names, which no
+    # matcher can answer for ``name_from_event``'s reason: ``subject_matches``
+    # is handed a permanent, a seat and a source, and never the trigger's
+    # context — and "it" is whatever the firing event was about. So the key
+    # travels to the handler, which resolves the object, reads its colours and
+    # then matches on the intersection.
+    #
+    # Named for the printed pronoun rather than for a referent, because the
+    # noun parser has no event in view: *which* object "it" is — and whether
+    # this position has one at all — is the lowering's to decide, and a
+    # lowering not written for the field refuses it by name.
+    shares_color_with_it: bool = False
     # "…**other than a basic land**" / "…**except for basic lands**" (Eye of
     # Singularity prints both, one on each line). One field for two spellings,
     # because they name the same set: a permanent that is a land with the Basic

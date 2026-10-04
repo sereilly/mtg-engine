@@ -93,6 +93,17 @@ def _lower_destroy(
     spec = node.subject
     filt = spec.filter
 
+    # "…that share a color with **it**" (Spreading Plague) is read by the
+    # sweep branch below and by nothing else in this function: a *target*
+    # narrowed by a relation to the firing event's object would need the
+    # picker and the CR 608.2b recheck to hold the trigger's context, and
+    # neither does. Refused up here so the single-target tail cannot carry the
+    # key into a payload no matcher reads.
+    if filt.shares_color_with_it and spec.quantifier not in ("all", "each"):
+        raise LoweringError(
+            "only a sweep reads 'shares a color with it'", node=node
+        )
+
     # "Destroy **the creature with the least power**. It can't be regenerated."
     # (Drop of Honey.) Purging Scythe prints the same noun phrase under a damage
     # verb one family over, which is why the pick is a floor both read
@@ -335,6 +346,44 @@ def _lower_destroy(
                 named_payload["bypass_regeneration"] = True
             return (
                 OracleInstruction("destroy_all_matching", "", named_payload),
+            )
+        # "Whenever a creature enters, destroy all other creatures **that share
+        # a color with it**. They can't be regenerated." (Spreading Plague.)
+        # ``name_from_event``'s arrangement one relation over, and a branch for
+        # its reason: the handler holds the trigger's context and the matcher
+        # never does, so the key is lifted out here and resolved there — and
+        # falling through to the generic paths below would leave the sweep with
+        # card types alone and destroy every creature on the battlefield.
+        #
+        # "It" is the object the firing event was about, so the sentence reads
+        # only under an event that freezes one (``_EVENT_SUBJECT_OBJECTS``).
+        # Under a source-scoped trigger the same pronoun would be the source
+        # itself — a different referent nothing prints — and it refuses here
+        # rather than being read against an id that was never stamped.
+        if filt.shares_color_with_it:
+            if event not in _EVENT_SUBJECT_OBJECTS:
+                raise LoweringError(
+                    "\"shares a color with it\" names the object this "
+                    "trigger's event was about, and this event records none",
+                    node=node,
+                )
+            shared_payload = _filter_payload(filt)
+            # "**other** creatures" — other than the creature the sentence is
+            # already about, the one that entered, and not the enchantment
+            # printing the line (which is not a creature in the first place).
+            # Resolved here, where the event is known, exactly as the name
+            # sweep above resolves the same word.
+            other_than_subject = bool(shared_payload.pop("exclude_self", None))
+            shared_payload.pop("shares_color_with_it", None)
+            if untestable_filter_keys(shared_payload):
+                raise LoweringError("no sweep handler for this narrowing", node=node)
+            shared_payload["shares_color_with_event_subject"] = True
+            if other_than_subject:
+                shared_payload["other_than_event_subject"] = True
+            if node.no_regen:
+                shared_payload["bypass_regeneration"] = True
+            return (
+                OracleInstruction("destroy_all_matching", "", shared_payload),
             )
         # "Destroy all creatures that were blocked by **target Wall** this
         # turn." (Glyph of Reincarnation.) The sibling of the branch above, and
