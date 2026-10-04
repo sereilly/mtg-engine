@@ -9,10 +9,10 @@ anything is lowered, where the rest of `_core` is the vocabulary an *effect* is
 built from. Nothing in `_core` refers to a cost, which is what made the cut
 free.
 
-Beside `_core` rather than under it: `statements.py` names the `Cost` union in
-`ActivatedAbilityNode`, and a cost is not one of the effect families — it has
-no `effects/` or `lowering/` twin at all, because a cost is charged rather than
-lowered.
+Beside `_core` rather than under it: `lines.py` names the `Cost` union in
+`ActivatedAbilityNode` and `statements.py` names it in `May`, and a cost is not
+one of the effect families — it has no `effects/` or `lowering/` twin at all,
+because a cost is charged rather than lowered.
 """
 
 from __future__ import annotations

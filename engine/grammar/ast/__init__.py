@@ -29,12 +29,14 @@ its node is in ``ast/characteristics.py``.
     stack            countering, choosing a modal spell's mode
     combat           can't-attack / can't-be-blocked
     game             tokens, life, turns, outcomes
-    statements       composition, ability lines, and the closing unions
+    statements       composition, and the unions that close over the families
+    lines            one printed line: the ability-line nodes and their union
 
 The families share no code with each other; a node two of them need is in
 ``_core``. ``statements`` is the only module that imports the families, because
-the ``Effect``, ``Statement`` and ``AbilityNode`` unions have to name all of
-them.
+the ``Effect`` and ``Statement`` unions have to name all of them. ``lines``
+sits on top of it and imports no family: an ability line holds a ``Statement``,
+and ``AbilityNode`` is a union over the line nodes alone.
 
 Re-exported flat, so every caller writes ``ast.DealDamage`` and never names a
 family — which is what makes moving a node between families a non-event.
@@ -461,6 +463,8 @@ from .statements import (
     CreateDelayedTrigger,
     NextDrawReplacement,
     Statement,
+)
+from .lines import (
     TriggerEvent,
     KeywordInstance,
     ActivationRestriction,
@@ -872,6 +876,7 @@ __all__ = [
     "OneOf",
     "WhereX",
     "Statement",
+    # lines
     "TriggerEvent",
     "KeywordInstance",
     "ActivationRestriction",

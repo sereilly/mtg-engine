@@ -430,8 +430,9 @@ change (both `__init__` re-export flat):
 ```
 ast/_core.py   the vocabulary nodes are built from
 ast/           damage characteristics board cards stack combat game
-ast/statements.py  the roof: Effect / Statement / AbilityNode unions
-phrases.py     word tables + fragment productions   |  lowering/_common.py
+ast/statements.py  the roof: Effect / Statement unions
+ast/lines.py       the line layer on the roof: ability-line nodes / AbilityNode
+phrases.py     shared fragment productions          |  lowering/_common.py
                                                     |  lowering/_amounts.py
 effects/       damage characteristics board cards   |  lowering/  (those eight,
                stack combat game prevention         |  + zones library mana

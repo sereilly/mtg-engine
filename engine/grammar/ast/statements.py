@@ -1,25 +1,40 @@
-"""Composition, ability lines, and the unions that close over the families.
+"""Composition, and the unions that close over the families.
 
-The roof of the package, and the only module that sees all seven families at
-once. It holds:
+The roof of the package, and the only module that sees every family at once.
+It holds:
 
 * `Effect`, the union of every leaf node — which is exactly why it cannot live
   beside any one of them;
 * the composable statement nodes (`Sequence`, `Conjunction`, `Conditional`,
-  `May`, `ForEach`) and `Statement`. These are what kills the conjunction-kind
-  explosion: "deal damage and gain life" is two effects under a `Conjunction`,
-  never a fused node;
-* the ability-line nodes — one printed line compiles to exactly one of them —
-  and `AbilityNode`.
+  `May`, `ForEach`, the six `Repeat…` wrappers, `WhereX`,
+  `CreateDelayedTrigger`, …) and `Statement`. These are what kills the
+  conjunction-kind explosion: "deal damage and gain life" is two effects under
+  a `Conjunction`, never a fused node.
 
 Nothing in a family imports this module, and this module imports every family:
 that one-way edge is the layer. It is the type of `grammar/statements.py`, which
 sits above `grammar/effects/` on the parsing side for the same reason.
+
+**The ability-line nodes are not here.** They were, under a second banner,
+until Invasion's Phase 0 found this module 25 lines under the size guard; they
+are `ast/lines.py` now, one storey up, which imports `Statement` from here and
+is never imported back. The cut is the one the parse side already has
+(`statements` under `parser`): a line *holds* a statement, and no statement
+holds a line. `AbilityNode` went with them — it is a union over the line nodes,
+not over the families, so it never needed this module's view.
+
+What is left is the half that grows, and it has to stay: a new leaf costs an
+import line and a union entry here whichever family it lands in. The next seam,
+measured and not taken, is the six `Repeat…` nodes — one contiguous run whose
+mirror both other packages already name (`grammar/repeats.py`,
+`lowering/repeats.py`). They name `Statement` only in annotations, so they could
+sit *below* this module the way `records` sits below `conditions`; that is the
+cut to make when this file reaches the guard again.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Union
 
 from .conditions import Condition
@@ -28,7 +43,6 @@ from .conditions import (ChosenThisWay, DiedThisTurn, DiedThisWay,
                          EachLifeLost, ExiledThisWay)
 from .costs import Cost
 from ._core import (
-    Duration,
     ObjectFilter,
     PlayerRef,
     RawEffect,
@@ -823,153 +837,3 @@ class NextDrawReplacement:
 
 
 Statement = Union[Sequence, Conjunction, Conditional, May, UnlessPlayerPays, ForEach, RepeatProcess, RepeatProcessWhile, RepeatUntilPileChosen, RepeatOptionalProcess, RepeatForEachType, RepeatProcessRequest, WhereX, CreateDelayedTrigger, NextDrawReplacement, Effect]
-
-
-# ---------------------------------------------------------------------------
-# Ability lines (one oracle line compiles to exactly one of these)
-# ---------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class TriggerEvent:
-    """The event half of a triggered ability. ``kind`` intentionally reuses the
-    legacy trigger-kind strings ("creature_dies", "upkeep_self", …) so the 23
-    existing ``condition_kinds=`` dispatch sites keep working unchanged while
-    the grammar migration is in flight."""
-    kind: str
-    word: str = "whenever"        # whenever | when | at
-    subject: ObjectFilter | PlayerRef | None = None
-    #: Noun phrases the condition carries **beyond** its subject, each under the
-    #: stem ``engine/oracle.py``'s pattern table gives its ``<stem>_subject``
-    #: group — "…that doesn't share a color with **a creature you control**"
-    #: (Invoke Prejudice) is ``("unshared_color", <that phrase>)``.
-    #:
-    #: A trigger condition is read twice, once by each front end (the table
-    #: supplies the *condition*, the grammar the *effect*), and a phrase only
-    #: one of them sees is a card whose two halves watch different sets. The
-    #: subject alone could not express these: the set on the far side of a
-    #: comparison is a different object from the one the trigger fires on.
-    #: Paired by stem in ``test_a_narrowed_trigger_reads_the_same_subject_on_both_sides``.
-    narrowings: tuple[tuple[str, ObjectFilter], ...] = ()
-
-
-@dataclass(frozen=True)
-class KeywordInstance:
-    name: str
-    argument: str | None = None   # "protection from red", "landwalk: island"
-
-
-@dataclass(frozen=True)
-class ActivationRestriction:
-    """"Activate only during your upkeep." / "Any player may activate this ability.\""""
-    text: str
-    timing: str | None = None
-    any_player: bool = False
-
-
-@dataclass(frozen=True)
-class SpellEffectLine:
-    """A one-shot effect line: an instant/sorcery's text, or the effect half of
-    a triggered or activated ability."""
-    statement: Statement
-
-
-@dataclass(frozen=True)
-class TriggeredAbilityNode:
-    event: TriggerEvent
-    statement: Statement
-    # CR 603.4 intervening-if: checked both when the trigger would fire and
-    # again on resolution. Modeled as a field rather than dropped — the legacy
-    # compiler silently discarded these, so conditional triggers always fired.
-    intervening_if: Condition | None = None
-
-
-@dataclass(frozen=True)
-class ActivatedAbilityNode:
-    costs: tuple[Cost, ...]
-    statement: Statement
-    restriction: ActivationRestriction | None = None
-
-
-@dataclass(frozen=True)
-class StaticAbilityNode:
-    """A continuous effect. Lowering for most static shapes waits on the CR 613
-    layers engine, so these are commonly "parsed but not lowered"."""
-    effect: Statement
-    condition: Condition | None = None
-    duration: Duration = field(default_factory=Duration)
-    #: "Enchanted creature gets +2/+1 as long as it's black. **Otherwise, it
-    #: gets -1/-2.**" (Phyrexian Boon.) The other arm of ``condition``, and a
-    #: *continuous* one: both arms apply exactly while their half of the
-    #: condition holds, so neither is the one-shot ``Conditional.otherwise``
-    #: that ``control_flow._attach_otherwise`` builds — reading it as that would
-    #: test the colour once and keep whichever delta it found.
-    #:
-    #: Meaningless without ``condition``, which is what it is the complement of;
-    #: the production that fills it only reaches this line after one parsed.
-    otherwise: Statement | None = None
-
-
-@dataclass(frozen=True)
-class KeywordLine:
-    keywords: tuple[KeywordInstance, ...]
-
-
-@dataclass(frozen=True)
-class RegistryLine:
-    """A line whose behaviour is implemented by a text-keyed sidecar registry
-    rather than by any ``OracleInstruction``.
-
-    "Players skip their untap steps.", "Cast this spell only during the declare
-    blockers step.", "If you would gain life, draw that many cards instead." —
-    none of these describe a one-shot effect the stack could resolve. They are
-    read straight off the card's oracle text by the untap step, the cast-timing
-    gate and the CR 614 replacement interceptors respectively. There is nothing
-    for the compiler to store and nothing for a handler to run.
-
-    Like :class:`KeywordLine`, this node lowers to zero instructions, which is
-    the whole point: it says "accounted for, elsewhere" instead of leaving the
-    line in the backlog under a misleading "unrecognized effect verb".
-
-    ``registry`` names the implementing module (``engine/grammar/registries.py``
-    maps each one to its matcher). ``text`` is the line **verbatim** — the
-    replacement interceptors self-select by looking for exactly this string in
-    ``permanent.card.oracle_text``, so normalizing it here would be a way to
-    quietly unhook Lich, Library of Leng and Ali from Cairo.
-    """
-
-    registry: str
-    text: str
-
-
-@dataclass(frozen=True)
-class DerivedLine:
-    """A line whose instruction a derivation table computes in full.
-
-    "All Swamps are 1/1 black creatures that are still lands." (Kormus Bell),
-    "All Mountains are Plains." (Conversion), Jihad's conditional anthem. Each
-    is a template with parameters, and for each of them one engine module
-    already derives those parameters from the printed sentence and hands the
-    consumer a payload — so a production here would be a second reading of the
-    same text, free to disagree with the first.
-
-    Unlike :class:`RegistryLine` this *does* lower, to exactly the instruction
-    the table produces (``engine/grammar/derived.py`` names the table for each
-    shape). ``table`` labels the node; nothing dispatches on it. ``text`` is the
-    line verbatim, and the lowering re-asks the same pure matcher rather than
-    carrying an instruction through the AST — one function, two callers, nothing
-    to drift.
-    """
-
-    table: str
-    text: str
-
-
-# `ModalNode` is deliberately absent: a modal head is printed bare, behind an
-# activation cost and behind a trigger condition, so it is a *statement* those
-# three line nodes carry (see `ast/stack.py`) rather than a fourth kind of line
-# that would need its own copy of the cost and event fields.
-AbilityNode = Union[
-    SpellEffectLine, TriggeredAbilityNode, ActivatedAbilityNode,
-    StaticAbilityNode, KeywordLine, RegistryLine, DerivedLine,
-]
