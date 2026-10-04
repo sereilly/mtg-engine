@@ -27,7 +27,8 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from engine.grammar.phrases import BASIC_LAND_WORDS
-from engine.grammar.vocabulary import CREATURE_TYPES, LAND_TYPES
+from engine.grammar.vocabulary import (CREATURE_TYPES, LAND_TYPES,
+                                       display_type_word)
 from engine.mana_payment import mana_cost_label
 from engine.oracle_types import CLAIMABLE_EXILED_CARDS
 from engine.pending_choices import CHOICE_SPECS, public_data
@@ -2136,6 +2137,23 @@ def _permanent_set_choice(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+def _keep_slot_noun(described: dict) -> str:
+    """The noun one keep slot printed, for the modal's label.
+
+    The **narrowest** one: Global Ruin's five slots are "a land of each basic
+    land type", so each is a land *and* one named type, and a label reading the
+    card type alone told the player to keep "1 land, 1 land, 1 land, 1 land,
+    1 land" while the engine refused any answer holding two Plains. A label
+    decides nothing, but one that contradicts the check behind it leaves a
+    refused answer unexplained. Cataclysm's slots name no subtype and read
+    exactly as they did.
+    """
+    subtype = described.get("subtype_filter")
+    if isinstance(subtype, str) and subtype:
+        return display_type_word(subtype)
+    return str(described.get("type_filter", "permanent"))
+
+
 @prompt_renderer("keep_permanents")
 def _keep_permanents(ctx: PromptContext, choices: list) -> dict:
     """Cataclysm and Limited Resources: which of this seat's own permanents
@@ -2165,7 +2183,7 @@ def _keep_permanents(ctx: PromptContext, choices: list) -> dict:
         "slots": [
             {
                 "count": int(slot.get("count", 0)),
-                "type": str((slot.get("filter") or {}).get("type_filter", "permanent")),
+                "type": _keep_slot_noun(slot.get("filter") or {}),
             }
             for slot in (choice.data.get("slots") or ())
         ],
