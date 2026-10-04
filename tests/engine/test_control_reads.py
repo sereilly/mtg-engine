@@ -324,7 +324,10 @@ POSITIONAL_BASELINE: dict[str, int] = {
     "engine/handlers/zones.py": 2,
     "engine/legality.py": 2,
     "engine/mixins/effects.py": 2,
-    "engine/mixins/permanent_state.py": 1,
+    # `engine/mixins/permanent_state.py` gone at PCY W3G3: Clone's copy choice
+    # subscripted the battlefield by the cast-time slot, so a creature leaving
+    # in response made it copy whatever slid into the slot. It reads the id
+    # the stack stamped first now, and the index through `permanent_at`.
     # Down one at Exodus: the chosen-source resolution ("a source of your
     # choice", CR 609.7a) subscripted a battlefield list, and moved to
     # `game_types.chosen_damage_source` — one resolver shared with the casting

@@ -15,6 +15,7 @@ from ...auras import aura_enchant_clause
 from ...cast_costs import buyback_paid
 from ...cast_timing import CAST_AT_INSTANT_SPEED
 from ...classifier import CardClassification, classify_card
+from ...enter_effects import copy_on_enter_type
 from ...events import emit
 from ...extra_triggers import additional_triggers
 from ...game_types import OracleExecutionContext, OracleStateMachine, StackItem
@@ -102,6 +103,29 @@ def _controller_narrowing_is_in(spec: dict, instruction) -> bool:
         return True
     flag = _CONTROLLER_SPEC_FLAGS.get(controller)
     return bool(flag and spec.get(flag))
+
+
+def _target_is_up_to(payload) -> bool:
+    """Whether an instruction's printed target is "**up to** one target …".
+
+    Walked for :func:`_target_filter_controller`'s reason: the ``targets``
+    description sits under a ``sequence``'s steps or a ``may``'s body as often
+    as at the top. CR 601.2c lets such an announcement name **zero** targets,
+    so "no legal target" is a choice that can be made rather than CR 603.3c's
+    "no legal choices can be made" — Gilded Drake's "exchange control of this
+    creature and up to one target creature an opponent controls" against an
+    empty board still resolves, and its "if you don't or can't make an
+    exchange, sacrifice this creature" is the whole point of that.
+    """
+    if isinstance(payload, dict):
+        targets = payload.get("targets")
+        if isinstance(targets, dict) and targets.get("quantifier") == "up_to":
+            return True
+        return any(_target_is_up_to(value) for value in payload.values())
+    if isinstance(payload, (list, tuple)):
+        return any(_target_is_up_to(entry) for entry in payload)
+    inner = getattr(payload, "payload", None)
+    return False if inner is None else _target_is_up_to(inner)
 
 
 class StackResolutionMixin:
@@ -680,6 +704,11 @@ class StackResolutionMixin:
                 "name": perm.card.name,
             })
         if not offered:
+            # "Up to one" with nothing to name is an announcement of zero
+            # targets (CR 601.2c), not a choice that cannot be made — the
+            # ability stays on the stack with no target and resolves.
+            if _target_is_up_to(getattr(instruction, "payload", None)):
+                return
             self.stack = [existing for existing in self.stack if existing is not item]
             self.log.append(
                 f"{item.card.name}'s triggered ability was removed from the stack: "
@@ -1240,11 +1269,19 @@ class StackResolutionMixin:
                 permanent.metadata["cast_x_value"] = x_value
             # A "copy as it enters" permanent (Clone) records the chosen copy
             # target so initialization can copy the player-selected creature
-            # rather than an arbitrary one.
+            # rather than an arbitrary one — with the id the stack stamped
+            # beside the slot, because the slot is a position the board may
+            # have renumbered since the cast (``_resolve_copy_target``).
             if target_permanent_index is not None:
+                chosen_id = (
+                    target_permanent_id[0]
+                    if isinstance(target_permanent_id, list) and target_permanent_id
+                    else target_permanent_id
+                )
                 permanent.metadata["copy_target"] = (
                     target_player_index if target_player_index is not None else caster_index,
                     target_permanent_index,
+                    chosen_id if isinstance(chosen_id, int) else None,
                 )
             # The one entry site in the engine that *is* a cast (CR 701.5a):
             # a permanent spell resolving. Every other path puts a permanent
@@ -1315,10 +1352,44 @@ class StackResolutionMixin:
             self.log.append(f"{caster.name} put {card.name} onto battlefield")
             self._apply_global_buff(caster, card)
             is_aura = "Aura" in card.type_line
-            if not is_aura:
+            if not is_aura and copy_on_enter_type(
+                compile_card_oracle(card).normalized_text or ""
+            ) is not None:
+                # **The cast's target was the object to copy.** A permanent
+                # that offers a copy choice as it enters (Clone, Vesuvan
+                # Doppelganger, Copy Artifact — CR 707.5's "as a copy", a
+                # CR 614.1c replacement) announces *that* at cast:
+                # ``targeting._cast_target_spec`` raises the copy picker in
+                # place of an entry trigger's. So whatever entry trigger the
+                # copied object brings (CR 707.5) was announced by nobody, and
+                # handing it the cast's target would aim it at the creature
+                # that was copied — a Clone of Man-o'-War bouncing the
+                # Man-o'-War. It chooses its own as it is put on the stack
+                # (CR 603.3d), exactly as the same trigger does on an entry
+                # nothing cast.
+                self._apply_self_enters_battlefield_triggers(
+                    caster_index, permanent, None, None, None,
+                    targets_announced=False,
+                )
+            elif not is_aura:
+                # ...and a cast that announced **nothing** — a headless or
+                # scripted cast with no picker in front of it — is the same
+                # "nobody chose" as an entry nothing cast. Handed in as if it
+                # were an announcement, the inline path fell back to scanning
+                # the *caster's* board: a bare Nekrataal destroyed its
+                # caster's Savannah Lions and a bare Ravenous Rats made its
+                # caster discard.
+                announced = any(
+                    value is not None
+                    for value in (
+                        target_player_index, target_permanent_index,
+                        target_permanent_id,
+                    )
+                )
                 self._apply_self_enters_battlefield_triggers(
                     caster_index, permanent, target_player_index,
                     target_permanent_index, target_permanent_id,
+                    targets_announced=announced,
                 )
             ran_entry_text = self._apply_aura_effect(
                 caster_index,
@@ -1576,6 +1647,8 @@ class StackResolutionMixin:
         target_player_index: int | None,
         target_permanent_index: int | None,
         target_permanent_id: int | list[int | None] | None = None,
+        *,
+        targets_announced: bool = True,
     ) -> None:
         """Fire a just-entered permanent's own "when this enters the
         battlefield" triggered abilities (e.g. Oubliette). This engine doesn't
@@ -1589,14 +1662,55 @@ class StackResolutionMixin:
         hits whichever permanent slid into that slot. This context was built
         without the id, so every targeting ETB trigger in the pool resolved by
         index alone — Oubliette among them. ``chosen_permanent`` prefers the id
-        and only falls back to the index when there is none."""
-        program = compile_card_oracle(permanent.card)
+        and only falls back to the index when there is none.
+
+        **Whose triggers** is what the permanent *has*, which is
+        ``effective_card`` and not ``card``. CR 707.5: an object that enters as
+        a copy "becomes a copy as it enters the battlefield", and "any
+        enters-the-battlefield triggered abilities of the copy will have a
+        chance to trigger"; CR 603.6d checks an entering permanent as it exists
+        after the event. Reading the printed card, every copy in the pool —
+        Clone, Vesuvan Doppelganger, Copy Artifact and the token copies of
+        Dance of Many, Dual Nature, Echo Chamber and Sublime Epiphany — fired
+        nothing on arrival: a Clone is printed with no entry trigger, and a
+        token copy's own card carries nothing but a name. The death half of
+        the same question (``_permanent_to_graveyard``) already read the
+        effective card; this was the entry half lagging behind it. A permanent
+        that is not a copy has the one card either way, so it fires once.
+
+        *targets_announced* says whether the targets handed in were chosen
+        *for these triggers*. True for a cast whose picker was derived from the
+        entry trigger (``targeting._cast_target_spec``'s last branch) — the
+        standing approximation above. False for an entry nothing cast (a token,
+        a reanimation), for a cast that announced nothing, and for a copy, whose
+        cast announced the object to copy instead: nothing chose a target for
+        the trigger at all, and the inline
+        path's answer to that was the fallback scan over the *controller's*
+        own board — a reanimated Nekrataal destroyed its controller's creature,
+        a token Ravenous Rats made its own controller discard. Such a trigger
+        that has a target to choose goes on the stack instead, where
+        ``_choose_trigger_targets`` asks for it as CR 603.3d says (a
+        non-interactive seat takes the picker's stated default). One with
+        nothing to choose stays inline, which is the approximation unchanged."""
+        program = compile_card_oracle(permanent.effective_card)
         for trig in program.triggered_abilities:
             if (
                 trig.condition.kind not in INLINE_TRIGGER_CONDITIONS
                 or not trig.supported
                 or trig.instruction is None
             ):
+                continue
+            if not targets_announced and self._entry_trigger_chooses_a_target(
+                trig.instruction
+            ):
+                self._enqueue_triggered_ability(
+                    controller_index=controller_index,
+                    source_permanent=permanent,
+                    card=permanent.card,
+                    instruction=trig.instruction,
+                    effect_kind=trig.effect_kind,
+                    ability_text=trig.source_line,
+                )
                 continue
             caster = self.players[controller_index]
             target_idx = target_player_index if target_player_index is not None else controller_index
@@ -1627,6 +1741,33 @@ class StackResolutionMixin:
                 )
                 continue
             self._execute_oracle_instruction(trig.instruction, context)
+
+    def _entry_trigger_chooses_a_target(self, instruction: OracleInstruction) -> bool:
+        """Whether CR 603.3d has a target for :meth:`_choose_trigger_targets`
+        to choose on this entry trigger.
+
+        The picker's own gate, asked before the push rather than after it: the
+        same spec derivation, the same two kind sets, and the same
+        :func:`announces_a_target` requirement on a player. A trigger it would
+        decline — a graveyard card, a spell, a seat nobody prints "target" for —
+        has no choice to make, so moving it to the stack would change only when
+        it resolves, and it stays on the inline path it has always taken.
+        """
+        from ...targeting import derive_instruction_spec
+
+        if modal_trigger_modes(instruction):
+            return False
+        spec = derive_instruction_spec([instruction])
+        if spec is None:
+            return False
+        kind = spec.get("kind")
+        if kind in self._CHOOSABLE_TRIGGER_TARGET_KINDS:
+            return True
+        return (
+            kind in self._CHOOSABLE_TRIGGER_PLAYER_KINDS
+            and announces_a_target(instruction)
+        )
+
     def _select_executable_instruction(
         self, card: CardDefinition, mode_index: int | None = None
     ) -> OracleInstruction | None:

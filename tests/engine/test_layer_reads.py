@@ -375,7 +375,7 @@ PRIMARY_TYPE_BASELINE: dict[str, int] = {
     "mixins/game_ending.py": 1,
     "mixins/helpers.py": 1,
     "mixins/oracle_instructions.py": 6,
-    "mixins/permanent_state.py": 10,
+    "mixins/permanent_state.py": 6,
     "mixins/stack/casting.py": 3,
     "mixins/stack/choices.py": 7,
     "mixins/stack/resolution.py": 1,
