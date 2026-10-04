@@ -16,8 +16,11 @@ boundary rather than a new one: it says a postmodifier names a *relation*, and
 these four read a seat, a keyword list or a zone owner and touch no filter and
 no draft at all. Each already documented itself as living below `references`
 "so the recursion can run one way" — which is the same argument for living
-here, one layer further down, where nothing can recurse at all.
-`postmodifiers` re-exports them under the names it used.
+here, one layer further down, where nothing can recurse at all. Their callers
+import them from here under the names they had, and nothing re-exports them.
+Since Invasion's Phase 0 the keyword list has two of those callers on this side,
+`postmodifiers` and `with_clauses`: the "with …" branch that read it left for
+the second, and "that doesn't have …" stayed in the first.
 
 **A fifth came down at Urza's Saga**, on the same boundary read one word
 further: ``_protection_quality`` is a late-bound wrapper over
@@ -25,7 +28,8 @@ further: ``_protection_quality`` is a late-bound wrapper over
 stream at all. It sat in `postmodifiers` only because the protection branch was
 its first caller, which is the reading of "incidental home" this module's second
 paragraph already records — and `postmodifiers` was eleven lines under the
-thousand-line guard with a new noun phrase due to land on it.
+thousand-line guard with a new noun phrase due to land on it. That branch is
+`with_clauses`' now, and so is the import.
 """
 
 from __future__ import annotations
