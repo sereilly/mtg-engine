@@ -31,7 +31,7 @@ for", which was true of a near-empty file and stopped being true when
 about a size and the size changed.
 """
 
-from ...oracle_types import OracleInstruction
+from ...oracle_types import CHOSEN_COLOR_THIS_WAY, OracleInstruction
 from .. import ast
 from ..errors import LoweringError
 from ...subject_filters import untestable_filter_keys
@@ -551,6 +551,25 @@ def _lower_become_color(
             #
             # No duration: "(This effect lasts indefinitely.)" is CR 611.2's
             # default said out loud, so a printed one would be a different card.
+            #
+            # "{G}: This creature becomes the color of your choice **until end
+            # of turn**." (Kavu Chameleon, Rainbow Crow.) That different card:
+            # one colour, asked by the step in front (CR 608.2d, the
+            # arrangement the targeted branch below states), and written to the
+            # turn-long channel by the handler Raging Spirit's "becomes
+            # colorless until end of turn" already uses — the same effect with
+            # its colour read off the choice instead of off the text.
+            if (
+                not several
+                and node.duration.kind in ("until_end_of_turn", "this_turn")
+            ):
+                return (
+                    OracleInstruction("choose_color", "", {"chooser": "you"}),
+                    OracleInstruction(
+                        "recolor_self_until_eot", "",
+                        {"color_from": CHOSEN_COLOR_THIS_WAY},
+                    ),
+                )
             if node.duration.kind is not None:
                 raise LoweringError(
                     f"no handler recolours for {node.duration.kind!r}", node=node
@@ -607,6 +626,27 @@ def _lower_become_color(
             # printed; refusing is what keeps that true if one is.
             raise LoweringError(
                 "the colour-set prompt writes no turn-long channel", node=node
+            )
+        if _names_several_targets(node.subject):
+            # "**Any number of target creatures** become the color of your
+            # choice until end of turn." (Sway of Illusion.) Several chosen
+            # objects and one colour for all of them, so it is the
+            # several-target recolour (Sylvan Paradise's "one or more target
+            # creatures become green until end of turn") with its colour read
+            # off the choosing step in front. It used to fall through to the
+            # one-target kind below, whose description names one target and
+            # here named none: the card reported supported, the picker offered
+            # nothing, and the resolution recoloured whatever it happened on.
+            if several or not until_eot:
+                raise LoweringError(
+                    "several targets take one chosen colour for a turn, and "
+                    "nothing else is printed", node=node,
+                )
+            many: dict[str, object] = {"color_from": CHOSEN_COLOR_THIS_WAY}
+            _describe_several_targets(many, node.subject)
+            return (
+                OracleInstruction("choose_color", "", {"chooser": "you"}),
+                OracleInstruction("recolor_targets_until_eot", "", many),
             )
         payload: dict[str, object] = {}
         if several:

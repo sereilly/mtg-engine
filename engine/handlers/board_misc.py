@@ -798,7 +798,7 @@ def recolor_targets_until_eot(game: Game, instruction: OracleInstruction, contex
     the effect still happens, which is what `resolve_target_permanents` gives
     without a per-slot fallback that would recolour the same creature twice.
     """
-    written = _colour_override_value(instruction.payload.get("target_color"))
+    written = _colour_to_write(game, instruction, context)
     if written is None:
         return True, "resolved"
     targets = resolve_target_permanents(game, context)
@@ -840,6 +840,29 @@ def _colour_override_word(written) -> str:
     return "colorless" if written == () else str(written)
 
 
+def _colour_to_write(game, instruction, context):
+    """The colour a turn-long recolour writes: the printed one, or the one the
+    step in front of it chose.
+
+    "…become **the color of your choice** until end of turn" (Sway of Illusion,
+    Kavu Chameleon, Rainbow Crow) names its colour while the effect is applied
+    (CR 608.2d), so the payload carries ``color_from`` — the scratchpad slot
+    the ``choose_color`` step wrote — where a printed colour carries
+    ``target_color``. An unanswered choice writes **nothing**, for
+    ``recolor_target_chosen_color``'s reason: a permanent that became a colour
+    nobody picked is the wrong colour.
+    """
+    chosen_from = instruction.payload.get("color_from")
+    if chosen_from is None:
+        return _colour_override_value(instruction.payload.get("target_color"))
+    symbol = game._normalize_mana_color(context.results.get(str(chosen_from)))
+    if symbol is None:
+        game.log.append(
+            f"{context.card.name}: no colour was chosen, so nothing is recoloured"
+        )
+    return symbol
+
+
 @effect_handler("recolor_self_until_eot")
 def recolor_self_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"{2}: This creature becomes colorless until end of turn." (Raging Spirit.)
@@ -847,7 +870,7 @@ def recolor_self_until_eot(game: Game, instruction: OracleInstruction, context: 
     The source-subject twin of ``recolor_targets_until_eot``: same channel, same
     sweep, and no target to resolve because the sentence names none.
     """
-    written = _colour_override_value(instruction.payload.get("target_color"))
+    written = _colour_to_write(game, instruction, context)
     source = context.source_permanent
     if written is None or source is None:
         return True, "resolved"
