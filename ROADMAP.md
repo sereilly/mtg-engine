@@ -474,6 +474,32 @@ one card prints this") reads as a work item long after it stopped being true.
   creature cards leave (CR 601.2b lets them), and the top-down default is the
   floor until there is one. (FEM, WTH; re-verified 2026-09-07.)
 
+- **What Prophecy's third wave measured and left** (2026-10-04; each part is
+  named in the commit that declined it, which is what makes it a brief):
+
+  * *The optional-pay planner counts six lands the AI's plan now declines.*
+    `mana_payment.untapped_mana_lands` still reads Mishra's Workshop
+    (restricted mana, CR 106.6) and Gaea's Cradle, Serra's Sanctum, Tolarian
+    Academy, City of Shadows and Reflecting Pool (output the board decides)
+    as one mana each; a "you may pay {1}" on a creatureless board would tap
+    the Cradle for nothing. `ai_policy._land_mana_is_unplannable` is the
+    predicate the AI side already asks (W3G4 merge).
+  * *A copy with no recorded choice copies the first creature in seat
+    order* — CR 707.5's "may" made for the player on a non-cast entry
+    (W3G3). Beside it: entry triggers are still inline when the cast
+    announced their target, and the `trigger_target` prompt names one
+    target, so Basri's Acolyte entered without a cast gets one counter where
+    its controller could have chosen two.
+  * *`ai_valuation` has no side for `phase_out_target_creature_until_source_leaves`
+    (Oubliette) or `create_copy_token` (Dance of Many)*, so their unasked
+    default target is still the first candidate (W3G3).
+  * *Cadaverous Bloom's "Add {B}{B} or {G}{G}" ignores the colour
+    announced* — `mana_color` G produces {B}{B}; the only card in the pool
+    printing that shape (W3G5).
+  * *Two cast-side costs have no picker*, pinned with their parts in
+    `_PICKERLESS_CAST_COSTS`: Infernal Harvest's X is asked after any cost
+    stage, and Haunting Misery has no graveyard wire field (W3G5).
+
 - **Ten flat spellings of the testable-keys check remain in `lowering/`**
   (down from 39 at VIS), each a set difference over the outer payload's keys
   that answers "testable" for a nested phrase whatever the inner phrase says,
@@ -907,10 +933,11 @@ expire:
 > what is already there); `test_the_shipped_sets_are_in_printing_order` is the
 > assertion that can.
 
-Run against `set_progress.json` on 2026-10-02, with Nemesis shipped, it
-answers **Prophecy** (PCY, 2000-06-05, 143 cards), then Invasion and Planeshift
-— and then Seventh Edition, the next reprint-shaped set, whose sources are the
-pool's own. On 2026-09-09, with 6ED shipped, the same rule answered Urza's
+Run against `set_progress.json` on 2026-10-04, with Prophecy shipped, it
+answers **Invasion** (INV, 2000-10-02, 335 cards), then Planeshift — and then
+Seventh Edition, the next reprint-shaped set, whose sources are the pool's own.
+On 2026-10-02, with Nemesis shipped, it answered Prophecy, which has since
+shipped. On 2026-09-09, with 6ED shipped, the same rule answered Urza's
 Destiny, then Mercadian Masques, Nemesis and Prophecy, and the first three of
 those have since shipped in that order. 6ED itself was the previous
 answer and is the caution to read beside the rule: `set_progress.json` said **0**
@@ -1020,6 +1047,7 @@ a wave is five parallel worktree groups integrated serially.
 | UDS | 143 | 69.9% | 2 waves + 1 closer |
 | MMQ | 335 | 73.7% | 3 waves + 1 closer |
 | NEM | 143 | 66.4% | 1 wave + 1 closer |
+| PCY | 143 | 58.0% | 3 waves (the third on one card and four piles) |
 
 Three data points shape an estimate. **Legends** is the warning: the lowest
 starting coverage and the flattest ranking — after eight rounds, 113 of its 135
@@ -1035,18 +1063,19 @@ mis-playing along the way, which every set since Ice Age has repeated and which
 is the argument for the Rock Hydra step.
 
 **Where the pool stands** (regenerate rather than trust these; read
-2026-10-02, at Nemesis' close): 4,169 unique cards over 27 sets, 6,307
+2026-10-04, at Prophecy's close): 4,312 unique cards over 28 sets, 6,450
 printings, 100% supported. Grammar parses 90.6% of lines, lowers 89.9% and
-executes 61.2% (`GRAMMAR_COVERAGE.md`; the lowered row fell 0.3pp on Nemesis'
-*membership*, not on any production). **1.2%** of supported cards carry a
-name-keyed hook — 52 cards, 58 entries in 6 registries (`HOOK_RELIANCE.md`) —
-and the projection that implies for the release line has fallen from 1,195
-hand-written entries to **363**, across fourteen consecutive sets that added no
-hook and retired several. That is the measure moving the way the architecture
-needs it to. Parse coverage: 4,167 of 4,169 supported cards fully claimed, 2
-acknowledged, **0 unclaimed** (`PARSE_COVERAGE.md`). `RULES_PROGRESS.md` is the
-CR coverage tracker. `CARD_VERIFICATION.md` is a log, not a target: 627 passed
-(403 in-game, 224 auto), 50 equivalent, 0 failed, 3,492 untested.
+executes 61.1% (`GRAMMAR_COVERAGE.md`; the executed row fell 0.1pp on
+Prophecy's *membership*, not on any production). **1.2%** of supported cards
+carry a name-keyed hook — 52 cards, 58 entries in 6 registries
+(`HOOK_RELIANCE.md`) — and the projection that implies for the release line
+has fallen from 1,195 hand-written entries to **351**, across fifteen
+consecutive sets that added no hook and retired several. That is the measure
+moving the way the architecture needs it to. Parse coverage: 4,310 of 4,312
+supported cards fully claimed, 2 acknowledged, **0 unclaimed**
+(`PARSE_COVERAGE.md`). `RULES_PROGRESS.md` is the CR coverage tracker.
+`CARD_VERIFICATION.md` is a log, not a target: 631 passed (403 in-game, 228
+auto), 50 equivalent, 0 failed, 3,631 untested.
 
 **A whole wave can fix a hundred cards and move no compiled program**, and 6ED's
 is the run to cite. Five groups, five Known-gaps entries, zero cards implemented,

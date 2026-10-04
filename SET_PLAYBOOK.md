@@ -95,6 +95,34 @@ branch's table had been written when a single kind covered both. Every file
 merged cleanly and three tests failed at runtime. Nothing textual can find
 this; what finds it is running the suite between merges rather than at the end.
 
+**Prophecy's third wave produced it twice more, and both times one side of the
+collision was a *guard*.** A pool-wide guard written on one branch states an
+invariant over the pool that branch could see, and a sibling branch of the same
+wave changes the pool. W3G2's "every chosen colour is asked at resolution"
+sweep named Rhystic Cave, which W3G1 had just made a mana ability that answers
+at activation (CR 605.3b); W3G1's "the AI's plan counts a land exactly when the
+tap seam taps it" sweep named six lands W3G4 had just taught the plan to
+decline. Neither was a regression and neither guard was wrong when written —
+each had asserted an equality where the invariant was narrower. **The fix is
+to make the guard state its invariant, using the engine's own predicate, never
+to add the card's name to an allow-list**: the first now skips a line whose
+abilities are all `is_mana_ability`, which its own docstring had already
+exempted in prose for a different spelling; the second asserts the plan never
+counts a refused land and declines only what `_land_mana_is_unplannable` names,
+with a ceiling on how many. When a merge turns a *new* pool-wide guard red on a
+card the *other* branch touched, drive the card before touching either side.
+
+The same wave had **two branches fix one line by two routes** (the AI tap
+planner's land filter: one asked `taps_for_payment`, the other the tap seam's
+own gate). That is Weatherlight's Aura shape below — take the one that
+subsumes the other, and prove it with the *losing* branch's tests rather than
+by reading: W3G1's Cave tests passed on W3G4's predicate, which is what made
+dropping W3G1's spelling safe. And **look in each worktree for uncommitted
+work before merging its branch**: one held a change written against a premise a
+sibling had since removed (a card it special-cased as unsupported was
+supported), which is a decision for the integrator, not something `git merge`
+will ever show.
+
 Fallen Empires added two more, both about *how the conflict is resolved* rather
 than about what conflicted. **A whole-file `--theirs` (or `--ours`) discards the
 hunks that were never in dispute.** Resolving one conflicted file that way would
@@ -3844,3 +3872,25 @@ the same move script. *Phase 5:* read a zero against the pre-set commit.
 Zero hooks added, the eleventh consecutive set; reliance 1.3% -> 1.2%. Nothing
 drained from Known gaps; the shipped defects the set measured and left are
 ROADMAP entries, not playbook ones.
+
+### PCY — 2026-10-04
+
+*Three waves and sixteen groups; the set stood at 142 of 143 after the second,
+so the third spent one group on the last card (Rhystic Cave) and four on the
+pile waves 1–2 had measured and declined.* Those four fixed a colour read off
+the announcement instead of asked at resolution (CR 608.2d, eleven shipped
+readers), a copy entering as the printed card (CR 707.5: 165 token copies and
+127 Clones whose entry trigger never fired), an AI simulator in which nothing
+had ever cost mana, and cost choices the engine made for a human seat.
+`oracle_diff` read **9, 0, 0 and 0** on those four merges — 6ED's finding
+again.
+
+*Integration edits:* the semantic-collision paragraph gains the wave's two
+guard-versus-sibling collisions and the rule that came out of them (make the
+guard state its invariant with the engine's own predicate; never allow-list
+the card), plus "prove a subsuming resolution with the losing branch's tests"
+and "check each worktree for uncommitted work". *Phase 4:* the wrong insert was
+made with the same move script as the real one and the order guard was the
+only thing that fired, as Nemesis' entry asked. Zero hooks added. Nothing
+drained from Known gaps; what the wave measured and left is one ROADMAP entry
+with its parts named.
