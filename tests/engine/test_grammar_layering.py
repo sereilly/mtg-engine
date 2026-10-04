@@ -10,7 +10,7 @@ Two properties, and they fail differently.
 
 **The layers are ordered.** `phrases -> effects -> conditions -> statements ->
 costs -> parser` on the parsing side, `_common/categories -> the families -> statics -> lower` on the
-lowering side, `_core -> the families -> statements` inside the AST. An import that
+lowering side, `_core -> the families -> statements -> lines` inside the AST. An import that
 reaches back up would compile fine and would make the three files three files
 again with extra steps.
 
@@ -1802,7 +1802,12 @@ def test_layers_only_import_downward(layers):
         # lines under the size guard. A floor like the rest — it imports
         # `_primitives` and the vocabulary, names no node at run time, and
         # nothing reads back.
-        ("ast", ("_core", "_payloads", "_primitives", "_references", "_seats", "_targets", "costs", "records"), ("statements",)),
+        # `lines` joins `statements` in the *roof* slot at Invasion's Phase 0:
+        # the ability-line nodes and `AbilityNode`, pre-split out of
+        # `statements` 25 lines under the size guard. It is a second storey, not
+        # a floor — it imports `statements` for the one name `Statement` and no
+        # family at all — so it is exempted here and held by the roof tests below.
+        ("ast", ("_core", "_payloads", "_primitives", "_references", "_seats", "_targets", "costs", "records"), ("statements", "lines")),
     ],
     ids=["effects", "lowering", "ast"],
 )
@@ -1824,9 +1829,13 @@ def test_families_import_only_their_package_shared_module(package, shared, roof)
     `Condition` union names both halves of the split, and nothing reads back.
 
     `roof` names the modules that sit *above* the families rather than below
-    them; they are exempted here and checked by their own test. Only `ast/` has
-    one, because `Effect`, `Statement` and `AbilityNode` are unions over every
-    family and so cannot live beside any single one.
+    them; they are exempted here and checked by their own tests. Only `ast/` has
+    one, because `Effect` and `Statement` are unions over every family and so
+    cannot live beside any single one. `AbilityNode` was named in that sentence
+    until Invasion's Phase 0 and never belonged in it: it is a union over the
+    seven line nodes, which reach the families only through the `Statement`
+    they hold — so it lives in `lines`, on top of `statements`, and that module
+    imports no family.
     """
     violations = []
     for path in sorted((GRAMMAR / package).glob("*.py")):
@@ -1897,6 +1906,46 @@ def test_the_ast_roof_only_reaches_downward():
     assert not violations, (
         "ast/statements.py is the roof of the package — it may import `_core` "
         "and the families and nothing else:\n  " + "\n  ".join(violations)
+    )
+
+
+def test_the_ast_line_layer_sits_on_the_roof_and_nothing_sits_on_it():
+    """`ast/lines.py` may name `statements`; no module in the package names it.
+
+    The line nodes hold a `Statement`, so the edge to the roof is real — and it
+    is the *only* edge this module is for. Three things keep it from becoming
+    the hole the roof test closes one storey down:
+
+    * it imports the vocabulary and `statements` and **no family**. A line node
+      that needed a family's node directly would be an effect that had drifted
+      up into the line layer, which is how `parser.py` came to hold four effect
+      productions before its first split;
+    * `statements` does not import it back — already true by the test above,
+      whose `allowed` set does not name `lines`, and restated here because that
+      is an accident of a set literal rather than something that test says;
+    * nothing else in the package imports it but `__init__`. A family naming a
+      line node would be reaching past the roof.
+    """
+    allowed = {"_core", "conditions", "costs", "statements"}
+    violations = [
+        f"ast/lines.py:{line} imports {target or '__init__'}"
+        for line, target, _is_sibling in _imports(GRAMMAR / "ast" / "lines.py")
+        if target not in allowed
+    ]
+    assert not violations, (
+        "ast/lines.py is the line layer — it may import the vocabulary and "
+        "`statements` and nothing else:\n  " + "\n  ".join(violations)
+    )
+    readers = [
+        f"ast/{path.name}:{line}"
+        for path in sorted((GRAMMAR / "ast").glob("*.py"))
+        if path.stem not in ("__init__", "lines")
+        for line, target, _is_sibling in _imports(path)
+        if target == "lines"
+    ]
+    assert not readers, (
+        "ast/lines.py is the top of the package — only `__init__` may import "
+        "it:\n  " + "\n  ".join(readers)
     )
 
 
@@ -2041,6 +2090,15 @@ def test_every_grammar_module_is_placed_or_exempt():
 # `UNLAYERED` is — see the test below.
 FAMILY_SHARED = {
     "_common", "_core", "_events", "conditions", "categories", "statements",
+    # `ast/lines`, pre-split out of `ast/statements` at Invasion's Phase 0, 25
+    # lines under the size guard. The ability-line nodes and `AbilityNode`:
+    # the type of `parser.py` (one printed line) where `statements` is the type
+    # of `grammar/statements.py` (one whole sentence), which is the cut both
+    # other packages already had. Not a family and not a floor — it is the one
+    # module *above* a roof, importing `statements` for `Statement` and no
+    # family — so it has no independence to check here and is held by
+    # `test_the_ast_line_layer_sits_on_the_roof_and_nothing_sits_on_it`.
+    "lines",
     # `lowering/_frozen_seats`, split out of `_events` at Mercadian Masques'
     # second Phase 0 — the seat half of that module's three questions ("that
     # player", "that much", "they"), taken out when `_events` reached 990 of the
