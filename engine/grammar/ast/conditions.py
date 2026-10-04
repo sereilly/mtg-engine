@@ -520,6 +520,45 @@ class ItIsColor:
 
 
 @dataclass(frozen=True)
+class ColorIsMostCommon:
+    """"…as long as **white is the most common color among all permanents or is
+    tied for most common**." (Invasion's five Djinns.)
+
+    A census of the whole battlefield asked about one printed colour. Nothing
+    is chosen and nothing is named back: the colour is the card's own word, the
+    set is "all permanents", and the answer is ``engine/color_census.py``'s —
+    the one count the two spells below and Call to Arms' narrower clause share.
+
+    ``tied`` is the half of the sentence after the superlative, and it is read
+    rather than assumed because the two printed spellings are opposite answers
+    on a level board: "**or is** tied for most common" admits the tie, "**but
+    isn't** tied for most common" (Call to Arms) is a strict lead.
+    """
+
+    color: str
+    tied: bool = True
+
+
+@dataclass(frozen=True)
+class SharesMostCommonColor:
+    """"Destroy target creature **if it shares a color with the most common
+    color among all permanents or a color tied for most common**." (Tsabo's
+    Assassin; Barrin's Unmaking prints "if that permanent shares …".)
+
+    The same census as :class:`ColorIsMostCommon`, asked the other way round:
+    not "is this colour a leader" but "is the object any of the leaders".
+    The object is the pronoun's — the target the guarded effect announced — so
+    this carries no subject, for :class:`ItIsColor`'s reason: which half of the
+    resolution context the pronoun names is only knowable beside the effect.
+
+    Both tails are one clause and both are required by the production: "the
+    most common color … **or a color tied for most common**" is how the card
+    says the leaders are a set, and a reader that stopped at the superlative
+    would have to pick one leader out of a tie.
+    """
+
+
+@dataclass(frozen=True)
 class TurnIsYours:
     """"**During your turn**, creatures you control get +2/+0." / "**During
     turns other than yours**, creatures you control get -0/-2." (Vibrating
@@ -618,6 +657,7 @@ Condition = Union[
     AttackersAimedAtYou,
     BlockersOfBoundCreature,
     CardsInZones,
+    ColorIsMostCommon,
     Controls,
     EveryOf,
     IsState,
@@ -633,6 +673,7 @@ Condition = Union[
     SameNamedObject,
     SelfInGraveyardWithCardsAbove,
     SelfIsOnlyCardOfTypeInGraveyard,
+    SharesMostCommonColor,
     AttachedCounterCount,
     SourceCounterCount,
     SourceExiled,

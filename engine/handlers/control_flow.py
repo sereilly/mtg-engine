@@ -1327,6 +1327,46 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         matched = wanted in colors
         return (not matched) if payload.get("negated") else matched
 
+    if kind == "target_shares_most_common_color":
+        # "Destroy target creature **if it shares a color with the most common
+        # color among all permanents** or a color tied for most common."
+        # (Tsabo's Assassin, Barrin's Unmaking.) CR 608.2c again: the census is
+        # taken while the instruction is followed, so a permanent that entered
+        # or was recoloured in response is counted, and the target itself is one
+        # of "all permanents" — a lone coloured target is always most common.
+        #
+        # The picker offers every permanent the noun phrase admits: the clause
+        # is a condition on the *effect*, not a targeting restriction, so a
+        # target that fails it is a legal target the spell simply does nothing
+        # to (CR 608.2b reads the printed target phrase, which says no colour).
+        #
+        # The same resolver the colour clause above uses, for its reason: the
+        # branch and the effect beside it must mean one permanent. A target
+        # that is gone shares a colour with nothing.
+        from ..color_census import shares_most_common_color
+        from ._common import resolve_target_permanent
+
+        target = resolve_target_permanent(
+            game, context,
+            predicate=lambda perm: True,
+            fallback_players=(),
+            fallback_on_invalid_choice=False,
+        )
+        return shares_most_common_color(game, target)
+
+    if kind == "color_is_most_common":
+        # "…white is the most common color among all permanents or is tied for
+        # most common." The Djinns print it on a static, where
+        # ``static_bonuses.conditional_static_holds`` answers it; this is the
+        # same payload reaching an intervening-if or a sentence-level "if", and
+        # the same census answers it so the two cannot disagree about a tie.
+        from ..color_census import color_is_most_common
+
+        return color_is_most_common(
+            game, str(payload.get("color") or ""),
+            tied=bool(payload.get("tied", True)),
+        )
+
     if kind == "target_is_type":
         # "Untap target Griffin. **If it's a creature**, it gets +1/+1 until
         # end of turn." (Griffin Canyon.) The type twin of the colour clause

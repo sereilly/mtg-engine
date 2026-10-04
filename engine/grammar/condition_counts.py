@@ -56,7 +56,7 @@ from .references import parse_player_ref
 from .seat_comparisons import accept_margin
 from .seats import accept_life_total_of
 from .stream import TokenStream
-from .vocabulary import COLOR_WORDS
+from .vocabulary import CARD_TYPES, COLOR_WORDS
 
 
 def _parse_count_bound(stream: TokenStream) -> ast.Comparison:
@@ -147,6 +147,84 @@ def _parse_blockers_of_bound_creature(
     return ast.BlockersOfBoundCreature(filt, comparison)
 
 
+#: The set a colour census is taken over, as printed. One phrase today — "among
+#: all permanents" is every permanent on the battlefield, either seat's, tokens
+#: and lands included — and required whole: a narrower set ("among nontoken
+#: permanents the chosen player controls", Call to Arms) is a different count
+#: with a different answer, and this reader must refuse it rather than answer
+#: it about the whole board.
+_CENSUS_SCOPE: tuple[str, ...] = ("among", "all", "permanents")
+
+#: The two tails of "<colour> is the most common color …", as ``(words, tied)``.
+#: Both required — the bare superlative says nothing about a level board, and
+#: the two tails are opposite answers there.
+_CENSUS_TIE_TAILS: tuple[tuple[tuple[str, ...], bool], ...] = (
+    (("or", "is", "tied", "for", "most", "common"), True),
+    (("but", "isn't", "tied", "for", "most", "common"), False),
+)
+
+
+def accept_target_pronoun(stream: TokenStream) -> bool:
+    """``it`` / ``that <noun>`` naming the object the guarded effect targets.
+
+    "Destroy target creature if **it** shares a color with …" (Tsabo's
+    Assassin) and "Return target permanent to its owner's hand if **that
+    permanent** shares a color with …" (Barrin's Unmaking) are one referent in
+    two spellings: the repeated noun restates what the effect in front already
+    chose, which is the arrangement ``record_conditions`` keeps for "that land
+    was nonbasic". Which object that is — a permanent, a spell — is the
+    lowering's question (``pronoun_target_referent``), asked beside the effect.
+
+    Consumes nothing unless one of the two is there.
+    """
+    if stream.accept_word("it"):
+        return True
+    mark = stream.mark()
+    if stream.accept_word("that"):
+        noun = stream.peek_word()
+        if noun == "permanent" or noun in CARD_TYPES:
+            stream.advance()
+            return True
+    stream.reset(mark)
+    return False
+
+
+def _accept_color_census_condition(stream: TokenStream) -> "ast.Condition | None":
+    """A question about **the most common color among all permanents**, or
+    None with the cursor untouched.
+
+    Two printed askers of one count (``engine/color_census.py``):
+
+    * "**white is** the most common color among all permanents **or is tied
+      for most common**" — the five Invasion Djinns. A printed colour against
+      the census.
+    * "**it shares a color with** the most common color among all permanents
+      **or a color tied for most common**" — Tsabo's Assassin, Barrin's
+      Unmaking. The effect's own target against the census.
+
+    Every word is required in both. The scope is what the count is *of*, and
+    the tail is what the card says about a level board; a reader that stopped
+    at the superlative would be picking one of those for the card.
+    """
+    mark = stream.mark()
+    colour = stream.peek_word()
+    if colour in COLOR_WORDS and stream.peek_word(1) == "is":
+        stream.advance(2)
+        if stream.accept_phrase("the", "most", "common", "color", *_CENSUS_SCOPE):
+            for tail, tied in _CENSUS_TIE_TAILS:
+                if stream.accept_phrase(*tail):
+                    return ast.ColorIsMostCommon(COLOR_WORDS[colour], tied=tied)
+        stream.reset(mark)
+        return None
+    if accept_target_pronoun(stream) and stream.accept_phrase(
+        "shares", "a", "color", "with", "the", "most", "common", "color",
+        *_CENSUS_SCOPE, "or", "a", "color", "tied", "for", "most", "common",
+    ):
+        return ast.SharesMostCommonColor()
+    stream.reset(mark)
+    return None
+
+
 def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
     """One counted condition, or None without consuming when it is something else.
 
@@ -160,6 +238,17 @@ def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
     # reference the rest of the clause then refuses — the same position, since
     # the dispatcher resets to its own mark immediately before calling here.
     mark = stream.mark()
+
+    # "…as long as **white is the most common color among all permanents** or
+    # is tied for most common" (the Invasion Djinns) / "…if **it shares a color
+    # with the most common color among all permanents** or a color tied for
+    # most common" (Tsabo's Assassin). A count of the whole battlefield by
+    # colour. Read first: the first form opens on a colour word, which no other
+    # clause here does, and the second on a pronoun followed by "shares", which
+    # nothing below reads — and it consumes nothing when neither is there.
+    census = _accept_color_census_condition(stream)
+    if census is not None:
+        return census
 
     # "if **that opponent reveals exactly the chosen number of cards of the
     # chosen color**" (Scrying Glass). A count of a *record* rather than of a
@@ -283,6 +372,7 @@ def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
     # other clause this branch reads ("gained … this turn", a plain count) can
     # be handed a seat nobody named. The lowering admits it under the
     # superlative alone, for the life gate's reason.
+    seat_negated = False
     if (
         stream.peek_word() == "a"
         and stream.peek_word(1) == "player"
@@ -291,6 +381,27 @@ def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
     ):
         stream.advance(2)
         player = ast.PlayerRef("any_player")
+    elif (
+        stream.peek_word() == "no"
+        and stream.peek_word(1) == "opponent"
+        and stream.peek_word(2) == "controls"
+    ):
+        # "…as long as **no opponent controls** a white or blue creature"
+        # (Kavu Runner, Skittish Kavu). The negation printed on the *seat*
+        # rather than on the noun or the verb — the third word order of one
+        # condition, and the same node as "your opponents control **no** white
+        # or blue creatures" (Kezzerdrix's spelling): CR 102.2 makes "no
+        # opponent" a statement about every opponent at once, so it is the
+        # ``each_opponent`` seat with a count of zero, which is the one
+        # comparison where a pooled tally and an every-one-of-them test agree
+        # (``lowering/conditions.py`` admits that seat for nothing else).
+        #
+        # Not ``opponent`` with a zero: that seat is "**an** opponent", an
+        # `any` over the seats, and "an opponent controls none" holds in a
+        # three-seat game the moment one of two opponents has an empty board.
+        stream.advance(2)
+        player = ast.PlayerRef("each_opponent")
+        seat_negated = True
     else:
         player = parse_player_ref(stream)
     if player is not None:
@@ -314,6 +425,11 @@ def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
             margin = accept_margin(stream)
             if margin is not None and not stream.at_word("more"):
                 raise stream.error("expected 'more' after the printed margin")
+            if seat_negated and (margin is not None or stream.at_word("more")):
+                # "No opponent controls more creatures than you" is a sentence
+                # nothing prints, and the comparison below carries no negation
+                # — read on, the "no" would be consumed and dropped.
+                raise stream.error("'no opponent controls' takes a plain noun phrase")
             if stream.accept_word("more"):
                 filt = parse_object_filter(stream)
                 # "if that player controls more lands than **each other
@@ -348,7 +464,7 @@ def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
                     player, filt,
                     ast.Comparison("more_than_you", ast.Fixed(margin or 0)),
                 )
-            negated = bool(stream.accept_word("no")) or verb_negated
+            negated = bool(stream.accept_word("no")) or verb_negated or seat_negated
             # "you control **a** Swamp". The article carries no meaning of its
             # own, but the noun parser refuses it as an unknown adjective, so
             # leaving it would refuse every singular condition in the pool.

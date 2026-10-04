@@ -2739,16 +2739,19 @@ class PermanentStateMixin:
         color = source_perm.metadata.get("chosen_color")
         if not isinstance(seat, int) or not (0 <= seat < len(self.players)) or not color:
             return False
-        counts: dict[str, int] = {}
-        for perm in self.controlled_by(seat):
-            if perm.metadata.get("is_token"):
-                continue
-            for other in self._effective_colors(perm):
-                counts[other] = counts.get(other, 0) + 1
-        mine = counts.get(color, 0)
-        if mine <= 0:
-            return False
-        return all(count < mine for other, count in counts.items() if other != color)
+        # The census itself is ``engine/color_census.py``'s — the one count the
+        # Invasion Djinns, Barrin's Unmaking and Tsabo's Assassin also ask, over
+        # "all permanents" where this card names a narrower set. What is this
+        # card's own is the set and the strictness (``tied=False``).
+        from ..color_census import color_is_most_common
+
+        return color_is_most_common(
+            self, color, tied=False,
+            permanents=[
+                perm for perm in self.controlled_by(seat)
+                if not perm.metadata.get("is_token")
+            ],
+        )
 
     @staticmethod
     def _protection_quality_of(word: str) -> tuple[str, str] | None:
