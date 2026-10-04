@@ -421,6 +421,30 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
             then=_report_player, asks=True,
         )
         return True, "resolved"
+    if instruction.payload.get("recipient") == "damaged_player":
+        # "Whenever Darigaaz deals combat damage to a player, … Darigaaz deals
+        # damage to **the player** equal to …" (Darigaaz, the Igniter.) The seat
+        # this trigger's own damage event hit, frozen by the damage seam
+        # (CR 603.10) and read through the one reader of a printed "that
+        # player" — the same seat ``reveal_hand`` and ``discard_hand`` resolve
+        # under this word. No record means the words named nobody, and the
+        # damage does not happen rather than landing on a guess.
+        seat = frozen_that_player_seat(game, context)
+        if seat is None:
+            game.log.append(f"{card.name}: no recorded player, no damage dealt")
+            return True, "resolved"
+        struck = game.players[seat]
+
+        def _report_struck(dealt: int) -> None:
+            context.results["damage_dealt"] = dealt
+            if dealt:
+                game.log.append(f"{card.name} dealt {dealt} damage to {struck.name}")
+
+        game._deal_damage_to_player(
+            struck, damage, source=source_permanent or card,
+            then=_report_struck, asks=True,
+        )
+        return True, "resolved"
     if instruction.payload.get("recipient") == "damaged_permanent_controller":
         # "…deals 3 damage to **that creature's controller**" (Bellowing Fiend).
         # The seat that controlled the permanent this trigger's damage event

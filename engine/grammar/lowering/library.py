@@ -32,6 +32,7 @@ from ._common import (
     _targets_only,
 )
 from ._events import (
+    _DAMAGED_PLAYER_EVENTS,
     _DEFENDING_PLAYER_EVENTS,
     _EVENT_SUBJECT_PLAYERS,
     EVENT_SUBJECT_PLAYER,
@@ -73,7 +74,9 @@ _REVEALED_HAND_FIELDS = frozenset(
 )
 
 
-def _lower_reveal_hand(node: ast.RevealHand) -> tuple[OracleInstruction, ...]:
+def _lower_reveal_hand(
+    node: ast.RevealHand, event: str | None = None
+) -> tuple[OracleInstruction, ...]:
     """"Target player **reveals their hand**" (CR 701.20), on its own.
 
     The first half of Amnesia and Rag Man, lowered as its own step so the
@@ -98,6 +101,15 @@ def _lower_reveal_hand(node: ast.RevealHand) -> tuple[OracleInstruction, ...]:
     """
     if node.player.kind == "you":
         return (OracleInstruction("reveal_hand", "", {"who": "you"}),)
+    # "Whenever Crosis deals combat damage to a player, … **that player**
+    # reveals their hand …" (Crosis, the Purger; Darigaaz, the Igniter.) The
+    # seat the damage froze (CR 603.10), under the word ``discard_hand`` already
+    # spells it with — and admitted only under an event whose fire site really
+    # recorded a damaged player, the gate that sentence is held to: under any
+    # other trigger the words name nobody, and the handler's fallback is the
+    # ability's own controller.
+    if node.player.kind == "that_player" and event in _DAMAGED_PLAYER_EVENTS:
+        return (OracleInstruction("reveal_hand", "", {"who": "damaged_player"}),)
     if node.player.kind not in ("target_player", "target_opponent"):
         raise LoweringError(
             f"no handler reveals {node.player.kind!r}'s hand", node=node

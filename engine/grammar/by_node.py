@@ -280,7 +280,6 @@ _BY_NODE_TYPE: dict[type, object] = {
     # because the node had nothing to read, and a lowering that reads its
     # node is exactly what this table is for.
     ast.RevealTop: _lower_reveal_top_of_library,
-    ast.RevealHand: _lower_reveal_hand,
     # "Reveal any number of blue cards in your hand." (Brine Seer.) The
     # chosen-subset reveal beside the whole-hand one, and a different node
     # for a different effect - see `ast.RevealCardsFromHand`.
@@ -384,6 +383,9 @@ _BY_NODE_TYPE_WITH_EVENT: dict[type, object] = {
     # freezes none rather than copying whatever the resolution is holding.
     ast.BecomeCopy: _lower_become_copy,
     ast.Discard: _lower_discard,
+    # "…**that player** reveals their hand…" (Crosis, the Purger): the seat the
+    # damage froze, so the bare reveal joins the sentences that name it.
+    ast.RevealHand: _lower_reveal_hand,
     ast.ExileEntireLibrary: _lower_exile_entire_library,
     # "…**that player** exiles a card at random from their hand" (Elkin Lair):
     # the same seat question one zone over, and the same answer.

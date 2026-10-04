@@ -3806,6 +3806,19 @@ def reveal_hand(game: Game, instruction: OracleInstruction, context: OracleExecu
     # ``deal_damage`` records about its own recipient.
     if instruction.payload.get("who") == "you":
         victim = context.caster
+    elif instruction.payload.get("who") == "damaged_player":
+        # "…**that player** reveals their hand…" (Crosis, the Purger.) The seat
+        # the damage froze (CR 603.10). No record means the words named nobody
+        # and no hand is shown — never a fall back to the ability's controller,
+        # whose hand is the one this must not open. An empty record is written
+        # all the same, so the sentence behind this one counts nothing rather
+        # than reading a back-reference with no producer.
+        frozen = frozen_that_player_seat(game, context)
+        if frozen is None:
+            context.results[REVEALED_HAND_CARDS] = []
+            game.log.append(f"{context.card.name}: no recorded player, no reveal")
+            return True, "resolved"
+        victim = game.players[frozen]
     else:
         victim = context.target if context.target is not None else context.caster
     seat = next(
@@ -3842,6 +3855,15 @@ def discard_all_matching_cards(game: Game, instruction: OracleInstruction, conte
     scan-and-remove by value would take the wrong copy of a pair.
     """
     victim = context.target if context.target is not None else context.caster
+    if instruction.payload.get("who") == "damaged_player":
+        # "…that player reveals their hand and discards all cards of that
+        # color." (Crosis, the Purger.) The seat the damage froze; with none
+        # recorded nothing is discarded, for ``reveal_hand``'s reason.
+        frozen = frozen_that_player_seat(game, context)
+        if frozen is None:
+            game.log.append(f"{context.card.name}: no recorded player, no discard")
+            return True, "resolved"
+        victim = game.players[frozen]
     filters = instruction.payload.get("filter") or {}
     # "…discards all cards **of that color**." (Persecute.) CR 608.2d's choice,
     # made by the sentence in front of this one and read out of the scratchpad

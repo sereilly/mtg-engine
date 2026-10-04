@@ -322,7 +322,13 @@ def _lower_discard(node: ast.Discard, event: str | None = None) -> tuple[OracleI
     # matcher cannot test refuses instead of being dropped into a discard that
     # empties the whole hand.
     if isinstance(node.count, ast.AllOf) and not node.whole_hand:
-        if node.player.kind not in ("target_player", "target_opponent"):
+        # "…that player reveals their hand and discards all cards of that
+        # color." (Crosis, the Purger.) The seat a damage trigger froze rather
+        # than one the announcement chose — the same instruction with a ``who``,
+        # as ``discard_hand`` below reads the same seat, and admitted only under
+        # an event that recorded one.
+        damaged = node.player.kind == "that_player" and event in _DAMAGED_PLAYER_EVENTS
+        if not damaged and node.player.kind not in ("target_player", "target_opponent"):
             raise LoweringError(
                 "no handler discards every matching card from a seat nobody "
                 "targeted", node=node,
@@ -364,7 +370,10 @@ def _lower_discard(node: ast.Discard, event: str | None = None) -> tuple[OracleI
                     "no discard can test this narrowing", node=node
                 )
             payload.update(carried)
-        _describe_targets(payload, node.player)
+        if damaged:
+            payload["who"] = "damaged_player"
+        else:
+            _describe_targets(payload, node.player)
         return (OracleInstruction("discard_all_matching_cards", "", payload),)
     # Only the controller's own discard and the at-random one below carry a
     # narrowing; every other handler arms a prompt that takes the whole hand, so
