@@ -34,6 +34,7 @@ from ..enter_effects import (
     choose_number_on_enter,
     pay_any_life_on_enter,
     enters_with_pt_counters,
+    kicked_entry,
     enters_with_named_counter,
     LOSE_LIFE_EQUAL_TO_TOTAL_ON_ENTER,
     choosable_bodies,
@@ -43,6 +44,8 @@ from ..auras import (CHOSEN_PROTECTION_COLOR, aura_protection_colors,
 from .. import copies
 from ..named_counters import add_counters as add_named_counters
 from ..named_counters import counters_on
+from ..cast_costs import KICKED
+from ..keywords import grant_ability_line, grant_keyword
 from ..tokens import make_token_card
 from ..keywords import (add_derived_ability_line, add_derived_grant,
                         add_derived_removal, clear_derived_grants)
@@ -1032,6 +1035,40 @@ class PermanentStateMixin:
             else:
                 permanent.toughness_bonus += count
                 permanent.metadata["plus_0_1_counters"] = count
+
+        # "**If this creature was kicked, it enters with** two +1/+1 counters
+        # on it **and with flying**." (Faerie Squadron.) The loop above under
+        # CR 702.33d's condition, read off the stamp the resolving spell left
+        # on the permanent before it entered (``resolution._resolve_card``) --
+        # so a creature put onto the battlefield without being cast, which
+        # carries no stamp, enters as the card's printed body. That is the
+        # rule: it was not cast, so it was not kicked.
+        #
+        # What follows "and with" is something the permanent **has** from here
+        # on, with no duration (CR 611.2a), so it goes through the two layer-6
+        # grant channels with ``duration=None`` -- the value that has always
+        # meant "no sweep takes this away". A granted keyword is therefore
+        # removable (Humility takes Kavu Titan's trample and leaves the
+        # counters), which is what makes it an ability and not a rewrite of the
+        # card.
+        if permanent.metadata.get(KICKED):
+            for raw_line in entry_lines:
+                entry = kicked_entry(raw_line, permanent.effective_card.name)
+                if entry is None:
+                    continue
+                count, kind = entry["counters"]
+                if kind == "+1/+1":
+                    self.place_plus1_counters(permanent, count)
+                elif kind == "+1/+0":
+                    permanent.power_bonus += count
+                    permanent.metadata["plus_1_0_counters"] = count
+                else:
+                    permanent.toughness_bonus += count
+                    permanent.metadata["plus_0_1_counters"] = count
+                for keyword in entry["keywords"]:
+                    grant_keyword(permanent, keyword)
+                for granted_line in entry["ability_lines"]:
+                    grant_ability_line(permanent, granted_line)
 
         # "…enters with **X** <kind> counters on it" (Rock Hydra's +1/+1,
         # Balduvian Hydra's +1/+0). The count is the announced X rather than a
@@ -2830,6 +2867,11 @@ class PermanentStateMixin:
         ):
             return False
         if any(not target_perm.has_type(subtype) for subtype in filt.subtypes):
+            return False
+        # "…**and other Treefolk creatures**" as the second half of a union
+        # (Verdeloth the Ancient): a creature of any excluded type is out,
+        # through the same layer-4 reader the positive test above asks.
+        if any(target_perm.has_type(subtype) for subtype in filt.excluded_subtypes):
             return False
         # "**Legendary** creatures you control have …" (Legends' five banding
         # lands). A supertype is not a type: ``has_type`` answers about card

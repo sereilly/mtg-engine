@@ -527,6 +527,24 @@ def lower_record_condition(
         return {"kind": DAMAGED_BY_SOURCE_DIED}
     if isinstance(condition, ast.DiedThisTurn):
         return {"kind": "died_this_turn", "filter": condition.filter.to_payload()}
+    if isinstance(condition, ast.WasKicked):
+        # CR 702.33d. Asked of the ability's own source and of nothing else:
+        # the answer lives on the resolving spell's stack record and on the
+        # permanent that spell became, so a reference rebound onto some other
+        # object ("whenever a creature enters, if it was kicked") would be a
+        # condition answered about the wrong permanent. Refused, not guessed.
+        subject = condition.subject
+        if subject is not None and not subject.filter.is_source:
+            raise LoweringError(
+                "'was kicked' is recorded on the spell and the permanent it "
+                "became; asking it of another object needs that object's own "
+                "kicked record threaded through the event",
+                node=condition,
+            )
+        payload: dict[str, object] = {"kind": "was_kicked"}
+        if condition.negated:
+            payload["negated"] = True
+        return payload
     if isinstance(condition, ast.AdditionalCostWasPaid):
         # "**If this spell's additional cost was paid**, …" (Undergrowth.) No
         # symbols in the payload: the card prints "the" additional cost and

@@ -209,6 +209,15 @@ class LordBuffFilter:
 
     colors: tuple[str, ...] = ()
     subtypes: tuple[str, ...] = ()
+    # "Saproling creatures **and other Treefolk creatures** get +1/+1."
+    # (Verdeloth the Ancient.) The creature types a buffed permanent must *not*
+    # have -- ``ObjectFilter.excluded_subtypes``' twin, and its own field for
+    # the reason ``excluded_types`` below is: a negative is not a narrower
+    # positive. It is what lets one printed sentence over a **union** of two
+    # sets ride as two buffs that cannot both reach one creature (the second
+    # carries the first's subtype here), so a creature that is both a Saproling
+    # and a Treefolk gets the one +1/+1 the sentence gives it.
+    excluded_subtypes: tuple[str, ...] = ()
     # "**Legendary** creatures you control…" (Legends' five banding lands).
     # A supertype (CR 205.4), not a creature type — read off the type line by
     # ``permanent_matches_filter``'s ``supertypes`` key, which is the same
@@ -918,6 +927,11 @@ def lord_buff_payload(buff: LordBuff) -> dict[str, object]:
         payload["colors"] = list(buff.filter.colors)
     if buff.filter.subtypes:
         payload["subtypes"] = list(buff.filter.subtypes)
+    # Emitted only when set, so every payload written before the field existed
+    # stays byte-identical; spelled as the filter payload's own key for the
+    # same exclusion (``exclude_subtypes``).
+    if buff.filter.excluded_subtypes:
+        payload["exclude_subtypes"] = list(buff.filter.excluded_subtypes)
     if buff.filter.supertypes:
         payload["supertypes"] = list(buff.filter.supertypes)
     if buff.filter.controller:
@@ -983,6 +997,7 @@ def lord_buff_from_payload(payload: dict) -> LordBuff:
         filter=LordBuffFilter(
             colors=tuple(payload.get("colors") or ()),
             subtypes=tuple(payload.get("subtypes") or ()),
+            excluded_subtypes=tuple(payload.get("exclude_subtypes") or ()),
             supertypes=tuple(payload.get("supertypes") or ()),
             controller=payload.get("controller"),
             other_than_source=bool(payload.get("other")),

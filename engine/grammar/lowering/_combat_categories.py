@@ -163,4 +163,10 @@ COMBAT_INSTRUCTION_CATEGORIES: dict[str, str] = {
     "force_subject_to_attack_until_eot": "combat_restrictions",
     "force_target_to_block_until_eot": "combat_restrictions",
     "force_subject_to_block_until_eot": "combat_restrictions",
+    # "This creature can attack as though it didn't have defender." with no
+    # duration (the ability a kicked Prison Barricade is granted). The static
+    # twin of `attack_as_though_no_defender_until_eot`, which is a `pump` row
+    # only because it left with the pump sentence it is printed inside; this
+    # one is a property the declare-attackers step reads off the program.
+    "attacks_as_though_no_defender": "combat_restrictions",
 }

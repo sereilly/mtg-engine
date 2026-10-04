@@ -528,6 +528,81 @@ def enters_with_pt_counters(line: str, card_name: str | None = None) -> tuple[in
     return count, match.group("counter")
 
 
+#: "**If this creature was kicked, it enters with** two +1/+1 counters on it
+#: **and with flying**." (Faerie Squadron, and eleven more Invasion creatures.)
+#: CR 614.1c's entry replacement under CR 702.33d's condition: the sentence
+#: after the comma is :data:`ENTERS_WITH_PT_COUNTERS`' own -- "it" for "this
+#: creature" -- so the count and the kind are read by *that* reader rather than
+#: spelled again here, and a kicked creature entering with counters is the same
+#: placement as an unkicked Triskelion entering with them.
+#:
+#: The optional tail is what the permanent additionally **has** once it is on
+#: the battlefield, for as long as it stays there (CR 611.2a: an effect with no
+#: stated duration lasts while the object does): one keyword ("and with first
+#: strike" / flying / fear / haste / trample), or one quoted ability ("and with
+#: \"This creature can attack as though it didn't have defender.\"", Prison
+#: Barricade). Both are layer-6 grants through ``engine/keywords.py``'s two
+#: channels with no duration, which is what "no sweep takes this away" has
+#: always meant there.
+KICKED_ENTRY = re.compile(
+    r"^if this [a-z]+ was kicked, it (?P<entry>enters with .+? on it)"
+    r"(?: and with (?P<grant>.+))?$"
+)
+
+_QUOTED = re.compile(r'"([^"]+)"')
+
+
+def kicked_entry(line: str, card_name: str | None = None) -> "dict | None":
+    """What a **kicked** permanent enters with, or None when *line* is not that
+    sentence or says something this cannot carry out.
+
+    ``{"counters": (count, kind), "keywords": (...), "ability_lines": (...)}``.
+    Read by the entry state and by the support gate, like every reader in this
+    file, so what is placed and what is claimed cannot drift.
+
+    Every part must be read or the whole line refuses. A keyword the engine has
+    no behaviour for, or a quoted ability the compiler cannot read on a card
+    that says nothing else, would be a creature that paid its kicker and
+    entered with the counters alone -- the dropped-rider failure, on the half
+    of the card the kicker was paid *for*.
+    """
+    match = KICKED_ENTRY.match(_self_normalized(line, card_name))
+    if match is None:
+        return None
+    placement = enters_with_pt_counters(f"this creature {match.group('entry')}")
+    if placement is None:
+        return None
+    grant = match.group("grant")
+    keywords: tuple[str, ...] = ()
+    ability_lines: tuple[str, ...] = ()
+    if grant is not None:
+        if grant.startswith('"'):
+            if not grant.endswith('"') or grant.count('"') != 2:
+                return None
+            # The ability as *printed*, case and all: it is granted as a line
+            # of text the compiler then reads like any other, and a prompt or a
+            # card view shows it to a player.
+            quoted = _QUOTED.search(line)
+            if quoted is None:
+                return None
+            from .granted_abilities import granted_ability_supported
+
+            if not granted_ability_supported(quoted.group(1)):
+                return None
+            ability_lines = (quoted.group(1),)
+        else:
+            from .grammar.vocabulary import IMPLEMENTED_KEYWORDS
+
+            if grant not in IMPLEMENTED_KEYWORDS:
+                return None
+            keywords = (grant,)
+    return {
+        "counters": placement,
+        "keywords": keywords,
+        "ability_lines": ability_lines,
+    }
+
+
 #: "This Equipment enters with a soul counter on it." (Malefic Scythe) /
 #: "Rasputin enters with **seven dream** counters on it." (Rasputin
 #: Dreamweaver.) A **named** counter (CR 122.1) rather than a P/T one, so it is
@@ -1462,6 +1537,11 @@ def enter_effect_line(line: str, card_name: str | None = None) -> str | None:
         return "enters with named counters"
     if enters_with_pt_counters(normalized) is not None:
         return "enters with P/T counters"
+    # "If this creature was kicked, it enters with …" (CR 702.33d under
+    # CR 614.1c). The **raw** line, for the quoted ability's sake: the reader
+    # grants it as printed and does its own collapsing.
+    if kicked_entry(line, card_name) is not None:
+        return "enters with P/T counters if kicked"
     if enters_with_x_pt_counters(normalized) is not None:
         return "enters with X P/T counters"
     if enters_with_x_named_counters(normalized) is not None:
@@ -1560,6 +1640,8 @@ __all__ = [
     "ENTERS_WITH_PT_COUNTERS",
     "ENTERS_WITH_SEVEN_PLUS_1_0_COUNTERS",
     "enters_with_pt_counters",
+    "KICKED_ENTRY",
+    "kicked_entry",
     "enters_with_named_counter",
     "ENTERS_WITH_X_PT_COUNTERS",
     "enters_with_x_pt_counters",

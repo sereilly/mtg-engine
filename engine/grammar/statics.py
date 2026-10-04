@@ -53,6 +53,10 @@ def _lord_filter(filt: ast.ObjectFilter) -> LordBuffFilter:
     return LordBuffFilter(
         colors=filt.colors,
         subtypes=filt.subtypes,
+        # "**Non-Wall** creatures…" and the second half of a union (Verdeloth
+        # the Ancient). Carried for the reason every field below is: the round
+        # trip decides whether the table can express the sentence.
+        excluded_subtypes=filt.excluded_subtypes,
         controller=filt.controller,
         other_than_source=filt.other_than_source,
         qualifiers=qualifiers,
@@ -103,6 +107,7 @@ def _object_filter_of(lord: LordBuffFilter) -> ast.ObjectFilter:
         "excluded_types": lord.excluded_types,
         "colors": lord.colors,
         "subtypes": lord.subtypes,
+        "excluded_subtypes": lord.excluded_subtypes,
         "controller": lord.controller,
         "other_than_source": lord.other_than_source,
         "with_plus1_counter": lord.with_plus1_counter,
@@ -817,5 +822,76 @@ def _lower_static_ability(node: ast.StaticAbilityNode) -> tuple[OracleInstructio
         # creature you control" counts.
         if computed and (_is_source(pump.subject) or _is_enchanted(pump.subject)):
             return _lower_pump(pump)
+    union = _lower_lord_union(node, effects)
+    if union is not None:
+        return union
     buff = _lower_lord_effects(node, effects)
     return (OracleInstruction(LORD_BUFF_KIND, "", lord_buff_payload(buff)),)
+
+
+def _lower_lord_union(
+    node: ast.StaticAbilityNode, effects: tuple[ast.Statement, ...]
+) -> "tuple[OracleInstruction, ...] | None":
+    """"**Saproling creatures and other Treefolk creatures** get +1/+1."
+    (Verdeloth the Ancient.) One static ability over the *union* of two
+    described sets -- or None when the effects name a single subject, which is
+    every anthem but this shape.
+
+    ``LordBuff`` describes one set, so the union rides as one buff per subject.
+    What makes that the printed sentence rather than two anthems is that the
+    sets are made **disjoint** first: each later subject is narrowed by
+    excluding every earlier one, so a creature in both (a Saproling Treefolk)
+    is reached once and gets +1/+1, not +2/+2 -- CR 611.3a applies one ability
+    to each object matching its description, once.
+
+    Excluding a set needs that set to be *one creature type and nothing else*:
+    "not a Saproling" is a filter field, "not (an attacking Goblin you
+    control)" is not. Any earlier subject carrying another narrowing therefore
+    refuses the line rather than being excluded approximately. The last subject
+    may carry whatever a single anthem may ("other", a seat, a colour), since
+    nothing has to exclude it.
+    """
+    groups: list[tuple[object, list[ast.Statement]]] = []
+    for effect in effects:
+        subject = getattr(effect, "subject", None)
+        for known, members in groups:
+            if known == subject:
+                members.append(effect)
+                break
+        else:
+            groups.append((subject, [effect]))
+    if len(groups) < 2:
+        return None
+    instructions: list[OracleInstruction] = []
+    excluded: tuple[str, ...] = ()
+    for position, (subject, members) in enumerate(groups):
+        if not isinstance(subject, ast.TargetSpec):
+            raise LoweringError(
+                "a static ability over two different subjects", node=node
+            )
+        narrowed = dataclasses.replace(
+            subject,
+            filter=dataclasses.replace(
+                subject.filter,
+                excluded_subtypes=subject.filter.excluded_subtypes + excluded,
+            ),
+        )
+        buff = _lower_lord_effects(
+            node,
+            tuple(dataclasses.replace(member, subject=narrowed) for member in members),
+        )
+        if position < len(groups) - 1:
+            if buff.filter != LordBuffFilter(subtypes=buff.filter.subtypes) or (
+                len(buff.filter.subtypes) != 1
+            ):
+                raise LoweringError(
+                    "a static ability over two subjects needs each earlier one "
+                    "to be a single creature type, so the later ones can "
+                    "exclude it",
+                    node=node,
+                )
+            excluded += buff.filter.subtypes
+        instructions.append(
+            OracleInstruction(LORD_BUFF_KIND, "", lord_buff_payload(buff))
+        )
+    return tuple(instructions)

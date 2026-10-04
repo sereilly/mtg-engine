@@ -25,7 +25,7 @@ from ...auras import aura_enchant_clause
 from ...alternative_costs import (AlternativeCost, alternative_costs,
                                   board_noun)
 from ...cast_costs import (AdditionalCost, OptionalManaCost, additional_costs,
-                           buyback_cost)
+                           buyback_cost, cast_announces_x, optional_x_offers)
 from ...auras import controller_cast_ban
 # `own_cast_ban` beside `auras.controller_cast_ban` above, and named apart from
 # it deliberately: both answer "which permanent forbids this seat this spell",
@@ -1414,8 +1414,21 @@ class SpellCastingMixin:
         buyback_off, buyback_by = (
             buyback_cost_reduction(self) if buyback_key is not None else (0, [])
         )
+        # "Kicker {X}" (Verdeloth the Ancient), "Kicker {X}{2}" (Kangee). An X
+        # that lives in an *offer* (CR 107.3a's "additional cost with an {X} in
+        # it"), so CR 601.2b's two announcements depend on each other: a caster
+        # who took the offer names a number and pays for it just below, and one
+        # who declined names none. The number is settled here, before anything
+        # reads it, so a stray X sent with a declined kicker cannot reach the
+        # permanent ("create X Saprolings") by another road -- and an X nobody
+        # announced for a kicker that *was* taken is the 0 it reads as.
+        if optional_x_offers(card, from_zone=from_zone):
+            if cast_announces_x(card, from_zone=from_zone, taken=optional_paid):
+                x_value = max(0, int(x_value or 0))
+            else:
+                x_value = None
         for offer, times in _optional_cost_totals(cast_costs, optional_paid):
-            charged = offer.cost
+            charged = offer.cost_at(x_value)
             if buyback_off and offer.symbols == buyback_key:
                 # Through ``reduce_cost``, the one place CR 118.7's arithmetic
                 # lives: a generic reduction touches only the generic component

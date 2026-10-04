@@ -12,6 +12,7 @@ pass. Also holds the attack-legality query (``can_attack``),
 from ..attack_tapping import attacking_causes_tap
 from ..auras import attached_combat_restrictions, aura_restriction_active
 from ..combat_permissions import (ATTACK_AS_THOUGH_NO_DEFENDER,
+                                  ATTACKS_AS_THOUGH_NO_DEFENDER,
                                   CANT_ATTACK_UNTIL_EOT)
 from ..combat_restrictions import (declaration_company_required,
                                    declaration_greater_power_required,
@@ -1238,6 +1239,17 @@ class DeclareAttackersStepMixin:
         # this turn (Wall of Wonder). A flag rather than a keyword removal for
         # the reason above, and swept by the cleanup step.
         if attacker.metadata.get(ATTACK_AS_THOUGH_NO_DEFENDER):
+            return True
+        # …and the creature's own **unconditional** static: "This creature can
+        # attack as though it didn't have defender." (the ability a kicked
+        # Prison Barricade enters with). Read off ``effective_card`` so a line
+        # the permanent was *granted* counts exactly as a printed one would,
+        # and asked before the seat check below because it depends on nobody's
+        # board.
+        if any(
+            i.kind == ATTACKS_AS_THOUGH_NO_DEFENDER
+            for i in compile_card_oracle(attacker.effective_card).instructions
+        ):
             return True
         seat = self.controller_index_of(attacker)
         if seat is None:

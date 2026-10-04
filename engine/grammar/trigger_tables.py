@@ -222,6 +222,11 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("phases_in", ("this", "permanent", "phases", "in")),
     ("land_tapped_for_mana", ("a", "player", "taps", "a", "land", "for", "mana")),
     ("spell_cast", ("a", "player", "casts", "a", "spell")),
+    # "Whenever a player **kicks** a spell" (Saproling Infestation). The cast
+    # event under CR 702.33d's narrowing; `engine/oracle.py`'s pattern table
+    # carries the marker the dispatcher reads, exactly as it carries every
+    # other cast narrowing this table's bare phrases cannot.
+    ("spell_cast", ("a", "player", "kicks", "a", "spell")),
     # Longest first: the bare phrase below is a strict prefix of this one, so
     # matching it first would leave "from anywhere other than their hand"
     # unaccounted and fail the line.

@@ -5,6 +5,7 @@ whose power limit the handler hardcodes — recorded here as a value so the
 lowering can check it rather than assume it.
 """
 
+from ...combat_permissions import ATTACKS_AS_THOUGH_NO_DEFENDER
 from ...oracle_types import CHOSEN_THIS_WAY_OBJECTS, OracleInstruction
 from ...subject_filters import untestable_filter_keys
 from ...turn_state import THAT_PLAYERS_NEXT_TURN
@@ -720,6 +721,21 @@ def _lower_attack_as_though(node: ast.AttackAsThough) -> tuple[OracleInstruction
         raise LoweringError(
             f"no attack permission ignores {node.ignored_keyword!r}", node=node
         )
+    if not node.duration.kind and _is_source(node.subject):
+        # "This creature can attack as though it didn't have defender." with no
+        # duration at all -- the sentence Prison Barricade is *granted* in
+        # quotes when it was kicked. A static ability of the creature itself
+        # (CR 604.1), so it is not stamped and swept like the one-turn form
+        # below: the instruction simply sits on the permanent's program for as
+        # long as the line is part of what the permanent says, and
+        # ``declare_attackers_step._ignores_defender`` reads it there -- off
+        # ``effective_card``, which is what folds a granted line in.
+        #
+        # Lowered here rather than added to ``engine/combat_restrictions.py``
+        # for ``prohibitions._lower_cant_be``'s reason: the line *parses*, and
+        # parsed-but-unlowered takes the sentence away from a derivation table
+        # without giving it to anybody.
+        return (OracleInstruction(ATTACKS_AS_THOUGH_NO_DEFENDER, "", {}),)
     if node.duration.kind not in _REST_OF_TURN:
         raise LoweringError(
             "a durationless attack permission is a static ability, which the "
