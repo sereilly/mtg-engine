@@ -307,7 +307,20 @@ _PATTERNS: tuple[tuple[re.Pattern[str], "str | tuple[str, ...]"], ...] = (
         # the anchors already keep them apart (that sentence does not end in
         # "can't attack you"), and the order is what keeps that from being a
         # coincidence.
-        re.compile(r"^(?P<attack_you_subject>[a-z' -]*creatures) can't attack you$"),
+        #
+        # "Creatures **of the chosen color without flying** can't attack you."
+        # (Teferi's Moat.) The same row with the narrowing printed *behind* the
+        # noun: English puts a colour word in front and "of the chosen color" /
+        # "without flying" after, and the noun reader below reads either. So the
+        # subject runs to the verb rather than stopping at "creatures" — a
+        # phrase the reader cannot read whole, or cannot test, still refuses the
+        # line. The chosen colour is answered against the permanent that prints
+        # the sentence (CR 614.1c's record, `subject_matches`' ``source``) and
+        # the keyword through layer 6.
+        re.compile(
+            r"^(?P<attack_you_subject>[a-z' -]*creatures(?: [a-z' -]+?)?) "
+            r"can't attack you$"
+        ),
         "creatures_cant_attack_you",
     ),
     (

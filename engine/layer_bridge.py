@@ -36,7 +36,9 @@ from .auras import (
 )
 from .named_counters import counters_on
 from .control import control_changes, has_control_change
-from .global_statics import global_static_sources, global_statics_applying_to
+from .enter_effects import own_chosen_color
+from .global_statics import (global_static_sources, global_statics_applying_to,
+                             removes_all_abilities)
 from .continuous import (
     Characteristics,
     ContinuousEffect,
@@ -1027,6 +1029,19 @@ def collect_color_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
     recorded", which is also what a copy of a colourless artifact looked like.
     """
     effects = []
+    # "This creature is the chosen color." (Alloy Golem.) The permanent's own
+    # static, and so the *earliest* stamp here: CR 613.7a gives a static
+    # ability the timestamp of the object it is on, which is the moment it
+    # entered, and every other channel below is an effect that began after
+    # that — a lace or a Sway of Illusion aimed at the Golem wins, as the later
+    # effect does (CR 613.7). Not contributed once its abilities are gone
+    # (CR 613.1f is layer 6, but a removal that has already happened is the
+    # same predicate layer 6 itself asks).
+    own = own_chosen_color(perm)
+    if own is not None and not removes_all_abilities(perm):
+        effects.append(
+            set_colors(scope_only(oid), [own], timestamp=-1, label="chosen colour")
+        )
     # Two channels, in timestamp order (CR 613.7b), for the reason layer 7b
     # keeps two: an indefinite lace ("Target permanent becomes red", CR 105)
     # and a turn-long one ("One or more target creatures become red until end
