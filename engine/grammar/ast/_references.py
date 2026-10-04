@@ -778,6 +778,25 @@ class ObjectFilter:
     #: ``_ZONE_NOUNS`` on exactly this argument — "a production that needs it
     #: should say so explicitly"; this is that explicit reading.
     on_the_battlefield: bool = False
+    #: "…for each **basic land type among** lands you control" (domain,
+    #: CR 207.2c's ability word: Wayfaring Giant, Tribal Flames). What is
+    #: counted is not the objects this phrase describes but the *distinct
+    #: values of one characteristic among them* — two Forests are one type and
+    #: one Tropical Island is two (CR 305.6), so no narrowing of the set and no
+    #: arithmetic on its size says it.
+    #:
+    #: It rides the filter for ``on_the_battlefield``'s reason: it is a fact
+    #: about how a **count** reads the set, and every sentence that spends a
+    #: count already carries a filter to ``lowering/_amounts.count_spec`` — so
+    #: one field reaches the pump, the life gain, the token count, the damage
+    #: and the where-clause without each node learning a second quantity. Never
+    #: emitted by ``to_payload`` and listed in
+    #: ``lowering/_filters.CONDITIONALLY_EMITTED_FIELDS``, so every lowering but
+    #: the count refuses the phrase by name: read as a plain filter it would
+    #: count the lands. Produced only by ``nouns.parse_counted_objects`` — the
+    #: reader a count position calls — and never by the noun parser a target or
+    #: a sweep calls. The value is the count spec's aggregate name.
+    distinct: str | None = None
     #: "…creatures with power **equal to or greater than the enchanted
     #: creature's toughness**" (Ironclaw Curse). A bound that is not a number
     #: but a live characteristic of the ability's own source — see

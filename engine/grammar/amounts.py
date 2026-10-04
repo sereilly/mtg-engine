@@ -424,10 +424,10 @@ def _parse_counted_amount(
             return counters
         # Late import for the reason `parse_equal_to` gives: nouns depends on
         # this module for comparisons, so the cycle is broken at call time.
-        from .nouns import parse_object_filter
+        from .nouns import parse_counted_objects
         from .where_x import accept_this_way_count
 
-        filt = parse_object_filter(stream)
+        filt = parse_counted_objects(stream)
         # "…this way" turns the count into a back-reference — see
         # `parse_equal_to`, which reads the identical trailer through the
         # identical shared reader.
@@ -597,10 +597,10 @@ def _parse_equal_to_body(stream: TokenStream) -> ast.Amount | None:
             return counters
         # Late import: nouns depends on this module for comparisons, so the
         # cycle is broken at call time rather than import time.
-        from .nouns import parse_object_filter
+        from .nouns import parse_counted_objects
         from .where_x import accept_this_way_count
 
-        filt = parse_object_filter(stream)
+        filt = parse_counted_objects(stream)
         # "equal to the number of Mountains **put into a graveyard this way**"
         # (Volcanic Eruption). The trailing participle makes the count a
         # back-reference to an earlier step of this same effect, and it is read

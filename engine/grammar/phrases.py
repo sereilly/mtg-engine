@@ -45,7 +45,7 @@ from .amounts import (accept_counter_kind, accept_counters_on_event_subject,
 from .durations import _parse_duration
 from .errors import GrammarError
 from .lexer import GToken, tokenize
-from .nouns import parse_object_filter
+from .nouns import parse_counted_objects, parse_object_filter
 # Re-exported under the name this module's callers already use — the
 # arrangement `readers` documents for the fragments it holds.
 from .readers import _identifies_one_object  # noqa: F401
@@ -156,7 +156,10 @@ def _parse_per_each_objects(
         stream.reset(mark)
         return None, False
     try:
-        filt = parse_object_filter(stream)
+        # ``parse_counted_objects`` rather than the bare noun parser: this is a
+        # count position, so "for each **basic land type among** lands you
+        # control" (domain) is one of the things it may say.
+        filt = parse_counted_objects(stream)
     except GrammarError:
         stream.reset(mark)
         return None, False

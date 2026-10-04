@@ -28,7 +28,7 @@ from .records import (accept_added_base, accept_damage_dealt_this_turn,
 
 from .errors import GrammarError
 from .lexer import NUMBER, PUNCT
-from .nouns import parse_object_filter
+from .nouns import parse_counted_objects, parse_object_filter
 from .readers import accept_source_reference
 from .stream import TokenStream
 from .vocabulary import NUMBER_WORDS
@@ -493,7 +493,9 @@ def parse_where_x_definition_body(stream: TokenStream) -> "ast.Amount":
     counters = accept_counters_on_source(stream)
     if counters is not None:
         return counters
-    filt = parse_object_filter(stream)
+    # A count position, so the domain spelling ("the number of **basic land
+    # types among** lands you control", Tribal Flames) is read here too.
+    filt = parse_counted_objects(stream)
     this_way = accept_this_way_count(stream, filt)
     if this_way is not None:
         return this_way

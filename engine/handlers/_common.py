@@ -1097,6 +1097,18 @@ def evaluate_count(
             for perm in matched:
                 seen.update(permanent_effective_colors(perm))
             return _scaled(len(seen), spec)
+        if aggregate == "distinct_basic_land_types":
+            # "…for each basic land type among lands you control" (domain:
+            # Wayfaring Giant, Tribal Flames). The *types*, not the lands: two
+            # Forests are one and a Tropical Island is two, so the answer is
+            # between zero and CR 305.6's five. Through the layer-4 accessor,
+            # because a land's basic land types are computed — a Phantasmal
+            # Terrain or a Blood Moon changes what is counted, and the printed
+            # type line would not know.
+            types: set[str] = set()
+            for perm in matched:
+                types.update(perm.basic_land_types)
+            return _scaled(len(types), spec)
         return _scaled(len(matched), spec)
     # "the number of creature cards in **all graveyards**" (Lhurgoyf). Every
     # player's copy of the zone rather than one player's, which is a property of

@@ -23,7 +23,7 @@ from ..records import (_parse_for_each_this_way,
 
 from ..errors import GrammarError
 from ..lexer import PT, PUNCT, QUOTE, SELF, tokenize
-from ..nouns import parse_object_filter
+from ..nouns import parse_counted_objects, parse_object_filter
 from ..references import parse_recipient, parse_target_spec
 from ..stream import TokenStream
 
@@ -337,7 +337,7 @@ def _parse_gains(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
                             per_each = accept_counters_removed_for_cost(stream)
                         if per_each is None:
                             try:
-                                per_each = parse_object_filter(stream)
+                                per_each = parse_counted_objects(stream)
                             except GrammarError:
                                 stream.reset(for_each_mark)
                 if per_each is None:
@@ -685,7 +685,7 @@ def _parse_loses(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
                 for_each_mark = stream.mark()
                 if stream.accept_phrase("for", "each"):
                     try:
-                        per_each = parse_object_filter(stream)
+                        per_each = parse_counted_objects(stream)
                     except GrammarError:
                         stream.reset(for_each_mark)
             return ast.LoseLife(player, amount, per_each=per_each)

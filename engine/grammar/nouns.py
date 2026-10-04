@@ -18,6 +18,8 @@ unsupported card.
 
 from __future__ import annotations
 
+import dataclasses
+
 from . import ast
 from .amounts import parse_pt_pair
 from .lexer import PT
@@ -842,7 +844,53 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
     return _build_object_filter(d)
 
 
+#: The characteristics a count may be taken over **instead of** the objects
+#: that carry them, as the printed words that open the phrase and the count
+#: spec's aggregate name each one means.
+#:
+#: "…for each **basic land type among** lands you control" is domain
+#: (CR 207.2c), and it is one row because the next ("for each **color among**
+#: permanents you control", which ``effects/cards`` still reads on its own for
+#: the one draw that prints it) is data rather than a second production. Both
+#: inflections are listed: "for each" takes the singular and "the number of"
+#: the plural, and a row that knew one would make the same count readable in
+#: half its sentences.
+_DISTINCT_AMONG: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("basic", "land", "type", "among"), "distinct_basic_land_types"),
+    (("basic", "land", "types", "among"), "distinct_basic_land_types"),
+)
+
+
+def parse_counted_objects(stream: TokenStream) -> ast.ObjectFilter:
+    """The set a **count** is taken over — ``parse_object_filter``, plus the
+    one spelling only a count can mean: ``basic land type[s] among <objects>``.
+
+    "This creature gets +1/+1 for each **basic land type among lands you
+    control**." (Wayfaring Giant.) The plain noun parser reads "basic land" as
+    a noun phrase and stops at "type", which is where every domain card in
+    Invasion failed. What follows "among" is an ordinary noun phrase and is
+    read by the ordinary reader; what the phrase in front of it changes is
+    *what is counted*, which travels as ``ObjectFilter.distinct`` (see that
+    field) for ``lowering/_amounts.count_spec`` to lift onto the spec.
+
+    A separate entry point rather than a branch inside ``parse_object_filter``:
+    that function is also what a target, a sweep and a trigger subject call,
+    and "destroy target basic land type among …" is not a sentence. A caller
+    opts in by calling this one, which is the claim that its lowering hands the
+    filter to ``count_spec``.
+
+    Refuses exactly as ``parse_object_filter`` does, with the cursor wherever
+    the refusal left it — every caller already rewinds its own mark.
+    """
+    for phrase, aggregate in _DISTINCT_AMONG:
+        if stream.accept_phrase(*phrase):
+            return dataclasses.replace(
+                parse_object_filter(stream), distinct=aggregate
+            )
+    return parse_object_filter(stream)
+
+
 __all__ = [
     "accept_source_reference", "parse_card_name", "parse_comparison",
-    "parse_object_filter",
+    "parse_counted_objects", "parse_object_filter",
 ]
