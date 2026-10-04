@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from fastapi import HTTPException
 
+from engine.faces import spell_named
 from engine.models import Permanent, PlayerState
 
 
@@ -211,7 +212,20 @@ def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
     )
 
 def _find_card_in_hand(player: PlayerState, card_name: str):
-    return next((card for card in player.hand if card.name == card_name), None)
+    """The spell *card_name* names out of *player*'s hand, or None.
+
+    ``spell_named`` rather than a name comparison: a split card is cast by the
+    name of one of its halves (CR 709.3, CR 709.4a), and what comes back is
+    that half — the card the timing gates below the caller must judge
+    (CR 709.3a), not the two-spell card it is printed on.
+    """
+    return next(
+        (
+            spell for spell in (spell_named(card, card_name) for card in player.hand)
+            if spell is not None
+        ),
+        None,
+    )
 
 def _find_controlled_permanent(
     player: PlayerState,

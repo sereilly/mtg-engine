@@ -7646,6 +7646,13 @@ def simple_card_keywords(card: CardDefinition) -> tuple[str, ...] | None:
     what an entry-state line (``enter_effects.py``) or a replacement-only
     permanent compiles to, and neither of those is simple.
     """
+    # A multi-face card is never simple, whatever its halves print. Its own
+    # text box is empty and its own program has no abilities, so every test
+    # below would pass it as "no abilities at all" — and the verification
+    # tracker would auto-pass a card whose whole behaviour is a choice between
+    # two spells (CR 709.3) that no generic path exercises.
+    if is_multi_face(card):
+        return None
     program = compile_card_oracle(card)
     if (
         not program.supported

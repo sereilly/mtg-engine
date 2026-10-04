@@ -78,22 +78,27 @@ def build_parser() -> argparse.ArgumentParser:
 def hollow_lines_report(cards) -> list[tuple[str, str, str]]:
     """``(card, part kind, source line)`` for every supported card whose
     compiled program carries an ability with no instruction behind it."""
-    from engine.oracle import compile_card_oracle
+    from engine.oracle import compile_card_oracle, compiled_faces
 
     findings: list[tuple[str, str, str]] = []
     for card in cards:
-        program = compile_card_oracle(card)
-        if not program.supported:
+        if not compile_card_oracle(card).supported:
             continue
-        for ability in program.activated_abilities:
-            if not ability.supported or ability.instruction is None:
-                findings.append((card.name, "activated", ability.source_line))
-        for trigger in program.triggered_abilities:
-            if not trigger.supported or trigger.instruction is None:
-                findings.append((card.name, "triggered", trigger.source_line))
-        for mode in program.modes:
-            if mode.instruction is None:
-                findings.append((card.name, "mode", mode.label))
+        # ``compiled_faces``: a split card's abilities are on its halves' programs
+        # (CR 709.4c) and the whole card's own program has none, so reading it
+        # would report "no hollow line" over a card nobody looked at. A
+        # single-face card is its own one-entry list. Reported under the card a
+        # player holds.
+        for _face, program in compiled_faces(card):
+            for ability in program.activated_abilities:
+                if not ability.supported or ability.instruction is None:
+                    findings.append((card.name, "activated", ability.source_line))
+            for trigger in program.triggered_abilities:
+                if not trigger.supported or trigger.instruction is None:
+                    findings.append((card.name, "triggered", trigger.source_line))
+            for mode in program.modes:
+                if mode.instruction is None:
+                    findings.append((card.name, "mode", mode.label))
     return findings
 
 
@@ -110,7 +115,8 @@ def refusals_report(cards) -> list[tuple[str, str, str, list[tuple[str, str, str
     a different card (an equip line, most visibly).
     """
     from engine.grammar import compile_line
-    from engine.oracle import compile_card_oracle, expand_ability_lines
+    from engine.oracle import (compile_card_oracle, compiled_faces,
+                               expand_ability_lines)
 
     findings: list[tuple[str, str, str, list[tuple[str, str, str]]]] = []
     for card in cards:
@@ -118,22 +124,30 @@ def refusals_report(cards) -> list[tuple[str, str, str, list[tuple[str, str, str
         if program.supported:
             continue
         lines: list[tuple[str, str, str]] = []
-        expanded = expand_ability_lines(
-            card.oracle_text or "", card_name=card.name, legendary=card.is_legendary
-        )
-        for raw in expanded.splitlines():
-            line = raw.strip()
-            if not line:
+        # The lines of every face that failed (``compiled_faces``): a split
+        # card's text is on its halves, each read under its own name — the
+        # half's name is its self-reference — and a half that compiles is not
+        # part of why the card is refused. A single-face card is its own
+        # one-entry list, so this is the loop it always was.
+        for face, face_program in compiled_faces(card):
+            if face_program.supported:
                 continue
-            result = compile_line(line, card_name=card.name)
-            if result.blank:
-                continue
-            if result.parse_error:
-                lines.append(("refused", line, result.parse_error))
-            elif result.lowering_error:
-                lines.append(("unlowered", line, result.lowering_error))
-            else:
-                lines.append(("clean", line, ""))
+            expanded = expand_ability_lines(
+                face.oracle_text or "", card_name=face.name, legendary=face.is_legendary
+            )
+            for raw in expanded.splitlines():
+                line = raw.strip()
+                if not line:
+                    continue
+                result = compile_line(line, card_name=face.name)
+                if result.blank:
+                    continue
+                if result.parse_error:
+                    lines.append(("refused", line, result.parse_error))
+                elif result.lowering_error:
+                    lines.append(("unlowered", line, result.lowering_error))
+                else:
+                    lines.append(("clean", line, ""))
         findings.append((card.name, card.primary_type, program.reason, lines))
     return findings
 

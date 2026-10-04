@@ -76,6 +76,7 @@ from engine.card_loader import (
     manifest_set_paths,
 )
 from engine.grammar import compile_line
+from engine.faces import castable_faces
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 OUTPUT_PATH = REPO_ROOT / "HOOK_RELIANCE.md"
@@ -233,26 +234,33 @@ def _count_card(card, hooked_names: set[str], stats: Stats) -> None:
         # falling reliance. See Stats' docstring.
         return
     stats.supported_cards += 1
-    if card.name in hooked_names:
+    # ``castable_faces``: the card itself, or each half of a split card. A
+    # split card's lines are on its halves (CR 709.4c) and each half compiles
+    # under its own name, so that is the name a hook for it would be keyed by —
+    # read as handed in, the card has no line and could carry a hook on either
+    # half without this instrument counting the card or the line.
+    spells = castable_faces(card)
+    if card.name in hooked_names or any(face.name in hooked_names for face in spells):
         stats.hooked_cards += 1
-    keys = _hooked_line_keys(card.name)
-    for line in _printed_lines(card):
-        result = compile_line(line, card_name=card.name)
-        if result.blank:
-            # Reminder-text-only: no rules text to claim, and excluded from
-            # GRAMMAR_COVERAGE.md's denominator too, so the two stay comparable.
-            continue
-        stats.lines += 1
-        if oracle.normalize_creature_line(line) not in keys:
-            continue
-        if result.usable:
-            # The grammar reads this line, so the compiler never reaches the
-            # hook — the entry is dead weight, not reliance. Counting it would
-            # overstate the number the ratchet guards. `test_card_lines.py`
-            # fails on such an entry separately; this is measured rather than
-            # assumed so the report stays true while that guard is red.
-            continue
-        stats.hooked_lines += 1
+    for face in spells:
+        keys = _hooked_line_keys(face.name)
+        for line in _printed_lines(face):
+            result = compile_line(line, card_name=face.name)
+            if result.blank:
+                # Reminder-text-only: no rules text to claim, and excluded from
+                # GRAMMAR_COVERAGE.md's denominator too, so the two stay comparable.
+                continue
+            stats.lines += 1
+            if oracle.normalize_creature_line(line) not in keys:
+                continue
+            if result.usable:
+                # The grammar reads this line, so the compiler never reaches the
+                # hook — the entry is dead weight, not reliance. Counting it would
+                # overstate the number the ratchet guards. `test_card_lines.py`
+                # fails on such an entry separately; this is measured rather than
+                # assumed so the report stays true while that guard is red.
+                continue
+            stats.hooked_lines += 1
 
 
 def analyze() -> tuple[dict[str, Stats], Stats, list[Registry], set[str]]:
@@ -274,7 +282,13 @@ def analyze() -> tuple[dict[str, Stats], Stats, list[Registry], set[str]]:
     # discovering against the shipped pool alone would file it as a dead key.
     all_paths = manifest_set_paths(include_measured=True)
     pool_names = {
-        card.name for path in all_paths if path.exists() for card in load_cards(str(path))
+        # Every name a card answers to as a spell: its own, and each half's for
+        # a split card (CR 709.4a) — a hook keyed on a half's name is a live
+        # entry, not a dead key.
+        name
+        for path in all_paths if path.exists()
+        for card in load_cards(str(path))
+        for name in {card.name, *(face.name for face in castable_faces(card))}
     }
     registries = discover_registries(pool_names)
     hooked_names: set[str] = set().union(*(r.cards for r in registries)) if registries else set()

@@ -211,6 +211,22 @@ def has_name(card, name: str) -> bool:
     return name == getattr(card, "name", None) or name in card_names(card)
 
 
+def name_aliases(card) -> tuple[str, ...]:
+    """The other spellings a decklist may use for a multi-face *card*; ``()``
+    for a single-face card.
+
+    A list writes a split card "Assault // Battery", and an exporter may write
+    one slash, no spaces, or just the front half's name. All of them mean the
+    one card (CR 709.2), so a name lookup that wants to *find the card* indexes
+    these beside its printed name. Not for casting — that is
+    :func:`spell_named`, where a half's name means the half.
+    """
+    names = [face.name for face in face_cards(card)]
+    if not names:
+        return ()
+    return (*names, " / ".join(names), "/".join(names), "//".join(names))
+
+
 def spell_named(card, name: str):
     """What casting *name* out of *card* puts on the stack, or None.
 
@@ -271,6 +287,7 @@ __all__ = [
     "holds_spell_named",
     "is_face",
     "is_multi_face",
+    "name_aliases",
     "spell_named",
     "whole_card",
 ]

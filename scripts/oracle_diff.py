@@ -62,6 +62,7 @@ for _stream in (sys.stdout, sys.stderr):
         pass
 
 from engine.card_loader import load_cards, manifest_set_paths  # noqa: E402
+from engine.faces import face_cards  # noqa: E402
 from engine.oracle import compile_card_oracle  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -114,7 +115,21 @@ def snapshot_card(card) -> dict[str, str]:
 
 
 def snapshot_pool() -> dict[str, dict[str, str]]:
-    return {card.name: snapshot_card(card) for card in load_pool()}
+    """Every card's program, **and every face's** under ``"Card [Face]"``.
+
+    A split card's own program has no instructions by construction (CR 709.3a:
+    only the chosen half is evaluated, so the halves are what compile —
+    ``engine/faces.py``). Snapshotting the card alone would store an empty
+    program for it, and a change that moved what Assault does would compare
+    equal: the differential would be blind to exactly the cards whose text
+    lives one level down. So each half is its own entry beside the card's.
+    """
+    snapshot: dict[str, dict[str, str]] = {}
+    for card in load_pool():
+        snapshot[card.name] = snapshot_card(card)
+        for face in face_cards(card):
+            snapshot[f"{card.name} [{face.name}]"] = snapshot_card(face)
+    return snapshot
 
 
 def write_snapshot(snapshot: dict, path: Path) -> None:

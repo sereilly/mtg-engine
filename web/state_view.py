@@ -48,6 +48,7 @@ from engine.special_actions import (available_permanent_special_actions,
                                     available_special_actions)
 from engine.cast_timing import casts_at_instant_speed
 from engine.classifier import classify_card
+from engine.faces import face_cards
 from engine.models import PlayerState
 from engine.activation_zones import HAND
 from engine.cycling import expand_cycling_line
@@ -281,6 +282,19 @@ def _card_castable_now(
     game = session.game
     player = game.players[player_index]
 
+    # CR 709.3a: "Only the chosen half is evaluated to see if it can be cast."
+    # A split card is castable when either half is, and every gate below is
+    # asked of the half — its type for timing, its targets, its cost.
+    faces = face_cards(card)
+    if faces:
+        return any(
+            _card_castable_now(
+                session, player_index, face, window,
+                extra_generic=extra_generic, hand_index=hand_index,
+            )
+            for face in faces
+        )
+
     classification = classify_card(card)
     if not classification.supported:
         return False
@@ -398,6 +412,33 @@ def _compute_playable_hand_indices(session: Session, player_index: int) -> list[
         if i not in locked
         and _card_castable_now(session, player_index, card, window, hand_index=i)
     ]
+
+
+def _compute_castable_hand_faces(session: Session, player_index: int) -> dict[int, list[str]]:
+    """For each split card in hand, the names of the halves castable right now
+    (CR 709.3a) — by hand position, the same key the playable list uses.
+
+    The playable list answers "may this card be cast"; a split card is two
+    spells with two answers, and the prompt that offers its halves greys the
+    one this board cannot cast. Empty for a hand with no multi-face card, which
+    is every hand until the first one is dealt.
+    """
+    window = _casting_window(session, player_index)
+    if window is None:
+        return {}
+    locked = locked_hand_indices(session.game, player_index)
+    found: dict[int, list[str]] = {}
+    for index, card in enumerate(session.game.players[player_index].hand):
+        faces = face_cards(card)
+        if not faces:
+            continue
+        found[index] = [
+            face.name
+            for face in faces
+            if index not in locked
+            and _card_castable_now(session, player_index, face, window, hand_index=index)
+        ]
+    return found
 
 
 _ABILITY_REMINDER = re.compile(r"\([^)]*\)")
@@ -796,6 +837,7 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
                 session.game.players[i], viewer_seat, i, session.game,
                 _compute_playable_hand_indices(session, i) if viewer_seat == i else [],
                 _compute_playable_command_indices(session, i) if viewer_seat == i else [],
+                _compute_castable_hand_faces(session, i) if viewer_seat == i else {},
             )
             for i in range(len(session.game.players))
         ],

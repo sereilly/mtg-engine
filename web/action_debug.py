@@ -12,8 +12,25 @@ from .debug_actions import (
     _debug_move_permanent_off_battlefield,
     _debug_target_permanent,
 )
-from .runtime import CARD_BY_NAME
+from engine.faces import whole_card
+
+from .runtime import CARD_BY_NAME, spell_by_name
 from .seats import _first_opponent_seat
+
+
+def _debug_spell_name(card, requested: str) -> str:
+    """The name a debug free cast hands the cast path for *card*.
+
+    The card's own for a single-face card. For a split card it is the **half**
+    the request named (CR 709.3) — the catalog lookup above resolves a half's
+    name to the card it is on, so the card goes into the hand whole and this
+    recovers which spell was meant. A request that named the whole card names
+    no half and gets the cast path's refusal, which lists both.
+    """
+    spell = spell_by_name(requested)
+    if spell is not None and whole_card(spell) is card:
+        return spell.name
+    return card.name
 
 
 @action_handler("debug_add_to_hand", human_only=DEBUG_ONLY)
@@ -69,7 +86,10 @@ def _action_debug_cast_free(session, req, seat_type):
     original_enforce_mana_costs = session.game.enforce_mana_costs
     try:
         session.game.enforce_mana_costs = False
-        result = _queue_spell_from_request(session.game, req.seat, card.name, req, x_value=x_value)
+        result = _queue_spell_from_request(
+            session.game, req.seat, _debug_spell_name(card, req.card_name), req,
+            x_value=x_value,
+        )
     finally:
         session.game.enforce_mana_costs = original_enforce_mana_costs
 
@@ -117,7 +137,10 @@ def _action_debug_cast_free_opponent(session, req, seat_type):
     original_enforce_mana_costs = session.game.enforce_mana_costs
     try:
         session.game.enforce_mana_costs = False
-        result = _queue_spell_from_request(session.game, opponent_seat, card.name, req, x_value=x_value)
+        result = _queue_spell_from_request(
+            session.game, opponent_seat, _debug_spell_name(card, req.card_name), req,
+            x_value=x_value,
+        )
     finally:
         session.game.enforce_mana_costs = original_enforce_mana_costs
 

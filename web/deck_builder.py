@@ -3,6 +3,7 @@ from __future__ import annotations
 import random
 
 from engine.ante import is_ante_card
+from engine.faces import name_aliases
 from engine.models import CardDefinition
 
 
@@ -169,6 +170,12 @@ def build_deck_from_entries(
     """
     cards = _card_map(catalog)
     by_name = {name.casefold(): card for name, card in cards.items()}
+    # A split card by any spelling a list may use for it (`faces.name_aliases`):
+    # "Assault" in a saved deck is the card Assault // Battery, one card
+    # (CR 709.2). Never shadowing a card that is really called that.
+    for card in cards.values():
+        for alias in name_aliases(card):
+            by_name.setdefault(alias.casefold(), card)
 
     deck: list[CardDefinition] = []
     missing: list[str] = []

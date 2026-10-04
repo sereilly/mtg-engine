@@ -352,6 +352,13 @@ class ModeChoice(BaseModel):
 class GameActionRequest(BaseModel):
     seat: int = Field(ge=0)
     action: ActionKind
+    # For a cast, the name of the **spell**: a single-face card's name, or —
+    # for a split card — the name of the half being cast (CR 709.3: the player
+    # chooses which half before it goes on the stack; CR 709.4a: the card has
+    # both names). "Assault", never "Assault // Battery": the whole spelling
+    # names no half and is refused with the two names it could have meant. The
+    # hand payload lists a split card's halves under `faces`, each carrying the
+    # `name` to send here. This is why "which half" needs no field of its own.
     card_name: str | None = None
     permanent_name: str | None = None
     permanent_index: int | None = Field(default=None, ge=0)

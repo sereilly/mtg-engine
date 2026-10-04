@@ -42,6 +42,7 @@ from .cast_restrictions import check_cast_timing
 from .cost_modifiers import (cost_reduction_for_cast, reduce_cost,
                              sacrifice_taxes, spell_cost_tax, spell_symbol_tax)
 from .classifier import classify_card
+from .faces import castable_faces, spell_named
 from .game import Game
 from .handlers._common import permanent_matches_filter
 from .mixins.stack import (aura_enchant_noun, enchant_noun_seat,
@@ -255,9 +256,41 @@ def choose_attack_target(game: Game, player_index: int) -> int:
 COMMAND_ZONE_CAST_BONUS = 4.0
 
 
+def hand_spells(player) -> "list[tuple[int, CardDefinition]]":
+    """Every spell *player*'s hand could be cast as, with the hand position of
+    the card it is on: ``(hand_index, spell)``.
+
+    One entry per single-face card and **one per half of a split card**
+    (CR 709.3 — the player chooses which half, and CR 709.3a evaluates only
+    that half). So every chooser that walks a hand asking "should I cast
+    this?" scores a split card as the two spells it is and proposes the better
+    one, with nothing else to learn: the spell is a ``CardDefinition`` like any
+    other, and its ``name`` is what the executor casts
+    (:func:`spell_being_cast`).
+    """
+    return [
+        (hand_index, spell)
+        for hand_index, card in enumerate(player.hand)
+        for spell in castable_faces(card)
+    ]
+
+
+def spell_being_cast(zone, action: "CastAction") -> CardDefinition:
+    """The spell *action* proposes out of *zone* (a hand, a command zone).
+
+    ``action.hand_index`` finds the card and ``action.card_name`` says which
+    spell it is cast as — the card itself for a single-face card, the chosen
+    half for a split card. Every executor reads this rather than the zone
+    card's own name, which for a split card names no spell and is refused
+    (CR 709.3).
+    """
+    held = zone[action.hand_index]
+    return spell_named(held, action.card_name) or held
+
+
 def choose_cast_action(game: Game, player_index: int) -> CastAction | None:
     best: CastAction | None = None
-    for hand_index, card in enumerate(game.players[player_index].hand):
+    for hand_index, card in hand_spells(game.players[player_index]):
         candidate = _cast_candidate(game, player_index, card, hand_index)
         if candidate is not None and _is_better_cast(candidate, best):
             best = candidate
@@ -1958,7 +1991,7 @@ def choose_combat_instant_cast_action(game: Game, player_index: int) -> CastActi
     player = game.players[player_index]
 
     best: CastAction | None = None
-    for hand_index, card in enumerate(player.hand):
+    for hand_index, card in hand_spells(player):
         if card.primary_type != "instant":
             continue
         if not _can_cast_with_targets(game, player_index, card):
@@ -3466,7 +3499,7 @@ def optional_pay_may_tap_lands(game: Game, player_index: int, entry: dict) -> bo
     return not any(
         card.primary_type != "land"
         and _cast_candidate(game, player_index, card, hand_index) is not None
-        for hand_index, card in enumerate(game.players[player_index].hand)
+        for hand_index, card in hand_spells(game.players[player_index])
     )
 
 

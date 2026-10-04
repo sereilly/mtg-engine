@@ -42,6 +42,7 @@ from .models import CardDefinition, Permanent, PlayerState
 from .alternative_costs import alternative_costs
 from .cast_costs import buyback_cost, cast_announces_x, costs_charged_from
 from .cast_restrictions import timing_fixed_seat
+from .faces import is_multi_face
 from .combat_restrictions import restriction_condition_holds
 from .cost_x_definitions import (caps_cast_x, cast_x_ceiling,
                                  cast_x_value, defines_cast_x)
@@ -820,6 +821,13 @@ class LegalityMixin:
         {1}{G} paid). ``spell_hand_index`` is which copy is being cast, needed
         for the same reason CR 601.2a is: a spell cannot be exiled to pay for
         itself, and a second copy in hand can."""
+        # CR 709.3: a split card is not a spell until a half is chosen, and each
+        # half has its own spec — asked of the half (`faces.face_cards`), which
+        # is the card the cast path and the serializer both hand this method.
+        # The whole card answers "faces" for the reason a modal card answers
+        # "modal" below: there is a choice to make before any target.
+        if is_multi_face(card):
+            return {"kind": "faces", "requires_target": False, "valid_targets": []}
         # Modal "Choose one —" spells choose a mode first; each mode carries its
         # own target spec (filled in by the web layer per mode), so report "modal"
         # and let the UI run its mode-choice flow rather than enumerating here.
