@@ -67,25 +67,17 @@ from .references import (PAIR_ORDINALS,  # noqa: F401
                          parse_target_spec)
 from .stream import TokenStream
 from .zones import accept_zone_possessive
-from .vocabulary import KEYWORD_INDEX, NUMBER_WORDS, match_longest
+from .vocabulary import (BASIC_LAND_WORDS,  # noqa: F401 — re-exported
+                         KEYWORD_INDEX, NUMBER_WORDS, match_longest)
 from .keywords import _parse_keywords, parse_keyword_list
 
 
-#: The five types CR 205.3i calls **basic** land types, in the printed order
-#: (WUBRG) every card that lists them uses. Not read out of
-#: ``data/vocabulary/land_types.json``: that catalog holds every land subtype
-#: Magic prints, and "a basic land type" is a strictly smaller question with a
-#: fixed answer the rules give rather than a set that grows with each release.
-#:
-#: Here rather than in one effect family because two of them need it — the
-#: combat restriction ("can't attack unless defending player controls a
-#: Forest") and the choose-a-type grant (Giant Slug) — and a fragment two
-#: families share is what this module is for.
-
-
-BASIC_LAND_WORDS: tuple[str, ...] = (
-    "plains", "island", "swamp", "mountain", "forest",
-)
+#: The five types CR 205.3i calls **basic** land types — ``BASIC_LAND_WORDS``,
+#: imported above. Re-exported here rather than in one effect family because
+#: two of them need it — the combat restriction ("can't attack unless defending
+#: player controls a Forest") and the choose-a-type grant (Giant Slug) — and a
+#: fragment two families share is what this module is for. The tuple itself
+#: lives in ``vocabulary`` since the noun reader below this module needed it.
 
 
 def is_pt_counter(kind: str) -> bool:

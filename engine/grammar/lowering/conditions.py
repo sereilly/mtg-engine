@@ -26,8 +26,6 @@ payload the evaluator would answer False to forever.
 
 from __future__ import annotations
 
-import dataclasses
-
 from .. import ast
 from ..errors import LoweringError
 from ._amounts import count_spec
@@ -373,36 +371,6 @@ def _lower_condition(
                 "count": 0,
             }
         who = _condition_seat(condition, condition.who, event, "board count")
-        if condition.of_each is not None:
-            # "…you control a land **of each basic land type**" (Coalition
-            # Victory). Every value of the characteristic is present exactly
-            # when the count of distinct values reaches how many there are, so
-            # the clause is the comparison ``cards_in_zones`` already makes of a
-            # ``count_spec`` — the kind's name is older than its reach; what it
-            # evaluates is any count against a printed bound, through
-            # ``count_from_payload``. The aggregate is the one domain's "for
-            # each basic land type among lands you control" rides, which is
-            # what keeps the condition and the count from disagreeing about a
-            # Tropical Island or a Phantasmal Terrain.
-            #
-            # "You" only: the spec's seat is the asker's, and another seat's
-            # board would be counted on the wrong battlefield.
-            aggregate, size = condition.of_each
-            if who != "you" or condition.filter.controller not in (None, "you"):
-                raise LoweringError(
-                    "'of each' is read for your own board", node=condition
-                )
-            return {
-                "kind": "cards_in_zones",
-                "count": count_spec(
-                    dataclasses.replace(
-                        condition.filter, controller=None, distinct=aggregate
-                    ),
-                    condition,
-                ),
-                "op": "ge",
-                "value": size,
-            }
         payload = {
             "kind": "controls",
             "who": who,

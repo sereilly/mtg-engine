@@ -67,15 +67,6 @@ class Controls:
     #: bounding the whole matching set and bounds the largest same-name group
     #: within it.
     shared_name: bool = False
-    #: "…you control a land **of each basic land type**" (Coalition Victory).
-    #: Beside ``shared_name`` and for its reason: a relation over the counted
-    #: set, which no one permanent can answer — a Forest is "a land" and says
-    #: nothing about whether a Plains is beside it. The value is
-    #: ``(aggregate, size)`` from ``nouns.accept_of_each_characteristic``: the
-    #: clause holds when that aggregate of the set reaches that size, so it is
-    #: lowered onto the count comparison every other counted condition uses and
-    #: needs no evaluator of its own.
-    of_each: tuple[str, int] | None = None
 
 
 @dataclass(frozen=True)

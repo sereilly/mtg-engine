@@ -51,7 +51,7 @@ from . import ast
 from .amounts import parse_amount
 from .bounds import parse_comparison
 from .errors import GrammarError
-from .nouns import accept_of_each_characteristic, parse_object_filter
+from .nouns import accept_one_of_each, parse_object_filter
 from .references import parse_player_ref
 from .seat_comparisons import accept_margin
 from .seats import accept_life_total_of
@@ -401,15 +401,7 @@ def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
                 comparison = ast.Comparison("eq", ast.Fixed(0))
             elif bound is not None:
                 comparison = ast.Comparison(bound[0], ast.Fixed(bound[1]))
-            # "…a land **of each basic land type**" (Coalition Victory). Read
-            # after the noun phrase it trails, and only on the plain form: a
-            # negated or counted "of each" is a sentence nothing prints.
-            of_each = (
-                accept_of_each_characteristic(stream)
-                if comparison is None and not shared_name and not another
-                else None
-            )
-            first = ast.Controls(player, filt, comparison, shared_name, of_each)
+            first = ast.Controls(player, filt, comparison, shared_name)
 
             # "you control an Urza's Mine **and** an Urza's Tower" (the
             # Antiquities cycle). The conjunction shares one player and one
@@ -423,8 +415,21 @@ def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
             # distributed over each conjunct to stay faithful, and no card in
             # the pool prints one — so it refuses to widen instead of guessing
             # which of the two readings was meant.
+            #
+            # "…you control a land **of each basic land type** and a creature
+            # of each color" (Coalition Victory). The same conjunction with one
+            # of its nouns abbreviated: ``accept_one_of_each`` hands back the
+            # five noun phrases the words stand for, and each becomes the
+            # conjunct it would have been written out — so the abbreviation
+            # needs no node and no evaluator, and a Tropical Island answers
+            # two of the five exactly as it would answer "a Forest and an
+            # Island".
             if not negated and bound is None and not shared_name:
-                parts = [first]
+                expanded = None if another else accept_one_of_each(stream, filt)
+                parts = (
+                    [ast.Controls(player, each) for each in expanded]
+                    if expanded else [first]
+                )
                 while True:
                     conj = stream.mark()
                     if not stream.accept_word("and"):
@@ -435,10 +440,10 @@ def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
                     except GrammarError:
                         stream.reset(conj)
                         break
-                    parts.append(ast.Controls(
-                        player, extra,
-                        of_each=accept_of_each_characteristic(stream),
-                    ))
+                    parts.extend(
+                        ast.Controls(player, each)
+                        for each in accept_one_of_each(stream, extra) or (extra,)
+                    )
                 if len(parts) > 1:
                     return ast.EveryOf(tuple(parts))
             return first

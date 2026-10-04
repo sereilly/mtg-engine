@@ -29,7 +29,7 @@ from .. import ast
 from ..amounts import accept_fraction_head, accept_rounding, parse_amount
 from ..errors import GrammarError
 from ..names import accept_original_expansion
-from ..nouns import parse_object_filter
+from ..nouns import accept_one_of_each, parse_object_filter
 from ..records import _parse_for_each_history
 from ..references import parse_recipient, parse_target_spec
 from ..stream import TokenStream
@@ -500,6 +500,28 @@ def _accept_keep_slot(stream: TokenStream) -> "ast.KeepSlot | None":
     return ast.KeepSlot(count, described)
 
 
+def _accept_keep_slots(stream: TokenStream) -> "tuple[ast.KeepSlot, ...] | None":
+    """One printed keep, as the slot — or slots — it names.
+
+    "…a land **of each basic land type**" (Global Ruin) is five keeps printed
+    as one: a Plains, an Island, a Swamp, a Mountain and a Forest, each a slot
+    of its own for exactly the reason Cataclysm's four are. One permanent fills
+    at most one slot, which is what makes a Tropical Island a choice between
+    being the Forest and being the Island rather than both keeps at once.
+
+    Only a singular keep can be distributed: "two lands of each basic land
+    type" is not a sentence any card prints, and the slot count it would mean
+    is a guess.
+    """
+    slot = _accept_keep_slot(stream)
+    if slot is None:
+        return None
+    each = accept_one_of_each(stream, slot.filter) if slot.count == 1 else None
+    if each is None:
+        return (slot,)
+    return tuple(ast.KeepSlot(1, described) for described in each)
+
+
 def parse_keep_then_sacrifice_rest(
     stream: TokenStream, chooser: "ast.PlayerRef"
 ) -> "ast.KeepChosenSacrificeRest | None":
@@ -534,7 +556,11 @@ def parse_keep_then_sacrifice_rest(
     if not stream.accept_word("chooses", "choose"):
         return None
     pool = None
-    if stream.accept_phrase("from", "among"):
+    # "…chooses **from** the lands they control" (Global Ruin) beside
+    # "…chooses **from among** the permanents they control" (Cataclysm): one
+    # clause, and the second word is the only difference.
+    if stream.accept_word("from"):
+        stream.accept_word("among")
         stream.accept_word("the")
         try:
             pool = parse_object_filter(stream)
@@ -543,23 +569,23 @@ def parse_keep_then_sacrifice_rest(
         if pool is None:
             stream.reset(mark)
             return None
-    first = _accept_keep_slot(stream)
+    first = _accept_keep_slots(stream)
     if first is None:
         stream.reset(mark)
         return None
-    slots = [first]
+    slots = list(first)
     while True:
         loop = stream.mark()
         stream.accept_punct(",")
         stream.accept_word("and")
-        following = _accept_keep_slot(stream)
+        following = _accept_keep_slots(stream)
         if following is None:
             # The separator belongs to the tail below ("…, **and** a land,
             # **then** sacrifices…" prints both), so it goes back rather than
             # being eaten here.
             stream.reset(loop)
             break
-        slots.append(following)
+        slots.extend(following)
     stream.accept_punct(",")
     if not stream.accept_word("then", "and"):
         stream.reset(mark)

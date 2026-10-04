@@ -35,8 +35,9 @@ from .filter_draft import _FilterDraft, _build_object_filter
 from .readers import _SELF_NOUNS, accept_source_reference
 from .vocabulary import GENERIC_NOUNS as _GENERIC_NOUNS
 from .vocabulary import singular as _singular
-from .vocabulary import (ALL_SUBTYPES, CARD_TYPES, COLOR_WORDS, CREATURE_TYPES,
-                         SUBTYPE_INDEX, SUPERTYPES, TYPE_LINE_SUPERTYPES, match_longest)
+from .vocabulary import (ALL_SUBTYPES, BASIC_LAND_WORDS, CARD_TYPES,
+                         COLOR_WORDS, CREATURE_TYPES, SUBTYPE_INDEX,
+                         SUPERTYPES, TYPE_LINE_SUPERTYPES, match_longest)
 
 # Head nouns that are not card types but name a set of objects. "target" is one
 # of them: Fireball's "among any number of targets" uses it as a bare noun.
@@ -855,47 +856,71 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
 #: permanents you control", which ``effects/cards`` still reads on its own for
 #: the one draw that prints it) is data rather than a second production.
 #:
-#: The size is CR 305.6's: there are five basic land types, so "a land **of
-#: each** basic land type" is that count reaching five. It is here, beside the
-#: words, because it is a fact about the characteristic and not about either
+#: The last two columns are what "a land **of each** basic land type" needs:
+#: the values the rules give the characteristic (CR 305.6: five) and the
+#: ``ObjectFilter`` field one of them narrows. They are here, beside the words,
+#: because they are facts about the characteristic and not about either
 #: sentence that reads one.
 _COUNTED_CHARACTERISTICS: tuple[
-    tuple[tuple[tuple[str, ...], ...], str, int], ...
+    tuple[tuple[tuple[str, ...], ...], str, str, tuple[str, ...]], ...
 ] = (
     (
         (("basic", "land", "type"), ("basic", "land", "types")),
         "distinct_basic_land_types",
-        5,
+        "subtypes",
+        BASIC_LAND_WORDS,
     ),
 )
 
 
-def _accept_counted_characteristic(stream: TokenStream) -> tuple[str, int] | None:
-    """The characteristic named at the cursor, as ``(aggregate, size)``."""
-    for spellings, aggregate, size in _COUNTED_CHARACTERISTICS:
+def _accept_counted_characteristic(
+    stream: TokenStream,
+) -> tuple[str, str, tuple[str, ...]] | None:
+    """The characteristic named at the cursor, as ``(aggregate, filter field,
+    values)``, or None with nothing consumed."""
+    for spellings, aggregate, field, values in _COUNTED_CHARACTERISTICS:
         for phrase in spellings:
             if stream.accept_phrase(*phrase):
-                return aggregate, size
+                return aggregate, field, values
     return None
 
 
-def accept_of_each_characteristic(stream: TokenStream) -> tuple[str, int] | None:
-    """``of each <characteristic>`` trailing a noun phrase, or None with
-    nothing consumed.
+def accept_one_of_each(
+    stream: TokenStream, described: ast.ObjectFilter
+) -> tuple[ast.ObjectFilter, ...] | None:
+    """``of each <characteristic>`` trailing the noun phrase *described* — as
+    one filter **per value**, in printed order — or None with nothing consumed.
 
     "…if you control a land **of each basic land type**" (Coalition Victory);
     "…chooses from the lands they control a land **of each basic land type**"
-    (Global Ruin). The phrase does not narrow the set in front of it — any one
-    land answers "a land" — it says the set must hold *every value* of a
-    characteristic, which is the count ``parse_counted_objects`` reads below
-    reaching the size returned beside it. One table, so the two spellings of
-    one question cannot come to name different characteristics.
+    (Global Ruin). The phrase is an abbreviation and is read as what it
+    abbreviates: "a Plains, an Island, a Swamp, a Mountain and a Forest", each
+    still a land. The rewrite is in the parse, so both sentences land on shapes
+    that already exist — the condition on the "you control X and Y"
+    conjunction, the choice on Cataclysm's list of keep slots — and neither
+    needs a node, a lowering or an evaluator of its own.
+
+    What the rewrite preserves is the question each of those shapes already
+    asks: a conjunction is satisfied by a Tropical Island for two of its
+    conjuncts (the card asks whether the types are *present*), and a keep slot
+    holds one permanent, so a dual land is kept as one type or the other. Both
+    are the printed card.
+
+    One table with ``parse_counted_objects`` below, so "of each basic land
+    type" and "for each basic land type among" cannot come to name different
+    characteristics.
     """
     mark = stream.mark()
     if stream.accept_phrase("of", "each"):
         named = _accept_counted_characteristic(stream)
         if named is not None:
-            return named
+            _aggregate, field, values = named
+            return tuple(
+                dataclasses.replace(
+                    described, **{field: getattr(described, field) + (value,)}
+                )
+                for value in values
+            )
     stream.reset(mark)
     return None
 
@@ -931,6 +956,5 @@ def parse_counted_objects(stream: TokenStream) -> ast.ObjectFilter:
 
 __all__ = [
     "accept_source_reference", "parse_card_name", "parse_comparison",
-    "accept_of_each_characteristic", "parse_counted_objects",
-    "parse_object_filter",
+    "accept_one_of_each", "parse_counted_objects", "parse_object_filter",
 ]
