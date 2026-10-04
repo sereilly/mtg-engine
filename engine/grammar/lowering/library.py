@@ -20,6 +20,7 @@ from ...oracle_types import (PER_OBJECT_SEAT_RECORDS, REVEALED_HAND_CARDS,
 from ...subject_filters import card_only_filter
 from .. import ast
 from ..errors import LoweringError
+from ...oracle_types import CHOSEN_COLOR_THIS_WAY
 from ._cost_records import cost_record_spec
 from ._common import (
     chargeable_card_filter,
@@ -242,6 +243,7 @@ def _lower_discard_revealed_matching_unless_pay_life(
 
 def _lower_reveal_hand_and_choose(
     node: ast.RevealHandAndChoose, event: str | None = None,
+    produced: frozenset[str] = frozenset(),
 ) -> tuple[OracleInstruction, ...]:
     """"Target opponent reveals their hand. You choose a noncreature, nonland
     card from it. That player discards that card." (Duress.)
@@ -250,7 +252,16 @@ def _lower_reveal_hand_and_choose(
     legal, and the discard is what the choice was for, so splitting them would
     put a chosen card between two instructions with nothing carrying it.
     """
-    leftover = _restrictions_beyond(node.filter, _REVEALED_HAND_FIELDS)
+    # "Choose a color. … you choose a card **of that color** from it." (Addle.)
+    # CR 608.2d's colour, admitted only behind a step that chose one and
+    # carried as the scratchpad key Persecute's discard reads.
+    of_that_color = (
+        node.filter.color_chosen_this_way and CHOSEN_COLOR_THIS_WAY in produced
+    )
+    leftover = _restrictions_beyond(
+        node.filter,
+        _REVEALED_HAND_FIELDS | ({"color_chosen_this_way"} if of_that_color else set()),
+    )
     if leftover:
         raise LoweringError(
             "the revealed-hand picker cannot narrow by: " + ", ".join(leftover),
@@ -266,6 +277,8 @@ def _lower_reveal_hand_and_choose(
             node=node,
         )
     payload: dict[str, object] = {"fate": node.fate}
+    if of_that_color:
+        payload["color_filter_from"] = CHOSEN_COLOR_THIS_WAY
     if node.filter.card_types:
         # "You choose **a creature card** from it." (Ostracize.) The positive
         # twin of ``exclude_types`` below, emitted only when the card prints it

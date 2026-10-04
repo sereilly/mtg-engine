@@ -2457,11 +2457,16 @@ class PendingChoicesMixin:
             narrowing["card_type"] = tuple(card_types)
         if excluded_supertypes:
             narrowing["exclude_supertypes"] = excluded_supertypes
+        # "…a card **of that color**" (Addle): the fourth narrowing, carried for
+        # the three above's reason.
+        any_colors = list(choice.data.get("any_colors") or ())
+        if any_colors:
+            narrowing["restrictions"] = {"any_colors": any_colors}
         victim = self.players[victim_index]
         legal = [
             index
             for index, held in enumerate(victim.hand)
-            if search_matches(held, narrowing)
+            if search_matches(held, narrowing, game=self, owner=victim)
         ]
         if not legal:
             return
@@ -2476,6 +2481,7 @@ class PendingChoicesMixin:
             exclude_basic_lands=narrowing["exclude_basic_lands"],
             card_types=card_types,
             exclude_supertypes=excluded_supertypes,
+            any_colors=any_colors,
             source_id=choice.data.get("source_id"),
             record=choice.data.get("record"),
             # The printed "up to" survives every answer: the picks after the

@@ -532,9 +532,14 @@ def _parse_reveal_hand_and_choose(stream: TokenStream) -> ast.Statement | None:
     # and the referent is identical — "it" is the hand this sentence revealed —
     # so it is two accepted tokens here rather than a second production, which
     # would race this one for the word "reveals".
+    #
+    # "…reveals their hand **and** you choose a card of that color from it."
+    # (Addle.) The third join, and the same clause again.
     if not stream.accept_punct("."):
         if stream.accept_punct(","):
             stream.accept_word("then")
+        else:
+            stream.accept_word("and")
     if not stream.accept_phrase("you", "choose"):
         stream.reset(mark)
         return None
