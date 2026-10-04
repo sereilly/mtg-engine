@@ -157,4 +157,85 @@ def object_colors(game, obj, seat=None) -> tuple[str, ...]:
     return card_colors(game, getattr(obj, "card", obj), seat)
 
 
-__all__ = ["card_colors", "color_override_for_seat", "object_colors"]
+# ---------------------------------------------------------------------------
+# Colour *relations* (CR 105.2, CR 105.4)
+# ---------------------------------------------------------------------------
+#
+# Everything above answers "what colour is this object". The four questions
+# below are asked *about* those answers, and they live here for the reason the
+# readers above do: Invasion prints each of them on several cards in several
+# grammatical positions — a sweep's narrowing (Spreading Plague), a prevention
+# predicate (Well-Laid Plans), a cast prohibition (Mana Maze), a cost change
+# (Urza's Filter), a trigger's narrowing (Rewards of Diversity), a static's
+# condition (Spirit of Resistance) — and a relation spelled at each of those
+# sites is as many chances to disagree about a colourless object as there are
+# sites. Every one of them takes **colour sets**, not objects: which reader
+# produced the set (a layer stack, a stack item, a damage source) is the
+# caller's knowledge and the relation is the same whoever asks.
+
+#: CR 105.1: the five colours, in WUBRG order. The symbols the rest of the
+#: engine spells a colour with.
+ALL_COLORS: tuple[str, ...] = ("W", "U", "B", "R", "G")
+
+
+def share_a_color(one, other) -> bool:
+    """Whether two colour sets share a colour (CR 105.2).
+
+    A non-empty **intersection**, which is the whole definition: a colourless
+    object shares a colour with nothing — not even with another colourless one
+    — and a multicoloured object shares with anything having one of its
+    colours (CR 105.2b: it *is* each of them). Never an equality: a white-blue
+    creature and a blue-black one share blue.
+
+    Takes anything iterable over colour symbols, so a ``set`` out of the layer
+    system, a ``tuple`` off a stack item and a ``frozenset`` a record kept all
+    ask the one question.
+    """
+    return bool(frozenset(one or ()) & frozenset(other or ()))
+
+
+def is_multicolored(colors) -> bool:
+    """Whether a colour set is **multicolored** (CR 105.2b: two or more of the
+    five colours).
+
+    Counted against :data:`ALL_COLORS` rather than by ``len``: a set carrying
+    a symbol that is not a colour ("C", a stray empty string off a malformed
+    record) must not make a monocoloured object gold.
+    """
+    return len(frozenset(colors or ()) & frozenset(ALL_COLORS)) >= 2
+
+
+def colors_among(game, permanents) -> frozenset[str]:
+    """Every colour at least one of *permanents* has (CR 105.2, layer 5).
+
+    "…protection from each color **among permanents you control**" (Pledge of
+    Loyalty) and "a permanent **of each color**" (Spirit of Resistance) are
+    this one union read two ways — as a set, and as a test that the set is
+    full. Through the layer-aware accessor, so a permanent a Lace has recoloured
+    counts as what it now is and a multicoloured one counts for each of its
+    colours.
+    """
+    found: set[str] = set()
+    for permanent in permanents:
+        found.update(game._effective_colors(permanent))
+    return frozenset(found) & frozenset(ALL_COLORS)
+
+
+def of_each_color(game, permanents) -> bool:
+    """Whether *permanents* include one **of each color** (CR 105.1's five).
+
+    One permanent may answer for several colours — a white-blue-black-red-green
+    creature is "a creature of each color" on its own — because the sentence
+    asks that every colour be represented, not that five different permanents
+    represent them. A colourless permanent represents none.
+
+    The noun ("a **permanent** of each color", "a **creature** of each color")
+    is the caller's: it hands over the permanents that noun names.
+    """
+    return colors_among(game, permanents) == frozenset(ALL_COLORS)
+
+
+__all__ = [
+    "ALL_COLORS", "card_colors", "color_override_for_seat", "colors_among",
+    "is_multicolored", "object_colors", "of_each_color", "share_a_color",
+]

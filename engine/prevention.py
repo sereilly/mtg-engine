@@ -144,6 +144,20 @@ MATCHING_BLANKET = 30
 # for the next source. That is the blanket band's own argument — "applying one
 # costs the recipient nothing" — read from the seat that actually chooses.
 CHOSEN_SOURCE_ONE_SHOT = 31
+# "If a source would deal 3 or less damage to this creature, prevent that
+# damage." (Callous Giant.) A permanent's own static shield whose narrowing is
+# the **size of the event** — free like every blanket above it, so it sits with
+# them. Being early is what makes it compose the way its controller would
+# choose (CR 616.1e): a small event is taken whole before any consumable is
+# spent on it, and a large one is simply not this shield's business until
+# something else has cut it down — CR 616.1f re-asks after every applied
+# effect, so a pool that brings 5 down to 3 hands the remainder here.
+SMALL_EVENT_BLANKET = 32
+# "Prevent all damage that would be dealt to a creature by another creature if
+# they share a color." (Well-Laid Plans.) A blanket over the whole table whose
+# narrowing is a **relation between the two ends of the event**. No charges, so
+# beside the others and ahead of every consumable, for their reason.
+SHARED_COLOR_BLANKET = 33
 # "Prevent all damage that would be dealt to you this turn by attacking
 # creatures without flying." (Al-abara's Carpet.) A blanket a *player* was
 # handed rather than one a permanent prints, but a blanket all the same — no
@@ -2187,8 +2201,17 @@ def _remove_counter_per_damage(game, event: dict) -> PreventionOutcome | None:
 #: CR 109.5 gives a source a controller, and the clause compares that seat with
 #: the protected one. A blanket that dropped it would shield its controller from
 #: their own Flesh Reaver, which is a strictly larger card.
+#:
+#: The optional leading condition (Spirit of Resistance: "**As long as you
+#: control a permanent of each color,** prevent all damage that would be dealt
+#: to you."). CR 611.2's "as long as" on a static ability, exactly as
+#: ``_PREVENT_ALL_FROM_SOURCE_TYPE_RE`` carries its own one screen up — and the
+#: clause is read by the grammar's condition reader rather than as a noun
+#: phrase behind a fixed "you control", because "of each color" is a relation
+#: over the set and not a narrowing of one permanent.
 _PREVENT_ALL_TO_CONTROLLER_RE = re.compile(
-    r"^prevent all (?P<combat>combat )?damage that would be dealt to you"
+    r"^(?:as long as (?P<condition>[^,]+), )?"
+    r"prevent all (?P<combat>combat )?damage that would be dealt to you"
     r"(?P<foreign> by sources you don't control)?$"
 )
 
@@ -2204,10 +2227,31 @@ def prevent_all_to_controller(line: str) -> dict | None:
     )
     if match is None:
         return None
-    return {
+    described: dict = {
         "combat_only": bool(match.group("combat")),
         "foreign_sources_only": bool(match.group("foreign")),
     }
+    phrase = match.group("condition")
+    if phrase is not None:
+        # The grammar's own condition reader, lazily imported because the
+        # grammar's parse claim imports this module. Held to the one shape
+        # ``_condition_holds`` answers for a standing ability — "you control
+        # …", evaluated by ``static_bonuses.conditional_static_holds`` — so a
+        # clause that reader would answer False for by not knowing it leaves the
+        # card unsupported instead of admitted with a shield that never arms.
+        # A clause nothing reads answers None for the same reason in the other
+        # direction: a condition dropped is a Glacial Chasm.
+        from .grammar import condition_payload_for
+
+        condition = condition_payload_for(phrase)
+        if (
+            not condition
+            or condition.get("kind") != "controls"
+            or condition.get("who") != "you"
+        ):
+            return None
+        described["condition"] = condition
+    return described
 
 
 def _controller_blanket_for(game, event: dict) -> dict | None:
@@ -2235,6 +2279,11 @@ def _controller_blanket_for(game, event: dict) -> dict | None:
         for line in permanent.effective_card.oracle_text.splitlines():
             described = prevent_all_to_controller(line)
             if described is None:
+                continue
+            if not _condition_holds(game, described, permanent):
+                # "**As long as you control a permanent of each color,** …"
+                # (Spirit of Resistance.) Rechecked at every event rather than
+                # latched (CR 611.2): the fifth colour may have left since.
                 continue
             if described["foreign_sources_only"] and (
                 # "…by sources **you don't control**" (Energy Field). CR 109.5's
@@ -2575,6 +2624,198 @@ def _prevent_next_damage_from_chosen_source(game, event: dict) -> PreventionOutc
     return PreventionOutcome(prevented=amount)
 
 
+#: "If a source would deal **3** or less damage to this creature, prevent that
+#: damage." (Callous Giant.) A static shield narrowed by the **size of the
+#: event** — every other reader in this file narrows by who is dealing the
+#: damage or who is taking it. The threshold is payload, the way every
+#: parameter here is: a card printing "2 or less" needs no code.
+#:
+#: The comparison is against the event *as it stands when this shield is
+#: asked* (CR 615.1: a prevention effect applies to damage that "would be
+#: dealt", and CR 616.1f re-asks after each applied effect). So five damage a
+#: prevention pool has already cut to three is three or less, and one damage a
+#: Furnace of Rath has not yet doubled is one — both are orders the Giant's
+#: controller could choose, and the second is the one they would.
+#:
+#: All of it or none of it: "prevent **that damage**" names the whole event,
+#: and four damage is not partly prevented.
+_PREVENT_SMALL_EVENT_RE = re.compile(
+    r"^if a source would deal (?P<threshold>\d+) or less damage to this "
+    r"(?:artifact|creature|enchantment|land|permanent), prevent that damage$"
+)
+
+
+def prevent_small_event_threshold(line: str, card_name: str | None = None) -> int | None:
+    """The largest event *line* prevents outright, or None if it is not that
+    line. One matcher, asked by the interceptor below and by the claim reader,
+    so what is prevented and what is claimed cannot drift.
+
+    *card_name* collapses CR 201.5's self-reference the way
+    ``_static_shield_match`` does, for the legendary templating that would
+    print the creature's own name.
+    """
+    normalized = " ".join((line or "").strip().lower().rstrip(".").split())
+    if card_name:
+        from .oracle import _collapse_self_references
+
+        normalized = _collapse_self_references(
+            normalized, card_name, "this creature"
+        )
+    match = _PREVENT_SMALL_EVENT_RE.match(normalized)
+    return int(match.group("threshold")) if match else None
+
+
+def _small_event_threshold_for(game, event: dict) -> int | None:
+    """The threshold under which the damaged permanent's own text prevents this
+    event, or None. Pure.
+
+    The recipient's own text only — "dealt to **this** creature" — so a second
+    Giant shields itself and not its twin, and read off the effective card so
+    a copy carries the shield and a creature whose text was removed does not.
+    """
+    recipient = event["recipient"]
+    amount = event["amount"]
+    if amount <= 0 or isinstance(recipient, PlayerState) or recipient is None:
+        return None
+    card = getattr(recipient, "effective_card", None) or recipient.card
+    best: int | None = None
+    for line in (card.oracle_text or "").splitlines():
+        threshold = prevent_small_event_threshold(line, card.name)
+        if threshold is not None and amount <= threshold:
+            best = threshold if best is None else max(best, threshold)
+    return best
+
+
+def _applies_small_event_blanket(game, event: dict) -> bool:
+    return _small_event_threshold_for(game, event) is not None
+
+
+@prevention_effect(SMALL_EVENT_BLANKET, applies=_applies_small_event_blanket)
+def _prevent_small_event(game, event: dict) -> PreventionOutcome | None:
+    """Callous Giant: "If a source would deal 3 or less damage to this
+    creature, prevent that damage."
+
+    Every such event, for as long as the creature is on the battlefield.
+    Nothing is spent and nothing recorded — the next event asks the text again
+    (CR 611.2), and each is judged on its own size: three one-point pings are
+    three prevented events, never a four-point total.
+    """
+    threshold = _small_event_threshold_for(game, event)
+    if threshold is None:  # pragma: no cover - the predicate just said otherwise
+        return None
+    game.log.append(
+        f"{event['recipient'].card.name} prevented {event['amount']} damage "
+        f"({threshold} or less from one source)"
+    )
+    return PreventionOutcome(prevented=event["amount"])
+
+
+#: "Prevent all damage that would be dealt to a creature by another creature
+#: if they share a color." (Well-Laid Plans.) A static blanket over the whole
+#: table with **no described set at either end**: what it names is a relation
+#: between the event's two ends, which is why it is not a row of
+#: ``prevent_all_to_matching`` — that reader tests one permanent against a noun
+#: phrase, and "shares a colour with whatever is hitting it" is not a property
+#: one permanent has.
+#:
+#: The printed "combat" is captured for the reason every blanket here captures
+#: its own. Anchored and without a duration, for the controller blanket's
+#: reason: "…this turn" would be a one-shot effect the grammar reads.
+_PREVENT_SHARED_COLOR_RE = re.compile(
+    r"^prevent all (?P<combat>combat )?damage that would be dealt to a "
+    r"creature by another creature if they share a color$"
+)
+
+
+def prevent_between_shared_colors(line: str) -> dict | None:
+    """The width of the shared-colour blanket *line* prints, or None.
+
+    One matcher, asked by the interceptor below and by the claim reader, so
+    what is prevented and what is claimed cannot drift.
+    """
+    match = _PREVENT_SHARED_COLOR_RE.match(
+        " ".join((line or "").strip().lower().rstrip(".").split())
+    )
+    if match is None:
+        return None
+    return {"combat_only": bool(match.group("combat"))}
+
+
+def _shared_color_blanket_for(game, event: dict) -> str | None:
+    """The name of a permanent whose shared-colour blanket covers this event,
+    or None. Pure.
+
+    Three things have to be true of the event before any board is scanned, and
+    each is a printed word:
+
+    - "**to a creature**" — the recipient is a permanent that is a creature
+      now (CR 613 layer 4: an animated land is one, a player never is);
+    - "**by another creature**" — the source is a *permanent* that is a
+      creature, and a different object from the recipient. A spell's source is
+      the card as printed (CR 109.5), which is not a creature however red it
+      is, so a Lightning Bolt is never covered;
+    - "**if they share a color**" — ``object_colors.share_a_color`` over the
+      two objects' own layer-5 colours. The objects', deliberately, and not
+      ``damage_source_colors``: Ghostly Flame rewrites what colour a source is
+      *as a source of damage*, and this sentence asks about "they" — two
+      creatures — rather than about the damage. Colourless shares with nothing
+      (CR 105.2c), so two artifact creatures fight normally.
+
+    Every battlefield, because the sentence names no controller: an opponent's
+    Well-Laid Plans covers your creatures exactly as your own would.
+    """
+    if event["amount"] <= 0:
+        return None
+    from .models import Permanent
+    from .object_colors import share_a_color
+
+    recipient = event["recipient"]
+    source = event.get("source")
+    if not isinstance(recipient, Permanent) or not isinstance(source, Permanent):
+        return None
+    if source is recipient or not recipient.is_creature or not source.is_creature:
+        return None
+    if not share_a_color(
+        game._effective_colors(recipient), game._effective_colors(source)
+    ):
+        return None
+    for permanent in game.all_permanents():
+        for line in (permanent.effective_card.oracle_text or "").splitlines():
+            described = prevent_between_shared_colors(line)
+            if described is None:
+                continue
+            if described["combat_only"] and not event.get("combat"):
+                continue
+            return permanent.card.name
+    return None
+
+
+def _applies_shared_color_blanket(game, event: dict) -> bool:
+    return _shared_color_blanket_for(game, event) is not None
+
+
+@prevention_effect(SHARED_COLOR_BLANKET, applies=_applies_shared_color_blanket)
+def _prevent_between_shared_colors(game, event: dict) -> PreventionOutcome | None:
+    """Well-Laid Plans: "Prevent all damage that would be dealt to a creature
+    by another creature if they share a color."
+
+    Every point, combat or not, for as long as the enchantment is on the
+    battlefield. Nothing is spent and nothing recorded — the colours are read
+    when the damage would be dealt (CR 615.1: prevention effects "aren't
+    locked in ahead of time"), so a creature a Lace recoloured mid-combat is judged by what
+    it is now.
+    """
+    name = _shared_color_blanket_for(game, event)
+    if name is None:  # pragma: no cover - the predicate just said otherwise
+        return None
+    game.log.append(
+        f"{event['amount']} damage to {recipient_label(event['recipient'])} "
+        f"from {_source_label(event.get('source'))} is prevented — they share "
+        f"a color ({name})"
+    )
+    return PreventionOutcome(prevented=event["amount"])
+
+
 def prevention_claims_line(line: str, card_name: str | None = None) -> bool:
     """Whether one printed line is, in full, a static prevention effect
     implemented above.
@@ -2605,4 +2846,6 @@ def prevention_claims_line(line: str, card_name: str | None = None) -> bool:
         or prevent_all_to_controller(line) is not None
         or prevent_all_to_matching(line) is not None
         or prevent_all_from_spell_class(line) is not None
+        or prevent_small_event_threshold(line, card_name) is not None
+        or prevent_between_shared_colors(line) is not None
     )

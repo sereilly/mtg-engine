@@ -192,11 +192,19 @@ def keyword_ability_name(keyword: str) -> str:
 def protection_quality(word: str) -> tuple[str, str] | None:
     """The canonical quality one word of a protection clause names, or None.
 
-    Four families (CR 702.16, the qualities this engine models): a colour
+    Five families (CR 702.16, the qualities this engine models): a colour
     ("white"), "multicolored" (Basri's Lieutenant), a card type ("artifacts",
-    Angelic Curator; "planeswalkers", Sparkhunter Masticore), and a creature
-    subtype ("Demons", Baneslayer Angel; "Dogs", Pack Leader's flock). Both
-    print pluralized, the catalogs store singulars.
+    Angelic Curator; "planeswalkers", Sparkhunter Masticore), a creature
+    subtype ("Demons", Baneslayer Angel; "Dogs", Pack Leader's flock), and one
+    of those two **behind a supertype** ("legendary creatures", Tsabo Tavoc).
+    All print pluralized, the catalogs store singulars.
+
+    The fifth is ``("typed", "legendary creature")``: every word of the value
+    must hold of the source, a supertype word through the supertype accessor
+    and the noun through ``has_type``. One quality rather than two, because it
+    is a conjunction — "protection from legendary creatures" is not protection
+    from legends and from creatures, and absorbing it as two entries of the
+    set would shield against every creature in the game.
 
     **The card-type family reads the catalog rather than one word.** It was
     the literal pair ``("planeswalker", "planeswalkers")``, which is a list of
@@ -226,7 +234,22 @@ def protection_quality(word: str) -> tuple[str, str] | None:
         return ("multicolored", "")
     # Lazily for the reason :func:`keyword_ability_name` imports lazily: this
     # module sits underneath the grammar in the import order.
-    from .grammar.vocabulary import CARD_TYPES, CREATURE_TYPES
+    from .grammar.vocabulary import (CARD_TYPES, CREATURE_TYPES,
+                                     TYPE_LINE_SUPERTYPES)
+
+    # "**legendary** creatures" (Tsabo Tavoc). CR 702.16a lets the quality be
+    # any characteristic, and a supertype in front of a type noun is two of
+    # them joined — so the noun is read by this same function and the phrase
+    # is admitted only when it names a card type or a creature type on its
+    # own. Anything else behind a supertype ("legendary white creatures", a
+    # word no catalog holds) answers None, which keeps the line refused rather
+    # than admitted with part of its quality dropped.
+    words = word.split()
+    if len(words) >= 2 and all(w in TYPE_LINE_SUPERTYPES for w in words[:-1]):
+        noun = protection_quality(words[-1])
+        if noun is None or noun[0] not in ("card_type", "subtype"):
+            return None
+        return ("typed", " ".join(sorted(set(words[:-1])) + [noun[1]]))
 
     singular = word[:-1] if word.endswith("s") else word
     # Card types before creature types, and the two catalogs share no word

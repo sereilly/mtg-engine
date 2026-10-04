@@ -410,6 +410,18 @@ def _lower_condition(
                     node=condition,
                 )
             payload["shared_name"] = True
+        if condition.of_each_color:
+            # "you control a permanent **of each color**" (Spirit of
+            # Resistance). Both evaluators of this payload answer the key
+            # through ``object_colors.of_each_color`` — and only for the
+            # asker's own board, which is the one seat both of them resolve the
+            # same way. Pooled over "each opponent" the five colours could be
+            # found one per opponent, which is a sentence nobody printed.
+            if who != "you":
+                raise LoweringError(
+                    "'of each color' is asked of your own board", node=condition,
+                )
+            payload["of_each_color"] = True
         return payload
     if isinstance(condition, ast.SubjectCharacteristicIs):
         # The bound must be a printed number: the evaluator compares an integer,

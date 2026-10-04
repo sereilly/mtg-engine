@@ -3116,6 +3116,22 @@ class PermanentStateMixin:
             # has_type resolves through the layer system, so a granted or
             # layer-4 type counts exactly as a printed one.
             return source.has_type(value)
+        if kind == "typed":
+            # "protection from **legendary creatures**" (Tsabo Tavoc): a
+            # conjunction, every word of it. A supertype is not a type —
+            # ``has_type`` answers about card types and subtypes and would say
+            # no to every legend — so the supertype words go through the
+            # layer-4 supertype accessor, the same split
+            # ``_lord_buff_matches`` makes for "legendary creatures you
+            # control".
+            from ..grammar.vocabulary import TYPE_LINE_SUPERTYPES
+
+            held = source.effective_supertypes
+            return all(
+                (word in held) if word in TYPE_LINE_SUPERTYPES
+                else source.has_type(word)
+                for word in value.split()
+            )
         return False
 
     def _card_has_quality(
@@ -3161,6 +3177,12 @@ class PermanentStateMixin:
             return len(set(card_colors(self, card, seat))) >= 2
         if kind in ("card_type", "subtype"):
             return value in (card.type_line or "").lower().split()
+        if kind == "typed":
+            # The conjunction, off the printed line — a spell has no layers to
+            # ask about its types, and a supertype and a type are both words
+            # of that one line (CR 205.1).
+            printed = (card.type_line or "").lower().split()
+            return all(word in printed for word in value.split())
         return False
 
     def _source_has_quality(

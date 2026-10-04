@@ -1145,6 +1145,22 @@ def prevent_damage_to_target_until_eot(game: Game, instruction: OracleInstructio
         if not chosen:
             game.log.append(f"{context.card.name}: no creature to shield")
         return True, "resolved"
+    if instruction.payload.get("on_source"):
+        # "{U}: Prevent all combat damage that would be dealt to and dealt by
+        # **this creature** this turn." (Urborg Phantom.) The ability's own
+        # source, named rather than chosen — read here instead of through the
+        # bound resolution below, whose fallback would shield whichever
+        # creature its scan reached first. The twin of the same key on
+        # ``prevent_damage_by_target_until_eot``, and it ends the same way: a
+        # source that has already left takes no shield and says so (CR 608.2b).
+        perm = context.source_permanent
+        if perm is None or not game.is_on_battlefield(perm):
+            game.log.append(
+                f"{context.card.name}: its source is gone, nothing is shielded"
+            )
+            return True, "resolved"
+        arm(perm)
+        return True, "resolved"
     # Through the innermost binding, so a shield printed inside a loop is armed
     # on the creature the iteration is on rather than on the first of the
     # resolution's targets (Winter's Chill). Outside a loop `bound_permanent`

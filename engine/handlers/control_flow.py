@@ -747,6 +747,17 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             for permanent in game.controlled_by(player)
             if permanent is not source and permanent_matches_filter(permanent, filters)
         ]
+        if payload.get("of_each_color"):
+            # "you control a permanent **of each color**" (Spirit of
+            # Resistance; "a creature of each color", Coalition Victory). Not a
+            # count at all: the five colours must each be found among the
+            # matching permanents, one gold permanent answering for each of its
+            # own (CR 105.2b). One reader with the static evaluator one file
+            # over (``static_bonuses.conditional_static_holds``), so the clause
+            # means the same on a spell's "if" as on a standing "as long as".
+            from ..object_colors import of_each_color
+
+            return of_each_color(game, matched)
         if payload.get("shared_name"):
             # "…with the same name as one another" (Chrome Replicator). The
             # threshold bounds the largest group sharing a name, not the

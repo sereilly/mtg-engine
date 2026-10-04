@@ -470,7 +470,13 @@ def _lower_prevent_all(
         # times — so it joins this branch with a several-target description
         # rather than becoming a second kind, exactly as "those creatures"
         # below does for the list an earlier step recorded.
-        and node.to.quantifier in ("it", "target", "that", "those", "up_to")
+        # "…dealt to and dealt by **this creature** this turn." (Urborg
+        # Phantom.) The ability's own source, *named* rather than pronounced —
+        # the recipient half of the ``on_source`` reading the directional
+        # shield beside this one already takes for Mtenda Lion.
+        and node.to.quantifier in (
+            "it", "target", "that", "those", "up_to", "this",
+        )
         and (node.dealt_by is None or node.to_and_by)
     ):
         if node.duration.kind not in _REST_OF_TURN + _REST_OF_COMBAT:
@@ -499,6 +505,27 @@ def _lower_prevent_all(
                     "the two-way shield covers combat damage only", node=node
                 )
             payload["to_and_by"] = True
+        if node.to.quantifier == "this":
+            # Named, not described and not chosen: "this creature" carries the
+            # noun and nothing else, so a restated adjective would be a
+            # narrowing of a set with one member in it. And it has to be a
+            # payload key rather than the pronoun's fall-through, for the
+            # reason the source half states — the handler resolves a *bound*
+            # permanent first, and an ability that chose nothing would shield
+            # whichever creature that scan reached.
+            if not _is_source(node.to) or _restrictions_beyond(
+                node.to.filter, frozenset({"card_types", "is_source"})
+            ):
+                raise LoweringError(
+                    "the source shield reads no narrowing beyond the noun",
+                    node=node,
+                )
+            payload["on_source"] = True
+            return (
+                OracleInstruction(
+                    "prevent_damage_to_target_until_eot", "", payload,
+                ),
+            )
         if node.to.quantifier == "those":
             if _restrictions_beyond(node.to.filter, frozenset({"card_types"})):
                 # A bound plural was chosen by the sentence in front of this
