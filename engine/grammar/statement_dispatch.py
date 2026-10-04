@@ -10,8 +10,43 @@ routes one AST node to its family, ``lower_ability`` wraps that for a whole
 line" — and the half that moved is the half that *grows*. That is
 ``by_node.py``'s rule applied a second time: a registry inside a dispatcher is
 the thing every landed card appends to, so it is the half that leaves. Here
-both halves are dispatch, and the chain of 79 arms is the one a new template
+both halves are dispatch, and the chain of arms is the one a new template
 lands in; the line wrappers around it have not moved in four sets.
+
+**What an arm has to do to be in the chain.** ``by_node.py`` is read first, and
+it holds four tables, not one: a row there is a node whose lowering is one
+function called with the node alone, with the firing ``event``, with
+``produced``, or with both. So "it needs ``produced``" is *not* a reason to be
+here, though for a long time the arms said it was — thirteen of them were
+exactly ``return _lower_x(statement, produced)`` and several carried a comment
+that ``by_node``'s rows "take the node and nothing else", which has not been
+true since Visions (the event table arrived in its first wave, the records
+table in its fourth). They left for the tables at Invasion's Phase 0, with
+Tap, Untap, Sacrifice and the block-count grant, each of which was a row of
+another of the four. That is the third time this module has been relieved along
+that seam — Visions' first wave and Weatherlight's Phase 0 are the others — and
+the reason the rule is stated here rather than left to the tables' own
+comments. An arm belongs in this chain when it does one of four things a table
+row cannot:
+
+* it **decides** — between two families (``Destroy``'s delay, ``Exile``'s pick
+  among a chosen set, ``PutOntoBattlefield``'s three readings), or between two
+  lowerings by one of the node's own fields (``ChoosePermanent``);
+* it passes something a table does not carry — the trigger's ``event_subject``,
+  ``whole_effect``, or the ``whole_effect``-filtered ``dispatch_event`` rather
+  than the raw one;
+* it **recurses** — a statement made of statements (``Sequence``,
+  ``Conditional``, ``ForEach``, the repeats, the delays): the inner statement
+  is lowered here, or ``lower_statement`` itself is handed down, because a
+  family cannot import the dispatcher back;
+* its lowering takes the same arguments in an order no table calls.
+
+The last is an accident of signatures rather than a principle, and the next
+round to touch one of those lowerings should bring its arm across.
+
+``statement_dispatch_naming.py`` is the chain's other half (Tempest's Phase 0):
+the statements answered by naming something or making a choice, called from the
+middle of the chain and continuing it on a ``None``.
 
 Beside ``lower.py`` rather than under ``lowering/`` for ``by_node``'s reason
 exactly: this is the dispatch layer, not an effect family. It imports every
@@ -28,6 +63,7 @@ from ..oracle_types import OracleInstruction
 from . import ast
 from .errors import LoweringError
 from .lowering._events import LOOP_BOUND_OBJECT, LOOP_BOUND_PLAYER
+from .lowering._prevented_riders import _guard_is_the_arms_own_precondition
 from .lowering._roles import (plan_another_target_roles,
                               stamp_another_target_roles)
 from .lowering.where_x import lower_where_x
@@ -35,7 +71,6 @@ from .lowering.control_flow import (
     _lower_may, _lower_one_of, _lower_unless_player_pays,
 )
 from .lowering.board import _lower_exile_one_of_chosen
-from .lowering.tolls import _lower_sacrifice_unless_pay
 from .lowering.sequences import _lower_steps
 from .lowering.loops import (
     _lower_for_each,
@@ -46,18 +81,14 @@ from .lowering.loops import (
     _lower_for_each_player,
 )
 from .lowering import (
-    INSTRUCTION_CATEGORIES,
     _refuse_unfused_distinctness,
     _fused_discard_then_draw,
     _fused_draw_then_discard,
     _fused_exile_then_controller_life,
     _fused_exile_event_subject_until_source_leaves,
-    _lower_add_mana,
     _lower_become_color,
     _lower_cant_be,
-    _lower_remove_from_combat,
     _lower_combat_restriction,
-    lower_block_count_grant,
     _lower_create_delayed_trigger,
     _lower_next_draw_replacement,
     _lower_create_token,
@@ -79,12 +110,9 @@ from .lowering import (
     _lower_exile,
     _lower_repeat_for_types,
     _lower_repeat_optional_process,
-    _lower_put_exiled_with_source,
-    _lower_put_library_top_into_hand,
     _lower_repeat_process,
     _lower_repeat_process_while,
     _lower_repeat_until_pile_chosen,
-    _lower_each_player_claims_exiled_card,
     _lower_for_each_destroyed,
     _lower_for_each_exiled,
     _lower_for_each_tapped,
@@ -97,52 +125,28 @@ from .lowering import (
     _lower_gain_ability_text,
     _lower_prevent_damage,
     _lower_put_on_library_top,
-    _lower_chosen_source_next_damage,
     _lower_gain_keyword,
     _lower_lose_keyword,
     _lower_pump,
     _lower_phase_out,
     _lower_gain_life,
-    _lower_discard_revealed_matching_unless_pay_life,
-    _lower_discard_revealed_unless_pay_life,
     _lower_lose_life,
-    _lower_bin_revealed_card,
     _lower_put_revealed_card_onto_battlefield,
-    _lower_put_milled_card_onto_battlefield,
     _lower_put_counter,
     _lower_put_onto_battlefield,
     _lower_remove_counter,
     _lower_return_to_zone,
-    _lower_sacrifice,
     _lower_destroy_unless_pay,
     _lower_cast_permission,
-    _lower_play_with_top_revealed,
-    _lower_search_player_library,
     _lower_graveyard_pick_onto_battlefield,
     _lower_untap_restriction,
     _lower_condition,
     pronoun_target_referent,
-    _lower_tap,
 )
-
-
-#: The node types whose lowering is *only* a name — one AST class, one
-#: function, nothing to decide. These were 78 two-line branches of the chain
-#: below: 156 lines saying what a dict says in 78, growing by three every time
-#: a round adds a node. Dispatching them by type is what every other seam in
-#: this engine already does (`EFFECT_HANDLERS` is the one the architecture
-#: notes name), and it is what the module-size guard was pointing at — the
-#: families were absorbing the work; the chain grew anyway, by construction.
-#:
-#: The chain below keeps every branch that *decides* something: a node whose
-#: lowering depends on its own fields, on the firing event, or on which of
-#: several kinds it should become.
-#:
-#: Read before the chain, which is safe by construction rather than by
-#: inspection: no class in this table appears anywhere else in the chain and
-#: none of them inherits from another, so at most one branch could ever have
-#: matched a given node.
 from .statement_dispatch_naming import lower_naming_statement
+# The four registries `lower_statement` reads before its chain — see
+# `by_node.py` for what makes a node a row, and the docstring above for what
+# makes one an arm.
 from .by_node import (_BY_NODE_TYPE, _BY_NODE_TYPE_WITH_EVENT,
                       _BY_NODE_TYPE_WITH_EVENT_AND_PRODUCED,
                       _BY_NODE_TYPE_WITH_PRODUCED)
@@ -229,13 +233,6 @@ def lower_statement(
     if lowering is not None:
         return lowering(statement, event, produced)
 
-    # "Sacrifice **it** unless you pay its mana cost reduced by {2}" (Flash).
-    # In the chain rather than in the name-only table above because the pronoun
-    # is only a pronoun *relative to what came before it*: with no record from
-    # an earlier step of the same sentence, "it" has no referent but the source,
-    # and the two readings lower to different machinery.
-    if isinstance(statement, ast.SacrificeUnlessPay):
-        return _lower_sacrifice_unless_pay(statement, produced)
     if isinstance(statement, ast.Draw):
         # "…then draws **as many cards as they discarded this way**" (Forget).
         # A back-reference names its producer or refuses, and only `produced`
@@ -336,8 +333,9 @@ def lower_statement(
     # trigger, which is true of the clause wherever in the sentence it sits.
     if isinstance(statement, ast.PutOnLibraryTop):
         return _lower_put_on_library_top(statement, event, event_subject)
-    # In the chain rather than the name-only table, all three: each acts on what
-    # an earlier step recorded, and `produced` refuses when nothing did.
+    # In the chain rather than a table: it acts on what an earlier step
+    # recorded, and `produced` refuses when nothing did — and it reads the
+    # trigger's narrowing beside the event, which no table carries.
     if isinstance(statement, ast.GainAbilityText):
         return _lower_gain_ability_text(
             statement, produced, event, event_subject
@@ -355,10 +353,6 @@ def lower_statement(
         # `creature_becomes_blocked`) that the ordinary bound reading would
         # resolve to instead.
         return _lower_prevent_damage(statement, produced, event=event)
-    # Beside the shield above, and here rather than in `by_node.py` for its
-    # reason: the source it names is one a step in front of it chose (idiom 7).
-    if isinstance(statement, ast.ChosenSourceNextDamage):
-        return _lower_chosen_source_next_damage(statement, produced)
     if isinstance(statement, (ast.DoesntUntapNextStep, ast.DoesntUntapWhileCounter)):
         # The **unfiltered** event, for `_lower_destroy`'s reason one branch
         # up: whose creature "that creature" names is a fact about the trigger
@@ -368,14 +362,6 @@ def lower_statement(
         return _lower_untap_restriction(
             statement, produced, event, event_subject
         )
-    if isinstance(statement, (ast.Tap, ast.Untap)):
-        # The **unfiltered** event, for the same reason `_lower_destroy` takes
-        # one: whether a repeated "that <noun>" names the permanent the source
-        # is attached to is a fact about the trigger, true of every clause under
-        # it, and Mind Whip's tap sits inside a `may`'s otherwise branch.
-        return _lower_tap(statement, event, produced)
-    if isinstance(statement, ast.AddMana):
-        return _lower_add_mana(statement, produced)
     if isinstance(statement, ast.CreateToken):
         # ``event`` for the P/T back-reference: "its power is equal to that
         # creature's power" is read through the one place that decides where a
@@ -441,18 +427,6 @@ def lower_statement(
             "a modal head is a whole clause, not a step inside one", node=statement
         )
 
-    if isinstance(statement, ast.BinRevealedCard):
-        # Here rather than in `by_node.py`, and not in its event-bearing table
-        # either: "it" names the card an earlier step of *this* effect turned
-        # up, so the lowering needs `produced` where that table passes `event`.
-        return _lower_bin_revealed_card(statement, produced)
-
-    if isinstance(statement, ast.PutMilledCardOntoBattlefield):
-        # Here rather than in `by_node.py` because "one of **them**" names a
-        # set an earlier step of this same effect recorded, so the lowering
-        # needs `produced` and the node cannot answer on its own.
-        return _lower_put_milled_card_onto_battlefield(statement, produced)
-
     if isinstance(statement, ast.ReturnToZone):
         # `produced` is what makes "…for each card discarded this way" legal:
         # the clause names a set an earlier step of this same effect made, so it
@@ -495,51 +469,11 @@ def lower_statement(
             statement, statement.bound_card_from or event, produced,
         )
 
-    if isinstance(statement, ast.Sacrifice):
-        # ``event``, not ``dispatch_event``: what "that artifact" names is a
-        # fact about the *trigger* — its condition already named the enchanted
-        # permanent — rather than about where in the sentence the clause sits,
-        # and the kind it produces reaches its handler through the ordinary
-        # dict dispatch however deeply it is nested. The same reading
-        # ``_lower_destroy`` above takes, and for the same reason: Curse
-        # Artifact's sacrifice lowers under a ``May``.
-        # ``produced`` for the same reason ``_lower_destroy`` takes it: "one of
-        # those creatures" names a set an earlier step of this effect chose.
-        # The **unfiltered** event, for `_lower_destroy`'s reason: "that
-        # creature's controller sacrifices **it** at end of combat" (Basalt
-        # Golem) reaches the bound branch through the *delay's* event, which is
-        # a fact about the sentence rather than about where in it the clause
-        # sits.
-        return _lower_sacrifice(statement, event, produced)
-    if isinstance(statement, ast.DiscardRevealedUnlessPayLife):
-        return _lower_discard_revealed_unless_pay_life(statement, produced)
-    if isinstance(statement, ast.DiscardRevealedMatchingUnlessPayLife):
-        # The plural, and in the chain beside the singular for its reason: the
-        # record an earlier step wrote is the whole of the gate, so the lowering
-        # needs `produced` and cannot sit in the name-only table.
-        return _lower_discard_revealed_matching_unless_pay_life(
-            statement, produced
-        )
-
     if isinstance(statement, ast.CastPermission):
         # *event* as well as *produced*: "**The player** may play that card this
         # turn" (Elkin Lair) names the seat the firing trigger was about, and
         # only an event that freezes one can answer.
         return _lower_cast_permission(statement, produced, event)
-
-    # The reveal half of the same printed sentence (Temporal Aperture), and in
-    # the chain beside the permission for that branch's reason: the condition
-    # its duration holds under is about "that card", so the lowering has to see
-    # what the step in front of it recorded.
-    if isinstance(statement, ast.PlayWithTopRevealed):
-        return _lower_play_with_top_revealed(statement, produced)
-
-    # "Search that player's library for **that many** cards" (Jester's Mask):
-    # the count is a back-reference, so this lowering needs the record of what
-    # the steps before it produced — which is why it is dispatched here rather
-    # than from the node table below.
-    if isinstance(statement, ast.SearchPlayerLibrary):
-        return _lower_search_player_library(statement, produced)
 
     # The naming and choice arms live in `statement_dispatch_naming.py`;
     # None means none of them matched and the chain continues.
@@ -550,12 +484,6 @@ def lower_statement(
     if isinstance(statement, ast.CombatRestriction):
         return _lower_combat_restriction(statement, dispatch_event, produced)
 
-    if isinstance(statement, ast.BlockCountGrant):
-        # The permission twin of the restriction above, and its own branch for
-        # the node's own reason: the two say opposite things and share only the
-        # rule they read (CR 509.1b).
-        return lower_block_count_grant(statement)
-
     if isinstance(statement, ast.CantBe):
         # The **unfiltered** event, for the reason `_lower_destroy` above takes
         # one: "that creature can't be regenerated this turn" (Lim-Dûl's
@@ -564,9 +492,6 @@ def lower_statement(
         # sentence it sits — and the kind it produces reaches its handler
         # through the ordinary dict dispatch, nested or not.
         return _lower_cant_be(statement, event, event_subject)
-
-    if isinstance(statement, ast.RemoveFromCombat):
-        return _lower_remove_from_combat(statement, produced)
 
 
     # In the chain: the event decides whether "that creature gains first
@@ -709,17 +634,6 @@ def lower_statement(
     # The fourth, and the only one whose clause is a *condition* — so it takes
     # the condition lowering back as an argument too, for the same reason it
     # takes the statement one: both live below this dispatcher.
-    if isinstance(statement, ast.PutLibraryTopIntoHand):
-        # Takes ``produced``: Scroll Rack prints "put **that many** cards",
-        # which is a back-reference to the exile a step earlier.
-        return _lower_put_library_top_into_hand(statement, produced)
-    if isinstance(statement, ast.PutExiledWithSource):
-        # Left ``by_node`` when Duplicity's "put **all other** cards you own
-        # exiled with this enchantment into your hand" gave it a
-        # back-reference: "other" names the cards a step of this same effect
-        # exiled, so the lowering reads ``produced`` and the row stopped being
-        # one that needs nothing but its node.
-        return _lower_put_exiled_with_source(statement, produced)
     if isinstance(statement, ast.RepeatProcessWhile):
         return _lower_repeat_process_while(
             statement, lower_statement, _lower_condition, produced, event,
@@ -732,20 +646,15 @@ def lower_statement(
         return _lower_repeat_until_pile_chosen(
             statement, lower_statement, produced,
         )
-    if isinstance(statement, ast.EachPlayerClaimsExiledCard):
-        # Takes ``produced``: "one of the exiled cards" names what a step of
-        # this same effect exiled, which is a reading only the producer set can
-        # admit — the row cannot sit in ``by_node``, whose rows take the node
-        # and nothing else.
-        return _lower_each_player_claims_exiled_card(statement, produced)
 
     if isinstance(statement, ast.ChoosePermanent):
         # Two lowerings, told apart by the printed quantifier. The plural needs
         # ``produced``: "**that player** chooses up to two Plains" inside a loop
         # names the seat an earlier step of this same effect recorded about the
         # object the loop is on, which is a reading only the producer set can
-        # admit. That argument is why this pair sits here rather than in
-        # ``by_node``, whose rows take the node and nothing else.
+        # admit. The pair sits here rather than in ``by_node`` because telling
+        # the two apart is a *decision*, and a row decides nothing — not
+        # because of the argument, which one of that module's tables carries.
         # "**any number of** creatures they control" (Oracle en-Vec) is the
         # plural too, and its own word rather than an "up to" with a very large
         # count — see ``references.parse_target_spec``. Both go left, so the set
@@ -922,35 +831,3 @@ def lower_statement(
         return (OracleInstruction("grant_team_assign_unblocked_until_eot", "", {}),)
 
     raise LoweringError(f"no lowering for {type(statement).__name__}", node=statement)
-
-
-def _guard_is_the_arms_own_precondition(condition, then) -> bool:
-    """"**If it's a creature**, put a +0/+1 counter on it for each 1 damage
-    prevented this way…" (Scars of the Veteran.)
-
-    The guard restates what the arm can already only do. "Any target" is a
-    creature, a player or a planeswalker (CR 115.4), and the arm is
-    ``add_pt_counters_per_damage_prevented``, whose whole reading is the
-    ``permanent_id`` the shield step recorded — armed on a player it records
-    none and the arm places nothing. So the condition is CR-redundant here, in
-    the way "under its owner's control" restates CR 400.3, and dropping it is
-    not dropping a rider.
-
-    **Not** consumed into nothing: it is checked against the arm, so a printing
-    that guarded some *other* effect with the same words still reaches the
-    ordinary conditional lowering — where it refuses, because nothing in the
-    effect revealed a card for "it" to name. This is the one arm whose own
-    record answers the question, and the pair is asserted rather than assumed.
-    """
-    from .lowering._common import _restrictions_beyond
-
-    return (
-        isinstance(condition, ast.RevealedCardIs)
-        and not condition.negated
-        and condition.filter.card_types == ("creature",)
-        and not _restrictions_beyond(
-            condition.filter, frozenset({"card_types"})
-        )
-        and len(then) == 1
-        and then[0].kind == "add_pt_counters_per_damage_prevented"
-    )

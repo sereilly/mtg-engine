@@ -2545,6 +2545,13 @@ FAMILY_SHARED = {
     # forking. A floor for `_blankets`' reason exactly: `prevention` reads it —
     # from three refusals in front of the branches that own the clause — and it
     # reads nothing back.
+    #
+    # Two more readers since, each for a predicate about the same rider that had
+    # been sitting on a nearer floor: `counters` (Mercadian Masques' Phase 0,
+    # out of `_records`) and, at Invasion's Phase 0, `statement_dispatch` —
+    # `_guard_is_the_arms_own_precondition` left the bottom of the dispatcher,
+    # where it routed nothing. The dispatch layer is above every floor, so that
+    # import needs no entry here; this module still reads nothing back.
     "_prevented_riders",
     # `_zone_categories` split out of `lowering/zones.py` at Tempest's Phase 0,
     # when that module sat eleven lines from the guard with three of the wave's

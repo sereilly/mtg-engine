@@ -1,9 +1,25 @@
-"""The node-type registry ``lower.py`` dispatches through.
+"""The node-type registries ``lower_statement`` dispatches through.
 
-One row per AST node whose lowering needs nothing but the node — no event,
-no ``produced`` set, no recursion back into the dispatcher. Everything that
-does need one of those stays in ``lower.py``'s chain, which is why this is a
-table and that is a function.
+One row per AST node whose lowering **decides nothing the dispatcher has to
+know about**: one node class, one function, called the same way as every other
+row of its table. That is the line, and it is drawn on what the dispatcher does
+rather than on what the lowering reads — which is why there are four tables
+rather than one, a row's table being only *which arguments its function takes*:
+
+* :data:`_BY_NODE_TYPE` — the node alone;
+* :data:`_BY_NODE_TYPE_WITH_EVENT` — and the firing ``event``, raw;
+* :data:`_BY_NODE_TYPE_WITH_PRODUCED` — and the records earlier steps wrote;
+* :data:`_BY_NODE_TYPE_WITH_EVENT_AND_PRODUCED` — and both.
+
+What stays in ``statement_dispatch.py``'s chain is an arm that chooses between
+families or lowerings, passes something no table carries (the trigger's
+narrowing, ``whole_effect``, the filtered event) or recurses into the
+dispatcher — which is why these are tables and that is a function. This
+paragraph said "needs nothing but the node — no event, no ``produced`` set"
+from Fallen Empires until Invasion's Phase 0, though the second table arrived at
+Visions' first wave and the third at its fourth — and the chain's arms quoted it
+back as their reason for being arms. Thirteen of them were rows of the third
+table and came across at that Phase 0.
 
 It left ``lower.py`` when Fallen Empires took that module past the 1,000-line
 cap, for the reason ``lowering/_records.py`` already records about the two
@@ -124,20 +140,39 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_add_mana_for_tappe
                        _lower_exchange_greatest_mana_value,
                        _lower_mutual_control_of_sets,
                        _lower_pay_or_sacrifice_greatest_mana_value,
-                       _lower_win_game)
+                       _lower_win_game,
+                       # The rows that left `statement_dispatch`'s chain at
+                       # Invasion's Phase 0 — see each table's own note.
+                       lower_block_count_grant,
+                       _lower_sacrifice, _lower_tap,
+                       _lower_sacrifice_unless_pay,
+                       _lower_chosen_source_next_damage, _lower_add_mana,
+                       _lower_bin_revealed_card,
+                       _lower_put_milled_card_onto_battlefield,
+                       _lower_discard_revealed_unless_pay_life,
+                       _lower_discard_revealed_matching_unless_pay_life,
+                       _lower_play_with_top_revealed,
+                       _lower_search_player_library,
+                       _lower_remove_from_combat,
+                       _lower_put_library_top_into_hand,
+                       _lower_put_exiled_with_source,
+                       _lower_each_player_claims_exiled_card)
 
 
 #: The node types whose lowering is *only* a name — one AST class, one
-#: function, nothing to decide. These were 78 two-line branches of the chain
-#: below: 156 lines saying what a dict says in 78, growing by three every time
-#: a round adds a node. Dispatching them by type is what every other seam in
-#: this engine already does (`EFFECT_HANDLERS` is the one the architecture
-#: notes name), and it is what the module-size guard was pointing at — the
-#: families were absorbing the work; the chain grew anyway, by construction.
+#: function, nothing to decide. These were 78 two-line branches of
+#: ``lower_statement``'s chain: 156 lines saying what a dict says in 78, growing
+#: by three every time a round adds a node. Dispatching them by type is what
+#: every other seam in this engine already does (`EFFECT_HANDLERS` is the one
+#: the architecture notes name), and it is what the module-size guard was
+#: pointing at — the families were absorbing the work; the chain grew anyway,
+#: by construction.
 #:
-#: The chain below keeps every branch that *decides* something: a node whose
-#: lowering depends on its own fields, on the firing event, or on which of
-#: several kinds it should become.
+#: That chain — in ``statement_dispatch.py`` since Alliances — keeps every
+#: branch that *decides* something: which family or which lowering a node goes
+#: to, or what to hand it beyond the arguments these four tables carry. That a
+#: lowering reads the firing event or the records is not such a decision; the
+#: wider tables below are for exactly those.
 #:
 #: Read before the chain, which is safe by construction rather than by
 #: inspection: no class in this table appears anywhere else in the chain and
@@ -307,6 +342,13 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.ChooseBlocksForDefenders: _lower_choose_blocks_for_defenders,
     ast.ReassignBlockersBetweenAttackers: _lower_reassign_blockers_between_attackers,
     ast.ReturnSelfInsteadOfUntapping: _lower_return_self_instead_of_untapping,
+    # The permission twin of ``ast.CombatRestriction``, and its own node for
+    # the node's own reason: the two say opposite things and share only the
+    # rule they read (CR 509.1b). The restriction is an arm of the chain — it
+    # is handed the ``whole_effect``-filtered event, which no table carries —
+    # and the grant sat beside it there until Invasion's Phase 0 taking the
+    # node and nothing else, which is this table's definition.
+    ast.BlockCountGrant: lower_block_count_grant,
 }
 
 
@@ -319,12 +361,13 @@ _BY_NODE_TYPE: dict[type, object] = {
 #: table's reason: a registry that grows every time a card lands is the half
 #: that moves out of the dispatcher.
 #:
-#: Nine branches of that chain are already exactly ``return _lower_x(statement,
-#: event)`` — Discard, Mill, ExileEntireLibrary, PlayWithHandRevealed,
-#: AddManaForTappedLand, PlayerGetsCounters, UntapChosenByPaying,
-#: RevealHandAndChoose, LookTopPick. Each is a row this table could hold; they
-#: are left where they are because moving a branch nobody is changing is churn,
-#: and the next round that touches one should bring it across.
+#: Nine branches of that chain were already exactly ``return _lower_x(statement,
+#: event)`` when this table arrived — Discard, Mill, ExileEntireLibrary,
+#: PlayWithHandRevealed, AddManaForTappedLand, PlayerGetsCounters,
+#: UntapChosenByPaying, RevealHandAndChoose, LookTopPick — and were left where
+#: they were, because moving a branch nobody is changing is churn. All nine are
+#: rows below now, brought across by the rounds that next touched the
+#: dispatcher; no arm of the chain is left that passes the raw event alone.
 #:
 #: Read after :data:`_BY_NODE_TYPE` and before the chain, and disjoint from both
 #: for that table's reason: a class in two tables would be dispatched by
@@ -412,8 +455,8 @@ _BY_NODE_TYPE_WITH_EVENT: dict[type, object] = {
 }
 
 
-#: The fourth registry, and the only node that needs **both**: what the firing
-#: event froze *and* what earlier steps of this same effect recorded.
+#: The fourth registry: a node that needs **both** — what the firing event
+#: froze *and* what earlier steps of this same effect recorded.
 #:
 #: "…all creatures with magnet counters on them block **that creature** this
 #: turn if able" (Magnetic Web) reads the event — the attacker the requirement
@@ -444,6 +487,32 @@ _BY_NODE_TYPE_WITH_EVENT_AND_PRODUCED: dict[type, object] = {
     # It left the records-only table for the search's reason one row up: one
     # node, two referents, two places to look.
     ast.CreateCopyToken: _lower_create_copy_token,
+    # Three arms of `statement_dispatch`'s chain that were exactly ``return
+    # _lower_x(statement, event, produced)``, brought across at Invasion's
+    # Phase 0. Each arm's reasoning about the *raw* event travels with it, and
+    # the raw event is what this table passes.
+    #
+    # The **unfiltered** event, for the same reason ``_lower_destroy`` takes
+    # one: whether a repeated "that <noun>" names the permanent the source is
+    # attached to is a fact about the trigger, true of every clause under it,
+    # and Mind Whip's tap sits inside a ``may``'s otherwise branch. Two rows
+    # and one lowering: the chain's arm matched either class.
+    ast.Tap: _lower_tap,
+    ast.Untap: _lower_tap,
+    # ``event``, not ``dispatch_event``: what "that artifact" names is a fact
+    # about the *trigger* — its condition already named the enchanted permanent
+    # — rather than about where in the sentence the clause sits, and the kind
+    # it produces reaches its handler through the ordinary dict dispatch
+    # however deeply it is nested. The same reading ``_lower_destroy`` takes,
+    # and for the same reason: Curse Artifact's sacrifice lowers under a
+    # ``May``.
+    # ``produced`` for the same reason ``_lower_destroy`` takes it: "one of
+    # those creatures" names a set an earlier step of this effect chose.
+    # The **unfiltered** event, for ``_lower_destroy``'s reason: "that
+    # creature's controller sacrifices **it** at end of combat" (Basalt Golem)
+    # reaches the bound branch through the *delay's* event, which is a fact
+    # about the sentence rather than about where in it the clause sits.
+    ast.Sacrifice: _lower_sacrifice,
 }
 
 
@@ -504,4 +573,55 @@ _BY_NODE_TYPE_WITH_PRODUCED: dict[type, object] = {
     # singular spellings (Phyrexian Gremlins' "it", Giant Oyster's target) read
     # no record and lower exactly as they did.
     ast.DoesntUntapWhileSourceTapped: _lower_doesnt_untap_while_source_tapped,
+    # Thirteen arms of `statement_dispatch`'s chain that were exactly ``return
+    # _lower_x(statement, produced)`` — this table's definition — brought across
+    # at Invasion's Phase 0, with that module 44 lines from the size guard and
+    # eight groups about to reach it. Eight predate this table and were never
+    # moved; five were written after it, three of them under a comment saying
+    # a row of ``by_node`` is a lowering that needs "nothing but its node".
+    # That was this module's own docstring, which had stopped being true the
+    # day the event table was added. Each arm's reasoning travels with it.
+    #
+    # "Sacrifice **it** unless you pay its mana cost reduced by {2}" (Flash).
+    # The pronoun is only a pronoun *relative to what came before it*: with no
+    # record from an earlier step of the same sentence, "it" has no referent but
+    # the source, and the two readings lower to different machinery.
+    ast.SacrificeUnlessPay: _lower_sacrifice_unless_pay,
+    # Beside ``ast.PreventDamage``'s shield, which is an arm of the chain: the
+    # source this names is one a step in front of it chose (idiom 7).
+    ast.ChosenSourceNextDamage: _lower_chosen_source_next_damage,
+    ast.AddMana: _lower_add_mana,
+    # "it" names the card an earlier step of *this* effect turned up, so the
+    # lowering needs ``produced`` where the event-bearing table passes
+    # ``event``.
+    ast.BinRevealedCard: _lower_bin_revealed_card,
+    # "one of **them**" names a set an earlier step of this same effect
+    # recorded, so the node cannot answer on its own.
+    ast.PutMilledCardOntoBattlefield: _lower_put_milled_card_onto_battlefield,
+    ast.DiscardRevealedUnlessPayLife: _lower_discard_revealed_unless_pay_life,
+    # The plural, beside the singular for its reason: the record an earlier
+    # step wrote is the whole of the gate.
+    ast.DiscardRevealedMatchingUnlessPayLife:
+        _lower_discard_revealed_matching_unless_pay_life,
+    # The reveal half of the printed sentence ``ast.CastPermission`` reads the
+    # other half of (Temporal Aperture): the condition its duration holds under
+    # is about "that card", so the lowering has to see what the step in front
+    # of it recorded.
+    ast.PlayWithTopRevealed: _lower_play_with_top_revealed,
+    # "Search that player's library for **that many** cards" (Jester's Mask):
+    # the count is a back-reference, so this lowering needs the record of what
+    # the steps before it produced.
+    ast.SearchPlayerLibrary: _lower_search_player_library,
+    ast.RemoveFromCombat: _lower_remove_from_combat,
+    # Scroll Rack prints "put **that many** cards", which is a back-reference
+    # to the exile a step earlier.
+    ast.PutLibraryTopIntoHand: _lower_put_library_top_into_hand,
+    # It left the name-only table when Duplicity's "put **all other** cards you
+    # own exiled with this enchantment into your hand" gave it a
+    # back-reference: "other" names the cards a step of this same effect
+    # exiled. It went to the chain then, and should have come here.
+    ast.PutExiledWithSource: _lower_put_exiled_with_source,
+    # "one of the exiled cards" names what a step of this same effect exiled,
+    # which is a reading only the producer set can admit.
+    ast.EachPlayerClaimsExiledCard: _lower_each_player_claims_exiled_card,
 }

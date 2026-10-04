@@ -19,8 +19,18 @@ that module's docstring states — **which shield records what, and for how long
 shield nor a duration.
 
 **A floor rather than a family**, for ``_blankets``' reason: ``prevention``
-reads it — from three places in ``_lower_prevent_damage`` and nowhere else —
-and it reads nothing back.
+reads the three productions below — from three places in
+``_lower_prevent_damage`` and nowhere else — and they read nothing back.
+
+It has two more readers since, each for a rider's *other* end, and each arrived
+the same way — a predicate about CR 615.5 that had been sitting on whichever
+floor was nearest. ``counters`` reads the pair that says which placement is the
+rider's (Mercadian Masques' Phase 0, out of ``_records``), and
+``statement_dispatch`` reads :func:`_guard_is_the_arms_own_precondition`
+(Invasion's Phase 0, out of the dispatcher itself): the printed "if it's a
+creature" in front of that placement. The last is the only name here the
+dispatch layer reaches, and it reaches it directly — a floor is below the
+dispatcher as it is below every family.
 
 Two of the three are read at the **top** of that function, ahead of every
 branch, and that is deliberate rather than incidental. Each shield branch was
@@ -36,7 +46,8 @@ from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
 from ..phrases import is_pt_counter
-from ._common import _amount_payload, testable_filter_payload
+from ._common import (_amount_payload, _restrictions_beyond,
+                      testable_filter_payload)
 
 
 def _alternate_amount(node: ast.PreventDamage) -> dict | None:
@@ -245,8 +256,6 @@ def names_the_shielded_object(subject) -> bool:
     shield step recorded. Any *other* field is one the sentence added and this
     reading would drop, so it refuses.
     """
-    from ._common import _restrictions_beyond
-
     if not isinstance(subject, ast.TargetSpec):
         return False
     if _restrictions_beyond(subject.filter, frozenset({"card_types", "is_source"})):
@@ -271,4 +280,47 @@ def counts_prevented_damage(node) -> bool:
     return (
         isinstance(count, ast.ThatMuch)
         and count.source == PREVENTION_SHIELD_RECORD
+    )
+
+
+# ---------------------------------------------------------------------------
+# The guard printed in front of the rider
+# ---------------------------------------------------------------------------
+#
+# Moved here from ``statement_dispatch.py`` at Invasion's Phase 0, and by
+# subject as the two predicates above were: it routes no node and reads no part
+# of that module's chain. It answers one question about one CR 615.5 rider —
+# Scars of the Veteran's, the card both of those name — and had been defined
+# beneath the dispatcher because the ``Conditional`` arm is its only caller.
+# The arm stays where it was; it is the one place the condition and the effect
+# it guards are both in view, and it hands both down.
+
+
+def _guard_is_the_arms_own_precondition(condition, then) -> bool:
+    """"**If it's a creature**, put a +0/+1 counter on it for each 1 damage
+    prevented this way…" (Scars of the Veteran.)
+
+    The guard restates what the arm can already only do. "Any target" is a
+    creature, a player or a planeswalker (CR 115.4), and the arm is
+    ``add_pt_counters_per_damage_prevented``, whose whole reading is the
+    ``permanent_id`` the shield step recorded — armed on a player it records
+    none and the arm places nothing. So the condition is CR-redundant here, in
+    the way "under its owner's control" restates CR 400.3, and dropping it is
+    not dropping a rider.
+
+    **Not** consumed into nothing: it is checked against the arm, so a printing
+    that guarded some *other* effect with the same words still reaches the
+    ordinary conditional lowering — where it refuses, because nothing in the
+    effect revealed a card for "it" to name. This is the one arm whose own
+    record answers the question, and the pair is asserted rather than assumed.
+    """
+    return (
+        isinstance(condition, ast.RevealedCardIs)
+        and not condition.negated
+        and condition.filter.card_types == ("creature",)
+        and not _restrictions_beyond(
+            condition.filter, frozenset({"card_types"})
+        )
+        and len(then) == 1
+        and then[0].kind == "add_pt_counters_per_damage_prevented"
     )
