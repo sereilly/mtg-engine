@@ -17,6 +17,7 @@ from ..delayed_triggers import (end_source_tapped_delayed_triggers,
 from ..enter_effects import CAST_THIS_TURN_STAMP, ENTERED_BATTLEFIELD_TURN
 from ..exiled_records import forget_record, newest_record_for
 from ..events import Event, collect, emit
+from ..faces import whole_card
 from ..layer_bridge import computed_controller
 from ..land_types import end_land_type_change
 from ..linked_exile import LEAVES, UNTAPPED
@@ -911,6 +912,11 @@ class GameHelpersMixin:
         ``tests/engine/test_leave_battlefield_seam.py`` asks for it.
         """
         seat = self._owner_seat(owner)
+        # CR 709.4: everywhere but the stack a split card is the whole card. A
+        # spell's card is its *half* (``engine/faces.py``), so the three zone
+        # seams are where it becomes one card again — asked here rather than at
+        # each place a spell can be sent, which is the reason these are seams.
+        card = whole_card(card)
         if is_token_card(card):
             return False  # CR 111.7 / 704.5d: it ceases to exist instead
         if self._leaving_battlefield_replaced(from_battlefield, owner, "hand"):
@@ -927,6 +933,7 @@ class GameHelpersMixin:
         ``position`` is "top" or "bottom"; the return value and
         *from_battlefield* read as :meth:`put_card_into_hand`'s do."""
         seat = self._owner_seat(owner)
+        card = whole_card(card)  # CR 709.4 — see ``put_card_into_hand``
         if is_token_card(card):
             return False  # CR 111.7 / 704.5d: it ceases to exist instead
         if self._leaving_battlefield_replaced(from_battlefield, owner, "library"):
@@ -978,6 +985,7 @@ class GameHelpersMixin:
         that already has one.
         """
         seat = self._owner_seat(owner)
+        card = whole_card(card)  # CR 709.4 — see ``put_card_into_hand``
         consumed, _ = apply_replacements(
             self,
             "put_into_graveyard",

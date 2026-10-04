@@ -39,6 +39,8 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 
+from .faces import holds_spell_named
+
 
 @dataclass(frozen=True)
 class HandLock:
@@ -116,7 +118,10 @@ def playable_hand_index(game, seat: int, card_name: str) -> int | None:
     """
     locked = locked_hand_indices(game, seat)
     for index, card in enumerate(game.players[seat].hand):
-        if card.name == card_name and index not in locked:
+        # ``holds_spell_named``, not a name comparison: a split card is cast by
+        # the name of one of its halves (CR 709.3, CR 709.4a), so "Assault"
+        # finds the Assault // Battery in hand.
+        if holds_spell_named(card, card_name) and index not in locked:
             return index
     return None
 
@@ -126,7 +131,7 @@ def hand_lock_reason(game, seat: int, card_name: str) -> str | None:
     source, because "you can't play that" with no reason is indistinguishable
     from a bug to the player reading the log."""
     for lock in live_hand_locks(game, seat):
-        if getattr(lock.card, "name", None) == card_name:
+        if holds_spell_named(lock.card, card_name):
             return (
                 f"{card_name} can't be played until "
                 f"{game.players[seat].name}'s next turn ({lock.source_name})"

@@ -18,6 +18,7 @@ from ...classifier import CardClassification, classify_card
 from ...enter_effects import copy_on_enter_type
 from ...events import emit
 from ...extra_triggers import additional_triggers
+from ...faces import whole_card
 from ...game_types import OracleExecutionContext, OracleStateMachine, StackItem
 from ...handlers.control_flow import evaluate_condition
 from ...models import CardDefinition, Permanent
@@ -214,8 +215,14 @@ class StackResolutionMixin:
         here with ``hand_instead`` False, because the resolution never got as
         far as asking.
         """
+        # CR 709.4: the *spell* was one half of a split card and the card that
+        # leaves the stack is the whole of it. ``card`` stays the half for the
+        # log lines — that is the spell that resolved — and ``leaving`` is what
+        # lands in a zone. The hand and graveyard seams ask the same question
+        # themselves; exile has no seam, so it is asked here.
+        leaving = whole_card(card)
         if hand_instead and not exile_instead:
-            arrived = self.put_card_into_hand(owner, card)
+            arrived = self.put_card_into_hand(owner, leaving)
             if arrived:
                 self.log.append(
                     f"{card.name} {verb} and returned to its owner's hand "
@@ -223,10 +230,10 @@ class StackResolutionMixin:
                 )
             return
         if exile_instead:
-            owner.exile.append(card)
+            owner.exile.append(leaving)
             self.log.append(f"{card.name} {verb} and was exiled instead of going to the graveyard")
         else:
-            self.put_card_into_graveyard(owner, card)
+            self.put_card_into_graveyard(owner, leaving)
             self.log.append(f"{card.name} {verb} and moved to graveyard")
 
     def _default_opposing_seat(self, caster_index: int) -> int:

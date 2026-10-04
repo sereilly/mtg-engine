@@ -9,6 +9,7 @@ from ..exiled_records import (EXILE_RECORD_KEY, EXILED_SPELL_CONTROLLER_KEY,
                               StackAnnouncement, is_live, record_exiled_card,
                               record_in_context)
 from ..game_types import StackItem
+from ..faces import is_face, spell_named, whole_card
 from ..mana_payment import mana_cost_label, total_pips
 from ..oracle_types import (COUNTERED_ABILITY_SOURCE, COUNTERED_SPELL_CONTROLLER,
                             COUNTERED_SPELL_NAME)
@@ -145,6 +146,7 @@ def _stack_announcement(item: StackItem) -> StackAnnouncement:
         chosen_modes=item.chosen_modes,
         target_stack_item=item.target_stack_item,
         choices=dict(item.choices),
+        face_name=item.card.name if is_face(item.card) else None,
     )
 
 
@@ -211,7 +213,9 @@ def exile_target_spell(game: Game, instruction: OracleInstruction, context: Orac
         verb=f"was exiled by {context.card.name}",
     )
     record = record_exiled_card(
-        game, target.card, owner_index,
+        # The card as exile holds it (CR 709.4): ``_bin_spell_card`` put the
+        # *whole* card there, and the register is keyed on that object.
+        game, whole_card(target.card), owner_index,
         # CR 108.4 gives a card in exile no controller, so its own abilities
         # belong to its owner. The printed possessive ("**that player's**
         # upkeeps") is a different seat once the two come apart — the *spell's*
@@ -293,7 +297,13 @@ def put_exiled_card_onto_stack_as_copy(game: Game, instruction: OracleInstructio
         game.players[record.owner_index], record.card, record=record
     )
     copy = StackItem(
-        card=record.card,
+        # CR 707.10 copies "the characteristics of the spell", and for a split
+        # card those are one half's (CR 709.3b) — the half the announcement
+        # recorded, since the card in exile is the whole card again.
+        card=(
+            spell_named(record.card, announcement.face_name)
+            if announcement.face_name is not None else None
+        ) or record.card,
         caster_index=seat,
         # The physical card is the object (see the docstring), so CR 608.2n
         # bins it to its **owner's** graveyard — the seat whose exile it just

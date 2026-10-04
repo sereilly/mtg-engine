@@ -51,6 +51,7 @@ from ...divided_damage import (
     division_refusal, stamp_card_shares, stamped_entry,
 )
 from ...hand_locks import hand_lock_reason, playable_hand_index
+from ...faces import choose_a_face_refusal, holds_spell_named, spell_named
 from ...classifier import classify_card
 from ...cost_modifiers import (
     CostReduction, buyback_cost_reduction, cost_reduction_for_cast, reduce_cost,
@@ -924,7 +925,7 @@ class SpellCastingMixin:
             # of them is a restriction on how *many* may be played.
             hand_index = playable_hand_index(self, caster_index, card_name)
             if hand_index is None:
-                if not any(card.name == card_name for card in caster.hand):
+                if not any(holds_spell_named(card, card_name) for card in caster.hand):
                     raise ValueError(f"Card not in hand: {card_name}")
                 denial = hand_lock_reason(self, caster_index, card_name) or (
                     f"{card_name} can't be played"
@@ -940,7 +941,11 @@ class SpellCastingMixin:
             # is the whole of the rule's restriction.
             source_zone = caster.command_zone
             hand_index = next(
-                (i for i, card in enumerate(source_zone) if card.name == card_name), None
+                (
+                    i for i, card in enumerate(source_zone)
+                    if holds_spell_named(card, card_name)
+                ),
+                None,
             )
             if hand_index is None:
                 raise ValueError(f"Card not in command zone: {card_name}")
@@ -982,7 +987,7 @@ class SpellCastingMixin:
             for seat in seats:
                 pile = getattr(self.players[seat], from_zone)
                 for i, candidate in enumerate(pile):
-                    if candidate.name != card_name:
+                    if not holds_spell_named(candidate, card_name):
                         continue
                     if hand_index is None and seat == caster_index:
                         # The fallback that names the refusal below, and only
@@ -1013,7 +1018,25 @@ class SpellCastingMixin:
                     classify_card(source_zone[hand_index]).effect_kind, details,
                 )
 
-        card = source_zone[hand_index]
+        # **Which face is this spell** (CR 709.3), settled here and nowhere
+        # else: "a player chooses which half of a split card they are casting
+        # before putting it onto the stack", and CR 709.3a has only that half
+        # evaluated for whether it can be cast. So `held` is the card as its
+        # zone holds it — the object the departure, the permission and the
+        # commander record are keyed to, by identity — and `card` is the spell:
+        # the half the caster named (`engine/faces.py`), or the card itself
+        # when it has one face. Every gate, cost and target below reads `card`
+        # and is therefore about the half, with nothing else to remember.
+        #
+        # A split card asked for by its whole spelling names no half, and is
+        # refused rather than defaulted: there is no deterministic pick that is
+        # not the engine choosing a different spell from the one that was meant.
+        held = source_zone[hand_index]
+        card = spell_named(held, card_name)
+        if card is None:
+            details = choose_a_face_refusal(held) or f"{card_name} is not a spell"
+            self.log.append(details)
+            return SimulationResult(card_name, False, None, details)
         classification = classify_card(card)
         extra_generic_tax = 0
         # The *coloured* half of the same taxes (Derelor's "{B}"). Its own
@@ -1276,7 +1299,7 @@ class SpellCastingMixin:
         # of its own — which is what makes it interact correctly with the cost
         # increases above and with a cost reduction below.
         if from_zone == "command":
-            commander_tax = self.commander_tax(caster_index, card)
+            commander_tax = self.commander_tax(caster_index, held)
             if commander_tax:
                 extra_generic_tax += commander_tax
                 self.log.append(
@@ -1862,7 +1885,7 @@ class SpellCastingMixin:
             # pure loss, paid on top of a spell that was already free.
             and chosen_alternative is None
         ):
-            waiver = permission_for(self, caster_index, card, "hand")
+            waiver = permission_for(self, caster_index, held, "hand")
             if waiver is not None and from_zone == "hand":
                 free_grant = waiver
                 if permission is None:
@@ -1926,7 +1949,7 @@ class SpellCastingMixin:
         # ``pop``: one transition out of exile, thirteen sites, one place for
         # anything that must happen when a card leaves.
         if from_zone == "exile":
-            self.take_card_from_exile(source_seat, card)
+            self.take_card_from_exile(source_seat, held)
         else:
             del source_zone[hand_index]
         # Now, and not before: the spell is no longer in the hand, so it cannot
@@ -1964,13 +1987,13 @@ class SpellCastingMixin:
         # board that has not changed since pays exactly what the gate measured.
         self._pay_sacrifice_tax(owed, f"to cast {card.name}")
         if permission is not None:
-            consume_permission(self, permission, card)
+            consume_permission(self, permission, held)
         if from_zone == "command":
             # CR 903.8's "each previous time" is counted once the cast is
             # announced and paid for, so the tax charged above is the one this
             # cast owed and the next one is {2} higher. A cast that failed
             # anywhere above returned before here and costs nothing.
-            self.record_commander_cast(caster_index, card)
+            self.record_commander_cast(caster_index, held)
         if from_zone != "hand":
             # Whose pile it left, which is not always the caster's: a grant may
             # open somebody else's exile (Grinning Totem). The permission is the

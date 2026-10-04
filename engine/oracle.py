@@ -31,6 +31,7 @@ import re
 from functools import lru_cache
 
 from .models import CardDefinition
+from .faces import CAST_FACE_LAYOUTS, face_cards, is_multi_face
 from .oracle_types import (
     ActivatedAbilityCost,
     ModalOption,
@@ -6427,14 +6428,22 @@ def expand_card_lines(card) -> list[str]:
 
 
 # Layouts the compiler can read straight from the top-level characteristics.
-# Every other layout (split, flip, transform, modal_dfc, adventure, meld, …)
-# leaves mana_cost and oracle_text empty and puts the real text in card_faces,
-# so compiling one as-is would classify it a supported vanilla — a silently
-# wrong answer rather than an error. Face-aware compilation is roadmap phase 3;
-# until then these are explicitly unsupported.
-SUPPORTED_LAYOUTS = frozenset({
+# Every other layout (flip, transform, modal_dfc, adventure, meld, …) leaves
+# mana_cost and oracle_text empty and puts the real text in card_faces, so
+# compiling one as-is would classify it a supported vanilla — a silently wrong
+# answer rather than an error. Those stay explicitly unsupported.
+#
+# **Split cards are the first multi-face layout admitted** (CR 709), and not by
+# teaching `_compile_card_oracle` about faces: `engine/faces.py` derives each
+# half as a normal-layout card of its own, that card is what compiles (and what
+# the stack holds, CR 709.3b), and `compile_card_oracle` answers for the whole
+# card by asking of its halves. `faces.CAST_FACE_LAYOUTS` is the one list of
+# layouts read that way, so admitting the next one is an entry there plus the
+# cast path's say-so — never an edit to the single-face set below.
+SINGLE_FACE_LAYOUTS = frozenset({
     "normal", "leveler", "class", "saga", "case", "planar", "scheme", "vanguard", "token",
 })
+SUPPORTED_LAYOUTS = SINGLE_FACE_LAYOUTS | CAST_FACE_LAYOUTS
 
 
 # ---------------------------------------------------------------------------
@@ -7042,7 +7051,13 @@ def _compile_card_oracle(
     )
     normalized_text = _normalize_text(oracle_text)
 
-    if layout not in SUPPORTED_LAYOUTS:
+    # The single-face set, not `SUPPORTED_LAYOUTS`: this function reads one
+    # text box, and a multi-face card's own is empty. A split card reaches the
+    # compiler through `compile_card_oracle`, which hands each half here as the
+    # normal-layout card `engine/faces.py` derives — so a multi-face layout
+    # arriving *here* was handed in whole, and reading its empty text as a
+    # supported vanilla is exactly the silently wrong answer the gate is for.
+    if layout not in SINGLE_FACE_LAYOUTS:
         return OracleProgram(
             False, "unsupported", f"unsupported card layout: {layout}", normalized_text
         )
@@ -7556,7 +7571,54 @@ def _compile_card_oracle(
     return OracleProgram(False, "unsupported", "unknown card type", normalized_text)
 
 
+#: The ``effect_kind`` a whole multi-face card reports. Its own word because
+#: the whole card has no effect of its own — each face has one — and a census
+#: bucketing it under either half's kind would count one card as that kind and
+#: silently lose the other.
+MULTI_FACE_EFFECT_KIND = "multi_face"
+
+
+def face_programs(card: CardDefinition) -> tuple[tuple[CardDefinition, OracleProgram], ...]:
+    """Each face of a multi-face *card* with its compiled program, in printed
+    order; ``()`` for a single-face card.
+
+    The one way to read "what does this card's text compile to" for a card
+    whose text is on its faces. Every instrument that walks a card's lines —
+    the coverage scripts, the behaviour signature, the program differential —
+    asks this rather than the whole card's program, which has no instructions
+    by construction (see :func:`compile_card_oracle`).
+    """
+    return tuple((face, compile_card_oracle(face)) for face in face_cards(card))
+
+
+def compiled_faces(card: CardDefinition) -> tuple[tuple[CardDefinition, OracleProgram], ...]:
+    """*card* as the list of (card, program) pairs an instrument should read:
+    its faces for a multi-face card, and otherwise the card itself. Never
+    empty, so a caller loops over it without asking which kind it holds."""
+    return face_programs(card) or ((card, compile_card_oracle(card)),)
+
+
 def compile_card_oracle(card: CardDefinition) -> OracleProgram:
+    if is_multi_face(card):
+        # CR 709.3a: "Only the chosen half is evaluated to see if it can be
+        # cast." The whole card is never a spell, so it has no instructions to
+        # resolve — its verdict is its faces' verdicts, and it is supported
+        # only when **every** face is (a card one half of which does nothing is
+        # a card a player can be dealt and cannot fully play). The reason names
+        # the face that failed, because "unsupported" on a two-spell card is
+        # otherwise a question with two answers.
+        programs = face_programs(card)
+        text = " // ".join(program.normalized_text for _, program in programs)
+        failed = [(face, program) for face, program in programs if not program.supported]
+        if failed:
+            reason = "; ".join(
+                f"{face.name}: {program.reason}" for face, program in failed
+            )
+            return OracleProgram(False, "unsupported", reason, text)
+        return OracleProgram(
+            True, MULTI_FACE_EFFECT_KIND,
+            f"{card.layout} card: every face supported", text,
+        )
     return _compile_card_oracle(
         card.name, card.primary_type, card.oracle_text, card.keywords, card.layout,
         card.is_legendary,

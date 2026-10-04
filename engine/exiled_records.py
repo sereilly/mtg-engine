@@ -104,6 +104,11 @@ class StackAnnouncement:
     #: ``StackItem.choices`` carries, copied rather than shared so the record
     #: cannot be edited through the object it was read from.
     choices: dict = field(default_factory=dict)
+    #: CR 709.3's choice — which half of a split card the spell was — by the
+    #: half's name, or None for a single-face card. A decision made as the
+    #: spell was announced like every other field here, and one the card in
+    #: exile cannot answer: off the stack it is the whole card again (CR 709.4).
+    face_name: str | None = None
 
 
 @dataclass
