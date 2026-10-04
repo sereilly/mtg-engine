@@ -1,24 +1,32 @@
 """The multi-zone strip by name — "search a player's graveyard, hand, and
 library for all cards with the same name as X and exile them".
 
-A floor under ``effects/search.py``, split out of it at Urza's Destiny's wave 1
-when that module sat 28 lines from the thousand-line guard with five cards'
-worth of new reading to land here and nowhere else. A floor rather than a
-family, precedented by ``lowering/_recipients`` and for its stated reason:
-``search`` is the only module that asks, and this exists because that family
-crossed the guard.
+A floor split out of ``effects/search.py`` at Urza's Destiny's wave 1, when
+that module sat 28 lines from the thousand-line guard with five cards' worth of
+new reading to land here and nowhere else. A floor rather than a family,
+precedented by ``lowering/_recipients`` and for its stated reason: one module
+asks, and this exists because that family crossed the guard.
+
+**That one module is ``_other_libraries``, and it always was one function.**
+This is tried from inside the production that reads ``Search <player>'s`` and
+hands down the player — never from the tutor — so when that production left
+``search`` at the Phase 0 before Invasion, the import went with it. A floor
+under a floor; nothing reads back.
 
 **And the seam is a real one, which is what makes it a floor and not a
-convenience.** Everything left in ``search`` is CR 701.23's library walk —
-whose library, what may be found, where the find goes, and the shuffle that
-ends it. This is not a library search at all. It opens three zones of three
-different kinds (an open zone, its owner's hidden hand, and a library), it
-finds by a name nothing printed rather than by a described card, it exiles
-everything it finds rather than moving one card somewhere, and it shuffles
-only the library because that is the only one of the three CR 701.24 says to.
-The two halves share the printed word "Search" and no vocabulary whatsoever:
-``_STRIPPED_ZONES`` below is the file's only zone table and nothing in
-``search`` reads it.
+convenience.** Everything in ``search`` and ``_other_libraries`` is CR 701.23's
+library walk — whose library, what may be found, where the find goes, and the
+shuffle that ends it. This is not a library search at all. It opens three zones
+of three different kinds (an open zone, its owner's hidden hand, and a
+library), it finds by a name nothing printed rather than by a described card,
+it exiles everything it finds rather than moving one card somewhere, and it
+shuffles only the library because that is the only one of the three CR 701.24
+says to. With the tutor it shares the printed word "Search" and nothing else.
+With its caller it shares the opener that names the player and the closing
+"and exile them. Then that player shuffles", each side reading its own copy —
+this sentence said "no vocabulary whatsoever" until the caller was measured
+apart from the tutor. ``_STRIPPED_ZONES`` below is the file's only zone table
+and neither module reads it.
 
 The name it compares against is always a **record** — something an earlier step
 of the same resolution wrote down — and never a literal the card prints, which
@@ -69,8 +77,8 @@ def _accept_strip_cards_with_chosen_name(
     this search opened.
 
     Two or more zones are required. One zone is the ordinary counted search in
-    ``search``, whose whole tail this production has none of, and admitting a
-    single zone here would take those cards away from it.
+    ``_other_libraries``, whose whole tail this production has none of, and
+    admitting a single zone here would take those cards away from it.
 
     **Two spellings of one thing, which is why they are branches and not two
     productions.** "the same name as **the chosen card**" (Lobotomy) and "the

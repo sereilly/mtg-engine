@@ -10,17 +10,28 @@ filter, a destination, a reveal and a shuffle, and none of that vocabulary
 appears anywhere else in the family.
 
 The cut is where the call graph already fell apart: ``_parse_search_library`` is
-the only name outside this module that anything reaches for, and the three
-productions behind it (the other player's library, the untap rider, the counted
-two-destination form) are called from here and nowhere else. Nothing left in
-``library`` calls anything here, and nothing here calls anything there.
+the only name outside this module that anything reaches for, and everything
+else here is a clause or a tail of the sentence it reads — the counted form, the
+exiling forms, the untap and discard riders, the pile an opponent picks from —
+called from it and from nowhere else. Nothing left in ``library`` calls anything
+here, and nothing here calls anything there.
 
-The multi-zone strip that used to sit at the bottom of this file left at
-Urza's Destiny's wave 1, into ``_strips`` — a floor this module imports rather
-than a family beside it, since nothing else asks. Its own docstring records the
-seam; the short version is that "search a player's graveyard, hand, and library
-for all cards with the same name as that spell and exile them" is not a library
-search, and shared not one word of vocabulary with what stayed.
+**What is here is the searcher's own library**, which is what "the tutor" in the
+first line means, and two things that were not have left. Both were reached
+through the one branch at the top of the entry point: "search" followed by
+anything but "your" or "their".
+
+* The multi-zone strip left at Urza's Destiny's wave 1, into ``_strips``: "search
+  a player's graveyard, hand, and library for all cards with the same name as
+  that spell and exile them" is not a library search at all.
+* ``_parse_search_other_library`` left at the Phase 0 before Invasion, into
+  ``_other_libraries`` — the floor this module imports. "Search target player's
+  library" is a different card and not a wording of this one, which the entry
+  point's docstring has said since it was written, and it called nothing that
+  stayed. It was also the strip's only caller, so ``_strips`` went with it and
+  this module no longer imports that floor. This paragraph used to say the strip
+  "shared not one word of vocabulary with what stayed"; that was true of the
+  tutor and not of the production that called it.
 
 **Asymmetric, and the mirror image of the asymmetry this package usually
 records** — or it was. The sentence that stood here said the lowering side has
@@ -41,7 +52,7 @@ from ..nouns import parse_object_filter
 from ..references import parse_player_ref, parse_target_spec
 from ..stream import TokenStream
 from ..phrases import _accept_number, _parse_zone
-from ._strips import _accept_strip_cards_with_chosen_name
+from ._other_libraries import _parse_search_other_library
 
 
 
@@ -389,144 +400,6 @@ def _accept_search_discard_clause(stream: TokenStream) -> tuple[int, bool]:
         return 0, False
     at_random = bool(stream.accept_phrase("at", "random"))
     return count, at_random
-
-
-def _parse_search_other_library(stream: TokenStream) -> ast.Statement:
-    """``Search <player>'s library for <count> cards and exile them. Then that
-    player shuffles.`` (Jester's Cap.)
-
-    ``Search <player>'s library for <count> cards. That player puts those cards
-    into their hand, then shuffles.`` (Jester's Mask.)
-
-    Three things are read rather than skipped, each for the reason the
-    own-library production reads its three:
-
-    * **whose library** — the seat the flow opens, which is not the seat that
-      chooses (CR 608.2c);
-    * **where the finds go** — exile and the searched player's hand are
-      different effects. The sentence naming the hand is printed *after* the
-      search and is still consumed here, because it is about the cards this
-      search found: left to the sequence parser it would run before the prompt
-      this arms had been answered, and would have nothing to move.
-    * **the shuffle** — CR 701.24 ends a library search with one, so deleting
-      the word refuses the line rather than claiming a search that leaves the
-      library ordered.
-    """
-    player = parse_player_ref(stream)
-    if player is None:
-        raise stream.error("expected whose library is searched")
-    # The lexer splits "player's" into "player" + "'s".
-    stream.expect_word("'s")
-    # "Search that player's **graveyard, hand, and library** for all cards with
-    # the same name as the chosen card and exile them." (Lobotomy.) A search
-    # across several zones and by a name nothing printed — read here, before
-    # the literal "library" this production has always expected, which is the
-    # word that failed the line. Non-consuming on refusal, so Jester's Cap and
-    # Jester's Mask keep every reading and every refusal site they have.
-    stripped = _accept_strip_cards_with_chosen_name(stream, player)
-    if stripped is not None:
-        return stripped
-    stream.expect_word("library")
-    stream.expect_word("for")
-    # "…for **up to seven** cards" (Denying Wind): a ceiling, not CR 701.23d's
-    # find-that-many floor.
-    up_to = bool(stream.accept_phrase("up", "to"))
-    count = parse_amount(stream)
-    if isinstance(count, ast.Fixed) and count.value < 1:
-        raise stream.error("expected how many cards the search may find")
-    filt = parse_object_filter(stream)
-    if not filt.is_card:
-        raise stream.error("a library holds cards, not permanents")
-    to: ast.Zone | None = None
-    under_control_of: ast.PlayerRef | None = None
-    if isinstance(count, ast.Fixed) and count.value == 1 and stream.accept_phrase(
-        "and", "put", "that", "card", "onto", "the", "battlefield"
-    ):
-        # "Search **target opponent's** library for a creature card and put that
-        # card onto the battlefield **under your control**." (Bribery.) The
-        # third destination this production reads, and the first that separates
-        # the seat whose library is opened from the seat the find lands under —
-        # CR 110.2a's controller, which is what the printed phrase is there to
-        # say.
-        #
-        # The controller is **required**, not optional: CR 110.2 would default
-        # it to the spell's controller and so would happen to be right here,
-        # but ``search_filters.landing_seat`` does not — its default follows the
-        # *zone*, so a phrase consumed into nothing would put the creature back
-        # onto the battlefield of the player whose library it came out of. A
-        # printed seat read and dropped is the rider bug this grammar refuses by
-        # construction, so the words are consumed and checked.
-        to = ast.Zone("battlefield")
-        if stream.accept_phrase("under", "your", "control"):
-            under_control_of = ast.PlayerRef("you")
-        elif stream.accept_phrase("under", "the", "control", "of"):
-            under_control_of = parse_player_ref(stream)
-            if under_control_of is None:
-                raise stream.error("expected a player after 'under the control of'")
-        else:
-            raise stream.error(
-                "expected whose battlefield this search's find enters"
-            )
-    elif stream.accept_phrase("and", "exile", "them"):
-        to = ast.Zone("exile")
-    elif isinstance(count, ast.Fixed) and count.value == 1 and stream.accept_phrase(
-        "and", "exile", "it"
-    ):
-        # "Search target opponent's library for **a card** and exile **it**."
-        # (Grinning Totem.) The plural clause above with one find, and the
-        # pronoun is *checked against the count* rather than merely consumed:
-        # "for three cards and exile it" is not a sentence any card prints, and
-        # admitting it would let a three-card search claim the one-card reading
-        # — the same agreement `_parse_search_untap_rider` demands of "that
-        # land". The whole difference is a word, so it is a branch here and not
-        # a second production.
-        to = ast.Zone("exile")
-    # "…and exile it**, then the player shuffles**." (Rootwater Thief.) The
-    # shuffle clause printed inside the search's own sentence rather than as the
-    # next one — the same CR 701.23 tail, so it is read here for exactly the
-    # reason the separate-sentence spelling is. The comma spelling needs "then";
-    # only a full stop can open the clause bare ("Then that player shuffles.").
-    same_sentence = (
-        to is not None
-        and stream.accept_punct(",")
-        and stream.at_word("then")
-    )
-    if not same_sentence and not stream.accept_punct("."):
-        raise stream.error("expected the sentence that ends this search")
-    if to is not None:
-        # "**Then that player shuffles.**"
-        stream.accept_word("then")
-        shuffler = parse_player_ref(stream)
-        if shuffler is None:
-            raise stream.error("expected who shuffles after this search")
-        # The shuffler is the player whose library was searched (CR 701.23a)
-        # — "that player" / "the player" back-refer to the seat this sentence
-        # opened — and a printed seat read and dropped is the rider bug this
-        # grammar refuses: a card naming some other shuffler is not this one.
-        if shuffler.kind not in ("that_player", player.kind):
-            raise stream.error("the searched player is the one who shuffles")
-        stream.expect_word("shuffles")
-        return ast.SearchPlayerLibrary(
-            player, count, filt, to, under_control_of, up_to=up_to
-        )
-    if up_to:
-        raise stream.error("only an exiling search reads 'up to' here")
-    # "**That player puts those cards into their hand, then shuffles.**"
-    holder = parse_player_ref(stream)
-    if holder is None:
-        raise stream.error("expected who takes the cards this search found")
-    for word in ("puts", "those", "cards", "into"):
-        stream.expect_word(word)
-    # "into **their** hand" — the possessive names the player this same clause
-    # just named. `_parse_zone` has no reading for it (its possessives are
-    # "your", "its owner's" and "its controller's"), and widening it there would
-    # give every zone destination in the grammar a pronoun with no antecedent.
-    stream.expect_word("their")
-    stream.expect_word("hand")
-    stream.accept_punct(",")
-    stream.expect_word("then")
-    stream.expect_word("shuffles")
-    return ast.SearchPlayerLibrary(player, count, filt, ast.Zone("hand", holder))
 
 
 def _parse_search_untap_rider(stream: TokenStream):
