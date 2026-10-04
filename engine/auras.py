@@ -29,6 +29,9 @@ fails to parse.
 from __future__ import annotations
 
 import re
+from functools import lru_cache
+
+from .oracle_types import compilation_cache
 
 # The nouns an Aura's effect clause can address, from its "Enchant <noun>" line.
 _NOUN = r"(?:creature|artifact|enchantment|land|wall|permanent)"
@@ -1992,6 +1995,138 @@ def aura_granted_ability_lines(oracle_text: str) -> tuple[str, ...]:
     return tuple(lines)
 
 
+# 'As long as enchanted permanent is red or green, it has "At the beginning of
+# your upkeep, sacrifice this permanent unless you pay its mana cost."' (Essence
+# Leak.) The quoted grant one pattern up with a **criterion on the host** in
+# front of it — CR 613.1's "as long as", so the ability is there exactly while
+# the host answers the description and is gone, with nothing to undo, the
+# moment a Lace or a Sway of Illusion changes the answer (CR 611.3a).
+#
+# The criterion is captured as words and read by the grammar's **noun parser**
+# (:func:`_host_criterion_filter`), not by a colour alternation here: "is red or
+# green" is "is a red or green permanent", which is a phrase that parser already
+# reads and ``subject_matches`` already tests through the layers. A regex of
+# colour words would be a second reader of what a colour is, and would make
+# "is tapped" or "is an artifact" on the next card a new pattern instead of the
+# same one.
+_CONDITIONAL_QUOTED_ABILITY_GRANT = re.compile(
+    rf'^as long as {_ATTACHED} (?P<noun>{_NOUN}) is (?P<criterion>[a-z][a-z, \-]*), '
+    r'it has "(?P<ability>[^"]+)"$'
+)
+
+
+def _host_criterion_filter(noun: str, criterion: str) -> dict | None:
+    """The filter payload "<attached> *noun* is *criterion*" tests, or None.
+
+    Built by handing the noun parser the phrase the clause abbreviates — "red or
+    green" + "permanent" — so the criterion means what the same words mean in
+    front of any noun in the engine. None when the parser cannot read it, when
+    it reads past the phrase, when the result carries a key ``subject_matches``
+    cannot test, or when the criterion added nothing to the bare noun: each of
+    those is a condition that would be admitted and then not enforced, which
+    for a granted *drawback* is the card doing more than it prints.
+    """
+    from .grammar.errors import GrammarError
+    from .grammar.lexer import tokenize
+    from .grammar.nouns import parse_object_filter
+    from .grammar.stream import TokenStream
+    from .subject_filters import untestable_filter_keys
+
+    def _described(phrase: str) -> dict | None:
+        stream = TokenStream(tokenize(phrase).tokens)
+        try:
+            described = parse_object_filter(stream)
+        except GrammarError:
+            return None
+        if not stream.exhausted:
+            return None
+        return described.to_payload()
+
+    bare = _described(noun)
+    narrowed = _described(f"{criterion} {noun}")
+    if bare is None or narrowed is None or narrowed == bare:
+        return None
+    if untestable_filter_keys(narrowed):
+        return None
+    return narrowed
+
+
+@compilation_cache
+@lru_cache(maxsize=None)
+def aura_conditional_ability_grants(oracle_text: str) -> tuple[tuple[tuple, str], ...]:
+    """``(criterion, ability line)`` pairs an Aura grants its host **while the
+    host answers the criterion**.
+
+    The criterion is a filter payload frozen as sorted items (the result is
+    cached, and a shared dict would be one caller's mutation away from changing
+    the card); :func:`conditional_ability_lines_for` thaws it.
+
+    Kept apart from :func:`aura_granted_ability_lines` for the reason
+    :func:`aura_conditional_keyword_grants` is kept apart from the keyword
+    grants: that list is folded into ``Permanent.effective_card`` unconditionally
+    and with no game in hand, so a conditional grant returned from it would be
+    an unconditional one the moment a caller forgot the second element.
+
+    A pair is returned only when **both** halves are implemented — the
+    criterion is testable and the quote compiles
+    (``granted_abilities.granted_ability_supported``) — so the support gate,
+    which asks this function, cannot admit a line whose ability does nothing.
+    """
+    text = oracle_text or ""
+    if '"' not in text or "as long as" not in text.lower():
+        return ()
+    from .granted_abilities import granted_ability_supported
+
+    grants: list[tuple[tuple, str]] = []
+    for raw_line in text.splitlines():
+        match = _CONDITIONAL_QUOTED_ABILITY_GRANT.match(_line_text(raw_line))
+        if match is None:
+            continue
+        described = _host_criterion_filter(
+            match.group("noun"), match.group("criterion").strip()
+        )
+        ability = match.group("ability")
+        if described is None or not granted_ability_supported(ability):
+            continue
+        grants.append((_freeze_filter(described), ability))
+    return tuple(grants)
+
+
+def _freeze_filter(described: dict) -> tuple:
+    """*described* as hashable, order-stable items (lists become tuples)."""
+    return tuple(
+        (key, tuple(value) if isinstance(value, list) else value)
+        for key, value in sorted(described.items())
+    )
+
+
+def conditional_ability_lines_for(game, aura, seat: int, host) -> tuple[str, ...]:
+    """The quoted abilities *aura* grants *host* right now.
+
+    Asked on every recompute by ``_recalculate_lord_buffs``, which owns the
+    derived-ability channel's clear and rebuild — so the answer is never
+    remembered, and the ability leaves with the Aura, with the criterion, or
+    with either's text being changed (CR 611.3a/b).
+
+    The criterion is tested through ``subject_matches``: the host's colour is
+    CR 613 layer 5's answer, not its printed one. *seat* is the Aura's
+    controller (CR 109.5), which is who a relative key would be measured from.
+    """
+    from .subject_filters import subject_matches
+
+    lines: list[str] = []
+    for frozen, ability in aura_conditional_ability_grants(
+        aura.effective_card.oracle_text or ""
+    ):
+        described = {
+            key: list(value) if isinstance(value, tuple) else value
+            for key, value in frozen
+        }
+        if subject_matches(game, host, described, observer=seat, source=aura):
+            lines.append(ability)
+    return tuple(lines)
+
+
 def _keyword_list(run: str) -> list[str]:
     """The keywords a printed run names — "flying and first strike", "flying,
     first strike, and trample".
@@ -2996,6 +3131,11 @@ def aura_continuous_claim(line: str) -> str | None:
         return (
             "state-conditioned keyword grant (layer 6) — "
             "auras.aura_conditional_keyword_grants"
+        )
+    if aura_conditional_ability_grants(normalized):
+        return (
+            "criterion-conditioned ability grant (layer 6) — "
+            "auras.conditional_ability_lines_for"
         )
     if aura_restrictions(normalized):
         return "combat/untap restriction — auras.aura_restriction_active"

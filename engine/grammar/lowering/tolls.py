@@ -27,6 +27,7 @@ import dataclasses
 
 from ...oracle_types import OracleInstruction
 from ...subject_filters import object_only_filter
+from ...upkeep_costs import SOURCE_MANA_COST
 from .. import ast
 from ..errors import LoweringError
 from ._common import _filter_payload, _full_mana_payload, _is_source
@@ -96,7 +97,15 @@ def _lower_sacrifice_unless_pay(
                 },
             ),
         )
-    if node.cost_from is not None:
+    if node.cost_from is not None and not (
+        node.cost_from == "its_mana_cost"
+        and _is_source(subject)
+        and not node.cost.pips
+    ):
+        # A derived cost on the *source* is read by the upkeep handlers below;
+        # one carrying a printed reduction is not — those handlers charge the
+        # mana cost whole — so it refuses rather than charging more than the
+        # card says.
         raise LoweringError(
             "a derived cost is read off a permanent an earlier step of this "
             "sentence created", node=node,
@@ -109,6 +118,17 @@ def _lower_sacrifice_unless_pay(
         if types == ("enchantment",)
         else "upkeep_pay_or_sacrifice_self"
     )
+    if node.cost_from == "its_mana_cost":
+        # "…sacrifice this permanent unless you pay **its mana cost**."
+        # (Pendrell Flux, Essence Leak.) "Its" is the permanent carrying the
+        # ability — the source — so the cost is not knowable here: the sentence
+        # is granted to whatever the Aura is on. The payload names where to
+        # read it (``upkeep_costs.SOURCE_MANA_COST``) and the two upkeep
+        # handlers and the prompt resolve it through one reader,
+        # ``upkeep_costs.resolved_toll_instruction``. No ``mana`` key at all,
+        # deliberately: an empty one is a cost of nothing, which a reader that
+        # had not learned the new key would charge.
+        return (OracleInstruction(kind, "", {"cost_from": SOURCE_MANA_COST}),)
     return (OracleInstruction(kind, "", {"mana": _full_mana_payload(node.cost)}),)
 
 def _lower_pay_or_sacrifice_greatest_mana_value(

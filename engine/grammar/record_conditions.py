@@ -79,7 +79,7 @@ from .seat_records import (_accept_seat_cast_record,
                            _accept_seat_damage_record,
                            _accept_seat_land_record)
 from .stream import TokenStream
-from .vocabulary import COLOR_WORDS, NUMBER_WORDS
+from .vocabulary import CARD_TYPES, COLOR_WORDS, NUMBER_WORDS
 
 
 def _accept_it_is(stream: TokenStream, *, negated: bool) -> bool:
@@ -98,6 +98,40 @@ def _accept_it_is(stream: TokenStream, *, negated: bool) -> bool:
         return negated
     stream.reset(mark)
     return False
+
+
+def _accept_colour_run(stream: TokenStream, *, negated: bool) -> "ast.Condition | None":
+    """``red`` / ``white or blue`` after a copula, as a colour test on the
+    pronoun's object — or None, consuming nothing, when no colour word is next.
+
+    "…**if it's red**" (Hydroblast) is one colour; "If that creature is **white
+    or blue**, …" (Lightning Dart) and "As long as enchanted permanent is **red
+    or green**, …" (Essence Leak) are the same test with a disjunction inside
+    the predicate. CR 105.2 makes an object's colours a set, so "is white or
+    blue" is "is white, or is blue" — which is how it is built: one
+    :class:`ast.ItIsColor` per printed word under the ``SomeOf`` the
+    clause-level "or" already produces, so no evaluator learns a second shape.
+
+    Read here rather than left to that clause-level loop, which asks for a
+    whole condition after "or" and would hand "blue" back unread — leaving the
+    line refused at a word this production does read.
+
+    Negated, the disjunction flips (De Morgan): "it **isn't** white or blue" is
+    neither, so the parts are conjoined. No card prints it; it is written out
+    because the other reading would be the opposite condition.
+    """
+    first = stream.peek_word()
+    if first not in COLOR_WORDS:
+        return None
+    stream.advance()
+    colours = [COLOR_WORDS[first]]
+    while stream.peek_word() == "or" and stream.peek_word(1) in COLOR_WORDS:
+        colours.append(COLOR_WORDS[stream.peek_word(1)])
+        stream.advance(2)
+    parts = tuple(ast.ItIsColor(colour, negated=negated) for colour in colours)
+    if len(parts) == 1:
+        return parts[0]
+    return ast.EveryOf(parts) if negated else ast.SomeOf(parts)
 
 
 def _accept_quality_with_implied_noun(
@@ -328,6 +362,24 @@ def _accept_record_condition(stream: TokenStream) -> "ast.Condition | None":
     # it's untapped**" (Giant Tortoise) opens with the same two words and is a
     # state test, not a card test. So this branch takes the sentence only when a
     # noun phrase naming card *types* follows, and hands it back otherwise.
+    # "If **that creature is** white or blue, …" (Lightning Dart). The repeated
+    # noun where Hydroblast prints the pronoun: both name the object the effect
+    # beside the clause targets, and the lowering resolves which
+    # (``pronoun_target_referent``). Taken only when a colour word follows the
+    # copula, so "that creature is tapped" and every other "that <noun> is …"
+    # sentence is handed back whole to the reader that owns it.
+    that_mark = stream.mark()
+    if stream.accept_word("that"):
+        noun = stream.peek_word()
+        if (
+            (noun == "permanent" or noun in CARD_TYPES)
+            and stream.peek_word(1) == "is"
+            and stream.peek_word(2) in COLOR_WORDS
+        ):
+            stream.advance(2)
+            return _accept_colour_run(stream, negated=False)
+    stream.reset(that_mark)
+
     it_mark = stream.mark()
     # "If it **isn't** a land card, …" (Wand of Ith) is the same test read the
     # other way, so it is the same branch carrying the word rather than a
@@ -341,10 +393,9 @@ def _accept_record_condition(stream: TokenStream) -> "ast.Condition | None":
         # is a question about the object the effect targets. The colour is
         # consumed against `COLOR_WORDS` rather than through the noun parser,
         # which needs a head noun and would refuse the phrase outright.
-        colour = stream.peek_word()
-        if colour in COLOR_WORDS:
-            stream.advance()
-            return ast.ItIsColor(COLOR_WORDS[colour], negated=negated)
+        coloured = _accept_colour_run(stream, negated=negated)
+        if coloured is not None:
+            return coloured
         stream.accept_word("a", "an")
         try:
             revealed_filter = parse_object_filter(stream)

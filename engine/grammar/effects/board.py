@@ -189,8 +189,16 @@ def _parse_sacrifice(stream: TokenStream, player: ast.PlayerRef) -> ast.Statemen
             mark_derived = stream.mark()
             if stream.accept_phrase("its", "mana", "cost"):
                 if not stream.accept_phrase("reduced", "by"):
-                    raise stream.error(
-                        "expected 'reduced by' after a derived mana cost"
+                    # "…sacrifice this permanent unless you pay **its mana
+                    # cost**." (Pendrell Flux's and Essence Leak's granted
+                    # ability.) The same derived cost with nothing taken off
+                    # it: an empty reduction, which is what the printed
+                    # sentence says. It refused here — naming a "reduced by"
+                    # the card never prints — so the quote compiled to nothing
+                    # and Pendrell Flux shipped granting an ability no step
+                    # ever charged.
+                    return ast.SacrificeUnlessPay(
+                        subject, ast.ManaCost(()), cost_from="its_mana_cost",
                     )
                 return ast.SacrificeUnlessPay(
                     subject, _parse_mana_payment(stream),

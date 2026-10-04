@@ -353,6 +353,35 @@ def _lower_combat_restriction(
                 {"subject": described, "required": bool(payload["required"])},
             ),
         )
+    # "This creature can't attack unless **a black or green creature** also
+    # attacks." (Scarred Puma.) The companion's noun phrase as the filter the
+    # declaration gate tests against each *other* declared attacker. Held to
+    # what ``subject_matches`` can answer for the usual reason, sharper here
+    # than usual: a narrowing the gate ignored would let any second attacker
+    # escort the Puma, which is the restriction quietly lifted.
+    if node.kind == "cant_attack_unless_subject_attacks":
+        if not _is_source(node.subject):
+            # Read off the creature's own compiled program at the declaration
+            # (``declaration_companion_required`` takes one permanent), so a
+            # sentence about a described set has nowhere to be enforced.
+            raise LoweringError(
+                "the escort restriction is read off the creature that prints it",
+                node=node,
+            )
+        described = _filter_payload(dict(node.payload)["companion"])
+        untestable = untestable_filter_keys(described)
+        if untestable or not described:
+            raise LoweringError(
+                "the attack gate cannot test the creature that must also "
+                "attack: "
+                + (", ".join(sorted(untestable)) or "nothing was described"),
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "cant_attack_unless_subject_attacks", "", {"companion": described}
+            ),
+        )
     # "This creature can't block white creatures with power 2 or greater."
     # (Orcish Veteran.) The printed noun phrase as the filter list the
     # enforcement site tests against the *attacker*, byte for byte the payload

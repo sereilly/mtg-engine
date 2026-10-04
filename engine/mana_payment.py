@@ -536,6 +536,38 @@ def mana_cost_from_symbols(printed: str) -> dict[str, int] | None:
 _PRINTED_SYMBOL = re.compile(r"\{([^}]+)\}")
 
 
+def permanent_mana_cost(permanent) -> dict[str, int] | None:
+    """The mana cost of *permanent* as a payable symbol dict, or None when it
+    has none.
+
+    "…unless you pay **its mana cost**." Read off ``effective_card``, so a
+    Clone costs what it copied (CR 707.2) and a token that is not a copy has no
+    mana cost at all (CR 202.1b). **None is "unpayable", not "free"** —
+    CR 118.6 — and the two must not be confused: ``{0}`` (Ornithopter) is a
+    mana cost and comes back as an empty requirement any player can meet, while
+    a land's missing cost comes back None and may not be paid.
+
+    ``{X}`` is 0 anywhere but the stack (CR 107.3g, CR 107.3h), so it is
+    dropped rather than refused. A symbol this engine cannot spend — hybrid,
+    Phyrexian — is None for :func:`mana_cost_from_symbols`' reason: a cost read
+    as smaller than it is charges less than the card says, and refusing the
+    payment is the conservative answer.
+    """
+    printed = permanent.effective_card.mana_cost or ""
+    symbols = _PRINTED_SYMBOL.findall(printed)
+    if not symbols:
+        return None
+    spendable = "".join(
+        "{" + symbol + "}" for symbol in symbols if symbol.upper() != "X"
+    )
+    if not spendable:
+        return {}
+    cost = mana_cost_from_symbols(spendable)
+    if cost is None:
+        return None
+    return {symbol: amount for symbol, amount in cost.items() if amount}
+
+
 def total_pips(required: dict[str, int]) -> int:
     """How many mana the cost is, all told — for a log line or a prompt label,
     never for deciding whether it can be paid."""

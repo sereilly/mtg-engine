@@ -188,6 +188,33 @@ def _parse_cant_attack_or_block(
                 subject, "cant_attack_unless_greater_power_attacks", ()
             )
         stream.reset(greater_mark)
+        # "This creature can't attack **unless a black or green creature also
+        # attacks**." (Scarred Puma.) Okk's sentence with a *noun phrase* where
+        # that one prints a comparison: the declaration must hold a second
+        # attacker answering the description. Its own kind for the reason Okk's
+        # is — a different question about the same declaration — and the
+        # phrase is read by the noun parser, so "a Goblin", "a creature with
+        # flying" and "a black or green creature" are one production and the
+        # enforcing check tests whichever was printed through
+        # ``subject_matches``.
+        #
+        # "Also" is required for Okk's reason: it is what makes the companion a
+        # *second* attacker rather than this creature answering its own
+        # description (a green Puma is not its own escort), and the gate reads
+        # the word as "other than this one".
+        companion_mark = stream.mark()
+        if stream.accept_word("unless") and stream.accept_word("a", "an"):
+            try:
+                companion = parse_object_filter(stream)
+            except GrammarError:
+                companion = None
+            if companion is not None and stream.accept_phrase("also", "attacks"):
+                return ast.CombatRestriction(
+                    subject,
+                    "cant_attack_unless_subject_attacks",
+                    (("companion", companion),),
+                )
+        stream.reset(companion_mark)
         others_mark = stream.mark()
         if stream.accept_phrase("unless", "at", "least"):
             count = _accept_number(stream)

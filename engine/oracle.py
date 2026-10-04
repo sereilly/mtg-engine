@@ -5073,6 +5073,10 @@ _GRAMMAR_STATIC_CREATURE_KINDS = frozenset(
         # complex" with both of its lines grammar-clean.
         "cant_attack_unless_greater_power_attacks",
         "cant_block_unless_greater_power_blocks",
+        # "…unless a black or green creature also attacks." (Scarred Puma.)
+        # Okk's row with a noun phrase for the companion; the declaration reads
+        # the compiled instruction off the card exactly as it reads that one.
+        "cant_attack_unless_subject_attacks",
         # "You may have this creature assign its combat damage as though it
         # weren't blocked." (Lone Wolf.) A static property of the creature read
         # by the combat damage step at CR 510.1's turn-based action, so — like

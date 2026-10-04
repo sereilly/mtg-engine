@@ -184,8 +184,51 @@ def _parse_conditional_instead_rider(
     if type(replacement) is not type(last) or not stream.accept_word("instead"):
         stream.reset(mark)
         return False
+    replacement = _rebind_replacement_recipient(replacement, last)
     steps[-1] = ast.Conditional(condition, then=replacement, otherwise=last)
     return True
+
+
+def _rebind_replacement_recipient(replacement, last):
+    """*replacement* with a pronoun recipient pointed at *last*'s one target.
+
+    "Lightning Dart deals 1 damage to **target creature**. If that creature is
+    white or blue, Lightning Dart deals 4 damage to **it** instead." The second
+    sentence replaces the first, so its "it" is the creature the first one
+    targeted — the same object, chosen once (CR 601.2c), dealt one amount or
+    the other. Written back as the first sentence's own target spec, both arms
+    of the ``Conditional`` describe one target: the picker derives one choice
+    and whichever arm runs resolves the same permanent.
+
+    Only for the shape that has an answer: one recipient on each side, the
+    first a single announced target, the second a bare "it" or a "that <noun>"
+    restating it and narrowing nothing. Anything else is returned unchanged and
+    refuses where it always did — an "it" with two targets in front of it names
+    neither, and a "that" carrying a narrowing of its own is describing some
+    other object.
+    """
+    if not isinstance(replacement, ast.DealDamage):
+        return replacement
+    if len(replacement.recipients) != 1 or len(last.recipients) != 1:
+        return replacement
+    named, chosen = replacement.recipients[0], last.recipients[0]
+    if not (
+        isinstance(named, ast.TargetSpec)
+        and isinstance(chosen, ast.TargetSpec)
+        and chosen.targeted
+        and chosen.count == 1
+        and not named.targeted
+    ):
+        return replacement
+    if named.quantifier == "that":
+        restated = replace(named.filter, card_types=())
+        if restated != ast.ObjectFilter() or not (
+            set(named.filter.card_types) <= set(chosen.filter.card_types)
+        ):
+            return replacement
+    elif named.quantifier != "it":
+        return replacement
+    return replace(replacement, recipients=(chosen,))
 
 
 def _choice_step_index(steps: list[ast.Statement]) -> int | None:
