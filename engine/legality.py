@@ -444,6 +444,22 @@ _UNCHECKED_CAST_TARGET_KINDS = frozenset({
 })
 
 
+#: The narrowings of a **stack** target that a spell's announcement and its
+#: resolution re-ask through the picker's own enumeration
+#: (:meth:`LegalityMixin.described_stack_target_refusal`). Exactly the keys no
+#: per-kind arm in ``_validate_cast_targets`` reads *and* whose enumeration
+#: reader is the handler's own (``_spell_targets_matching``,
+#: ``_stack_controller_ok``, the ability list) — so the gate can only refuse
+#: what the handler would have declined anyway. The card-type keys are left
+#: out on purpose: the enumeration reads them through ``primary_type`` where
+#: the handler reads every printed type, and gating on that would refuse a
+#: legal cast (an artifact creature spell named by "artifact spell").
+_DESCRIBED_STACK_SPEC_KEYS = (
+    "stack_targets_filter", "stack_targets_source", "stack_controller",
+    "stack_include_abilities",
+)
+
+
 def _resolution_rechecks_description(spec: dict) -> bool:
     """Whether ``illegal_targets_refusal`` re-asks *spec*'s printed
     description of each surviving permanent target (CR 608.2b).
@@ -2368,6 +2384,67 @@ class LegalityMixin:
                 return refused
         return None
 
+    def _described_stack_targets(
+        self, caster_index: int, card: CardDefinition, spec: dict,
+    ) -> "list | None":
+        """The stack objects *spec*'s printed description admits, by identity,
+        or None when this spec is not one the question is asked of.
+
+        "Counter target spell or ability **an opponent controls that targets a
+        land you control**" (Teferi's Response): everything after the noun is a
+        restriction on what may be chosen (CR 115.1), and until this nothing
+        asked it of a *spell's* stack target — the announcement gate skips the
+        ``stack`` kind and the per-kind arm reads the colour alone, so the
+        spell could be aimed at any object and the handler declined after the
+        cost was paid. For a card with a sentence behind the counter that is
+        not a wasted card but a free one: Teferi's Response drew its two cards
+        for {1}{U} off any object at all.
+
+        The enumeration is the picker's own, turned back from top-first
+        indices into the objects, so the offer and the gate are one reading.
+        """
+        if spec.get("kind") != "stack" or not any(
+            spec.get(key) for key in _DESCRIBED_STACK_SPEC_KEYS
+        ):
+            return None
+        depth = len(self.stack)
+        offered = []
+        for entry in self._enumerate_stack_targets(caster_index, card, spec):
+            index = entry.get("stack_index")
+            if isinstance(index, int) and 0 <= depth - 1 - index < depth:
+                offered.append(self.stack[depth - 1 - index])
+        return offered
+
+    def described_stack_target_refusal(
+        self, caster_index: int, card: CardDefinition, target_stack_item, *,
+        from_zone: str = "hand",
+    ) -> str | None:
+        """CR 601.2c for a spell whose target is **an object on the stack**
+        with a printed description: the one named must be one the picker would
+        have offered, and with none named there must be one to offer.
+
+        :meth:`cast_target_refusal`'s twin for the zone it leaves out, and
+        beside it for its reason — asked from the one cast path, before any
+        mana is spent. Scoped by :data:`_DESCRIBED_STACK_SPEC_KEYS`; every
+        other counterspell keeps the arm it has.
+        """
+        if card.primary_type not in ("instant", "sorcery"):
+            return None
+        program = compile_card_oracle(card)
+        if program.modes:
+            return None
+        spec = derive_cast_spec(card, program, from_zone=from_zone)
+        if spec is None:
+            return None
+        offered = self._described_stack_targets(caster_index, card, spec)
+        if offered is None:
+            return None
+        if target_stack_item is None:
+            return None if offered else f"no valid target for {card.name}"
+        if not any(item is target_stack_item for item in offered):
+            return f"no valid target for {card.name}"
+        return None
+
     def illegal_targets_refusal(self, item) -> str | None:
         """CR 608.2b: whether *item* must leave the stack without resolving.
 
@@ -2563,7 +2640,20 @@ class LegalityMixin:
         if item.target_stack_item is not None:
             # A countered or already-resolved spell has left the zone it was
             # targeted in, which is CR 608.2b's first sentence.
-            legality.append(any(obj is item.target_stack_item for obj in self.stack))
+            still_there = any(obj is item.target_stack_item for obj in self.stack)
+            if still_there and not program.modes:
+                # …and its second: "that targets a land you control" stops
+                # being true when the land leaves or the object is re-aimed
+                # (Teferi's Response). Re-asked through the announcement's own
+                # enumeration, for the specs that gate asks it of.
+                offered = self._described_stack_targets(
+                    item.caster_index, card, spec
+                )
+                if offered is not None:
+                    still_there = any(
+                        obj is item.target_stack_item for obj in offered
+                    )
+            legality.append(still_there)
 
         if not legality or any(legality):
             return None
@@ -3613,6 +3703,8 @@ class LegalityMixin:
             # print them separately: Deflection carries only the first.
             if not self._stack_single_target_ok(item, spec, caster_index, source):
                 continue
+            if not _stack_controller_ok(item, spec, caster_index):
+                continue
             if color_filter and color_filter not in self._stack_item_colors(item):
                 continue
             stack_any_colors = spec.get("stack_any_colors")
@@ -3763,6 +3855,11 @@ class LegalityMixin:
             # including ones aimed at something the card never named.
             if not self._stack_single_target_ok(item, spec, caster_index, source):
                 continue
+            # "…an opponent controls" (Teferi's Response): CR 113.8's
+            # controller, the gate the spell loop above asks through the same
+            # reader.
+            if not _stack_controller_ok(item, spec, caster_index):
+                continue
             item_card = getattr(item, "card", None)
             name = item_card.name if item_card is not None else "ability"
             # Top-first, the convention the spell enumeration above emits and
@@ -3773,6 +3870,25 @@ class LegalityMixin:
                 "name": f"{name}'s {kind} ability",
             })
         return targets
+
+
+def _stack_controller_ok(item, spec: dict, caster_index: int) -> bool:
+    """Whether a stack object's controller is the one *spec* names.
+
+    "counter target artifact spell **you control**" (Goblin Artisans),
+    "…spell or ability **an opponent controls**" (Teferi's Response). The seat
+    that put the object on the stack — a spell's controller by CR 112.2, an
+    ability's by CR 113.8 — measured against the seat doing the looking, which
+    is the reading ``handlers/stack._counter_controller_refusal`` makes at
+    resolution. One function for both stack enumerations, because the question
+    is the same for a spell and an ability and it was asked of neither: the
+    handler declined after the cost was paid.
+    """
+    wanted = spec.get("stack_controller")
+    if wanted is None:
+        return True
+    mine = getattr(item, "caster_index", None) == caster_index
+    return mine if wanted == "you" else (not mine if wanted == "opponent" else False)
 
 
 def _single_target_is(game, chosen: dict, wanted: str, source=None) -> bool:

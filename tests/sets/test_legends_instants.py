@@ -536,14 +536,15 @@ def test_avoid_fate_counters_an_instant_aimed_at_your_permanent(set_pool):
 def test_avoid_fate_leaves_a_spell_aimed_at_a_permanent_you_do_not_control(set_pool):
     """The narrowing is the card. A counter that ignored it would counter every
     instant on the stack, which is a strictly better and different card — so the
-    spell has to *resolve*, and its effect has to land."""
-    game, _p1, p2 = _avoid_fate_game(set_pool, "Transmutation", 1)
+    spell has to *resolve*, and its effect has to land. Refused at announcement
+    (CR 601.2c) since INV W1G8: the spell is not a legal target at all."""
+    game, p1, p2 = _avoid_fate_game(set_pool, "Transmutation", 1)
     theirs = p2.battlefield[0]
 
     result = game.cast_from_hand(0, "Avoid Fate", target_stack_index=0)
     game._settle()
 
-    assert result.supported, result.details
+    assert not result.supported and "Avoid Fate" in [c.name for c in p1.hand]
     assert not game.stack
     assert theirs.card.name == "Theirs"
     assert any(
@@ -554,13 +555,13 @@ def test_avoid_fate_leaves_a_spell_aimed_at_a_permanent_you_do_not_control(set_p
 def test_avoid_fate_leaves_a_sorcery_alone(set_pool):
     """A sorcery aimed at your own permanent satisfies the second narrowing and
     fails the first — the two are tested separately, so neither can carry the
-    other."""
+    other. Refused at announcement (CR 601.2c), like the test above."""
     game, p1, _p2 = _avoid_fate_game(set_pool, "Psychic Purge", 0)
 
     result = game.cast_from_hand(0, "Avoid Fate", target_stack_index=0)
     game._settle()
 
-    assert result.supported, result.details
+    assert not result.supported and "Avoid Fate" in [c.name for c in p1.hand]
     assert not game.stack
     assert any(
         "Psychic Purge dealt 1 damage to Mine" in line for line in game.log

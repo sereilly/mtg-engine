@@ -1559,6 +1559,14 @@ def _counter_spec(payload: dict) -> dict:
         # then counters nothing, which is the {U} paid for no effect the
         # narrowing beside it exists to prevent.
         spec["stack_targets_source"] = True
+    controller = payload.get("controller")
+    if controller:
+        # "…spell or ability **an opponent controls**" (Teferi's Response),
+        # "…artifact spell **you control**" (Goblin Artisans). Whose object it
+        # is, handed over in the word the handler tests — so the offer and the
+        # counter name one set, and a spell cast at one's own land is never
+        # offered to a card that could not counter it.
+        spec["stack_controller"] = controller
     if payload.get("also_ability"):
         # "Counter target spell **or ability** that targets a creature."
         # (Diplomatic Escort.) CR 113.7a: an ability on the stack is not a

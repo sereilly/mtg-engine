@@ -54,6 +54,7 @@ from .effects import (_parse_bound_targeting_prevention,
 from .effects.exile import (_parse_bin_unplayed_exiled_card,
                             parse_exile_graveyard_arrivals_this_turn)
 from .effects.retargeting import _parse_conditional_retarget
+from .effects.stack import _parse_destroy_countered_ability_source
 from .errors import GrammarError
 from .rebinding import (rebind_player_pronoun_to_condition_target,
                         rebind_pronoun_to_condition_target)
@@ -108,6 +109,15 @@ def parse_if_opening(
         graveyard_top = parse_graveyard_top_to_library(stream)
         if graveyard_top is not None:
             return graveyard_top
+        # "If a permanent's ability is countered this way, destroy that
+        # permanent." (Teferi's Response.) Here for the reason the three above
+        # are: the printed "if" tests nothing the board can answer — it asks
+        # what the counter in front of it removed, and "that permanent" is the
+        # same record read back. The generic conditional below has no condition
+        # for it and no referent for the arm. Refuses without consuming.
+        countered_source = _parse_destroy_countered_ability_source(stream)
+        if countered_source is not None:
+            return countered_source
         produces = _parse_produces_instead(stream)
         if produces is not None:
             return produces

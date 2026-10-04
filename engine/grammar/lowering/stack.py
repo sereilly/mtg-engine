@@ -13,7 +13,7 @@ of modes the engine can carry out.
 
 import dataclasses
 
-from ...oracle_types import OracleInstruction
+from ...oracle_types import COUNTERED_ABILITY_SOURCE, OracleInstruction
 from ...subject_filters import CARD_ONLY_FILTER_KEYS
 from .. import ast
 from ..errors import LoweringError
@@ -57,7 +57,21 @@ _COUNTER_HONOURED_FILTER_FIELDS = frozenset({
 #: ``targets_object`` survives because it asks what the object *chose*, which a
 #: spell answered at CR 601.2c and an ability at CR 602.2b — one question, both
 #: kinds.
-_UNION_HONOURED_FILTER_FIELDS = frozenset({"zone", "also_ability", "targets_object"})
+#:
+#: ``controller`` survives for the same reason and was missing until Teferi's
+#: Response printed it: CR 113.8 gives an ability on the stack a controller —
+#: the player who activated it, or who controlled its source as it triggered —
+#: exactly as CR 112.2 gives a spell one, so "an opponent controls" is asked of
+#: the object's ``caster_index`` whichever kind it is.
+_UNION_HONOURED_FILTER_FIELDS = frozenset(
+    {"zone", "also_ability", "targets_object", "controller"}
+)
+
+#: Whose spell or ability a counter may name, as the payload word the handler
+#: and the picker both test against the countering seat. "You" was the only
+#: one (Goblin Artisans) and "an opponent controls" (Teferi's Response) is the
+#: second; any other word is a seat neither reader can resolve.
+_COUNTER_CONTROLLERS = frozenset({"you", "opponent"})
 
 # The "unless … pays" costs the counter flow can offer: ``{X}`` (Power Sink,
 # sized from the caster's chosen X) and a fixed generic amount (Miscast's
@@ -510,10 +524,12 @@ def _lower_counter_spell(
         # Whose spell it is, checked by the handler against the caster's seat —
         # the one restriction here that is about the spell's controller rather
         # than the card, and refused for any other value because the handler
-        # can only ask about "mine".
-        if filt.controller != "you":
+        # can only ask about "mine" — or, since Teferi's Response, about "an
+        # opponent's": the same question with the answer turned over, asked of
+        # a spell and of an ability alike (CR 112.2, CR 113.8).
+        if filt.controller not in _COUNTER_CONTROLLERS:
             raise LoweringError("no handler for this counter controller", node=node)
-        payload["controller"] = "you"
+        payload["controller"] = filt.controller
     if filt.not_ability_targeted_by_same_name:
         # "…that isn't the target of an ability from another creature named ~"
         # (Goblin Artisans). Answered off the stack at resolution: the abilities
@@ -722,6 +738,36 @@ def _countered_destination(node: ast.CounterSpell) -> str:
             node=node,
         )
     return destination
+
+
+def _lower_destroy_countered_ability_source(
+    node: "ast.DestroyCounteredAbilitySource", produced: frozenset[str],
+) -> tuple[OracleInstruction, ...]:
+    """"If a permanent's ability is countered this way, destroy that permanent."
+    (Teferi's Response.)
+
+    Gated on the producer, which is the whole safety of it — Interdict's rule
+    for the same pronoun (``_lower_bound_permanent_activation_ban``): with no
+    counter in front of it "that permanent" names nothing, and a destroy
+    lowered without the record would reach whatever the resolution context
+    happened to hold.
+
+    An existing kind, read through its ``permanents_from`` channel: the record
+    is the permanent, an empty one destroys nothing (the counter took a spell,
+    or nothing at all), and **no target description** rides the payload — the
+    spell targeted an object on the stack (CR 115.1), so a description here
+    would raise a second picker for a permanent the caster never chose.
+    """
+    if COUNTERED_ABILITY_SOURCE not in produced:
+        raise LoweringError(
+            '"that permanent" names the source of a countered ability, and no '
+            "step of this effect countered one",
+            node=node,
+        )
+    payload: dict[str, object] = {"permanents_from": COUNTERED_ABILITY_SOURCE}
+    if node.bypass_regeneration:
+        payload["bypass_regeneration"] = True
+    return (OracleInstruction("destroy_target_permanent", "", payload),)
 
 
 def _lower_counter_ability(

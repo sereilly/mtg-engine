@@ -781,6 +781,14 @@ _PRODUCES_FOR_PAYLOAD: dict[str, tuple[str, object, str]] = {
     # cards** onto the battlefield under their owners' control" — a sentence
     # that would compile clean and put nothing.
     "reveal_top_of_library": ("whose", "each_player", REVEALED_TOP_CARDS_BY_SEAT),
+    # "Counter target spell **or ability** … If a permanent's ability is
+    # countered this way, destroy that permanent." (Teferi's Response.) The
+    # union counter writes the record ``counter_stack_ability`` writes for
+    # Interdict, and only the union can: a counter that names spells alone
+    # refuses an ability outright, so declaring it flat would admit "that
+    # permanent" behind Counterspell — a sentence that would compile clean and
+    # destroy nothing.
+    "counter_top_stack_spell": ("also_ability", True, COUNTERED_ABILITY_SOURCE),
     # "**Choose a source you control** and flip a coin." (Desperate Gambit.) The
     # same instruction Enchantment Alteration's host pick uses, sending its
     # answer somewhere else — and where it sends it is exactly what the

@@ -355,6 +355,7 @@ from .stack import (
     _lower_change_target,
     _lower_counter_ability,
     _lower_counter_spell,
+    _lower_destroy_countered_ability_source,
     _lower_modal_head,
     _lower_put_exiled_card_on_stack_as_copy,
 )
@@ -670,6 +671,7 @@ __all__ = [
     "_fused_conditional_counter",
     "_lower_change_target",
     "_lower_counter_ability",
+    "_lower_destroy_countered_ability_source",
     "_lower_choose_target",
     "_lower_waive_shroud",
     "_lower_counter_spell",

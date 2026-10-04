@@ -116,3 +116,135 @@ def test_winnow_offers_nonland_permanents_and_refuses_a_land(set_pool):
     ).supported
     assert game.is_on_battlefield(forest)
     assert game.players[0].hand == [winnow]
+
+
+def _w1g8_response_table(set_pool):
+    """Seat 0 holds Teferi's Response and an Island; seat 1 has a Forest and
+    an Icy Manipulator to aim at either land."""
+    game = _w1g8_instant_duel(set_pool)
+    mine = _w1g8_instant_put(game, set_pool, 0, "Island")
+    theirs = _w1g8_instant_put(game, set_pool, 1, "Forest")
+    icy = _w1g8_instant_put(game, set_pool, 1, "Icy Manipulator")
+    game.players[0].hand.append(set_pool("INV")["Teferi's Response"])
+    return game, mine, theirs, icy
+
+
+def _w1g8_response_offers(game, set_pool) -> list[str]:
+    """What Teferi's Response's cast picker shows seat 0 right now."""
+    card = set_pool("INV")["Teferi's Response"]
+    spec = _w1g8_cast_spec(card, _w1g8_compile(card))
+    return [
+        entry["name"]
+        for entry in game._enumerate_targets(0, card, spec, for_cast=True)
+    ]
+
+
+def test_teferis_response_counters_an_ability_and_destroys_its_source(set_pool):
+    """"Counter target spell or ability an opponent controls that targets a
+    land you control. If a permanent's ability is countered this way, destroy
+    that permanent. / Draw two cards." The Icy Manipulator's ability is
+    countered (the Island stays untapped), the Manipulator is destroyed, and
+    two cards are drawn."""
+    game, mine, _theirs, icy = _w1g8_response_table(set_pool)
+    assert game.queue_permanent_ability(
+        1, "Icy Manipulator", target_permanent_ids=[mine.permanent_id],
+    ).supported
+    assert _w1g8_response_offers(game, set_pool) == [
+        "Icy Manipulator's activated ability"
+    ]
+
+    assert game.cast_from_hand(
+        0, "Teferi's Response", target_stack_index=0,
+    ).supported
+    _w1g8_resolve_stack(game)
+
+    assert not mine.tapped
+    assert not game.is_on_battlefield(icy)
+    assert [card.name for card in game.players[1].graveyard] == ["Icy Manipulator"]
+    assert len(game.players[0].hand) == 2
+
+
+def test_teferis_response_counters_a_spell_and_destroys_nothing(set_pool):
+    """The spell half: Stone Rain aimed at the Island is countered and binned,
+    and "a permanent's ability" was not what was countered — nothing on either
+    battlefield is destroyed."""
+    game, mine, theirs, icy = _w1g8_response_table(set_pool)
+    game.active_player_index = 1
+    game.players[1].hand.append(set_pool("LEA")["Stone Rain"])
+    assert game.queue_from_hand(
+        1, "Stone Rain", target_permanent_ids=[mine.permanent_id],
+    ).supported
+
+    assert game.cast_from_hand(
+        0, "Teferi's Response", target_stack_index=0,
+    ).supported
+    _w1g8_resolve_stack(game)
+
+    assert game.is_on_battlefield(mine)
+    assert game.is_on_battlefield(theirs) and game.is_on_battlefield(icy)
+    assert [card.name for card in game.players[1].graveyard] == ["Stone Rain"]
+    assert len(game.players[0].hand) == 2
+
+
+def test_teferis_response_cannot_name_an_object_aimed_at_another_land(set_pool):
+    """"…that targets a land **you control**": an ability aimed at the
+    opponent's own Forest is not offered, and naming it is refused at
+    announcement (CR 601.2c) — so the spell is not two cards for {1}{U}."""
+    game, _mine, theirs, _icy = _w1g8_response_table(set_pool)
+    assert game.queue_permanent_ability(
+        1, "Icy Manipulator", target_permanent_ids=[theirs.permanent_id],
+    ).supported
+    assert _w1g8_response_offers(game, set_pool) == []
+
+    assert not game.cast_from_hand(
+        0, "Teferi's Response", target_stack_index=0,
+    ).supported
+    assert [card.name for card in game.players[0].hand] == ["Teferi's Response"]
+    assert len(game.stack) == 1
+
+
+def test_teferis_response_cannot_name_its_casters_own_ability(set_pool):
+    """"…an **opponent** controls": the caster's own Icy Manipulator aimed at
+    the caster's own Island answers the second clause and fails the first."""
+    game, mine, _theirs, _icy = _w1g8_response_table(set_pool)
+    _w1g8_instant_put(game, set_pool, 0, "Icy Manipulator")
+    assert game.queue_permanent_ability(
+        0, "Icy Manipulator", target_permanent_ids=[mine.permanent_id],
+    ).supported
+    assert _w1g8_response_offers(game, set_pool) == []
+
+    assert not game.cast_from_hand(
+        0, "Teferi's Response", target_stack_index=0,
+    ).supported
+    assert [card.name for card in game.players[0].hand] == ["Teferi's Response"]
+
+
+def test_teferis_response_is_uncastable_with_nothing_to_counter(set_pool):
+    """A bare cast with an empty stack has no legal target (CR 601.2c) — the
+    draw cannot be bought on its own."""
+    game, _mine, _theirs, _icy = _w1g8_response_table(set_pool)
+
+    assert not game.cast_from_hand(0, "Teferi's Response").supported
+    assert [card.name for card in game.players[0].hand] == ["Teferi's Response"]
+
+
+def test_teferis_response_does_not_resolve_once_its_target_is_illegal(set_pool):
+    """CR 608.2b: the Island leaves in response, so the Stone Rain no longer
+    "targets a land you control". Teferi's Response has no legal target left
+    and is removed from the stack — no counter, and no cards drawn."""
+    game, mine, _theirs, _icy = _w1g8_response_table(set_pool)
+    game.active_player_index = 1
+    game.players[1].hand.append(set_pool("LEA")["Stone Rain"])
+    assert game.queue_from_hand(
+        1, "Stone Rain", target_permanent_ids=[mine.permanent_id],
+    ).supported
+    assert game.queue_from_hand(
+        0, "Teferi's Response", target_stack_index=0,
+    ).supported
+
+    game.remove_from_battlefield(mine)
+    assert game.resolve_top_of_stack()
+
+    assert game.players[0].hand == []
+    assert [item.card.name for item in game.stack] == ["Stone Rain"]
+    assert any("608.2b" in line for line in game.log)
