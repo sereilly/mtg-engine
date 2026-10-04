@@ -1,33 +1,51 @@
-"""Phrase-level vocabularies and the productions that read a *fragment*.
+"""The fragment productions more than one effect family reads.
 
-The bottom of the parser: word tables — trigger events, durations, counter
-kinds, board counts, zone names — and the handful of productions that consume
-part of a sentence rather than a whole one. Everything above imports from here
-and nothing here imports back.
+The floor under `effects/`: productions that consume *part* of a sentence
+rather than a whole one — a zone destination, a "for each …" multiplier, a
+subject filter, a counter kind, a graveyard position — and the two short word
+lists they need beside them, the basic land types and the zone names.
+Everything above imports from here and nothing here imports back.
 
-`_parse_zone` and `_parse_mana_payment` live here rather than with the effects
-for a reason worth keeping: they were the *only* references crossing between
-effect families ("search your library" needs a zone, "unless they pay" needs a
-cost). A fragment two families need is not an effect, and filing it as one is
-what couples them.
+`_parse_zone` lives here rather than with the effects for a reason worth
+keeping: it and `_parse_mana_payment` were the *only* references crossing
+between effect families ("search your library" needs a zone, "unless they pay"
+needs a cost). A fragment two families need is not an effect, and filing it as
+one is what couples them. **That is the test for what belongs here**, and it is
+asked of a reader's callers rather than of its shape: a fragment with one
+caller is that caller's, however general it looks.
 
-Kept as data plus a reader rather than as branches inside the productions that
-use them: a table is a thing a new card is added to, a branch is a thing that
-has to be found first.
+**The word tables this module opened with have each become a floor of their
+own**, and this docstring went on listing them after they had gone — "trigger
+events, durations, counter kinds, board counts, zone names". The trigger events
+are `trigger_tables`; the board counts are `where_x`; the counter kinds are a
+rule `is_pt_counter` asks `engine/pt.py`. The keyword lists, the printed
+prices (`_parse_mana_payment` among them) and the back-references followed, to
+`keywords`, `prices` and `references`, and are re-exported below under the
+names their callers already used. The durations were the last table of any
+size, and left for `durations` at the Phase 0 before Invasion with this module
+38 lines under the thousand-line guard. That one is **not** re-exported: every
+caller imports it from there, and this module reads `_parse_duration` only for
+two fragments of its own.
+
+Two readers went *home* at the same Phase 0, on the test above.
+`_accept_literal` and its `NUMBER_SLOT` had one caller,
+`where_x.accept_board_count` — the table they read left for that module at
+Legends, and the reader stayed behind with the comment explaining the table.
+`accept_member_state_clause` has had one caller since the day it was written,
+and sits beside it in `static_lines` now.
 """
 
 import dataclasses
 from dataclasses import replace
 
 from ..pt import pt_counter_deltas
-from ..turn_state import THAT_PLAYERS_NEXT_TURN
 from . import ast
 from .amounts import (accept_counter_kind, accept_counters_on_event_subject,
                       accept_counters_on_source, parse_amount)
-
+from .durations import _parse_duration
 from .errors import GrammarError
-from .lexer import GToken, NUMBER, PUNCT, tokenize
-from .nouns import _STATE_ADJECTIVES, parse_object_filter
+from .lexer import GToken, tokenize
+from .nouns import parse_object_filter
 # Re-exported under the name this module's callers already use — the
 # arrangement `readers` documents for the fragments it holds.
 from .readers import _identifies_one_object  # noqa: F401
@@ -52,127 +70,6 @@ from .zones import accept_zone_possessive
 from .vocabulary import KEYWORD_INDEX, NUMBER_WORDS, match_longest
 from .keywords import _parse_keywords, parse_keyword_list
 
-
-_DURATIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    # "for as long as this artifact remains tapped" (Ashnod's Battle Gear,
-    # Tawnos's Weaponry). A *linked* duration: it ends when the source untaps
-    # or leaves, so nothing schedules its removal — the effect is contributed
-    # while the condition holds and simply stops being contributed when it does
-    # not, which is CR 611.3b's "removal is the absence of a contribution".
-    # The noun is any permanent word, because the card printing it says what it
-    # is and the duration does not care.
-    ("while_source_tapped",
-     ("for", "as", "long", "as", "this", "artifact", "remains", "tapped")),
-    ("while_source_tapped",
-     ("for", "as", "long", "as", "this", "creature", "remains", "tapped")),
-    ("while_source_tapped",
-     ("for", "as", "long", "as", "this", "permanent", "remains", "tapped")),
-    # "for as long as this creature remains **on the battlefield**" (Stromgald
-    # Spy). The other linked duration, and linked the same way: nothing
-    # schedules its removal, because the effect is contributed while the source
-    # is in the scan and simply stops being contributed when it is not
-    # (CR 611.2b, and CR 400.7 makes a returning permanent a new object that
-    # contributes nothing). Its own kind rather than the tapped one's: an
-    # opponent who taps the source breaks that link and not this one.
-    #
-    # The value has been in the grammar since Scarwood Bandits, read inline by
-    # the control-change production because it was the only sentence printing
-    # the words. A second sentence now prints them, which is what moves the
-    # phrase into the one duration table — and the entry makes it available to
-    # every production, which is safe because a lowering handed a duration it
-    # has no sweep for refuses by name rather than dropping the words.
-    ("while_source_on_battlefield",
-     ("for", "as", "long", "as", "this", "artifact", "remains", "on", "the",
-      "battlefield")),
-    ("while_source_on_battlefield",
-     ("for", "as", "long", "as", "this", "creature", "remains", "on", "the",
-      "battlefield")),
-    ("while_source_on_battlefield",
-     ("for", "as", "long", "as", "this", "permanent", "remains", "on", "the",
-      "battlefield")),
-    ("until_end_of_turn", ("until", "end", "of", "turn")),
-    ("until_end_of_combat", ("until", "end", "of", "combat")),
-    ("until_your_next_turn", ("until", "your", "next", "turn")),
-    # "Until your next upkeep" (Xenic Poltergeist). Longer than its own prefix
-    # is not the issue here — "until your next turn" and "until your next
-    # upkeep" diverge at the last word — but they are different moments (CR 500:
-    # the upkeep step is inside the turn), so they are different kinds and the
-    # one nothing implements must not fall back to the one that is close.
-    ("until_your_next_upkeep", ("until", "your", "next", "upkeep")),
-    # "Until **the beginning of** your next upkeep" (Elkin Bottle). The same
-    # moment spelled out, so the same kind: CR 500's upkeep step begins once,
-    # and a second kind would be a second name for one instant. Longest-match
-    # is not at risk against the entry below it — "beginning" and "end" diverge
-    # on the third word.
-    ("until_your_next_upkeep",
-     ("until", "the", "beginning", "of", "your", "next", "upkeep")),
-    # "Until the end of your next upkeep" (Halfdane). A step *later* than the
-    # entry above: "until your next upkeep" ends as that upkeep begins, this
-    # one ends as it ends — which is the whole trick of the card printing it,
-    # whose own upkeep trigger re-applies the effect before the old one runs
-    # out. Different moments, so different kinds, for the reason the comment
-    # above gives about turns and upkeeps.
-    ("until_end_of_your_next_upkeep",
-     ("until", "the", "end", "of", "your", "next", "upkeep")),
-    # "…until **its controller's next untap step**." (Orcish Farmer.) A moment
-    # in someone else's turn, which is what separates it from every entry above:
-    # the four "your next …" kinds all name a step of the seat the effect
-    # belongs to, and this one names a step of whoever controls the *object*.
-    # Read before "this turn" only by being longer; they share no prefix.
-    # The possessive is two tokens: the lexer splits "controller's" into the
-    # noun and the clitic, which is what `_parse_doesnt_untap_next_step` spells
-    # out one family over.
-    ("until_controllers_next_untap_step",
-     ("until", "its", "controller", "'s", "next", "untap", "step")),
-    # "**This turn and next turn**, creatures can't attack, and …" (Peace
-    # Talks.) A duration spanning two turns, and its own kind rather than
-    # "this turn" with a number beside it: every sweep in this engine ends an
-    # effect at a cleanup step, and what this phrase says is *survive one of
-    # them*. Reading it as "this turn" would end the effect a whole turn early
-    # — the half of the card the opponent is paying for.
-    #
-    # Before "this turn", which is its own prefix: ``_parse_duration`` takes
-    # the first row that matches, so the longer phrase has to be tried first or
-    # the sentence would read as the shorter one and leave "and next turn"
-    # unconsumed.
-    ("this_turn_and_next_turn", ("this", "turn", "and", "next", "turn")),
-    ("this_turn", ("this", "turn")),
-    # "…until the end of **that** turn" (Giant Slug). Which turn "that" names
-    # is not in the sentence: it comes from the delay the sentence sits inside
-    # ("at the beginning of your next upkeep, …"). So it is its own kind, and
-    # ``delayed.resolve_that_turn`` is the one place that turns it into an
-    # ordinary end of turn — inside a delay, where "that turn" is the turn the
-    # ability resolves in. Outside one nothing lowers it, which is the honest
-    # answer: the phrase names a turn the reader cannot identify.
-    ("until_end_of_that_turn", ("until", "the", "end", "of", "that", "turn")),
-    # "…**until a player casts a creature spell**." (Soul Sculptor.) The first
-    # duration in the pool that ends on an **event** rather than at a moment in
-    # the turn structure (CR 611.2a's "as long as stated"), and the only entry
-    # in this table whose
-    # sweep is not a turn step: `engine/event_durations.py` hangs it off the
-    # cast announcement, and a lowering handed this word refuses unless the
-    # channel it would write has that sweep.
-    #
-    # No prefix relation with anything above it — every other "until" entry
-    # diverges by the second word — so its position here is only where the
-    # other spelled-out windows are.
-    ("until_a_player_casts_a_creature_spell",
-     ("until", "a", "player", "casts", "a", "creature", "spell")),
-    # "**During that player's next turn,** the chosen creatures attack if able,
-    # and other creatures can't attack." (Oracle en-Vec.) A window that opens on
-    # a turn nobody is taking yet, and the only entry in this table printed in
-    # the *leading* position on every card that has it — ``statements`` names
-    # the opening word so the probe is reached, and ``_distribute_duration``
-    # hands it to each effect behind the comma.
-    #
-    # "That player" is a seat an earlier sentence of the same effect recorded,
-    # so the phrase names a turn the parser cannot identify and the *lowering*
-    # is where it becomes one — exactly as ``until_end_of_that_turn`` above
-    # names a turn only a delay can resolve. The name is
-    # ``turn_state.THAT_PLAYERS_NEXT_TURN``, which the handlers read back.
-    (THAT_PLAYERS_NEXT_TURN,
-     ("during", "that", "player", "'s", "next", "turn")),
-)
 
 #: The five types CR 205.3i calls **basic** land types, in the printed order
 #: (WUBRG) every card that lists them uses. Not read out of
@@ -203,25 +100,6 @@ def is_pt_counter(kind: str) -> bool:
     Magic prints.
     """
     return pt_counter_deltas(kind) is not None
-
-# Board-state counts that bind a clause's X, one literal phrase per name. Not
-# parsed compositionally, and that is the design rather than a shortcut: each
-# of these is arithmetic an ``ObjectFilter`` cannot express — a count taken at
-# an earlier point in the turn, a count of a hidden zone with a constant
-# subtracted — so the *handler* computes the whole thing and the grammar's only
-# job is to say which count was written. A phrase not listed here fails to
-# match, the line fails full-token consumption, and the card falls back rather
-# than compiling onto a handler that counts something else.
-#
-# A ``NUMBER_SLOT`` in a phrase matches any printed number and captures it as
-# the count's ``base``. The constant is the one part of these phrases that is
-# *data*: Black Vise prints "minus 4" and The Rack "3 minus", one arithmetic
-# with one number changed, and spelling the 4 in made every other threshold a
-# non-match. That is why The Rack was a name-keyed hook — not because its
-# sentence was bespoke, but because its number was 3.
-
-
-NUMBER_SLOT = "<n>"
 
 # Zone names a destination clause can end in (CR 400.1).
 
@@ -500,15 +378,6 @@ def _accept_number(stream: TokenStream) -> int | None:
     return NUMBER_WORDS[word]
 
 
-def _parse_duration(stream: TokenStream) -> ast.Duration:
-    """Parse a trailing duration clause. Absent wording means permanent — one
-    node replacing the fifteen places the legacy rules re-literalled these."""
-    for kind, phrase in _DURATIONS:
-        if stream.accept_phrase(*phrase):
-            return ast.Duration(kind)
-    return ast.Duration()
-
-
 def _parse_can_attack_as_though(
     stream: TokenStream, subject: "ast.Recipient"
 ) -> "ast.AttackAsThough | None":
@@ -542,41 +411,6 @@ def _parse_can_attack_as_though(
     keyword, consumed = matched
     stream.advance(consumed)
     return ast.AttackAsThough(subject, keyword, duration)
-
-
-def _accept_literal(stream: TokenStream, *phrase: str) -> tuple[bool, int | None]:
-    """Consume consecutive tokens by their text, all-or-nothing.
-
-    ``TokenStream.accept_phrase`` requires every token to be a *word*, which
-    "…hand minus 4" is not — the 4 lexes as a number. Punctuation is still
-    refused, so a phrase can never silently span a sentence boundary.
-
-    A :data:`NUMBER_SLOT` element matches any number token and is returned
-    beside the match, so the phrase says *where* the constant goes and the
-    caller keeps the constant itself as data.
-    """
-    if len(stream.tokens) - stream.pos < len(phrase):
-        return False, None
-    captured: int | None = None
-    for offset, text in enumerate(phrase):
-        token = stream.tokens[stream.pos + offset]
-        if token.kind == PUNCT:
-            return False, None
-        if text is NUMBER_SLOT:
-            if token.kind != NUMBER:
-                return False, None
-            captured = int(token.text)
-            continue
-        if token.text != text:
-            return False, None
-    stream.advance(len(phrase))
-    return True, captured
-
-
-#: "Protection from the color of your choice" — the keyword whose argument is
-#: not known until the effect resolves (CR 608.2d). Named once here because the
-#: parser writes it, the grant gate reads it and the handler resolves it, and a
-#: third spelling of the same string is how those three come apart.
 
 
 def _accept_self_reference(stream: TokenStream) -> bool:
@@ -704,47 +538,6 @@ def _parse_card_alternatives(
     if len(alternatives) == 1 and not chargeable_card_filter(alternatives[0]):
         return ()
     return tuple(alternatives)
-
-
-def accept_member_state_clause(stream: TokenStream) -> tuple[str, bool] | None:
-    """``it's [not] <state>`` — the ``(ObjectFilter field, value)`` it names.
-
-    The trailing half of "Each untapped creature you control gets +0/+2 **as
-    long as it's not attacking**" (Arcades Sabboth). "It" is a member of the set
-    the sentence already described, so what the clause states is one more
-    adjective on that noun phrase — which is why this returns a filter field
-    rather than an :class:`ast.Condition`. Read as a condition it would ask the
-    question of the ability's *source*, and Arcades would hand its whole team
-    +0/+2 whenever Arcades itself stayed home.
-
-    The state vocabulary is ``nouns._STATE_ADJECTIVES``, the same table the
-    *leading* adjectives are read from, so "attacking" cannot mean one field
-    here and another in front of the noun. The negation is a word read in front
-    of the adjective rather than rows of its own, because Magic prints "not
-    <adjective>" for every one of them.
-
-    Returns None with the cursor where it was when the clause is not this.
-    """
-    mark = stream.mark()
-    if not stream.accept_word("it"):
-        stream.reset(mark)
-        return None
-    # The lexer splits the contraction, so "it's" and "it is" are the same two
-    # tokens with a different second one — both copulas are accepted here for
-    # the reason `conditions._parse_single_condition` accepts both.
-    if not (stream.accept_word("'s") or stream.accept_word("is")):
-        stream.reset(mark)
-        return None
-    negated = bool(stream.accept_word("not"))
-    word = stream.peek_word()
-    state = _STATE_ADJECTIVES.get(word) if word else None
-    if state is None:
-        stream.reset(mark)
-        return None
-    stream.advance()
-    field_name, value = state
-    return field_name, (not value) if negated else value
-
 
 
 # ---------------------------------------------------------------------------

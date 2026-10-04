@@ -27,8 +27,9 @@ from ..nouns import parse_object_filter
 from ..references import parse_recipient, parse_target_spec
 from ..stream import TokenStream
 
+from ..durations import _parse_duration
 from ..phrases import (_expect_counter_kind, _parse_can_attack_as_though,
-                       _parse_duration, _parse_for_each, _parse_keywords,
+                       _parse_for_each, _parse_keywords,
                        _parse_per_each_objects, parse_keyword_list)
 from ..where_x import parse_where_x_definition
 

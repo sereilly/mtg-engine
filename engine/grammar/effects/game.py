@@ -22,7 +22,7 @@ from ..errors import GrammarError
 from ..nouns import parse_object_filter
 from ..references import parse_player_ref
 from ..stream import TokenStream
-from ..phrases import _parse_duration
+from ..durations import _parse_duration
 from ..vocabulary import ALL_SUBTYPES, CARD_TYPES, NUMBER_WORDS, singular
 
 

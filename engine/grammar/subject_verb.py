@@ -43,9 +43,9 @@ from .player_verbs import parse_player_subject_verb
 from .records import accept_player_deed
 from .references import _parse_further_subjects, parse_recipient
 from .stream import TokenStream
+from .durations import _parse_duration
 from .phrases import (
     _parse_can_attack_as_though,
-    _parse_duration,
     parse_bound_subject,
 )
 from .effects import (

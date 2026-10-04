@@ -72,8 +72,8 @@ from .nouns import parse_object_filter
 # The moved block's own imports, and they moved *with* it — twice now: a
 # function that changes module leaves its imports behind, which is the failure
 # this package's scans exist to catch loudly rather than at the line that runs.
-from .phrases import (_accept_self_reference, _parse_duration,
-                      parse_bound_subject)
+from .durations import _parse_duration
+from .phrases import _accept_self_reference, parse_bound_subject
 from .readers import accept_source_reference
 from .seat_records import (_accept_seat_cast_record,
                            _accept_seat_damage_record,

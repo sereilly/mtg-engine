@@ -27,7 +27,8 @@ from .. import ast
 from ..readers import accept_source_reference
 from ..references import parse_recipient
 from ..stream import TokenStream
-from ..phrases import _parse_duration, parse_bound_subject
+from ..durations import _parse_duration
+from ..phrases import parse_bound_subject
 
 
 def _parse_damage_cant_be_prevented(

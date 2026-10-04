@@ -28,9 +28,10 @@ from ..lexer import NUMBER, WORD
 from ..stream import TokenStream
 from ..vocabulary import NUMBER_WORDS
 from ..where_x import _parse_where_x_is
+from ..durations import _parse_duration
 from ..phrases import (
     _accept_mana_alternatives, _accept_per_counter_multiplier,
-    _parse_duration, _parse_mana_payment, _parse_opponents_choice,
+    _parse_mana_payment, _parse_opponents_choice,
     _parse_per_each_objects, _parse_that_object, accept_or_planeswalker,
     parse_bound_subject,
 )

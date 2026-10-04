@@ -39,8 +39,9 @@ from .leading_iteration import parse_leading_iteration
 from .if_openings import parse_if_opening
 from .rebinding import rebind_counter_pronoun_to_bound_target
 from .sentence_rebinding import rebind_alternative_pronoun_to_choice_target
+from .durations import _parse_duration
 from .phrases import (_accept_conjoined_life_cost, _accept_life_only_offer,
-                      _parse_duration, _parse_mana_payment)
+                      _parse_mana_payment)
 from .effects import (_parse_damage_becomes_counter_removal,
                       _parse_destroy_chosen_that_didnt_attack,
                       _parse_untap_chosen_by_paying,

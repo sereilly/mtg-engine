@@ -25,7 +25,7 @@ from .. import ast
 from ..amounts import expect_pt
 from ..errors import GrammarError
 from ..keywords import parse_keyword_list
-from ..phrases import _parse_duration
+from ..durations import _parse_duration
 from ..back_references import _parse_that_object
 from ..stream import TokenStream
 from ..vocabulary import (CARD_TYPES, COLOR_WORDS, LAND_TYPES, SUBTYPE_INDEX,

@@ -59,7 +59,8 @@ from .. import ast
 from ..errors import GrammarError
 from ..lexer import SELF
 from ..nouns import parse_object_filter
-from ..phrases import _parse_duration, _parse_zone
+from ..durations import _parse_duration
+from ..phrases import _parse_zone
 from ..references import parse_player_ref, parse_target_spec
 from ..stream import TokenStream
 from ..vocabulary import CARD_TYPES, singular as _singular

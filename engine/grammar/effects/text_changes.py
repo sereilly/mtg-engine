@@ -18,7 +18,7 @@ rather than through any accessor this family owns.
 """
 
 from .. import ast
-from ..phrases import _parse_duration
+from ..durations import _parse_duration
 from ..references import parse_recipient
 from ..stream import TokenStream
 

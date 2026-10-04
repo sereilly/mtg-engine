@@ -40,8 +40,8 @@ from .errors import GrammarError
 from .nouns import parse_object_filter
 from .references import parse_recipient
 from .stream import TokenStream
+from .durations import _parse_duration
 from .phrases import (
-    _parse_duration,
     _parse_pay_life,
 )
 from .references import _parse_further_subjects
