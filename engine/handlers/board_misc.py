@@ -29,7 +29,8 @@ from ._common import (BLOCK_PAIR_SUBJECT, SUBJECT_FROM_TRIGGER,
                       one_recorded_permanent_id,
                       per_recipient_amount,
                       permanent_matches_filter,
-                      count_from_payload, resolve_amount,
+                      count_from_payload, count_spec_in_resolution,
+                      resolve_amount,
                       resolve_target_permanent,
                       resolve_target_permanents, seats_matching_deed)
 from .registry import effect_handler
@@ -1909,8 +1910,13 @@ def create_token(game: Game, instruction: OracleInstruction, context: OracleExec
           )
       elif isinstance(raw_count, dict) and "per_each" in raw_count:
           owner = game.players[seat] if raw_count.get("per_recipient") else caster
+          # "…for each permanent **of that color**" (Rith, the Awakener): the
+          # colour the step in front of this one chose (CR 608.2d) is resolved
+          # into the spec first, because `evaluate_count` holds no resolution
+          # and the matcher refuses the word unresolved.
           count = evaluate_count(
-              game, owner, raw_count["per_each"],
+              game, owner,
+              count_spec_in_resolution(raw_count["per_each"], context),
               source=context.source_permanent,
           )
       for _ in range(count):

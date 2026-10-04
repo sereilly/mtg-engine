@@ -25,8 +25,9 @@ from .. import ast
 from ..errors import LoweringError
 from ._cost_records import optional_cost_key
 from ._seats import _player_recipient
-from ._amounts import (count_spec, halved_count_spec, recorded_count_spec,
-                       seat_scoped_count_spec, x_offset_amount)
+from ._amounts import (count_spec, halved_count_spec, printed_count_spec,
+                       recorded_count_spec, seat_scoped_count_spec,
+                       x_offset_amount)
 from ._common import (
     dropped_narrowings,
     _amount_payload,
@@ -575,7 +576,7 @@ def _lower_gain_life(
         # seat's and names none — so it is the one scope that cannot disagree
         # with whoever gains. Every other spec keeps the refusal, and gets it
         # in the spelling that says what is actually wrong.
-        spec = count_spec(filt, node)
+        spec = printed_count_spec(filt, node)
         if node.player.kind != "you" and spec.get("owner") != "all":
             raise LoweringError(
                 "a life gain counted off one seat's zone is that seat's own",

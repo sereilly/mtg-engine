@@ -100,6 +100,41 @@ def split_creature_type_choice(described: dict) -> tuple[tuple, dict, dict]:
     return prelude, rest, {"subtype_filter_from": CHOSEN_CREATURE_TYPE_THIS_WAY}
 
 
+def split_color_choice(described: dict) -> tuple[tuple, dict, dict]:
+    """*described* with a colour chosen during this resolution lifted out:
+    the instructions to run first, the filter without the phrase, and the keys
+    the caller adds **after its testability gate**.
+
+    :func:`split_creature_type_choice` one characteristic over, and it reads
+    both printed spellings of the one narrowing (CR 608.2d):
+
+    * "…**of the color of your choice**" (Wash Out) — nobody has chosen, so the
+      ``choose_color`` step goes in front, asked of the spell's controller
+      (``chooser: "you"``, the step every other "of your choice" colour uses);
+    * "…**of that color**" (Dromar, the Banisher) — an earlier sentence chose,
+      so there is no prelude and only the read.
+
+    Either way the sweep carries ``color_filter_from``, the key Persecute's
+    discard already reads, naming the scratchpad slot the choosing step writes.
+    A handler with nothing in that slot sweeps **nothing**; read as "no
+    narrowing" it would take the board.
+    """
+    chose_here = bool(described.get("color_of_your_choice"))
+    if not chose_here and not described.get("color_chosen_this_way"):
+        return (), described, {}
+    from ...oracle_types import CHOSEN_COLOR_THIS_WAY, OracleInstruction
+
+    rest = {
+        key: value for key, value in described.items()
+        if key not in ("color_of_your_choice", "color_chosen_this_way")
+    }
+    prelude = (
+        (OracleInstruction("choose_color", "", {"chooser": "you"}),)
+        if chose_here else ()
+    )
+    return prelude, rest, {"color_filter_from": CHOSEN_COLOR_THIS_WAY}
+
+
 # Payload keys no EFFECT_HANDLERS entry reads. They are additive *descriptions*
 # of what a line targets, kept so the engine can answer "what does this spell
 # target?" from the compiled program instead of re-reading oracle text

@@ -157,6 +157,11 @@ def count_from_payload(
     # from without knowing it can be. Clamped at zero where every quantity in
     # this engine is (CR 107.1b): a hand smaller than the opponent's deals no
     # damage rather than healing them.
+    # "…for each permanent **of that color**" (Rith, the Awakener). CR 608.2d's
+    # colour, chosen by the step in front of this one: resolved here, where the
+    # resolution is in hand, because `evaluate_count` below is also the CR 604.3
+    # recompute's reader and holds no scratchpad.
+    spec = count_spec_in_resolution(spec, context)
     subtracted = spec.get("minus_count")
     if isinstance(subtracted, dict):
         whole = dict(spec)
@@ -240,6 +245,9 @@ def count_from_payload(
         # ``chosen_card_type``, which for a count is the direction that is too
         # small rather than too large.
         described = resolve_chosen_card_type_in_resolution(described, context)
+        # "…the number of cards **of that color** revealed this way" (Darigaaz,
+        # the Igniter) — the same choice one characteristic over, already
+        # resolved by the step at the top of this function when it is carried.
         return max(0, _scaled(sum(
             1 for card in (context.results.get(str(recorded_cards)) or ())
             if _card_matches_filter(card, described)
@@ -474,6 +482,10 @@ def per_recipient_amount(game, context, spec: dict, face, *, source=None) -> int
     reads as zero.
     """
     seat = game.players.index(face)
+    # "…the number of creatures **of that color** that player controls"
+    # (Searing Rays): the same resolution-scoped colour `count_from_payload`
+    # resolves, through the same function.
+    spec = count_spec_in_resolution(spec, context)
     tally = spec.get("seat_tally_of")
     if tally is not None:
         recorded = context.results.get(tally) or {}
@@ -839,6 +851,60 @@ def resolve_chosen_card_type_in_resolution(described: dict, context) -> dict:
     return resolved
 
 
+#: "…for each permanent **of that color**" (Rith, the Awakener), "…the number of
+#: creatures **of that color** that player controls" (Searing Rays), "return all
+#: creatures **of that color**" (Dromar, the Banisher). The filter key a noun
+#: phrase carries when the colour it narrows by was chosen by an earlier step of
+#: the *same resolution* (CR 608.2d) — ``ast.ObjectFilter.color_chosen_this_way``
+#: — as against ``chosen_color``, whose colour a permanent recorded as it
+#: entered (CR 614.1c).
+COLOR_CHOSEN_THIS_WAY_KEY = "color_chosen_this_way"
+
+
+def resolve_color_chosen_in_resolution(described: dict, context) -> dict:
+    """*described* with "of that color" spent out of the **scratchpad**.
+
+    :func:`resolve_chosen_card_type_in_resolution` one characteristic over, and
+    the same contract: the colour is whatever ``choose_color`` wrote into the
+    resolution its own next step runs in (``CHOSEN_COLOR_THIS_WAY``), turned
+    into the ordinary ``color_filter`` every matcher already reads — so it goes
+    through CR 613 layer 5 on a battlefield and CR 202.2 in a hand like any
+    other colour question.
+
+    Untouched when this resolution recorded nothing, which leaves the key in
+    the filter — and both matchers refuse it outright, so an unanswered choice
+    counts (or sweeps) nothing rather than the whole board. That is the
+    direction the key had to be given: it reached the count evaluator unread
+    for three cards, and "for each permanent of that color" counted every
+    permanent its controller had.
+    """
+    from ..oracle_types import CHOSEN_COLOR_THIS_WAY
+
+    if not described.get(COLOR_CHOSEN_THIS_WAY_KEY):
+        return described
+    symbol = (getattr(context, "results", None) or {}).get(CHOSEN_COLOR_THIS_WAY)
+    if not symbol:
+        return described
+    resolved = dict(described)
+    resolved.pop(COLOR_CHOSEN_THIS_WAY_KEY, None)
+    resolved["color_filter"] = str(symbol)
+    return resolved
+
+
+def count_spec_in_resolution(spec: dict, context) -> dict:
+    """*spec* with its filter's resolution-scoped words resolved.
+
+    The one place a count taken while an effect is applied turns "of that
+    color" into a colour, asked by both readers that hold a resolution
+    (:func:`count_from_payload` and :func:`per_recipient_amount`) so the
+    sentence means one thing whichever channel carried it.
+    """
+    described = spec.get("filter")
+    if not isinstance(described, dict) or not described.get(COLOR_CHOSEN_THIS_WAY_KEY):
+        return spec
+    return {**spec, "filter": resolve_color_chosen_in_resolution(described, context)}
+
+
 def _resolve_chosen_card_type(filt: dict, source) -> dict:
     """*filt* with "of that type" turned into the ordinary type keys.
 
@@ -1190,6 +1256,11 @@ def _card_matches_filter(card, filt: dict, *, game=None, owner=None) -> bool:
     # ignoring it would offer every creature card in the hand — so it refuses,
     # exactly as ``permanent_matches_filter`` does for the same two keys.
     if any(filt.get(key) for key in _CHOSEN_SUBTYPE_KEYS):
+        return False
+    # "…cards **of that color**" with nothing behind the pronoun: the colour is
+    # in a resolution's scratchpad and a reader holding one resolves it into
+    # ``color_filter`` first. Refused for the reason above.
+    if filt.get(COLOR_CHOSEN_THIS_WAY_KEY) or filt.get("color_of_your_choice"):
         return False
     types, subtypes = printed_shape(card)
     wanted = filt.get("type_filter")
@@ -1788,6 +1859,19 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     # into `color_filter` before asking, so the key only survives to here when
     # nobody could answer it.
     if payload.get("chosen_color"):
+        return False
+    # "…of **that** color" (Rith, the Awakener) — the same narrowing with the
+    # colour chosen by an earlier step of the resolution (CR 608.2d) instead of
+    # recorded on a permanent, and refused here for the identical reason: only a
+    # reader holding the resolution can answer it
+    # (`resolve_color_chosen_in_resolution`), and the key surviving to here
+    # means nobody did. Ignored, it counted every permanent on the seat.
+    #
+    # "…of the color **of your choice**" (Wash Out) is the same word before
+    # anyone has chosen: only a lowering that puts the choosing step in front
+    # may carry it (``split_color_choice``), and it lifts the key off when it
+    # does — so here it is a phrase no step answers.
+    if payload.get(COLOR_CHOSEN_THIS_WAY_KEY) or payload.get("color_of_your_choice"):
         return False
     # "…**with the chosen ability**" (Phyrexian Splicer). The same recorded
     # choice one characteristic over — the word is on the ability's source and

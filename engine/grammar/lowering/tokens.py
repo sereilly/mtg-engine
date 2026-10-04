@@ -26,7 +26,7 @@ from ._events import (EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER,
                       _EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_OBJECTS,
                       _EVENT_SUBJECT_PLAYERS, _back_reference_payload)
 from ._record_keys import _RECORDED_PERMANENTS
-from ._amounts import count_spec
+from ._amounts import count_spec, printed_count_spec
 from ._common import (
     _amount_payload, _describe_targets, _restrictions_beyond,
     testable_filter_payload
@@ -530,7 +530,14 @@ def _stamp_token_count(
         # each recipient in turn. Handed over as a key that matcher does not
         # test, it would be silently ignored and every seat would be counted on
         # the caster's board.
-        spec = count_spec(dataclasses.replace(filt, controller=None), node)
+        #
+        # A phrase that is *not* per recipient goes over as printed, so one that
+        # names no seat at all ("for each permanent of that color", Rith) is
+        # read as the whole battlefield rather than as the caster's share.
+        spec = (
+            count_spec(dataclasses.replace(filt, controller=None), node)
+            if per_recipient else printed_count_spec(filt, node)
+        )
         payload["count"] = {"per_each": spec, "per_recipient": per_recipient}
         return payload["count"]
     if isinstance(node.count, ast.ThatMuch):

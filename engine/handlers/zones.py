@@ -2963,6 +2963,23 @@ def return_all_matching(game: Game, instruction: OracleInstruction, context: Ora
     from ..subject_filters import subject_matches
 
     swept = instruction.payload.get("filter") or {}
+    # "…all creatures **of that color**" (Dromar, the Banisher) / "…all
+    # permanents **of the color of your choice**" (Wash Out). CR 608.2d's
+    # colour, chosen by the step in front of this one and read out of the
+    # scratchpad exactly as Persecute's discard reads it.
+    #
+    # **No colour means no sweep**, and it must: an unanswered choice read as
+    # "no narrowing" is not a card that does less, it is one that returns every
+    # permanent on the table.
+    color_key = instruction.payload.get("color_filter_from")
+    if color_key is not None:
+        chosen_color = context.results.get(str(color_key))
+        if not chosen_color:
+            game.log.append(
+                f"{context.card.name}: no colour was chosen, so nothing is returned"
+            )
+            return True, "resolved"
+        swept = {**swept, "color_filter": str(chosen_color)}
     observer = (
         game.players.index(context.caster) if context.caster in game.players else None
     )
