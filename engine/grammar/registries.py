@@ -46,6 +46,8 @@ from ..cast_restrictions import (CAST_RESTRICTIONS, COMBAT_PLAY_BAN_CLAIM,
                                  own_cast_ban_line,
                                  SPELL_CAP_CLAIM,
                                  spell_cap_line,
+                                 LAST_CAST_COLOR_BAN_CLAIM,
+                                 last_cast_color_ban_line,
                                  global_cast_ban_line,
                                  global_play_timing_line,
                                  GLOBAL_PLAY_TIMING_CLAIM)
@@ -178,6 +180,13 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # claim cannot outlive the cap.
     if spell_cap_line(normalized) is not None:
         return SPELL_CAP_CLAIM
+
+    # engine/cast_restrictions.py — the same rule comparing two spells:
+    # "Players can't cast spells that share a color with the spell most
+    # recently cast this turn." (Mana Maze.) Claimed through the reader that
+    # enforces it, so the claim cannot outlive the ban.
+    if last_cast_color_ban_line(normalized):
+        return LAST_CAST_COLOR_BAN_CLAIM
 
     # engine/cast_restrictions.py — the *name*-keyed half of the same rule:
     # "Spells with the chosen names can't be cast and lands with the chosen

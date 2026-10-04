@@ -1305,6 +1305,102 @@ def global_play_timing(game: "Game", actor_index: int) -> str | None:
     return None
 
 
+#: "Players can't cast spells **that share a color with the spell most recently
+#: cast this turn**." (Mana Maze.) CR 601.3a again, and a scope none of the rows
+#: above reads it in: what is forbidden is decided by a *relation* between the
+#: spell being announced and another spell — CR 105.2's shared colour — and the
+#: other spell is whichever was cast last, by anybody.
+#:
+#: It needs no record of its own, for the spell cap's reason one row down. The
+#: turn's ledger (``engine/damage_ledger.py``) has held every cast in order, by
+#: its per-cast identity, since Backdraft — and ``begin_turn_bookkeeping``
+#: clears it at the turn boundary, which is the printed "this turn": the first
+#: spell of a turn is compared against nothing.
+#:
+#: The whole sentence is the pattern. Nothing in it is payload, because nothing
+#: in it is a word another card could print differently and mean this rule.
+_LAST_CAST_COLOR_BAN = re.compile(
+    r"^players can't cast spells that share a color with the spell most "
+    r"recently cast this turn$"
+)
+
+#: The claim name the support gate and ``engine/grammar/registries.py`` use for
+#: the row above. Its own, for :data:`SPELL_CAP_CLAIM`'s reason: no other ban
+#: here compares two spells.
+LAST_CAST_COLOR_BAN_CLAIM = "last_cast_color_ban"
+
+
+@lru_cache(maxsize=None)
+def last_cast_color_ban_line(line: str) -> bool:
+    """Whether *line* is, in full, Mana Maze's prohibition.
+
+    One reader, four callers: ``engine/grammar/registries.py`` asks it so the
+    printed line is *claimed*, ``engine/oracle.py``'s support gate so the card
+    is admitted on the strength of a restriction that exists,
+    ``mixins/stack/casting.py`` at CR 601.2 so it is *enforced*, and
+    ``ai_policy`` so a seat stops proposing what the cast path will refuse.
+    """
+    return _LAST_CAST_COLOR_BAN.match(line.strip().lower().rstrip(".")) is not None
+
+
+def most_recent_cast_colors(game: "Game") -> frozenset[str] | None:
+    """The colours of the spell most recently cast this turn, or None when no
+    spell has been cast this turn.
+
+    ``frozenset()`` — empty, and **not** None — is a colourless spell, which is
+    a real answer: after an artifact every spell is castable, because a
+    colourless object shares a colour with nothing (CR 105.2c).
+
+    Read off the ledger's per-cast ``StackItem`` through the one reader of a
+    spell's colour (``Game._stack_item_colors``), so a spell a Lace recoloured
+    on the stack is the colour it became — and the item is kept by the ledger
+    after it has left the stack, which is the common case: "most recently
+    cast" is usually a spell that has already resolved or been countered, and
+    what it was is its last-known information (CR 608.2h).
+
+    Cast, not copied and not put onto the stack some other way: the ledger is
+    written at CR 601.2i and nowhere else.
+    """
+    from .damage_ledger import ledger
+
+    casts = ledger(game).casts
+    if not casts:
+        return None
+    return frozenset(game._stack_item_colors(casts[-1].item))
+
+
+def last_cast_color_ban(game: "Game", caster_index: int, card) -> str | None:
+    """The name of a permanent whose Maze stops *card* being cast, or None.
+
+    Every battlefield and no seat comparison, for :func:`global_cast_ban`'s
+    reason: the sentence says "players", so it binds its own controller as
+    thoroughly as anybody (CR 601.3a).
+
+    The spell being announced is read through ``object_colors.card_colors``
+    with the seat casting it — the layer-5 reading every colour question about
+    a card in a hand takes — so a gold card is stopped by either of its colours
+    (CR 105.2b) and a card a Celestial Dawn has made white is white.
+
+    A land is never cast (CR 305.1), so the sentence cannot reach one: this
+    function is asked from a path that land drops also take.
+    """
+    from .object_colors import card_colors, share_a_color
+    from .search_filters import card_has_type
+
+    if card_has_type(card, "land"):
+        return None
+    previous = most_recent_cast_colors(game)
+    if not previous:
+        return None
+    if not share_a_color(previous, card_colors(game, card, caster_index)):
+        return None
+    for _seat, permanent in game.permanents_with_controller():
+        for raw_line in (permanent.effective_card.oracle_text or "").splitlines():
+            if last_cast_color_ban_line(raw_line):
+                return permanent.card.name
+    return None
+
+
 #: "Each player can't cast more than one spell each turn." (Arcane Laboratory;
 #: Rule of Law is the same sentence.) CR 601.3a again, and the fourth scope this
 #: file reads it in — the three above ask *what* may be cast and this one asks

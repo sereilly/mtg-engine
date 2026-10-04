@@ -6675,7 +6675,20 @@ def _derived_static_claims(
     # naming a type, read off the board at every cast — so there is no
     # instruction, and the enchantment's whole text is this sentence, which
     # means no claim is an unsupported card however well the cap works.
-    from .cast_restrictions import SPELL_CAP_CLAIM, spell_cap_line
+    from .cast_restrictions import (LAST_CAST_COLOR_BAN_CLAIM,
+                                    SPELL_CAP_CLAIM, last_cast_color_ban_line,
+                                    spell_cap_line)
+
+    # "Players can't cast spells that share a color with the spell most
+    # recently cast this turn." (Mana Maze.) Read off the board at every
+    # announcement, so there is no instruction to produce — and the
+    # enchantment's whole text is this sentence, so without a claim it reports
+    # unsupported however well the ban works.
+    if any(
+        last_cast_color_ban_line(line)
+        for line in (oracle_text or "").splitlines()
+    ):
+        claims.append(LAST_CAST_COLOR_BAN_CLAIM)
 
     if any(
         spell_cap_line(line) is not None
