@@ -1019,6 +1019,36 @@ def is_mana_ability(instruction: OracleInstruction) -> bool:
     return instruction.kind in MANA_ABILITY_KINDS
 
 
+def mana_ability_symbols(instruction: OracleInstruction | None) -> frozenset[str]:
+    """Every symbol one mana ability can put in its controller's pool, read off
+    its add-mana steps with the wrappers opened — "{T}: Add {U} or {B}. This
+    land deals 1 damage to you." is a ``sequence`` whose first step is a
+    ``pips_choice`` — or empty for an instruction that adds no mana.
+
+    Asked by the AI's tap executor to choose **which** of a land's mana
+    abilities to run for the colour its plan counted on: a painland's first
+    ability makes {C}, and the tap seam runs the first one unless told
+    otherwise, so a plan that counted a Karplusan Forest as {G} tapped it for
+    {C} and the spell it was paying for was refused.
+    """
+    if instruction is None:
+        return frozenset()
+    found: set[str] = set()
+    for step in _effect_steps(instruction):
+        payload = step.payload or {}
+        if payload.get("any_color"):
+            found.update("WUBRG")
+        for key in ("pips", "pips_choice"):
+            found.update(symbol for symbol, _count in payload.get(key) or ())
+        for alternative in payload.get("pips_alternatives") or ():
+            found.update(symbol for symbol, _count in alternative)
+        found.update(
+            symbol for symbol in payload.get("combination") or ()
+            if isinstance(symbol, str)
+        )
+    return frozenset(found)
+
+
 def mana_ability_amount(card: CardDefinition) -> int | None:
     """Mana one activation of *card*'s mana ability adds, or None if it has none.
 
@@ -1468,6 +1498,40 @@ def ability_target_side(instruction: OracleInstruction | None) -> str | None:
     if "you" in sides:
         return "you"
     return None
+
+
+def ability_denies_its_target(instruction: OracleInstruction | None) -> bool:
+    """:func:`denies_its_target` asked of the step that names the target,
+    wrappers opened — the instruction itself when no step names one.
+
+    :func:`ability_target_side`'s twin, and needed for its reason: "Destroy
+    target artifact you control" read through a ``sequence`` is a wrapper, and
+    a wrapper denies nothing, so the own-seat chooser that aims by the step
+    would then activate the step against its own permanent.
+    """
+    if instruction is None:
+        return False
+    steps = [
+        step for step in _effect_steps(instruction)
+        if isinstance((step.payload or {}).get("targets"), dict)
+    ] or [instruction]
+    return any(denies_its_target(step) for step in steps)
+
+
+def source_becomes_an_aura(instruction: OracleInstruction | None) -> bool:
+    """Whether *instruction* turns the permanent it is printed on into an Aura
+    and attaches it ("This creature loses this ability and becomes an Aura
+    enchantment with enchant creature. Attach it to target creature." — the
+    Licids).
+
+    Such an ability's target is the Aura's host, so which board it belongs on
+    is what the *Aura* does to its host — the card's other text, which no step
+    of this program reads — and not the attach step, which reads "you" because
+    an Equipment's attach does.
+    """
+    if instruction is None:
+        return False
+    return any(step.kind == "become_aura_with_enchant" for step in _effect_steps(instruction))
 
 
 def foreign_activation_use(ability) -> str | None:

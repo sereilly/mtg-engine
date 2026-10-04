@@ -123,6 +123,14 @@ def is_tap_alone_mana_ability(ability) -> bool:
     )
 
 
+#: The tap refusals `tap_land_for_mana` logs, by the reason key
+#: `land_mana_tap_refusal` returns, as the suffix after the land's name.
+_LOGGED_TAP_REFUSALS = {
+    "summoning_sick": " has summoning sickness",
+    "activations_forbidden": "'s activated abilities can't be activated this turn",
+}
+
+
 class TurnManagementMixin:
     def select_starting_player(
         self, rng: random.Random | None = None
@@ -533,6 +541,78 @@ class TurnManagementMixin:
         chosen = usable[ability_index]
         return chosen.instruction if is_tap_alone_mana_ability(chosen) else None
 
+    def land_mana_tap_refusal(self, land, ability_index: int | None = None) -> str | None:
+        """Why tapping *land* for mana through :meth:`tap_land_for_mana` would
+        be refused right now — a short reason key — or None when it would make
+        mana. Pure: nothing is tapped, logged or produced.
+
+        **The seam's own gate, made askable.** The AI's tap planner
+        (`ai_policy._plan_land_taps`) counted every untapped land as a mana,
+        while this seam refuses a storage or depletion land with no counter
+        to pay (Sand Silos), a land with no mana ability at all (Bazaar of
+        Baghdad), a summoning-sick land creature and a land under Interdict —
+        so the AI tapped "for" a spell, the tap made nothing and the cast was
+        refused for insufficient mana, the same spell every turn. Invisible
+        while the simulator ignored mana costs; the web app's AI seat, which
+        never did, had it all along. One predicate, asked by both, so what the
+        planner counts and what the tap makes cannot disagree.
+        """
+        if land is None or land.card.primary_type != "land" or land.tapped:
+            return "not_an_untapped_land"
+
+        # Tapping a land for mana *is* activating its mana ability (CR 106.12),
+        # so the gates the activation path asks of that ability are asked here
+        # too — this seam is the second door to the same ability, and a gate
+        # one door asks and the other does not is a rule enforced on half the
+        # wire. CR 302.6 (through CR 602.5a): a land that is a creature —
+        # Mishra's Factory animated, a Forest under Living Lands — has the
+        # summoning-sickness rule like any creature, and a {T} mana ability is
+        # a {T} ability. CR 602.5's per-permanent ban ("That permanent's
+        # activated abilities can't be activated this turn", Interdict) prints
+        # no mana-ability exception. Both refused here as the activation path
+        # refuses them, with nothing tapped.
+        from ..spell_prohibitions import permanent_activations_forbidden
+
+        if self._is_summoning_sick(land):
+            return "summoning_sick"
+        if permanent_activations_forbidden(self, land):
+            return "activations_forbidden"
+
+        # A land with no mana ability at all (Island of Wak-Wak, Bazaar of
+        # Baghdad) can't be tapped for mana — without this, the color fallback
+        # below would invent a green mana out of nothing. A compiled one the
+        # summary does not know about (a mana ability granted to such a land)
+        # is a mana ability all the same.
+        if ability_index is not None:
+            if self._chosen_land_mana_ability(land, ability_index) is None:
+                return "no_such_mana_ability"
+            return None
+        mana_ability, priced_mana_ability = self._land_mana_abilities(land)
+        if mana_ability is None and not land.effective_produced_mana:
+            if not land.basic_land_types:
+                return "no_mana_ability"
+
+        # **And a land whose mana ability costs more than the tap cannot be
+        # tapped for mana here either** (CR 602.2b: every cost, at one moment).
+        # "{T}, Remove a depletion counter from this land: Add {B}{B}" (Peat Bog
+        # and its four siblings) and "{T}, Remove any number of storage
+        # counters ...: Add {B} for each" (the storage-land cycles, Gemstone
+        # Mine) all fall past the compiled-ability branch below -- it takes only
+        # a tap-alone cost, correctly -- and landed on the ``produced_mana``
+        # fallback, which adds **one** mana of the summary's colour and charges
+        # nothing. Sixteen lands in the pool tapped for a free mana for ever,
+        # spending no counter and so never sacrificing themselves; six of them
+        # ship. The amount is wrong too, but the unpaid cost is what makes it a
+        # different card.
+        #
+        # Refused rather than approximated: the seat activates the ability and
+        # pays, which is the path that works. Producing nothing is the honest
+        # answer for a caller -- the AI's auto-tap, the web's land click -- that
+        # asked to tap a land and cannot pay what the land asks.
+        if mana_ability is None and priced_mana_ability:
+            return "priced_mana_ability"
+        return None
+
     def tap_land_for_mana(
         self,
         player_index: int,
@@ -572,67 +652,17 @@ class TurnManagementMixin:
                 player, land_name, permanent_index
             )
             land = resolved[1] if resolved else None
-        if land is not None and land.card.primary_type != "land":
-            land = None
-        if land is None or land.tapped:
+        refusal = self.land_mana_tap_refusal(land, ability_index)
+        if refusal is not None:
+            # The two refusals a player can see the reason for are logged, as
+            # they always were; the rest are a land that makes no mana here.
+            if refusal in _LOGGED_TAP_REFUSALS:
+                self.log.append(f"{land.card.name}{_LOGGED_TAP_REFUSALS[refusal]}")
             return False
-
-        # Tapping a land for mana *is* activating its mana ability (CR 106.12),
-        # so the gates the activation path asks of that ability are asked here
-        # too — this seam is the second door to the same ability, and a gate
-        # one door asks and the other does not is a rule enforced on half the
-        # wire. CR 302.6 (through CR 602.5a): a land that is a creature —
-        # Mishra's Factory animated, a Forest under Living Lands — has the
-        # summoning-sickness rule like any creature, and a {T} mana ability is
-        # a {T} ability. CR 602.5's per-permanent ban ("That permanent's
-        # activated abilities can't be activated this turn", Interdict) prints
-        # no mana-ability exception. Both refused here as the activation path
-        # refuses them, with nothing tapped.
-        from ..spell_prohibitions import permanent_activations_forbidden
-
-        if self._is_summoning_sick(land):
-            self.log.append(f"{land.card.name} has summoning sickness")
-            return False
-        if permanent_activations_forbidden(self, land):
-            self.log.append(
-                f"{land.card.name}'s activated abilities can't be activated this turn"
-            )
-            return False
-
-        # A land with no mana ability at all (Island of Wak-Wak, Bazaar of
-        # Baghdad) can't be tapped for mana — without this, the color fallback
-        # below would invent a green mana out of nothing. A compiled one the
-        # summary does not know about (a mana ability granted to such a land)
-        # is a mana ability all the same.
-        mana_ability, priced_mana_ability = self._land_mana_abilities(land)
         if ability_index is not None:
             mana_ability = self._chosen_land_mana_ability(land, ability_index)
-            if mana_ability is None:
-                return False
-            priced_mana_ability = False
-        if mana_ability is None and not land.effective_produced_mana:
-            if not land.basic_land_types:
-                return False
-
-        # **And a land whose mana ability costs more than the tap cannot be
-        # tapped for mana here either** (CR 602.2b: every cost, at one moment).
-        # "{T}, Remove a depletion counter from this land: Add {B}{B}" (Peat Bog
-        # and its four siblings) and "{T}, Remove any number of storage
-        # counters ...: Add {B} for each" (the storage-land cycles, Gemstone
-        # Mine) all fall past the compiled-ability branch below -- it takes only
-        # a tap-alone cost, correctly -- and landed on the ``produced_mana``
-        # fallback, which adds **one** mana of the summary's colour and charges
-        # nothing. Sixteen lands in the pool tapped for a free mana for ever,
-        # spending no counter and so never sacrificing themselves; six of them
-        # ship. The amount is wrong too, but the unpaid cost is what makes it a
-        # different card.
-        #
-        # Refused rather than approximated: the seat activates the ability and
-        # pays, which is the path that works. Producing nothing is the honest
-        # answer for a caller -- the AI's auto-tap, the web's land click -- that
-        # asked to tap a land and cannot pay what the land asks.
-        if mana_ability is None and priced_mana_ability:
-            return False
+        else:
+            mana_ability, _priced = self._land_mana_abilities(land)
 
         # CR 701.26a's event, announced by the one tap seam. City of Brass
         # ("Whenever this land becomes tapped, it deals 1 damage to you") and

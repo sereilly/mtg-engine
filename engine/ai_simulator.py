@@ -9,7 +9,8 @@ import random
 from .ai_combat import run_ai_combat_phase
 from .ai_policy import (choose_activation_action, choose_cast_action,
                         choose_foreign_activation_action,
-                        choose_hand_activation_action, planned_tap_color)
+                        choose_hand_activation_action, choose_land_drop,
+                        tap_planned_lands)
 from .card_loader import load_cards
 from .game import Game
 from .search_filters import card_has_type
@@ -91,6 +92,14 @@ class SimulationReport:
     #: `ai_policy.choose_foreign_activation_action` existed, because every
     #: chooser walked the seat's own battlefield.
     foreign_activations: int = 0
+    #: Lands played (CR 305.1), by the land-drop pass rather than as the
+    #: turn's one cast. **Not** counted in ``interaction_count``: a land play is
+    #: a special action that uses no stack (CR 116.2a), and a run whose only
+    #: actions were land drops cast nothing — which is what that count's zero
+    #: exists to say. Until PCY's wave 3 a land *was* the turn's cast, so a
+    #: seat that played one cast nothing else that turn, and every number this
+    #: report printed was over games in which no mana cost was ever paid.
+    lands_played: int = 0
 
     @property
     def ok(self) -> bool:
@@ -582,15 +591,7 @@ def _execute_foreign_activation(
     which is what ``activate_permanent_ability`` counts ``permanent_index``
     into when it is given that seat.
     """
-    for position, permanent_index in enumerate(action.land_tap_indices):
-        land = game.permanent_at(active, permanent_index)
-        if land is None:
-            continue
-        game.tap_land_for_mana(
-            active, land.card.name,
-            chosen_color=planned_tap_color(action, position),
-            permanent_index=permanent_index,
-        )
+    tap_planned_lands(game, active, action)
     result = game.activate_permanent_ability(
         active,
         action.permanent_name,
@@ -613,6 +614,240 @@ def _execute_foreign_activation(
         report.refused_activations[
             f"{action.permanent_name} ({owner}'s): {result.details}"
         ] += 1
+
+
+#: Bounds on the main phase's two repeated passes. A turn has one land drop
+#: plus whatever an allowance adds (CR 305.2) — Fastbond's "any number" is
+#: bounded by the hand, and this by a number no real hand reaches, so a land
+#: that returns itself to hand on entering cannot loop. Casts are bounded by
+#: the mana the seat has, and this by a number a turn's mana does not reach
+#: in a limited deck, so a spell that untaps lands or returns itself cannot.
+_MAX_LAND_DROPS = 8
+_MAX_CASTS_PER_MAIN_PHASE = 8
+
+
+def _play_land_drops(
+    game: Game, active: int, report: SimulationReport, game_index: int, turn: int
+) -> None:
+    """The turn's land drops (CR 305.1/305.2), before anything is cast.
+
+    **Their own pass, and first**, because a land was the turn's one *cast*
+    until PCY's wave 3: ``choose_cast_action`` scored a land 1.0 and every
+    spell at least 1.5, so a seat that played a land cast nothing else that
+    turn and a seat holding a spell kept its land in hand. That was invisible
+    for as long as this simulator ignored mana costs — a spell cost nothing,
+    so the land lost every comparison it should have won. How many drops the
+    turn has is `Game._may_play_another_land`'s answer (asked inside
+    `ai_policy.choose_land_drop`), the one every land-drop gate asks, so an
+    additional-land effect gives the seat its extra plays here too.
+
+    A refused play is counted with the refused casts and ends the pass: the
+    chooser asks the cast path's own gates, so a refusal is a policy bug to
+    surface rather than a land to retry.
+    """
+    seat_name = game.players[active].name
+    for _ in range(_MAX_LAND_DROPS):
+        if game.is_game_over():
+            return
+        action = choose_land_drop(game, active)
+        if action is None:
+            return
+        land = game.players[active].hand[action.hand_index]
+        result = game.cast_from_hand(
+            active, land.name, target_player_index=action.target_player_index,
+        )
+        _resolve_pending_choices(game)
+        report.log_lines.append(
+            f"G{game_index} T{turn} {seat_name} play {land.name} -> {result.details}"
+        )
+        if not result.supported:
+            report.refused_casts[f"{land.name}: {result.details}"] += 1
+            return
+        report.lands_played += 1
+
+
+def _play_one_cast(
+    game: Game, active: int, report: SimulationReport, game_index: int, turn: int
+) -> bool:
+    """Cast what `ai_policy.choose_cast_action` proposes, paying for it.
+
+    True when a spell was cast and accepted, so the caller may ask for another;
+    False when nothing was proposed or the cast was refused — a refusal is not
+    retried, because the policy would propose the same card again.
+    """
+    active_player = game.players[active]
+    cast_action = choose_cast_action(game, active)
+    if cast_action is None:
+        return False
+    # `hand_index` indexes the zone `from_zone` names. The simulator's games
+    # are ordinary duels, so today this is always the hand — but the executor
+    # reads the field rather than assuming it, or a commander game run through
+    # here would cast the wrong card.
+    cast_zone = (
+        active_player.command_zone
+        if cast_action.from_zone == "command"
+        else active_player.hand
+    )
+    card_to_cast = cast_zone[cast_action.hand_index]
+
+    # The payment: the planned lands tapped into the pool, each for the colour
+    # the plan counted on (`ai_policy.tap_planned_lands`, the web AI seat's
+    # executor too); the cast below spends it.
+    tap_planned_lands(game, active, cast_action)
+
+    before = _snap(game)
+    # Forward the *whole* choice. Dropping the permanent target was invisible
+    # while the decklist was eight cards that target a player or nothing: an
+    # Aura reaches `cast_from_hand` with no index and is refused ("Evil
+    # Presence requires a target", CR 601.2c/115.1b), and the AI had already
+    # picked a legal land for it.
+    result = game.cast_from_hand(
+        active,
+        card_to_cast.name,
+        target_player_index=cast_action.target_player_index,
+        target_permanent_index=cast_action.target_permanent_index,
+        target_permanent_ids=cast_action.target_permanent_ids,
+        x_value=cast_action.x_value,
+        from_zone=cast_action.from_zone,
+        # CR 118.9. Forwarded like every other announcement on the action:
+        # dropped here, the cast would fall back to a mana cost the policy has
+        # already established this seat cannot pay, and be refused.
+        alternative_cost=cast_action.alternative_cost,
+        # CR 601.2d, forwarded for exactly that reason: the division is part of
+        # the announcement, and a cast that drops it is refused now that the
+        # gate asks for one.
+        divided_targets=cast_action.divided_targets,
+    )
+    _resolve_pending_choices(game)
+    after = _snap(game)
+    report.interaction_count += 1
+    report.log_lines.append(
+        f"G{game_index} T{turn} {active_player.name} cast {card_to_cast.name} -> {result.details}"
+    )
+    if not result.supported:
+        # Two different things wore one message. `supported` on a cast result
+        # means "the cast went through", so a spell declined for want of a
+        # legal target, for a printed timing clause or by City in a Bottle was
+        # reported as an *unsupported card* — which the pool has none of. Ask
+        # the compiler, which is what that word actually means.
+        if not compile_card_oracle(card_to_cast).supported:
+            report.issues.append(InteractionIssue(
+                game_index, turn,
+                f"Unsupported card cast in simulation: {card_to_cast.name}",
+            ))
+        else:
+            report.refused_casts[f"{card_to_cast.name}: {result.details}"] += 1
+        # The oracle below is about what a spell *did*, and a refused one did
+        # nothing — asked anyway, it reported a refused Unsummon as "did not
+        # remove one target creature", an issue out of a cast that broke no
+        # rule. Unreachable while every cast was free; one refusal for want of
+        # mana made it a false exit 1 (5ED's run, once costs were enforced).
+        return False
+    expectation_error = _assert_expected(
+        card_to_cast, before, after, active, cast_action.target_player_index,
+    )
+    if expectation_error:
+        report.issues.append(InteractionIssue(game_index, turn, expectation_error))
+    return True
+
+
+def _play_casts(
+    game: Game, active: int, report: SimulationReport, game_index: int, turn: int
+) -> None:
+    """Cast spells until the seat proposes nothing it can pay for.
+
+    **More than one**, now that each one is paid for: a cast was the turn's one
+    action while mana was free, which cost nothing to model and was no less
+    true than the free mana itself. With costs enforced, one spell per turn is
+    a seat that taps two of its six lands and passes holding a hand of
+    two-drops — and the deck builder deals the cheapest spells it can, so that
+    was most turns of most games. Each cast plans against the lands the last
+    one left untapped, so the loop ends when the mana does.
+
+    The land-drop pass is asked again after every cast, because a spell can
+    grant a drop the turn did not have when the pass first ran ("You may play
+    any number of lands on each of your turns", Fastbond; Summer Bloom) — and
+    a drop left there was taken by the cast chooser instead, as a "cast", which
+    is the land-as-the-turn's-action shape this pass exists to end.
+    """
+    for _ in range(_MAX_CASTS_PER_MAIN_PHASE):
+        if game.is_game_over():
+            return
+        if not _play_one_cast(game, active, report, game_index, turn):
+            return
+        _play_land_drops(game, active, report, game_index, turn)
+
+
+def _play_activations(
+    game: Game, active: int, report: SimulationReport, game_index: int, turn: int
+) -> None:
+    """One ability on the seat's own battlefield, one from its hand and one on
+    another seat's battlefield, each planned against the lands the casts left
+    untapped and paid for the same way."""
+    active_player = game.players[active]
+    activation_action = None if game.is_game_over() else choose_activation_action(game, active)
+    if activation_action is not None:
+        tap_planned_lands(game, active, activation_action)
+        result = game.activate_permanent_ability(
+            active,
+            activation_action.permanent_name,
+            target_player_index=activation_action.target_player_index,
+            permanent_index=activation_action.permanent_index,
+            target_permanent_index=activation_action.target_permanent_index,
+            target_role_refs=activation_action.target_role_refs,
+        )
+        _resolve_pending_choices(game)
+        report.interaction_count += 1
+        report.log_lines.append(
+            f"G{game_index} T{turn} {active_player.name} "
+            f"activate {activation_action.permanent_name} -> {result.details}"
+        )
+        if not result.supported:
+            report.refused_activations[
+                f"{activation_action.permanent_name}: {result.details}"
+            ] += 1
+
+    # An ability activated from the seat's **hand** (CR 113.6j) — cycling. A
+    # separate pass rather than a branch above, because `activate_from_hand`
+    # takes neither a permanent nor a target; after the battlefield pass, so
+    # the lands it plans against are the ones nothing else wanted.
+    hand_activation = (
+        None if game.is_game_over()
+        else choose_hand_activation_action(game, active)
+    )
+    if hand_activation is not None:
+        tap_planned_lands(game, active, hand_activation)
+        result = game.activate_from_hand(
+            active,
+            hand_activation.card_name,
+            ability_index=hand_activation.ability_index,
+            hand_index=hand_activation.hand_index,
+        )
+        _resolve_pending_choices(game)
+        report.interaction_count += 1
+        report.log_lines.append(
+            f"G{game_index} T{turn} {active_player.name} "
+            f"activate {hand_activation.card_name} from hand "
+            f"-> {result.details}"
+        )
+        if not result.supported:
+            report.refused_activations[
+                f"{hand_activation.card_name} (from hand): {result.details}"
+            ] += 1
+
+    # An ability on a permanent **another seat controls** that this seat may
+    # activate (CR 602.1b, "Any player may activate this ability"). Last of the
+    # main-phase passes, so it spends only mana nothing of the seat's own
+    # wanted. No simulated seat had ever done this: every chooser walked its
+    # own board.
+    foreign_activation = (
+        None if game.is_game_over()
+        else choose_foreign_activation_action(game, active)
+    )
+    if foreign_activation is not None:
+        _execute_foreign_activation(
+            game, active, foreign_activation, report, game_index, turn,
+        )
 
 
 def _play_combat_phase(
@@ -790,7 +1025,20 @@ def run_ai_simulation(
                 cards, rng.randint(1, 1_000_000), required=required_cards
             ),
         )
-        game = Game(players=[p1, p2])
+        # CR 601.2f-h and 602.2b: a spell or an ability is paid for. This read
+        # `Game(players=[p1, p2])`, and `enforce_mana_costs` defaults to False,
+        # so in every simulated game this project ever ran nothing cost
+        # anything: a seat cast a six-drop on its first turn with no land, and
+        # the land drop was the turn's one action rather than the thing that
+        # pays for the rest (W2G3's census: 32 of LEA's 82 nonland casts, 62
+        # of M21's 78 and 75 of TMP's 94 cost more than the caster's lands).
+        # The fifth omission of the "it plays a whole turn" class, and the
+        # same shape: the run completed, the interaction count was non-zero
+        # and the issue list was empty. The web app's games have always
+        # enforced costs (`web/session_store.py`); now these do too, and the
+        # AI pays through the same seam its web seat does — the policy plans
+        # the taps, `tap_planned_lands` fills the pool, the cast spends it.
+        game = Game(players=[p1, p2], enforce_mana_costs=True)
         starting_player = game.select_starting_player()
         game.deal_opening_hands(starting_player)
         for i in range(len(game.players)):
@@ -849,172 +1097,13 @@ def run_ai_simulation(
                 game._resolve_priority_window()
                 _resolve_pending_choices(game)
 
-                cast_action = choose_cast_action(game, active)
-                if cast_action is not None:
-                    # `hand_index` indexes the zone `from_zone` names. The
-                    # simulator's games are ordinary duels, so today this is
-                    # always the hand — but the executor reads the field rather
-                    # than assuming it, or a commander game run through here
-                    # would cast the wrong card.
-                    cast_zone = (
-                        game.players[active].command_zone
-                        if cast_action.from_zone == "command"
-                        else game.players[active].hand
-                    )
-                    card_to_cast = cast_zone[cast_action.hand_index]
-
-                    # Each land asked for the colour the plan counted on
-                    # (`planned_tap_color`); the seam's "G" default made a dual
-                    # or a swapped land produce something the plan did not.
-                    for position, permanent_index in enumerate(cast_action.land_tap_indices):
-                        permanent = game.players[active].battlefield[permanent_index]
-                        game.tap_land_for_mana(
-                            active, permanent.card.name,
-                            chosen_color=planned_tap_color(cast_action, position),
-                            permanent_index=permanent_index,
-                        )
-
-                    before = _snap(game)
-                    # Forward the *whole* choice. Dropping the permanent target
-                    # was invisible while the decklist was eight cards that
-                    # target a player or nothing: an Aura reaches
-                    # `cast_from_hand` with no index and is refused ("Evil
-                    # Presence requires a target", CR 601.2c/115.1b), and the AI
-                    # had already picked a legal land for it.
-                    result = game.cast_from_hand(
-                        active,
-                        card_to_cast.name,
-                        target_player_index=cast_action.target_player_index,
-                        target_permanent_index=cast_action.target_permanent_index,
-                        target_permanent_ids=cast_action.target_permanent_ids,
-                        x_value=cast_action.x_value,
-                        from_zone=cast_action.from_zone,
-                        # CR 118.9. Forwarded like every other announcement on
-                        # the action: dropped here, the cast would fall back to
-                        # a mana cost the policy has already established this
-                        # seat cannot pay, and be refused.
-                        alternative_cost=cast_action.alternative_cost,
-                        # CR 601.2d, forwarded for exactly that reason: the
-                        # division is part of the announcement, and a cast that
-                        # drops it is refused now that the gate asks for one.
-                        divided_targets=cast_action.divided_targets,
-                    )
-                    _resolve_pending_choices(game)
-                    after = _snap(game)
-                    report.interaction_count += 1
-                    report.log_lines.append(
-                        f"G{game_index} T{turn} {active_player.name} cast {card_to_cast.name} -> {result.details}"
-                    )
-                    if not result.supported:
-                        # Two different things wore one message. `supported` on
-                        # a cast result means "the cast went through", so a
-                        # spell declined for want of a legal target, for a
-                        # printed timing clause or by City in a Bottle was
-                        # reported as an *unsupported card* — which the pool has
-                        # none of. Ask the compiler, which is what that word
-                        # actually means.
-                        if not compile_card_oracle(card_to_cast).supported:
-                            report.issues.append(InteractionIssue(
-                                game_index, turn,
-                                f"Unsupported card cast in simulation: {card_to_cast.name}",
-                            ))
-                        else:
-                            report.refused_casts[
-                                f"{card_to_cast.name}: {result.details}"
-                            ] += 1
-                    expectation_error = _assert_expected(
-                        card_to_cast,
-                        before,
-                        after,
-                        active,
-                        cast_action.target_player_index,
-                    )
-                    if expectation_error:
-                        report.issues.append(InteractionIssue(game_index, turn, expectation_error))
-
-                activation_action = None if game.is_game_over() else choose_activation_action(game, active)
-                if activation_action is not None:
-                    for position, permanent_index in enumerate(activation_action.land_tap_indices):
-                        permanent = game.players[active].battlefield[permanent_index]
-                        game.tap_land_for_mana(
-                            active, permanent.card.name,
-                            chosen_color=planned_tap_color(activation_action, position),
-                            permanent_index=permanent_index,
-                        )
-
-                    result = game.activate_permanent_ability(
-                        active,
-                        activation_action.permanent_name,
-                        target_player_index=activation_action.target_player_index,
-                        permanent_index=activation_action.permanent_index,
-                        target_permanent_index=activation_action.target_permanent_index,
-                        target_role_refs=activation_action.target_role_refs,
-                    )
-                    _resolve_pending_choices(game)
-                    report.interaction_count += 1
-                    report.log_lines.append(
-                        f"G{game_index} T{turn} {active_player.name} "
-                        f"activate {activation_action.permanent_name} -> {result.details}"
-                    )
-                    if not result.supported:
-                        report.refused_activations[
-                            f"{activation_action.permanent_name}: {result.details}"
-                        ] += 1
-
-                # An ability activated from the seat's **hand** (CR 113.6j) —
-                # cycling. A separate pass rather than a branch above, because
-                # `activate_from_hand` takes neither a permanent nor a target;
-                # after the battlefield pass, so the lands it plans against are
-                # the ones nothing else wanted.
-                hand_activation = (
-                    None if game.is_game_over()
-                    else choose_hand_activation_action(game, active)
-                )
-                if hand_activation is not None:
-                    for position, permanent_index in enumerate(hand_activation.land_tap_indices):
-                        # Through the seam: the two loops above this one predate
-                        # the id migration and are held by a ratchet, so a third
-                        # open-coded slot read would raise the baseline for a
-                        # line that never needed one.
-                        permanent = game.permanent_at(active, permanent_index)
-                        if permanent is None:
-                            continue
-                        game.tap_land_for_mana(
-                            active, permanent.card.name,
-                            chosen_color=planned_tap_color(hand_activation, position),
-                            permanent_index=permanent_index,
-                        )
-                    result = game.activate_from_hand(
-                        active,
-                        hand_activation.card_name,
-                        ability_index=hand_activation.ability_index,
-                        hand_index=hand_activation.hand_index,
-                    )
-                    _resolve_pending_choices(game)
-                    report.interaction_count += 1
-                    report.log_lines.append(
-                        f"G{game_index} T{turn} {active_player.name} "
-                        f"activate {hand_activation.card_name} from hand "
-                        f"-> {result.details}"
-                    )
-                    if not result.supported:
-                        report.refused_activations[
-                            f"{hand_activation.card_name} (from hand): {result.details}"
-                        ] += 1
-
-                # An ability on a permanent **another seat controls** that this
-                # seat may activate (CR 602.1b, "Any player may activate this
-                # ability"). Last of the main-phase passes, so it spends only
-                # mana nothing of the seat's own wanted. No simulated seat had
-                # ever done this: every chooser walked its own board.
-                foreign_activation = (
-                    None if game.is_game_over()
-                    else choose_foreign_activation_action(game, active)
-                )
-                if foreign_activation is not None:
-                    _execute_foreign_activation(
-                        game, active, foreign_activation, report, game_index, turn,
-                    )
+                # The main phase's passes, in the order a player takes them:
+                # the land drop, then casts paid for out of the lands, then
+                # the activations, each planned against what is still
+                # untapped. See `_play_land_drops` and `_play_casts`.
+                _play_land_drops(game, active, report, game_index, turn)
+                _play_casts(game, active, report, game_index, turn)
+                _play_activations(game, active, report, game_index, turn)
 
                 # CR 506-511, the half of a turn this loop did not have. It went
                 # main phase -> cast -> activate -> next seat, so no simulated

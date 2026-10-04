@@ -378,3 +378,282 @@ def test_a_loss_that_pays_for_a_draw_keeps_the_draw_probes_answer(set_pool):
     price of the cards and the draw probe still decides — the caster."""
     game = Game(players=[PlayerState(name="AI", life=12), PlayerState(name="Opp")])
     assert _choose_target_for_spell(set_pool("M21")["Peer into the Abyss"], 0, game) == 0
+
+
+# --- W3G4: an own-seat ability is aimed by the step that targets ---------------
+#
+# `choose_activation_action` asked `instruction_target_side` of the top-level
+# instruction, and a ``sequence`` / ``may`` wrapper has no side — so a two-step
+# ability fell back to "the biggest creature on either board". W2G3 measured 87
+# such abilities statically; driven, with a creature of each size on each board,
+# 47 shipped abilities were aimed at the wrong seat on one board or the other.
+
+import re as _w3g4_re
+
+from engine.ai_simulator import SimulationReport as _W3g4Report
+from engine.ai_simulator import _play_activations as _w3g4_play_activations
+from engine.ai_simulator import _play_one_cast as _w3g4_play_one_cast
+from engine.ai_valuation import source_becomes_an_aura as _w3g4_becomes_aura
+from engine.handlers._common import attached_host as _w3g4_attached_host
+from engine.mixins.stack import aura_enchant_noun as _w3g4_enchant_noun
+from engine.named_counters import add_counters as _w3g4_add_counters
+from engine.targeting import derive_activation_spec as _w3g4_activation_spec
+from engine.targeting import usable_activated_abilities as _w3g4_usable
+
+
+def _w3g4_board(mine=(), theirs=(), hand=()):
+    """A main phase of the AI's, costs enforced, nothing summoning sick."""
+    game = Game(players=[PlayerState(name="AI", hand=list(hand)), PlayerState(name="Opp")])
+    game.enforce_mana_costs = True
+    game.interactive_seats = set()
+    game.turn = 5
+    game.active_player_index = 0
+    game._set_phase_and_step("precombat_main", "precombat_main")
+    for seat, group in ((0, mine), (1, theirs)):
+        for card in group:
+            game._put_permanent_onto_battlefield(seat, Permanent(card=card), None)
+    for permanent in game.all_permanents():
+        permanent.metadata["summoning_sickness_turn"] = -99
+    return game
+
+
+def _w3g4_report():
+    return _W3g4Report(games_requested=1, games_completed=0, interaction_count=0)
+
+
+def _w3g4_on_board(game, name):
+    return next(p for p in game.all_permanents() if p.card.name == name)
+
+
+def test_bullwhip_pings_the_opponents_creature_not_the_biggest_on_either_board(set_pool):
+    """"{2}, {T}: This artifact deals 1 damage to target creature. That creature
+    attacks this turn if able." — a damage step and a forced attack, so a
+    ``sequence``. Read as one instruction it had no side, and the AI's own
+    Craw Wurm, the biggest creature on either board, took the damage. Driven
+    through the simulator's own executor, which pays the {2} from the lands."""
+    lea = set_pool("LEA")
+    game = _w3g4_board(
+        mine=[set_pool("STH")["Bullwhip"], lea["Craw Wurm"], lea["Mountain"], lea["Mountain"]],
+        theirs=[_mk_creature_card("Their Squire", 1, 1)],
+    )
+    report = _w3g4_report()
+
+    _w3g4_play_activations(game, 0, report, 1, 1)
+
+    assert report.log_lines == ["G1 T1 AI activate Bullwhip -> resolved"], report.log_lines
+    assert [card.name for card in game.players[1].graveyard] == ["Their Squire"]
+    assert _w3g4_on_board(game, "Craw Wurm").damage_marked == 0
+    assert all(p.tapped for p in game.controlled_by(0) if p.card.name == "Mountain")
+
+
+def test_power_matrix_pumps_the_ais_own_creature(set_pool):
+    """"{T}: Target creature gets +1/+1 and gains flying, first strike, and
+    trample until end of turn." — a pump and a grant. The fallback gave them
+    to the opponent's Craw Wurm."""
+    game = _w3g4_board(
+        mine=[set_pool("MMQ")["Power Matrix"], _mk_creature_card("Own Bear", 2, 2)],
+        theirs=[set_pool("LEA")["Craw Wurm"]],
+    )
+
+    _w3g4_play_activations(game, 0, _w3g4_report(), 1, 1)
+
+    bear, wurm = _w3g4_on_board(game, "Own Bear"), _w3g4_on_board(game, "Craw Wurm")
+    assert (bear.effective_power, bear.effective_toughness) == (3, 3)
+    assert game._has_keyword(bear, "flying") and game._has_keyword(bear, "trample")
+    assert (wurm.effective_power, wurm.effective_toughness) == (6, 4)
+    assert not game._has_keyword(wurm, "flying")
+
+
+def test_a_licid_is_attached_where_its_aura_belongs(set_pool):
+    """"This creature loses this ability and becomes an Aura enchantment with
+    enchant creature. Attach it to target creature." The attach step reads
+    "you" for an Equipment's reason, so the Licid is aimed as the Aura it
+    becomes would be cast: Calming Licid's "can't attack" on the opponent's
+    creature, Gliding Licid's flying on the AI's own — each against a board
+    whose biggest creature is on the other side."""
+    lea, sth = set_pool("LEA"), set_pool("STH")
+    calming = _w3g4_board(
+        mine=[sth["Calming Licid"], lea["Plains"], lea["Craw Wurm"]],
+        theirs=[_mk_creature_card("Their Squire", 1, 1)],
+    )
+    gliding = _w3g4_board(
+        mine=[sth["Gliding Licid"], lea["Island"], _mk_creature_card("Own Bear", 2, 2)],
+        theirs=[lea["Craw Wurm"]],
+    )
+    for game, licid, wanted in (
+        (calming, "Calming Licid", ("Their Squire", 1)),
+        (gliding, "Gliding Licid", ("Own Bear", 0)),
+    ):
+        _w3g4_play_activations(game, 0, _w3g4_report(), 1, 1)
+        host = _w3g4_attached_host(game, _w3g4_on_board(game, licid))
+        assert host is not None, licid
+        assert (host.card.name, game.controller_index_of(host)) == wanted, licid
+    assert not legal_attackers(calming, 1), "the enchanted creature can still attack"
+
+
+def test_an_x_cost_ability_is_not_proposed_and_a_defined_x_does_not_crash(set_pool):
+    """Two shapes the score below the side read used to ``int("x")`` on:
+    Crimson Hellkite's "{X}, {T}: … X damage" (the chooser announces no X, so
+    it is a tap for nothing and is not proposed), and Torture Chamber's
+    "…damage equal to the number of pain counters removed this way" (a
+    defined X, scored at the floor and aimed at the opponent). Either one,
+    untapped in a main phase, raised out of the chooser and killed the run."""
+    lea = set_pool("LEA")
+    hellkite = _w3g4_board(
+        mine=[set_pool("MIR")["Crimson Hellkite"]] + [lea["Mountain"]] * 4,
+        theirs=[_mk_creature_card("Their Bear", 2, 2)],
+    )
+    assert choose_activation_action(hellkite, 0) is None
+
+    chamber = _w3g4_board(
+        mine=[set_pool("TMP")["Torture Chamber"], lea["Mountain"]],
+        theirs=[_mk_creature_card("Their Bear", 2, 2)],
+    )
+    _w3g4_add_counters(_w3g4_on_board(chamber, "Torture Chamber"), "pain", 2)
+    _w3g4_play_activations(chamber, 0, _w3g4_report(), 1, 1)
+    assert [card.name for card in chamber.players[1].graveyard] == ["Their Bear"]
+
+
+#: The Licids whose Aura text, read by a person, is a cost to the enchanted
+#: creature or its controller — the rest grant a keyword or a regeneration.
+_W3G4_HARMFUL_LICIDS = frozenset({
+    "Calming Licid", "Convulsing Licid", "Dominating Licid",
+    "Leeching Licid", "Stinging Licid",
+})
+
+
+def _w3g4_step_side(instruction):
+    """The side the targeting steps state, read here independently of the
+    policy: each step's own leaf reading, a denial winning."""
+    steps, stack = [], [instruction]
+    while stack:
+        item = stack.pop()
+        nested = [
+            child for key in ("steps", "then", "else", "action", "otherwise", "effect")
+            for child in ((item.payload or {}).get(key) or ())
+            if hasattr(child, "kind")
+        ]
+        if nested:
+            stack.extend(nested)
+        elif isinstance((item.payload or {}).get("targets"), dict):
+            steps.append(item)
+    sides = {instruction_target_side(step) for step in steps} - {None}
+    return "opponent" if "opponent" in sides else "you" if "you" in sides else None
+
+
+def test_no_wrapped_own_ability_in_the_pool_is_aimed_at_the_wrong_seat(catalog, set_pool):
+    """Pool-wide, both manifest roles: every card whose first usable ability
+    names an object target through a wrapper, on the AI's board twice — once
+    with the opponent holding the biggest creature, once with the AI — must be
+    aimed at the seat its targeting steps state (a Licid at the seat its Aura
+    belongs on). Validated backwards: on the tree before this change the same
+    walk named 47 shipped abilities aimed at the wrong seat (Bullwhip,
+    Serrated Biskelion, Power Matrix, Wishmonger, every Licid, …).
+    """
+    cards = {card.name: card for card in catalog}
+    cards.update(set_pool("PCY"))
+    lea = set_pool("LEA")
+    small, big = lea["Grizzly Bears"], lea["Craw Wurm"]
+    small_artifact = set_pool("ATQ")["Ornithopter"]
+    examined, proposed, wrong = [], 0, []
+    for name, card in sorted(cards.items()):
+        if card.primary_type in ("instant", "sorcery", "land") or "Aura" in (card.type_line or ""):
+            continue
+        usable = _w3g4_usable(compile_card_oracle(card))
+        if not usable or usable[0].instruction is None:
+            continue
+        ability = usable[0]
+        spec = _w3g4_activation_spec(ability) or {}
+        if spec.get("kind") not in {"creature", "artifact", "land", "permanent"}:
+            continue
+        if spec.get("sacrifice_cost") or spec.get("discard_cost"):
+            continue
+        if instruction_target_side(ability.instruction) is not None:
+            continue  # not wrapped: the reading this fixed never applied
+        if _w3g4_becomes_aura(ability.instruction):
+            side = "opponent" if name in _W3G4_HARMFUL_LICIDS else "you"
+        else:
+            side = _w3g4_step_side(ability.instruction)
+        if side is None:
+            continue
+        examined.append(name)
+        for own_big in (False, True):
+            game = _w3g4_board(
+                mine=[card, big if own_big else small, small_artifact],
+                theirs=[small if own_big else big, small_artifact],
+            )
+            game.enforce_mana_costs = False
+            action = choose_activation_action(game, 0)
+            if action is None or action.permanent_name != name or action.target_permanent_index is None:
+                continue
+            proposed += 1
+            if action.target_player_index != (0 if side == "you" else 1):
+                wrong.append((name, side, "own biggest" if own_big else "opponent's biggest"))
+
+    assert len(examined) >= 60, examined
+    assert proposed >= 60, proposed
+    assert {"Bullwhip", "Power Matrix", "Wishmonger", "Calming Licid"} <= set(examined)
+    assert wrong == [], wrong
+
+
+#: A person's reading of an Aura whose effect is a price charged to its host's
+#: controller — written here, not imported, so the policy's markers are not
+#: checked against themselves.
+_W3G4_PRICE_TO_HOSTS_CONTROLLER = _w3g4_re.compile(
+    r"deals? (?:\d+|x|that much) damage to (?:that player|that \w+'s controller)"
+    r"|(?:that player|its controller) loses (?:\d+ )?life"
+)
+
+
+def test_an_aura_that_charges_its_hosts_controller_is_cast_on_an_opponent(catalog, set_pool):
+    """"At the beginning of the upkeep of enchanted creature's controller, this
+    Aura deals 1 damage to that player." (Wanderlust.) None of the AI's harmful
+    markers read a damage clause, so it cast every Aura of this shape on its
+    **own** permanent and took the damage itself each upkeep. Pool-wide, with
+    a host of every kind on both boards; validated backwards: 21 of the 22
+    examined went on the caster's own permanent before this change."""
+    cards = {card.name: card for card in catalog}
+    cards.update(set_pool("PCY"))
+    hosts = [cards[name] for name in ("Grizzly Bears", "Mountain", "Ornithopter", "Castle")]
+    examined, cast, wrong = [], 0, []
+    for name, card in sorted(cards.items()):
+        if _w3g4_enchant_noun(card) is None or not compile_card_oracle(card).supported:
+            continue
+        if not _W3G4_PRICE_TO_HOSTS_CONTROLLER.search((card.oracle_text or "").lower()):
+            continue
+        examined.append(name)
+        game = _w3g4_board(mine=hosts, theirs=hosts, hand=[card])
+        game.enforce_mana_costs = False
+        action = choose_cast_action(game, 0)
+        if action is None:
+            continue
+        cast += 1
+        if action.target_player_index != 1:
+            wrong.append(name)
+
+    assert len(examined) >= 20, examined
+    assert cast >= 18, cast
+    assert {"Wanderlust", "Psychic Venom", "Warp Artifact"} <= set(examined)
+    assert wrong == [], wrong
+
+
+def test_wanderlust_cast_by_the_simulator_hurts_the_opponent_at_their_upkeep(set_pool):
+    """The Rock Hydra test for the reading above: cast through the simulator's
+    executor (paid from three Forests), then the opponent's upkeep."""
+    lea = set_pool("LEA")
+    game = _w3g4_board(
+        mine=[lea["Forest"]] * 3 + [_mk_creature_card("Own Bear", 2, 2)],
+        theirs=[_mk_creature_card("Their Bear", 2, 2)],
+        hand=[lea["Wanderlust"]],
+    )
+    assert _w3g4_play_one_cast(game, 0, _w3g4_report(), 1, 1)
+    host = _w3g4_attached_host(game, _w3g4_on_board(game, "Wanderlust"))
+    assert (host.card.name, game.controller_index_of(host)) == ("Their Bear", 1)
+
+    game.turn = 6
+    game.begin_turn_bookkeeping(1)
+    game.resolve_untap_step(1)
+    game.resolve_upkeep(1)
+    resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    assert (game.players[0].life, game.players[1].life) == (20, 19)

@@ -157,18 +157,21 @@ def test_every_reader_that_counts_land_mana_counts_what_the_tap_seam_taps():
     made it a rule: its mana needs priority (CR 304.5) and any player may deny
     it, so nothing that pays mid-payment may count it.
 
-    One predicate answers all three (``mana_payment.taps_for_payment``); this
-    sweep checks the predicate against the seam's own behaviour, land by land,
-    rather than against a second list. The floor is on how many lands it
+    One reading answers all three — ``Game._land_mana_abilities``, through
+    ``mana_payment.taps_for_payment`` for the payment planner and through the
+    seam's own gate (``Game.land_mana_tap_refusal``) for the AI's plan; this
+    sweep checks each against the seam's own behaviour, land by land, rather
+    than against a second list. The floor is on how many lands it
     examined, for the reason the sweep above gives.
     """
-    from engine.ai_policy import _plan_land_taps
+    from engine.ai_policy import _land_mana_is_unplannable, _plan_land_taps
     from engine.mana_payment import taps_for_payment, untapped_mana_lands
 
     lands = [card for card in _pool() if card.primary_type == "land"]
     assert len(lands) >= 150
 
     disagree = []
+    declined = []
     refused = examined = 0
     for card in lands:
         game, land = _board(card)
@@ -180,14 +183,32 @@ def test_every_reader_that_counts_land_mana_counts_what_the_tap_seam_taps():
         examined += 1
         counted = taps_for_payment(land)
         in_planner = bool(untapped_mana_lands([land]))
+        # The AI's plan is the one reader allowed to count *fewer* lands than
+        # the seam taps, and only the ones it says it cannot count (PCY W3G4):
+        # a tap the seam accepts is not always a mana a plan can spend.
+        # Mishra's Workshop's goes into a restricted bucket (CR 106.6) and a
+        # plan is not told what the mana is for; Gaea's Cradle, Serra's
+        # Sanctum, Tolarian Academy, City of Shadows and Reflecting Pool make
+        # what the rest of the board decides, which alone on this board is
+        # nothing. Asked before the tap, which is what the plan is.
+        unplannable = _land_mana_is_unplannable(game, land)
         planned = _plan_land_taps(game, game.players[0], {"generic": 1}) is not None
         symbol = (card.produced_mana or ("G",))[0]
         tapped = game.tap_land_for_mana(0, card.name, symbol)
         refused += not tapped
-        if counted != tapped or (in_planner and not tapped) or planned != tapped:
+        declined += [card.name] if tapped and unplannable else []
+        if (
+            counted != tapped
+            or (in_planner and not tapped)
+            or planned != (tapped and not unplannable)
+        ):
             disagree.append((card.name, counted, in_planner, planned, tapped))
 
     assert disagree == []
+    # The exclusion is a handful of lands, not a way out of the comparison: a
+    # predicate that began declining ordinary lands would empty this sweep's
+    # third reader while every row above still agreed.
+    assert len(declined) * 20 <= examined, sorted(declined)
     assert examined >= 150
     # The seam refuses 39 of the 166 examined today (the sixteen priced lands,
     # Rhystic Cave, and the lands that make no mana); a sweep that refused none

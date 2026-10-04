@@ -5,13 +5,13 @@ import re
 
 from .ai_valuation import (
     SPELL_TYPES,
+    ability_denies_its_target,
     ability_target_side,
     cards_drawn_by_controller,
     cards_drawn_by_target,
     caster_sacrifice_steps,
     castable_commanders,
     counters_a_spell,
-    denies_its_target,
     destroyed_permanent_filter,
     divided_shape,
     foreign_activation_use,
@@ -20,8 +20,10 @@ from .ai_valuation import (
     instruction_target_side,
     is_mana_ability,
     mana_ability_amount,
+    mana_ability_symbols,
     returns_creature_to_hand,
     several_target_slot_sides,
+    source_becomes_an_aura,
     source_toughness_change,
     spell_denies_its_own_target,
     spell_hand_pick_entry_filters,
@@ -47,7 +49,6 @@ from .mixins.stack import (aura_enchant_noun, enchant_noun_seat,
 from .target_restrictions import forbidden_target
 from .auras import aura_restriction_active
 from .combat_permissions import MUST_BLOCK_ATTACKERS_UNTIL_EOT
-from .mana_payment import taps_for_payment
 from .models import CardDefinition, Permanent, PlayerState
 from .oracle import OracleInstruction, compile_card_oracle
 from .oracle_types import cost_target_count, x_spend_colors_from_text
@@ -177,6 +178,61 @@ def planned_tap_color(action, position: int) -> str:
     return colors[position] if position < len(colors) else "G"
 
 
+def planned_tap_ability(game: Game, land: Permanent, color: str) -> int | None:
+    """Which of *land*'s mana abilities makes *color* — an index for
+    ``tap_land_for_mana(ability_index=…)`` — or None for the seam's default.
+
+    CR 605: each mana ability is its own ability, and the tap seam runs the
+    land's **first** tap-alone one unless told which. For a painland that is
+    "{T}: Add {C}", so a plan that counted a Karplusan Forest or an
+    Underground River as a coloured mana tapped it for {C} and the spell was
+    refused "insufficient mana" — every turn, once the simulator enforced
+    costs. None whenever the default already makes the colour (a basic, a
+    dual, City of Brass, a land under a swap the seam applies to any ability),
+    so every land that tapped correctly taps exactly as it did.
+    """
+    from .mixins.turn_management import is_tap_alone_mana_ability
+
+    free, _priced = game._land_mana_abilities(land)
+    if free is None or color in mana_ability_symbols(free):
+        return None
+    usable = usable_activated_abilities(compile_card_oracle(game.playable_card_of(land)))
+    for index, ability in enumerate(usable):
+        if not is_tap_alone_mana_ability(ability):
+            continue
+        if color in mana_ability_symbols(ability.instruction) and (
+            game.land_mana_tap_refusal(land, index) is None
+        ):
+            return index
+    return None
+
+
+def tap_planned_lands(game: Game, seat: int, action) -> None:
+    """Tap the lands *action*'s plan names into *seat*'s pool, each for the
+    colour the plan counted on and through the mana ability that makes it.
+
+    **The AI's payment**, shared by every executor — the simulator's and the
+    web app's AI seat — so the two pay the same way: the policy plans the taps
+    (`_plan_land_taps`), this fills the pool through the engine's one tap
+    seam, and the cast or activation that follows spends it (CR 601.2g-h).
+    Every slot is resolved to its permanent before the first tap and tapped
+    **by id**, so a tap that moved anything cannot shift a later slot onto a
+    different land.
+    """
+    planned = [game.permanent_at(seat, index) for index in action.land_tap_indices]
+    for position, land in enumerate(planned):
+        permanent_id = game.permanent_id_of(land)
+        if permanent_id is None:
+            continue
+        color = planned_tap_color(action, position)
+        game.tap_land_for_mana(
+            seat, land.card.name,
+            chosen_color=color,
+            permanent_id=permanent_id,
+            ability_index=planned_tap_ability(game, land, color),
+        )
+
+
 def choose_attack_target(game: Game, player_index: int) -> int:
     """MVP multiplayer opponent-choice heuristic: attack/target whichever living
     opponent has the least life, tying broken by lowest seat index (deterministic
@@ -221,6 +277,70 @@ def choose_cast_action(game: Game, player_index: int) -> CastAction | None:
             best = candidate
 
     return best
+
+
+def choose_land_drop(game: Game, player_index: int) -> CastAction | None:
+    """The land this seat plays now (CR 305.1), or None when it has no land
+    to play or no land play left (CR 305.2).
+
+    **A land drop is not a cast, and the two are not one choice.** Playing a
+    land is a special action that uses no stack and costs no mana, and a turn
+    has a land drop *and* the mana it then spends — so a seat that weighed
+    its land against its spells under one score (``choose_cast_action``, where
+    a land scores 1.0 and every spell at least 1.5) either played the land and
+    cast nothing, or cast the spell and kept the land in hand. That was
+    invisible while the simulator never enforced mana costs: a spell cost
+    nothing, so the land always lost. Asked before the casts, from the same
+    gates (`_cast_candidate`), so a land the cast path would refuse is never
+    proposed; how many drops a turn has is `Game._may_play_another_land`, the
+    one question every land-drop gate asks, so an Exploration or a Fastbond
+    adds plays here exactly as it does at the table.
+
+    Which land, when there is a choice: the one that adds a colour the hand's
+    spells ask for and the seat's lands do not yet make (`_land_drop_value`).
+    """
+    if not game._may_play_another_land(player_index):
+        return None
+    best: CastAction | None = None
+    best_value: tuple[int, int] | None = None
+    for hand_index, card in enumerate(game.players[player_index].hand):
+        if card.primary_type != "land":
+            continue
+        candidate = _cast_candidate(game, player_index, card, hand_index)
+        if candidate is None:
+            continue
+        value = _land_drop_value(game, player_index, card)
+        if best_value is None or value > best_value:
+            best, best_value = candidate, value
+    return best
+
+
+def _land_drop_value(
+    game: Game, player_index: int, land: CardDefinition
+) -> tuple[int, int]:
+    """How much *land* helps the seat's hand: ``(colours it adds that the
+    hand wants and no land the seat controls makes, colours it makes that the
+    hand wants at all)``, compared as a tuple.
+
+    The colours a card *in hand* makes are the printed summary
+    (``produced_mana``) — it is not a permanent yet, so the engine's answer
+    for one (`_land_symbols`) cannot be asked. A ranking, never a gate: the
+    tap planner still asks the engine what each land makes once it is down.
+    """
+    wanted: set[str] = set()
+    for card in game.players[player_index].hand:
+        if card.primary_type == "land":
+            continue
+        for symbol in re.findall(r"\{([^}]+)\}", card.mana_cost or ""):
+            wanted.update(part for part in symbol.upper().split("/") if part in "WUBRG")
+    made = {
+        symbol
+        for permanent in game.controlled_by(player_index)
+        if permanent.card.primary_type == "land"
+        for symbol in _land_symbols(game, permanent)
+    }
+    makes = set(land.produced_mana or ()) & wanted
+    return (len(makes - made), len(makes))
 
 
 def _cast_candidate(
@@ -331,6 +451,18 @@ def _cast_candidate(
                     return None
                 if single is not None:
                     target, target_permanent_index, target_permanent_ids = single
+    # "Destroy target artifact **with mana value X**" (Detonate): the target
+    # fixes X, and the cast gate refuses an X that does not match it. X was
+    # sized above as the most the lands could pay, before any target existed,
+    # so the AI announced X=5 at a one-mana artifact and was refused — a
+    # refusal free mana made rare and enforced costs made routine. The X is
+    # the target's (`_x_implied_by_target`, the gate's own reading), and the
+    # cost below is planned against that X, so an unaffordable target is a
+    # cast not proposed rather than one refused.
+    if x_value is not None and isinstance(target_permanent_index, int):
+        implied = game._x_implied_by_target(card, target, target_permanent_index, None)
+        if implied is not None:
+            x_value = implied
     if not _caster_can_make_its_sacrifices(game, player_index, card):
         # "Sacrifice a creature. Rupture deals damage equal to that creature's
         # power…": with nothing to sacrifice the whole resolution is nothing.
@@ -547,6 +679,22 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
         # the source's own counters, which the score does read.
         if ability.cost.remove_counter_filter is not None:
             continue
+        # …and the self-referring spelling the score does price, which still
+        # has to be *payable*: "{T}, Remove a javelin counter from this
+        # creature: …" (Icatian Javelineers), Elvish Farmer's spore counters,
+        # Goblin Bomb's fuse counters. With none left the activation path
+        # refuses it with nothing paid (CR 601.2h via CR 602.2b), and this
+        # proposed it again every main phase — 43 refused activations over the
+        # default seeded runs, the "costs a board cannot pay" W2G3 left. The
+        # count the engine compares, read through the same counter reader.
+        if ability.cost.remove_counter:
+            from .named_counters import counters_on
+
+            wanted = ability.cost.remove_counter_count
+            if isinstance(wanted, int) and counters_on(
+                permanent, ability.cost.remove_counter
+            ) < wanted:
+                continue
 
         # "Exile the top card of your library" (Royal Herbalist, Phyrexian
         # Devourer). The same floor one zone over, and the sharper case for it:
@@ -641,9 +789,14 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
         # floor until the policy prices an X. Read off the cost clause the way
         # the activation path counts its ``{X}`` symbols, so a *defined* X (the
         # verse cycle's "where X is …") is left to the sizing that answers it.
-        if (spec or {}).get("x_targets") and "{x}" in (
-            ability.source_line or ""
-        ).lower().split(":", 1)[0]:
+        #
+        # And the same floor for **every** ``{X}`` in a cost, not only one that
+        # sizes a target list: "{X}, {T}: This creature deals X damage to target
+        # creature" (Crimson Hellkite) is an X its controller announces
+        # (CR 107.3a), this policy announces none, and the engine reads that as
+        # zero — a tap and a turn spent dealing nothing. It reached the score
+        # below only to crash there on the payload's "x".
+        if "{x}" in (ability.source_line or "").lower().split(":", 1)[0]:
             continue
         # An ability naming several targets of *different* kinds, chosen in
         # dependency order (CR 602.2b reaches CR 601.2c). Asked before the
@@ -684,14 +837,14 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
             if not perms:
                 continue
             # Which board, from what the effect does to its target
-            # (`ai_valuation.instruction_target_side`) — and **only** that
+            # (`_activation_target_side`) — and **only** that
             # board. This fell back to "any legal permanent" when the wanted
             # side had none, which is how a destroy, a tap or a "can't block"
             # with no opposing target landed on the activator's own creature,
             # and a pump with no friendly one landed on an opponent's: an
             # activation that resolves and harms the seat that paid for it.
-            side = instruction_target_side(ability.instruction)
-            if side == "you" and denies_its_target(ability.instruction):
+            side = _activation_target_side(permanent, ability.instruction)
+            if side == "you" and ability_denies_its_target(ability.instruction):
                 # "Destroy target … you control" (Rats of Rath), "Return target
                 # land you control to its owner's hand" (Trade Routes): the
                 # printed seat is the activator's and the effect is a denial,
@@ -767,6 +920,32 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
             best = candidate
 
     return best
+
+
+def _activation_target_side(permanent: Permanent, instruction) -> str | None:
+    """Whose permanent an own-seat ability's object target should be — "you",
+    "opponent", or None for no preference.
+
+    **Read step by step** (`ai_valuation.ability_target_side`), the reading the
+    foreign chooser already took. This asked `instruction_target_side` of the
+    top-level instruction, and a ``sequence`` / ``may`` wrapper has no side, so
+    an ability whose effect is two steps fell back to "the biggest creature on
+    either board": Bullwhip pinged and Serrated Biskelion shrank the AI's own
+    biggest creature, Power Matrix and Ivy Seer pumped the opponent's, and
+    Wishmonger gave the opponent's protection. Measured over both manifest
+    roles with a creature of each size on each board: 47 abilities aimed at
+    the wrong seat in one board or the other. The top-level reading stays as
+    the fallback for a leaf whose target is not a ``targets`` payload.
+
+    An ability that turns its source into an Aura (the Licids) is aimed as
+    that Aura would be cast (`_aura_harms_its_host`): its attach step reads
+    "you" for an Equipment's reason, and Calming Licid's "can't attack" or
+    Dominating Licid's "you control enchanted creature" belong on an
+    opponent's creature.
+    """
+    if source_becomes_an_aura(instruction):
+        return "opponent" if _aura_harms_its_host(permanent.effective_card) else "you"
+    return ability_target_side(instruction) or instruction_target_side(instruction)
 
 
 def _choose_activation_role_targets(
@@ -978,7 +1157,9 @@ def _foreign_activation_candidate(
             # board is a gift paid for.
             side = ability_target_side(instruction)
             if side == "you":
-                if denies_its_target(instruction):
+                # Asked of the step that names the target, for the reason
+                # the side is: a wrapper denies nothing.
+                if ability_denies_its_target(instruction):
                     return None
                 perms = [t for t in perms if t["seat"] == player_index]
             elif side == "opponent":
@@ -2278,6 +2459,48 @@ def _targets_are_optional(program) -> bool:
     return bool(quantifiers) and all(q == "up_to" for q in quantifiers)
 
 
+#: Printed phrases that make an Aura's effect a cost to whoever controls its
+#: host, so it belongs on an opponent's permanent. Text probes, and tuning
+#: like every other weight in this module.
+_HARMFUL_AURA_MARKERS = (
+    "gets -",
+    "doesn't untap",
+    "tap enchanted",
+    "you control enchanted",
+    "can't attack",
+    "can't block",
+)
+#: …and the Auras whose whole effect is a price charged to **the host's
+#: controller** rather than to the host: "this Aura deals 1 damage to that
+#: player" (Wanderlust, Cursed Land, Warp Artifact), "…to that land's
+#: controller" (Psychic Venom), "its controller loses life equal to its power"
+#: (Death Watch). None of them printed a phrase the list above reads, so the
+#: AI cast every one of them onto its **own** permanent — 21 of the 22 shipped
+#: Auras printing one, measured with a host of every kind on both boards — and
+#: paid the damage itself every upkeep. Read the same way from a Licid's text.
+_HARMFUL_AURA_PATTERN = re.compile(
+    r"damage to (?:that player|its controller|that [a-z]+'s controller)"
+    r"|(?:that player|its controller) loses (?:\d+|x|life)"
+)
+
+
+def _aura_harms_its_host(card: CardDefinition) -> bool:
+    """Whether *card*'s text, as an Aura, works against the permanent it
+    enchants and that permanent's controller — so the AI puts it on an
+    opponent's permanent rather than its own.
+
+    One reader for the two ways an Aura gets a host: cast onto one
+    (`_choose_aura_target`), and a permanent that *becomes* one and attaches
+    itself (`ai_valuation.source_becomes_an_aura`, the Licids), where the
+    activation chooser asks the same question of the same text.
+    """
+    text = (card.oracle_text or "").lower()
+    return (
+        any(marker in text for marker in _HARMFUL_AURA_MARKERS)
+        or _HARMFUL_AURA_PATTERN.search(text) is not None
+    )
+
+
 def _choose_aura_target(game: Game, caster_index: int, card: CardDefinition) -> tuple[int, int] | None:
     """Pick (player_index, permanent_index) for an Aura's enchant target.
 
@@ -2288,18 +2511,7 @@ def _choose_aura_target(game: Game, caster_index: int, card: CardDefinition) -> 
     noun = aura_enchant_noun(card)
     if noun is None:
         return None
-    text = card.oracle_text.lower()
-    harmful = any(
-        marker in text
-        for marker in (
-            "gets -",
-            "doesn't untap",
-            "tap enchanted",
-            "you control enchanted",
-            "can't attack",
-            "can't block",
-        )
-    )
+    harmful = _aura_harms_its_host(card)
     target_player_index = choose_attack_target(game, caster_index) if harmful else caster_index
     # "Enchant creature **you control**" (Cocoon): however "harmful" the text
     # reads, the clause forbids an opponent's permanent — the same gate the
@@ -3037,7 +3249,18 @@ def _score_activation(
     score = 1.0
 
     if instruction.kind == "deal_damage":
-        amount = int(instruction.payload.get("amount", 1) or 1)
+        # A *defined* amount ("…equal to the number of pain counters removed
+        # this way", Torture Chamber) is the payload's "x", and this was
+        # ``int("x")``: a ValueError out of the chooser, which killed the whole
+        # simulated run — and the web app's AI step — the first time a seat
+        # held one untapped in a main phase. One is the floor every other
+        # unread amount here gets.
+        raw_amount = instruction.payload.get("amount", 1)
+        amount = (
+            raw_amount if isinstance(raw_amount, int) and not isinstance(raw_amount, bool)
+            else int(raw_amount) if isinstance(raw_amount, str) and raw_amount.isdigit()
+            else 1
+        ) or 1
         target_player = game.players[target_index]
         effective_damage = max(0, amount - target_player.damage_prevention_pool)
         if effective_damage == 0:
@@ -3495,19 +3718,31 @@ def _plan_land_taps(
     anything costing three.
     """
     pool = {symbol: player.mana_pool.get(symbol, 0) for symbol in _MANA_SYMBOLS}
-    # Only a land the tap seam will actually tap for mana
-    # (``mana_payment.taps_for_payment``) — the executor sends every planned
-    # slot to that seam, and one it refuses is a cast the plan promised and the
-    # engine then declines. Rhystic Cave is the land that must never be here
-    # (its mana needs priority and can be denied); the storage and depletion
-    # lands, whose mana ability costs more than {T}, and a land that makes no
-    # mana at all (Bazaar of Baghdad, read as {C} by ``_land_symbols``) were
-    # here already and were refused the same way.
+    # Only a land the tap seam will make mana from (`land_mana_tap_refusal`,
+    # the seam's own gate): an untapped land is not a mana. A storage land with
+    # no counter, a Bazaar of Baghdad or a summoning-sick land creature counted
+    # as one here, the executor's tap of it made nothing, and the cast it was
+    # planned for was refused "insufficient mana" — the same spell every turn,
+    # once the simulator enforced costs (5ED: Sand Silos, 14 refusals a run).
+    #
+    # **Rhystic Cave is the land that must never be here**: "Activate only as
+    # an instant" means its mana needs priority (CR 304.5), which nobody has
+    # while a cost is being paid, and any player may deny it. The seam's gate
+    # reads `_land_mana_abilities`, whose answer for the Cave is "cannot be
+    # run inside a payment" — the same reading `mana_payment.taps_for_payment`
+    # gives the optional-pay planner, so the two planners agree about it.
+    #
+    # Nor one whose mana is **restricted** ("Spend this mana only to cast
+    # artifact spells", Mishra's Workshop): it goes into its own bucket
+    # (CR 106.6), this planner is not told what the mana is for, and counted
+    # as a generic mana it paid for a Priest of Yawgmoth the bucket cannot.
+    # Nor one whose output the rest of the board decides (Gaea's Cradle with
+    # no creature makes nothing) — `_land_mana_is_unplannable`.
     untapped_lands = [
         (index, _land_symbols(game, permanent), _land_mana_amount(game, permanent))
         for index, permanent in enumerate(game.controlled_by(player))
-        if permanent.card.primary_type == "land" and not permanent.tapped
-        and taps_for_payment(permanent)
+        if game.land_mana_tap_refusal(permanent) is None
+        and not _land_mana_is_unplannable(game, permanent)
     ]
 
     if _can_pay_cost(pool, required, player):
@@ -3657,6 +3892,50 @@ def _land_mana_amount(game: Game, permanent: Permanent) -> int:
     return 1
 
 
+#: Payload keys on a land's add-mana step that make what one tap produces a
+#: fact about the rest of the board rather than about the land: "{G} for each
+#: creature you control" (Gaea's Cradle), "{C} for each storage counter on this
+#: land" (City of Shadows), "one mana of any type that a land you control could
+#: produce" (Reflecting Pool). The planner counts a tap as its printed pips, so
+#: these read as one mana each — on an empty board, zero.
+_BOARD_DEPENDENT_MANA_KEYS = ("per_each", "per_each_counter_on_source", "any_type_from_lands")
+
+
+def _land_mana_is_unplannable(game: Game, land: Permanent) -> bool:
+    """Whether the mana *land*'s default tap makes is one this planner cannot
+    count: **restricted** ("Spend this mana only …", CR 106.6 — the
+    ``spend_only`` the add-mana handler files it under, read where
+    `_land_mana_amount` reads it), or **board-dependent**
+    (`_BOARD_DEPENDENT_MANA_KEYS`). Left out of the plan rather than guessed
+    at: a guess counted as mana is a cast refused for insufficient mana."""
+    free, _priced = game._land_mana_abilities(land)
+    if free is None:
+        return False
+    payload = free.payload or {}
+    if payload.get("spend_only"):
+        return True
+    return any(
+        (step.payload or {}).get(key)
+        for step in (free, *((payload.get("steps") or ())))
+        for key in _BOARD_DEPENDENT_MANA_KEYS
+        if hasattr(step, "payload")
+    )
+
+
+def _tap_alone_land_symbols(game: Game, land: Permanent) -> set[str]:
+    """Every symbol one of *land*'s tap-alone mana abilities makes — the
+    abilities the tap seam runs (`planned_tap_ability` picks among them), and
+    none it refuses (`land_mana_tap_refusal`)."""
+    from .mixins.turn_management import is_tap_alone_mana_ability
+
+    found: set[str] = set()
+    usable = usable_activated_abilities(compile_card_oracle(game.playable_card_of(land)))
+    for index, ability in enumerate(usable):
+        if is_tap_alone_mana_ability(ability) and game.land_mana_tap_refusal(land, index) is None:
+            found |= mana_ability_symbols(ability.instruction)
+    return found
+
+
 def _land_symbols(game: Game, permanent: Permanent) -> tuple[str, ...]:
     """Every symbol tapping *permanent* for mana could put in the pool, the one
     it would make unasked first.
@@ -3666,7 +3945,32 @@ def _land_symbols(game: Game, permanent: Permanent) -> tuple[str, ...]:
     is silent. "C" for a land that names neither, which is what this planner
     has always assumed of one.
     """
+    from . import land_mana_swaps
+
     symbols = tuple(game._land_payment_colors(permanent))
+    free, _priced = game._land_mana_abilities(permanent)
+    if symbols and free is not None and not land_mana_swaps.payment_colors(game, permanent):
+        # **Only what the tap can make.** ``_land_payment_colors`` is the
+        # printed summary for an unswapped land, and the summary lists every
+        # symbol any of the land's abilities makes — including one behind a
+        # mana price the tap seam will not pay: Henge of Ramos and Castle
+        # Sengir summarise to five colours and tap for {C}. Counted as
+        # coloured, the plan tapped them "for" a red pip, made {C} and the
+        # spell was refused. So the symbols are the tap-alone abilities' own,
+        # read off the compiled program (`mana_ability_symbols`).
+        #
+        # And what the **default** ability makes goes first, because the
+        # planner pays generic mana with a land's first symbol and the tap
+        # executor runs the default ability for it (`planned_tap_ability`):
+        # the summary is alphabetical, so an Underground River ("B", "C", "U")
+        # paid a generic {1} with its painful {B} rather than its {C}.
+        default = mana_ability_symbols(free)
+        reachable = set(default) | _tap_alone_land_symbols(game, permanent)
+        ordered = [symbol for symbol in symbols if symbol in default]
+        ordered += [symbol for symbol in symbols if symbol in reachable and symbol not in ordered]
+        ordered += [symbol for symbol in sorted(reachable) if symbol not in ordered]
+        if ordered:
+            return tuple(ordered)
     if symbols:
         return symbols
     # Layer 4 already knows which basic land types this permanent currently
