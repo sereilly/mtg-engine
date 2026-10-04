@@ -296,6 +296,13 @@
   ]
  },
  {
+  "card": "Bog Glider",
+  "clause": "search your library for a mercenary permanent card with mana value 2 or less, put it onto the battlefield, then shuffle",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
   "card": "Boil",
   "clause": "destroy all islands",
   "ignored": [
@@ -360,6 +367,14 @@
   ]
  },
  {
+  "card": "Calming Verse",
+  "clause": "destroy all enchantments you don't control. then if you control an untapped land, destroy all enchantments you control",
+  "ignored": [
+   "all",
+   "all"
+  ]
+ },
+ {
   "card": "Carrion Beetles",
   "clause": "exile up to three target cards from a single graveyard",
   "ignored": [
@@ -409,6 +424,13 @@
   ]
  },
  {
+  "card": "Celestial Convergence",
+  "clause": "remove an omen counter from this enchantment. if there are no omen counters on this enchantment, the player with the highest life total wins the game. if two or more players are tied for highest life total, the game is a draw",
+  "ignored": [
+   "enchantment,"
+  ]
+ },
+ {
   "card": "Chandra, Flame's Catalyst",
   "clause": "you may cast target red instant or sorcery card from your graveyard. if that spell would be put into your graveyard, exile it instead",
   "ignored": [
@@ -428,6 +450,13 @@
   "clause": "each other player may put an artifact or enchantment card onto the battlefield from their hand",
   "ignored": [
    "card"
+  ]
+ },
+ {
+  "card": "Chimeric Idol",
+  "clause": "tap all lands you control. this artifact becomes a 3/3 turtle artifact creature until end of turn",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -661,6 +690,20 @@
   "clause": "dry spell deals 1 damage to each creature and each player",
   "ignored": [
    "dry"
+  ]
+ },
+ {
+  "card": "Dual Nature",
+  "clause": "exile all tokens created with this enchantment",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Dual Nature",
+  "clause": "exile all tokens with the same name as that creature",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -919,6 +962,14 @@
   ]
  },
  {
+  "card": "Flameshot",
+  "clause": "flameshot deals 3 damage divided as you choose among one, two, or three target creatures",
+  "ignored": [
+   "or",
+   "target"
+  ]
+ },
+ {
   "card": "Flashfires",
   "clause": "destroy all plains",
   "ignored": [
@@ -1146,6 +1197,13 @@
   ]
  },
  {
+  "card": "Gulf Squid",
+  "clause": "tap all lands target player controls",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Hail Storm",
   "clause": "hail storm deals 2 damage to each attacking creature and 1 damage to you and each creature you control",
   "ignored": [
@@ -1206,6 +1264,13 @@
   "clause": "destroy each creature that blocked or was blocked this turn",
   "ignored": [
    "each"
+  ]
+ },
+ {
+  "card": "Heightened Awareness",
+  "clause": "draw an additional card",
+  "ignored": [
+   "additional"
   ]
  },
  {
@@ -1412,6 +1477,13 @@
   ]
  },
  {
+  "card": "Inflame",
+  "clause": "inflame deals 2 damage to each creature dealt damage this turn",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
   "card": "Infuse",
   "clause": "untap target artifact, creature, or land",
   "ignored": [
@@ -1468,6 +1540,13 @@
   ]
  },
  {
+  "card": "Jolrael, Empress of Beasts",
+  "clause": "all lands target player controls become 3/3 creatures until end of turn. they're still lands",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Jolt",
   "clause": "you may tap or untap target artifact, creature, or land",
   "ignored": [
@@ -1510,6 +1589,13 @@
   "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {2}{r}{r}",
   "ignored": [
    "permanent"
+  ]
+ },
+ {
+  "card": "Keldon Firebombers",
+  "clause": "each player sacrifices all lands they control except for three",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -1710,6 +1796,13 @@
   "clause": "if this permanent is an enchantment, it becomes a 3/2 phyrexian imp creature with flying",
   "ignored": [
    "permanent"
+  ]
+ },
+ {
+  "card": "Mageta the Lion",
+  "clause": "destroy all creatures except for mageta the lion. those creatures can't be regenerated",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -2091,6 +2184,13 @@
   ]
  },
  {
+  "card": "Outbreak",
+  "clause": "choose a creature type. all creatures of that type get -1/-1 until end of turn",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Pandemonium",
   "clause": "that creature's controller may have it deal damage equal to its power to any target of their choice",
   "ignored": [
@@ -2163,6 +2263,13 @@
  {
   "card": "Plague Dogs",
   "clause": "all creatures get -1/-1 until end of turn",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Plague Wind",
+  "clause": "destroy all creatures you don't control. they can't be regenerated",
   "ignored": [
    "all"
   ]
@@ -2453,6 +2560,14 @@
   "card": "Retribution of the Meek",
   "clause": "destroy all creatures with power 4 or greater. they can't be regenerated",
   "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Reveille Squad",
+  "clause": "if this creature is untapped, you may untap all creatures you control",
+  "ignored": [
+   "creature",
    "all"
   ]
  },
@@ -2781,6 +2896,13 @@
   ]
  },
  {
+  "card": "Silt Crawler",
+  "clause": "tap all lands you control",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Simian Grunts",
   "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {2}{g}",
   "ignored": [
@@ -2879,6 +3001,13 @@
   ]
  },
  {
+  "card": "Spitting Spider",
+  "clause": "this creature deals 1 damage to each creature with flying",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
   "card": "Spoils of Evil",
   "clause": "for each artifact or creature card in target opponent's graveyard, add {c} and you gain 1 life",
   "ignored": [
@@ -2921,6 +3050,13 @@
   "clause": "squall deals 2 damage to each creature with flying",
   "ignored": [
    "each"
+  ]
+ },
+ {
+  "card": "Squirrel Wrangler",
+  "clause": "squirrel creatures get +1/+1 until end of turn",
+  "ignored": [
+   "creatures"
   ]
  },
  {
@@ -3215,6 +3351,13 @@
    "each",
    "additional",
    "each"
+  ]
+ },
+ {
+  "card": "Troublesome Spirit",
+  "clause": "tap all lands you control",
+  "ignored": [
+   "all"
   ]
  },
  {

@@ -1321,6 +1321,14 @@ TRIGGERED_LABELS_BY_CONDITION: dict[tuple[str, str], str] = {
     # row names the moment — CR 305.1's land drop, which is neither a cast nor
     # a step.
     ("land_played", "may"): "triggered_land_played",
+    # --- Prophecy, at its promotion ---------------------------------------
+    # Reveille Squad: "Whenever one or more creatures attack you, if this
+    # creature is untapped, you may untap all creatures you control." The one
+    # `may` the set puts behind a condition this table had not met. The wrapper
+    # says nothing about the offer, so the condition names the moment, and the
+    # declaration of attackers is a combat moment — the bucket
+    # `creature_becomes_blocked` and `combat_your_turn` already take above.
+    ("attackers_declared", "may"): "triggered_combat",
     # Antiquities' two optional death triggers (Tablet of Epityr, Urza's
     # Miter), added at its promotion. `permanent_dies` is the wider condition
     # `dies` above narrows to a creature, and it names the same moment.

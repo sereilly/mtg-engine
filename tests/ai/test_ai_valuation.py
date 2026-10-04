@@ -417,6 +417,14 @@ def test_every_divided_card_in_the_pool_is_described(catalog):
         # name it. The side is the question an activation could have wanted a
         # different answer to, and it does not.
         "Arc Mage",
+        # Reviewed at Prophecy's promotion, and the set's only one. Flameshot
+        # answers "opponent" off the `damage` category like every burn spell
+        # above it (derived: thresholded, not whole-board) -- Arc Lightning's
+        # division among creatures only. What is new is beside the division
+        # rather than in it: it is the inventory's first divided spell with an
+        # *alternative cost* ("discard a Mountain card rather than pay"), which
+        # changes what the AI pays and not where it aims.
+        "Flameshot",
         # Reviewed at Tempest's promotion, and it is the entry that adds
         # nothing -- which is the reviewable result rather than the absence of
         # one. Rolling Thunder's every derived field already matched four cards

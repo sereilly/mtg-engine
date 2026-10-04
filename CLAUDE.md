@@ -14,9 +14,9 @@ Fallen Empires (102), Fourth Edition (368), Ice Age (373), Homelands (115),
 Alliances (144), Mirage (335), Visions (167), Fifth Edition (434),
 Weatherlight (167), Tempest (335), Stronghold (143), Exodus (143),
 Urza's Saga (335), Urza's Legacy (143), Classic Sixth Edition (335),
-Urza's Destiny (143), Mercadian Masques (335), Nemesis (143) and Core Set 2021
-(285), 4,169 unique cards, all classified as supported.
-**Twenty-seven sets, and their sizes are the whole spread**: 4ED and 5ED are pure
+Urza's Destiny (143), Mercadian Masques (335), Nemesis (143), Prophecy (143)
+and Core Set 2021 (285), 4,312 unique cards, all classified as supported.
+**Twenty-eight sets, and their sizes are the whole spread**: 4ED and 5ED are pure
 reprint sets, every one of their cards already in the pool, so they are the two
 sets that ship without implementing a card, and **6ED is the third of that shape
 and the first where it is only *almost* true** — 333 of its 335 were already
@@ -30,8 +30,8 @@ zero overlap with the 1,610 already here, Alliances is the **third**: 144
 of 144 new, sharing not one oracle_id with 5ED or M21, and Visions is the
 fourth — 167 of 167 new, sharing not one oracle_id with *any* set in the pool.
 **Weatherlight is the fifth, Exodus the sixth, Urza's Destiny the
-seventh and Nemesis the eighth**, and all four are clean the same way: 167 of
-167, 143 of 143, 143 of 143 and 143 of 143 new, each sharing with every set before it not one oracle_id **and
+seventh, Nemesis the eighth and Prophecy the ninth**, and all five are clean the same way: 167 of
+167, 143 of 143, 143 of 143, 143 of 143 and 143 of 143 new, each sharing with every set before it not one oracle_id **and
 not one card name**. `set_progress.json` records UDS with 142 new cards and it
 brought 143, for 6ED's reason one column over — that number counts against the
 whole release line and this manifest is a subset of it. **Mirage breaks that run** — 313 of its 335 are new and 22 were
@@ -82,7 +82,7 @@ Rehearsed at the wrong end before the real promotion, the prefix guard passed
 and `test_the_shipped_sets_are_in_printing_order` failed at index 20 — which is
 exactly the division of labour those two guards are documented to have, observed
 rather than assumed. Which is why
-the per-set totals sum to far more than 4,169 — they are printings (6,307 of
+the per-set totals sum to far more than 4,312 — they are printings (6,450 of
 them). Alliances was the
 first set to reach 100% with **zero name-keyed hooks**, across all 144, Visions
 is the second across all 167, **Weatherlight is the third** across all 167
@@ -98,8 +98,16 @@ the first to move the count downward on purpose**: 335 cards across fifteen
 parallel groups in three waves, adding no hook and **retiring five** — and
 **Urza's Legacy is the eighth**, 143 of 143 across ten parallel groups in two
 waves, adding none — and **Nemesis is the ninth**, 143 of 143 across six
-parallel groups in one wave plus a closing round, adding none.
-Reliance is **1.2% of supported cards**, 52 of 4,169, down from 53 of 3,715 —
+parallel groups in one wave plus a closing round, adding none — and
+**Prophecy is the tenth**, 143 of 143 across sixteen parallel groups in three
+waves, adding none. **Four of its third wave's five groups took no card at
+all**: one took the last card (Rhystic Cave, a mana ability that needs priority
+and can be denied) and four went to the pile the first two waves had measured
+and declined — a colour chosen at announcement instead of at
+resolution (CR 608.2d), a copy that entered as the printed card (CR 707.5), an
+AI simulator in which nothing had ever cost mana, and cost choices the engine
+made for a human seat.
+Reliance is **1.2% of supported cards**, 52 of 4,312, down from 53 of 3,715 —
 and Mercadian Masques is the first set in four to move the numerator, *down*:
 Food Chain is the second card to print Metamorphosis' cost-record-plus-spend-
 restriction pair, which that hook's own comment said no second card printed.
@@ -131,7 +139,7 @@ Dark at 47.9%, Fourth Edition at 100%, Ice Age at 49.3%, Fallen Empires at
 67.6%, Homelands at 66.1%, Fifth Edition at 100%, Alliances at 43.1%, Mirage
 at 54.9%, Visions at 59.3%, Weatherlight at 59.9%, Tempest at 67.8%,
 Stronghold at 67.8% again, Exodus at 63.6%, Classic Sixth Edition at 100%,
-Urza's Destiny at 69.9% and Nemesis at 66.4%, and all nineteen were promoted to `sets` once every card was, which is the role working as designed rather than a role nobody uses. 4ED is the degenerate case that shows what the role is
+Urza's Destiny at 69.9%, Nemesis at 66.4% and Prophecy at 58.0%, and all twenty were promoted to `sets` once every card was, which is the role working as designed rather than a role nobody uses. 4ED is the degenerate case that shows what the role is
 *for* rather than an exception to it: it entered `measured` fully supported and
 left the same day, and the ingest still paid — a guard proved itself unable to
 tell the roles apart for an all-reprint set, which is a finding only the
