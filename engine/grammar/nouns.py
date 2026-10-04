@@ -845,20 +845,59 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
 
 
 #: The characteristics a count may be taken over **instead of** the objects
-#: that carry them, as the printed words that open the phrase and the count
-#: spec's aggregate name each one means.
+#: that carry them: the printed words that name one (both inflections — "for
+#: each" takes the singular and "the number of" the plural, and a row that knew
+#: one would make the same count readable in half its sentences), the count
+#: spec's aggregate name it means, and how many values the rules give it.
 #:
-#: "…for each **basic land type among** lands you control" is domain
-#: (CR 207.2c), and it is one row because the next ("for each **color among**
+#: "…for each **basic land type** among lands you control" is domain
+#: (CR 207.2c), and it is one row because the next ("for each **color** among
 #: permanents you control", which ``effects/cards`` still reads on its own for
-#: the one draw that prints it) is data rather than a second production. Both
-#: inflections are listed: "for each" takes the singular and "the number of"
-#: the plural, and a row that knew one would make the same count readable in
-#: half its sentences.
-_DISTINCT_AMONG: tuple[tuple[tuple[str, ...], str], ...] = (
-    (("basic", "land", "type", "among"), "distinct_basic_land_types"),
-    (("basic", "land", "types", "among"), "distinct_basic_land_types"),
+#: the one draw that prints it) is data rather than a second production.
+#:
+#: The size is CR 305.6's: there are five basic land types, so "a land **of
+#: each** basic land type" is that count reaching five. It is here, beside the
+#: words, because it is a fact about the characteristic and not about either
+#: sentence that reads one.
+_COUNTED_CHARACTERISTICS: tuple[
+    tuple[tuple[tuple[str, ...], ...], str, int], ...
+] = (
+    (
+        (("basic", "land", "type"), ("basic", "land", "types")),
+        "distinct_basic_land_types",
+        5,
+    ),
 )
+
+
+def _accept_counted_characteristic(stream: TokenStream) -> tuple[str, int] | None:
+    """The characteristic named at the cursor, as ``(aggregate, size)``."""
+    for spellings, aggregate, size in _COUNTED_CHARACTERISTICS:
+        for phrase in spellings:
+            if stream.accept_phrase(*phrase):
+                return aggregate, size
+    return None
+
+
+def accept_of_each_characteristic(stream: TokenStream) -> tuple[str, int] | None:
+    """``of each <characteristic>`` trailing a noun phrase, or None with
+    nothing consumed.
+
+    "…if you control a land **of each basic land type**" (Coalition Victory);
+    "…chooses from the lands they control a land **of each basic land type**"
+    (Global Ruin). The phrase does not narrow the set in front of it — any one
+    land answers "a land" — it says the set must hold *every value* of a
+    characteristic, which is the count ``parse_counted_objects`` reads below
+    reaching the size returned beside it. One table, so the two spellings of
+    one question cannot come to name different characteristics.
+    """
+    mark = stream.mark()
+    if stream.accept_phrase("of", "each"):
+        named = _accept_counted_characteristic(stream)
+        if named is not None:
+            return named
+    stream.reset(mark)
+    return None
 
 
 def parse_counted_objects(stream: TokenStream) -> ast.ObjectFilter:
@@ -882,15 +921,16 @@ def parse_counted_objects(stream: TokenStream) -> ast.ObjectFilter:
     Refuses exactly as ``parse_object_filter`` does, with the cursor wherever
     the refusal left it — every caller already rewinds its own mark.
     """
-    for phrase, aggregate in _DISTINCT_AMONG:
-        if stream.accept_phrase(*phrase):
-            return dataclasses.replace(
-                parse_object_filter(stream), distinct=aggregate
-            )
+    mark = stream.mark()
+    named = _accept_counted_characteristic(stream)
+    if named is not None and stream.accept_word("among"):
+        return dataclasses.replace(parse_object_filter(stream), distinct=named[0])
+    stream.reset(mark)
     return parse_object_filter(stream)
 
 
 __all__ = [
     "accept_source_reference", "parse_card_name", "parse_comparison",
-    "parse_counted_objects", "parse_object_filter",
+    "accept_of_each_characteristic", "parse_counted_objects",
+    "parse_object_filter",
 ]

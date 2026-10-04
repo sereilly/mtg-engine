@@ -51,7 +51,7 @@ from . import ast
 from .amounts import parse_amount
 from .bounds import parse_comparison
 from .errors import GrammarError
-from .nouns import parse_object_filter
+from .nouns import accept_of_each_characteristic, parse_object_filter
 from .references import parse_player_ref
 from .seat_comparisons import accept_margin
 from .seats import accept_life_total_of
@@ -401,7 +401,15 @@ def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
                 comparison = ast.Comparison("eq", ast.Fixed(0))
             elif bound is not None:
                 comparison = ast.Comparison(bound[0], ast.Fixed(bound[1]))
-            first = ast.Controls(player, filt, comparison, shared_name)
+            # "…a land **of each basic land type**" (Coalition Victory). Read
+            # after the noun phrase it trails, and only on the plain form: a
+            # negated or counted "of each" is a sentence nothing prints.
+            of_each = (
+                accept_of_each_characteristic(stream)
+                if comparison is None and not shared_name and not another
+                else None
+            )
+            first = ast.Controls(player, filt, comparison, shared_name, of_each)
 
             # "you control an Urza's Mine **and** an Urza's Tower" (the
             # Antiquities cycle). The conjunction shares one player and one
@@ -427,7 +435,10 @@ def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
                     except GrammarError:
                         stream.reset(conj)
                         break
-                    parts.append(ast.Controls(player, extra))
+                    parts.append(ast.Controls(
+                        player, extra,
+                        of_each=accept_of_each_characteristic(stream),
+                    ))
                 if len(parts) > 1:
                     return ast.EveryOf(tuple(parts))
             return first
