@@ -485,6 +485,32 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         # is on the stack, and neither zone this searches is the stack. A
         # permanent that entered from that spell **is** one, which is what makes
         # the enchantment's own second half read the way the card is printed.
+        if payload.get("same_name_as") == "target":
+            # "…if **another** permanent with the same name is on the
+            # battlefield." (Winnow.) The name is the *targeted permanent's*,
+            # read as CR 608.2c reads everything — while the instruction is
+            # followed — and through ``effective_card`` on both sides, because
+            # CR 707.2 makes a copy's name the copied one. "Another" is
+            # identity, never value: two Grizzly Bears are equal objects to a
+            # dataclass comparison and are exactly the board this asks about.
+            from ._common import resolve_target_permanent
+
+            target = resolve_target_permanent(
+                game, context,
+                predicate=lambda perm: True,
+                fallback_players=(),
+                fallback_on_invalid_choice=False,
+            )
+            if target is None:
+                return False
+            target_name = target.effective_card.name
+            nontoken = bool(payload.get("nontoken"))
+            return bool(target_name) and any(
+                other is not target
+                and other.effective_card.name == target_name
+                and not (nontoken and other.metadata.get("is_token"))
+                for other in game.all_permanents()
+            )
         cast_card = (context.trigger_context or {}).get("cast_card")
         name = getattr(cast_card, "name", None)
         if not name:
