@@ -182,6 +182,27 @@ def _parse_cast_event(
                     subject=ast.ObjectFilter(colors=colours),
                 )
         stream.reset(mark)
+    # "…casts a **multicolored** spell" (Rewards of Diversity). The word sits
+    # where a colour does and is not one (CR 105.4), so it is read beside the
+    # colour loop above rather than inside it — and all three printed scopes
+    # are read, because `engine/oracle.py`'s table carries the marker on all
+    # three and a scope read on one side only is a line that strands there.
+    #
+    # *Consumed and not carried*, the split the ordinal exclusion below makes:
+    # the condition — this narrowing included — comes from the table
+    # (`cast_multicolored`), and `ObjectFilter` has no field that says "two or
+    # more colours". This side only has to read the whole line.
+    for scope, opener in (
+        ("spell_cast", ("a", "player", "casts", "a")),
+        ("opponent_casts_spell", ("an", "opponent", "casts", "a")),
+        ("you_cast_spell", ("you", "cast", "a")),
+    ):
+        mark = stream.mark()
+        if stream.accept_phrase(*opener) and stream.accept_phrase(
+            "multicolored", "spell"
+        ):
+            return ast.TriggerEvent(scope, trigger_word)
+        stream.reset(mark)
     # "…casts an **artifact** spell" (Urza's Chalice, Citanul Druid). The
     # type narrowing beside the colour one above, and for the same reason:
     # one dispatcher for every card printed this way. Both scopes are read
