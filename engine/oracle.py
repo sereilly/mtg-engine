@@ -1993,6 +1993,12 @@ AT_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # "…of combat on your turn" narrows the bare form to the active player's
     # combat (Adherent of Hope); must precede its own prefix below.
     ("combat_your_turn",    r"at the beginning of combat on your turn"),
+    # "…of combat on **each opponent's** turn" (Fight or Flight): the other
+    # narrowing of the same step, and a separate kind for `upkeep_self` /
+    # `upkeep_each`'s reason — the dispatch is what reads the difference. The
+    # seat varies per firing, so the fire site freezes it and "that player"
+    # reads it back (CR 603.10). Above the bare row, which is its prefix.
+    ("combat_opponent_turn", r"at the beginning of combat on each opponent's turn"),
     # "At the beginning of **each** combat" (Goblin Flotilla). The same event
     # as the bare spelling below it and the same kind: CR 506.1 gives a turn one
     # combat phase per combat, and the fire site announces every one of them —

@@ -1066,7 +1066,19 @@ LOWER_LAYERS = [
 # no compiled program moves. Parse-only for `damage_locks`' reason: all three
 # arrangements build one `ast.ChangeTarget` — which is what makes them three
 # arrangements rather than three effects.
-EFFECT_FAMILIES = ["damage", "characteristics", "base_pt", "types", "board", "cards", "exile", "stack", "retargeting", "combat", "game", "mana", "production_changes", "library", "search", "reveal", "control_changes", "prevention", "damage_instances", "redirection", "damage_locks", "counters", "tapping", "attachments", "tokens", "returns", "text_changes", "destruction", "zones", "hand", "permissions", "requirements"]
+EFFECT_FAMILIES = ["damage", "characteristics", "base_pt", "types", "board", "cards", "exile", "stack", "retargeting", "combat", "game", "mana", "production_changes", "library", "search", "reveal", "control_changes", "prevention", "damage_instances", "redirection", "damage_locks", "counters", "tapping", "attachments", "tokens", "returns", "text_changes", "destruction", "zones", "hand", "permissions", "requirements",
+                   # `separations` arrived whole at Invasion's first wave —
+                   # CR 700.3's two piles, on all three sides at once
+                   # (`effects/`, `lowering/`, `ast/`). Not a split: nothing
+                   # crossed a cap. It is a family because its six printings
+                   # share one procedure and no noun — cards off a library,
+                   # cards in a graveyard, permanents on a battlefield — so no
+                   # existing family's line ("a pile being looked through", "an
+                   # object put back", "destruction") holds more than two of
+                   # them. Phyrexian Portal's face-down split stays in
+                   # `library`, which is where a pile somebody *looks through*
+                   # belongs.
+                   "separations"]
 # `redirection` arrived on the parse side at Visions' first wave, a set after
 # the lowering side split it off `lowering/damage.py` — the mirror re-forming
 # rather than a new vocabulary, which is what this file asks a split to do.

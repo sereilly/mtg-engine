@@ -22,6 +22,7 @@ from . import (  # noqa: E402,F401
     life_and_game,
     mana,
     permanent_choices,
+    piles,
     player_choices,
     prevention,
     pump,

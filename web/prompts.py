@@ -1393,6 +1393,77 @@ def _pile_exile_choice(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+def _face_up_pile_items(ctx: PromptContext, choice) -> list[dict]:
+    """Every object a CR 700.3 split is over, in the order the engine holds
+    them — the positions an answer names.
+
+    Face up, to every seat that sees the prompt: these piles are public (the
+    cards were revealed, or are permanents, or lie in a graveyard), which is
+    the whole difference from the face-down pair above. A permanent carries its
+    id so the client can point at the one on the board.
+    """
+    from engine.piles import item_card
+
+    session = choice.data["_session"]
+    group = choice.data["_group"]
+    items = []
+    for position, item in enumerate(group.items):
+        card = item_card(ctx.game, session, group, position)
+        entry = {
+            "pile_index": position,
+            "card": ctx.serialize_card(card) if card is not None else None,
+        }
+        if session.what == "battlefield":
+            entry["permanent_id"] = item
+        items.append(entry)
+    return items
+
+
+@prompt_renderer("pile_split")
+def _pile_split(ctx: PromptContext, choices: list) -> dict:
+    """CR 700.3: this seat separates the listed objects into two piles.
+
+    ``what`` says what kind of object they are (``library_top`` /
+    ``graveyard`` / ``battlefield``) and ``owner_name`` whose; the fates ride
+    along so the separator can see what each pile is for.
+    """
+    choice = choices[0]
+    session = choice.data["_session"]
+    owner = ctx.game.players[int(choice.data["owner_index"])]
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "owner_name": owner.name,
+        "what": session.what,
+        "chosen_fate": session.payload.get("chosen"),
+        "other_fate": session.payload.get("other"),
+        "cards": _face_up_pile_items(ctx, choice),
+    }
+
+
+@prompt_renderer("pile_choice")
+def _pile_choice(ctx: PromptContext, choices: list) -> dict:
+    """CR 700.3: this seat chooses one of the two piles somebody separated.
+
+    Both piles in full — positions into the same item list the split named —
+    because the chooser is looking at them.
+    """
+    choice = choices[0]
+    session = choice.data["_session"]
+    group = choice.data["_group"]
+    owner = ctx.game.players[int(choice.data["owner_index"])]
+    items = _face_up_pile_items(ctx, choice)
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "owner_name": owner.name,
+        "what": session.what,
+        "chosen_fate": session.payload.get("chosen"),
+        "other_fate": session.payload.get("other"),
+        "piles": [[items[position] for position in pile] for pile in group.piles],
+    }
+
+
 @prompt_renderer("pile_search")
 def _pile_search(ctx: PromptContext, choices: list) -> dict:
     """Phyrexian Portal: search the pile that was not exiled.

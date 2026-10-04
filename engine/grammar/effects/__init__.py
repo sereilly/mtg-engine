@@ -192,6 +192,12 @@ from .library import (
     parse_graveyard_top_to_library,
     parse_player_separates_your_library_top,
 )
+# CR 700.3's two piles — the split and the choice, whatever is separated.
+from .separations import (
+    parse_each_player_separates,
+    parse_reveal_top_and_separate,
+    parse_separate_into_piles,
+)
 # CR 701.20a's public half of the look, split off `library` at Tempest's second
 # wave — see that module's docstring for the line.
 from .reveal import (
@@ -414,6 +420,9 @@ __all__ = [
     "_parse_search_library",
     "parse_player_looks_at_own_library_top",
     "parse_player_separates_your_library_top",
+    "parse_each_player_separates",
+    "parse_reveal_top_and_separate",
+    "parse_separate_into_piles",
     "_parse_can_be_targeted_as_though",
     "_parse_change_target",
     "_parse_copy_that_spell",

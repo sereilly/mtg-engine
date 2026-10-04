@@ -156,7 +156,8 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_add_mana_for_tappe
                        _lower_remove_from_combat,
                        _lower_put_library_top_into_hand,
                        _lower_put_exiled_with_source,
-                       _lower_each_player_claims_exiled_card)
+                       _lower_each_player_claims_exiled_card,
+                       _lower_separate_into_piles)
 
 
 #: The node types whose lowering is *only* a name — one AST class, one
@@ -390,6 +391,11 @@ _BY_NODE_TYPE_WITH_EVENT: dict[type, object] = {
     ast.ExileRandomFromHand: _lower_exile_random_from_hand,
     ast.ExileCardsFromHand: _lower_exile_cards_from_hand,
     ast.Mill: _lower_mill,
+    # "…separate all creatures **that player** controls into two piles."
+    # (Fight or Flight.) CR 700.3's paragraph, whose seat word is the firing
+    # event's in two of its six printings — so the lowering has to know which
+    # event fired, and refuses "that player" under one that froze no seat.
+    ast.SeparateIntoPiles: _lower_separate_into_piles,
     # "…**that player** skips their next combat phase" (Blinding Angel): the
     # seat the damage event froze, so the lowering has to know which event
     # fired. It left the name-only table above the moment it started deciding

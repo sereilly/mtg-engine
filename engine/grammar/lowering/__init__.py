@@ -262,6 +262,7 @@ from .exchanges import (
     _lower_exchange_greatest_mana_value,
     _lower_mutual_control_of_sets,
 )
+from .separations import _lower_separate_into_piles
 from .tapping import (
     _lower_for_each_tapped,
     _lower_tap,
@@ -633,6 +634,7 @@ __all__ = [
     "_lower_look_at_library_top",
     "_lower_look_top_cycle_for_life",
     "_lower_separate_library_top_into_piles",
+    "_lower_separate_into_piles",
     "_SEARCH_HONOURED_FILTER_FIELDS",
     "_lower_graveyard_pick_onto_battlefield",
     "_lower_put_graveyard_position_onto_battlefield",

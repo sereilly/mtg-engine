@@ -39,6 +39,7 @@ from ...oracle_types import (CLAIMABLE_EXILED_CARDS, DISCARDED_BY_SEAT,
                              EXILED_THIS_WAY_OBJECTS)
 from ...grammar.lowering._events import PUT_FROM_HAND_PERMANENTS
 from ... import land_mana_swaps
+from ... import piles
 from ...pending_choices import (CHOICE_SPECS, PendingChoice,
                                 optional_pay_options, register_choice,
                                 spec_for)
@@ -5410,6 +5411,26 @@ class PendingChoicesMixin:
         if not self._resolve_pile_search(choice, 0 if pile else None):
             self.discard_pending_choice(choice)
 
+    # -- Two face-up piles (CR 700.3: Fact or Fiction and its siblings) ------
+    #
+    # The procedure and both resolvers are ``engine/piles.py``; these are the
+    # two answers an interactive seat gives.
+
+    def confirm_pile_split(self, player_index: int, first_pile) -> bool:
+        """Answer the separation. *first_pile* is the positions — into the
+        items as the prompt listed them — that go into the first pile;
+        everything else goes into the second. Either pile may be empty
+        (CR 700.3)."""
+        return self.resolve_pending_choice(
+            "pile_split", player_index, first_pile=first_pile
+        )
+
+    def confirm_pile_choice(self, player_index: int, pile_index: int) -> bool:
+        """Answer which of the two piles (0 or 1) is the chosen one."""
+        return self.resolve_pending_choice(
+            "pile_choice", player_index, pile_index=pile_index
+        )
+
     # -- The repeated look-and-bottom offer (Lim-Dul's Vault) ----------------
 
     def confirm_library_cycle_offer(self, player_index: int, accept: bool) -> bool:
@@ -9885,6 +9906,41 @@ register_choice(
     blocked_detail="search the pile before other actions",
     suspends=True,
     default_at_arm=True,
+)
+
+register_choice(
+    "pile_split",
+    resolve=lambda game, choice, r: piles.resolve_pile_split(
+        game, choice, r.get("first_pile")
+    ),
+    default=lambda game, choice: piles.default_pile_split(game, choice),
+    action="pile_split_confirm",
+    prompt_key="pile_split",
+    blocked_detail="separate the piles before other actions",
+    # The choice between the piles is a later step of this same resolution
+    # (CR 608.2), and it is between what this answer made.
+    suspends=True,
+    # A non-interactive separator answers at once, or the resolution stops on
+    # a prompt nobody owes an answer to.
+    default_at_arm=True,
+    # The piles are face up (CR 700.3) — unlike Phyrexian Portal's, every
+    # player sees them — so the prompt is the separator's but hides nothing.
+    spectator_visible=True,
+)
+
+register_choice(
+    "pile_choice",
+    resolve=lambda game, choice, r: piles.resolve_pile_choice(
+        game, choice, r.get("pile_index")
+    ),
+    default=lambda game, choice: piles.default_pile_choice(game, choice),
+    action="pile_choice_confirm",
+    prompt_key="pile_choice",
+    blocked_detail="choose a pile before other actions",
+    # What becomes of each pile is the next step of the same resolution.
+    suspends=True,
+    default_at_arm=True,
+    spectator_visible=True,
 )
 
 register_choice(

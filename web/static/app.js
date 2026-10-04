@@ -3126,6 +3126,42 @@ function getPileExileInfo(state = currentState) {
   return info;
 }
 
+// CR 700.3's face-up piles (Fact or Fiction and its siblings): one seat
+// separates, another chooses. Both see every object in every pile, which is
+// the difference from the Portal pair above.
+let facePileSelected = new Set();
+
+function getPileSplitInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.pile_split;
+  if (!info || info.player_seat !== seat) return null;
+  return info;
+}
+
+function getPileChoiceInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.pile_choice;
+  if (!info || info.player_seat !== seat) return null;
+  return info;
+}
+
+const PILE_FATE_WORDS = {
+  hand: "goes to the owner's hand",
+  graveyard: "goes to the graveyard",
+  exile: "is exiled",
+  battlefield: "returns to the battlefield",
+  destroy: "is destroyed",
+  tap: "is tapped",
+  only_attackers: "holds the only creatures that can attack this turn",
+  only_blockers: "holds the only creatures that can block this turn",
+};
+
+function pileFateSentence(info) {
+  const chosen = PILE_FATE_WORDS[info.chosen_fate] || "is chosen";
+  const other = info.other_fate ? ` The other ${PILE_FATE_WORDS[info.other_fate]}.` : "";
+  return `The chosen pile ${chosen}.${other}`;
+}
+
 // Thran Tome: the cards somebody else revealed off their own library, one of
 // which this seat sends to their graveyard. Owed by the *opponent*, so the seat
 // test is against the prompt's own player_seat rather than against whose turn
@@ -3836,6 +3872,8 @@ function isAnyPromptActive(state = currentState) {
   if (getExileHandPileInfo(state)) return true;
   if (getLibraryPileSplitInfo(state)) return true;
   if (getPileExileInfo(state)) return true;
+  if (getPileSplitInfo(state)) return true;
+  if (getPileChoiceInfo(state)) return true;
   if (getOpponentPicksRevealedInfo(state)) return true;
   if (getPileSearchInfo(state)) return true;
   if (getLibraryCycleInfo(state)) return true;
@@ -7492,6 +7530,96 @@ function applyPileExilePrompt(info) {
   });
 }
 
+function applyPileSplitPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+  panel.classList.remove("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+  okBtn.classList.remove("hidden");
+
+  title.textContent = `${info.card_name} - separate into two piles`;
+  body.textContent =
+    `Toggle what goes into the first pile; the rest form the second. ` +
+    `Either pile may be empty. ${pileFateSentence(info)}`;
+  steps.innerHTML =
+    '<div class="prompt-choice-column">' +
+    (info.cards || [])
+      .map(
+        (c) =>
+          `<button type="button" class="prompt-choice-btn` +
+          (facePileSelected.has(c.pile_index) ? " selected" : "") +
+          `" data-face-pile-card="${c.pile_index}">` +
+          `${escapeHtml(c.card ? c.card.name : "(gone)")}</button>`
+      )
+      .join("") +
+    "</div>";
+  steps.querySelectorAll("[data-face-pile-card]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const index = Number(btn.dataset.facePileCard);
+      if (facePileSelected.has(index)) facePileSelected.delete(index);
+      else facePileSelected.add(index);
+      btn.classList.toggle("selected");
+    });
+  });
+  okBtn.onclick = async () => {
+    const picks = Array.from(facePileSelected).sort((a, b) => a - b);
+    facePileSelected = new Set();
+    await sendAction({ seat, action: "pile_split_confirm", first_pile: picks });
+  };
+}
+
+function applyPileChoicePrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  title.textContent = `${info.card_name} - choose a pile`;
+  body.textContent = `${info.owner_name}'s piles. ${pileFateSentence(info)}`;
+  steps.innerHTML =
+    '<div class="prompt-choice-column">' +
+    (info.piles || [])
+      .map((pile, index) => {
+        const names = pile
+          .map((c) => escapeHtml(c.card ? c.card.name : "(gone)"))
+          .join(", ");
+        return (
+          `<button type="button" class="prompt-choice-btn" data-face-pile="${index}">` +
+          `Pile ${index + 1}: ${names || "(empty)"}</button>`
+        );
+      })
+      .join("") +
+    "</div>";
+  steps.querySelectorAll("[data-face-pile]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await sendAction({
+        seat,
+        action: "pile_choice_confirm",
+        pile_index: Number(btn.dataset.facePile),
+      });
+    });
+  });
+}
+
 function applyOpponentPicksRevealedPrompt(info) {
   const panel = q("activationPanel");
   const title = q("promptTitle");
@@ -9938,6 +10066,18 @@ function renderActivationPrompt() {
   const pileExileInfo = getPileExileInfo();
   if (pileExileInfo) {
     applyPileExilePrompt(pileExileInfo);
+    return;
+  }
+
+  const pileSplitInfo = getPileSplitInfo();
+  if (pileSplitInfo) {
+    applyPileSplitPrompt(pileSplitInfo);
+    return;
+  }
+
+  const pileChoiceInfo = getPileChoiceInfo();
+  if (pileChoiceInfo) {
+    applyPileChoicePrompt(pileChoiceInfo);
     return;
   }
 

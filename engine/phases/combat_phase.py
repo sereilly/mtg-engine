@@ -561,6 +561,20 @@ class CombatPhaseMixin:
                 self, "combat_your_turn",
                 players=[self.players[self.active_player_index]],
             )
+            # "…on **each opponent's** turn" (Fight or Flight) — the same step
+            # scanned over every *other* battlefield, with the seat whose
+            # combat it is frozen for the "that player" the ability then
+            # names (CR 603.10): nothing on a board records whose turn a
+            # trigger fired in once the turn has moved on.
+            emit(
+                self, "combat_opponent_turn",
+                players=[
+                    player
+                    for seat, player in enumerate(self.players)
+                    if seat != self.active_player_index and not player.lost
+                ],
+                event_subject_player=self.active_player_index,
+            )
             # "At the beginning of **each** combat" (Goblin Flotilla) — the
             # unnarrowed form of the same step, and every battlefield: the
             # ability is its own permanent's controller's (CR 113.7a) and the

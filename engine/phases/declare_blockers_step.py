@@ -1006,6 +1006,18 @@ class DeclareBlockersStepMixin:
             # all, which on War Cadence is the whole defending board.
             if entry.get("toll"):
                 continue
+            # "**Only** creatures in the chosen piles can block this turn."
+            # (Stand or Fall.) The blocking twin of the attack gate's two
+            # readings, in the same order and for the same reasons: the
+            # creatures a resolution *named* are excepted by id (CR 400.7 — one
+            # that left and returned is a new object the sentence never named),
+            # and an entry scoped to one player's creatures is inert for every
+            # other seat's.
+            if blocker.permanent_id in (entry.get("except_permanent_ids") or ()):
+                continue
+            scoped_seat = entry.get("controller_seat")
+            if scoped_seat is not None and self.controller_index_of(blocker) != scoped_seat:
+                continue
             filt = entry.get("filter") or {}
             type_filter = filt.get("type_filter", "creature")
             if type_filter == "creature" and not blocker.is_creature:

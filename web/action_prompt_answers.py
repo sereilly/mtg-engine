@@ -870,6 +870,36 @@ def _action_pile_exile_confirm(session, req, seat_type):
         raise HTTPException(status_code=400, detail="invalid pile")
 
 
+@action_handler("pile_split_confirm")
+def _action_pile_split_confirm(session, req, seat_type):
+    # CR 700.3 (Fact or Fiction and its siblings): the separator sends the
+    # positions that go into the first pile. An empty list is a legal
+    # separation - a pile may be empty.
+    pending = next((c for c in session.game.pending_choices_of("pile_split")), None)
+    if pending is None:
+        raise HTTPException(status_code=400, detail="no pile separation pending")
+    if req.seat != pending.player_index:
+        raise HTTPException(status_code=400, detail="not your choice")
+    if req.first_pile is None:
+        raise HTTPException(status_code=400, detail="first_pile is required")
+    if not session.game.confirm_pile_split(req.seat, req.first_pile):
+        raise HTTPException(status_code=400, detail="invalid separation")
+
+
+@action_handler("pile_choice_confirm")
+def _action_pile_choice_confirm(session, req, seat_type):
+    # CR 700.3: which of the two face-up piles this seat chooses.
+    pending = next((c for c in session.game.pending_choices_of("pile_choice")), None)
+    if pending is None:
+        raise HTTPException(status_code=400, detail="no pile to choose pending")
+    if req.seat != pending.player_index:
+        raise HTTPException(status_code=400, detail="not your choice")
+    if req.pile_index is None:
+        raise HTTPException(status_code=400, detail="pile_index is required")
+    if not session.game.confirm_pile_choice(req.seat, req.pile_index):
+        raise HTTPException(status_code=400, detail="invalid pile")
+
+
 @action_handler("opponent_picks_revealed_confirm")
 def _action_opponent_picks_revealed_confirm(session, req, seat_type):
     # Thran Tome: which of the revealed cards the *opponent* sends to the

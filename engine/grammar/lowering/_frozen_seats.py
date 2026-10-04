@@ -233,6 +233,12 @@ OPPONENT_CHOSE_MODE = "mode_chosen_by_opponent"
 
 _EVENT_SUBJECT_PLAYERS: frozenset[str] = frozenset({
     "upkeep_each",
+    # "At the beginning of combat on each opponent's turn, separate all
+    # creatures **that player** controls into two piles." (Fight or Flight.)
+    # The seat whose combat it is, frozen by `phases/combat_phase.py`'s
+    # announcement — it varies per firing exactly as `upkeep_each`'s does.
+    # `combat_your_turn` stays out for `upkeep_self`'s reason.
+    "combat_opponent_turn",
     # "At the beginning of **the chosen player's** upkeep, this enchantment
     # deals 3 damage to **that player** …" (Energy Vortex). The seat an earlier
     # effect chose and the permanent recorded, frozen into the trigger's
