@@ -18,10 +18,10 @@ recording why the draft is ``slots=True`` took that module four lines past the
 thousand-line guard. The cut is the one ``nouns``’ own title draws: that file
 is "what a printed noun phrase *describes*", the reading of words off a stream,
 and neither object here reads a token. The draft is not even ``nouns``’
-property — five modules write onto it (``nouns``, ``postmodifiers``, ``zones``,
-``seat_relations``, ``histories``), each taking it as a parameter, which is
-exactly the shape SET_PLAYBOOK.md gives for a thing that belongs below the
-family that happens to have declared it.
+property — six modules write onto it (``nouns``, ``postmodifiers``, ``zones``,
+``seat_relations``, ``histories``, ``with_clauses``), each taking it as a
+parameter, which is exactly the shape SET_PLAYBOOK.md gives for a thing that
+belongs below the family that happens to have declared it.
 
 It is the bottom of the parse side, under ``readers``: it reads ``ast`` and the
 dataclass machinery and nothing else, and nothing here is a production.
@@ -68,10 +68,11 @@ class _FilterDraft:
     builder would be a second place that knows those rules.
 
     ``slots=True`` is the point of this being a class at all, and it is load
-    bearing. Five modules write onto this draft — `nouns`, `postmodifiers`,
-    `zones`, `seat_relations`, `histories` — and on a plain dataclass a write to
-    a field it does not declare *succeeds*: Python makes the attribute,
-    `_build_object_filter` below never looks for it, and the narrowing is gone.
+    bearing. Six modules write onto this draft — `nouns`, `postmodifiers`,
+    `zones`, `seat_relations`, `histories`, `with_clauses` — and on a plain
+    dataclass a write to a field it does not declare *succeeds*: Python makes
+    the attribute, `_build_object_filter` below never looks for it, and the
+    narrowing is gone.
     Nothing raises and nothing fails; the phrase simply reads as **wider than
     the card prints**, which is the failure direction no instrument in this repo
     can see. `--hollow-lines` only finds a line that produced no ability part

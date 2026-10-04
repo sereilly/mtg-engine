@@ -1,10 +1,10 @@
 """The trailing half of a noun phrase: everything printed **after** the head.
 
-"creature **you control**", "creature **with flying**", "creature **other than
-this creature**", "creature **blocking target attacking creature**". Split from
-`nouns` because that module had grown to 967 lines around a single 795-line
-`parse_object_filter`, and this is the half that grows: a new printed
-restriction is nearly always a postmodifier.
+"creature **other than this creature**", "creature **blocking target attacking
+creature**", "Equipment **attached to that creature**", "creature **that isn't
+enchanted**". Split from `nouns` because that module had grown to 967 lines
+around a single 795-line `parse_object_filter`, and this is the half that
+grows: a new printed restriction is nearly always a postmodifier.
 
 The two halves are genuinely different readings. Leading adjectives narrow the
 *kind* of object — colour, type, state — and each is one word tested against a
@@ -12,20 +12,44 @@ vocabulary. A postmodifier names a **relation**: to the controller, to another
 object the sentence names, to a zone. That is why this file recurses and the
 adjective loop does not.
 
+**That list was never the whole of it, and four of the loop's questions are now
+answered one layer down.** Each left with this file at or near the
+thousand-line guard, along the line the sentence above draws or fails to draw.
+The seat and ownership readings that open the loop ("you control", "an
+opponent owns") went to `seat_relations` and the zone scope to `zones` — the
+two ends of the list. A **record** of something that already happened ("that
+attacked this turn") went to `histories`, which calls it the fourth relation
+the list does not name. And at Invasion's Phase 0 the "with …" clause and its
+"without" went to `with_clauses`: not a relation at all but what the object
+itself *has* — "with flying", "with power 3 or greater" — and the branch that
+had grown most. All four are floors this loop calls at the position their
+branch always held, and none reads back.
+
+What stays is the middle of the list and the loop around it: the relation to
+another object — the ability's own source ("other than this creature", "banded
+with it"), the other end of a live block, an attachment's host, a seat or a
+target an earlier clause chose — with the "that …" relative clause, the printed
+exemptions, and the single branches that are not a run of anything ("named …",
+"of their choice", "on the battlefield"). The order they are tried in is the
+other thing this file owns, and it is load-bearing: a branch that opens and
+cannot finish restores the cursor and **ends** the scan, so one tried too early
+takes the phrase away from the reading behind it.
+
 **The recursion arrives as a parameter.** "blocking target attacking creature"
 contains a whole nested phrase, so this file needs `parse_object_filter` — which
 lives one layer up. Taking it as *parse_filter* rather than importing it keeps
 the dependency running one way, the same inversion `lowering/where_x.py` makes
-for the same reason.
+for the same reason — and `histories` and `with_clauses` are handed it on from
+here, because each reads a nested phrase of its own.
 
 Everything both halves accumulate lives on the `_FilterDraft` they share; see
-its docstring in `nouns`.
+its docstring in `filter_draft`, where it has lived since it left `nouns`.
 """
 
 from __future__ import annotations
 
 #: "…other than **the creature tapped this way**" (Veteran's Voice). The
-#: production above resolves it to the attached host, which is only the same
+#: production below resolves it to the attached host, which is only the same
 #: permanent while the ability's cost is the one that taps the host. Named
 #: here so the production and the compiler's gate read one string rather
 #: than two spellings of it.
@@ -34,21 +58,15 @@ COST_TAPPED_REFERENT = "the creature tapped this way"
 from typing import Callable
 
 from . import ast
-from .amounts import (accept_counter_kind, accept_counters_on_it_bound,
-                      accept_source_counter_bound)
-from .bounds import (accept_cards_in_hand_bound,
-                     accept_comparative_characteristic,
-                     accept_source_relative_comparison, accept_superlative,
-                     parse_comparison)
 from .errors import GrammarError
 from .histories import accept_history_relation, accept_relative_clause_history
-from .lexer import PT, SELF
-from .names import accept_name_comparison, accept_original_expansion, parse_card_name
+from .lexer import SELF
+from .names import parse_card_name
 from .readers import (_SELF_NOUNS, _accept_back_referenced_controller,
-                      _parse_keyword_list, _protection_quality,
-                      accept_source_reference)
+                      _parse_keyword_list, accept_source_reference)
 from .seat_relations import accept_seat_relation
 from .stream import TokenStream
+from .with_clauses import accept_with_clause
 from .zones import accept_zone_scope
 from .vocabulary import singular as _singular
 
@@ -69,7 +87,7 @@ def _parse_postmodifiers(
     """Read every postmodifier the cursor is at, onto *d*."""
     # --- postmodifiers ---------------------------------------------------
     while True:
-        # Whose is it — the ten seat and ownership readings, in
+        # Whose is it — the seat and ownership readings, in
         # `seat_relations` since Weatherlight's Phase 0 (see that file). Tried
         # first because the loop always tried them first, and the branch left
         # between them below opens on a word none of them does.
@@ -365,7 +383,7 @@ def _parse_postmodifiers(
             # Resolving the pronoun to the host is only true while the cost is
             # the one that taps it, which no filter can check. The compiler
             # checks it instead, where the cost and the effect are both in
-            # hand — see ``COST_TAPPED_REFERENT`` below and its reader in
+            # hand — see ``COST_TAPPED_REFERENT`` above and its reader in
             # ``oracle._parse_activated_ability``.
             elif stream.accept_phrase(
                 "than", "the", "creature", "tapped", "this", "way",
@@ -405,226 +423,17 @@ def _parse_postmodifiers(
             continue
         if scoped is False:
             break
-        if stream.at_word("with"):
-            probe = stream.mark()
-            stream.advance()
-            # "…**with the same name as another permanent**" (Eye of
-            # Singularity) and "…**with that name**" (its second line). Read
-            # by `names`, one layer down, for the reason
-            # `accept_original_expansion` below is: a name comparison is about
-            # a literal rather than about a type line. Tried first because both
-            # open on words the probes below would take apart, and each
-            # consumes its whole phrase or nothing.
-            comparison = accept_name_comparison(stream, tuple(d.card_types))
-            if comparison == "another":
-                d.shares_name_with_another = True
-                continue
-            if comparison == "event":
-                d.name_from_event = True
-                continue
-            # "…**with the same name as that card**" (Assembly Hall) — the
-            # card an earlier step of this same effect revealed, which is a
-            # different place to look than the firing event's object above.
-            if comparison == "recorded":
-                d.name_from_recorded_card = True
-                continue
-            # "…with **lesser power**" (No Quarter). A bound stated against the
-            # other object the sentence is about, with no number and no
-            # possessive — so it opens on the *adjective* rather than on the
-            # characteristic and is tried before the branches that expect the
-            # characteristic first. Declines without consuming, so every other
-            # "with …" phrase keeps its own reading.
-            # "…**with the least toughness**" (Purging Scythe), "…**with the
-            # greatest mana value**" (Tariff, Juxtapose). Read before every
-            # bound below because it opens on the article rather than on a
-            # characteristic, and because what it names is not a bound at all:
-            # a superlative picks one object out of the set the rest of the
-            # phrase describes, so the payload key it emits is one no matcher
-            # answers (see ``ast.Superlative``). Declines without consuming.
-            superlative = accept_superlative(stream, parse_filter=parse_filter)
-            if superlative is not None:
-                d.superlative = superlative
-                continue
-            comparative = accept_comparative_characteristic(stream)
-            if comparative is not None:
-                d.characteristic_vs_source = comparative
-                continue
-            if stream.accept_word("power"):
-                # "…with power **equal to or greater than the enchanted
-                # creature's toughness**" (Ironclaw Curse). Tried before the
-                # printed-number bound, and it declines without consuming, so
-                # every phrase that reading already took is untouched: the two
-                # are told apart by the word after the characteristic, not by
-                # one of them failing.
-                relative = accept_source_relative_comparison(stream, "power")
-                if relative is not None:
-                    d.characteristic_vs_source = relative
-                    continue
-                # "…**less than or equal to the number of treasure counters on
-                # this enchantment**" (Legacy's Allure). A count on the
-                # ability's own source rather than a printed number, so it is
-                # its own field for the reason the mana-value pair below are
-                # two: `parse_comparison` reads an `Amount`, and an amount is
-                # answered from the effect's context rather than from whichever
-                # permanent the matcher is looking at. Read before that parser,
-                # whose "less than" branch would consume the words and then
-                # fail on "the".
-                source_counters = accept_source_counter_bound(
-                    stream, comparison=("less", "than", "or", "equal", "to"),
-                )
-                if source_counters is not None:
-                    d.power_at_most_source_counters = source_counters
-                    continue
-                hand_bound = accept_cards_in_hand_bound(stream)
-                if hand_bound is not None:
-                    d.power_greater_than_cards_in_hand = hand_bound
-                    continue
-                d.power = parse_comparison(stream)
-                continue
-            if stream.accept_word("toughness"):
-                relative = accept_source_relative_comparison(stream, "toughness")
-                if relative is not None:
-                    d.characteristic_vs_source = relative
-                    continue
-                d.toughness = parse_comparison(stream)
-                continue
-            # "…**with a name originally printed in the <Set> expansion**"
-            # (Apocalypse Chime, Golgothian Sylex). Read before the two "a …"
-            # probes below, which open on the same article and reset cleanly
-            # either way. An expansion the manifest does not know refuses
-            # without consuming, so the line fails loudly rather than sweeping
-            # the set the reader guessed.
-            expansion_probe = stream.mark()
-            expansion = accept_original_expansion(stream)
-            if expansion is not None:
-                d.original_expansion = expansion
-                continue
-            stream.reset(expansion_probe)
-            # "…**with a single target**" (Reflecting Mirror; Deflection and
-            # Divert print the same three words). CR 115.9a counts what the
-            # object chose as it was put on the stack, so the phrase describes
-            # a spell or an ability on the stack and nothing on a battlefield.
-            # Read before the counter probe below, which opens on the same "a"
-            # and resets cleanly either way.
-            if stream.accept_phrase("a", "single", "target"):
-                d.target_count = 1
-                continue
-            # "with a +1/+1 counter on it" (Tempered Veteran), "with a
-            # **bounty** counter on it" (Bounty Hunter), "with **magnet
-            # counters** on them" (Magnetic Web).
-            #
-            # **One production, three printings, and two of them arrived in one
-            # wave from two groups.** The singular and the plural are the same
-            # restriction — "creatures with magnet counters on them" describes
-            # each creature carrying at least one, not a board carrying several
-            # — so reading them in two branches would be two readers of one
-            # phrase, which is the fork this file has already been split for
-            # once. The article is the only other difference and the plural
-            # simply drops it.
-            #
-            # Two *fields*, though: CR 122.1a's +1/+1 counter has rules meaning
-            # (layer 7d, ``engine/pt.py``'s channel, the ``plus_counters``
-            # record) where every other kind CR 122.1 admits is an inert marker
-            # in ``engine/named_counters.py``'s open store. Where the answer is
-            # looked up is the matcher's business, not the parser's.
-            #
-            # This branch used to accept the +1/+1 kind alone, "because the
-            # counters the engine records under another name have no matcher".
-            # That refusal has expired — ``with_named_counter`` is in
-            # ``TESTABLE_SUBJECT_FILTER_KEYS`` with ``counters_on`` behind it —
-            # and a kind nothing can answer still fails loudly, one layer down
-            # at the key check.
-            counter_probe = stream.mark()
-            stream.accept_word("a", "an")
-            token = stream.peek()
-            if token is not None and token.kind == PT and token.text == "+1/+1":
-                stream.advance()
-                if stream.accept_word("counter", "counters") and (
-                    stream.accept_phrase("on", "it")
-                    or stream.accept_phrase("on", "them")
-                ):
-                    d.with_plus1_counter = True
-                    continue
-            else:
-                kind = accept_counter_kind(stream)
-                if kind is not None and stream.accept_word(
-                    "counter", "counters"
-                ) and (
-                    stream.accept_phrase("on", "it")
-                    or stream.accept_phrase("on", "them")
-                ):
-                    d.with_named_counter = kind.text
-                    continue
-            stream.reset(counter_probe)
-            # "with mana value X" (Spell Blast). Two words, so it is tried
-            # before the keyword list — "mana" alone is not a keyword, but
-            # leaving the phrase unmatched would strand "value X" and fail the
-            # whole line rather than restricting the noun phrase.
-            if stream.accept_phrase("mana", "value"):
-                # "…**less than or equal to the number of rust counters on
-                # it**" (Corrosion). A bound that is a characteristic of the
-                # object being tested rather than a number, which is why it is
-                # its own field: `parse_comparison` reads an `Amount`, and an
-                # amount is answered from the effect's context and not from
-                # whichever permanent the matcher happens to be looking at.
-                # Read before the ordinary comparison, whose "less than" branch
-                # would otherwise consume the words and then fail on "the".
-                counters = accept_counters_on_it_bound(stream)
-                if counters is not None:
-                    d.mana_value_at_most_counters = counters
-                    continue
-                # "…**equal to the number of age counters on this
-                # enchantment**" (Wave of Terror). The same shape read off the
-                # ability's own source instead, and read here for the reason
-                # the one above is: `parse_comparison` opens with an amount and
-                # would fail on "equal".
-                source_counters = accept_source_counter_bound(stream)
-                if source_counters is not None:
-                    d.mana_value_equals_source_counters = source_counters
-                    continue
-                d.mana_value = parse_comparison(stream)
-                continue
-            # "…**with protection from white**" (Escaped Shapeshifter). Read
-            # before the keyword list below, which matches "protection" on its
-            # own and then strands "from white" — the whole line failing on a
-            # phrase whose first word it had already taken.
-            #
-            # The quality, not the word: `keywords.protection_quality` is the
-            # one reader of what a protection clause names, and it is the same
-            # one `_protection_qualities` answers the board with — so a phrase
-            # naming a quality the shield reader cannot model refuses here
-            # rather than describing a set nothing is ever in.
-            # "target creature **with the chosen ability**" (Phyrexian
-            # Splicer). Read before the keyword list for the protection
-            # branch's reason: "the" is not a keyword, so the list would refuse
-            # and take the whole line with it — which is the `expected a
-            # subject` this phrase refused with for two waves.
-            if stream.accept_phrase("the", "chosen", "ability"):
-                d.chosen_keyword = True
-                continue
-            protection_probe = stream.mark()
-            if stream.accept_phrase("protection", "from"):
-                word = stream.peek_word()
-                if word is not None and _protection_quality(word) is not None:
-                    stream.advance()
-                    d.with_protection_from = word
-                    continue
-            stream.reset(protection_probe)
-            try:
-                d.with_keywords.extend(_parse_keyword_list(stream))
-                continue
-            except Exception:
-                stream.reset(probe)
-                break
-        if stream.at_word("without"):
-            probe = stream.mark()
-            stream.advance()
-            try:
-                d.without_keywords.extend(_parse_keyword_list(stream))
-                continue
-            except Exception:
-                stream.reset(probe)
-                break
+        # "with flying", "with power 3 or greater", "with a +1/+1 counter on
+        # it", "without flying" — what the object described **has**, which is
+        # none of the relations this file's docstring lists and was the loop's
+        # single largest branch. It left for `with_clauses` at Invasion's
+        # Phase 0 (see that module); the three outcomes ride the return value,
+        # exactly as the zone scope's do one branch up.
+        had = accept_with_clause(stream, d, parse_filter)
+        if had is True:
+            continue
+        if had is False:
+            break
         if stream.at_word("that"):
             # "…**that isn't the target of an ability from another creature
             # named ~**" (Goblin Artisans). A guard against two copies aiming
@@ -682,13 +491,14 @@ def _parse_postmodifiers(
                 d.enchanted_only = True
                 continue
             # "…**that doesn't have cumulative upkeep**" (Balduvian Shaman).
-            # The relative-clause spelling of "without <keyword>" a few lines
-            # up — the same restriction and the same field, because the
-            # difference is Wizards' templating and nothing else. Read here so
-            # the two printings cannot come to mean two things, and refusing
-            # without consuming when the words behind it are not a keyword
-            # list, so every other "that doesn't …" keeps failing on its own
-            # words.
+            # The relative-clause spelling of "without <keyword>", which
+            # `with_clauses` reads — the same restriction and the same field,
+            # because the difference is Wizards' templating and nothing else.
+            # Both go through the one keyword-list reader so the two printings
+            # cannot come to mean two things, and this one stays an arm of the
+            # "that …" chain it is printed in. It refuses without consuming
+            # when the words behind it are not a keyword list, so every other
+            # "that doesn't …" keeps failing on its own words.
             elif stream.at_word("doesn't"):
                 keyword_probe = stream.mark()
                 stream.advance()

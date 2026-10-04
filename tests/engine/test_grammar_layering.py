@@ -61,7 +61,7 @@ PARSE_LAYERS = [
     # parses, the card compiles, and the effect reaches a strictly larger set
     # than the card prints. The guard over the pair is the only instrument in
     # the repo that can see it, and a guard over two halves wants them in one
-    # file. The draft is not `nouns`' property either: five modules write onto
+    # file. The draft is not `nouns`' property either: six modules write onto
     # it, each taking it as a parameter.
     #
     # No mirror name to reuse — `ast/_references.py` holds the `ObjectFilter`
@@ -231,6 +231,28 @@ PARSE_LAYERS = [
     # `nouns` still re-exports `parse_comparison` under its own name so no
     # caller of `nouns.parse_comparison` moved.
     "bounds",
+    # What a noun phrase says its object **has** — "with flying", "with power 3
+    # or greater", "with a bounty counter on it", "without flying". Pre-split
+    # off `postmodifiers` at Invasion's Phase 0, 32 lines under the guard below
+    # with eight groups about to open and the set's narrowings due on exactly
+    # this branch. The line is the one that module's docstring never drew: it
+    # says a postmodifier names a *relation* — to the controller, to another
+    # object, to a zone — and this clause is none of them, nor the record
+    # `histories` added to that list. It asks about the described object alone,
+    # and where it measures against something else the other end only says how
+    # much. It is also the half that grows, and that was measured: since
+    # `histories` left, 57 of the 149 lines `postmodifiers` gained and kept
+    # were in this one branch, while the combat relations, "attached to …" and
+    # "of …" gained none.
+    #
+    # No mirror name to reuse — no lowering module is about this clause, and
+    # `characteristics` is taken three times over for the effects that *change*
+    # one. The name is the prefix the draft, the filter and the payload already
+    # give these fields (`with_keywords`, `with_named_counter`, …).
+    #
+    # Below `postmodifiers`, which calls it and is never imported back, and
+    # above `bounds` and `names`, whose readers its arms try in order.
+    "with_clauses",
     # The trailing half of a noun phrase. Below `nouns`, which hands it the
     # recursive parser rather than being imported back — "blocking target
     # attacking creature" nests a whole phrase.

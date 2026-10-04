@@ -405,7 +405,7 @@ def accept_superlative(
     favour of whichever was read first.
 
     Declines without consuming, so every other "with …" phrase keeps its own
-    reading — the discipline every probe in ``postmodifiers`` follows.
+    reading — the discipline every probe in ``with_clauses`` follows.
     """
     mark = stream.mark()
     if article and not stream.accept_word("the"):
@@ -423,8 +423,9 @@ def accept_superlative(
         if stream.accept_phrase(*words):
             # "…with the greatest power **among creatures on the battlefield**"
             # (Topple). The comparison set, read only where a noun-phrase
-            # reader is handed in — `postmodifiers`' own *parse_filter*, for the
-            # reason it takes one: ``nouns`` sits above this layer. The
+            # reader is handed in — `postmodifiers`' own *parse_filter*, passed
+            # on by ``with_clauses``, for the reason it takes one: ``nouns``
+            # sits above this layer. The
             # tie-break sentence ("…tied for least toughness") passes none, and
             # has to agree with the phrase it breaks the tie of.
             if parse_filter is not None and stream.accept_word("among"):

@@ -616,7 +616,7 @@ _DRAFT_RENAMED = {"owned_by": "owner"}
 
 def test_every_filter_draft_field_is_carried_into_the_object_filter():
     """``nouns._FilterDraft`` is a hand-written mirror of ``ast.ObjectFilter``,
-    and five modules write onto the draft.
+    and six modules write onto the draft.
 
     A field the parser sets that ``_build_object_filter`` does not copy is
     **silently dropped** — the phrase parses, the restriction vanishes, and the
