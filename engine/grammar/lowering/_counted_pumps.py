@@ -348,10 +348,54 @@ def lower_counted_pump(
                         "subject": "attached",
                     }),
                 )
+            # "**Target creature** gets +1/+1 until end of turn for each basic
+            # land type among lands you control." (Power Armor.) A sixth
+            # reading: the object is chosen by a picker, as Barreling Attack's
+            # is two branches up, but the count is not *about* it — it is an
+            # ordinary board count taken from the resolving seat (CR 109.5's
+            # "you"), so the spec carries no ``relative_to`` marker and the
+            # handler asks the one evaluator before it resolves the target.
+            #
+            # "+X/+X until end of turn, where X is the number of …" has landed
+            # on this kind with this spec since Liliana, Waker of the Dead;
+            # this is the same amount spelled as a repetition, which is the
+            # argument the ``pump_self`` branch below makes for its own pair.
+            # The count is taken once, at resolution, and the boost it sizes
+            # does not move afterwards (CR 608.2h, CR 611.2c): the temporary
+            # channel records a number, not a spec.
+            #
+            # Reached only with a duration. Durationless, "target creature gets
+            # +1/+1 for each …" would be a permanent bonus nothing recomputes
+            # and no sweep ends, and it falls to the refusal below.
+            if _is_target(node.subject) and node.duration.kind is not None:
+                duration = _TARGET_PUMP_DURATIONS.get(node.duration.kind)
+                if duration is None:
+                    raise LoweringError(
+                        "no pump handler ends at this duration", node=node
+                    )
+                counted_payload: dict[str, object] = {
+                    "power": _per_each_amount(
+                        node.power, node.power_negative, node
+                    ),
+                    "toughness": _per_each_amount(
+                        node.toughness, node.toughness_negative, node
+                    ),
+                    "x_from_count": count_spec(
+                        node.per_each, node, offset=_per_each_offset(node)
+                    ),
+                    "duration": duration,
+                }
+                _describe_targets(counted_payload, node.subject)
+                return (
+                    OracleInstruction(
+                        "pump_target_creature_until_eot", "", counted_payload
+                    ),
+                )
             if not _is_source(node.subject):
                 raise LoweringError(
                     'a "for each" pump is only a continuous bonus on its own '
-                    "source or a one-shot buff on a named class", node=node,
+                    "source, an Aura's host, one chosen target or a one-shot "
+                    "buff on a named class", node=node,
                 )
             node = _resolve_per_each_pronoun(node)
             if node.duration.kind is not None:
