@@ -1779,7 +1779,17 @@ def test_layers_only_import_downward(layers):
         # CR 701.23’s library walk, and a strip across a graveyard, a hand and a
         # library shares with it the printed word "Search" and no vocabulary at
         # all.
-        ("effects", ("_strips",), ()),
+        #
+        # `_other_libraries` is the second, pre-split out of `search` at the
+        # Phase 0 before Invasion with that module 29 lines under the guard:
+        # the production that reads "Search <player>'s library", which the
+        # tutor's entry point reaches through one branch and which called
+        # nothing that stayed. It is what makes the paragraph above one
+        # function out of date — that production was the *only* caller of
+        # `_strips`, so `search` now imports `_other_libraries` and
+        # `_other_libraries` imports `_strips`. A floor reading a floor, as
+        # `_roles` reads `_targets` on the lowering side; nothing reads back.
+        ("effects", ("_strips", "_other_libraries"), ()),
         # `_targets` joins the lowering floors at Prophecy's wave 2, when
         # `_roles` — split out of it at Mercadian Masques — first read it back:
         # a printed "another target" is planned as two roles from the
@@ -2080,6 +2090,13 @@ FAMILY_SHARED = {
     # its four siblings). A single-importer floor, precedented by `_recipients`
     # below, and the first one `effects/` has had.
     "_strips",
+    # `effects/_other_libraries`, pre-split out of `effects/search.py` at the
+    # Phase 0 before Invasion — "Search <player>'s library", the search whose
+    # library is not the searcher's own (Jester's Cap, Bribery, Denying Wind).
+    # A single-importer floor like `_strips`, and the importer `_strips` has
+    # had in fact since it was written: the strip is tried from inside this
+    # production and from nowhere else.
+    "_other_libraries",
     # `_recipients` split out of `lowering/damage.py` at ULG wave 1, when that
     # module sat 24 lines under the size guard with a new counted-amount branch
     # to land. The seam is the one that module's own docstring already drew
