@@ -120,6 +120,14 @@ def test_no_card_in_the_pool_loses_a_word_to_the_expansion(_r28_pool):
     naming itself -- the one creature the sweep spares -- and "Mageta" is not a
     word the game uses to describe objects, so the expansion is right to write
     the whole name.
+
+    Invasion added one: Verdeloth the Ancient's enters trigger reads "When
+    Verdeloth enters, if it was kicked, create X 1/1 green Saproling creature
+    tokens." The legend naming itself as the subject of its own trigger, and
+    "Verdeloth" is not a word the game uses to describe objects. The set's
+    other legends that print a short name (Kangee, Darigaaz, Crosis, Dromar,
+    Rith, Treva) carry it before a comma, which is the name's own first part
+    and is not this expansion's to write.
     """
     changed = {
         card.name
@@ -130,6 +138,7 @@ def test_no_card_in_the_pool_loses_a_word_to_the_expansion(_r28_pool):
     }
     assert changed == {
         "Hazezon Tamar",
+        "Verdeloth the Ancient",
         "Rasputin Dreamweaver",
         "Rohgahh of Kher Keep",
         "Eron the Relentless",

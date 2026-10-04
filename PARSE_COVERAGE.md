@@ -12,6 +12,41 @@ unclaimed text. Do not edit by hand.
 - With UNCLAIMED text (must fix or acknowledge): **0**
 - With deletion-probe findings (ignored words): **513**
 
+## Measured sets — reported, not gated
+
+Cards in a `measured` set (see `cards/manifest.json`) that the
+compiler calls **supported** while carrying a printed line nothing
+implements. They are the debt behind that set's progress number, and
+`--hollow-lines` sees only the ones that produced an *ability part* —
+a line yielding nothing at all leaves that probe nothing to find.
+
+Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
+`HOOK_RELIANCE.md`'s ceilings exclude the same sets: a ratchet over a
+set nobody has implemented fires on its composition rather than on
+anything anyone did, and every ingest would arrive red.
+
+**11 unclaimed sentence(s) across 8 supported card(s).**
+
+- **Cauldron Dance**
+  - `that creature gains haste`
+  - `return it to your hand at the beginning of the next end step`
+- **Harsh Judgment**
+  - `if an instant or sorcery spell of the chosen color would deal damage to you, it deals that damage to its controller instead`
+- **Teferi's Moat**
+  - `creatures of the chosen color without flying can't attack you`
+- **Teferi's Response**
+  - `counter target spell or ability an opponent controls that targets a land you control`
+  - `if a permanent's ability is countered this way, destroy that permanent`
+- **Temporal Distortion**
+  - `each permanent with an hourglass counter on it doesn't untap during its controller's untap step`
+- **Tsabo's Web**
+  - `each land with an activated ability that isn't a mana ability doesn't untap during its controller's untap step`
+- **Winnow**
+  - `destroy target nonland permanent if another permanent with the same name is on the battlefield`
+- **Yawgmoth's Agenda**
+  - `you can't cast more than one spell each turn`
+  - `you may play lands and cast spells from your graveyard`
+
 ## Acknowledged simplifications
 
 | Card | Sentence | Why it is acceptable |

@@ -250,9 +250,19 @@ def test_the_flash_cycle_is_still_supported_by_what_it_actually_does():
     cards in the pool print the sentence and every one of them is held up by
     its own effect lines."""
     by_name = {c.name: c for c in _w3g5_load(_w3g5_paths(include_measured=True))}
+    # Asked of the **shipped** printers. A measured set's card may print the
+    # sentence and be unsupported for a reason of its own -- that is what
+    # `measured` means, and the census names it. Invasion's Breaking Wave
+    # ("You may cast this spell as though it had flash **if you pay {2} more to
+    # cast it**") arrived that way and this guard read it as the permission
+    # having unsupported a card: a fact about today's manifest roles asserted as
+    # an invariant, the class SET_PLAYBOOK.md records at Alliances and Ice Age.
+    # The card joins the population the day its set is promoted.
+    shipped = {c.name for c in _w3g5_load(_w3g5_paths())}
     printers = [
         card for card in by_name.values()
         if "as though it had flash" in (card.oracle_text or "")
+        and card.name in shipped
     ]
 
     assert len(printers) >= 9, printers

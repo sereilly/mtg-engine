@@ -291,11 +291,20 @@ def _w1g1_shape(card, kind: str) -> tuple[int, int]:
         if instruction.kind == kind
     ]
     if kind == "max_blockers_each_combat":
-        # One over the cap, and two attackers because Caverns of Despair caps
-        # attacks at the same number — the board has to be one its own other
-        # half admits.
+        # One over the cap, and as many attackers as the card's own *other*
+        # half admits — the board has to be one the restriction's permanent
+        # allows to exist. That number was a literal two, which is Caverns of
+        # Despair's attack cap and was right for as long as it was the only
+        # card printing both halves; Invasion's Dueling Grounds prints them at
+        # one, and the harness's own attack was refused before the AI was ever
+        # asked to block. Read off the payload, like the block cap beside it.
         cap = min(int(payload.get("count", 0)) for payload in payloads)
-        return cap + 1, 2
+        attack_caps = [
+            int(instruction.payload.get("count", 0))
+            for instruction in compile_card_oracle(card).instructions
+            if instruction.kind == "max_attackers_each_combat"
+        ]
+        return cap + 1, min([2, *attack_caps])
     if kind == "cant_block_unless_others_block":
         # One short of the floor, so the creature printing it is the offender.
         needed = max(int(payload.get("count", 0)) for payload in payloads)
