@@ -97,7 +97,7 @@ class EventWindow:
 
 
 #: One row per printed phrase. The key is the ``Duration`` kind
-#: ``grammar/phrases._DURATIONS`` produces, so the parser's word table and this
+#: ``grammar/durations._DURATIONS`` produces, so the parser's word table and this
 #: sweep name the same thing — and a phrase with no row here is a duration the
 #: record channels reject, so it refuses at lowering rather than compiling into
 #: a window nothing ends.

@@ -33,7 +33,8 @@ from .errors import GrammarError
 from .bounds import parse_comparison
 from .readers import accept_source_reference, accept_source_reference_spec
 from .references import parse_target_spec
-from .phrases import _parse_duration, _parse_keywords
+from .durations import _parse_duration
+from .phrases import _parse_keywords
 from .condition_clauses import (_accept_counter_condition,
                                 _parse_self_in_graveyard_above,
                                 _parse_self_only_of_type_in_graveyard)

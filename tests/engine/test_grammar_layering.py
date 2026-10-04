@@ -318,6 +318,35 @@ PARSE_LAYERS = [
     # (`phrases`) against which keyword abilities it names (here), and nothing
     # in it calls back.
     "keywords",
+    # How long an effect lasts (CR 611.2a): the table of printed duration
+    # phrases and `_parse_duration`, its one reader. Pre-split out of `phrases`
+    # at Invasion's Phase 0, when that module sat 38 lines under the guard below
+    # and is the floor every effect family reads — the shared-module case
+    # SET_PLAYBOOK.md says to pre-split rather than to brief. The seam is the
+    # one `phrases` had been cut along three times already: its docstring listed
+    # the word tables it held ("trigger events, durations, counter kinds, board
+    # counts, zone names") and each of the others had left along that list.
+    # This was the last table of any size, and it is the half that grows with
+    # the pool — a row and its paragraph per new printed window — where a
+    # fragment production arrives only when a second family asks for one.
+    #
+    # Below `phrases`, which reads `_parse_duration` for two fragments of its
+    # own and is **not** a re-export of it: the twenty other importers were
+    # pointed here directly, which is `cost_records`' decision restated. It
+    # reads `ast`, the token stream and `engine/turn_state.py`, so it could sit
+    # anywhere under its callers; it is here because this is what it left.
+    #
+    # No mirror name to reuse: no lowering module owns durations (each family
+    # maps the kinds it has a sweep for and refuses the rest), and
+    # `engine/event_durations.py` — the sweep for the one row that ends on an
+    # event — is keyed by this table's kinds, the same word from the other end.
+    #
+    # The same Phase 0 sent two readers *home* rather than to a new module,
+    # because each had exactly one caller and `phrases`' rule is "a fragment
+    # two families need": `_accept_literal` / `NUMBER_SLOT` to `where_x`, whose
+    # `_BOARD_COUNTS` walk is all that reads them, and
+    # `accept_member_state_clause` to `static_lines`.
+    "durations",
     "phrases",
     # What a "sacrifice …" clause names, and how it is priced. Split out of
     # `phrases` when Mirage's second wave took that module past the guard below,
@@ -348,10 +377,15 @@ PARSE_LAYERS = [
     # the drift this layering exists to prevent — and nothing between the two
     # positions imports this module, so the move costs no other edge.
     "upkeep",
-    # The "…, where X is …" clause. Above `phrases`, whose word tables and
-    # literal reader it uses, and split out of it at the guard the round two
-    # branches both added a definition. The name re-forms the mirror
+    # The "…, where X is …" clause. Split out of `phrases` at the guard the
+    # round two branches both added a definition. The name re-forms the mirror
     # `lowering/where_x.py` has had since round 23.
+    #
+    # It sat "above `phrases`, whose word tables and literal reader it uses"
+    # until Invasion's Phase 0: the literal reader had no other caller and came
+    # here, and the one word table it read is `durations` now. It imports
+    # nothing from `phrases` any more, so its place above it asserts only that
+    # nothing below reads it back.
     "where_x",
     # Which object a bare "it" in an effect names, when the antecedent is
     # **outside** the sentence — a trigger's condition described it, the firing

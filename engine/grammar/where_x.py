@@ -10,6 +10,12 @@ Everything here reads a *definition* — a count, a characteristic, an offset, a
 multiplier — and hands back an `Amount` for the sentence around it to carry.
 The sentence itself is read a layer up; nothing in this file knows what the X
 is for.
+
+`_accept_literal` and `NUMBER_SLOT` followed their table at the Phase 0 before
+Invasion. The walk over `_BOARD_COUNTS` is their only caller, and it came here
+when this module was cut; the reader and the sentinel stayed in `phrases`,
+along with the comment explaining the table, which sits above it again now.
+This module imports nothing from `phrases` any longer.
 """
 
 from . import ast
@@ -21,12 +27,32 @@ from .records import (accept_added_base, accept_damage_dealt_this_turn,
                       accept_recorded_card_mana_value)
 
 from .errors import GrammarError
-from .lexer import NUMBER
+from .lexer import NUMBER, PUNCT
 from .nouns import parse_object_filter
 from .readers import accept_source_reference
 from .stream import TokenStream
 from .vocabulary import NUMBER_WORDS
-from .phrases import NUMBER_SLOT, _accept_literal, _parse_duration
+from .durations import _parse_duration
+
+
+# Board-state counts that bind a clause's X, one literal phrase per name. Not
+# parsed compositionally, and that is the design rather than a shortcut: each
+# of these is arithmetic an ``ObjectFilter`` cannot express — a count taken at
+# an earlier point in the turn, a count of a hidden zone with a constant
+# subtracted — so the *handler* computes the whole thing and the grammar's only
+# job is to say which count was written. A phrase not listed here fails to
+# match, the line fails full-token consumption, and the card falls back rather
+# than compiling onto a handler that counts something else.
+#
+# A ``NUMBER_SLOT`` in a phrase matches any printed number and captures it as
+# the count's ``base``. The constant is the one part of these phrases that is
+# *data*: Black Vise prints "minus 4" and The Rack "3 minus", one arithmetic
+# with one number changed, and spelling the 4 in made every other threshold a
+# non-match. That is why The Rack was a name-keyed hook — not because its
+# sentence was bespoke, but because its number was 3.
+
+
+NUMBER_SLOT = "<n>"
 
 
 _BOARD_COUNTS: tuple[tuple[str, tuple[str, ...]], ...] = (
@@ -85,6 +111,35 @@ _OFFSET_WORDS: dict[str, int] = {"minus": -1, "plus": 1}
 #: "three times" are one shape, and a card printing the other one must not need
 #: a second production.
 _MULTIPLIER_WORDS: dict[str, int] = {"twice": 2}
+
+
+def _accept_literal(stream: TokenStream, *phrase: str) -> tuple[bool, int | None]:
+    """Consume consecutive tokens by their text, all-or-nothing.
+
+    ``TokenStream.accept_phrase`` requires every token to be a *word*, which
+    "…hand minus 4" is not — the 4 lexes as a number. Punctuation is still
+    refused, so a phrase can never silently span a sentence boundary.
+
+    A :data:`NUMBER_SLOT` element matches any number token and is returned
+    beside the match, so the phrase says *where* the constant goes and the
+    caller keeps the constant itself as data.
+    """
+    if len(stream.tokens) - stream.pos < len(phrase):
+        return False, None
+    captured: int | None = None
+    for offset, text in enumerate(phrase):
+        token = stream.tokens[stream.pos + offset]
+        if token.kind == PUNCT:
+            return False, None
+        if text is NUMBER_SLOT:
+            if token.kind != NUMBER:
+                return False, None
+            captured = int(token.text)
+            continue
+        if token.text != text:
+            return False, None
+    stream.advance(len(phrase))
+    return True, captured
 
 
 def accept_board_count(stream: TokenStream) -> ast.BoardCount | None:

@@ -46,7 +46,8 @@ from ..readers import _parse_keyword_list
 from ..prevented_riders import _parse_prevented_this_way_rider
 from ..stream import TokenStream
 from ..vocabulary import CARD_TYPES, COLOR_WORDS
-from ..phrases import _parse_duration, _parse_opponents_choice
+from ..durations import _parse_duration
+from ..phrases import _parse_opponents_choice
 
 
 def _accept_redirect_tail(

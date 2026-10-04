@@ -13,7 +13,8 @@ from ..nouns import parse_object_filter
 from ..prices import _parse_mana_payment
 from ..references import parse_recipient
 from ..stream import TokenStream
-from ..phrases import (_accept_number, _parse_duration, parse_subject_filter_at)
+from ..durations import _parse_duration
+from ..phrases import _accept_number, parse_subject_filter_at
 from ..sacrifices import parse_counted_subject
 
 

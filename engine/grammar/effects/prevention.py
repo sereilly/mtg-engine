@@ -32,7 +32,8 @@ from ..nouns import parse_object_filter
 from ..names import accept_source_card_name
 from ..prevented_riders import _parse_prevented_this_way_rider
 from ..stream import TokenStream
-from ..phrases import (_parse_duration, accept_or_planeswalker,
+from ..durations import _parse_duration
+from ..phrases import (accept_or_planeswalker,
                        parse_bound_subject)
 
 

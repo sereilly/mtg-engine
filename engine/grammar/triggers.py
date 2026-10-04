@@ -15,8 +15,10 @@ trigger tables and their readers were plainly one family: every table in here
 is read only by the productions in here.
 
 Sits between ``phrases`` and ``effects`` in the parse layer order: it reads
-``phrases``' shared fragments (durations, numbers, subject filters) and nothing
-above.
+``phrases``' subject-filter reader and nothing above. (That list read
+"durations, numbers, subject filters" when it was written. The number reader is
+:mod:`trigger_matched`'s import now, and the durations are a module of their
+own, ``durations``, which nothing here reads.)
 
 **And it has now moved a third time, in place.** The ``whenever`` clause
 readers are :mod:`trigger_matched` as of Mercadian Masques' Phase 0 and the

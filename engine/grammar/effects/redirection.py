@@ -32,7 +32,8 @@ from ..lexer import NUMBER
 from ..readers import accept_source_reference
 from ..references import parse_player_ref, parse_recipient
 from ..stream import TokenStream
-from ..phrases import (_parse_duration, _parse_opponents_choice,
+from ..durations import _parse_duration
+from ..phrases import (_parse_opponents_choice,
                        parse_bound_subject)
 
 

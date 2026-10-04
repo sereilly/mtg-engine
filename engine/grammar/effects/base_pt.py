@@ -29,7 +29,7 @@ from ..amounts import expect_pt, parse_amount
 from ..errors import GrammarError
 from ..lexer import PT
 from ..nouns import parse_object_filter
-from ..phrases import _parse_duration
+from ..durations import _parse_duration
 from ..references import parse_recipient
 from ..stream import TokenStream
 

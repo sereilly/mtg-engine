@@ -35,7 +35,8 @@ from .delayed import _parse_create_delayed_trigger
 from .effects.characteristics import _parse_keywords
 from .effects.prevention import _parse_bound_targeting_prevention
 from .errors import GrammarError
-from .phrases import BASIC_LAND_WORDS, _parse_duration
+from .durations import _parse_duration
+from .phrases import BASIC_LAND_WORDS
 from .nouns import parse_object_filter
 from .references import _parse_further_subjects, parse_recipient, parse_target_spec
 from .seat_comparisons import accept_player_comparison

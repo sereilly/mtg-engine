@@ -5,7 +5,9 @@ Split out of ``phrases`` at the thousand-line guard, reusing the name
 over — the mirror re-forming rather than forking, which is what these names are
 for. The boundary is the one that side already drew: everything here answers
 "which keyword abilities does this phrase name?", where the rest of ``phrases``
-answers "what does this noun phrase, duration, cost or zone mean?".
+answers "what does this noun phrase, duration, cost or zone mean?". (The cost
+and the duration have since left it the same way, for ``prices`` and
+``durations``.)
 
 Which keywords the engine implements is **not** decided here. That is
 ``vocabulary.IMPLEMENTED_KEYWORDS``, one frozenset, read by this module and by
@@ -21,6 +23,10 @@ from .vocabulary import (KEYWORD_FAMILIES, KEYWORD_INDEX, NUMERIC_ARGUMENT_KEYWO
                          match_longest)
 
 
+#: "Protection from the color of your choice" — the keyword whose argument is
+#: not known until the effect resolves (CR 608.2d). Named once here because the
+#: parser writes it, the grant gate reads it and the handler resolves it, and a
+#: third spelling of the same string is how those three come apart.
 PROTECTION_FROM_CHOSEN_COLOR = "protection from the color of your choice"
 
 #: "…protection from the color of **its controller's** choice" (Wishmonger).

@@ -15,8 +15,14 @@ module is: what these productions produce is exactly what the compiler records
 under that name.
 
 Sits between ``riders`` and ``costs`` in the layer order: it reads whole
-sentences (``statements``), conditions and one shared phrase fragment, and
-nothing above it reaches back.
+sentences (``statements``) and conditions, and nothing above it reaches back.
+
+The one fragment it used to read out of ``phrases`` is here now.
+``accept_member_state_clause`` — the "it's not attacking" of Arcades Sabboth's
+"as long as" — was filed there as a shared fragment and has had exactly one
+caller since the day it was written, ``_narrow_by_member_state`` below. It came
+across at the Phase 0 before Invasion, when ``phrases`` was 38 lines under the
+guard and its own rule ("a fragment two families need") was the test.
 """
 
 from __future__ import annotations
@@ -26,7 +32,7 @@ from dataclasses import replace
 from . import ast
 from .conditions import _parse_condition
 from .errors import GrammarError
-from .phrases import accept_member_state_clause
+from .nouns import _STATE_ADJECTIVES
 from .statements import parse_statement
 from .stream import TokenStream
 
@@ -345,6 +351,46 @@ def _distributive_subject(statement: ast.Statement) -> ast.TargetSpec | None:
     if not isinstance(subject, ast.TargetSpec) or subject.quantifier not in ("all", "each"):
         return None
     return subject
+
+
+def accept_member_state_clause(stream: TokenStream) -> tuple[str, bool] | None:
+    """``it's [not] <state>`` — the ``(ObjectFilter field, value)`` it names.
+
+    The trailing half of "Each untapped creature you control gets +0/+2 **as
+    long as it's not attacking**" (Arcades Sabboth). "It" is a member of the set
+    the sentence already described, so what the clause states is one more
+    adjective on that noun phrase — which is why this returns a filter field
+    rather than an :class:`ast.Condition`. Read as a condition it would ask the
+    question of the ability's *source*, and Arcades would hand its whole team
+    +0/+2 whenever Arcades itself stayed home.
+
+    The state vocabulary is ``nouns._STATE_ADJECTIVES``, the same table the
+    *leading* adjectives are read from, so "attacking" cannot mean one field
+    here and another in front of the noun. The negation is a word read in front
+    of the adjective rather than rows of its own, because Magic prints "not
+    <adjective>" for every one of them.
+
+    Returns None with the cursor where it was when the clause is not this.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("it"):
+        stream.reset(mark)
+        return None
+    # The lexer splits the contraction, so "it's" and "it is" are the same two
+    # tokens with a different second one — both copulas are accepted here for
+    # the reason `conditions._parse_single_condition` accepts both.
+    if not (stream.accept_word("'s") or stream.accept_word("is")):
+        stream.reset(mark)
+        return None
+    negated = bool(stream.accept_word("not"))
+    word = stream.peek_word()
+    state = _STATE_ADJECTIVES.get(word) if word else None
+    if state is None:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    field_name, value = state
+    return field_name, (not value) if negated else value
 
 
 def _narrow_by_member_state(

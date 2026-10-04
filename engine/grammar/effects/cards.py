@@ -24,7 +24,8 @@ from ..errors import GrammarError
 from ..nouns import parse_object_filter
 from ..references import parse_player_ref, parse_recipient, parse_target_spec
 from ..stream import TokenStream
-from ..phrases import (accept_a_card_at_random_from_hand, _parse_duration,
+from ..durations import _parse_duration
+from ..phrases import (accept_a_card_at_random_from_hand,
                        _parse_mana_payment)
 from ..readers import accept_source_reference
 
