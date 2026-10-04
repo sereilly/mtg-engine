@@ -428,13 +428,12 @@ ACTIVATED_LABELS: dict[str, str] = {
     # card that ends up somewhere it can be used again.
     "ante_or_exchange_ownership": "activated_recursion",
     "random_reveal_ownership_exchange": "activated_recursion",
-    # Alchor's Tomb changes a permanent's colour. Antiquities' `gain_type`
-    # settled this: the report's word for a permanent changing what it *is* is
-    # `activated_pump`, and a colour change is layer 5 beside that layer 4 one.
-    "recolor_target_chosen_color": "activated_pump",
-    # Dream Coat recolours the creature its Aura is on rather than a target.
-    # Same layer-5 change, same bucket — the report's question is what the
-    # ability *does*, and "which permanent" is the payload's business.
+    # Dream Coat recolours the creature its Aura is on. Antiquities'
+    # `gain_type` settled the bucket: the report's word for a permanent
+    # changing what it *is* is `activated_pump`, and a colour change is layer 5
+    # beside that layer 4 one. (Alchor's Tomb's `recolor_target_chosen_color`
+    # had this entry too until PCY W3G2 put the CR 608.2d colour question in
+    # front of it: the ability is a `sequence` now, which names its shape.)
     "recolor_enchanted_chosen_color": "activated_pump",
     # Diamond Valley and Life Chisel. Life gain has no legacy bucket: the
     # spell table marks `target_gains_life` `spell_pattern` (unclaimed), and
@@ -1078,7 +1077,7 @@ TRIGGERED_LABELS: dict[str, str] = {
     # described set rather than one object is the payload's business.
     "return_all_matching": "triggered_return",
     # Aisling Leprechaun turns a blocker green — the colour change whose bucket
-    # `recolor_target_chosen_color` settles on the activated side.
+    # `recolor_enchanted_chosen_color` settles on the activated side.
     "recolor_target_from_text": "triggered_pump",
     # Divine Intervention's countdown and Venarian Gold's sleep counter. Not
     # `upkeep_effect`: that label belongs to the pay-or-consequence upkeep

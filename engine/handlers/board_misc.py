@@ -10,7 +10,8 @@ from ..auras import BECAME_AURA_ENCHANT, BECAME_AURA_RECORD
 from ..layer_bridge import GAINED_TYPES, SET_CARD_TYPES
 from ..oracle_types import _COLOR_WORD_TO_SYMBOL
 from ..models import CardDefinition, Permanent
-from ..oracle_types import (CHOSEN_TARGET_PERMANENTS, COUNTERS_REMOVED,
+from ..oracle_types import (CHOSEN_COLOR_THIS_WAY, CHOSEN_TARGET_PERMANENTS,
+                            COUNTERS_REMOVED,
                             EVENT_SUBJECT_LAST_KNOWN, LAST_TARGET_CONTROLLER,
                             X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT,
                             OracleInstruction)
@@ -587,9 +588,12 @@ def mark_text_modified(game: Game, instruction: OracleInstruction, context: Orac
 def recolor_target_from_text(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     symbol = str(instruction.payload.get("target_color", ""))
     # "Target spell or permanent becomes [color]" — a spell on the stack is a
-    # legal target (the Lace cards). Recolor it via the stack item's color override.
+    # legal target (the Lace cards). Recolor it via the stack item's color
+    # override — its own key, never ``new_color``: that one is what the spell
+    # was announced with (a text change's word, a mana spell's colour), and one
+    # key for both made every such spell the colour it announced.
     if context.stack_target is not None and symbol:
-        context.stack_target.choices["new_color"] = symbol
+        context.stack_target.choices["color_override"] = symbol
         game.log.append(f"{context.stack_target.card.name} (on the stack) became {symbol}")
         return True, "resolved"
     # "…that creature becomes green" on a block trigger (Aisling Leprechaun):
@@ -631,11 +635,13 @@ def recolor_target_chosen_color(game: Game, instruction: OracleInstruction, cont
     A colour *replacement* like the lace kind beside it, and indefinite like
     Aisling Leprechaun's — the difference is only where the colour comes from.
     CR 608.2d makes the choice part of the effect, so nothing in the text names
-    it and the answer arrives on ``context.choices["new_color"]``, the same
-    channel Feat of Resistance's "protection from the color of your choice"
-    reads. An unanswered choice recolours nothing rather than defaulting to a
-    colour: a permanent that became a colour nobody picked is the wrong colour,
-    and doing nothing is the honest failure.
+    it: the ``choose_color`` step the lowering puts in front of this one asks
+    the ability's controller while the effect is applied, and the answer is
+    read off this resolution's scratchpad (``CHOSEN_COLOR_THIS_WAY``) — the
+    record Feat of Resistance's "protection from the color of your choice"
+    reads too. An unanswered choice recolours nothing rather than defaulting to
+    a colour: a permanent that became a colour nobody picked is the wrong
+    colour, and doing nothing is the honest failure.
 
     The printed noun phrase is enforced here, not assumed. The filter travels on
     the payload and is asked through ``subject_matches`` because "you control" is
@@ -657,12 +663,12 @@ def recolor_target_chosen_color(game: Game, instruction: OracleInstruction, cont
         return True, "resolved"
     if instruction.payload.get("several"):
         # "Target permanent becomes the color **or colors** of your choice."
-        # (Prismatic Lace.) A *set* is offered, and the activation wire carries
-        # one symbol — so the question goes on the standing queue, the same
-        # prompt Shyft's trigger already uses one branch over. Asked here
-        # rather than read off ``choices["new_color"]`` because a single symbol
-        # is one legal answer to the offer and not the offer itself: taking it
-        # would quietly make "or colors" mean "a color" on every printing.
+        # (Prismatic Lace.) A *set* is offered, and the one-colour step the
+        # single offer is asked through names one symbol — so the question goes
+        # on the standing queue, the same prompt Shyft's trigger already uses
+        # one branch over. A single symbol is one legal answer to the offer and
+        # not the offer itself: taking it would quietly make "or colors" mean
+        # "a color" on every printing.
         # "**Your** choice" is the spell's controller (CR 109.5), never the
         # permanent's — Prismatic Lace is aimed at any permanent on the table
         # and the colour is picked by whoever cast it.
@@ -673,7 +679,7 @@ def recolor_target_chosen_color(game: Game, instruction: OracleInstruction, cont
             several=True,
         )
         return True, "resolved"
-    symbol = game._normalize_mana_color((context.choices or {}).get("new_color"))
+    symbol = game._normalize_mana_color(context.results.get(CHOSEN_COLOR_THIS_WAY))
     if symbol is None:
         game.log.append(
             f"{context.card.name}: no colour was chosen, so nothing is recoloured"
@@ -704,12 +710,12 @@ def recolor_self_chosen_color(game: Game, instruction: OracleInstruction, contex
     """"You may have this creature become the color or colors of your choice."
     (Shyft.)
 
-    The third subject in the chosen-colour family, and the only one whose choice
-    is made during a *triggered* ability's resolution — the other two are
-    activated, so their colour rides the activation on ``choices["new_color"]``
-    and is in hand by the time the handler runs. Nothing announces a trigger's
-    colour, so this one asks: the standing ``color_set_choice`` prompt, on the
-    ability's controller.
+    The third subject in the chosen-colour family, and the only one on a
+    *triggered* ability — but not the only one that asks: CR 608.2d puts every
+    one of these choices in the resolution, so the activated two ask exactly as
+    this does (Dream Coat on this same prompt, Alchor's Tomb through the
+    one-colour step in front of it). Here it is the standing
+    ``color_set_choice`` prompt, on the ability's controller.
 
     The prompt takes a **set**, because "the color **or colors**" offers one
     (CR 105.2 makes a two-coloured object one object). Layer 5 has written a
@@ -741,14 +747,17 @@ def recolor_enchanted_chosen_color(game: Game, instruction: OracleInstruction, c
     is attached to (CR 303.4), which the activator does not choose. Read as a
     target the sentence refused and the ability compiled to nothing.
 
-    CR 608.2d puts the colour choice in the resolution, so the answer arrives on
-    ``context.choices["new_color"]`` — the same channel every other chosen
-    colour in the engine reads. ``several`` says the card offered a *set*
-    (CR 105.2, "the color **or colors**"): the write takes any number, so a
-    channel carrying "WU" makes a white-and-blue creature, and the one symbol
-    the activation wire carries today is one legal answer to that offer rather
-    than a narrowing of it. An unanswered choice recolours nothing, because a
-    permanent that became a colour nobody picked is the wrong colour.
+    CR 608.2d puts the colour choice in the resolution, so it is **asked
+    here**, on the standing ``color_set_choice`` prompt Shyft and Prismatic
+    Lace already use — the same offer on the same permanent channel, aimed at
+    the Aura's host. ``several`` says the card offered a *set* (CR 105.2, "the
+    color **or colors**"), which that prompt takes whole; a one-symbol answer is
+    one legal answer to the offer rather than a narrowing of it.
+
+    It used to read the answer off the activation (``choices["new_color"]``),
+    which CR 602.2b does not announce: an interactive seat was never asked, a
+    client that sent no colour recoloured nothing, and the player named the
+    colour before the opponent could respond rather than after.
     """
     source_permanent = context.source_permanent
     if source_permanent is None:
@@ -760,25 +769,14 @@ def recolor_enchanted_chosen_color(game: Game, instruction: OracleInstruction, c
     enchanted = attached_host(game, source_permanent)
     if enchanted is None:
         return False, "aura not attached to a permanent"
-    answer = (context.choices or {}).get("new_color")
-    parts = answer if isinstance(answer, (list, tuple)) else [answer]
-    symbols = [
-        symbol for symbol in (game._normalize_mana_color(part) for part in parts)
-        if symbol
-    ]
-    if not symbols:
-        game.log.append(
-            f"{context.card.name}: no colour was chosen, so nothing is recoloured"
-        )
-        return True, "resolved"
-    # A tuple whenever the card offered a set, so layer 5 writes every colour
-    # rather than the first — and a bare symbol otherwise, which is what every
-    # writer before this one put on the channel.
-    enchanted.metadata["color_override"] = (
-        tuple(symbols) if instruction.payload.get("several") else symbols[0]
-    )
-    game.log.append(
-        f"{enchanted.card.name} became {'/'.join(symbols)} ({context.card.name})"
+    # "**You**" is the ability's controller (CR 109.5) — the seat that
+    # activated it — never the creature's: Dream Coat on an opponent's creature
+    # is still its controller's choice.
+    game.arm_color_set_choice(
+        game.players.index(context.caster),
+        permanent=enchanted,
+        card_name=context.card.name,
+        several=bool(instruction.payload.get("several")),
     )
     return True, "resolved"
 

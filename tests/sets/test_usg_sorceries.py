@@ -221,14 +221,18 @@ def test_w2g3_persecute_discards_only_the_chosen_colour(set_pool):
     card = set_pool("USG")["Persecute"]
     assert compile_card_oracle(card).supported
 
-    game, alice, bob = _g3w2s_table()
+    game, alice, bob = _g3w2s_table(interactive=(0,))
     black = _mk_card(name="W2G3 Fear", mana_cost="{B}", type_line="Instant",
                      oracle_text="", colors=("B",))
     white = _mk_card(name="W2G3 Ward", mana_cost="{W}", type_line="Instant",
                      oracle_text="", colors=("W",))
     bob.hand = [black, white, _g3w2s_land("B-Land")]
 
-    _g3w2s_cast(game, 0, card, target_player_index=1, new_color="B")
+    # Asked as the spell resolves (PCY W3G2), not announced with the cast.
+    alice.hand.append(card)
+    game.cast_from_hand(0, card.name, target_player_index=1)
+    assert game.confirm_color_choice(0, "B"), game.log
+    resolve_stack(game)
 
     assert [c.name for c in bob.hand] == ["W2G3 Ward", "B-Land"]
     assert [c.name for c in bob.graveyard] == ["W2G3 Fear"]
@@ -236,15 +240,18 @@ def test_w2g3_persecute_discards_only_the_chosen_colour(set_pool):
 
 def test_w2g3_persecute_with_no_colour_named_discards_nothing(set_pool):
     """An unanswered CR 608.2d choice is not "no narrowing": read that way the
-    spell would empty the hand. Doing nothing is the honest failure, and it is
-    what the missing record is checked for."""
-    game, alice, bob = _g3w2s_table()
+    spell would empty the hand. Until the caster has named the colour, the
+    reveal and the discard behind the question wait (CR 608.2 follows the
+    instructions in order; PCY W3G2 moved the question into the resolution)."""
+    game, alice, bob = _g3w2s_table(interactive=(0,))
     black = _mk_card(name="W2G3 Fear", mana_cost="{B}", type_line="Instant",
                      oracle_text="", colors=("B",))
     bob.hand = [black]
 
-    _g3w2s_cast(game, 0, set_pool("USG")["Persecute"], target_player_index=1)
+    alice.hand.append(set_pool("USG")["Persecute"])
+    game.cast_from_hand(0, "Persecute", target_player_index=1)
 
+    assert [choice.kind for choice in game.pending_choices] == ["color_choice"]
     assert [c.name for c in bob.hand] == ["W2G3 Fear"]
 
 

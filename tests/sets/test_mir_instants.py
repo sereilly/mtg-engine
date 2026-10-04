@@ -771,21 +771,22 @@ def test_prismatic_boon_protects_every_creature_it_named(set_pool):
     """"Choose a color. **X** target creatures gain protection from **the chosen
     color** until end of turn."
 
-    "The chosen color" is the same question "the color of your choice" asks —
-    CR 609.3 puts both in this resolution, so they name one colour and read one
-    channel. A second keyword string would have been a second answer to it, and
-    the grant handler would have had to learn which sentence had done the
-    asking.
+    "The chosen color" reads the answer "Choose a color." recorded — CR 608.2d
+    puts both in this resolution, so they name one colour and read one record.
+    The colour is asked as the spell resolves, not announced with the cast (PCY
+    W3G2), so the seat answers the prompt.
     """
     a = Permanent(card=_g5_vanilla("A"))
     b = Permanent(card=_g5_vanilla("B"))
     game = _g5_game(set_pool("MIR"), ["Prismatic Boon"], battlefield=[a, b])
+    game.interactive_seats = {0}
 
     cast = game.cast_from_hand(
-        0, "Prismatic Boon", x_value=2, new_color="R",
+        0, "Prismatic Boon", x_value=2,
         target_permanent_ids=[a.permanent_id, b.permanent_id],
     )
     assert cast.supported, cast.details
+    assert game.confirm_color_choice(0, "R"), game.log
     game.resolve_stack()
     game._settle()
 

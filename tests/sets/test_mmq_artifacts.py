@@ -713,11 +713,14 @@ def test_distorting_lens_recolours_its_target_for_the_turn(set_pool):
     lens = _W2G3Permanent(card=set_pool("MMQ")["Distorting Lens"])
     victim = _W2G3Permanent(card=_w2g3_card("Bear", "Creature - Bear", colors=("G",)))
     game, _p0, _p1 = _w2g3_duel(lens, victim)
+    # The colour is asked as the ability resolves (CR 608.2d, PCY W3G2).
+    game.interactive_seats = {0}
 
     result = game.activate_permanent_ability(
         0, "Distorting Lens", target_permanent_index=1,
-        target_permanent_ids=[victim.permanent_id], mana_color="U",
+        target_permanent_ids=[victim.permanent_id],
     )
+    assert game.confirm_color_choice(0, "U")
     _w2g3_resolve(game)
 
     assert result.supported
@@ -731,11 +734,14 @@ def test_distorting_lenss_colour_wears_off_with_the_turn(set_pool):
     lens = _W2G3Permanent(card=set_pool("MMQ")["Distorting Lens"])
     victim = _W2G3Permanent(card=_w2g3_card("Bear", "Creature - Bear", colors=("G",)))
     game, _p0, _p1 = _w2g3_duel(lens, victim)
+    game.interactive_seats = {0}
     game.activate_permanent_ability(
         0, "Distorting Lens", target_permanent_index=1,
-        target_permanent_ids=[victim.permanent_id], mana_color="U",
+        target_permanent_ids=[victim.permanent_id],
     )
+    assert game.confirm_color_choice(0, "U")
     _w2g3_resolve(game)
+    assert game._effective_colors(victim) == {"U"}
 
     game.resolve_cleanup_step(0)
 

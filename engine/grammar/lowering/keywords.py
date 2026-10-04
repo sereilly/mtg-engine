@@ -15,11 +15,13 @@ from __future__ import annotations
 
 import dataclasses
 
-from ...oracle_types import OracleInstruction
+from ...oracle_types import CHOSEN_COLOR_THIS_WAY, OracleInstruction
 from ...subject_filters import untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
-from ..keywords import PROTECTION_FROM_TARGETS_CONTROLLERS_CHOSEN_COLOR
+from ..keywords import (PROTECTION_FROM_CHOSEN_COLOR,
+                        PROTECTION_FROM_TARGETS_CONTROLLERS_CHOSEN_COLOR,
+                        PROTECTION_FROM_THE_CHOSEN_COLOR)
 from ..vocabulary import IMPLEMENTED_KEYWORDS
 from ._events import _RECORDED_PERMANENTS, binds_block_pair
 from ._record_keys import CREATED_TOKEN
@@ -143,10 +145,71 @@ def _lower_gain_keyword(
         modes = []
         for alternative in alternatives:
             lowered = _lower_gain_keyword(alternative, event, event_subject)
-            if len(lowered) != 1:
-                raise LoweringError("a keyword choice needs one instruction per option", node=node)
-            modes.append({"label": alternative.keywords[0], "instruction": lowered[0]})
+            # "…protection from artifacts or from **the color of your choice**"
+            # (Jeweled Spirit). An alternative that asks its own question is two
+            # steps — the ask and the grant — and the mode is both of them, in
+            # order: the colour is asked only if that alternative is the one
+            # taken, which is why the ask rides inside the mode rather than in
+            # front of the whole choice.
+            instruction = (
+                lowered[0] if len(lowered) == 1
+                else OracleInstruction("sequence", "", {"steps": lowered})
+            )
+            modes.append({"label": alternative.keywords[0], "instruction": instruction})
         return (OracleInstruction("choose_one", "", {"modes": tuple(modes)}),)
+    return _chosen_color_prelude(node, produced) + _lower_granted_keywords(
+        node, event, event_subject, produced
+    )
+
+
+def _chosen_color_prelude(
+    node: ast.GainKeyword, produced: frozenset[str]
+) -> tuple[OracleInstruction, ...]:
+    """The step that asks "the color of your choice", or nothing.
+
+    CR 608.2d: a colour is not among what CR 601.2b–c / 602.2b announce, so
+    the player names it *while the effect is applied* — after every response
+    has resolved, which is the whole point of Mother of Runes. A handler that
+    stopped to ask could not also finish the grant (the answer arrives after it
+    has returned), so the question is a step in front of the sentence that
+    spends it: Extinction's "of the creature type of your choice" is the same
+    arrangement one characteristic over (``_common.split_creature_type_choice``),
+    and Wishmonger's ask below is the same step asked of a different seat.
+
+    ``chooser: "you"`` is CR 109.5's "your" — the controller of the spell or
+    ability, which for an activated ability is the player who activated it —
+    and it records the answer in this resolution's scratchpad alone: the
+    granting permanent has no continuous ability that keeps asking about a
+    colour, so a standing record on it would be a second, staler answer.
+
+    "The chosen color" asks nothing: it reads back what a "Choose a color."
+    sentence earlier in this effect recorded, so it is admitted only where one
+    did — read under any other sentence it would grant from a colour nobody in
+    this resolution was asked.
+    """
+    if (
+        PROTECTION_FROM_THE_CHOSEN_COLOR in node.keywords
+        and CHOSEN_COLOR_THIS_WAY not in produced
+    ):
+        raise LoweringError(
+            "'the chosen color' reads a colour an earlier sentence of this "
+            "effect chose, and none did",
+            node=node,
+        )
+    if PROTECTION_FROM_CHOSEN_COLOR not in node.keywords:
+        return ()
+    return (OracleInstruction("choose_color", "", {"chooser": "you"}),)
+
+
+def _lower_granted_keywords(
+    node: ast.GainKeyword,
+    event: str | None,
+    event_subject: object | None,
+    produced: frozenset[str],
+) -> tuple[OracleInstruction, ...]:
+    """Every grant that is not a choice between keywords — the body of
+    :func:`_lower_gain_keyword` behind its "your choice of" branch and its
+    colour question."""
     # "Target creature gains **landwalk of each of the land types of the
     # sacrificed land** until end of turn." (Excavator.) CR 702.14a builds a
     # landwalk's *name* out of a land type, and which land type is a fact about

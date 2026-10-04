@@ -221,10 +221,12 @@ def test_dream_coat_recolours_the_creature_it_enchants(set_pool):
     coat = Permanent(card=set_pool("LEG")["Dream Coat"])
     bear = Permanent(card=_creature("Bear", 2, 2))
     game, p1, _ = _p4_aura_game(coat, bear)
+    # CR 608.2d: the colour is asked as the ability resolves (PCY W3G2), so the
+    # seat has to be one the engine asks rather than one it answers for.
+    game.interactive_seats = {0}
 
-    result = game.activate_permanent_ability(
-        0, "Dream Coat", permanent_index=1, mana_color="U"
-    )
+    result = game.activate_permanent_ability(0, "Dream Coat", permanent_index=1)
+    assert game.confirm_color_set_choice(0, ["U"])
     game._settle()
 
     assert result.supported
@@ -241,10 +243,12 @@ def test_dream_coat_can_make_its_host_several_colours(set_pool):
     coat = Permanent(card=set_pool("LEG")["Dream Coat"])
     bear = Permanent(card=_creature("Bear", 2, 2))
     game, p1, _ = _p4_aura_game(coat, bear)
+    game.interactive_seats = {0}
 
-    # The set arrives on the same channel one colour does; the wire carries one
-    # symbol today, so this is the layer's half of the answer.
-    bear.metadata["color_override"] = ("W", "U")
+    # Asked at resolution on the colour-set prompt (PCY W3G2), which takes the
+    # whole set the plural offers.
+    game.activate_permanent_ability(0, "Dream Coat", permanent_index=1)
+    assert game.confirm_color_set_choice(0, ["W", "U"])
 
     assert computed_colors(bear) == {"W", "U"}
 

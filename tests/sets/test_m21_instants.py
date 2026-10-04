@@ -1286,14 +1286,17 @@ def test_the_counter_and_the_protection_both_land(set_pool):
 
 
 def test_the_colour_is_the_one_chosen_and_not_a_default(set_pool):
-    """CR 609.3: the choice is made as the effect resolves, so the keyword
-    cannot name it — it names the *choice*, and the grant resolves it."""
+    """CR 608.2d: the choice is made as the effect resolves, so the keyword
+    cannot name it — it names the *choice*, the step in front of the grant asks
+    it (PCY W3G2), and the grant spends the answer. Blue, where the default
+    would have been the red of the opponent's only creature."""
     game, _p1, mine = _feat_board(set_pool)
+    game.interactive_seats = {0}
 
     game.cast_from_hand(
-        0, "Feat of Resistance",
-        target_player_index=0, target_permanent_index=0, new_color="U",
+        0, "Feat of Resistance", target_player_index=0, target_permanent_index=0,
     )
+    assert game.confirm_color_choice(0, "U")
     game._settle()
 
     assert ("color", "U") in game._protection_qualities(mine)
@@ -1301,16 +1304,20 @@ def test_the_colour_is_the_one_chosen_and_not_a_default(set_pool):
 
 
 def test_no_colour_chosen_protects_from_nothing(set_pool):
-    """A protection the player did not pick is a protection from the wrong
-    things, so nothing is granted rather than a default colour being invented.
-    The +1/+1 counter still happens — CR 608.2's "as much as it can"."""
+    """Until the colour is named, nothing is protected: a protection the player
+    did not pick is a protection from the wrong things. The +1/+1 counter, the
+    sentence in front of the question, has already happened — CR 608.2 follows
+    the instructions in the order written, and the grant behind the question
+    waits for its answer (PCY W3G2; before that the colour rode the cast and a
+    cast with none simply granted nothing)."""
     game, _p1, mine = _feat_board(set_pool)
+    game.interactive_seats = {0}
 
     game.cast_from_hand(
         0, "Feat of Resistance", target_player_index=0, target_permanent_index=0
     )
-    game._settle()
 
+    assert [choice.kind for choice in game.pending_choices] == ["color_choice"]
     assert (mine.effective_power, mine.effective_toughness) == (4, 3)
     assert game._protection_qualities(mine) == set()
 

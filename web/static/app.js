@@ -2060,18 +2060,16 @@ function activatedAbilityRequiresTargetRoles(card) { return specKind(card) === "
 function cardRequiresManaColorChoice(card) {
   if (!card || typeof card === "string") return false;
   const text = (card.oracle_text || "").toLowerCase();
-  // "…protection from the color of your choice" (Feat of Resistance) rides the
-  // same one-shot colour prompt: CR 609.3 makes the choice part of resolving
-  // the spell, and it reaches the engine as mana_color exactly as the
-  // any-one-color mana clauses do.
+  // A *mana* colour, named as the mana is made. "The color of your choice"
+  // (Mother of Runes, Feat of Resistance, Alchor's Tomb, Dream Coat) is not
+  // asked here any more: CR 608.2d makes it a choice announced while the effect
+  // is applied, after the opponent has responded, so the engine asks it at
+  // resolution through the color_choice / color_set_choice prompts — and
+  // sending a colour with the activation was a choice the player had to make
+  // before they could see what they were answering.
   return (
     text.includes("any one color")
     || text.includes("one mana of any color")
-    || text.includes("the color of your choice")
-    // "…becomes the color **or colors** of your choice" (Dream Coat). The same
-    // one-shot prompt: the plural is a wider offer, not a different question,
-    // and the substring above does not contain it.
-    || text.includes("the color or colors of your choice")
   );
 }
 
@@ -2086,28 +2084,14 @@ function nonActivatedOracleText(card) {
     .join("\n");
 }
 
-// A spell whose own first sentence is the imperative "Choose a color."
-// (Prismatic Boon, Persecute). CR 608.2d puts that choice in the resolution and
-// it rides `mana_color` like every other one — but the substring list above
-// keys on the phrase that *spends* the colour ("the color of your choice"),
-// and these two cards spend it as "the chosen color" / "that color" instead. So
-// both were cast with no colour named, and both then did nothing at all while
-// logging themselves resolved.
-//
-// Anchored to a sentence boundary rather than matched as a substring, because
-// the same words appear inside an *entry* choice — "As this enchantment enters,
-// choose a color." (Psychic Allergy, Jihad, Quirion Elves) — which is answered
-// by the enter-choice prompt after the permanent is on the battlefield, not at
-// the cast. A comma is not a period, and that is the whole of the distinction.
-const STANDALONE_CHOOSE_A_COLOR = /(^|\.\s+)choose a color\./;
-
-// The cast-time variant: only text OUTSIDE activated abilities can put a
-// color choice on the spell itself (Metamorphosis, Feat of Resistance).
+// The cast-time variant: only text OUTSIDE activated abilities can put a mana
+// color choice on the spell itself (Metamorphosis). A spell that says "Choose a
+// color." (Prismatic Boon, Persecute) or "the color of your choice" (Feat of
+// Resistance) is cast with nothing extra: CR 608.2d asks that colour as the
+// spell resolves, through the color_choice prompt.
 function castRequiresManaColorChoice(card) {
   if (!card || typeof card === "string") return false;
-  const outside = nonActivatedOracleText(card);
-  if (STANDALONE_CHOOSE_A_COLOR.test(outside.toLowerCase())) return true;
-  return cardRequiresManaColorChoice({ oracle_text: outside });
+  return cardRequiresManaColorChoice({ oracle_text: nonActivatedOracleText(card) });
 }
 
 function cardRequiresCastColorChoice(card) {
@@ -2682,7 +2666,9 @@ function getCreatureTypeChoiceInfo(state = currentState) {
 }
 
 // Scrying Glass / Chromatic Armor / Hall of Gemstone: "Choose a color." made
-// while an ability resolves (CR 608.2d). Its own prompt rather than a shape of
+// while an ability resolves (CR 608.2d) — and every "the color of your choice"
+// (Mother of Runes, Feat of Resistance, Alchor's Tomb), asked here after the
+// opponent has had the chance to respond. Its own prompt rather than a shape of
 // the enter-choice one below, because the sentence that reads the answer may be
 // a later step of the same resolution and has to wait for it.
 function getColorChoiceInfo(state = currentState) {

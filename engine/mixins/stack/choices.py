@@ -8247,11 +8247,11 @@ class PendingChoicesMixin:
     ) -> None:
         """Ask *player_index* which colour or colours *permanent* becomes.
 
-        The colour a *triggered* ability sets has nowhere else to come from: an
-        activated one carries it on the activation (``choices["new_color"]``),
-        and nothing announces a trigger. So the question is put here, on the
-        standing queue, and CR 608.2d is why it is put at resolution rather than
-        when the trigger goes on the stack.
+        CR 608.2d puts the choice in the resolution — not as a trigger goes on
+        the stack, and not with an activation either, which CR 602.2b does not
+        announce a colour with — so the question is put here, on the standing
+        queue, by every subject the phrase is printed on: Shyft's trigger, Dream
+        Coat's host, Prismatic Lace's target.
 
         A deterministic default is stamped before the prompt, the discipline
         every entry choice follows: the colour the *opponents* hold least of

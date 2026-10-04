@@ -333,8 +333,8 @@ class AbilityActivationMixin:
         mana_color: str | None = None,
         # "…replacing all instances of one color word with another" (Balduvian
         # Shaman). A text change names *two* words, and `mana_color` is only
-        # ever the second — the key an any-colour mana ability and Alchor's
-        # Tomb also use. The word being replaced arrives here, on the same key
+        # ever the second — the key an any-colour mana ability also uses. The
+        # word being replaced arrives here, on the same key
         # the cast side already carries it on, so `mark_text_modified` reads
         # one pair whether a spell or an ability asked the question.
         old_color: str | None = None,
@@ -608,8 +608,8 @@ class AbilityActivationMixin:
         mana_color: str | None = None,
         # "…replacing all instances of one color word with another" (Balduvian
         # Shaman). A text change names *two* words, and `mana_color` is only
-        # ever the second — the key an any-colour mana ability and Alchor's
-        # Tomb also use. The word being replaced arrives here, on the same key
+        # ever the second — the key an any-colour mana ability also uses. The
+        # word being replaced arrives here, on the same key
         # the cast side already carries it on, so `mark_text_modified` reads
         # one pair whether a spell or an ability asked the question.
         old_color: str | None = None,
@@ -3056,14 +3056,6 @@ class AbilityActivationMixin:
                         list(discard_cost_cards)
                         + ([discard_cost_card] if discard_cost_card is not None else [])
                     ),
-                    # "…the color of your choice" (Alchor's Tomb): the colour
-                    # arrives with the activation, on the same `mana_color` key
-                    # an any-colour mana ability uses, and rides to resolution
-                    # on the stack item — which is where the cast side already
-                    # carries a spell's chosen colour (`resolution.py` reads
-                    # `item.choices["new_color"]` for the Lace cycle). One key,
-                    # so a handler need not know whether a spell or an ability
-                    # asked the question.
                     # CR 601.2d's announced division, on the very key the
                     # cast side stamps it under — the shield handler reads
                     # ``context.choices[DIVIDED_TARGETS]`` and does not know
@@ -3074,6 +3066,12 @@ class AbilityActivationMixin:
                     # not an address, and the battlefield renumbers the moment
                     # anything leaves it.
                     DIVIDED_TARGETS: divided_targets,
+                    # The word a text-changing ability writes (Balduvian
+                    # Shaman), on the key the cast side carries a text change's
+                    # word on. Never "the color of your choice": that is not
+                    # announced (CR 602.2b) but asked while the ability resolves
+                    # (CR 608.2d, the ``choose_color`` step), and nothing reads
+                    # it here for it any more.
                     "new_color": self._chosen_mana_color(mana_color),
                     # The word a text change replaces, beside the one it
                     # replaces it with. See the parameter's note above.
