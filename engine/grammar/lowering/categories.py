@@ -18,8 +18,8 @@ the wrapper table it has to consult on every step
 ``lowering/__init__`` and ``lower.py`` both re-export it — which is the same
 promise this file's own move made about ``INSTRUCTION_CATEGORIES``.
 
-**And which kinds are *zone changes* is `lowering/zones.py`'s**, for the same
-reason and by the same move — the third time this table has been split at the
+**And which kinds are *zone changes* left for `lowering/zones.py`**, for the
+same reason and by the same move — the third time this table was split at the
 thousand-line guard, and the first time it crossed at *integration* rather than
 on a branch. Five wave branches each added a handful of rows to Visions'
 wave 1; no group crossed the line and the sum did, which is the case the size
@@ -28,7 +28,22 @@ find. It was found anyway, because the line was already drawn in prose one
 module over: a zone change names **two** zones, the one an object leaves and the
 one it goes to, and that pair is what picks the handler, where every kind left
 here acts on an object where it stands. 121 rows of 380, the largest category by
-a factor of three.
+a factor of three. (Those rows are `lowering/_zone_categories.py` now:
+`zones.py` reached the guard itself at Tempest's Phase 0, and the registry is
+what left it.)
+
+**Two more whole categories have left since, each to a floor of its own**:
+`pump` to `_pump_categories.py`, when two groups' rows summed to 1,003 here at
+Urza's Saga's wave 2, and `combat_restrictions` to `_combat_categories.py` at
+the Phase 0 before Invasion, 71 lines under the guard with eight groups about to
+add rows. The rule is the zone split's — take a whole category, never a slice of
+the file — and which one is a measurement: `pump` was the largest left, and
+`combat_restrictions` the one that grows (21 rows at Tempest, 34 when it left,
+where `damage`, larger by two rows, went 30 to 36). Each floor states its own
+line. All of them are folded back in at the bottom of this file, so the table
+every reader imports is still this one — and no row's value changed in any of
+the moves, because a category names the family a kind migrates with and never
+the module its row is in.
 
 **Which kinds are wrappers is `lowering/control_flow.py`'s**, not this module's.
 The table used to sit at the bottom of this file, and the split came at the
@@ -48,6 +63,7 @@ from ...zone_copies import ZONE_TOP_COPY_KIND
 from ...land_types import STATIC_LAND_TYPE_KIND, STATIC_SUPERTYPE_REMOVAL_KIND
 from .control_changes import BID_LIFE_FOR_CONTROL_KIND
 from .ownership import OWNERSHIP_INSTRUCTION_CATEGORIES
+from ._combat_categories import COMBAT_INSTRUCTION_CATEGORIES
 from ._pump_categories import PUMP_INSTRUCTION_CATEGORIES
 from ._zone_categories import ZONE_INSTRUCTION_CATEGORIES
 INSTRUCTION_CATEGORIES: dict[str, str] = {
@@ -623,122 +639,17 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "grant_cant_be_blocked_by_until_eot": "evasion",
     "grant_cant_be_blocked_except_by_until_eot": "evasion",
     "grant_unblockable_to_self": "evasion",
-    # Restrictions on declaring attackers/blockers (CR 506, 509).
-    "cant_attack_unless_defender_controls": "combat_restrictions",
-    # CR 508.1c / 509.1b: a restriction on the whole declaration rather
-    # than on the creature, so the count is payload and the check lives
-    # where the declaration is assembled.
-    "cant_attack_unless_others_attack": "combat_restrictions",
-    # CR 508.1g printed on a permanent that names a class of creatures
-    # rather than itself (Flooded Woodlands, Reclamation).
-    "creatures_cant_attack_unless_sacrifice": "combat_restrictions",
-    # War Tax and War Cadence: the same board-wide declaration toll with the
-    # cost in mana and a window on it (CR 508.1g, CR 509.1d). Two kinds
-    # because the gate that charges each is a different step of combat.
-    "creatures_cant_attack_unless_pay_until_eot": "combat_restrictions",
-    "creatures_cant_block_unless_pay_until_eot": "combat_restrictions",
-    "cant_block_unless_others_block": "combat_restrictions",
-    # "…unless a creature with greater power also attacks/blocks." (Okk.) The
-    # same CR 508.1c / 509.1b declaration-wide restriction asking a comparison
-    # instead of a count, so the same category and GRAMMAR_CATEGORIES is
-    # unchanged.
-    "cant_attack_unless_greater_power_attacks": "combat_restrictions",
-    "cant_block_unless_greater_power_blocks": "combat_restrictions",
-    # "That creature can't attack during its controller's next turn." (Wall of
-    # Dust's block trigger) — a one-shot stamp on the blocked creature, read
-    # back by `can_attack` for exactly one of that controller's turns.
-    "cant_attack_during_controllers_next_turn": "combat_restrictions",
-    "cant_block_subject": "combat_restrictions",
-    # Heat Wave: the same restriction printed about a described set of
-    # blockers rather than about the permanent carrying it, so the
-    # blocker gate finds it by scanning the board rather than by reading
-    # the blocker's own program.
-    "subject_cant_block_subject": "combat_restrictions",
-    # The one-shot, turn-scoped blanket ("Creatures without flying can't block
-    # this turn", Destructive Tampering's second mode).
-    "cant_block_until_eot": "combat_restrictions",
-    "target_cant_attack_until_eot": "combat_restrictions",
-    "target_cant_block_source_until_eot": "combat_restrictions",
-    "target_cant_block_until_eot": "combat_restrictions",
-    # The permission twin of the two above (Yare): CR 509.1b's block-count
-    # ceiling raised for a turn rather than a restriction imposed for one.
-    "grant_additional_blocks_until_eot": "combat_restrictions",
-    # "Creatures can't attack this turn." (Festival.) The same category as its
-    # blocking twin above, so GRAMMAR_CATEGORIES is unchanged.
-    "cant_attack_until_eot": "combat_restrictions",
     # "Players and permanents can't be the targets of spells or activated
     # abilities." (Peace Talks.) In `targeting` beside the retarget and
     # choose-target kinds rather than in a restriction family: what it changes
     # is which objects CR 115.1 offers, which is that category's whole subject.
     "ban_targeting": "targeting",
-    # "This creature can't attack unless you sacrifice two Islands."
-    # (Leviathan.) A restriction with a cost behind it, enforced by the
-    # declaration rather than by a handler — same category, so
-    # GRAMMAR_CATEGORIES is unchanged.
-    "cant_attack_unless_sacrifice": "combat_restrictions",
-    # "…and remove it from combat" (Disharmony, CR 506.4c). A one-shot combat
-    # action rather than a restriction, filed with the family whose steps
-    # dispatch it.
-    # "Attacking doesn't cause creatures you control to tap this combat…"
-    # (Johan.) A restriction on what declaring an attacker does, so it files
-    # with the other CR 506/508 clauses and GRAMMAR_CATEGORIES is unchanged.
-    # "This creature assigns no combat damage this turn." (Floral Spuzzem.)
-    # CR 510.1's assignment switched off for one permanent — a restriction on
-    # what the combat damage step does, so it files with the other CR 506/510
-    # clauses.
-    "assign_no_combat_damage_until_eot": "combat_restrictions",
-    # "X target blocked creatures assign their combat damage this turn as
-    # though they weren't blocked." (Outmaneuver.) The same CR 510.1
-    # rewrite in the other direction, so the same category and
-    # GRAMMAR_CATEGORIES is unchanged.
-    "assign_as_unblocked_until_eot": "combat_restrictions",
-    # "You may have this creature assign its combat damage as though it weren't
-    # blocked." (Lone Wolf.) The row above with no window and the permanent
-    # itself as subject, which makes it a **static** ability rather than a mark:
-    # the combat damage step reads it off the compiled program at CR 510.1's
-    # turn-based action, exactly as it reads the mark. Same category, so
-    # GRAMMAR_CATEGORIES is unchanged.
-    "may_assign_as_unblocked": "combat_restrictions",
-    "exempt_from_attack_tapping": "combat_restrictions",
-    "remove_from_combat": "combat_restrictions",
-    # "Target unblocked attacking creature becomes blocked." (Dazzling Beauty;
-    # CR 509.1h.) A one-shot change to what a creature's being in combat means,
-    # filed beside `remove_from_combat` for that entry's reason: the family
-    # whose steps dispatch it is the combat one.
-    "become_blocked": "combat_restrictions",
-    # "You choose which creatures block this combat and how those creatures
-    # block." (Melee.) CR 509.1a's chooser substituted for the declare-blockers
-    # turn-based action — a restriction on how that declaration is made rather
-    # than an effect on any permanent, so it files with the other CR 506/509
-    # clauses and GRAMMAR_CATEGORIES is unchanged.
-    "choose_blocks_for_defenders": "combat_restrictions",
-    # "…each creature that's blocking exactly one of those attacking creatures
-    # stops blocking it and is blocking the other attacking creature."
-    # (General Jarkeld.) A one-shot rewrite of an existing block (CR 509.1g),
-    # filed beside Sorrow's Path's mirror of it for the same reason
-    # `remove_from_combat` is here: the family whose steps dispatch it.
-    "reassign_blockers_between_attackers": "combat_restrictions",
-    "mark_non_wall_target_to_attack": "combat_restrictions",
-    # Kookus: CR 508.1a's requirement for one turn, which is not the printed
-    # static `combat_restrictions.py` reads for "attacks **each combat** if
-    # able". Same category, so GRAMMAR_CATEGORIES is unchanged.
-    "force_self_to_attack_until_eot": "combat_restrictions",
-    # "Target creature attacks this turn if able." (Boiling Blood.) The
-    # same CR 508.1a requirement on a creature the caster chose rather
-    # than on the effect's own source.
-    "force_target_to_attack_until_eot": "combat_restrictions",
-    "force_bound_to_attack_until_eot": "combat_restrictions",
-    "force_bound_to_block_until_eot": "combat_restrictions",
-    # "**Non-Wall creatures the active player controls** attack this turn if
-    # able." (Maddening Imp.) The same CR 508.1a requirement over every creature
-    # a printed noun phrase describes — the mirror of the block twin two rows
-    # down, which is why they carry the same category and the same name shape.
-    "force_subject_to_attack_until_eot": "combat_restrictions",
-    # The delayed half of that requirement — "At the beginning of the next end
-    # step, destroy each of those creatures that didn't attack this turn."
-    # (Maddening Imp, Siren's Call.) A `destruction` kind rather than a combat
-    # one: what it arms is the end step's destroy sweep, and the combat is only
-    # the condition.
+    # The delayed half of `force_subject_to_attack_until_eot`'s requirement
+    # (`_combat_categories`) — "At the beginning of the next end step, destroy
+    # each of those creatures that didn't attack this turn." (Maddening Imp,
+    # Siren's Call.) A `destruction` kind rather than a combat one: what it
+    # arms is the end step's destroy sweep, and the combat is only the
+    # condition.
     "destroy_subject_at_end_step_if_it_didnt_attack": "destruction",
     # "…destroy the blocking creature." / "…destroy the attacking creature."
     # (No Quarter.) The other half of the block pair the firing was about, named
@@ -746,8 +657,6 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # `handlers/_common.block_pair_permanents` already resolves for every other
     # block-pair effect.
     "destroy_block_pair_partner": "destruction",
-    "force_target_to_block_until_eot": "combat_restrictions",
-    "force_subject_to_block_until_eot": "combat_restrictions",
     "counter_top_stack_spell": "counterspells",
     # "…the player puts it onto the stack as a copy of the original spell."
     # (Ertai's Meddling.) CR 707.10's copying, which is what `copy_this_spell`
@@ -918,12 +827,15 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "unless_player_pays": "optional",
 }
 
-# The zone-change half is its own floor beside this one (see
-# `_zone_categories.ZONE_INSTRUCTION_CATEGORIES` for the line): it lived with
-# the family that produces it until `lowering/zones.py` reached the size guard
-# at Tempest's Phase 0, and a registry with no call graph is what leaves a
-# module of dispatch. Composed rather than referenced, so every reader still
-# asks one table one question.
+# Four halves live beside this one, and each states its own line where its rows
+# are. Three are floors holding one whole category apiece (`pump`, `zones`,
+# `combat_restrictions`); the zone half lived with the family that produces it
+# until `lowering/zones.py` reached the size guard at Tempest's Phase 0, and a
+# registry with no call graph is what leaves a module of dispatch. The fourth
+# is three `zones` rows still beside the one lowering that builds them.
+# Composed rather than referenced, so every reader still asks one table one
+# question.
 INSTRUCTION_CATEGORIES.update(PUMP_INSTRUCTION_CATEGORIES)
 INSTRUCTION_CATEGORIES.update(ZONE_INSTRUCTION_CATEGORIES)
+INSTRUCTION_CATEGORIES.update(COMBAT_INSTRUCTION_CATEGORIES)
 INSTRUCTION_CATEGORIES.update(OWNERSHIP_INSTRUCTION_CATEGORIES)
